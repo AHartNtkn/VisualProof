@@ -3,6 +3,7 @@ import { mkEngine } from '../../src/view/engine'
 import { DARK } from '../../src/view/paint'
 import { seedProject } from '../../src/view/relax'
 import { InteractiveViewport } from '../../src/game/interface/loupe/interact/viewport'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { comprehensionFixture } from '../app/comprehension-fixture'
 
 const fixture = comprehensionFixture()
@@ -91,7 +92,7 @@ const host: ConstructionLoupeHost = {
   boundary: () => [],
   engine: () => engine,
   view: () => ({ scale: 1, offsetX: 0, offsetY: 0 }),
-  context: () => ({ theorems: new Map(), relations: new Map() }),
+  context: () => EMPTY_PROOF_CONTEXT,
   orientation: () => 'forward',
   theme: () => DARK,
   apply: (step) => { state.commits++; state.lastRule = step.rule },

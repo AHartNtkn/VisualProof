@@ -10,7 +10,9 @@ import {
 import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { diagramFromJson } from '../../src/kernel/diagram/json'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson } from '../../src/kernel/proof/json'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 const repairedIds = [
@@ -28,13 +30,18 @@ type ValidationFile = {
   readonly recognizedStates: readonly unknown[]
 }
 
-const context = { theorems: new Map(), relations: new Map() }
+const context = EMPTY_PROOF_CONTEXT
 const content = <T>(relativePath: string): T =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'content', relativePath), 'utf8')) as T
 const puzzle = (id: string): Diagram =>
   diagramFromJson(content<PuzzleFile>(`puzzles/${id}.json`).diagram)
 const witness = (id: string): readonly ProofStep[] =>
-  content<ValidationFile>(`validation/${id}.json`).solution.map(stepFromJson)
+  content<ValidationFile>(`validation/${id}.json`).solution
+    .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+    .flatMap((action) => action.steps)
+const deiteration = (diagram: Diagram, sel: Extract<ProofStep, { rule: 'deiteration' }>['sel']): ProofStep => ({
+  rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, 100),
+})
 const replay = (diagram: Diagram, steps: readonly ProofStep[]): Diagram =>
   steps.reduce((state, step) => applyStep(state, step, context, 'backward'), diagram)
 const attempt = (diagram: Diagram, steps: readonly ProofStep[]): Diagram | null => {
@@ -51,7 +58,9 @@ describe('Seyric causal shortcut repairs', () => {
       const puzzleFile = content<PuzzleFile>(`puzzles/${id}.json`)
       const validation = content<ValidationFile>(`validation/${id}.json`)
       const diagram = diagramFromJson(puzzleFile.diagram)
-      const steps = validation.solution.map(stepFromJson)
+      const steps = validation.solution
+        .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+        .flatMap((action) => action.steps)
 
       expect(puzzleFile.id, id).toBe(id)
       expect(validation.puzzle, id).toBe(id)
@@ -82,11 +91,9 @@ describe('Seyric causal shortcut repairs', () => {
 
     expect(() => applyStep(diagram, exposeQ!, context, 'backward')).toThrow()
     expect(() => applyStep(diagram, consumeQ!, context, 'backward')).toThrow()
-    expect(() => applyStep(diagram, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r6', regions: ['r7', 'r8'], nodes: [], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).toThrow()
+    expect(() => deiteration(diagram, {
+      region: 'r6', regions: ['r7', 'r8'], nodes: [], wires: [],
+    })).toThrow()
 
     const echoRemoved = applyStep(diagram, removeEcho!, context, 'backward')
     const qExposed = applyStep(echoRemoved, exposeQ!, context, 'backward')
@@ -110,11 +117,9 @@ describe('Seyric causal shortcut repairs', () => {
     expect(exposeU).toEqual({ rule: 'doubleCutElim', region: 'r33' })
 
     expect(() => applyStep(diagram, consumeFactor!, context, 'backward')).toThrow()
-    expect(() => applyStep(diagram, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r16', regions: ['r17', 'r26'], nodes: [], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).toThrow()
+    expect(() => deiteration(diagram, {
+      region: 'r16', regions: ['r17', 'r26'], nodes: [], wires: [],
+    })).toThrow()
 
     const factorReady = replay(diagram, [matchSource!, exposeFactor!])
     expect(factorReady.regions.r27).toMatchObject({ parent: 'r40' })
@@ -134,17 +139,13 @@ describe('Seyric causal shortcut repairs', () => {
     })
     expect(exposeT).toEqual({ rule: 'doubleCutElim', region: 'r11' })
 
-    const compoundOnly = applyStep(diagram, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r11', regions: ['r12'], nodes: [], wires: [] },
-      fuel: 100,
+    const compoundOnly = applyStep(diagram, deiteration(diagram, {
+      region: 'r11', regions: ['r12'], nodes: [], wires: [],
     }), context, 'backward')
     expect(() => applyStep(compoundOnly, exposeT!, context, 'backward')).toThrow()
 
-    const atomsOnly = applyStep(diagram, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r11', regions: [], nodes: ['n4', 'n5'], wires: [] },
-      fuel: 100,
+    const atomsOnly = applyStep(diagram, deiteration(diagram, {
+      region: 'r11', regions: [], nodes: ['n4', 'n5'], wires: [],
     }), context, 'backward')
     expect(() => applyStep(atomsOnly, exposeT!, context, 'backward')).toThrow()
 
@@ -152,10 +153,8 @@ describe('Seyric causal shortcut repairs', () => {
     expect(() => applyStep(fullProduct, exposeT!, context, 'backward')).not.toThrow()
 
     const compoundBypass = attempt(diagram, [
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r11', regions: ['r12'], nodes: [], wires: [] },
-        fuel: 100,
+      deiteration(diagram, {
+        region: 'r11', regions: ['r12'], nodes: [], wires: [],
       }),
       ...steps.slice(1),
     ])

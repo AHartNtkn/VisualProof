@@ -8,12 +8,13 @@ import {
   auditSeyricWitness,
 } from '../../src/game/content/seyric-authority'
 import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
-import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, RegionId } from '../../src/kernel/diagram/diagram'
 import { diagramFromJson } from '../../src/kernel/diagram/json'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import type { SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson } from '../../src/kernel/proof/json'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 const repairedIds = [
@@ -32,13 +33,15 @@ type ValidationFile = {
 }
 type Item = { readonly kind: 'region' | 'node'; readonly id: string }
 
-const context = { theorems: new Map(), relations: new Map() }
+const context = EMPTY_PROOF_CONTEXT
 const content = <T>(relativePath: string): T =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'content', relativePath), 'utf8')) as T
 const puzzle = (id: string): Diagram =>
   diagramFromJson(content<PuzzleFile>(`puzzles/${id}.json`).diagram)
 const witness = (id: string): readonly ProofStep[] =>
-  content<ValidationFile>(`validation/${id}.json`).solution.map(stepFromJson)
+  content<ValidationFile>(`validation/${id}.json`).solution
+    .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+    .flatMap((action) => action.steps)
 const replay = (diagram: Diagram, steps: readonly ProofStep[]): Diagram =>
   steps.reduce((state, step) => applyStep(state, step, context, 'backward'), diagram)
 
@@ -90,25 +93,13 @@ const hasExactSiblingComplement = (diagram: Diagram): boolean => {
   return false
 }
 
-const deiterate = (region: RegionId, regions: readonly RegionId[]): ProofStep => ({
-  rule: 'deiteration',
-  sel: { region, regions, nodes: [], wires: [] },
-  fuel: 100,
-})
-
-const doubleCutPairPattern = (arity: 1 | 2) => {
-  const builder = new DiagramBuilder()
-  const binders: RegionId[] = []
-  let parent = builder.root
-  for (let index = 0; index < arity; index += 1) {
-    const binder = builder.bubble(parent, 0)
-    binders.push(binder)
-    parent = binder
-  }
-  const outer = builder.cut(parent)
-  const inner = builder.cut(outer)
-  for (const binder of binders) builder.atom(inner, binder)
-  return { pattern: { diagram: builder.build(), boundary: [] }, binders }
+const deiterate = (
+  diagram: Diagram,
+  region: RegionId,
+  regions: readonly RegionId[],
+): ProofStep => {
+  const sel = { region, regions, nodes: [], wires: [] }
+  return { rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, 100) }
 }
 
 describe('Seyric workspace shortcut repairs', () => {
@@ -139,15 +130,14 @@ describe('Seyric workspace shortcut repairs', () => {
       rule: 'doubleCutIntro',
       sel: { region: 'r10', regions: ['r11', 'r12'], nodes: [], wires: [] },
     }
-    const consume = deiterate('dc', ['dc_0'])
-
-    expect(() => applyStep(diagram, deiterate('r10', ['r11', 'r12']), context, 'backward'))
+    expect(() => deiterate(diagram, 'r10', ['r11', 'r12']))
       .toThrow(/no justifying occurrence/)
     expect(() => applyStep(diagram, { rule: 'doubleCutElim', region: 'r6' }, context, 'backward'))
       .toThrow(/annulus/)
-    expect(() => applyStep(diagram, consume, context, 'backward')).toThrow()
+    expect(() => deiterate(diagram, 'dc', ['dc_0'])).toThrow()
 
     const exact = applyStep(diagram, exactIntro, context, 'backward')
+    const consume = deiterate(exact, 'dc', ['dc_0'])
     expect(() => applyStep(exact, consume, context, 'backward')).not.toThrow()
 
     for (const regions of [['r11'], ['r12']] as const) {
@@ -155,33 +145,24 @@ describe('Seyric workspace shortcut repairs', () => {
         rule: 'doubleCutIntro',
         sel: { region: 'r10', regions, nodes: [], wires: [] },
       }, context, 'backward')
-      expect(() => applyStep(partial, consume, context, 'backward')).toThrow(/no justifying occurrence/)
+      expect(() => deiterate(partial, 'dc', ['dc_0'])).toThrow(/no justifying occurrence/)
     }
     const oversized = applyStep(diagram, {
       rule: 'doubleCutIntro',
       sel: { region: 'r10', regions: ['r11', 'r12'], nodes: ['n6'], wires: [] },
     }, context, 'backward')
-    expect(() => applyStep(oversized, consume, context, 'backward'))
-      .toThrow(/no justifying occurrence/)
+    expect(() => deiterate(oversized, 'dc', ['dc_0'])).toThrow(/no justifying occurrence/)
   })
 
   it('makes the atomic copy direction legal only after the double cut changes its ancestry', () => {
     const diagram = puzzle('double-cut-copy-license')
-    const targetBefore = {
-      rule: 'deiteration' as const,
-      sel: { region: 'r6', regions: [], nodes: ['n1'], wires: [] },
-      fuel: 100,
-    }
-    const sourceBefore = {
-      rule: 'deiteration' as const,
-      sel: { region: 'r4', regions: [], nodes: ['n0'], wires: [] },
-      fuel: 100,
-    }
-    const consume = deiterate('dc', ['dc_0'])
-
-    expect(() => applyStep(diagram, targetBefore, context, 'backward'))
+    expect(() => findDeiterationEvidence(diagram, {
+      region: 'r6', regions: [], nodes: ['n1'], wires: [],
+    }, 100))
       .toThrow(/no justifying occurrence/)
-    expect(() => applyStep(diagram, sourceBefore, context, 'backward'))
+    expect(() => findDeiterationEvidence(diagram, {
+      region: 'r4', regions: [], nodes: ['n0'], wires: [],
+    }, 100))
       .toThrow(/no justifying occurrence/)
     expect(() => applyStep(diagram, { rule: 'doubleCutElim', region: 'r4' }, context, 'backward'))
       .toThrow(/annulus/)
@@ -190,6 +171,7 @@ describe('Seyric workspace shortcut repairs', () => {
       rule: 'doubleCutIntro',
       sel: { region: 'r6', regions: [], nodes: ['n1'], wires: [] },
     }, context, 'backward')
+    const consume = deiterate(exact, 'dc', ['dc_0'])
     expect(() => applyStep(exact, consume, context, 'backward')).not.toThrow()
 
     for (const nodes of [['n2'], ['n1', 'n2']] as const) {
@@ -197,29 +179,25 @@ describe('Seyric workspace shortcut repairs', () => {
         rule: 'doubleCutIntro',
         sel: { region: 'r6', regions: [], nodes, wires: [] },
       }, context, 'backward')
-      expect(() => applyStep(wrong, consume, context, 'backward'))
-        .toThrow(/no justifying occurrence/)
+      expect(() => deiterate(wrong, 'dc', ['dc_0'])).toThrow(/no justifying occurrence/)
     }
   })
 
-  it('makes the introduced annulus the only useful host for the exact compound insertion', () => {
+  it('makes the introduced annulus the only useful host for the exact bound branch construction', () => {
     const diagram = puzzle('double-cut-insertion-workspace')
-    const exact = doubleCutPairPattern(2)
-    const partial = doubleCutPairPattern(1)
-    const insertion = (region: RegionId, candidate = exact): ProofStep => ({
-      rule: 'insertion',
-      region,
-      pattern: candidate.pattern,
-      attachments: [],
-      binders: candidate.binders.length === 2
-        ? { [candidate.binders[0]!]: 'r2', [candidate.binders[1]!]: 'r3' }
-        : { [candidate.binders[0]!]: 'r2' },
-    })
-    const consume = deiterate('dc_0', ['r4'])
+    const [introduceWorkspace, introduceBranch, spawnP, spawnQ, consume] = witness(
+      'double-cut-insertion-workspace',
+    )
+    expect([introduceWorkspace?.rule, introduceBranch?.rule, spawnP?.rule, spawnQ?.rule, consume?.rule])
+      .toEqual(['doubleCutIntro', 'doubleCutIntro', 'boundRelationSpawn', 'boundRelationSpawn', 'deiteration'])
+    if (introduceWorkspace === undefined || introduceBranch === undefined
+      || spawnP === undefined || spawnQ === undefined || consume === undefined
+      || spawnP.rule !== 'boundRelationSpawn' || spawnQ.rule !== 'boundRelationSpawn'
+      || consume.rule !== 'deiteration') {
+      throw new Error('workspace witness must contain its complete bound-branch construction')
+    }
 
-    expect(() => applyStep(diagram, consume, context, 'backward')).toThrow()
-    expect(() => applyStep(diagram, insertion('r3'), context, 'backward'))
-      .toThrow(/requires a positive region/)
+    expect(() => applyStep(diagram, introduceBranch, context, 'backward')).toThrow()
     const openedWorkspace = applyStep(
       diagram,
       { rule: 'doubleCutElim', region: 'r4' },
@@ -228,29 +206,21 @@ describe('Seyric workspace shortcut repairs', () => {
     )
     expect(hasExactSiblingComplement(openedWorkspace)).toBe(false)
 
-    for (const host of ['r4', 'r6'] as const) {
-      const wrongHost = applyStep(diagram, insertion(host), context, 'backward')
-      expect(() => applyStep(wrongHost, deiterate('r3', ['r4']), context, 'backward'))
-        .toThrow(/no justifying occurrence/)
-    }
-
-    const introduced = applyStep(diagram, {
-      rule: 'doubleCutIntro',
-      sel: { region: 'r3', regions: ['r4'], nodes: [], wires: [] },
-    }, context, 'backward')
-    expect(() => applyStep(introduced, consume, context, 'backward'))
+    const introduced = applyStep(diagram, introduceWorkspace, context, 'backward')
+    expect(() => findDeiterationEvidence(introduced, consume.sel, 100))
       .toThrow(/no justifying occurrence/)
-    const inserted = applyStep(introduced, insertion('dc'), context, 'backward')
-    expect(() => applyStep(inserted, consume, context, 'backward')).not.toThrow()
-
-    const withPartial = applyStep(introduced, insertion('dc', partial), context, 'backward')
-    expect(() => applyStep(withPartial, consume, context, 'backward'))
+    const branch = applyStep(introduced, introduceBranch, context, 'backward')
+    expect(() => findDeiterationEvidence(branch, consume.sel, 100))
       .toThrow(/no justifying occurrence/)
-    expect(() => applyStep(introduced, insertion('dc_0'), context, 'backward'))
-      .toThrow(/requires a positive region/)
-
-    const sibling = applyStep(introduced, insertion('r6'), context, 'backward')
-    expect(() => applyStep(sibling, consume, context, 'backward'))
+    const oneBinder = applyStep(branch, spawnP, context, 'backward')
+    expect(() => findDeiterationEvidence(oneBinder, consume.sel, 100))
       .toThrow(/no justifying occurrence/)
+    const exact = applyStep(oneBinder, spawnQ, context, 'backward')
+    expect(() => applyStep(exact, consume, context, 'backward')).not.toThrow()
+
+    expect(() => applyStep(branch, { ...spawnP, region: 'r6' }, context, 'backward'))
+      .not.toThrow()
+    const sibling = applyStep(branch, { ...spawnP, region: 'r6' }, context, 'backward')
+    expect(() => findDeiterationEvidence(sibling, consume.sel, 100)).toThrow(/no justifying occurrence/)
   })
 })

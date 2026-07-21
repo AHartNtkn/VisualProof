@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import * as catalogModule from '../../src/game/catalog'
 import * as contentModule from '../../src/game/content'
 import { diagramToJson } from '../../src/kernel/diagram/json'
-import { artifactTheoremContext, artifactTheoremName } from '../../src/game/artifact-theorem'
+import {
+  artifactTheoremContext,
+  artifactTheoremName,
+  certifyCompletedArtifact,
+} from '../../src/game/artifact-theorem'
+import { singleStepAction } from '../../src/kernel/proof/action'
 import { twoVeils } from './fixtures'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 
@@ -299,13 +304,18 @@ describe('layered portable game content', () => {
     })
   })
 
-  it('constructs completed artifact theorems without runtime witnesses', () => {
+  it('constructs completed artifact theorems from authenticated runtime witnesses', () => {
     const catalog = catalogModule.loadGameContent(portableFiles())
     const id = catalog.puzzleIds[0]!
-    const context = artifactTheoremContext(catalog as never, new Set([id]))
+    const puzzle = catalog.puzzle(id)
+    const action = singleStepAction('doubleCutElim', {
+      rule: 'doubleCutElim', region: twoVeils().eliminations[0]!,
+    })
+    const artifact = certifyCompletedArtifact(catalog, new Map(), puzzle, [action])
+    const context = artifactTheoremContext(catalog, new Map([[id, artifact]]))
     const theorem = context.theorems.get(artifactTheoremName(id))
-    expect(theorem).toMatchObject({ steps: [], backSteps: [] })
-    expect(theorem?.rhs.diagram).toBe(catalog.puzzle(id).diagram)
+    expect(theorem).toMatchObject({ actions: [], backActions: [action] })
+    expect(theorem?.rhs.diagram).toEqual(puzzle.diagram)
   })
 
   it('tracks only transitively referenced definition semantics, independent of definition names', () => {
@@ -325,7 +335,7 @@ describe('layered portable game content', () => {
         ...files,
         'manifest.json': {
           ...manifest,
-          definitions: [`definitions/${alpha}.json`, `definitions/${beta}.json`, 'definitions/unrelated.json'],
+          definitions: [`definitions/${beta}.json`, `definitions/${alpha}.json`, 'definitions/unrelated.json'],
         },
         'puzzles/two-veils.json': { id: 'two-veils', diagram: {
           ...diagramToJson(puzzleBuilder.build()) as Record<string, unknown>,

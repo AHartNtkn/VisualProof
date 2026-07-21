@@ -1,5 +1,5 @@
-import { stepFromJson } from '../../src/kernel/proof/json'
-import type { GameStep } from '../../src/game/types'
+import type { ProofAction } from '../../src/kernel/proof/action'
+import { actionFromJson } from '../../src/kernel/proof/json'
 import twoVeils from '../../content/validation/two-veils.json'
 import fourVeils from '../../content/validation/four-veils.json'
 import forkedVeil from '../../content/validation/forked-veil.json'
@@ -28,9 +28,10 @@ const evidence = [
   blankWitness,
 ] as RawEvidence[]
 
-export const openingWitness = (id: string): readonly GameStep[] =>
-  evidence.find(({ puzzle }) => puzzle === id)?.solution.map(stepFromJson) ?? []
+export const openingWitness = (id: string): readonly ProofAction[] =>
+  evidence.find(({ puzzle }) => puzzle === id)?.solution.map((action) => actionFromJson(action)) ?? []
 
-export const openingDemonstration = (id: string, intervention: string): readonly GameStep[] =>
+export const openingDemonstration = (id: string, intervention: string): readonly ProofAction[] =>
   evidence.find(({ puzzle }) => puzzle === id)?.recognizedStates
-    .find((entry) => entry.intervention === intervention)?.demonstration.map(stepFromJson) ?? []
+    .find((entry) => entry.intervention === intervention)?.demonstration
+    .map((action) => actionFromJson(action)) ?? []

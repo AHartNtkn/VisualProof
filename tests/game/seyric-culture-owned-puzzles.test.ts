@@ -5,8 +5,12 @@ import { isBlank } from '../../src/game/blank'
 import { analyzeSeyricStart, auditSeyricWitness } from '../../src/game/content/seyric-authority'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { diagramFromJson } from '../../src/kernel/diagram/json'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import type { Diagram } from '../../src/kernel/diagram/diagram'
+import type { SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson, stepFromJson } from '../../src/kernel/proof/json'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 
 const seyricOwnedIds = [
   'seyric-field-edit-contrast',
@@ -31,10 +35,7 @@ type ValidationFile = {
 const content = <T>(relativePath: string): T =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'content', relativePath), 'utf8')) as T
 
-const context = {
-  theorems: new Map(),
-  relations: new Map(),
-}
+const context = EMPTY_PROOF_CONTEXT
 
 const puzzleDiagram = (id: string) =>
   diagramFromJson(content<PuzzleFile>(`puzzles/${id}.json`).diagram)
@@ -53,6 +54,25 @@ const attemptReplay = (id: string, steps: readonly ProofStep[]) => {
   }
 }
 
+const attempt = (id: string, operation: (diagram: Diagram) => Diagram): Diagram | null => {
+  try {
+    return operation(puzzleDiagram(id))
+  } catch {
+    return null
+  }
+}
+
+const deiterationStep = (diagram: Diagram, sel: SubgraphSelection): ProofStep => ({
+  rule: 'deiteration',
+  sel,
+  ...findDeiterationEvidence(diagram, sel, 100),
+})
+
+const solutionSteps = (validation: ValidationFile): readonly ProofStep[] =>
+  validation.solution
+    .map((action, index) => actionFromJson(action, `${validation.puzzle} solution action ${index}`))
+    .flatMap((action) => action.steps)
+
 describe('culture-owned Seyric puzzles', () => {
   it('are replayable, structurally Seyric, witness-clean, and canonically distinct', () => {
     const ownedForms = new Map<string, string>()
@@ -66,7 +86,7 @@ describe('culture-owned Seyric puzzles', () => {
       expect(validation.recognizedStates).toEqual([])
 
       const diagram = diagramFromJson(puzzle.diagram)
-      const steps = validation.solution.map(stepFromJson)
+      const steps = solutionSteps(validation)
       expect(analyzeSeyricStart(diagram).violations, id).toEqual([])
       expect(auditSeyricWitness(diagram, steps).violations, id).toEqual([])
       expect(validation.expectedRules).toEqual([...new Set(steps.map((step) => step.rule))])
@@ -99,9 +119,7 @@ describe('culture-owned Seyric puzzles', () => {
   })
 
   it('requires the field edit rather than allowing the surrounding continuation alone', () => {
-    const steps = content<ValidationFile>('validation/seyric-field-edit-contrast.json')
-      .solution
-      .map(stepFromJson)
+    const steps = solutionSteps(content<ValidationFile>('validation/seyric-field-edit-contrast.json'))
       .filter((_, index) => index !== 0)
     const bypass = attemptReplay('seyric-field-edit-contrast', steps)
     expect(bypass === null || !isBlank(bypass)).toBe(true)
@@ -117,11 +135,9 @@ describe('culture-owned Seyric puzzles', () => {
       sel: { region: 'r18', regions: ['r5'], nodes: [], wires: [] },
       target: 'r9',
     }), context, 'backward')
-    expect(() => applyStep(copiedWithoutEdit, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r5_0', regions: ['r6_0'], nodes: [], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).toThrow(/no justifying occurrence/)
+    const copiedSelection = { region: 'r5_0', regions: ['r6_0'], nodes: [], wires: [] }
+    expect(() => deiterationStep(copiedWithoutEdit, copiedSelection))
+      .toThrow(/no justifying occurrence/)
 
     const edited = applyStep(start, stepFromJson({
       rule: 'erasure',
@@ -132,34 +148,37 @@ describe('culture-owned Seyric puzzles', () => {
       sel: { region: 'r18', regions: ['r5'], nodes: [], wires: [] },
       target: 'r9',
     }), context, 'backward')
-    expect(() => applyStep(copiedAfterEdit, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r5_0', regions: ['r6_0'], nodes: [], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).not.toThrow()
+    expect(() => applyStep(
+      copiedAfterEdit,
+      deiterationStep(copiedAfterEdit, copiedSelection),
+      context,
+      'backward',
+    )).not.toThrow()
   })
 
   it('does not admit elimination of the existing annulus as an atomic-wrapping bypass', () => {
-    const bypass = attemptReplay('seyric-atomic-double-cut-selection', [
-      stepFromJson({ rule: 'doubleCutElim', region: 'r5' }),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r4', regions: [], nodes: ['n0'], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({
-        rule: 'erasure',
-        sel: { region: 'r3', regions: [], nodes: ['n2', 'n3', 'n4'], wires: [] },
-      }),
-      stepFromJson({ rule: 'vacuousElim', region: 'r3' }),
-      stepFromJson({ rule: 'vacuousElim', region: 'r2' }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'r1' }),
-    ])
+    const bypass = attempt('seyric-atomic-double-cut-selection', (start) => {
+      const staticSteps = [
+        stepFromJson({ rule: 'doubleCutElim', region: 'r5' }),
+        null,
+        stepFromJson({
+          rule: 'erasure',
+          sel: { region: 'r3', regions: [], nodes: ['n2', 'n3', 'n4'], wires: [] },
+        }),
+        stepFromJson({ rule: 'vacuousElim', region: 'r3' }),
+        stepFromJson({ rule: 'vacuousElim', region: 'r2' }),
+        stepFromJson({ rule: 'doubleCutElim', region: 'r1' }),
+      ] as const
+      let diagram = applyStep(start, staticSteps[0], context, 'backward')
+      diagram = applyStep(diagram, deiterationStep(diagram, {
+        region: 'r4', regions: [], nodes: ['n0'], wires: [],
+      }), context, 'backward')
+      for (const step of staticSteps.slice(2)) diagram = applyStep(diagram, step!, context, 'backward')
+      return diagram
+    })
     expect(bypass === null || !isBlank(bypass)).toBe(true)
 
-    const witness = content<ValidationFile>('validation/seyric-atomic-double-cut-selection.json')
-      .solution
-      .map(stepFromJson)
+    const witness = solutionSteps(content<ValidationFile>('validation/seyric-atomic-double-cut-selection.json'))
       .filter((_, index) => index !== 1 && index !== 4)
     const noWrap = attemptReplay('seyric-atomic-double-cut-selection', witness)
     expect(noWrap === null || !isBlank(noWrap)).toBe(true)
@@ -183,16 +202,20 @@ describe('culture-owned Seyric puzzles', () => {
         context,
         'backward',
       )
-      const supportPrepared = applyStep(targetOpened, stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r11', regions: ['r12'], nodes: [], wires: [] },
-        fuel: 100,
-      }), context, 'backward')
-      return applyStep(supportPrepared, stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r8', regions: ['dc'], nodes: [], wires: [] },
-        fuel: 100,
-      }), context, 'backward')
+      const supportSelection = { region: 'r11', regions: ['r12'], nodes: [], wires: [] }
+      const supportPrepared = applyStep(
+        targetOpened,
+        deiterationStep(targetOpened, supportSelection),
+        context,
+        'backward',
+      )
+      const atomicSelection = { region: 'r8', regions: ['dc'], nodes: [], wires: [] }
+      return applyStep(
+        supportPrepared,
+        deiterationStep(supportPrepared, atomicSelection),
+        context,
+        'backward',
+      )
     }
 
     expect(() => continueToAtomicUse(wrap(['n1']))).not.toThrow()
@@ -227,15 +250,15 @@ describe('culture-owned Seyric puzzles', () => {
       target: 'r9',
     }), context, 'backward')).toThrow(/must lie within the source region/)
 
-    expect(() => applyStep(exact, stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r5_0', regions: ['r6_0'], nodes: [], wires: [] },
-        fuel: 100,
-      }), context, 'backward')).not.toThrow()
+    const exactSelection = { region: 'r5_0', regions: ['r6_0'], nodes: [], wires: [] }
+    expect(() => applyStep(
+      exact,
+      deiterationStep(exact, exactSelection),
+      context,
+      'backward',
+    )).not.toThrow()
 
-    const withoutFirstCopy = content<ValidationFile>('validation/seyric-compound-copy-authority.json')
-      .solution
-      .map(stepFromJson)
+    const withoutFirstCopy = solutionSteps(content<ValidationFile>('validation/seyric-compound-copy-authority.json'))
       .filter((_, index) => index > 5)
     const bypass = attemptReplay('seyric-compound-copy-authority', withoutFirstCopy)
     expect(bypass === null || !isBlank(bypass)).toBe(true)

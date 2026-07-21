@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { applyGameSteps, currentDiagram, startPuzzle, type GameRuntimeAuthority } from '../../src/game/session'
+import { applyGameAction, currentDiagram, startPuzzle, type GameRuntimeAuthority } from '../../src/game/session'
 import { guidanceInterventionsFor, type TeacherSignal } from '../../src/game/teaching'
 import { guidanceDeliveryIdentity, puzzleId, type GuidanceDefinition, type GuidanceIntervention } from '../../src/game/types'
+import { singleStepAction } from '../../src/kernel/proof/action'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { fourVeils, twoVeils } from './fixtures'
 
 const four = fourVeils()
@@ -33,7 +35,7 @@ const guidance: GuidanceDefinition = {
   interventions: [opening, recognizedUnwinnable, completion],
 }
 const authority: GameRuntimeAuthority = {
-  context: { relations: new Map(), theorems: new Map() },
+  context: EMPTY_PROOF_CONTEXT,
 }
 const openingIdentity = guidanceDeliveryIdentity(puzzle.id, opening.id)
 const recognizedIdentity = guidanceDeliveryIdentity(puzzle.id, recognizedUnwinnable.id)
@@ -51,9 +53,9 @@ describe('passive guidance matching', () => {
   })
 
   it('offers an exact authored unwinnable state as passive recovery guidance', () => {
-    const transition = applyGameSteps(
+    const transition = applyGameAction(
       startPuzzle(puzzle),
-      [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
+      singleStepAction('doubleCutElim', { rule: 'doubleCutElim', region: four.eliminations[0]! }),
       authority,
     )
 
@@ -88,9 +90,9 @@ describe('passive guidance matching', () => {
     let signal: TeacherSignal | undefined
 
     expect(() => {
-      const transition = applyGameSteps(
+      const transition = applyGameAction(
         unchanged,
-        [{ rule: 'doubleCutElim', region: 'missing-region' }],
+        singleStepAction('doubleCutElim', { rule: 'doubleCutElim', region: 'missing-region' }),
         authority,
       )
       signal = {

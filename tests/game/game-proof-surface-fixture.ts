@@ -3,7 +3,9 @@ import { GameProofViewport } from '../../src/game/interface/proof-surface'
 import { brushHitTest } from '../../src/game/interface/loupe/hittest'
 import { gameProofMotionPreferences } from '../../src/game/interface/proof-motion'
 import { mountTimelineLever } from '../../src/game/interface/timeline-lever'
-import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
+import { applyAction } from '../../src/kernel/proof/action'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { DARK } from '../../src/view/paint'
 import { comprehensionFixture } from '../app/comprehension-fixture'
 import { minimalPuzzle } from './catalog-fixture'
@@ -30,17 +32,14 @@ const surface = new GameProofViewport({
   overlayHost: environment.element,
   diagram: () => diagram,
   boundary: () => [],
-  context: () => ({ theorems: new Map(), relations: new Map() }),
+  context: () => EMPTY_PROOF_CONTEXT,
   orientation: () => 'forward',
   theme: () => DARK,
   fuel: () => 256,
-  prepare: (steps) => {
+  prepare: (action) => {
     prepared++
-    preparedSteps.push(...steps)
-    let next = diagram
-    for (const step of steps) {
-      next = applyStep(next, step, { theorems: new Map(), relations: new Map() }, 'backward')
-    }
+    preparedSteps.push(...action.steps)
+    const next = applyAction(diagram, action, EMPTY_PROOF_CONTEXT, 'backward')
     return () => { diagram = next }
   },
   motionPreferences: () => gameProofMotionPreferences(true),
@@ -50,13 +49,13 @@ const surface = new GameProofViewport({
 })
 const timeline = mountTimelineLever(
   environment.timelineHandleSlot,
-  { kind: 'active', timeline: { states: timelineStates, steps: [], cursor: timelineCursor } },
+  { kind: 'active', timeline: { states: timelineStates, actions: [], cursor: timelineCursor } },
   (cursor) => {
     timelineCursor = cursor
     timelineRequests.push(cursor)
     timeline.update({
       kind: 'active',
-      timeline: { states: timelineStates, steps: [], cursor: timelineCursor },
+      timeline: { states: timelineStates, actions: [], cursor: timelineCursor },
     })
   },
 )
@@ -184,7 +183,7 @@ const state = {
     timelineCursor = cursor
     timeline.update({
       kind: 'active',
-      timeline: { states: timelineStates, steps: [], cursor: timelineCursor },
+      timeline: { states: timelineStates, actions: [], cursor: timelineCursor },
     })
   },
   disposeAndProbe: () => {

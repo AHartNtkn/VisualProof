@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as validationModule from '../../scripts/validate-game-content'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, RegionId } from '../../src/kernel/diagram/diagram'
-import type { GameStep } from '../../src/game/types'
+import type { ProofStep } from '../../src/kernel/proof/step'
 
 type StartViolationCode =
   | 'diagram-structure'
@@ -36,7 +36,7 @@ type PropositionalShape = {
 
 const authority = validationModule as typeof validationModule & {
   analyzeSeyricStart(diagram: Diagram): StartAnalysis
-  auditSeyricWitness(diagram: Diagram, steps: readonly GameStep[]): WitnessAudit
+  auditSeyricWitness(diagram: Diagram, steps: readonly ProofStep[]): WitnessAudit
   analyzeSeyricPropositionalShape(diagram: Diagram): PropositionalShape
 }
 
@@ -225,8 +225,8 @@ describe('Seyric authored-content authority', () => {
     const substantive = {
       rule: 'erasure',
       sel: { region: fixture.inner, regions: [], nodes: [], wires: [] },
-    } as GameStep
-    const witness: readonly GameStep[] = [
+    } as ProofStep
+    const witness: readonly ProofStep[] = [
       substantive,
       { rule: 'vacuousElim', region: fixture.inner },
       { rule: 'vacuousElim', region: fixture.outer },
@@ -245,8 +245,8 @@ describe('Seyric authored-content authority', () => {
     const lateSubstantive = {
       rule: 'erasure',
       sel: { region: fixture.inner, regions: [], nodes: [], wires: [] },
-    } as GameStep
-    const witnesses: readonly (readonly GameStep[])[] = [
+    } as ProofStep
+    const witnesses: readonly (readonly ProofStep[])[] = [
       [
         { rule: 'vacuousElim', region: fixture.inner },
         lateSubstantive,
@@ -275,7 +275,7 @@ describe('Seyric authored-content authority', () => {
 
   it('rejects a double-cut elimination interleaved inside the prefix cleanup block', () => {
     const fixture = validGlobalPrefix()
-    const witness: readonly GameStep[] = [
+    const witness: readonly ProofStep[] = [
       { rule: 'vacuousElim', region: fixture.inner },
       { rule: 'doubleCutElim', region: 'interleaved-structural-pair' },
       { rule: 'vacuousElim', region: fixture.outer },

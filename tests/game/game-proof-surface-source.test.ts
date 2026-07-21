@@ -24,7 +24,7 @@ describe('game-owned proof surface boundaries', () => {
     expect(combined).toMatch(/physicsEnabled:[^\n]*construction === null/)
     expect(combined).toMatch(/zoomEnabled:[^\n]*construction === null/)
     expect(combined).not.toMatch(/fillRect\s*\(/)
-    expect(combined).not.toMatch(/Applicable theorems|Closed theorems|citation cycle|armed reference|citeTheorem/i)
+    expect(combined).not.toMatch(/Applicable theorems|Closed theorems|citation cycle|armed reference/i)
   })
 
   it('leaves the gasket as the sole outer boundary while retaining canvas focus', () => {

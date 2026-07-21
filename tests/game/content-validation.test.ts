@@ -12,20 +12,31 @@ import { gameContentFiles } from '../../src/game/content/files'
 import { selectionContents, type Diagram, type RegionId, type SubgraphSelection } from '../../src/kernel/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
-import { applyStep } from '../../src/kernel/proof'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson } from '../../src/kernel/proof/json'
+import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 
 type JsonRecord = Record<string, any>
 
 const readJson = (path: string): JsonRecord => JSON.parse(readFileSync(path, 'utf8')) as JsonRecord
 const writeJson = (path: string, value: unknown): void => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
-const proofContext = { theorems: new Map(), relations: new Map() }
+const proofContext = EMPTY_PROOF_CONTEXT
 
-const creativePrimaryRule = new Map([
+const validationSteps = (id: string): readonly ProofStep[] => {
+  const validation = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
+  const solution = validation.solution as readonly unknown[]
+  return solution
+    .map((action: unknown, index: number) => actionFromJson(action, `${id} solution action ${index}`))
+    .flatMap((action) => action.steps)
+}
+
+const causalPrimaryRule = new Map([
   ['compound-copy-authority-contrast', 'iteration'],
   ['compound-double-cut-selection', 'doubleCutIntro'],
   ['content-bearing-annulus-choice', 'doubleCutElim'],
-  ['double-cut-insertion-workspace', 'insertion'],
-  ['grouped-branch-construction', 'insertion'],
+  ['double-cut-insertion-workspace', 'boundRelationSpawn'],
+  ['grouped-branch-construction', 'erasure'],
   ['useful-vacuous-owner-workspace', 'vacuousIntro'],
 ])
 
@@ -38,92 +49,28 @@ const creativePrerequisites = new Map([
   ['useful-vacuous-owner-workspace', ['blank-witness', 'empty-ring-release', 'marked-echo-deiteration']],
 ])
 
-const creativePrimaryStepIndex = new Map([
+const causalPrimaryStepIndex = new Map([
   ['compound-copy-authority-contrast', 0],
   ['compound-double-cut-selection', 0],
   ['content-bearing-annulus-choice', 0],
-  ['double-cut-insertion-workspace', 1],
+  ['double-cut-insertion-workspace', 2],
   ['grouped-branch-construction', 0],
   ['useful-vacuous-owner-workspace', 0],
 ])
 
-const boundAtomPattern = (() => {
-  const builder = new DiagramBuilder()
-  const binder = builder.bubble(builder.root, 0)
-  builder.atom(binder, binder)
-  return { pattern: { diagram: builder.build(), boundary: [] }, binder }
-})()
-
-const insertBoundAtom = (
+const spawnBoundAtom = (
   diagram: Diagram,
   region: RegionId,
   binder: RegionId,
 ): Diagram => applyStep(diagram, {
-  rule: 'insertion',
-  region,
-  pattern: boundAtomPattern.pattern,
-  attachments: [],
-  binders: { [boundAtomPattern.binder]: binder },
+  rule: 'boundRelationSpawn', region, binder, arity: 0,
 }, proofContext, 'backward')
 
-const deiterate = (diagram: Diagram, sel: SubgraphSelection): Diagram => applyStep(diagram, {
-  rule: 'deiteration', sel, fuel: 100,
-}, proofContext, 'backward')
-
-const contentBearingDoubleCutPatterns = (() => {
-  const exactBuilder = new DiagramBuilder()
-  const exactP = exactBuilder.bubble(exactBuilder.root, 0)
-  const exactQ = exactBuilder.bubble(exactP, 0)
-  const exactOuter = exactBuilder.cut(exactQ)
-  const exactInner = exactBuilder.cut(exactOuter)
-  exactBuilder.atom(exactInner, exactP)
-  exactBuilder.atom(exactInner, exactQ)
-
-  const nearbyBuilder = new DiagramBuilder()
-  const nearbyP = nearbyBuilder.bubble(nearbyBuilder.root, 0)
-  const nearbyOuter = nearbyBuilder.cut(nearbyP)
-  const nearbyInner = nearbyBuilder.cut(nearbyOuter)
-  nearbyBuilder.atom(nearbyInner, nearbyP)
-
-  return {
-    exact: {
-      pattern: { diagram: exactBuilder.build(), boundary: [] },
-      binders: { p: exactP, q: exactQ },
-    },
-    nearby: {
-      pattern: { diagram: nearbyBuilder.build(), boundary: [] },
-      binders: { p: nearbyP },
-    },
-  }
-})()
-
-const insertContentBearingDoubleCut = (
-  diagram: Diagram,
-  region: RegionId,
-  binders: { readonly p: RegionId; readonly q?: RegionId },
-): Diagram => {
-  if (binders.q === undefined) {
-    const source = contentBearingDoubleCutPatterns.nearby
-    return applyStep(diagram, {
-      rule: 'insertion',
-      region,
-      pattern: source.pattern,
-      attachments: [],
-      binders: { [source.binders.p]: binders.p },
-    }, proofContext, 'backward')
-  }
-  const source = contentBearingDoubleCutPatterns.exact
-  return applyStep(diagram, {
-    rule: 'insertion',
-    region,
-    pattern: source.pattern,
-    attachments: [],
-    binders: {
-      [source.binders.p]: binders.p,
-      [source.binders.q]: binders.q,
-    },
-  }, proofContext, 'backward')
-}
+const deiterationStep = (diagram: Diagram, sel: SubgraphSelection): ProofStep => ({
+  rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, 100),
+})
+const deiterate = (diagram: Diagram, sel: SubgraphSelection): Diagram =>
+  applyStep(diagram, deiterationStep(diagram, sel), proofContext, 'backward')
 
 const innerCutAround = (diagram: Diagram, stableNode: string): SubgraphSelection => {
   const inner = diagram.nodes[stableNode]?.region
@@ -209,10 +156,7 @@ describe('build-only game content evidence', () => {
   })
 
   it('gives the marked echo a deiteration-first witness', () => {
-    const evidence = readJson(resolve(
-      process.cwd(), 'content/validation/marked-echo-deiteration.json',
-    ))
-    expect(evidence.solution[0]?.rule).toBe('deiteration')
+    expect(validationSteps('marked-echo-deiteration')[0]?.rule).toBe('deiteration')
   })
 
   it('finds a negative host where an empty cut makes competing content disposable', () => {
@@ -266,10 +210,7 @@ describe('build-only game content evidence', () => {
     const catalog = loadGameContent(gameContentFiles)
     const intimidating = catalog.puzzle('atomic-fragment-erasure' as never).diagram
     const simple = catalog.puzzle('forked-veil' as never).diagram
-    const evidence = readJson(resolve(
-      process.cwd(), 'content/validation/atomic-fragment-erasure.json',
-    ))
-    const first = evidence.solution[0]
+    const first = validationSteps('atomic-fragment-erasure')[0]
 
     expect(catalog.puzzleFingerprint('atomic-fragment-erasure' as never))
       .not.toBe(catalog.puzzleFingerprint('forked-veil' as never))
@@ -283,6 +224,7 @@ describe('build-only game content evidence', () => {
       rule: 'erasure',
       sel: { region: 'r5', regions: ['r7'], nodes: [], wires: [] },
     })
+    if (first?.rule !== 'erasure') throw new Error('atomic fragment witness must begin with erasure')
     const fragment = selectionContents(intimidating, first.sel)
     expect([...fragment.allRegions].sort()).toEqual(['r7', 'r8', 'r9'])
     expect([...fragment.allNodes].sort()).toEqual(['n0', 'n1', 'n2', 'n3'])
@@ -333,27 +275,26 @@ describe('build-only game content evidence', () => {
     expect(row.experientialNeighbors).toContain('forked-veil')
   })
 
-  it('gates each reconstructed creative operation with its witness and prerequisites', () => {
+  it('gates each reconstructed causal operation with its witness and prerequisites', () => {
     const catalog = loadGameContent(gameContentFiles)
 
-    for (const [id, primaryRule] of creativePrimaryRule) {
+    for (const [id, primaryRule] of causalPrimaryRule) {
       expect(findEmptyCutShortcutHosts(catalog.puzzle(id as never).diagram), id).toEqual([])
-      const evidence = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
-      expect(evidence.solution[creativePrimaryStepIndex.get(id)!]?.rule, id).toBe(primaryRule)
+      expect(validationSteps(id)[causalPrimaryStepIndex.get(id)!]?.rule, id).toBe(primaryRule)
       expect(catalog.placement(id as never).prerequisites, id)
         .toEqual(creativePrerequisites.get(id))
     }
   })
 
-  it('uses a legal shallow insertion to unlock a pre-existing compound target', () => {
+  it('uses a legal shallow bound relation spawn to unlock a pre-existing compound target', () => {
     const catalog = loadGameContent(gameContentFiles)
     const start = catalog.puzzle('shallow-edit-legality-contrast' as never).diagram
     const target = { region: 'r6', regions: [], nodes: ['n3', 'n4'], wires: [] }
 
-    expect(() => insertBoundAtom(start, 'r3', 'r2')).toThrow(/requires a positive region/)
+    expect(() => spawnBoundAtom(start, 'r3', 'r2')).toThrow(/requires a positive region/)
     expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
-    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r2'), target)).not.toThrow()
-    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r3'), target))
+    expect(() => deiterate(spawnBoundAtom(start, 'r4', 'r2'), target)).not.toThrow()
+    expect(() => deiterate(spawnBoundAtom(start, 'r4', 'r3'), target))
       .toThrow(/no justifying occurrence/)
   })
 
@@ -551,33 +492,28 @@ describe('build-only game content evidence', () => {
     }, proofContext, 'backward')).toThrow(/annulus.*must contain exactly one child cut and nothing else/)
   })
 
-  it('uses the introduced positive annulus for a material compound insertion', () => {
+  it('constructs the exact bound branch only inside the introduced positive annulus', () => {
     const start = loadGameContent(gameContentFiles)
       .puzzle('double-cut-insertion-workspace' as never).diagram
-    const preIntroTarget = { region: 'r3', regions: ['r4'], nodes: [], wires: [] }
-
-    expect(() => insertContentBearingDoubleCut(start, 'r3', { p: 'r2', q: 'r3' }))
-      .toThrow(/requires a positive region/)
-    for (const existingPositiveHost of ['r4', 'r6']) {
-      const direct = insertContentBearingDoubleCut(start, existingPositiveHost, {
-        p: 'r2', q: 'r3',
-      })
-      expect(() => deiterate(direct, preIntroTarget)).toThrow(/no justifying occurrence/)
+    const [introduceWorkspace, introduceBranch, spawnP, spawnQ, consume] =
+      validationSteps('double-cut-insertion-workspace')
+    expect([introduceWorkspace?.rule, introduceBranch?.rule, spawnP?.rule, spawnQ?.rule, consume?.rule])
+      .toEqual(['doubleCutIntro', 'doubleCutIntro', 'boundRelationSpawn', 'boundRelationSpawn', 'deiteration'])
+    if (introduceWorkspace === undefined || introduceBranch === undefined
+      || spawnP === undefined || spawnQ === undefined || consume === undefined
+      || consume.rule !== 'deiteration') {
+      throw new Error('workspace witness must contain its complete bound-branch construction')
     }
-    const introduced = applyStep(start, {
-      rule: 'doubleCutIntro',
-      sel: { region: 'r3', regions: ['r4'], nodes: [], wires: [] },
-    }, proofContext, 'backward')
-    const target = { region: 'dc_0', regions: ['r4'], nodes: [], wires: [] }
-    expect(() => deiterate(introduced, target)).toThrow(/no justifying occurrence/)
 
-    const inserted = insertContentBearingDoubleCut(introduced, 'dc', { p: 'r2', q: 'r3' })
-    expect(() => deiterate(inserted, target)).not.toThrow()
-
-    const nearby = insertContentBearingDoubleCut(introduced, 'dc', { p: 'r2' })
-    expect(() => deiterate(nearby, target)).toThrow(/no justifying occurrence/)
-    expect(() => insertContentBearingDoubleCut(introduced, 'dc_0', { p: 'r2', q: 'r3' }))
-      .toThrow(/requires a positive region/)
+    expect(() => applyStep(start, introduceBranch, proofContext, 'backward')).toThrow()
+    const workspace = applyStep(start, introduceWorkspace, proofContext, 'backward')
+    expect(() => applyStep(workspace, spawnP, proofContext, 'backward')).toThrow()
+    const branch = applyStep(workspace, introduceBranch, proofContext, 'backward')
+    expect(() => findDeiterationEvidence(branch, consume.sel, 100)).toThrow(/justifying occurrence/)
+    const oneBinder = applyStep(branch, spawnP, proofContext, 'backward')
+    expect(() => findDeiterationEvidence(oneBinder, consume.sel, 100)).toThrow(/justifying occurrence/)
+    const exact = applyStep(oneBinder, spawnQ, proofContext, 'backward')
+    expect(() => applyStep(exact, consume, proofContext, 'backward')).not.toThrow()
   })
 
   it('represents both nested owners as distinct binder pairs', () => {

@@ -11,6 +11,8 @@ import type { CursebreakerPlatform } from '../../src/game/platform'
 import { encodeGameSave } from '../../src/game/save'
 import { controllerSource } from './controller-fixture'
 import { gameContentFiles } from '../../src/game/content'
+import { singleStepAction, type ProofAction } from '../../src/kernel/proof/action'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { buildTestCatalog } from './catalog-fixture'
 import { openingDemonstration, openingWitness } from './content-evidence'
 import {
@@ -49,17 +51,23 @@ const scenarioCatalog = scenario === 'opening' ? loadGameContent(gameContentFile
               puzzles: controllerSource().puzzles.map((puzzle) => ({ ...puzzle, teacher: [] })),
             })
 const catalog = scenarioCatalog
-const controllerEvidence = new Map(controllerSource().puzzles.map((puzzle) => [puzzle.id, puzzle.witness] as const))
+const actionsFor = (steps: readonly ProofStep[]): readonly ProofAction[] =>
+  steps.map((step) => singleStepAction(step.rule, step))
+const controllerEvidence = new Map(controllerSource().puzzles.map(
+  (puzzle) => [puzzle.id, actionsFor(puzzle.witness)] as const,
+))
 
 const witnessFor = (id: string) => scenario === 'opening'
   ? openingWitness(id)
-  : runtimeEvidenceFor(id)?.witness ?? controllerEvidence.get(id as never) ?? []
+  : runtimeEvidenceFor(id) === undefined
+    ? controllerEvidence.get(id as never) ?? []
+    : actionsFor(runtimeEvidenceFor(id)!.witness)
 
 const restoredSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
   const first = catalog.puzzleIds[0]!
   state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
-  state = reduceGame(catalog, state, { kind: 'applySteps', steps: [witnessFor(first)[0]!] }).state
+  state = reduceGame(catalog, state, { kind: 'applyProofAction', action: witnessFor(first)[0]! }).state
   state = reduceGame(catalog, state, { kind: 'setCultureScroll', culture: state.selectedCulture, scroll: 137 }).state
   state = reduceGame(catalog, state, { kind: 'setReducedMotion', value: true }).state
   state = reduceGame(catalog, state, { kind: 'setFullscreen', value: false }).state
@@ -71,8 +79,8 @@ const completedSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
   const first = catalog.puzzleIds[0]!
   state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
-  for (const step of witnessFor(first)) {
-    state = reduceGame(catalog, state, { kind: 'applySteps', steps: [step] }).state
+  for (const action of witnessFor(first)) {
+    state = reduceGame(catalog, state, { kind: 'applyProofAction', action }).state
   }
   return encodeGameSave(catalog, state)
 }
@@ -135,17 +143,17 @@ const platform: CursebreakerPlatform = {
 const stateProjection = (debug: CursebreakerDebugState) => ({
   mode: debug.state.mode,
   activePuzzle: debug.state.activePuzzle,
-  completed: [...debug.state.completed],
+  completedArtifacts: [...debug.state.completedArtifacts.keys()],
   cursor: debug.state.activePuzzle === null ? null : (
-    debug.state.completed.has(debug.state.activePuzzle)
+    debug.state.completedArtifacts.has(debug.state.activePuzzle)
       ? debug.state.replays.get(debug.state.activePuzzle)?.timeline.cursor
       : debug.state.firstAttempts.get(debug.state.activePuzzle)?.timeline.cursor
   ) ?? null,
-  steps: debug.state.activePuzzle === null ? [] : [...(
-    debug.state.completed.has(debug.state.activePuzzle)
-      ? debug.state.replays.get(debug.state.activePuzzle)?.timeline.steps
-      : debug.state.firstAttempts.get(debug.state.activePuzzle)?.timeline.steps
-  ) ?? []].map((step) => step.rule),
+  actions: debug.state.activePuzzle === null ? [] : [...(
+    debug.state.completedArtifacts.has(debug.state.activePuzzle)
+      ? debug.state.replays.get(debug.state.activePuzzle)?.timeline.actions
+      : debug.state.firstAttempts.get(debug.state.activePuzzle)?.timeline.actions
+  ) ?? []].map((action) => action.label),
   selectedCulture: debug.state.selectedCulture,
   selectedScroll: debug.state.scrollByCulture.get(debug.state.selectedCulture),
   settings: debug.state.settings,
@@ -203,9 +211,9 @@ const fixture = {
   witness: (index: number) => {
     const active = requireMounted().debug().state.activePuzzle
     if (active === null) throw new Error('no active puzzle')
-    const step = witnessFor(active)[index]
-    if (step === undefined) throw new Error(`active puzzle has no witness step ${index}`)
-    requireMounted().dispatch({ kind: 'applySteps', steps: [step] })
+    const action = witnessFor(active)[index]
+    if (action === undefined) throw new Error(`active puzzle has no witness action ${index}`)
+    requireMounted().dispatch({ kind: 'applyProofAction', action })
   },
   unwinnable: () => {
     const active = requireMounted().debug().state.activePuzzle
@@ -216,8 +224,8 @@ const fixture = {
     if (intervention?.trigger.kind !== 'recognizedUnwinnable') {
       throw new Error('active puzzle has no recognized unwinnable demonstration')
     }
-    for (const step of openingDemonstration(active, intervention.id)) {
-      requireMounted().dispatch({ kind: 'applySteps', steps: [step] })
+    for (const action of openingDemonstration(active, intervention.id)) {
+      requireMounted().dispatch({ kind: 'applyProofAction', action })
     }
   },
   puzzles: () => catalog.puzzleIds,

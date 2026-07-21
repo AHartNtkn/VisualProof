@@ -4,6 +4,9 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { weakHeadNormalize } from '../../src/kernel/term/hnf'
+import { freePorts } from '../../src/kernel/term/term'
+import { termNodeAt } from '../../src/kernel/rules/access'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
 import { mkEngine } from '../../src/view/engine'
 import { DARK } from '../../src/view/paint'
 import {
@@ -18,8 +21,10 @@ describe('game proof motion ownership', () => {
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     const target = weakHeadNormalize(diagram.nodes[node]!.kind === 'term' ? diagram.nodes[node]!.term : parseTerm('x'), 256).term
-    const conversion = applyConversion(diagram, node, target, 256)
-    const step = { rule: 'conversion' as const, node, term: target, certificate: conversion.certificate, attachments: {} }
+    const source = termNodeAt(diagram, node)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
+    const conversion = applyConversion(diagram, node, target, correspondence, 256)
+    const step = { rule: 'conversion' as const, node, term: target, certificate: conversion.certificate, correspondence, attachments: {} }
     const motion = new GameProofMotion({
       preferences: () => gameProofMotionPreferences(false), diagram: () => diagram,
       engine: () => engine, theme: () => DARK,
@@ -49,9 +54,11 @@ describe('game proof motion ownership', () => {
     motion.observeSwap(before, after, 0)
     expect(motion.debug(1).ghosts).toBeGreaterThan(0)
     const target = weakHeadNormalize(diagram.nodes[node]!.kind === 'term' ? diagram.nodes[node]!.term : parseTerm('x'), 256).term
-    const conversion = applyConversion(diagram, node, target, 256)
+    const source = termNodeAt(diagram, node)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
+    const conversion = applyConversion(diagram, node, target, correspondence, 256)
     let commits = 0
-    motion.run({ rule: 'conversion', node, term: target, certificate: conversion.certificate, attachments: {} }, () => { commits++ }, 0)
+    motion.run({ rule: 'conversion', node, term: target, certificate: conversion.certificate, correspondence, attachments: {} }, () => { commits++ }, 0)
     motion.dispose()
     motion.frame(1_000_000)
     expect([motion.playing, commits]).toEqual([false, 0])

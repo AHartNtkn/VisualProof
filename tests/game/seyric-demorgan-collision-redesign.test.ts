@@ -12,7 +12,8 @@ import type { Diagram, RegionId } from '../../src/kernel/diagram/diagram'
 import { diagramFromJson } from '../../src/kernel/diagram/json'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import type { SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson } from '../../src/kernel/proof/json'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 const redesignedIds = [
@@ -33,13 +34,15 @@ type ValidationFile = {
 }
 type Item = { readonly kind: 'region' | 'node'; readonly id: string }
 
-const context = { theorems: new Map(), relations: new Map() }
+const context = EMPTY_PROOF_CONTEXT
 const content = <T>(relativePath: string): T =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'content', relativePath), 'utf8')) as T
 const puzzle = (id: string): Diagram =>
   diagramFromJson(content<PuzzleFile>(`puzzles/${id}.json`).diagram)
 const witness = (id: string): readonly ProofStep[] =>
-  content<ValidationFile>(`validation/${id}.json`).solution.map(stepFromJson)
+  content<ValidationFile>(`validation/${id}.json`).solution
+    .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+    .flatMap((action) => action.steps)
 const replay = (diagram: Diagram, steps: readonly ProofStep[]): Diagram =>
   steps.reduce((state, step) => applyStep(state, step, context, 'backward'), diagram)
 const directItems = (diagram: Diagram, region: RegionId): readonly Item[] => [

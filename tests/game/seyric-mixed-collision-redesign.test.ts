@@ -9,7 +9,8 @@ import {
 } from '../../src/game/content/seyric-authority'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { diagramFromJson } from '../../src/kernel/diagram/json'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson } from '../../src/kernel/proof/json'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 const redesignedIds = [
@@ -30,13 +31,15 @@ type ValidationFile = {
   readonly recognizedStates: readonly unknown[]
 }
 
-const context = { theorems: new Map(), relations: new Map() }
+const context = EMPTY_PROOF_CONTEXT
 const content = <T>(relativePath: string): T =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'content', relativePath), 'utf8')) as T
 const puzzle = (id: string): Diagram =>
   diagramFromJson(content<PuzzleFile>(`puzzles/${id}.json`).diagram)
 const witness = (id: string): readonly ProofStep[] =>
-  content<ValidationFile>(`validation/${id}.json`).solution.map(stepFromJson)
+  content<ValidationFile>(`validation/${id}.json`).solution
+    .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+    .flatMap((action) => action.steps)
 const replay = (diagram: Diagram, steps: readonly ProofStep[]): Diagram =>
   steps.reduce((state, step) => applyStep(state, step, context, 'backward'), diagram)
 const replayAttempt = (diagram: Diagram, steps: readonly ProofStep[]): Diagram | null => {
@@ -155,10 +158,10 @@ describe('mixed Seyric collision redesigns', () => {
     expect(() => applyStep(diagram, leftUse, context, 'backward')).not.toThrow()
     expect(() => applyStep(diagram, rightUse, context, 'backward')).not.toThrow()
 
-    const sourceRemoved = applyStep(diagram, stepFromJson({
+    const sourceRemoved = applyStep(diagram, {
       rule: 'erasure',
       sel: { region: 'r4', regions: [], nodes: ['n0'], wires: [] },
-    }), context, 'backward')
+    }, context, 'backward')
     expect(() => applyStep(sourceRemoved, leftUse, context, 'backward')).toThrow()
     expect(() => applyStep(sourceRemoved, rightUse, context, 'backward')).toThrow()
   })
@@ -171,10 +174,11 @@ describe('mixed Seyric collision redesigns', () => {
     for (const node of factorNodes) {
       const region = diagram.nodes[node]?.region
       expect(region, `${node} must be present`).toBeDefined()
-      expect(() => applyStep(diagram, stepFromJson({
+      if (region === undefined) throw new Error(`${node} must be present`)
+      expect(() => applyStep(diagram, {
         rule: 'erasure',
         sel: { region, regions: [], nodes: [node], wires: [] },
-      }), context, 'backward'), `${node} must not be initially erasable`).toThrow()
+      }, context, 'backward'), `${node} must not be initially erasable`).toThrow()
     }
 
     const factorUses = steps.flatMap((step, index) => step.rule === 'deiteration'
@@ -191,45 +195,17 @@ describe('mixed Seyric collision redesigns', () => {
 
   it('rejects the former erase-both-factors consensus bypass', () => {
     const diagram = puzzle('classical-consensus-branch-building')
-    const bypass = [
-      stepFromJson({
+    const bypass: readonly ProofStep[] = [
+      {
         rule: 'erasure',
         sel: { region: 'r6', regions: [], nodes: ['n6'], wires: [] },
-      }),
-      stepFromJson({
+      },
+      {
         rule: 'erasure',
         sel: { region: 'r9', regions: [], nodes: ['n7'], wires: [] },
-      }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'r12' }),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r5', regions: ['r7'], nodes: [], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'r5' }),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r8', regions: ['r11'], nodes: [], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'r8' }),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r10', regions: [], nodes: ['n2'], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({
-        rule: 'erasure',
-        sel: { region: 'r16', regions: ['r14', 'r15'], nodes: ['n0'], wires: [] },
-      }),
-      stepFromJson({ rule: 'vacuousElim', region: 'r16' }),
-      stepFromJson({ rule: 'vacuousElim', region: 'r4' }),
-      stepFromJson({ rule: 'vacuousElim', region: 'r3' }),
-      stepFromJson({ rule: 'vacuousElim', region: 'r2' }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'r1' }),
+      },
     ]
 
-    const attempt = replayAttempt(diagram, bypass)
-    expect(attempt === null || !isBlank(attempt)).toBe(true)
+    expect(replayAttempt(diagram, bypass)).toBeNull()
   })
 })

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { applyStep } from '../../src/kernel/proof/step'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { artifactTheoremContext } from '../../src/game/artifact-theorem'
+import { singleStepAction } from '../../src/kernel/proof/action'
+import { artifactTheoremContext, certifyCompletedArtifact } from '../../src/game/artifact-theorem'
 import { planArtifactDrop } from '../../src/game/interface/artifact-drop'
 import { buildTestCatalog, minimalPuzzle, minimalSource } from './catalog-fixture'
 import { twoVeils } from './fixtures'
@@ -16,7 +17,10 @@ const catalog = buildTestCatalog({
   puzzles: [testArtifact],
 })
 const artifact = catalog.puzzle(testArtifact.id)
-const completed = artifactTheoremContext(catalog, new Set([artifact.id]))
+const completionAction = singleStepAction(testArtifact.witness[0]!.rule, testArtifact.witness[0]!)
+const completedArtifact = certifyCompletedArtifact(catalog, new Map(), artifact, [completionAction])
+const completedArtifacts = new Map([[artifact.id, completedArtifact]])
+const completed = artifactTheoremContext(catalog, completedArtifacts)
 
 describe('completed artifact drop authority', () => {
   it('dissolves a cut-only exact occurrence through an ordinary reverse theorem step', () => {
@@ -68,7 +72,7 @@ describe('completed artifact drop authority', () => {
   })
 
   it('refuses incomplete artifacts, similar forms, and strict-subgraph hits without a step', () => {
-    const unavailable = artifactTheoremContext(catalog, new Set())
+    const unavailable = artifactTheoremContext(catalog, new Map())
     expect(planArtifactDrop({
       artifact,
       diagram: artifact.diagram,

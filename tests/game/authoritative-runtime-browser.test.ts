@@ -43,11 +43,11 @@ const openFixture = async (
 const completeProductionPuzzle = async (
   page: Page,
   puzzle: string,
-  witnessSteps: number,
+  witnessActions: number,
 ): Promise<void> => {
   await page.locator(`[data-puzzle="${puzzle}"]`).click()
-  for (let index = 0; index < witnessSteps; index += 1) {
-    await page.evaluate((step) => window.__authoritativeRuntimeFixture.witness(step), index)
+  for (let index = 0; index < witnessActions; index += 1) {
+    await page.evaluate((action) => window.__authoritativeRuntimeFixture.witness(action), index)
   }
   await page.getByRole('button', { name: 'Return to level selection' }).click()
 }
@@ -467,7 +467,7 @@ describe('authoritative production renderer runtime', () => {
       const replacements = await page.evaluate(() =>
         window.__authoritativeRuntimeFixture.invalidSaveReplacements())
       expect(replacements).toHaveLength(1)
-      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 5, mode: 'archive' })
+      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 6, mode: 'archive' })
     } finally { await page.close() }
   })
 
@@ -636,7 +636,7 @@ describe('authoritative production renderer runtime', () => {
       await page.evaluate(() => window.__authoritativeRuntimeFixture.witness(2))
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
         cursor: 1,
-        steps: ['doubleCutElim'],
+        actions: ['doubleCutElim'],
         proofInstance: before.proofInstance,
       })
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().proofRebuilds))
@@ -829,7 +829,7 @@ describe('authoritative production renderer runtime', () => {
           mode: 'archive',
           activePuzzle: null,
           attempts: {},
-          completed: [],
+          completedArtifacts: [],
           completionReceipt: null,
           deliveredGuidance: [],
           guidance: null,
@@ -1025,14 +1025,14 @@ describe('authoritative production renderer runtime', () => {
       expect(await record.getAttribute('data-status')).toBe('unlocked')
       await record.click()
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
-        mode: 'puzzle', activePuzzle: puzzle, steps: [], guidance: null,
+        mode: 'puzzle', activePuzzle: puzzle, actions: [], guidance: null,
       })
       expect(await page.locator('.curse-guidance-note').count()).toBe(0)
       expect(await page.locator('.curse-game-proof-canvas').count()).toBe(1)
 
       await page.evaluate(() => window.__authoritativeRuntimeFixture.witness(0))
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
-        mode: 'puzzle', activePuzzle: puzzle, steps: ['deiteration'], guidance: null,
+        mode: 'puzzle', activePuzzle: puzzle, actions: ['deiteration'], guidance: null,
       })
       expect(await page.locator('.curse-guidance-note').count()).toBe(0)
     } finally { await page.close() }
@@ -1100,14 +1100,17 @@ describe('authoritative production renderer runtime', () => {
         const save = fixture.writes().at(-1) as any
         return {
           state: fixture.state(),
-          savedStep: save.attempts[manifest].steps.at(-1),
+          savedAction: save.attempts[manifest].actions.at(-1),
         }
       }, { manifest: manifest! })).toMatchObject({
         state: {
-          mode: 'puzzle', cursor: 1, steps: ['theorem'],
+          mode: 'puzzle', cursor: 1, actions: ['theorem'],
           proofInstance: beforeManifest.proofInstance,
         },
-        savedStep: { rule: 'theorem', direction: 'forward' },
+        savedAction: {
+          label: 'theorem',
+          steps: [{ rule: 'theorem', direction: 'forward' }],
+        },
       })
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().proofRebuilds))
         .toBeGreaterThan(beforeManifest.proofRebuilds!)

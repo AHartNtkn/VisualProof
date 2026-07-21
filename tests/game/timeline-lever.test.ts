@@ -47,7 +47,7 @@ class FakeDocument { createElement(): FakeElement { return new FakeElement(this)
 
 const diagram: Diagram = { root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes: {}, wires: {} }
 const timeline = (cursor: number, stateCount = 5): GameTimeline => ({
-  states: Array.from({ length: stateCount }, () => diagram), steps: [], cursor,
+  states: Array.from({ length: stateCount }, () => diagram), actions: [], cursor,
 })
 const active = (value: GameTimeline): TimelineLeverProjection => ({ kind: 'active', timeline: value })
 const eventWith = <T extends Record<string, unknown>>(type: string, values: T): Event & T => {

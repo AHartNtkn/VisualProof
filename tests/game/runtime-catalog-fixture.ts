@@ -2,8 +2,11 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
+import { freePorts } from '../../src/kernel/term/term'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { applyStep } from '../../src/kernel/proof/step'
 import { applyConversion } from '../../src/kernel/rules/conversion'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
 import { weakHeadNormalize } from '../../src/kernel/term/hnf'
 import type { GameCatalog } from '../../src/game/catalog'
 import {
@@ -103,12 +106,12 @@ export function editorRuntimeCatalog(): GameCatalog {
     bubble,
     comp: materialized.relation,
     attachments: materialized.attachments,
-    binders: {},
+    binders: [],
   }
   const afterInstantiation = applyStep(
     diagram,
     instantiate,
-    { theorems: new Map(), relations: new Map() },
+    EMPTY_PROOF_CONTEXT,
     'backward',
   )
   const termWires = Object.entries(afterInstantiation.wires)
@@ -143,22 +146,29 @@ export function motionRuntimeCatalog(): GameCatalog {
   const term = builder.termNode(outer, parseTerm('(\\a. a) ((\\b. b) ((\\c. c) q))'))
   const diagram = builder.build()
   const first = { rule: 'doubleCutElim' as const, region: third }
-  const afterFirst = applyStep(diagram, first, { theorems: new Map(), relations: new Map() }, 'backward')
+  const afterFirst = applyStep(diagram, first, EMPTY_PROOF_CONTEXT, 'backward')
   const termValue = afterFirst.nodes[term]
   if (termValue?.kind !== 'term') throw new Error('motion fixture term disappeared')
   const target = weakHeadNormalize(termValue.term, 256).term
-  const conversion = applyConversion(afterFirst, term, target, 256)
+  const correspondence = proposePortCorrespondence(
+    termValue.term,
+    target,
+    termValue.freePorts,
+    freePorts(target),
+  )
+  const conversion = applyConversion(afterFirst, term, target, correspondence, 256)
   const convert = {
     rule: 'conversion' as const,
     node: term,
     term: target,
     certificate: conversion.certificate,
+    correspondence,
     attachments: {},
   }
   const afterConversion = applyStep(
     afterFirst,
     convert,
-    { theorems: new Map(), relations: new Map() },
+    EMPTY_PROOF_CONTEXT,
     'backward',
   )
   const termWires = Object.entries(afterConversion.wires)

@@ -9,7 +9,8 @@ import { puzzleId } from '../../src/game/types'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { polarity } from '../../src/kernel/diagram/regions'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import { actionFromJson } from '../../src/kernel/proof/json'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 type ValidationFile = {
@@ -25,10 +26,15 @@ const readValidation = (id: string): ValidationFile => JSON.parse(readFileSync(
   resolve(process.cwd(), 'content', 'validation', `${id}.json`),
   'utf8',
 )) as ValidationFile
-const witness = (id: string): readonly ProofStep[] => readValidation(id).solution.map(stepFromJson)
+const actions = (id: string) => readValidation(id).solution
+  .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+const witness = (id: string): readonly ProofStep[] => actions(id).flatMap((action) => action.steps)
 const contextFor = (artifacts: readonly string[]) => artifactTheoremContext(
   catalog,
-  new Set(artifacts.map(puzzleId)),
+  new Map(artifacts.map((id) => {
+    const puzzle = puzzleId(id)
+    return [puzzle, { puzzle, actions: actions(id) }] as const
+  })),
 )
 const replay = (start: Diagram, steps: readonly ProofStep[], artifacts: readonly string[]): Diagram =>
   steps.reduce((diagram, step) => applyStep(diagram, step, contextFor(artifacts), 'backward'), start)
@@ -50,11 +56,15 @@ const theoremStep = (
   direction: 'forward' | 'reverse',
   region: string,
   regions: readonly string[] = [],
-): ProofStep => stepFromJson({
+): ProofStep => ({
   rule: 'theorem',
   name: artifactTheoremName(puzzleId(name)),
   at: { sel: { region, regions, nodes: [], wires: [] }, args: [] },
   direction,
+})
+
+const deiteration = (diagram: Diagram, sel: Extract<ProofStep, { rule: 'deiteration' }>['sel']): ProofStep => ({
+  rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, 100),
 })
 
 describe('Myratic artifact collision redesigns', () => {
@@ -129,7 +139,7 @@ describe('Myratic artifact collision redesigns', () => {
     const start = catalog.puzzle(puzzleId(id)).diagram
     const artifacts = readValidation(id).availableArtifacts
     const bypass = [
-      stepFromJson({
+      {
         rule: 'doubleCutIntro',
         sel: {
           region: 'target-branch',
@@ -137,10 +147,10 @@ describe('Myratic artifact collision redesigns', () => {
           nodes: ['target-open-x', 'target-open-y', 'target-open-z'],
           wires: [],
         },
-      }),
+      } as ProofStep,
       theoremStep('sey-lem-c01', 'reverse', 'continuation-inner', ['target-outer']),
-      stepFromJson({ rule: 'doubleCutElim', region: 'continuation-outer' }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'outer' }),
+      { rule: 'doubleCutElim', region: 'continuation-outer' } as ProofStep,
+      { rule: 'doubleCutElim', region: 'outer' } as ProofStep,
     ]
 
     expect(isBlank(replay(start, bypass, artifacts))).toBe(true)
@@ -183,10 +193,10 @@ describe('Myratic artifact collision redesigns', () => {
     expect(polarity(start, 'workspace')).toBe('positive')
     expect(isBlank(replay(start, steps, validation.availableArtifacts))).toBe(true)
 
-    expect(() => applyStep(start, stepFromJson({
+    expect(() => applyStep(start, {
       rule: 'erasure',
       sel: { region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [] },
-    }), contextFor(validation.availableArtifacts), 'backward')).toThrow()
+    }, contextFor(validation.availableArtifacts), 'backward')).toThrow()
 
     const forward = steps[forwardIndex]
     const sourceTransformation = steps[forwardIndex + 1]
@@ -218,36 +228,36 @@ describe('Myratic artifact collision redesigns', () => {
     const id = 'artifact-polarity-direction-contrast'
     const start = catalog.puzzle(puzzleId(id)).diagram
     const artifacts = readValidation(id).availableArtifacts
-    const bypass = [
-      theoremStep('two-mark-projection', 'forward', 'manifest-host'),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'r4', regions: [], nodes: ['n2'], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({
-        rule: 'erasure',
-        sel: { region: 'manifest-host', regions: ['r1'], nodes: [], wires: [] },
-      }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'manifest-host' }),
-      theoremStep('two-mark-projection', 'forward', 'outer'),
-      stepFromJson({
-        rule: 'deiteration',
-        sel: { region: 'workspace', regions: ['dissolve-outer'], nodes: [], wires: [] },
-        fuel: 100,
-      }),
-      stepFromJson({
-        rule: 'erasure',
-        sel: { region: 'outer', regions: ['r1'], nodes: [], wires: [] },
-      }),
-      stepFromJson({ rule: 'doubleCutElim', region: 'outer' }),
-    ]
+    const bypass: ProofStep[] = []
+    const context = contextFor(artifacts)
+    let state = start
+    const append = (step: ProofStep): void => {
+      state = applyStep(state, step, context, 'backward')
+      bypass.push(step)
+    }
+    append(theoremStep('two-mark-projection', 'forward', 'manifest-host'))
+    append(deiteration(state, {
+      region: 'r4', regions: [], nodes: ['n2'], wires: [],
+    }))
+    append(deiteration(state, {
+      region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [],
+    }))
+    append({
+      rule: 'erasure',
+      sel: { region: 'manifest-host', regions: ['r1'], nodes: [], wires: [] },
+    })
+    append({ rule: 'doubleCutElim', region: 'manifest-host' })
+    append(theoremStep('two-mark-projection', 'forward', 'outer'))
+    append(deiteration(state, {
+      region: 'workspace', regions: ['dissolve-outer'], nodes: [], wires: [],
+    }))
+    append({
+      rule: 'erasure',
+      sel: { region: 'outer', regions: ['r1'], nodes: [], wires: [] },
+    })
+    append({ rule: 'doubleCutElim', region: 'outer' })
 
+    expect(isBlank(state)).toBe(true)
     expect(isBlank(replay(start, bypass, artifacts))).toBe(true)
   })
 
@@ -256,15 +266,15 @@ describe('Myratic artifact collision redesigns', () => {
     const start = catalog.puzzle(puzzleId(id)).diagram
     const artifacts = readValidation(id).availableArtifacts
     const bypass = [
-      stepFromJson({
+      {
         rule: 'iteration',
         sel: { region: 'repeat-y', regions: [], nodes: ['repeat-x-open'], wires: [] },
         target: 'repeat-mark',
-      }),
+      } as ProofStep,
       theoremStep('two-mark-projection', 'reverse', 'continuation-host', ['repeat-outer']),
-      stepFromJson({ rule: 'doubleCutElim', region: 'manifest-host' }),
+      { rule: 'doubleCutElim', region: 'manifest-host' } as ProofStep,
       theoremStep('two-mark-projection', 'reverse', 'workspace', ['dissolve-outer']),
-      stepFromJson({ rule: 'doubleCutElim', region: 'outer' }),
+      { rule: 'doubleCutElim', region: 'outer' } as ProofStep,
     ]
 
     expect(isBlank(replay(start, bypass, artifacts))).toBe(true)

@@ -9,9 +9,10 @@ import {
 } from '../../src/game/content/seyric-authority'
 import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Diagram, RegionId } from '../../src/kernel/diagram/diagram'
-import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { diagramFromJson } from '../../src/kernel/diagram/json'
-import { stepFromJson } from '../../src/kernel/proof/json'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { actionFromJson } from '../../src/kernel/proof/json'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 const redesignedIds = [
@@ -32,7 +33,7 @@ type ValidationFile = {
   readonly recognizedStates: readonly unknown[]
 }
 
-const context = { theorems: new Map(), relations: new Map() }
+const context = EMPTY_PROOF_CONTEXT
 
 const content = <T>(relativePath: string): T =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'content', relativePath), 'utf8')) as T
@@ -41,7 +42,9 @@ const puzzle = (id: string): Diagram =>
   diagramFromJson(content<PuzzleFile>(`puzzles/${id}.json`).diagram)
 
 const witness = (id: string): readonly ProofStep[] =>
-  content<ValidationFile>(`validation/${id}.json`).solution.map(stepFromJson)
+  content<ValidationFile>(`validation/${id}.json`).solution
+    .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
+    .flatMap((action) => action.steps)
 
 const replay = (start: Diagram, steps: readonly ProofStep[]): Diagram =>
   steps.reduce(
@@ -90,20 +93,6 @@ const closureSize = (diagram: Diagram, root: RegionId): { regions: number; nodes
   }
 }
 
-const compoundCutPattern = (arity: 1 | 2 | 3) => {
-  const builder = new DiagramBuilder()
-  const binders: RegionId[] = []
-  let parent = builder.root
-  for (let index = 0; index < arity; index += 1) {
-    const binder = builder.bubble(parent, 0)
-    binders.push(binder)
-    parent = binder
-  }
-  const group = builder.cut(parent)
-  for (const binder of binders) builder.atom(group, binder)
-  return { pattern: { diagram: builder.build(), boundary: [] }, binders }
-}
-
 describe('redesigned Seyric shortcut puzzles', () => {
   it('removes the accidental exposed-complement routes and classifies the one retained exception', () => {
     for (const id of redesignedIds.filter((candidate) => candidate !== 'sey-red-c01')) {
@@ -136,24 +125,20 @@ describe('redesigned Seyric shortcut puzzles', () => {
     const diagram = puzzle('marked-echo-deiteration')
     const exact = applyStep(diagram, witness('marked-echo-deiteration')[0]!, context, 'backward')
     expect(exact).not.toEqual(diagram)
-    expect(() => applyStep(diagram, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r6', regions: [], nodes: ['n1'], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).toThrow()
+    const atomOnly = { region: 'r6', regions: [], nodes: ['n1'], wires: [] }
+    expect(() => findDeiterationEvidence(diagram, atomOnly, 100)).toThrow()
   })
 
-  it('makes atomic insertion create the exact source consumed by the next step', () => {
+  it('makes a bound relation spawn create the exact source consumed by the next step', () => {
     const diagram = puzzle('atomic-content-insertion')
-    const [insert, consume] = witness('atomic-content-insertion')
-    const exact = applyStep(diagram, insert!, context, 'backward')
+    const [spawn, consume] = witness('atomic-content-insertion')
+    expect(spawn).toEqual({ rule: 'boundRelationSpawn', region: 'r5', binder: 'r3', arity: 0 })
+    const exact = applyStep(diagram, spawn!, context, 'backward')
     expect(() => applyStep(exact, consume!, context, 'backward')).not.toThrow()
     expect(() => applyStep(diagram, consume!, context, 'backward')).toThrow()
 
-    const wrong = compoundCutPattern(2)
     const withWrongShape = applyStep(diagram, {
-      rule: 'insertion', region: 'r5', pattern: wrong.pattern, attachments: [],
-      binders: { [wrong.binders[0]!]: 'r2', [wrong.binders[1]!]: 'r3' },
+      rule: 'boundRelationSpawn', region: 'r5', binder: 'r2', arity: 0,
     }, context, 'backward')
     expect(() => applyStep(withWrongShape, consume!, context, 'backward')).toThrow()
   })
@@ -162,11 +147,9 @@ describe('redesigned Seyric shortcut puzzles', () => {
     const diagram = puzzle('structural-recognition-routing-choice')
     const steps = witness('structural-recognition-routing-choice')
     expect(() => applyStep(diagram, steps[0]!, context, 'backward')).not.toThrow()
-    expect(() => applyStep(diagram, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r8', regions: [], nodes: ['n2'], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).toThrow()
+    expect(() => findDeiterationEvidence(diagram, {
+      region: 'r8', regions: [], nodes: ['n2'], wires: [],
+    }, 100)).toThrow()
     expect(() => applyStep(diagram, steps[3]!, context, 'backward')).toThrow()
     const routed = replay(diagram, steps.slice(0, 4))
     expect(() => applyStep(routed, steps[4]!, context, 'backward')).not.toThrow()
@@ -202,59 +185,30 @@ describe('redesigned Seyric shortcut puzzles', () => {
 
     const oldBoundaryOpened = applyStep(
       diagram,
-      stepFromJson({ rule: 'doubleCutElim', region: 'r8' }),
+      { rule: 'doubleCutElim', region: 'r8' },
       context,
       'backward',
     )
-    expect(() => applyStep(oldBoundaryOpened, stepFromJson({
-      rule: 'deiteration',
-      sel: { region: 'r6', regions: ['r7'], nodes: ['n2'], wires: [] },
-      fuel: 100,
-    }), context, 'backward')).toThrow()
+    expect(() => findDeiterationEvidence(oldBoundaryOpened, {
+      region: 'r6', regions: ['r7'], nodes: ['n2'], wires: [],
+    }, 100)).toThrow()
   })
 
-  it('requires the intact grouped insertion rather than loose, partial, larger, or wrong-host content', () => {
+  it('requires removal of the intact grouped junk branch in the current witness', () => {
     const diagram = puzzle('grouped-branch-construction')
-    const [exactInsert, consume] = witness('grouped-branch-construction')
-    const exact = applyStep(diagram, exactInsert!, context, 'backward')
-    expect(() => applyStep(exact, consume!, context, 'backward')).not.toThrow()
-
-    const pair = compoundCutPattern(2)
-    const partial = compoundCutPattern(1)
-    const larger = compoundCutPattern(3)
-    const candidates: readonly { readonly label: string; readonly step: ProofStep }[] = [
-      { label: 'loose atoms', step: {
-        rule: 'insertion', region: 'r6',
-        pattern: (() => {
-          const builder = new DiagramBuilder()
-          const p = builder.bubble(builder.root, 0)
-          const q = builder.bubble(p, 0)
-          builder.atom(q, p)
-          builder.atom(q, q)
-          return { diagram: builder.build(), boundary: [] }
-        })(),
-        attachments: [], binders: { r1: 'r2', r2: 'r3' },
-      } },
-      { label: 'partial group', step: {
-        rule: 'insertion', region: 'r6', pattern: partial.pattern, attachments: [],
-        binders: { [partial.binders[0]!]: 'r2' },
-      } },
-      { label: 'larger group', step: {
-        rule: 'insertion', region: 'r6', pattern: larger.pattern, attachments: [],
-        binders: {
-          [larger.binders[0]!]: 'r2', [larger.binders[1]!]: 'r3', [larger.binders[2]!]: 'r4',
-        },
-      } },
-      { label: 'wrong host', step: {
-        rule: 'insertion', region: 'r7', pattern: pair.pattern, attachments: [],
-        binders: { [pair.binders[0]!]: 'r2', [pair.binders[1]!]: 'r3' },
-      } },
-    ]
-
-    for (const { label, step } of candidates) {
-      const near = applyStep(diagram, step, context, 'backward')
-      expect(() => applyStep(near, consume!, context, 'backward'), label).toThrow()
-    }
+    const steps = witness('grouped-branch-construction')
+    const [removeJunk] = steps
+    expect(removeJunk).toEqual({
+      rule: 'erasure',
+      sel: { region: 'r8', regions: ['r9'], nodes: [], wires: [] },
+    })
+    expect(diagram.regions.r9).toEqual({ kind: 'cut', parent: 'r8' })
+    expect(['n4', 'n5'].map((id) => diagram.nodes[id])).toEqual([
+      { kind: 'atom', region: 'r9', binder: 'r2' },
+      { kind: 'atom', region: 'r9', binder: 'r3' },
+    ])
+    expect(isBlank(replay(diagram, steps))).toBe(true)
+    expect(() => replay(diagram, steps.slice(1))).toThrow()
   })
 
   it('keeps every redesigned puzzle structurally Seyric, replayable, witness-clean, and canonically unique', () => {
