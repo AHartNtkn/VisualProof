@@ -257,31 +257,27 @@ export class SpawnCascade {
     const viewport = this.#document.defaultView
     const maxLeft = Math.max(0, (viewport?.innerWidth ?? snapshot.screen.x + 360) - 360)
     const maxTop = Math.max(0, (viewport?.innerHeight ?? snapshot.screen.y + 320) - 320)
-    menu.style.cssText = `position:fixed;left:${Math.max(0, Math.min(snapshot.screen.x, maxLeft))}px;top:${Math.max(0, Math.min(snapshot.screen.y, maxTop))}px;z-index:71;display:flex;align-items:flex-start;font:13px system-ui,sans-serif`
+    menu.style.left = `${Math.max(0, Math.min(snapshot.screen.x, maxLeft))}px`
+    menu.style.top = `${Math.max(0, Math.min(snapshot.screen.y, maxTop))}px`
 
     const backdrop = this.#document.createElement('div')
     backdrop.className = 'vpa-spawn-backdrop'
-    backdrop.style.cssText = 'position:fixed;inset:0;z-index:70;background:transparent'
     backdrop.addEventListener('pointerdown', () => this.close())
 
     const column = this.#document.createElement('div')
-    column.className = 'vpa-spawn-column'
-    column.style.cssText = 'width:220px;overflow:hidden;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003'
+    column.className = 'vpa-spawn-column curse-context-menu'
     const search = this.#document.createElement('input')
-    search.className = 'vpa-spawn-search'
+    search.className = 'vpa-spawn-search curse-context-menu__input'
     search.type = 'search'
     search.autocomplete = 'off'
     search.placeholder = `search relations → '${snapshot.region}'`
     search.setAttribute('aria-label', 'Search relations to spawn')
-    search.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:0;border-bottom:1px solid #e7e5e4;outline:0;font:13px system-ui,sans-serif'
     const listing = this.#document.createElement('div')
     listing.className = 'vpa-spawn-listing'
-    listing.style.cssText = 'max-height:270px;overflow-y:auto'
     column.append(search, listing)
 
     const submenu = this.#document.createElement('div')
-    submenu.className = 'vpa-spawn-submenu'
-    submenu.style.cssText = 'display:none;width:190px;max-height:300px;margin-left:2px;overflow-y:auto;border:1px solid #a8a29e;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0002'
+    submenu.className = 'vpa-spawn-submenu curse-context-menu'
     menu.append(column, submenu)
     this.#menu = menu
     this.#backdrop = backdrop
@@ -293,18 +289,15 @@ export class SpawnCascade {
 
     const row = (label: string, hint: string, pick: (() => void) | null): HTMLElement => {
       const item = this.#document.createElement(pick === null ? 'div' : 'button')
-      item.className = 'vpa-spawn-row'
+      item.className = `vpa-spawn-row curse-context-menu__row${pick === null ? '' : ' curse-context-menu__action'}`
       if (pick !== null) (item as HTMLButtonElement).type = 'button'
-      item.style.cssText = `display:flex;width:100%;box-sizing:border-box;justify-content:space-between;gap:6px;padding:6px 10px;border:0;background:#fff;text-align:left;font:13px system-ui,sans-serif;${pick === null ? 'color:#78716c' : 'cursor:pointer'}`
       const name = this.#document.createElement('span')
       name.textContent = label
       const meta = this.#document.createElement('span')
+      meta.className = 'curse-context-menu__meta'
       meta.textContent = hint
-      meta.style.color = '#a8a29e'
       item.append(name, meta)
       if (pick !== null) {
-        item.addEventListener('pointerenter', () => { item.style.background = '#fef3c7' })
-        item.addEventListener('pointerleave', () => { item.style.background = '#fff' })
         item.addEventListener('click', pick)
       }
       return item
@@ -312,9 +305,8 @@ export class SpawnCascade {
 
     const heading = (text: string): HTMLElement => {
       const item = this.#document.createElement('div')
-      item.className = 'vpa-spawn-heading'
+      item.className = 'vpa-spawn-heading curse-context-menu__heading'
       item.textContent = text
-      item.style.cssText = 'padding:6px 10px 3px;color:#78716c;font:10px system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase'
       return item
     }
 
@@ -425,12 +417,10 @@ export class SpawnCascade {
       if (catalog.groups.length > 0) nodes.push(heading('Namespaces'))
       for (const group of catalog.groups) {
         const groupRow = row(group.label, `${group.entries.length} ▸`, null)
-        groupRow.style.cursor = 'pointer'
+        groupRow.classList.add('curse-context-menu__action')
         groupRow.addEventListener('pointerenter', () => {
-          groupRow.style.background = '#fef3c7'
           showNamespace(group)
         })
-        groupRow.addEventListener('pointerleave', () => { groupRow.style.background = '#fff' })
         nodes.push(groupRow)
       }
       listing.replaceChildren(...nodes)

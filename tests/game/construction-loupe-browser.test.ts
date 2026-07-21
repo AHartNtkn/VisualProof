@@ -179,6 +179,19 @@ describe('rendered circular construction loupe', () => {
       const canvas = page.locator('.cursebreaker-construction-loupe__canvas')
       await canvas.click({ button: 'right', position: { x: 260, y: 260 } })
       await expect.poll(() => page.locator('.vpa-spawn-cascade').count()).toBe(1)
+      const palette = await page.locator('.vpa-spawn-column').evaluate((node) => {
+        const style = getComputedStyle(node)
+        return {
+          backgroundColor: style.backgroundColor,
+          borderTopColor: style.borderTopColor,
+          color: style.color,
+        }
+      })
+      expect(palette).toEqual({
+        backgroundColor: 'rgba(7, 18, 30, 0.933)',
+        borderTopColor: 'rgb(89, 217, 255)',
+        color: 'rgb(234, 250, 255)',
+      })
       await page.keyboard.press('Escape')
       await canvas.focus()
       await page.keyboard.press('Backspace')

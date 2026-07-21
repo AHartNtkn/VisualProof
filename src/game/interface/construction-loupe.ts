@@ -43,6 +43,7 @@ import {
   resizeConstructionLoupe,
   type LoupeGeometry,
 } from './construction-loupe-geometry'
+import './context-menu.css'
 import './construction-loupe.css'
 
 export type ConstructionLoupeKeyAction = 'commit' | 'close' | 'undo' | 'redo'

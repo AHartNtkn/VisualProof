@@ -79,6 +79,41 @@ describe('rendered game proof surface', () => {
     } finally { await page.close() }
   })
 
+  it('uses the proof-action palette for the construction context menu', async () => {
+    const page = await openFixture()
+    try {
+      const proofPoint = await page.evaluate(() => window.__gameProofSurfaceFixture.proofNodePoint())
+      await page.mouse.click(proofPoint.x, proofPoint.y, { button: 'right' })
+      const proofMenu = page.locator('.curse-context-menu--proof')
+      await expect.poll(() => proofMenu.count()).toBe(1)
+      const proofPalette = await proofMenu.evaluate((node) => {
+        const style = getComputedStyle(node)
+        return {
+          backgroundColor: style.backgroundColor,
+          borderTopColor: style.borderTopColor,
+          color: style.color,
+          boxShadow: style.boxShadow,
+        }
+      })
+
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.open())).toBe(true)
+      await page.locator('.cursebreaker-construction-loupe__canvas')
+        .click({ button: 'right', position: { x: 210, y: 210 } })
+      const constructionMenu = page.locator('.vpa-spawn-column')
+      await expect.poll(() => constructionMenu.count()).toBe(1)
+      const constructionPalette = await constructionMenu.evaluate((node) => {
+        const style = getComputedStyle(node)
+        return {
+          backgroundColor: style.backgroundColor,
+          borderTopColor: style.borderTopColor,
+          color: style.color,
+          boxShadow: style.boxShadow,
+        }
+      })
+      expect(constructionPalette).toEqual(proofPalette)
+    } finally { await page.close() }
+  })
+
   it('uses plain pointer input only to select and Shift pointer input only to deselect', async () => {
     const page = await openFixture()
     try {

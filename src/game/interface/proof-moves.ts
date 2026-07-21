@@ -34,6 +34,7 @@ import {
   erasureStep,
   foldedComprehension,
 } from '../../interaction/proof-authoring'
+import './context-menu.css'
 import './proof-surface.css'
 
 export type GameProofActionInput =
@@ -564,14 +565,14 @@ export class GameProofMoveController {
 
   #openMenu(sample: PointerSample, hits: readonly Hit[]): boolean {
     const menu = this.#document.createElement('div')
-    menu.className = 'curse-proof-menu'
+    menu.className = 'curse-context-menu curse-context-menu--proof'
     menu.setAttribute('role', 'menu')
-    menu.style.setProperty('--curse-proof-menu-left', `${sample.client.x + 10}px`)
-    menu.style.setProperty('--curse-proof-menu-top', `${sample.client.y + 10}px`)
+    menu.style.setProperty('--curse-context-menu-left', `${sample.client.x + 10}px`)
+    menu.style.setProperty('--curse-context-menu-top', `${sample.client.y + 10}px`)
     const row = (label: string, run: (() => void) | null): void => {
       const element = this.#document.createElement(run === null ? 'div' : 'button')
       element.textContent = label
-      element.className = run === null ? 'curse-proof-menu__heading' : 'curse-proof-menu__action'
+      element.className = run === null ? 'curse-context-menu__heading' : 'curse-context-menu__action'
       if (run !== null) element.addEventListener('click', () => {
         try { run() }
         catch (error) {

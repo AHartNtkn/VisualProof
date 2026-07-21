@@ -76,7 +76,7 @@ const pointerSample = (
 })
 
 const clickMenuAction = (host: MenuElement, label: string): void => {
-  const buttons = host.querySelectorAll<MenuElement>('.curse-proof-menu__action')
+  const buttons = host.querySelectorAll<MenuElement>('.curse-context-menu__action')
   const button = buttons.find((candidate) => candidate.textContent === label)
   if (button === undefined) {
     const descendants = host.querySelectorAll<MenuElement>('button')

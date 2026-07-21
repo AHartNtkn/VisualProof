@@ -159,6 +159,7 @@ git commit -m "fix: accept selected equation wire for headstrip"
 - Modify: `tests/game/game-proof-controller-routes.test.ts`
 - Modify: `tests/game/construction-loupe-browser.test.ts`
 - Modify: `tests/game/game-proof-surface-browser.test.ts`
+- Modify: `tests/game/authoritative-runtime-browser.test.ts`
 
 **Interfaces:**
 - Produces: `.curse-context-menu`, `.curse-context-menu__heading`, `.curse-context-menu__action`, `.curse-context-menu__meta`, and `.curse-context-menu__input` as the sole game context-menu visual classes
@@ -252,6 +253,15 @@ it('uses the proof-action palette for the construction context menu', async () =
 ```
 
 Update the fake-DOM helper selector from `.curse-proof-menu__action` to `.curse-context-menu__action`; this intentionally remains red until the proof DOM migrates.
+
+Update the authoritative runtime's proof-menu locator from `.curse-proof-menu`
+to `.curse-context-menu--proof`, then run its one editor lifecycle case to prove
+the migrated selector still reaches the production menu:
+
+Run: `npx vitest run tests/game/authoritative-runtime-browser.test.ts -t "opens the actual editor"`
+
+Expected before selector migration: FAIL waiting for `.curse-proof-menu`.
+Expected after selector migration: the selected editor lifecycle test passes.
 
 - [ ] **Step 2: Run focused style tests and verify RED**
 
@@ -366,7 +376,7 @@ Expected: all selected suites pass and the construction panel reports the proof 
 - [ ] **Step 6: Commit the shared style authority**
 
 ```bash
-git add src/game/interface/context-menu.css src/game/interface/proof-moves.ts src/game/interface/proof-surface.css src/game/interface/construction-loupe.ts src/game/interface/loupe/interact/spawn.ts tests/game/context-menu-source.test.ts tests/game/game-proof-controller-routes.test.ts tests/game/construction-loupe-browser.test.ts tests/game/game-proof-surface-browser.test.ts
+git add src/game/interface/context-menu.css src/game/interface/proof-moves.ts src/game/interface/proof-surface.css src/game/interface/construction-loupe.ts src/game/interface/loupe/interact/spawn.ts tests/game/context-menu-source.test.ts tests/game/game-proof-controller-routes.test.ts tests/game/construction-loupe-browser.test.ts tests/game/game-proof-surface-browser.test.ts tests/game/authoritative-runtime-browser.test.ts docs/superpowers/plans/2026-07-21-headstrip-selection-context-menu.md
 git commit -m "fix: unify game context menu styling"
 ```
 
