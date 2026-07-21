@@ -35,12 +35,13 @@ describe('game-owned proof surface boundaries', () => {
     )
   })
 
-  it('keeps deselection vocabulary separate from the proof erasure operation', () => {
+  it('uses the shared viewport selection vocabulary without conflating proof erasure', () => {
     const brush = readFileSync(
-      resolve('src/game/interface/loupe/interact/brush.ts'),
+      resolve('src/interaction/controllers/brush.ts'),
       'utf8',
     )
     expect(brush).toContain("type BrushMode = 'select' | 'deselect'")
     expect(brush).not.toMatch(/readonly erase|stroke\.erase|erase mode|add\/erase/i)
+    expect(source('proof-surface.ts')).toContain("from '../../interaction/controllers/viewport'")
   })
 })

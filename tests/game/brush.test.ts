@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { Hit } from '../../src/game/interface/loupe/hittest'
+import type { Hit } from '../../src/interaction/hittest'
 import {
   choosePointerPhase,
   createBrushState,
   isHitSelected,
   reduceBrush,
   type BrushMode,
-} from '../../src/game/interface/loupe/interact/brush'
+} from '../../src/interaction/controllers/brush'
 
 const nodeA: Hit = { kind: 'node', id: 'a' }
 const nodeB: Hit = { kind: 'node', id: 'b' }

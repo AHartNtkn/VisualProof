@@ -1,6 +1,6 @@
 import { mountLensEnvironment } from '../../src/game/interface/lens-environment'
 import { GameProofViewport } from '../../src/game/interface/proof-surface'
-import { brushHitTest } from '../../src/game/interface/loupe/hittest'
+import { brushHitTest } from '../../src/interaction/hittest'
 import { gameProofMotionPreferences } from '../../src/game/interface/proof-motion'
 import { mountTimelineLever } from '../../src/game/interface/timeline-lever'
 import { applyAction } from '../../src/kernel/proof/action'
@@ -164,7 +164,7 @@ const state = {
   selection: () => surface.debug().selection.map((hit) => `${hit.kind}:${hit.id}`),
   clearSelection: (): void => surface.interaction.setSelection([]),
   selectParameter: (): void => surface.interaction.setSelection([{ kind: 'wire', id: fixture.parameter }]),
-  open: (): boolean => surface.openConstruction(fixture.bubble, { x: innerWidth - 170, y: 170 }),
+  open: (): boolean => surface.openConstruction(fixture.bubble, { x: 170, y: 170 }),
   construction: () => surface.debug().construction,
   editing: (): boolean => surface.editing,
   prepared: (): number => prepared,

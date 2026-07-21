@@ -18,8 +18,8 @@ import {
   reparentNode,
   severEndpoint,
 } from '../edit'
-import { buildSelection, wireHitTest, type Hit } from '../hittest'
-import type { KeySample, PointerClaim, PointerSample } from './viewport'
+import { buildSelection, wireHitTest, type Hit } from '../../../../interaction/hittest'
+import type { KeySample, PointerClaim, PointerSample } from '../../../../interaction/controllers/viewport'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
 

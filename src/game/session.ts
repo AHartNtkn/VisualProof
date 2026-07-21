@@ -1,6 +1,7 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { applyAction, type ProofAction } from '../kernel/proof/action'
 import type { ProofContext } from '../kernel/proof/context'
+import { actionFromJson, actionToJson } from '../kernel/proof/json'
 import { isBlank } from './blank'
 import { GameDomainError, type PuzzleDefinition, type PuzzleId } from './types'
 
@@ -50,8 +51,9 @@ export function applyGameAction(
   if (isBlank(current)) {
     throw new GameDomainError('cannot apply a proof action from canonical blank')
   }
-  const next = applyAction(current, action, authority.context, 'backward', (diagram, stepIndex) => {
-    if (isBlank(diagram) && stepIndex < action.steps.length - 1) {
+  const ownedAction = actionFromJson(actionToJson(action), 'game proof action')
+  const next = applyAction(current, ownedAction, authority.context, 'backward', (diagram, stepIndex) => {
+    if (isBlank(diagram) && stepIndex < ownedAction.steps.length - 1) {
       throw new GameDomainError('a proof action cannot continue after reaching canonical blank')
     }
   })
@@ -62,7 +64,7 @@ export function applyGameAction(
     ...session,
     timeline: {
       states: [...states, next],
-      actions: [...actions, action],
+      actions: [...actions, ownedAction],
       cursor: actions.length + 1,
     },
   }

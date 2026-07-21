@@ -32,7 +32,7 @@ describe('backward game session', () => {
   it('records a compound user gesture as one action, one state, and one move', () => {
     const action: ProofAction = {
       label: 'remove both veil pairs',
-      steps: [...puzzle.witness],
+      steps: puzzle.witness.map((step) => ({ ...step })),
       placements: [],
     }
 
@@ -42,6 +42,34 @@ describe('backward game session', () => {
     expect(transition.session.timeline.actions).toEqual([action])
     expect(transition.session.timeline.states).toHaveLength(2)
     expect(transition.session.timeline.cursor).toBe(1)
+  })
+
+  it('owns a codec-normalized action snapshot instead of retaining caller-mutable proof data', () => {
+    const expectedFirst = { ...puzzle.witness[0]! }
+    const supplied = {
+      label: 'remove both veil pairs',
+      steps: puzzle.witness.map((step) => ({ ...step })),
+      placements: [],
+      allocation: { regions: [], nodes: ['reserved-node'], wires: [] },
+    } as ProofAction as unknown as {
+      label: string
+      steps: Array<{ rule: 'doubleCutElim'; region: string }>
+      placements: Array<{ introducedNode: number; x: number; y: number }>
+      allocation: { regions: string[]; nodes: string[]; wires: string[] }
+    }
+    const transition = applyGameAction(startPuzzle(corePuzzle), supplied, authority)
+    const retained = transition.session.timeline.actions[0]!
+
+    supplied.label = 'mutated'
+    supplied.steps[0]!.region = 'forged-region'
+    supplied.placements.push({ introducedNode: 0, x: 1, y: 2 })
+    supplied.allocation.nodes.push('later-reservation')
+
+    expect(retained).not.toBe(supplied)
+    expect(retained.label).toBe('remove both veil pairs')
+    expect(retained.steps[0]).toEqual(expectedFirst)
+    expect(retained.placements).toEqual([])
+    expect(retained.allocation?.nodes).toEqual(['reserved-node'])
   })
 
   it('accepts positive-region atomic spawning only in backward orientation', () => {

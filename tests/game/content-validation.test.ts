@@ -151,7 +151,9 @@ describe('build-only game content evidence', () => {
     expect(validateGameContent()).toEqual({
       puzzles: catalog.puzzleIds.length,
       solutions: catalog.puzzleIds.length,
+      actions: 1039,
       recognizedStates,
+      migrationStateDigest: '8dcda412c88fae5732a4332136d2a3771029660b30347a04398c874a24f072e5',
     })
   })
 

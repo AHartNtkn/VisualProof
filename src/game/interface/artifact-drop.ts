@@ -7,7 +7,7 @@ import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import type { PuzzleDefinition } from '../types'
 import { artifactTheoremName } from '../artifact-theorem'
-import type { Hit } from './loupe/hittest'
+import type { Hit } from '../../interaction/hittest'
 
 export type ArtifactDropTarget = {
   readonly hit: Hit | null

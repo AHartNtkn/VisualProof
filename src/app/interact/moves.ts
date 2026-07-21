@@ -1,6 +1,4 @@
-import { DiagramBuilder } from '../../kernel/diagram/builder'
-import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
+import type { Diagram, NodeId, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import type { ProofStep } from '../../kernel/proof/step'
@@ -9,17 +7,15 @@ import { assertProofContext } from '../../kernel/proof/context'
 import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import { applyConversion } from '../../kernel/rules/conversion'
-import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
-import { RuleError } from '../../kernel/rules/error'
 import { termNodeAt } from '../../kernel/rules/access'
 import { proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
+import { RuleError } from '../../kernel/rules/error'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import { applicableActions, type ActionDescriptor } from '../../interaction/actions'
 import { inferFoldArgs } from '../../interaction/define'
-import { absorbHits, orphanedWires } from '../../interaction/edit'
+import { absorbHits } from '../../interaction/edit'
 import { buildSelection, type Hit } from '../../interaction/hittest'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
@@ -28,6 +24,13 @@ import type { KeySample, PointerClaim, PointerSample } from '../../interaction/c
 import { FissionDragController, type FissionRequest } from '../../interaction/controllers/fission'
 import { CopyDragController, copyDestinationPreview } from '../../interaction/controllers/copy'
 import { proofConnectionStep } from '../../interaction/proof-connection'
+import {
+  contextualDeletionStep,
+  deiterationStep,
+  erasureStep,
+  foldedComprehension,
+  inconsistentCutStep,
+} from '../../interaction/proof-authoring'
 
 export type ProofOrientation = 'forward' | 'backward'
 
@@ -65,66 +68,8 @@ export function discoverProofActions(
   }
 }
 
-function erasureSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelection {
-  const existing = new Set(sel.wires)
-  const riders = orphanedWires(d, new Set(sel.nodes))
-    .filter((wire) => !existing.has(wire) && d.wires[wire]!.scope === sel.region)
-  return riders.length === 0 ? sel : { ...sel, wires: [...sel.wires, ...riders] }
-}
-
-export function erasureStep(d: Diagram, sel: SubgraphSelection): ProofStep {
-  return { rule: 'erasure', sel: erasureSelection(d, sel) }
-}
-
-/** Interactive construction of a replayable, fuel-free deiteration step. */
-export function deiterationStep(d: Diagram, sel: SubgraphSelection, fuel: number): ProofStep {
-  const evidence = findDeiterationEvidence(d, sel, fuel)
-  return { rule: 'deiteration', sel, ...evidence }
-}
-
-function inconsistentCutStep(d: Diagram, region: RegionId, fuel: number): ProofStep | null {
-  const result = findInconsistentCutEvidence(d, region, fuel)
-  if (result.status === 'certified') {
-    return {
-      rule: 'inconsistentCutElim', region,
-      first: result.first, second: result.second, certificate: result.certificate,
-    }
-  }
-  if (result.status === 'undecided') {
-    throw new RuleError('inconsistency is undecided under the current fuel')
-  }
-  return null
-}
-
 export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel: number): ProofStep | null {
-  const byKind = (kind: ActionDescriptor['kind']): ActionDescriptor | undefined =>
-    discovery.actions.find((action) => action.kind === kind)
-  const doubleCut = byKind('doubleCutElim')
-  if (doubleCut !== undefined) return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
-  const vacuous = byKind('vacuousElim')
-  if (vacuous !== undefined) return { rule: 'vacuousElim', region: discovery.sel.regions[0]! }
-  if (byKind('inconsistentCutElim') !== undefined) {
-    const inconsistent = inconsistentCutStep(d, discovery.sel.regions[0]!, fuel)
-    if (inconsistent !== null) return inconsistent
-  }
-  const erase = byKind('erase')
-  if (erase !== undefined) return erasureStep(d, discovery.sel)
-  const deiterate = byKind('deiterate')
-  return deiterate === undefined ? null : deiterationStep(d, discovery.sel, fuel)
-}
-
-export function foldedComprehension(ctx: ProofContext, name: string): DiagramWithBoundary {
-  assertProofContext(ctx)
-  const relation = ctx.relations.get(name)
-  if (relation === undefined) throw new Error(`unknown relation '${name}'`)
-  const arity = relation.boundary.length
-  const builder = new DiagramBuilder()
-  const ref = builder.ref(builder.root, name, arity)
-  const boundary: WireId[] = []
-  for (let index = 0; index < arity; index++) {
-    boundary.push(builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index } }]))
-  }
-  return mkDiagramWithBoundary(builder.build(), boundary)
+  return contextualDeletionStep(d, discovery.sel, discovery.actions, fuel)
 }
 
 export type ProofMoveControllerOptions = {

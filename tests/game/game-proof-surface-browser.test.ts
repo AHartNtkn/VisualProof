@@ -164,12 +164,23 @@ describe('rendered game proof surface', () => {
       await page.getByRole('button', { name: /λ term/ }).click()
       await page.locator('.vpa-spawn-search').fill('x')
       await page.keyboard.press('Enter')
-      const hostPoint = await page.evaluate(() => {
+      const hostPoints = await page.evaluate(() => {
         const proofCanvas = document.querySelector('.curse-game-proof-canvas')
-        return window.__gameProofSurfaceFixture.construction()!.hostWires.find((wire) => wire.point !== null
-          && document.elementFromPoint(wire.point.x, wire.point.y) === proofCanvas)?.point ?? null
+        return window.__gameProofSurfaceFixture.construction()!.hostWires
+          .filter((wire) => wire.point !== null
+            && document.elementFromPoint(wire.point.x, wire.point.y) === proofCanvas)
+          .map((wire) => ({ wire: wire.wire, point: wire.point! }))
       })
-      if (hostPoint === null) throw new Error('no host line is pointer reachable')
+      let hostPoint: { x: number; y: number } | null = null
+      const observed: unknown[] = []
+      for (const candidate of hostPoints) {
+        await page.mouse.move(candidate.point.x, candidate.point.y)
+        const connection = await page.evaluate(() =>
+          window.__gameProofSurfaceFixture.construction()!.connection)
+        observed.push({ candidate, connection })
+        if ((connection?.draftTargets.length ?? 0) > 0) { hostPoint = candidate.point; break }
+      }
+      if (hostPoint === null) throw new Error(`no host line has a pointer-reachable compatible draft target: ${JSON.stringify(observed)}`)
       await page.mouse.click(hostPoint.x, hostPoint.y)
       expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual([])
       await page.mouse.move(hostPoint.x, hostPoint.y)

@@ -1,7 +1,9 @@
 import type { Hit } from '../../interaction/hittest'
 
+export type BrushMode = 'select' | 'deselect'
+
 export type BrushStroke = {
-  readonly erase: boolean
+  readonly mode: BrushMode
   readonly fromVoid: boolean
   /** True once the stroke has encountered a semantic hit. */
   readonly painted: boolean
@@ -13,7 +15,7 @@ export type BrushState = {
 }
 
 export type BrushEvent =
-  | { readonly kind: 'begin'; readonly hit: Hit | null }
+  | { readonly kind: 'begin'; readonly hit: Hit | null; readonly mode?: 'toggle' | 'select' | 'deselect' }
   | { readonly kind: 'move'; readonly hit: Hit | null }
   | { readonly kind: 'end' }
 
@@ -44,28 +46,31 @@ export function createBrushState(selected: readonly Hit[] = []): BrushState {
   return { selected: uniqueHits(selected), stroke: null }
 }
 
-function paint(selected: readonly Hit[], hit: Hit | null, erase: boolean): readonly Hit[] {
+function paint(selected: readonly Hit[], hit: Hit | null, mode: 'select' | 'deselect'): readonly Hit[] {
   if (hit === null) return selected
   const present = isHitSelected(selected, hit)
-  if (erase) return present ? selected.filter((candidate) => !sameHit(candidate, hit)) : selected
+  if (mode === 'deselect') return present ? selected.filter((candidate) => !sameHit(candidate, hit)) : selected
   return present ? selected : [...selected, hit]
 }
 
-/** Pure brush lifecycle. A press chooses add/erase for the whole stroke; a
-    void-start stroke remains additive and clears only if it encounters no hit. */
+/** Pure brush lifecycle. A press resolves one selection mode for the whole
+    stroke; a void-start stroke clears only if it encounters no hit. */
 export function reduceBrush(state: BrushState, event: BrushEvent): BrushState {
   if (event.kind === 'begin') {
     const selected = uniqueHits(state.selected)
-    const erase = isHitSelected(selected, event.hit)
+    const requested = event.mode ?? 'toggle'
+    const mode = requested === 'toggle'
+      ? (isHitSelected(selected, event.hit) ? 'deselect' : 'select')
+      : requested
     return {
-      selected: paint(selected, event.hit, erase),
-      stroke: { erase, fromVoid: event.hit === null, painted: event.hit !== null },
+      selected: paint(selected, event.hit, mode),
+      stroke: { mode, fromVoid: event.hit === null, painted: event.hit !== null },
     }
   }
 
   if (event.kind === 'move') {
     if (state.stroke === null) return state
-    const selected = paint(state.selected, event.hit, state.stroke.erase)
+    const selected = paint(state.selected, event.hit, state.stroke.mode)
     const painted = state.stroke.painted || event.hit !== null
     if (selected === state.selected && painted === state.stroke.painted) return state
     return { selected, stroke: { ...state.stroke, painted } }

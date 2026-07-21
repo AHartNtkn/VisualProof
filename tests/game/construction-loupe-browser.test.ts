@@ -253,6 +253,16 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
+  it('cancels captured work on focus loss and reports modifier lifecycle through the shared owner', async () => {
+    const page = await openFixture()
+    try {
+      expect(await page.evaluate(() => window.__constructionLoupeFixture.probeSharedLifecycle())).toEqual({
+        cancellations: 2,
+        modifiers: [true, false],
+      })
+    } finally { await page.close() }
+  })
+
   it('feeds a real non-center spawn context through that exact mapping authority', async () => {
     const page = await openFixture()
     try {
@@ -312,6 +322,7 @@ declare global {
       lastContextMenuMapping(): null | { readonly client: { readonly x: number; readonly y: number }; readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } }
       history(): { readonly cursor: number; readonly length: number }
       probeInjectedMapper(): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } } | null
+      probeSharedLifecycle(): { readonly cancellations: number; readonly modifiers: readonly boolean[] }
     }
   }
 }

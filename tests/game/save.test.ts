@@ -163,6 +163,25 @@ describe('strict per-puzzle game save', () => {
       save: { format: 'cursebreaker-save', version: 4 },
       reducedMotion: false,
     })).toThrow(/unsupported game save format or version/)
+    const versionFive: any = plain(encodeGameSave(catalog, fresh()))
+    versionFive.version = 5
+    expect(() => decodeGameSave(catalog, versionFive)).toThrow(/unsupported game save format or version/)
+  })
+
+  it('rejects step-shaped v6 timelines and bare completed puzzle IDs', () => {
+    const stepTimeline: any = plain(encodeGameSave(catalog, fresh()))
+    stepTimeline.attempts[FIRST] = { steps: [], cursor: 0 }
+    stepTimeline.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
+    expect(() => decodeGameSave(catalog, stepTimeline)).toThrow(/unknown field 'steps'/)
+
+    const bareCompletion: any = plain(encodeGameSave(catalog, fresh()))
+    bareCompletion.completedArtifacts = [FIRST]
+    bareCompletion.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
+    expect(() => decodeGameSave(catalog, bareCompletion)).toThrow(/completed artifact 0 must be an object/)
+
+    const legacyCompletion: any = plain(encodeGameSave(catalog, fresh()))
+    legacyCompletion.completed = []
+    expect(() => decodeGameSave(catalog, legacyCompletion)).toThrow(/unknown field 'completed'/)
   })
 
   it('keeps the first catalog culture selected and saveable even when its archive is gated', () => {

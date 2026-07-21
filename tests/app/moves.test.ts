@@ -12,10 +12,10 @@ import { LIGHT } from '../../src/view/paint'
 import {
   contextualDeleteStep,
   discoverProofActions,
-  foldedComprehension,
   instantiationChoices,
   ProofMoveController,
 } from '../../src/app/interact/moves'
+import { foldedComprehension } from '../../src/interaction/proof-authoring'
 import { proofConnectionStep } from '../../src/interaction/proof-connection'
 import type { ConnectionEnd } from '../../src/interaction/controllers/connection'
 import type { Hit } from '../../src/interaction/hittest'

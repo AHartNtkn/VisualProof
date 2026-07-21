@@ -42,6 +42,27 @@ describe('completed artifact theorems', () => {
       .toBe(exploreForm(puzzle.diagram))
   })
 
+  it('rejects retained witnesses that continue within or after the first completion', () => {
+    const finishThenContinue = {
+      label: 'finish then continue',
+      steps: [
+        completionAction.steps[0]!,
+        { rule: 'doubleCutIntro' as const, sel: { region: puzzle.diagram.root, regions: [], nodes: [], wires: [] } },
+        { rule: 'doubleCutElim' as const, region: 'dc' },
+      ],
+      placements: [],
+    }
+    expect(() => certifyCompletedArtifact(catalog, noArtifacts, puzzle, [finishThenContinue]))
+      .toThrow(/cannot continue after reaching canonical blank/)
+    expect(() => certifyCompletedArtifact(catalog, noArtifacts, puzzle, [
+      completionAction,
+      singleStepAction('post-completion edit', {
+        rule: 'doubleCutIntro',
+        sel: { region: puzzle.diagram.root, regions: [], nodes: [], wires: [] },
+      }),
+    ])).toThrow(/continues after action 0 reached canonical blank/)
+  })
+
   it('manifests in a legal negative host during backward play', () => {
     const host = new DiagramBuilder()
     const negative = host.cut(host.root)

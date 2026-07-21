@@ -1,4 +1,5 @@
 import Ajv2020, { type AnySchema, type ValidateFunction } from 'ajv/dist/2020.js'
+import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -52,8 +53,16 @@ type CoverageRow = {
 export type ContentValidationReceipt = {
   readonly puzzles: number
   readonly solutions: number
+  readonly actions: number
   readonly recognizedStates: number
+  readonly migrationStateDigest: string
 }
+
+const MIGRATED_VALIDATION_BASELINE = Object.freeze({
+  puzzles: 109,
+  actions: 1039,
+  stateDigest: '8dcda412c88fae5732a4332136d2a3771029660b30347a04398c874a24f072e5',
+})
 
 const directChildRegions = (diagram: Diagram, parent: RegionId): RegionId[] =>
   Object.entries(diagram.regions)
@@ -441,6 +450,8 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
   const verified = new Set<PuzzleId>()
   const completedArtifacts = new Map<PuzzleId, CompletedArtifact>()
   let recognizedCount = 0
+  let actionCount = 0
+  const migrationStates = createHash('sha256')
   const pending = new Set(catalog.puzzleIds)
   while (pending.size > 0) {
     const next = [...pending].find((id) => catalog.placement(id).prerequisites.every((parent) => verified.has(parent)))
@@ -477,7 +488,11 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
     const availableArtifacts = new Map([...completedArtifacts].filter(([id]) => sidecar.availableArtifacts.includes(id)))
     const authority = { context: artifactTheoremContext(catalog, availableArtifacts) }
     let solution = startPuzzle(catalog.puzzle(next))
-    for (const action of sidecar.solution) solution = applyGameAction(solution, action, authority).session
+    for (const [index, action] of sidecar.solution.entries()) {
+      solution = applyGameAction(solution, action, authority).session
+      actionCount += 1
+      migrationStates.update(`${next}\0${index}\0${exploreForm(currentDiagram(solution))}\n`)
+    }
     if (!isBlank(currentDiagram(solution))) throw new GameDomainError(`validation '${next}' solution does not reach canonical blank`)
 
     const recognized = catalog.guidance(next).interventions.filter(({ trigger }) => trigger.kind === 'recognizedUnwinnable')
@@ -499,11 +514,26 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
     verified.add(next)
     pending.delete(next)
   }
-  return { puzzles: catalog.puzzleIds.length, solutions: evidence.length, recognizedStates: recognizedCount }
+  const migrationStateDigest = migrationStates.digest('hex')
+  if (catalog.puzzleIds.length !== MIGRATED_VALIDATION_BASELINE.puzzles
+    || evidence.length !== MIGRATED_VALIDATION_BASELINE.puzzles
+    || actionCount !== MIGRATED_VALIDATION_BASELINE.actions
+    || migrationStateDigest !== MIGRATED_VALIDATION_BASELINE.stateDigest) {
+    throw new GameDomainError(
+      `validation migration baseline changed: expected ${MIGRATED_VALIDATION_BASELINE.puzzles} puzzles, ${MIGRATED_VALIDATION_BASELINE.actions} actions, and state digest ${MIGRATED_VALIDATION_BASELINE.stateDigest}; received ${catalog.puzzleIds.length} puzzles, ${actionCount} actions, and ${migrationStateDigest}`,
+    )
+  }
+  return {
+    puzzles: catalog.puzzleIds.length,
+    solutions: evidence.length,
+    actions: actionCount,
+    recognizedStates: recognizedCount,
+    migrationStateDigest,
+  }
 }
 
 const invokedPath = process.argv[1]
 if (invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href) {
   const receipt = validateGameContent()
-  console.log(`Validated ${receipt.puzzles} puzzles, ${receipt.solutions} solutions, and ${receipt.recognizedStates} recognized states.`)
+  console.log(`Validated ${receipt.puzzles} puzzles, ${receipt.solutions} solutions, ${receipt.actions} actions, and ${receipt.recognizedStates} recognized states.`)
 }

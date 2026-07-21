@@ -1,6 +1,4 @@
 import { portKey, type Diagram, type NodeId, type RegionId, type WireId } from '../../kernel/diagram/diagram'
-import { DiagramBuilder } from '../../kernel/diagram/builder'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { isAncestorOrEqual, polarity } from '../../kernel/diagram/regions'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../../kernel/diagram/subgraph/selection'
@@ -11,7 +9,6 @@ import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
-import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
 import { RuleError } from '../../kernel/rules/error'
 import { headNormalize, weakHeadNormalize } from '../../kernel/term/hnf'
@@ -20,19 +17,23 @@ import { applyConversionByCertificate } from '../../kernel/rules/conversion'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { absorbHits, orphanedWires } from './loupe/edit'
-import { buildSelection, type Hit } from './loupe/hittest'
-import type { KeySample, PointerClaim, PointerSample } from './loupe/interact/viewport'
+import { absorbHits } from './loupe/edit'
+import { buildSelection, type Hit } from '../../interaction/hittest'
+import type { KeySample, PointerClaim, PointerSample } from '../../interaction/controllers/viewport'
 import { applicableActions, type ActionDescriptor } from '../../interaction/actions'
 import { inferFoldArgs } from '../../interaction/define'
 import { ConnectionDragController } from '../../interaction/controllers/connection'
 import { FissionDragController } from '../../interaction/controllers/fission'
 import { proofConnectionStep } from '../../interaction/proof-connection'
+import {
+  contextualDeletionStep,
+  deiterationStep,
+  erasureStep,
+  foldedComprehension,
+} from '../../interaction/proof-authoring'
 import './proof-surface.css'
 
 export type GameProofActionInput =
-  | { readonly kind: 'term'; readonly source: string }
-  | { readonly kind: 'arity'; readonly arity: number }
   | { readonly kind: 'target'; readonly region: RegionId }
   | { readonly kind: 'conversion'; readonly source: string }
   | { readonly kind: 'construction' }
@@ -121,36 +122,6 @@ export function vacuousEliminationChainSteps(
 const isVacuousBatchRequest = (diagram: Diagram, hits: readonly Hit[]): boolean =>
   hits.filter((hit) => hit.kind === 'region' && diagram.regions[hit.id]?.kind === 'bubble').length >= 2
 
-const erasureSelection = (diagram: Diagram, selection: SubgraphSelection): SubgraphSelection => {
-  const existing = new Set(selection.wires)
-  const riders = orphanedWires(diagram, new Set(selection.nodes))
-    .filter((wire) => !existing.has(wire) && diagram.wires[wire]!.scope === selection.region)
-  return riders.length === 0 ? selection : { ...selection, wires: [...selection.wires, ...riders] }
-}
-
-const deletionStep = (diagram: Diagram, discovery: Discovery, fuel: number): ProofStep | null => {
-  const has = (kind: ActionDescriptor['kind']): boolean => discovery.actions.some((action) => action.kind === kind)
-  if (has('doubleCutElim')) return { rule: 'doubleCutElim', region: discovery.selection.regions[0]! }
-  if (has('vacuousElim')) return { rule: 'vacuousElim', region: discovery.selection.regions[0]! }
-  if (has('inconsistentCutElim')) {
-    const result = findInconsistentCutEvidence(diagram, discovery.selection.regions[0]!, fuel)
-    if (result.status === 'undecided') throw new RuleError('inconsistency is undecided under the current fuel')
-    if (result.status === 'certified') return {
-      rule: 'inconsistentCutElim', region: discovery.selection.regions[0]!,
-      first: result.first, second: result.second, certificate: result.certificate,
-    }
-  }
-  if (has('erase')) return { rule: 'erasure', sel: erasureSelection(diagram, discovery.selection) }
-  if (has('deiterate')) {
-    return {
-      rule: 'deiteration',
-      sel: discovery.selection,
-      ...findDeiterationEvidence(diagram, discovery.selection, fuel),
-    }
-  }
-  return null
-}
-
 const iterationTargets = (diagram: Diagram, selection: SubgraphSelection): readonly RegionId[] => {
   const insideSelection = (region: RegionId): boolean => {
     for (let current = region; ;) {
@@ -172,18 +143,6 @@ const regionAt = (engine: Engine, diagram: Diagram, point: Vec2): RegionId => {
       && (best === null || geometry.radius < best.radius)) best = { id, radius: geometry.radius }
   }
   return best?.id ?? diagram.root
-}
-
-const foldedComprehension = (context: ProofContext, name: string): DiagramWithBoundary => {
-  const relation = context.relations.get(name)
-  if (relation === undefined) throw new Error(`unknown relation '${name}'`)
-  const builder = new DiagramBuilder()
-  const ref = builder.ref(builder.root, name, relation.boundary.length)
-  const boundary: WireId[] = []
-  for (let index = 0; index < relation.boundary.length; index++) {
-    boundary.push(builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index } }]))
-  }
-  return mkDiagramWithBoundary(builder.build(), boundary)
 }
 
 const normalizeStep = (diagram: Diagram, node: NodeId, fuel: number, weak: boolean): ProofStep => {
@@ -327,11 +286,11 @@ export class GameProofMoveController {
     if (selection.length > 0
       && (sample.hit === null || !selection.some((hit) => sameHit(hit, sample.hit!)))) return false
     try {
-      this.#openMenu(sample, selection)
+      return this.#openMenu(sample, selection)
     } catch (error) {
       this.#options.refuse(error instanceof Error ? error.message : String(error), sample.client)
+      return false
     }
-    return true
   }
 
   doubleClick(sample: PointerSample): boolean {
@@ -399,7 +358,9 @@ export class GameProofMoveController {
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
       let step: ProofStep | null
       try {
-        step = deletionStep(this.#options.diagram(), discovery, this.#options.fuel())
+        step = contextualDeletionStep(
+          this.#options.diagram(), discovery.selection, discovery.actions, this.#options.fuel(),
+        )
       } catch (error) {
         this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer)
         return true
@@ -421,7 +382,7 @@ export class GameProofMoveController {
   ): boolean {
     switch (action.kind) {
       case 'erase':
-        this.#commit({ rule: 'erasure', sel: erasureSelection(this.#options.diagram(), selection) })
+        this.#commit(erasureStep(this.#options.diagram(), selection))
         return true
       case 'doubleCutWrap':
         this.#commit({ rule: 'doubleCutIntro', sel: selection })
@@ -437,11 +398,7 @@ export class GameProofMoveController {
         this.#commit({ rule: 'iteration', sel: selection, target: input.region })
         return true
       case 'deiterate':
-        this.#commit({
-          rule: 'deiteration',
-          sel: selection,
-          ...findDeiterationEvidence(this.#options.diagram(), selection, this.#options.fuel()),
-        })
+        this.#commit(deiterationStep(this.#options.diagram(), selection, this.#options.fuel()))
         return true
       case 'convert': {
         if (input?.kind !== 'conversion') return false
@@ -548,6 +505,12 @@ export class GameProofMoveController {
     this.#commitAction(singleStepAction(step.rule, step))
   }
 
+  #commitPlaced(step: ProofStep, at: Vec2): void {
+    this.#commitAction(singleStepAction(step.rule, step, [
+      { introducedNode: 0, x: at.x, y: at.y },
+    ]))
+  }
+
   #commitSteps(steps: ActionSteps): void {
     this.#commitAction({ label: steps.map(({ rule }) => rule).join(' + '), steps, placements: [] })
   }
@@ -563,7 +526,7 @@ export class GameProofMoveController {
     }
   }
 
-  #openMenu(sample: PointerSample, hits: readonly Hit[]): void {
+  #openMenu(sample: PointerSample, hits: readonly Hit[]): boolean {
     const menu = this.#document.createElement('div')
     menu.className = 'curse-proof-menu'
     menu.setAttribute('role', 'menu')
@@ -585,10 +548,10 @@ export class GameProofMoveController {
     row('Seal operations', null)
     if (hits.length === 1 && hits[0]?.kind === 'wire') {
       this.#appendWireActions(row, hits[0].id)
-      if (menu.childElementCount <= 1) return
+      if (menu.childElementCount <= 1) return false
       this.#menu = menu
       this.#options.host.append(menu)
-      return
+      return true
     }
     const discovery = hits.length === 0
       ? (() => {
@@ -603,12 +566,13 @@ export class GameProofMoveController {
           }
         })()
       : discoverGameProofActions(diagram, hits, this.#options.context())
-    if (discovery === null) return
-    if (hits.length === 0) this.#appendSpawnActions(row, discovery.selection.region)
+    if (discovery === null) return false
+    if (hits.length === 0) this.#appendSpawnActions(row, discovery.selection.region, sample.world)
     for (const action of discovery.actions) this.#appendAction(row, action, discovery.selection)
-    if (menu.childElementCount <= 1) return
+    if (menu.childElementCount <= 1) return false
     this.#menu = menu
     this.#options.host.append(menu)
+    return true
   }
 
   #appendAction(
@@ -657,20 +621,24 @@ export class GameProofMoveController {
     }
   }
 
-  #appendSpawnActions(row: (label: string, run: (() => void) | null) => void, region: RegionId): void {
+  #appendSpawnActions(
+    row: (label: string, run: (() => void) | null) => void,
+    region: RegionId,
+    at: Vec2,
+  ): void {
     if (polarity(this.#options.diagram(), region) !== 'positive') return
     row('Spawn', null)
-    row('Term…', () => this.#openTermSpawn(region))
+    row('Term…', () => this.#openTermSpawn(region, at))
     for (const [name, relation] of this.#options.context().relations) {
-      row(`Relation ${name}`, () => this.#commit({
+      row(`Relation ${name}`, () => this.#commitPlaced({
         rule: 'relationSpawn', region, defId: name, arity: relation.boundary.length,
-      }))
+      }, at))
     }
     for (const [binder, value] of Object.entries(this.#options.diagram().regions)) {
       if (value.kind !== 'bubble' || !isAncestorOrEqual(this.#options.diagram(), binder, region)) continue
-      row(`Bound predicate ${binder}`, () => this.#commit({
+      row(`Bound predicate ${binder}`, () => this.#commitPlaced({
         rule: 'boundRelationSpawn', region, binder, arity: value.arity,
-      }))
+      }, at))
     }
   }
 
@@ -721,9 +689,9 @@ export class GameProofMoveController {
     }))
   }
 
-  #openTermSpawn(region: RegionId): void {
+  #openTermSpawn(region: RegionId, at: Vec2): void {
     this.#openTextPrompt('Spawn term', (value) => {
-      this.#commit(this.#termSpawnStep(region, value))
+      this.#commitPlaced(this.#termSpawnStep(region, value), at)
     })
   }
 

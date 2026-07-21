@@ -284,27 +284,13 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('renders numbered canonical puzzle previews and exposes a pointer-transparent inspection', async () => {
+  it('renders numbered catalog records without secondary puzzle preview surfaces', async () => {
     const page = await openFixture('long')
     try {
-      const first = page.locator('.curse-folio-record').first()
-      await first.locator('.curse-folio-puzzle-preview-frame[data-preview-state="ready"]')
-        .waitFor()
       expect(await page.locator('.curse-folio-record-name').allTextContents()).toEqual(
         Array.from({ length: 8 }, (_, index) => `${index + 1}. Long record 0-${index}`),
       )
-      const image = first.locator('.curse-folio-puzzle-preview')
-      expect(await image.evaluate((node) => ({
-        width: (node as HTMLImageElement).naturalWidth,
-        height: (node as HTMLImageElement).naturalHeight,
-        source: (node as HTMLImageElement).src,
-      }))).toMatchObject({ width: 640, height: 400, source: expect.stringMatching(/^blob:/) })
-
-      await first.hover()
-      const inspection = page.locator('.curse-folio-puzzle-preview-inspection')
-      expect(await inspection.getAttribute('aria-hidden')).toBe('false')
-      expect(await inspection.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none')
-      expect(await inspection.locator('img').getAttribute('src')).toBe(await image.getAttribute('src'))
+      expect(await page.locator('[class*="puzzle-preview"]').count()).toBe(0)
     } finally { await page.close() }
   })
 

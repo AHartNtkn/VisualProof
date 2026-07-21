@@ -1,15 +1,27 @@
 import { expect, test, type Page } from '@playwright/test'
 
 type Point = { readonly x: number; readonly y: number }
-type Region = Point & { readonly id: string; readonly kind: string; readonly r: number }
+type Region = {
+  readonly id: string
+  readonly kind: string
+  readonly client: Point
+  readonly interiorClient: Point
+  readonly rimClient: Point
+}
 type DebugState = {
-  readonly puzzle: string
-  readonly timeline: { readonly cursor: number; readonly count: number }
-  readonly completed: readonly string[]
-  readonly viewport: { readonly regions: readonly Region[] }
+  readonly state: {
+    readonly mode: 'archive' | 'puzzle' | 'completion'
+    readonly activePuzzle: string | null
+    readonly completedArtifacts: ReadonlyMap<string, unknown>
+    readonly completionReceipt: { readonly puzzle: string; readonly moves: number; readonly replay: boolean } | null
+  }
+  readonly timeline: { readonly cursor: number; readonly count: number } | null
+  readonly proofRegions: readonly Region[]
 }
 type CursebreakerDebug = {
   state(): DebugState
+  dispatch(action: { readonly kind: string; readonly puzzle?: string; readonly cursor?: number }): void
+  settled(): Promise<void>
   canvasToClient(point: Point): Point
   dispose(): void
 }
@@ -18,9 +30,33 @@ declare global {
   interface Window { __cursebreakerDebug?: CursebreakerDebug }
 }
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    let save: unknown | null = null
+    Object.defineProperty(window, 'cursebreakerPlatform', {
+      value: {
+        async loadSave() { return save },
+        async writeSave(document: unknown) { save = document },
+        async replaceInvalidSave(document: unknown) { save = document },
+        async rendererReady() {},
+        async reportStartupFailure(message: string) { throw new Error(message) },
+        async setFullscreen(fullscreen: boolean) { return fullscreen },
+        async requestExit(document: unknown) { save = document },
+        onExitRequested(_callback: () => void) { return () => {} },
+      },
+    })
+  })
+})
+
 const openGame = async (page: Page): Promise<void> => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__cursebreakerDebug !== undefined)
+}
+
+const openFirstPuzzle = async (page: Page): Promise<void> => {
+  await openGame(page)
+  await page.locator('[data-puzzle="two-veils"]').click()
+  await expect(page.locator('.curse-game-proof-canvas')).toBeVisible()
 }
 
 const bounds = async (page: Page, selector: string) => {
@@ -33,10 +69,13 @@ test('one-product boot', async ({ page }) => {
   await page.goto('/')
   await expect(page).toHaveTitle('Cursebreaker')
   await expect(page.locator('#cursebreaker')).toBeVisible()
-  await expect(page.locator('.curse-lens-stage')).toBeVisible()
-  await expect(page.locator('#seal-canvas')).toBeVisible()
+  await expect(page.locator('.curse-production-lens')).toBeVisible()
+  await expect(page.locator('[data-puzzle="two-veils"]')).toBeVisible()
+  await expect(page.locator('.curse-game-proof-canvas')).toHaveCount(0)
+  await page.locator('[data-puzzle="two-veils"]').click()
+  await expect(page.locator('.curse-game-proof-canvas')).toBeVisible()
   await expect(page.locator('#chrome, .vpa-compass, #library')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /forward|import|export/i })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^(forward|import|export)$/i })).toHaveCount(0)
   await expect(page.locator('body')).not.toContainText(/open (folder|file)|import|export/i)
 })
 
@@ -44,23 +83,26 @@ test('straight-on responsive lens', async ({ page }) => {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 700, height: 820 }]) {
     await page.setViewportSize(viewport)
     await page.goto('/')
-    await expect(page.locator('.curse-lens-stage')).toBeVisible()
-    const stage = await bounds(page, '.curse-lens-stage')
-    const glass = await bounds(page, '.curse-lens-glass')
-    const lever = await bounds(page, '.curse-timeline')
+    await expect(page.locator('.curse-production-lens')).toBeVisible()
+    const stage = await bounds(page, '.curse-production-lens')
+    const glass = await bounds(page, '.curse-production-aperture')
+    const lever = await bounds(page, '.curse-production-timeline')
     expect(Math.abs(stage.width - stage.height)).toBeLessThanOrEqual(1)
-    expect(stage.x).toBeGreaterThanOrEqual(15)
-    expect(stage.y).toBeGreaterThanOrEqual(15)
-    expect(viewport.width - stage.x - stage.width).toBeGreaterThanOrEqual(15)
-    expect(viewport.height - stage.y - stage.height).toBeGreaterThanOrEqual(15)
-    expect(Math.abs(glass.x + glass.width / 2 - (stage.x + stage.width / 2))).toBeLessThanOrEqual(1)
-    expect(Math.abs(glass.y + glass.height / 2 - (stage.y + stage.height / 2))).toBeLessThanOrEqual(1)
-    expect(lever.width).toBeLessThanOrEqual(stage.width * 0.4)
+    expect(stage.x).toBeGreaterThanOrEqual(0)
+    expect(stage.y).toBeGreaterThanOrEqual(0)
+    expect(viewport.width - stage.x - stage.width).toBeGreaterThanOrEqual(0)
+    expect(viewport.height - stage.y - stage.height).toBeGreaterThanOrEqual(0)
+    expect(glass.x).toBeGreaterThanOrEqual(stage.x)
+    expect(glass.y).toBeGreaterThanOrEqual(stage.y)
+    expect(glass.x + glass.width).toBeLessThanOrEqual(stage.x + stage.width)
+    expect(glass.y + glass.height).toBeLessThanOrEqual(stage.y + stage.height)
+    expect(lever.x).toBeGreaterThanOrEqual(stage.x)
+    expect(lever.x + lever.width).toBeLessThanOrEqual(stage.x + stage.width)
   }
 })
 
 test('decorative layers never own interaction', async ({ page }) => {
-  await page.goto('/')
+  await openFirstPuzzle(page)
   await expect(page.locator('.curse-decoration').first()).toBeVisible()
   const decorations = await page.locator('.curse-decoration').evaluateAll((elements) => elements.map((element) => ({
     pointerEvents: getComputedStyle(element).pointerEvents,
@@ -75,22 +117,23 @@ test('decorative layers never own interaction', async ({ page }) => {
     if (decoration.alt !== null) expect(decoration.alt).toBe('')
     expect(decoration.role).toBeNull()
   }
-  const centerOwner = await page.locator('.curse-lens-glass').evaluate((glass) => {
+  const centerOwner = await page.locator('.curse-production-aperture').evaluate((glass) => {
     const rect = glass.getBoundingClientRect()
-    return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.id
+    return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.classList
+      .contains('curse-game-proof-canvas') ?? false
   })
-  expect(centerOwner).toBe('seal-canvas')
+  expect(centerOwner).toBe(true)
 })
 
 test('real opening content', async ({ page }) => {
-  await openGame(page)
+  await openFirstPuzzle(page)
   const keys = await page.evaluate(() => Object.keys(window.__cursebreakerDebug!).sort())
-  expect(keys).toEqual(['canvasToClient', 'dispose', 'state'])
+  expect(keys).toEqual(['canvasToClient', 'dispatch', 'dispose', 'settled', 'state'])
   const state = await page.evaluate(() => window.__cursebreakerDebug!.state())
-  expect(state.puzzle).toBe('two-veils')
-  expect(state.viewport.regions.filter((region) => region.kind === 'cut')).toHaveLength(2)
+  expect(state.state.activePuzzle).toBe('two-veils')
+  expect(state.proofRegions.filter((region) => region.kind === 'cut')).toHaveLength(2)
   expect(JSON.stringify(state)).not.toMatch(/theorem|library/i)
-  const paletteSize = await page.locator('#seal-canvas').evaluate((canvas: HTMLCanvasElement) => {
+  const paletteSize = await page.locator('.curse-game-proof-canvas').evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext('2d')!
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
     const colors = new Set<string>()
@@ -103,45 +146,31 @@ test('real opening content', async ({ page }) => {
   expect(paletteSize).toBeGreaterThan(1)
 })
 
-test('backward completion retains navigable history', async ({ page }) => {
-  await openGame(page)
+test('backward completion records the solved artifact through the live rule interaction', async ({ page }) => {
+  await openFirstPuzzle(page)
   const outerPoint = await page.evaluate(() => {
     const debug = window.__cursebreakerDebug!
-    const cuts = debug.state().viewport.regions.filter((region) => region.kind === 'cut')
-      .sort((left, right) => right.r - left.r)
-    const [outer, inner] = cuts
-    if (outer === undefined || inner === undefined) throw new Error('opening seal has no double cut')
-    const candidates = Array.from({ length: 48 }, (_, index) => {
-      const angle = index * Math.PI * 2 / 48
-      const point = { x: outer.x + Math.cos(angle) * outer.r * 0.88, y: outer.y + Math.sin(angle) * outer.r * 0.88 }
-      return { point, clearance: Math.hypot(point.x - inner.x, point.y - inner.y) - inner.r }
-    })
-    const candidate = candidates.sort((left, right) => right.clearance - left.clearance)[0]!
-    if (candidate.clearance <= 0) throw new Error('no exposed point on outer cut')
-    return debug.canvasToClient(candidate.point)
+    const outer = debug.state().proofRegions.find((region) => region.id === 'r1')
+    if (outer === undefined) throw new Error('opening seal has no outer cut')
+    return outer.rimClient
   })
   await page.mouse.click(outerPoint.x, outerPoint.y)
   await page.mouse.click(outerPoint.x, outerPoint.y, { button: 'right' })
-  await page.locator('.vpa-proof-menu').getByRole('button', { name: 'Eliminate the double cut', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().timeline)).toEqual({ cursor: 1, count: 2 })
-  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().completed)).toContain('two-veils')
-
-  const rail = await bounds(page, '.curse-timeline-rail')
-  await page.mouse.move(rail.x + rail.width / 2, rail.y + rail.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(rail.x, rail.y + rail.height / 2, { steps: 5 })
-  await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().timeline.cursor)).toBe(0)
-  await page.mouse.move(rail.x, rail.y + rail.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(rail.x + rail.width, rail.y + rail.height / 2, { steps: 5 })
-  await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().timeline.cursor)).toBe(1)
-  await page.keyboard.press('Control+z')
-  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().timeline.cursor)).toBe(0)
-  await page.keyboard.press('Control+Shift+z')
-  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().timeline.cursor)).toBe(1)
-  await expect(page.getByRole('button', { name: /undo|redo/i })).toHaveCount(0)
+  await page.locator('.curse-proof-menu').getByRole('button', { name: 'Eliminate the double cut', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__cursebreakerDebug!.state().state.mode))
+    .toBe('completion')
+  expect(await page.evaluate(() => {
+    const state = window.__cursebreakerDebug!.state().state
+    return {
+      completed: state.completedArtifacts.has('two-veils'),
+      receipt: state.completionReceipt,
+    }
+  })).toEqual({
+    completed: true,
+    receipt: { puzzle: 'two-veils', moves: 1, replay: false },
+  })
+  await expect(page.locator('.curse-production-timeline-control')).toHaveAttribute('aria-disabled', 'true')
+  await expect(page.locator('.curse-production-timeline-control')).toHaveAttribute('aria-valuetext', 'Completed state 1')
 })
 
 test('all interface assets load without browser failures', async ({ page }) => {

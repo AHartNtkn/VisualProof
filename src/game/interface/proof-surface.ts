@@ -13,14 +13,14 @@ import type { Vec2 } from '../../view/vec'
 import type { PuzzleDefinition } from '../types'
 import { planArtifactDrop, type ArtifactDropPlan, type ArtifactDropTarget } from './artifact-drop'
 import { ConstructionLoupe, type ConstructionLoupeDebug } from './construction-loupe'
-import { hitTest, type Hit } from './loupe/hittest'
-import { isHitSelected } from './loupe/interact/brush'
+import { hitTest, type Hit } from '../../interaction/hittest'
+import { isHitSelected } from '../../interaction/controllers/brush'
 import {
   InteractiveViewport,
   type MutableView,
   type PointerClaim,
   type PointerSample,
-} from './loupe/interact/viewport'
+} from '../../interaction/controllers/viewport'
 import { GameProofMoveController } from './proof-moves'
 import {
   GameProofMotion,
@@ -178,6 +178,7 @@ export class GameProofViewport {
       engine: () => this.#engine,
       diagram: model.diagram,
       selectionEnabled: () => this.#construction === null,
+      brushMode: (sample) => sample.shiftKey ? 'deselect' : 'select',
       claim: (sample) => routeGameProofClaim(this.#construction, this.#moves, sample),
       doubleClick: (sample) => this.#construction === null && this.#moves.doubleClick(sample),
       contextMenu: (sample) => { if (this.#construction === null) this.#moves.contextMenu(sample) },
@@ -200,6 +201,7 @@ export class GameProofViewport {
       inputAllowed: () => proofSurfaceViewportAllowed(this.motion.playing, model.inputAllowed()),
       physicsEnabled: () => this.#construction === null,
       zoomEnabled: () => this.#construction === null,
+      keyScope: 'focused',
     })
   }
 

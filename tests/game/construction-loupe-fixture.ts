@@ -2,7 +2,7 @@ import { ConstructionLoupe, type ConstructionLoupeHost } from '../../src/game/in
 import { mkEngine } from '../../src/view/engine'
 import { DARK } from '../../src/view/paint'
 import { seedProject } from '../../src/view/relax'
-import { InteractiveViewport } from '../../src/game/interface/loupe/interact/viewport'
+import { InteractiveViewport } from '../../src/interaction/controllers/viewport'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { comprehensionFixture } from '../app/comprehension-fixture'
 
@@ -82,6 +82,50 @@ const state = {
     probe.dispose()
     probeCanvas.remove()
     return observed
+  },
+  probeSharedLifecycle: (): { readonly cancellations: number; readonly modifiers: readonly boolean[] } => {
+    const realm = activeMount.ownerDocument.defaultView!
+    const probeCanvas = activeMount.ownerDocument.createElement('canvas')
+    probeCanvas.style.cssText = 'position:fixed;left:0;top:0;width:100px;height:100px'
+    activeMount.append(probeCanvas)
+    let cancellations = 0
+    const modifiers: boolean[] = []
+    const probe = new InteractiveViewport({
+      canvas: probeCanvas,
+      view: { scale: 1, offsetX: 0, offsetY: 0 },
+      engine: () => engine,
+      diagram: () => fixture.diagram,
+      selectionEnabled: () => false,
+      claim: () => ({
+        still: 'claim', blocksPassiveRelaxation: false,
+        move: () => {}, release: () => {}, cancel: () => { cancellations++ },
+      }),
+      doubleClick: () => false,
+      contextMenu: () => {},
+      pointerChanged: () => {},
+      modifiersChanged: (held) => { modifiers.push(held) },
+      keyDown: () => false,
+      selectionChanged: () => {},
+      selectionCommitted: () => {},
+      keyScope: 'window',
+    })
+    probeCanvas.dispatchEvent(new realm.PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, pointerId: 41, button: 0, clientX: 5, clientY: 5,
+    }))
+    realm.dispatchEvent(new realm.Event('blur'))
+    probeCanvas.dispatchEvent(new realm.PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, pointerId: 42, button: 0, clientX: 5, clientY: 5,
+    }))
+    Object.defineProperty(activeMount.ownerDocument, 'visibilityState', {
+      value: 'hidden', configurable: true,
+    })
+    activeMount.ownerDocument.dispatchEvent(new realm.Event('visibilitychange'))
+    Reflect.deleteProperty(activeMount.ownerDocument, 'visibilityState')
+    realm.dispatchEvent(new realm.KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }))
+    realm.dispatchEvent(new realm.KeyboardEvent('keyup', { key: 'Control', ctrlKey: false }))
+    probe.dispose()
+    probeCanvas.remove()
+    return { cancellations, modifiers }
   },
 }
 

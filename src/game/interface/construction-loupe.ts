@@ -9,10 +9,10 @@ import { adaptCanvas, type CanvasAdapter } from '../../view/canvas'
 import { seedProject } from '../../view/relax'
 import { existentialStubs, legPaths } from '../../view/wires'
 import { addAtomNode, addRefNode, addTermNode } from './loupe/edit'
-import { wireHitTest, type Hit } from './loupe/hittest'
+import { wireHitTest, type Hit } from '../../interaction/hittest'
 import { ConstructController } from './loupe/interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './loupe/interact/spawn'
-import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './loupe/interact/viewport'
+import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from '../../interaction/controllers/viewport'
 import {
   applyComprehensionConnection,
   currentComprehensionDraft,
@@ -289,6 +289,7 @@ export class ConstructionLoupe {
       engine: () => this.#engine,
       diagram: () => this.#diagram(),
       selectionEnabled: () => true,
+      brushMode: (sample) => sample.shiftKey ? 'deselect' : 'select',
       claim: (sample) => this.#connectionClaim('draft', sample) ?? this.#construct.claim(sample),
       doubleClick: (sample) => this.#construct.doubleClick(sample),
       contextMenu: (sample) => {

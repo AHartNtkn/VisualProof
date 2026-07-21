@@ -3,10 +3,6 @@ import { describe, expect, it } from 'vitest'
 import type { FolioProjection } from '../../src/game/interface/folio-projection'
 import { mountFolioView } from '../../src/game/interface/folio-view'
 import { mountLensEnvironment } from '../../src/game/interface/lens-environment'
-import type {
-  PuzzlePreviewService,
-  PuzzlePreviewState,
-} from '../../src/game/interface/puzzle-preview-service'
 import { cultureId, puzzleId } from '../../src/game/types'
 import { eventWith, FakeDocument, FakeElement } from './interface-fake-dom'
 
@@ -15,14 +11,6 @@ const SECOND_CULTURE = cultureId('second-culture')
 const COMPLETED = puzzleId('completed-record')
 const AVAILABLE = puzzleId('available-record')
 const LOCKED = puzzleId('locked-record')
-
-const preview = (id: string) => ({
-  key: `fixture:${id}`,
-  fingerprint: id,
-  diagram: null,
-  width: 640 as const,
-  height: 400 as const,
-})
 
 type PendingMotionWait = {
   readonly milliseconds: number
@@ -45,64 +33,6 @@ class PendingMotionClock {
   }
 }
 
-class PreviewFixture implements PuzzlePreviewService {
-  readonly listeners = new Map<string, Set<(state: PuzzlePreviewState) => void>>()
-  readonly subscriptions = new Map<string, number>()
-  readonly invalidated: string[] = []
-  readonly urls = new Map<string, string>()
-
-  subscribe(
-    request: { readonly key: string },
-    listener: (state: PuzzlePreviewState) => void,
-  ): () => void {
-    this.subscriptions.set(request.key, (this.subscriptions.get(request.key) ?? 0) + 1)
-    let listeners = this.listeners.get(request.key)
-    if (listeners === undefined) {
-      listeners = new Set()
-      this.listeners.set(request.key, listeners)
-    }
-    listeners.add(listener)
-    listener({ kind: 'preparing' })
-    return () => listeners?.delete(listener)
-  }
-
-  publish(id: string, state: PuzzlePreviewState): void {
-    const key = `fixture:${id}`
-    if (state.kind === 'ready') this.urls.set(key, state.url)
-    else if (state.kind === 'error') this.urls.delete(key)
-    for (const listener of this.listeners.get(key) ?? []) listener(state)
-  }
-
-  currentUrl(key: string): string | null { return this.urls.get(key) ?? null }
-
-  evict(id: string): void { this.urls.delete(`fixture:${id}`) }
-
-  invalidate(key: string): void {
-    this.invalidated.push(key)
-    this.urls.delete(key)
-  }
-
-  dispose(): void {}
-}
-
-class PreviewObserverFixture {
-  static latest: PreviewObserverFixture | null = null
-  readonly observed = new Set<Element>()
-
-  constructor(readonly callback: IntersectionObserverCallback) {
-    PreviewObserverFixture.latest = this
-  }
-
-  observe(target: Element): void { this.observed.add(target) }
-  unobserve(target: Element): void { this.observed.delete(target) }
-  disconnect(): void { this.observed.clear() }
-
-  emit(target: Element, isIntersecting: boolean): void {
-    if (!this.observed.has(target)) return
-    this.callback([{ target, isIntersecting }] as IntersectionObserverEntry[], this as unknown as IntersectionObserver)
-  }
-}
-
 const projection = (mode: FolioProjection['mode']): FolioProjection => ({
   mode,
   selectedCulture: FIRST_CULTURE,
@@ -117,9 +47,9 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
       unlocked: true,
       scroll: 85,
       records: [
-        { id: COMPLETED, levelNumber: 1, name: 'Completed', accession: 'A-1', summary: 'Cleared.', status: 'completed', affordance: mode === 'archive' ? 'select' : 'drag-theorem', priority: false, restrictedPacket: false, preview: preview(COMPLETED) },
-        { id: AVAILABLE, levelNumber: 2, name: 'Available', accession: null, summary: 'Available.', status: 'unlocked', affordance: mode === 'archive' ? 'select' : 'inert', priority: true, restrictedPacket: false, preview: preview(AVAILABLE) },
-        { id: LOCKED, levelNumber: 3, name: 'Locked', accession: null, summary: 'Restricted.', status: 'locked', affordance: mode === 'archive' ? 'resist' : 'inert', priority: false, restrictedPacket: true, preview: preview(LOCKED) },
+        { id: COMPLETED, levelNumber: 1, name: 'Completed', accession: 'A-1', summary: 'Cleared.', status: 'completed', affordance: mode === 'archive' ? 'select' : 'drag-theorem', priority: false, restrictedPacket: false },
+        { id: AVAILABLE, levelNumber: 2, name: 'Available', accession: null, summary: 'Available.', status: 'unlocked', affordance: mode === 'archive' ? 'select' : 'inert', priority: true, restrictedPacket: false },
+        { id: LOCKED, levelNumber: 3, name: 'Locked', accession: null, summary: 'Restricted.', status: 'locked', affordance: mode === 'archive' ? 'resist' : 'inert', priority: false, restrictedPacket: true },
       ],
     },
     {
@@ -135,14 +65,12 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
 })
 
 describe('production excavation folio DOM view', () => {
-  it('renders numbered canonical preview states and reuses the ready raster for inspection', () => {
+  it('renders the record catalog directly without puzzle preview surfaces', () => {
     const document = new FakeDocument()
     const host = new FakeElement(document)
-    const previews = new PreviewFixture()
     const view = mountFolioView({
       host: host as unknown as HTMLElement,
       projection: projection('puzzle'),
-      previewService: previews,
       motionClock: { wait: async () => {} },
       onSelectPuzzle: () => {},
       onRefusePuzzle: () => {},
@@ -156,112 +84,12 @@ describe('production excavation folio DOM view', () => {
     })
     const root = view.element as unknown as FakeElement
     const completed = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
-    const frame = completed.querySelector('.curse-folio-puzzle-preview-frame')!
     expect(completed.querySelector('.curse-folio-record-name')!.textContent).toBe('1. Completed')
     expect(completed.getAttribute('aria-label')).toContain('1. Completed')
-    expect(frame.dataset.previewState).toBe('preparing')
-    expect(frame.querySelector('.curse-folio-puzzle-preview-status')!.textContent)
-      .toBe('Preparing preview…')
-    frame.querySelector('.curse-folio-puzzle-preview')!.dispatchEvent(new Event('error'))
-    expect(previews.invalidated).toEqual([])
-    expect(frame.dataset.previewState).toBe('preparing')
-
-    previews.publish(COMPLETED, { kind: 'ready', url: 'blob:completed' })
-    expect(frame.dataset.previewState).toBe('ready')
-    expect(frame.querySelector('.curse-folio-puzzle-preview')!.src).toBe('blob:completed')
+    expect(completed.querySelector('.curse-folio-record-accession')!.textContent).toBe('A-1')
+    expect(completed.querySelector('.curse-folio-record-summary')!.textContent).toBe('Cleared.')
     completed.dispatchEvent(new Event('focus'))
-    const enlarged = root.querySelector('.curse-folio-puzzle-preview-inspection')!
-    expect(enlarged.getAttribute('aria-hidden')).toBe('false')
-    expect(enlarged.querySelector('img')!.src).toBe('blob:completed')
-
-    frame.querySelector('.curse-folio-puzzle-preview')!.dispatchEvent(new Event('error'))
-    expect(previews.invalidated).toEqual([`fixture:${COMPLETED}`])
-    expect(frame.dataset.previewState).toBe('error')
-    expect(enlarged.getAttribute('aria-hidden')).toBe('true')
-
-    previews.publish(AVAILABLE, { kind: 'error', message: 'bad diagram' })
-    const available = root.querySelector(`[data-puzzle="${AVAILABLE}"]`)!
-    expect(available.querySelector('.curse-folio-puzzle-preview-status')!.textContent)
-      .toBe('Preview unavailable')
-    view.dispose()
-  })
-
-  it('retries an unavailable preview only after it leaves and re-enters visibility', () => {
-    const document = new FakeDocument()
-    ;(document as unknown as { defaultView: { IntersectionObserver: typeof IntersectionObserver } })
-      .defaultView = { IntersectionObserver: PreviewObserverFixture as unknown as typeof IntersectionObserver }
-    const host = new FakeElement(document)
-    const previews = new PreviewFixture()
-    const view = mountFolioView({
-      host: host as unknown as HTMLElement,
-      projection: projection('archive'),
-      previewService: previews,
-      motionClock: { wait: async () => {} },
-      onSelectPuzzle: () => {},
-      onRefusePuzzle: () => {},
-      onSelectCulture: () => {},
-      onRefuseCulture: () => {},
-      onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
-    })
-    const root = view.element as unknown as FakeElement
-    const frame = root.querySelector(`[data-puzzle="${AVAILABLE}"]`)!
-      .querySelector('.curse-folio-puzzle-preview-frame')! as unknown as Element
-    const observer = PreviewObserverFixture.latest!
-
-    observer.emit(frame, true)
-    expect(previews.subscriptions.get(`fixture:${AVAILABLE}`)).toBe(1)
-    previews.publish(AVAILABLE, { kind: 'error', message: 'render failed' })
-    observer.emit(frame, true)
-    expect(previews.subscriptions.get(`fixture:${AVAILABLE}`)).toBe(1)
-    observer.emit(frame, false)
-    observer.emit(frame, true)
-    expect(previews.subscriptions.get(`fixture:${AVAILABLE}`)).toBe(2)
-    view.dispose()
-  })
-
-  it('refreshes an evicted decoded URL on visibility re-entry and enlarged inspection', () => {
-    const document = new FakeDocument()
-    ;(document as unknown as { defaultView: { IntersectionObserver: typeof IntersectionObserver } })
-      .defaultView = { IntersectionObserver: PreviewObserverFixture as unknown as typeof IntersectionObserver }
-    const host = new FakeElement(document)
-    const previews = new PreviewFixture()
-    const view = mountFolioView({
-      host: host as unknown as HTMLElement,
-      projection: projection('archive'),
-      previewService: previews,
-      motionClock: { wait: async () => {} },
-      onSelectPuzzle: () => {},
-      onRefusePuzzle: () => {},
-      onSelectCulture: () => {},
-      onRefuseCulture: () => {},
-      onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
-    })
-    const root = view.element as unknown as FakeElement
-    const record = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
-    const frame = record.querySelector('.curse-folio-puzzle-preview-frame')! as unknown as Element
-    const observer = PreviewObserverFixture.latest!
-
-    observer.emit(frame, true)
-    previews.publish(COMPLETED, { kind: 'ready', url: 'blob:first' })
-    previews.evict(COMPLETED)
-    observer.emit(frame, false)
-    observer.emit(frame, true)
-    expect(previews.subscriptions.get(`fixture:${COMPLETED}`)).toBe(2)
-    previews.publish(COMPLETED, { kind: 'ready', url: 'blob:second' })
-
-    previews.evict(COMPLETED)
-    record.dispatchEvent(new Event('focus'))
-    expect(previews.subscriptions.get(`fixture:${COMPLETED}`)).toBe(3)
-    expect(root.querySelector('.curse-folio-puzzle-preview-inspection')!
-      .getAttribute('aria-hidden')).toBe('true')
+    expect(root.querySelector('[class*="puzzle-preview"]')).toBe(null)
     view.dispose()
   })
 
@@ -589,7 +417,7 @@ describe('production lens DOM ownership and approved assets', () => {
       'priority-band.png',
     ]) expect(folioCss).toContain(asset)
     expect(folioCss).not.toMatch(/mount-(?:photo|rubbing|tracing)\.png/)
-    expect(folioCss).toContain('.curse-folio-puzzle-preview-frame')
+    expect(folioCss).not.toContain('puzzle-preview')
     expect(folioCss).toContain('clearance-slip.png')
     expect(folioCss).toContain('restricted-sleeve.png')
     expect(lensCss).toContain('background: #07090c')

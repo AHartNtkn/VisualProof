@@ -519,6 +519,9 @@ describe('actual game proof controller routes', () => {
       { rule: 'relationSpawn', region: bubble, defId: 'R', arity: 0 },
       { rule: 'boundRelationSpawn', region: bubble, binder: bubble, arity: 0 },
     ])
+    expect(applied.map(({ placements }) => placements)).toEqual(Array.from({ length: 3 }, () => [
+      { introducedNode: 0, x: center.x, y: center.y },
+    ]))
   })
 
   it('routes wire sever and anchored split menu clicks into proof actions', () => {

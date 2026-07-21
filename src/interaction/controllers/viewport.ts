@@ -71,7 +71,12 @@ export type InteractiveViewportOptions = {
   readonly keyDown: (sample: KeySample) => boolean
   readonly selectionChanged: (selected: readonly Hit[]) => void
   readonly selectionCommitted: () => void
+  readonly mapClient?: (client: Vec2) => { readonly screen: Vec2; readonly world: Vec2 }
+  readonly brushMode?: (sample: PointerSample) => 'toggle' | 'select' | 'deselect'
   readonly inputAllowed?: () => boolean
+  readonly physicsEnabled?: () => boolean
+  readonly zoomEnabled?: () => boolean
+  readonly keyScope?: 'focused' | 'window'
 }
 
 const CLICK_SLOP_PX = 3
@@ -84,6 +89,7 @@ type ActivePointer = {
   readonly downWorld: Vec2
   readonly initialSelection: readonly Hit[]
   readonly claim: PointerClaim | null
+  readonly brushMode: 'toggle' | 'select' | 'deselect'
   brush: BrushState | null
   physics: { readonly drag: PhysicsDrag; readonly pinNode: string | null } | null
   activeDrag: ActivePhysicsDrag | null
@@ -106,6 +112,8 @@ function sameSelection(a: readonly Hit[], b: readonly Hit[]): boolean {
  */
 export class InteractiveViewport {
   readonly #opts: InteractiveViewportOptions
+  readonly #window: Window & typeof globalThis
+  readonly #document: Document
   readonly #pins = new Set<string>()
   #selected: readonly Hit[] = []
   #hover: Hit | null = null
@@ -116,6 +124,10 @@ export class InteractiveViewport {
   constructor(opts: InteractiveViewportOptions) {
     this.#opts = opts
     const { canvas } = opts
+    const canvasWindow = canvas.ownerDocument.defaultView
+    if (canvasWindow === null) throw new Error('interactive canvas must belong to a live window')
+    this.#window = canvasWindow
+    this.#document = canvas.ownerDocument
     if (canvas.tabIndex < 0) canvas.tabIndex = 0
     canvas.addEventListener('pointerdown', this.#pointerDown)
     canvas.addEventListener('pointermove', this.#pointerMove)
@@ -126,10 +138,10 @@ export class InteractiveViewport {
     canvas.addEventListener('contextmenu', this.#contextMenu)
     canvas.addEventListener('dblclick', this.#doubleClick)
     canvas.addEventListener('wheel', this.#wheel, { passive: false })
-    window.addEventListener('keydown', this.#keyDown)
-    window.addEventListener('keyup', this.#modifierChanged)
-    window.addEventListener('blur', this.#focusLost)
-    document.addEventListener('visibilitychange', this.#visibilityChanged)
+    this.#window.addEventListener('keydown', this.#keyDown)
+    this.#window.addEventListener('keyup', this.#modifierChanged)
+    this.#window.addEventListener('blur', this.#focusLost)
+    this.#document.addEventListener('visibilitychange', this.#visibilityChanged)
   }
 
   get selection(): readonly Hit[] { return this.#selected }
@@ -229,10 +241,10 @@ export class InteractiveViewport {
     canvas.removeEventListener('contextmenu', this.#contextMenu)
     canvas.removeEventListener('dblclick', this.#doubleClick)
     canvas.removeEventListener('wheel', this.#wheel)
-    window.removeEventListener('keydown', this.#keyDown)
-    window.removeEventListener('keyup', this.#modifierChanged)
-    window.removeEventListener('blur', this.#focusLost)
-    document.removeEventListener('visibilitychange', this.#visibilityChanged)
+    this.#window.removeEventListener('keydown', this.#keyDown)
+    this.#window.removeEventListener('keyup', this.#modifierChanged)
+    this.#window.removeEventListener('blur', this.#focusLost)
+    this.#document.removeEventListener('visibilitychange', this.#visibilityChanged)
   }
 
   #screen(event: MouseEvent | WheelEvent): Vec2 {
@@ -247,12 +259,14 @@ export class InteractiveViewport {
   }
 
   #sample(event: PointerEvent | MouseEvent): PointerSample {
-    const screen = this.#screen(event)
-    const world = this.#world(screen)
     const client = this.#client(event)
+    const { screen, world } = this.#opts.mapClient?.(client) ?? (() => {
+      const screen = this.#screen(event)
+      return { screen, world: this.#world(screen) }
+    })()
     this.#opts.pointerChanged(client)
     const sample: PointerSample = {
-      pointerId: event instanceof PointerEvent ? event.pointerId : 1,
+      pointerId: event instanceof this.#window.PointerEvent ? event.pointerId : 1,
       button: event.button,
       client,
       screen,
@@ -312,14 +326,16 @@ export class InteractiveViewport {
     this.#opts.canvas.focus({ preventScroll: true })
     const sample = this.#sample(event)
     const claim = this.#opts.claim(sample)
+    const brushMode = this.#opts.brushMode?.(sample) ?? 'toggle'
     const phase = event.button === 2
       ? (!event.shiftKey && !event.ctrlKey && claim !== null ? 'claimed' : null)
       : this.#opts.selectionEnabled()
         ? choosePointerPhase(event, claim !== null)
-        : event.shiftKey ? 'claimed' : event.ctrlKey ? 'physics' : 'claimed'
+        : event.shiftKey ? 'claimed'
+          : event.ctrlKey && this.#opts.physicsEnabled?.() !== false ? 'physics' : 'claimed'
     if (phase === null) return
     const brush = phase === 'selection'
-      ? reduceBrush(createBrushState(this.#selected), { kind: 'begin', hit: sample.hit })
+      ? reduceBrush(createBrushState(this.#selected), { kind: 'begin', hit: sample.hit, mode: brushMode })
       : null
     this.#pointer = {
       id: event.pointerId,
@@ -328,6 +344,7 @@ export class InteractiveViewport {
       downWorld: sample.world,
       initialSelection: this.#selected,
       claim,
+      brushMode,
       brush,
       physics: phase === 'physics' ? this.#makePhysicsGrab(sample.world) : null,
       activeDrag: null,
@@ -380,7 +397,9 @@ export class InteractiveViewport {
     } else if (pointer.phase === 'claimed' && pointer.claim !== null) {
       if (pointer.moved) pointer.claim.move(sample)
       pointer.claim.release(sample, pointer.moved)
-      if (!pointer.moved && pointer.claim.still === 'selection') this.#commitStillSelection(sample.hit)
+      if (!pointer.moved && pointer.claim.still === 'selection') {
+        this.#commitStillSelection(sample.hit, pointer.brushMode)
+      }
     } else if (pointer.phase === 'physics' && pointer.physics !== null && pointer.moved) {
       pointer.activeDrag = { drag: pointer.physics.drag, cursor: sample.world }
       commitPhysicsDragSample(this.#opts.engine(), pointer.activeDrag)
@@ -416,7 +435,7 @@ export class InteractiveViewport {
   }
 
   #visibilityChanged = (): void => {
-    if (document.visibilityState === 'hidden') this.#focusLost()
+    if (this.#document.visibilityState === 'hidden') this.#focusLost()
   }
 
   #contextMenu = (event: MouseEvent): void => {
@@ -430,9 +449,9 @@ export class InteractiveViewport {
     if (this.#opts.doubleClick(this.#sample(event))) event.preventDefault()
   }
 
-  #commitStillSelection(hit: Hit | null): void {
+  #commitStillSelection(hit: Hit | null, mode: 'toggle' | 'select' | 'deselect'): void {
     const initial = this.#selected
-    const begun = reduceBrush(createBrushState(initial), { kind: 'begin', hit })
+    const begun = reduceBrush(createBrushState(initial), { kind: 'begin', hit, mode })
     const ended = reduceBrush(begun, { kind: 'end' })
     this.setSelection(ended.selected)
     if (!sameSelection(initial, this.#selected)) this.#opts.selectionCommitted()
@@ -444,7 +463,7 @@ export class InteractiveViewport {
     if (pointer.phase === 'selection') {
       const movingStart = reduceBrush(
         createBrushState(pointer.initialSelection),
-        { kind: 'begin', hit: this.#hit(pointer.downWorld, true) },
+        { kind: 'begin', hit: this.#hit(pointer.downWorld, true), mode: pointer.brushMode },
       )
       this.#setBrush(movingStart)
     } else if (pointer.phase === 'physics' && pointer.physics !== null) {
@@ -487,8 +506,12 @@ export class InteractiveViewport {
 
   #keyDown = (event: KeyboardEvent): void => {
     this.#modifierChanged(event)
+    if (this.#opts.keyScope === 'focused'
+      && this.#document.activeElement !== this.#opts.canvas) return
     const target = event.target
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return
+    if (target instanceof this.#window.HTMLInputElement
+      || target instanceof this.#window.HTMLTextAreaElement
+      || (target instanceof this.#window.HTMLElement && target.isContentEditable)) return
     if (this.#opts.inputAllowed?.() === false) { event.preventDefault(); return }
     const consumed = this.#opts.keyDown({
       key: event.key,
@@ -503,12 +526,15 @@ export class InteractiveViewport {
 
   #wheel = (event: WheelEvent): void => {
     event.preventDefault()
-    if (this.#opts.inputAllowed?.() === false) return
-    const screen = this.#screen(event)
-    const world = this.#world(screen)
-    const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+    if (this.#opts.inputAllowed?.() === false || this.#opts.zoomEnabled?.() === false) return
+    const client = this.#client(event)
+    const { screen, world } = this.#opts.mapClient?.(client) ?? (() => {
+      const screen = this.#screen(event)
+      return { screen, world: this.#world(screen) }
+    })()
+    const delta = event.deltaMode === this.#window.WheelEvent.DOM_DELTA_LINE
       ? event.deltaY * 16
-      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+      : event.deltaMode === this.#window.WheelEvent.DOM_DELTA_PAGE
         ? event.deltaY * this.#opts.canvas.height
         : event.deltaY
     this.#userZoom = normalizeUserZoom(this.#userZoom * Math.exp(-delta * ZOOM_PER_WHEEL_PX))
