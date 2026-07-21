@@ -215,6 +215,23 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(out.wires[wo]!.scope).toBe(cut)
   })
 
+  it('refuses an equation wire owned by an ancestor region', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const n1 = h.termNode(cut, p('\\x. x a'))
+    const n2 = h.termNode(cut, p('\\x. x b'))
+    h.wire(cut, [fv(n1, 'a')])
+    h.wire(cut, [fv(n2, 'b')])
+    const equation = h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+
+    expect(() => applyHeadStrip(d, n1, n2))
+      .toThrowError(/equation wire.*scoped.*nodes.*region/i)
+    expect(d.nodes[n1]).toBeDefined()
+    expect(d.nodes[n2]).toBeDefined()
+    expect(d.wires[equation]).toBeDefined()
+  })
+
   it('strips under the binder: \\x. x a —o— \\x. x b yields closures \\x. a and \\x. b', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x a'))

@@ -1547,6 +1547,7 @@ structure HeadStripPayload (input : Diagram.CheckedDiagram signature)
     secondOriginalSpine.args.length
   outputWire : Fin input.val.wireCount
   outputBinary : (input.val.wires outputWire).endpoints.length = 2
+  outputScope : (input.val.wires outputWire).scope = region
   firstOutput : input.val.EndpointOccurs outputWire
     { node := first, port := .output }
   secondOutput : input.val.EndpointOccurs outputWire

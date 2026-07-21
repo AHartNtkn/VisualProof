@@ -9,17 +9,20 @@ argument positions are trivial, including the nullary rigid-head case, the
 matched equation discharges completely.
 
 The rule refuses an output wire with any endpoint beyond the two selected term
-outputs. Users must sever a multi-endpoint equality before applying
-`headStrip`; no implementation may silently lose or preserve the additional
-equality.
+outputs, and refuses a wire whose scope is not the selected nodes' region.
+Users must sever a multi-endpoint equality before applying `headStrip`; no
+implementation may silently lose or preserve the additional equality. A
+nonlocal equation must first be represented at the local region, because
+deleting an ancestor-owned wire would remove its value at the wrong quantifier
+scope.
 
 ## Selected Model
 
 The affected subgraph is exactly two distinct term nodes in one region plus
 their shared binary output wire. Existing rigid-head, head-normal-form, spine
 alignment, and port-correspondence gates remain authoritative. The binary-wire
-gate runs after identifying the shared output wire and before any result is
-constructed.
+and exact-scope gates run after identifying the shared output wire and before
+any result is constructed.
 
 On success, the result is built from survivors rather than from an augmented
 copy:
@@ -48,8 +51,9 @@ equality. Both multi-endpoint variants are therefore rejected.
 ## TypeScript Authority
 
 `applyHeadStrip` performs all gates before mutation. The shared output wire must
-contain exactly the two selected output endpoints. A larger endpoint list raises
-a `RuleError` that says the wire must be severed first.
+contain exactly the two selected output endpoints and its scope must equal the
+nodes' region. A larger endpoint list raises a `RuleError` that says the wire
+must be severed first; a nonlocal wire raises an exact-scope refusal.
 
 The final `nodes` and `wires` records omit the selected nodes and shared output
 wire from the outset. Surviving wires filter the selected nodes' endpoints;
@@ -63,9 +67,10 @@ survives, and a third endpoint is refused without changing the input.
 
 ## Lean Authority
 
-`HeadStripPayload` proves that the shared output wire is binary in addition to
-proving both selected output occurrences. This is the formal counterpart of the
-TypeScript refusal gate.
+`HeadStripPayload` proves that the shared output wire is binary and scoped at
+the selected nodes' region in addition to proving both selected output
+occurrences. These are the formal counterparts of the TypeScript refusal
+gates.
 
 The executable raw transformation uses the established concrete survivor-domain
 machinery to remove the two selected nodes and the shared output wire, then adds

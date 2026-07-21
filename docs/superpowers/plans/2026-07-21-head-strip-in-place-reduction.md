@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make TypeScript and Lean `headStrip` replace a binary rigid-head equation with corresponding nontrivial argument equations, discharge trivial/nullary matches, and refuse multi-endpoint equation wires.
+**Goal:** Make TypeScript and Lean `headStrip` replace a local binary rigid-head equation with corresponding nontrivial argument equations, discharge trivial/nullary matches, and refuse multi-endpoint or nonlocal equation wires.
 
 **Architecture:** TypeScript constructs the final record maps directly from surviving nodes and wires. Lean defines a checked two-node/one-wire selection, uses `FrameDomains` and `removeRaw` as the dense survivor authority, and appends only the compact argument equations to that frame; provenance, interface transport, and semantic simulation are rebuilt around the survivor maps.
 
@@ -11,6 +11,8 @@
 ## Global Constraints
 
 - The selected output wire has exactly the two selected term-output endpoints; otherwise refuse and require severing first.
+- The selected output wire is scoped exactly at the selected nodes' region; an
+  ancestor-owned value is not deleted by a local reduction.
 - The two source term nodes and their shared output wire are absent from every successful result.
 - Trivial and nullary matches discharge completely.
 - TypeScript and Lean expose one matching semantic rule; no augmenting compatibility path remains.

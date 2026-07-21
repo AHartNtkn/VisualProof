@@ -67,6 +67,11 @@ export function applyHeadStrip(
       `head strip requires a binary equation wire; '${oa}' has extra endpoints that must be severed first`,
     )
   }
+  if (equation.scope !== region) {
+    throw new RuleError(
+      `head strip requires the equation wire '${oa}' to be scoped at the nodes' region '${region}'; found scope '${equation.scope}'`,
+    )
+  }
 
   // Gate 3: both terms are in head-normal form.
   const normalHead = (node: NodeId, s: HeadSpine): Extract<HeadSpine['head'], { kind: 'bound' | 'free' }> => {
