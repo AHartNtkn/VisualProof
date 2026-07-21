@@ -8,16 +8,16 @@ import {
   type ArtifactProvenance,
   type CultureId,
   type GameRuleContext,
-  type GameStep,
   type PuzzleId,
 } from '../../src/game/types'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { twoVeils } from './fixtures'
 
 export type TestTeacherIntervention = {
   readonly id: string
   readonly trigger:
     | { readonly kind: 'opening' | 'completion' }
-    | { readonly kind: 'recognizedUnwinnable'; readonly state: DiagramWithBoundary; readonly demonstration: readonly GameStep[] }
+    | { readonly kind: 'recognizedUnwinnable'; readonly state: DiagramWithBoundary; readonly demonstration: readonly ProofStep[] }
   readonly pages: readonly string[]
   readonly repeat: 'once' | 'repeatable'
   readonly recovery?: 'timeline'
@@ -30,7 +30,7 @@ export type TestPuzzleDefinition = {
   readonly provenance: ArtifactProvenance
   readonly goal: DiagramWithBoundary
   readonly prerequisites: readonly PuzzleId[]
-  readonly witness: readonly GameStep[]
+  readonly witness: readonly ProofStep[]
   readonly teacher: readonly TestTeacherIntervention[]
 }
 

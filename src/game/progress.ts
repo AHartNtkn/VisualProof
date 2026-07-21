@@ -2,7 +2,9 @@ import type { GameCatalog } from './catalog'
 import { type CultureId, type PuzzleId } from './types'
 import { meetsUnlockConditions } from './unlock'
 
+export type CompletionIndex = { has(id: PuzzleId): boolean }
 export type GameProgress = { readonly completed: ReadonlySet<PuzzleId> }
+export type CompletionProgress = { readonly completed: CompletionIndex }
 export const emptyProgress = (): GameProgress => ({ completed: new Set() })
 
 export function recordCompletion(progress: GameProgress, id: PuzzleId): GameProgress {
@@ -12,13 +14,13 @@ export function recordCompletion(progress: GameProgress, id: PuzzleId): GameProg
 
 export function isCultureUnlocked(
   catalog: GameCatalog,
-  progress: GameProgress,
+  progress: CompletionProgress,
   id: CultureId,
 ): boolean {
   return catalog.culture(id).unlocksAfter.every((puzzle) => progress.completed.has(puzzle))
 }
 
-export function isUnlocked(catalog: GameCatalog, progress: GameProgress, id: PuzzleId): boolean {
+export function isUnlocked(catalog: GameCatalog, progress: CompletionProgress, id: PuzzleId): boolean {
   const placement = catalog.placement(id)
   return meetsUnlockConditions(catalog.culture(placement.culture), placement, progress.completed)
 }

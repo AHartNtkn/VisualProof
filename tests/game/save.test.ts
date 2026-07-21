@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { stepToJson } from '../../src/kernel/proof/json'
+import { actionToJson } from '../../src/kernel/proof/json'
+import { singleStepAction } from '../../src/kernel/proof/action'
 import type { GameCatalog } from '../../src/game/catalog'
 import { createInitialGameState, type GameControllerState } from '../../src/game/controller-state'
 import { reduceGame, type GameAction } from '../../src/game/controller'
@@ -34,7 +35,13 @@ const move = (
   state: GameControllerState,
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
-) => act(state, { kind: 'applySteps', steps: [controllerPuzzle(puzzle).witness[index]!] })
+) => act(state, {
+  kind: 'applyProofAction',
+  action: singleStepAction(
+    controllerPuzzle(puzzle).witness[index]!.rule,
+    controllerPuzzle(puzzle).witness[index]!,
+  ),
+})
 
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -67,15 +74,15 @@ describe('strict per-puzzle game save', () => {
 
     expect(loaded.mode).toBe('puzzle')
     expect(loaded.activePuzzle).toBe(SECOND)
-    expect(loaded.completed).toEqual(state.completed)
+    expect(loaded.completedArtifacts).toEqual(state.completedArtifacts)
     expect(loaded.firstAttempts).toEqual(state.firstAttempts)
     expect(loaded.firstAttempts.get(SECOND)?.timeline).toMatchObject({
       cursor: 0,
       states: expect.any(Array),
-      steps: expect.any(Array),
+      actions: expect.any(Array),
     })
     expect(loaded.firstAttempts.get(SECOND)?.timeline.states).toHaveLength(3)
-    expect(loaded.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(2)
+    expect(loaded.firstAttempts.get(SECOND)?.timeline.actions).toHaveLength(2)
     expect(loaded.replays).toEqual(state.replays)
     expect(loaded.replays.get(FIRST)?.timeline.cursor).toBe(1)
     expect(loaded.deliveredGuidance).toEqual(state.deliveredGuidance)
@@ -120,7 +127,7 @@ describe('strict per-puzzle game save', () => {
     let state = select(fresh(), FIRST)
     state = act(state, { kind: 'advanceGuidancePage' })
     const encoded: any = plain(encodeGameSave(catalog, state))
-    expect(encoded.version).toBe(5)
+    expect(encoded.version).toBe(6)
     expect(encoded.guidance).toEqual({
       puzzle: FIRST, intervention: SHARED_TEACHER_ID, page: 1,
     })
@@ -187,9 +194,11 @@ describe('strict per-puzzle game save', () => {
     expect(() => decodeGameSave(gatedSecond, forged)).toThrow(/selected culture.*locked/)
   })
 
-  it('replays serialized steps and refuses forged steps', () => {
+  it('replays serialized actions and refuses forged constituent steps', () => {
     const encoded: any = plain(encodeGameSave(catalog, richPuzzleState()))
-    encoded.attempts[SECOND].steps[0] = { rule: 'doubleCutElim', region: 'forged-region' }
+    encoded.attempts[SECOND].actions[0].steps[0] = {
+      rule: 'doubleCutElim', region: 'forged-region',
+    }
 
     expect(() => decodeGameSave(catalog, encoded)).toThrow(/invalid saved timeline|unknown region/)
   })
@@ -205,7 +214,7 @@ describe('strict per-puzzle game save', () => {
     const encoded: any = plain(encodeGameSave(locked, fresh(locked)))
     encoded.mode = 'puzzle'
     encoded.activePuzzle = SECOND
-    encoded.attempts[SECOND] = { steps: [], cursor: 0 }
+    encoded.attempts[SECOND] = { actions: [], cursor: 0 }
     encoded.puzzleFingerprints[SECOND] = locked.puzzleFingerprint(SECOND)
 
     expect(() => decodeGameSave(locked, encoded)).toThrow(/locked/)
@@ -220,7 +229,7 @@ describe('strict per-puzzle game save', () => {
         : puzzle),
     })
     const encoded: any = plain(encodeGameSave(locked, fresh(locked)))
-    encoded.attempts[SECOND] = { steps: [], cursor: 0 }
+    encoded.attempts[SECOND] = { actions: [], cursor: 0 }
     encoded.puzzleFingerprints[SECOND] = locked.puzzleFingerprint(SECOND)
 
     expect(() => decodeGameSave(locked, encoded)).toThrow(/first attempt.*locked/)
@@ -230,11 +239,11 @@ describe('strict per-puzzle game save', () => {
     let completed = select(fresh(), FIRST)
     for (let index = 0; index < 3; index += 1) completed = move(completed, FIRST, index)
     const completedSave: any = plain(encodeGameSave(catalog, completed))
-    completedSave.attempts[FIRST] = { steps: [], cursor: 0 }
+    completedSave.attempts[FIRST] = { actions: [], cursor: 0 }
     expect(() => decodeGameSave(catalog, completedSave)).toThrow(/first attempt.*completed puzzle/)
 
     const incompleteSave: any = plain(encodeGameSave(catalog, fresh()))
-    incompleteSave.replays[SECOND] = { steps: [], cursor: 0 }
+    incompleteSave.replays[SECOND] = { actions: [], cursor: 0 }
     incompleteSave.puzzleFingerprints[SECOND] = catalog.puzzleFingerprint(SECOND)
     expect(() => decodeGameSave(catalog, incompleteSave)).toThrow(/replay.*incomplete puzzle/)
   })
@@ -246,7 +255,8 @@ describe('strict per-puzzle game save', () => {
 
     const completedTimeline: any = plain(encodeGameSave(catalog, fresh()))
     completedTimeline.attempts[FIRST] = {
-      steps: controllerPuzzle(FIRST).witness.map(stepToJson),
+      actions: controllerPuzzle(FIRST).witness.map((step) =>
+        actionToJson(singleStepAction(step.rule, step))),
       cursor: 0,
     }
     completedTimeline.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
@@ -255,7 +265,7 @@ describe('strict per-puzzle game save', () => {
 
   it('refuses unknown IDs, unknown fields, and missing or extra fingerprints', () => {
     const unknownId: any = plain(encodeGameSave(catalog, fresh()))
-    unknownId.completed = ['unknown-puzzle']
+    unknownId.completedArtifacts = [{ puzzle: 'unknown-puzzle', actions: [] }]
     unknownId.puzzleFingerprints['unknown-puzzle'] = 'forged'
     expect(() => decodeGameSave(catalog, unknownId)).toThrow(/unknown puzzle/)
 

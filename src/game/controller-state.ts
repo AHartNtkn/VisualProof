@@ -3,6 +3,7 @@ import type { GameSession } from './session'
 import type { PresentedGuidanceIntervention } from './teaching'
 import {
   GameDomainError,
+  type CompletedArtifact,
   type CultureId,
   type GuidanceDeliveryIdentity,
   type PuzzleId,
@@ -35,7 +36,7 @@ export type ActiveGuidance = PresentedGuidanceIntervention & {
 export type GameControllerState = {
   readonly mode: GamePrimaryMode
   readonly activePuzzle: PuzzleId | null
-  readonly completed: ReadonlySet<PuzzleId>
+  readonly completedArtifacts: ReadonlyMap<PuzzleId, CompletedArtifact>
   readonly firstAttempts: ReadonlyMap<PuzzleId, GameSession>
   readonly replays: ReadonlyMap<PuzzleId, GameSession>
   readonly deliveredGuidance: readonly GuidanceDeliveryIdentity[]
@@ -60,7 +61,7 @@ export function createInitialGameState(
   return {
     mode: 'archive',
     activePuzzle: null,
-    completed: new Set(),
+    completedArtifacts: new Map(),
     firstAttempts: new Map(),
     replays: new Map(),
     deliveredGuidance: [],

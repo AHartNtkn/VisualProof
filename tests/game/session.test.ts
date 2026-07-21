@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { GameDomainError, puzzleId } from '../../src/game/types'
-import { applyGameSteps, currentDiagram, moveCursor, startPuzzle } from '../../src/game/session'
+import { applyGameAction, currentDiagram, moveCursor, startPuzzle } from '../../src/game/session'
 import { isBlank } from '../../src/game/blank'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import type { ProofAction } from '../../src/kernel/proof/action'
+import { singleStepAction } from '../../src/kernel/proof/action'
+import type { ProofStep } from '../../src/kernel/proof/step'
+import { parseTerm } from '../../src/kernel/term/parse'
+import { freePorts } from '../../src/kernel/term/term'
 import { minimalPuzzle } from './catalog-fixture'
 import { fourVeils } from './fixtures'
 
@@ -13,96 +19,118 @@ const puzzle = minimalPuzzle({
 })
 const corePuzzle = { id: puzzle.id, diagram: puzzle.goal.diagram }
 const authority = {
-  context: { relations: new Map(), theorems: new Map() },
+  context: EMPTY_PROOF_CONTEXT,
 }
+const gesture = (step: ProofStep): ProofAction => singleStepAction(step.rule, step)
+const compound = (label: string, steps: readonly ProofStep[]): ProofAction => ({
+  label,
+  steps,
+  placements: [],
+})
 
 describe('backward game session', () => {
-  it('accepts positive-region insertion only in backward orientation', () => {
-    const step = {
-      rule: 'insertion' as const,
-      region: puzzle.goal.diagram.root,
-      pattern: puzzle.goal,
-      attachments: [],
-      binders: {},
+  it('records a compound user gesture as one action, one state, and one move', () => {
+    const action: ProofAction = {
+      label: 'remove both veil pairs',
+      steps: [...puzzle.witness],
+      placements: [],
     }
 
-    const transition = applyGameSteps(startPuzzle(corePuzzle), [step], authority)
+    const transition = applyGameAction(startPuzzle(corePuzzle), action, authority)
 
-    expect(transition.session.timeline.steps).toEqual([step])
+    expect(transition.completedNow).toBe(true)
+    expect(transition.session.timeline.actions).toEqual([action])
+    expect(transition.session.timeline.states).toHaveLength(2)
+    expect(transition.session.timeline.cursor).toBe(1)
+  })
+
+  it('accepts positive-region atomic spawning only in backward orientation', () => {
+    const term = parseTerm('x')
+    const step = {
+      rule: 'openTermSpawn' as const,
+      region: puzzle.goal.diagram.root,
+      term,
+      freePorts: freePorts(term),
+    }
+
+    const transition = applyGameAction(startPuzzle(corePuzzle), gesture(step), authority)
+
+    expect(transition.session.timeline.actions).toEqual([gesture(step)])
     expect(currentDiagram(transition.session)).not.toBe(puzzle.goal.diagram)
   })
 
   it('completes on canonical blank', () => {
     const start = startPuzzle(corePuzzle)
-    const first = applyGameSteps(start, [puzzle.witness[0]!], authority)
+    const first = applyGameAction(start, gesture(puzzle.witness[0]!), authority)
     expect(first.completedNow).toBe(false)
-    const second = applyGameSteps(first.session, [puzzle.witness[1]!], authority)
+    const second = applyGameAction(first.session, gesture(puzzle.witness[1]!), authority)
     expect(second.completedNow).toBe(true)
     expect(isBlank(currentDiagram(second.session))).toBe(true)
   })
 
   it('rejects every move from canonical blank', () => {
-    const first = applyGameSteps(startPuzzle(corePuzzle), [puzzle.witness[0]!], authority).session
-    const solved = applyGameSteps(first, [puzzle.witness[1]!], authority).session
+    const first = applyGameAction(startPuzzle(corePuzzle), gesture(puzzle.witness[0]!), authority).session
+    const solved = applyGameAction(first, gesture(puzzle.witness[1]!), authority).session
     const blank = currentDiagram(solved)
 
-    expect(() => applyGameSteps(solved, [{
+    expect(() => applyGameAction(solved, gesture({
       rule: 'doubleCutIntro',
       sel: { region: blank.root, regions: [], nodes: [], wires: [] },
-    }], authority)).toThrow(GameDomainError)
+    }), authority)).toThrow(GameDomainError)
     expect(solved.timeline.states).toHaveLength(3)
-    expect(solved.timeline.steps).toHaveLength(2)
+    expect(solved.timeline.actions).toHaveLength(2)
   })
 
   it('retains future while scrubbing and truncates it on a new continuation', () => {
-    const first = applyGameSteps(startPuzzle(corePuzzle), [puzzle.witness[0]!], authority).session
-    const solved = applyGameSteps(first, [puzzle.witness[1]!], authority).session
+    const first = applyGameAction(startPuzzle(corePuzzle), gesture(puzzle.witness[0]!), authority).session
+    const solved = applyGameAction(first, gesture(puzzle.witness[1]!), authority).session
     const rewound = moveCursor(solved, 0)
     expect(rewound.timeline.states).toHaveLength(3)
-    const branched = applyGameSteps(rewound, [puzzle.witness[0]!], authority).session
+    const branched = applyGameAction(rewound, gesture(puzzle.witness[0]!), authority).session
     expect(branched.timeline.states).toHaveLength(2)
-    expect(branched.timeline.steps).toHaveLength(1)
+    expect(branched.timeline.actions).toHaveLength(1)
     expect(branched.timeline.cursor).toBe(1)
   })
 
   it('fails atomically when a general theorem reference is unavailable in game content', () => {
     const start = startPuzzle(corePuzzle)
-    expect(() => applyGameSteps(start, [{
+    expect(() => applyGameAction(start, gesture({
       rule: 'theorem', name: 'unavailable', direction: 'forward',
       at: { sel: { region: puzzle.goal.diagram.root, regions: [], nodes: [], wires: [] }, args: [] },
-    }], authority)).toThrow(/unknown theorem/)
+    }), authority)).toThrow(/unknown theorem/)
     expect(currentDiagram(start)).toBe(puzzle.goal.diagram)
   })
 
-  it('applies a prepared batch as ordinary timeline steps and reports completion from the final step', () => {
-    const transition = applyGameSteps(
+  it('applies a prepared compound action atomically and reports completion from its final step', () => {
+    const action = compound('remove all veils', puzzle.witness)
+    const transition = applyGameAction(
       startPuzzle(corePuzzle),
-      [puzzle.witness[0]!, ...puzzle.witness.slice(1)],
+      action,
       authority,
     )
 
     expect(transition.completedNow).toBe(true)
-    expect(transition.session.timeline.steps).toEqual(puzzle.witness)
-    expect(transition.session.timeline.states).toHaveLength(puzzle.witness.length + 1)
-    expect(transition.session.timeline.cursor).toBe(puzzle.witness.length)
+    expect(transition.session.timeline.actions).toEqual([action])
+    expect(transition.session.timeline.states).toHaveLength(2)
+    expect(transition.session.timeline.cursor).toBe(1)
   })
 
   it('preflights an entire batch before atomically replacing a rewound future', () => {
-    const solved = applyGameSteps(
+    const solved = applyGameAction(
       startPuzzle(corePuzzle),
-      [puzzle.witness[0]!, ...puzzle.witness.slice(1)],
+      compound('solve', puzzle.witness),
       authority,
     ).session
     const rewound = moveCursor(solved, 0)
     const before = rewound.timeline
     const forged = { rule: 'doubleCutElim' as const, region: 'forged-region' }
 
-    expect(() => applyGameSteps(rewound, [puzzle.witness[0]!, forged], authority)).toThrow()
+    expect(() => applyGameAction(rewound, compound('forged', [puzzle.witness[0]!, forged]), authority)).toThrow()
     expect(rewound.timeline).toBe(before)
 
-    const branched = applyGameSteps(rewound, [puzzle.witness[0]!], authority).session
+    const branched = applyGameAction(rewound, gesture(puzzle.witness[0]!), authority).session
     expect(branched.timeline.states).toHaveLength(2)
-    expect(branched.timeline.steps).toEqual([puzzle.witness[0]])
+    expect(branched.timeline.actions).toEqual([gesture(puzzle.witness[0]!)])
     expect(branched.timeline.cursor).toBe(1)
   })
 
@@ -120,22 +148,19 @@ describe('backward game session', () => {
       { rule: 'doubleCutElim' as const, region: cuts[2]! },
       { rule: 'doubleCutElim' as const, region: cuts[0]! },
     ] as const
-    const fullFuture = applyGameSteps(startPuzzle(sixVeilPuzzle), threeSteps, authority).session
+    const fullFuture = applyGameAction(startPuzzle(sixVeilPuzzle), compound('three operations', threeSteps), authority).session
     const rewound = moveCursor(fullFuture, 0)
 
-    const branched = applyGameSteps(rewound, [threeSteps[0], threeSteps[1]], authority).session
+    const branchAction = compound('two operations', [threeSteps[0], threeSteps[1]])
+    const branched = applyGameAction(rewound, branchAction, authority).session
     expect(isBlank(currentDiagram(branched))).toBe(false)
-    expect(branched.timeline.states).toHaveLength(3)
-    expect(branched.timeline.steps).toEqual([threeSteps[0], threeSteps[1]])
-    expect(branched.timeline.cursor).toBe(2)
+    expect(branched.timeline.states).toHaveLength(2)
+    expect(branched.timeline.actions).toEqual([branchAction])
+    expect(branched.timeline.cursor).toBe(1)
 
-    const oneBack = moveCursor(branched, 1)
-    expect(currentDiagram(oneBack)).toBe(branched.timeline.states[1])
-    const twoBack = moveCursor(oneBack, 0)
-    expect(currentDiagram(twoBack)).toBe(branched.timeline.states[0])
-    const oneForward = moveCursor(twoBack, 1)
-    expect(currentDiagram(oneForward)).toBe(branched.timeline.states[1])
-    const twoForward = moveCursor(oneForward, 2)
-    expect(currentDiagram(twoForward)).toBe(branched.timeline.states[2])
+    const beforeAction = moveCursor(branched, 0)
+    expect(currentDiagram(beforeAction)).toBe(branched.timeline.states[0])
+    const afterAction = moveCursor(beforeAction, 1)
+    expect(currentDiagram(afterAction)).toBe(branched.timeline.states[1])
   })
 })

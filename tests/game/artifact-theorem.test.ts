@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
-import { artifactTheoremContext, artifactTheoremName, completedArtifactTheorem } from '../../src/game/artifact-theorem'
+import {
+  artifactTheoremContext,
+  artifactTheoremName,
+  certifyCompletedArtifact,
+  completedArtifactTheorem,
+} from '../../src/game/artifact-theorem'
 import { blankDiagram, isBlank } from '../../src/game/blank'
-import { applyGameSteps, currentDiagram, startPuzzle } from '../../src/game/session'
+import { applyGameAction, currentDiagram, startPuzzle } from '../../src/game/session'
+import { singleStepAction } from '../../src/kernel/proof/action'
 import { buildTestCatalog, minimalSource } from './catalog-fixture'
 import { twoVeils } from './fixtures'
 
@@ -11,22 +17,29 @@ const source = minimalSource()
 const catalog = buildTestCatalog(source)
 const puzzle = catalog.puzzle(catalog.puzzleIds[0]!)
 const fixture = twoVeils()
-const unavailable = artifactTheoremContext(catalog, new Set())
-const available = artifactTheoremContext(catalog, new Set([puzzle.id]))
+const completionAction = singleStepAction('remove veil pair', {
+  rule: 'doubleCutElim',
+  region: fixture.eliminations[0]!,
+})
+const noArtifacts = new Map()
+const completed = certifyCompletedArtifact(catalog, noArtifacts, puzzle, [completionAction])
+const unavailable = artifactTheoremContext(catalog, noArtifacts)
+const available = artifactTheoremContext(catalog, new Map([[puzzle.id, completed]]))
 
 describe('completed artifact theorems', () => {
-  it('constructs the verified runtime endpoint theorem without a shipped proof recording', () => {
-    const theorem = completedArtifactTheorem(puzzle)
+  it('constructs the verified runtime endpoint theorem from the retained player proof', () => {
+    const theorem = completedArtifactTheorem(puzzle, [completionAction])
     expect(theorem.name).toBe(`game:artifact:${puzzle.id}`)
     expect(exploreForm(theorem.lhs.diagram)).toBe(exploreForm(blankDiagram()))
     expect(theorem.rhs.diagram).toBe(puzzle.diagram)
-    expect(theorem.steps).toEqual([])
-    expect(theorem.backSteps).toEqual([])
+    expect(theorem.actions).toEqual([])
+    expect(theorem.backActions).toEqual([completionAction])
   })
 
   it('is absent before completion and present after completion', () => {
     expect(unavailable.theorems.has(artifactTheoremName(puzzle.id))).toBe(false)
-    expect(available.theorems.get(artifactTheoremName(puzzle.id))?.rhs.diagram).toBe(puzzle.diagram)
+    expect(exploreForm(available.theorems.get(artifactTheoremName(puzzle.id))!.rhs.diagram))
+      .toBe(exploreForm(puzzle.diagram))
   })
 
   it('manifests in a legal negative host during backward play', () => {
@@ -37,8 +50,9 @@ describe('completed artifact theorems', () => {
       rule: 'theorem' as const, name: artifactTheoremName(puzzle.id), direction: 'forward' as const,
       at: { sel: { region: negative, regions: [], nodes: [], wires: [] }, args: [] },
     }
-    const transition = applyGameSteps(startPuzzle(hostPuzzle), [step], { context: available })
-    expect(transition.session.timeline.steps).toEqual([step])
+    const action = singleStepAction('manifest artifact', step)
+    const transition = applyGameAction(startPuzzle(hostPuzzle), action, { context: available })
+    expect(transition.session.timeline.actions).toEqual([action])
   })
 
   it('dissolves an exact occurrence in a legal positive host', () => {
@@ -49,7 +63,7 @@ describe('completed artifact theorems', () => {
         args: [],
       },
     }
-    const transition = applyGameSteps(startPuzzle(puzzle), [step], { context: available })
+    const transition = applyGameAction(startPuzzle(puzzle), singleStepAction('dissolve artifact', step), { context: available })
     expect(transition.completedNow).toBe(true)
     expect(isBlank(currentDiagram(transition.session))).toBe(true)
   })
@@ -60,8 +74,8 @@ describe('completed artifact theorems', () => {
       rule: 'theorem' as const, name: artifactTheoremName(puzzle.id), direction: 'reverse' as const,
       at: { sel: { region: puzzle.diagram.root, regions: [], nodes: [], wires: [] }, args: [] },
     }
-    expect(() => applyGameSteps(session, [missing], { context: unavailable })).toThrow(/unknown theorem/)
-    expect(() => applyGameSteps(session, [missing], { context: available })).toThrow(/not an occurrence/)
+    expect(() => applyGameAction(session, singleStepAction('missing', missing), { context: unavailable })).toThrow(/unknown theorem/)
+    expect(() => applyGameAction(session, singleStepAction('inexact', missing), { context: available })).toThrow(/not an occurrence/)
     expect(currentDiagram(session)).toBe(puzzle.diagram)
   })
 })

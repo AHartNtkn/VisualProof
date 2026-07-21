@@ -1,7 +1,12 @@
 import { exploreForm, exploreLabeling } from '../kernel/diagram/canonical/explore'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
+import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { diagramFromJson } from '../kernel/diagram/json'
 import type { Diagram } from '../kernel/diagram/diagram'
+import {
+  EMPTY_PROOF_CONTEXT,
+  extendRelations,
+  type ProofContext,
+} from '../kernel/proof/context'
 import { isBlank } from './blank'
 import {
   GameDomainError,
@@ -26,7 +31,7 @@ export type PortableGameCatalog = {
   readonly fingerprint: string
   readonly puzzleIds: readonly PuzzleId[]
   readonly cultureIds: readonly CultureId[]
-  readonly context: { readonly relations: ReadonlyMap<string, DiagramWithBoundary> }
+  readonly context: ProofContext
   puzzleFingerprint(id: PuzzleId): string
   puzzle(id: PuzzleId): PuzzleDefinition
   placement(id: PuzzleId): PuzzlePlacement
@@ -434,12 +439,13 @@ export function loadGameContent(files: GameContentFiles): PortableGameCatalog {
   const snapArtifactById = new Map(snapshot.artifacts.map((entry) => [entry.puzzle, entry] as const))
   const snapGuidanceById = new Map(snapshot.guidance.map((entry) => [entry.puzzle, entry] as const))
   const snapCultureById = new Map(snapshot.cultures.map((entry) => [entry.id, entry] as const))
+  const context = extendRelations(EMPTY_PROOF_CONTEXT, definitions)
   const unknown = (kind: string, id: string): never => { throw new GameDomainError(`unknown ${kind} '${id}'`) }
   return {
     fingerprint: JSON.stringify([...logicalFingerprints].sort(([left], [right]) => left.localeCompare(right))),
     puzzleIds: snapshot.puzzleIds,
     cultureIds: snapshot.cultureIds,
-    context: ownedSnapshot({ relations: snapshot.relations }),
+    context,
     puzzleFingerprint: (id) => logicalFingerprints.get(id) ?? unknown('puzzle', id),
     puzzle: (id) => snapPuzzleById.get(id) ?? unknown('puzzle', id),
     placement: (id) => snapPlacementById.get(id) ?? unknown('puzzle placement', id),
