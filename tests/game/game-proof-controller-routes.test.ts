@@ -87,6 +87,28 @@ const clickMenuAction = (host: MenuElement, label: string): void => {
 }
 
 describe('actual game proof controller routes', () => {
+  it.each(['Delete', 'Backspace'])('%s head-strips a selected binary rigid-head equation', (pressed) => {
+    const builder = new DiagramBuilder()
+    const a = builder.termNode(builder.root, parseTerm('\\x. x'))
+    const b = builder.termNode(builder.root, parseTerm('\\x. x'))
+    builder.wire(builder.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'output' } },
+    ])
+    const diagram = builder.build()
+    const applied: ProofAction[] = []
+    const selection = {
+      value: [{ kind: 'node' as const, id: a }, { kind: 'node' as const, id: b }],
+    }
+    const controller = controllerFor(diagram, selection, applied, [])
+
+    expect(controller.keyDown(key({ key: pressed }))).toBe(true)
+    expect(stepsFrom(applied)).toEqual([{
+      rule: 'headStrip', a, b,
+      correspondence: { commonArity: 0, left: {}, right: {} },
+    }])
+  })
+
   it('recognizes only a gapless nested chain of selected vacuous bubble rims, deepest first', () => {
     const builder = new DiagramBuilder()
     const outer = builder.bubble(builder.root, 0)

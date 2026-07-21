@@ -504,7 +504,7 @@ const outputEnd = (wire: string, node: string): ConnectionEnd => ({
 })
 
 describe('proof connection resolution', () => {
-  it('head-strips exactly the two output legs dragged on a three-output equality wire', () => {
+  it('does not head-strip two dragged outputs on a three-output equality wire', () => {
     const b = new DiagramBuilder()
     const a = b.termNode(b.root, p('\\x. x y z'))
     const ignored = b.termNode(b.root, p('\\x. x q r'))
@@ -515,11 +515,8 @@ describe('proof connection resolution', () => {
       { node: c, port: { kind: 'output' } },
     ])
 
-    expect(proofConnectionStep(b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
-      .toEqual({
-        rule: 'headStrip', a, b: c,
-        correspondence: { commonArity: 4, left: { s0: 0, s1: 1 }, right: { s0: 2, s1: 3 } },
-      })
+    expect(() => proofConnectionStep(b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
+      .toThrow()
   })
 
   it('does not guess a head-strip pair from a same-wire trunk', () => {
@@ -532,7 +529,7 @@ describe('proof connection resolution', () => {
     ])
 
     expect(() => proofConnectionStep(b.build(), { wire, endpoint: null }, outputEnd(wire, c), 'forward', 64))
-      .toThrow(/another term's output strand/)
+      .toThrow(/compatible endpoint strand/)
   })
 
   it('uses wireJoin for a legal different-wire proof connection', () => {
@@ -648,7 +645,7 @@ describe('proof connection resolution', () => {
     })
   })
 
-  it('authors headStrip by dragging between two output legs on the same wire', () => {
+  it('does not author headStrip by dragging between two output legs on the same wire', () => {
     const b = new DiagramBuilder()
     const a = b.termNode(b.root, p('\\x. x y'))
     const c = b.termNode(b.root, p('\\x. x z'))
@@ -692,14 +689,11 @@ describe('proof connection resolution', () => {
 
     expect(claim).not.toBeNull()
     claim!.move(to)
-    claim!.release(to, true)
-    expect(applied).toEqual([{
-      rule: 'headStrip', a, b: c,
-      correspondence: { commonArity: 2, left: { s0: 0 }, right: { s0: 1 } },
-    }])
+    expect(() => claim!.release(to, true)).toThrow()
+    expect(applied).toEqual([])
   })
 
-  it('refuses the same endpoint and preserves a kernel head mismatch refusal', () => {
+  it('refuses same-wire output dragging without exposing head-strip validation', () => {
     const b = new DiagramBuilder()
     const a = b.termNode(b.root, p('\\x. \\y. x'))
     const c = b.termNode(b.root, p('\\x. \\y. y'))
@@ -710,9 +704,9 @@ describe('proof connection resolution', () => {
     const d = b.build()
 
     expect(() => proofConnectionStep(d, outputEnd(wire, a), outputEnd(wire, a), 'forward', 64))
-      .toThrow(/another term's output strand/)
-    expect(() => proofConnectionStep(d, outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
-      .toThrow(/bound indices differ/)
+      .toThrow()
+    expect(proofConnectionStep(d, outputEnd(wire, a), outputEnd(wire, c), 'forward', 64).rule)
+      .toBe('anchoredWireSplit')
   })
 })
 

@@ -24,7 +24,10 @@ import { applicableActions, type ActionDescriptor } from '../../interaction/acti
 import { inferFoldArgs } from '../../interaction/define'
 import { ConnectionDragController } from '../../interaction/controllers/connection'
 import { FissionDragController } from '../../interaction/controllers/fission'
-import { proofConnectionStep } from '../../interaction/proof-connection'
+import {
+  proofConnectionStep,
+  proposeAttachedPortCorrespondence,
+} from '../../interaction/proof-connection'
 import {
   contextualDeletionStep,
   deiterationStep,
@@ -46,6 +49,27 @@ export function proofShortcutStep(sample: KeySample, selection: readonly Hit[]):
   return selection.length === 1 && selection[0]?.kind === 'wire'
     ? { rule: 'fusion', wire: selection[0].id }
     : null
+}
+
+export function selectedHeadStripStep(
+  diagram: Diagram,
+  hits: readonly Hit[],
+  context: ProofContext,
+): ProofStep | null {
+  if (hits.length !== 2 || hits.some((hit) => hit.kind !== 'node')) return null
+  const [a, b] = hits.map((hit) => hit.id)
+  if (a === undefined || b === undefined
+    || diagram.nodes[a]?.kind !== 'term' || diagram.nodes[b]?.kind !== 'term') return null
+  const step: ProofStep = {
+    rule: 'headStrip', a, b,
+    correspondence: proposeAttachedPortCorrespondence(diagram, a, b),
+  }
+  try {
+    applyStep(diagram, step, context, 'backward')
+    return step
+  } catch {
+    return null
+  }
 }
 
 type Discovery = { readonly selection: SubgraphSelection; readonly actions: readonly ActionDescriptor[] }
@@ -329,6 +353,11 @@ export class GameProofMoveController {
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
       const diagram = this.#options.diagram()
       const selection = this.#options.selection()
+      const headStrip = selectedHeadStripStep(diagram, selection, this.#options.context())
+      if (headStrip !== null) {
+        this.#commit(headStrip)
+        return true
+      }
       const chain = vacuousEliminationChainSteps(
         diagram,
         selection,

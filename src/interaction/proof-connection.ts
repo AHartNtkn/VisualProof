@@ -78,23 +78,12 @@ export function proofConnectionStep(
   if (source.wire === target.wire) {
     const a = source.endpoint
     const b = target.endpoint
-    if (a !== null && b !== null && a.port.kind === 'output' && b.port.kind === 'output') {
-      if (a.node === b.node || diagram.nodes[a.node]?.kind !== 'term' || diagram.nodes[b.node]?.kind !== 'term') {
-        throw new Error("release on another term's output strand to compare arguments")
-      }
-      const step: ProofStep = {
-        rule: 'headStrip', a: a.node, b: b.node,
-        correspondence: proposeAttachedPortCorrespondence(diagram, a.node, b.node),
-      }
-      applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-      return step
-    }
     const split = anchoredSplitCandidate(diagram, source.wire, a, b)
     if (split !== null) {
       applyStep(diagram, split, EMPTY_PROOF_CONTEXT, orientation)
       return split
     }
-    throw new Error("release on another term's output strand or a compatible endpoint strand of the same line")
+    throw new Error('release on a compatible endpoint strand of the same line')
   }
 
   const candidates: ProofStep[] = [{ rule: 'wireJoin', a: source.wire, b: target.wire }]
