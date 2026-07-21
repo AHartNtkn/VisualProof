@@ -5,8 +5,9 @@ import { pathToFileURL } from 'node:url'
 import { exploreForm } from '../src/kernel/diagram/canonical/explore'
 import type { Diagram, RegionId } from '../src/kernel/diagram/diagram'
 import { cutDepth } from '../src/kernel/diagram/regions'
-import { stepFromJson } from '../src/kernel/proof/json'
-import { artifactTheoremContext } from '../src/game/artifact-theorem'
+import type { ProofAction } from '../src/kernel/proof/action'
+import { actionFromJson } from '../src/kernel/proof/json'
+import { artifactTheoremContext, certifyCompletedArtifact } from '../src/game/artifact-theorem'
 import { isBlank } from '../src/game/blank'
 import { loadGameContent, type GameContentFiles } from '../src/game/catalog'
 import {
@@ -14,13 +15,13 @@ import {
   analyzeSeyricStart,
   auditSeyricWitness,
 } from '../src/game/content/seyric-authority'
-import { applyGameSteps, currentDiagram, startPuzzle } from '../src/game/session'
+import { applyGameAction, currentDiagram, startPuzzle } from '../src/game/session'
 import {
   GameDomainError,
   cultureId,
   puzzleId,
   type CultureId,
-  type GameStep,
+  type CompletedArtifact,
   type PuzzleId,
 } from '../src/game/types'
 export { analyzeSeyricPropositionalShape, analyzeSeyricStart, auditSeyricWitness }
@@ -28,10 +29,10 @@ export { analyzeSeyricPropositionalShape, analyzeSeyricStart, auditSeyricWitness
 type JsonRecord = Record<string, unknown>
 type ValidationEvidence = {
   puzzle: PuzzleId
-  solution: readonly GameStep[]
+  solution: readonly ProofAction[]
   availableArtifacts: readonly PuzzleId[]
   expectedRules: readonly string[]
-  recognizedStates: readonly { intervention: string; demonstration: readonly GameStep[] }[]
+  recognizedStates: readonly { intervention: string; demonstration: readonly ProofAction[] }[]
 }
 type CoverageObligation = {
   id: string
@@ -115,9 +116,9 @@ const requireSchema = (validator: ValidateFunction, value: unknown, path: string
 const parseEvidence = (value: unknown, path: string): ValidationEvidence => {
   const raw = record(value, path)
   const solution = Array.isArray(raw.solution)
-    ? raw.solution.map((step, index) => {
-        try { return stepFromJson(step) } catch (error) {
-          throw new GameDomainError(`${path} solution step ${index}: ${error instanceof Error ? error.message : String(error)}`)
+    ? raw.solution.map((action, index) => {
+        try { return actionFromJson(action, `${path} solution action ${index}`) } catch (error) {
+          throw new GameDomainError(`${path} solution action ${index}: ${error instanceof Error ? error.message : String(error)}`)
         }
       })
     : (() => { throw new GameDomainError(`${path} solution must be an array`) })()
@@ -130,9 +131,9 @@ const parseEvidence = (value: unknown, path: string): ValidationEvidence => {
     if (!Array.isArray(state.demonstration)) throw new GameDomainError(`${path} recognized state '${intervention}' demonstration must be an array`)
     return {
       intervention,
-      demonstration: state.demonstration.map((step, stepIndex) => {
-        try { return stepFromJson(step) } catch (error) {
-          throw new GameDomainError(`${path} recognized state '${intervention}' step ${stepIndex}: ${error instanceof Error ? error.message : String(error)}`)
+      demonstration: state.demonstration.map((action, actionIndex) => {
+        try { return actionFromJson(action, `${path} recognized state '${intervention}' action ${actionIndex}`) } catch (error) {
+          throw new GameDomainError(`${path} recognized state '${intervention}' action ${actionIndex}: ${error instanceof Error ? error.message : String(error)}`)
         }
       }),
     }
@@ -438,6 +439,7 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
   }
 
   const verified = new Set<PuzzleId>()
+  const completedArtifacts = new Map<PuzzleId, CompletedArtifact>()
   let recognizedCount = 0
   const pending = new Set(catalog.puzzleIds)
   while (pending.size > 0) {
@@ -456,22 +458,26 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
         throw new GameDomainError(`validation '${next}' uses artifact '${artifact}' not guaranteed by prerequisite closure`)
       }
     }
-    const usedRules = new Set(sidecar.solution.map(({ rule }) => rule))
+    const usedRules = new Set(sidecar.solution.flatMap((action) => action.steps.map(({ rule }) => rule)))
     const expectedRules = new Set(sidecar.expectedRules)
     if (usedRules.size !== expectedRules.size || [...usedRules].some((rule) => !expectedRules.has(rule))) {
       throw new GameDomainError(`validation '${next}' expectedRules does not equal solution rules`)
     }
     if (catalog.placement(next).culture === seyricCulture) {
-      const witnessAudit = auditSeyricWitness(catalog.puzzle(next).diagram, sidecar.solution)
+      const witnessAudit = auditSeyricWitness(
+        catalog.puzzle(next).diagram,
+        sidecar.solution.flatMap((action) => action.steps),
+      )
       if (!witnessAudit.ok) {
         throw new GameDomainError(
           `validation '${next}' violates terminal Seyric quantifier cleanup: ${witnessAudit.violations.map(({ detail }) => detail).join('; ')}`,
         )
       }
     }
-    const authority = { context: artifactTheoremContext(catalog, new Set(sidecar.availableArtifacts)) }
+    const availableArtifacts = new Map([...completedArtifacts].filter(([id]) => sidecar.availableArtifacts.includes(id)))
+    const authority = { context: artifactTheoremContext(catalog, availableArtifacts) }
     let solution = startPuzzle(catalog.puzzle(next))
-    for (const step of sidecar.solution) solution = applyGameSteps(solution, [step], authority).session
+    for (const action of sidecar.solution) solution = applyGameAction(solution, action, authority).session
     if (!isBlank(currentDiagram(solution))) throw new GameDomainError(`validation '${next}' solution does not reach canonical blank`)
 
     const recognized = catalog.guidance(next).interventions.filter(({ trigger }) => trigger.kind === 'recognizedUnwinnable')
@@ -480,12 +486,16 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
       const intervention = recognized.find(({ id }) => id === demonstration.intervention)
       if (intervention?.trigger.kind !== 'recognizedUnwinnable') throw new GameDomainError(`validation '${next}' names unknown recognized intervention '${demonstration.intervention}'`)
       let reached = startPuzzle(catalog.puzzle(next))
-      for (const step of demonstration.demonstration) reached = applyGameSteps(reached, [step], authority).session
+      for (const action of demonstration.demonstration) reached = applyGameAction(reached, action, authority).session
       if (exploreForm(currentDiagram(reached)) !== exploreForm(intervention.trigger.state.diagram)) {
         throw new GameDomainError(`validation '${next}' demonstration does not reach '${demonstration.intervention}'`)
       }
       recognizedCount += 1
     }
+    completedArtifacts.set(
+      next,
+      certifyCompletedArtifact(catalog, completedArtifacts, catalog.puzzle(next), sidecar.solution),
+    )
     verified.add(next)
     pending.delete(next)
   }

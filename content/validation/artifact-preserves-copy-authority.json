@@ -2,56 +2,176 @@
   "puzzle": "artifact-preserves-copy-authority",
   "solution": [
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r4",
-        "regions": [
-          "r1_1"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r4",
+            "regions": [
+              "r1_1"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r2",
+            "regions": [
+              "r1_0"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r2",
+            "regionMap": [
+              [
+                "root",
+                "r2"
+              ],
+              [
+                "r1_1",
+                "r1_0"
+              ],
+              [
+                "r2_1",
+                "r2_0"
+              ],
+              [
+                "r3_1",
+                "r3_0"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n1_0",
+                "n1"
+              ],
+              [
+                "n0_0",
+                "n0"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r6",
-        "regions": [
-          "r1_2"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r6",
+            "regions": [
+              "r1_2"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r2",
+            "regions": [
+              "r1_0"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r2",
+            "regionMap": [
+              [
+                "root",
+                "r2"
+              ],
+              [
+                "r1_2",
+                "r1_0"
+              ],
+              [
+                "r2_2",
+                "r2_0"
+              ],
+              [
+                "r3_2",
+                "r3_0"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n1_1",
+                "n1"
+              ],
+              [
+                "n0_1",
+                "n0"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "theorem",
-      "name": "game:artifact:single-mark-return",
-      "at": {
-        "sel": {
-          "region": "r2",
-          "regions": [
-            "r1_0"
-          ],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "reverse"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:single-mark-return",
+          "at": {
+            "sel": {
+              "region": "r2",
+              "regions": [
+                "r1_0"
+              ],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "reverse"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r3"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r3"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r5"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r5"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [

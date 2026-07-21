@@ -2,62 +2,180 @@
   "puzzle": "compound-projection",
   "solution": [
     {
-      "rule": "doubleCutElim",
-      "region": "r8"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r8"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r5",
-        "regions": [
-          "r6"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r5",
+            "regions": [
+              "r6"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r4",
+            "regions": [
+              "r10"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r4",
+            "regionMap": [
+              [
+                "binder",
+                "r4"
+              ],
+              [
+                "r6",
+                "r10"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n1",
+                "n3"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [
+              [
+                "binder",
+                "r3"
+              ]
+            ],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r5",
-        "regions": [
-          "r7"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r5",
+            "regions": [
+              "r7"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r4",
+            "regions": [
+              "r11"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r4",
+            "regionMap": [
+              [
+                "binder",
+                "r4"
+              ],
+              [
+                "r7",
+                "r11"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n2",
+                "n4"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [
+              [
+                "binder",
+                "r4"
+              ]
+            ],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "erasure",
-      "sel": {
-        "region": "r4",
-        "regions": [
-          "r10",
-          "r11"
-        ],
-        "nodes": [
-          "n0"
-        ],
-        "wires": []
-      }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r4",
+            "regions": [
+              "r10",
+              "r11"
+            ],
+            "nodes": [
+              "n0"
+            ],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "vacuousElim",
-      "region": "r4"
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r4"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "vacuousElim",
-      "region": "r3"
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r3"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "vacuousElim",
-      "region": "r2"
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r2"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [],

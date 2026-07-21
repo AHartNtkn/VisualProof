@@ -1,10 +1,30 @@
 {
   "puzzle": "four-veils",
   "solution": [
-    { "rule": "doubleCutElim", "region": "r3" },
-    { "rule": "doubleCutElim", "region": "r1" }
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r3"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
+    }
   ],
   "availableArtifacts": [],
-  "expectedRules": ["doubleCutElim"],
+  "expectedRules": [
+    "doubleCutElim"
+  ],
   "recognizedStates": []
 }

@@ -2,23 +2,29 @@
   "puzzle": "blank-witness",
   "solution": [
     {
-      "rule": "comprehensionInstantiate",
-      "bubble": "r1",
-      "comp": {
-        "diagram": {
-          "root": "r0",
-          "regions": {
-            "r0": {
-              "kind": "sheet"
-            }
+      "label": "comprehensionInstantiate",
+      "steps": [
+        {
+          "rule": "comprehensionInstantiate",
+          "bubble": "r1",
+          "comp": {
+            "diagram": {
+              "root": "r0",
+              "regions": {
+                "r0": {
+                  "kind": "sheet"
+                }
+              },
+              "nodes": {},
+              "wires": {}
+            },
+            "boundary": []
           },
-          "nodes": {},
-          "wires": {}
-        },
-        "boundary": []
-      },
-      "attachments": [],
-      "binders": {}
+          "attachments": [],
+          "binders": []
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [],

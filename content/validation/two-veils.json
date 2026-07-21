@@ -1,9 +1,20 @@
 {
   "puzzle": "two-veils",
   "solution": [
-    { "rule": "doubleCutElim", "region": "r1" }
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
+    }
   ],
   "availableArtifacts": [],
-  "expectedRules": ["doubleCutElim"],
+  "expectedRules": [
+    "doubleCutElim"
+  ],
   "recognizedStates": []
 }

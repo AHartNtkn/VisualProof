@@ -1,19 +1,222 @@
 {
   "puzzle": "sey-dm-fc-i01",
   "solution": [
-    { "rule": "doubleCutElim", "region": "source-p-outer" },
-    { "rule": "doubleCutElim", "region": "source-q-outer" },
-    { "rule": "deiteration", "sel": { "region": "consumer", "regions": ["required-whole"], "nodes": [], "wires": [] }, "fuel": 100 },
-    { "rule": "doubleCutElim", "region": "consumer" },
-    { "rule": "deiteration", "sel": { "region": "final", "regions": [], "nodes": ["final-s"], "wires": [] }, "fuel": 100 },
-    { "rule": "erasure", "sel": { "region": "work", "regions": ["source"], "nodes": ["output-s"], "wires": [] } },
-    { "rule": "doubleCutElim", "region": "container" },
-    { "rule": "vacuousElim", "region": "s" },
-    { "rule": "vacuousElim", "region": "q" },
-    { "rule": "vacuousElim", "region": "p" },
-    { "rule": "doubleCutElim", "region": "goal" }
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "source-p-outer"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "source-q-outer"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "consumer",
+            "regions": [
+              "required-whole"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "work",
+            "regions": [
+              "source"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "work",
+            "regionMap": [
+              [
+                "binder_0",
+                "work"
+              ],
+              [
+                "required-whole",
+                "source"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "required-p",
+                "source-p"
+              ],
+              [
+                "required-q",
+                "source-q"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [
+              [
+                "binder",
+                "p"
+              ],
+              [
+                "binder_0",
+                "q"
+              ]
+            ],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "consumer"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "final",
+            "regions": [],
+            "nodes": [
+              "final-s"
+            ],
+            "wires": []
+          },
+          "justifier": {
+            "region": "work",
+            "regions": [],
+            "nodes": [
+              "output-s"
+            ],
+            "wires": []
+          },
+          "certificate": {
+            "region": "work",
+            "regionMap": [
+              [
+                "binder",
+                "work"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "final-s",
+                "output-s"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [
+              [
+                "binder",
+                "s"
+              ]
+            ],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "work",
+            "regions": [
+              "source"
+            ],
+            "nodes": [
+              "output-s"
+            ],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "container"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "s"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "q"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "p"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "goal"
+        }
+      ],
+      "placements": []
+    }
   ],
   "availableArtifacts": [],
-  "expectedRules": ["doubleCutElim", "deiteration", "erasure", "vacuousElim"],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
   "recognizedStates": []
 }

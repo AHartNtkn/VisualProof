@@ -2,51 +2,112 @@
   "puzzle": "sey-ref-dis-i01",
   "solution": [
     {
-      "rule": "theorem",
-      "name": "game:artifact:single-mark-return",
-      "at": {
-        "sel": {
-          "region": "r3",
-          "regions": [
-            "r1_0"
-          ],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "reverse"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:single-mark-return",
+          "at": {
+            "sel": {
+              "region": "r3",
+              "regions": [
+                "r1_0"
+              ],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "reverse"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r3",
-        "regions": [],
-        "nodes": [
-          "n1"
-        ],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r3",
+            "regions": [],
+            "nodes": [
+              "n1"
+            ],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r2",
+            "regions": [],
+            "nodes": [
+              "n0"
+            ],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r2",
+            "regionMap": [
+              [
+                "binder",
+                "r2"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n1",
+                "n0"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [
+              [
+                "binder",
+                "r2"
+              ]
+            ],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "erasure",
-      "sel": {
-        "region": "r2",
-        "regions": [],
-        "nodes": [
-          "n0"
-        ],
-        "wires": []
-      }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r2",
+            "regions": [],
+            "nodes": [
+              "n0"
+            ],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "vacuousElim",
-      "region": "r2"
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r2"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [

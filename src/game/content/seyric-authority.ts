@@ -3,7 +3,7 @@ import { DiagramError } from '../../kernel/diagram/diagram'
 import type { Diagram, NodeId, RegionId } from '../../kernel/diagram/diagram'
 import { extractSubgraph } from '../../kernel/diagram/subgraph/extract'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
-import type { GameStep } from '../types'
+import type { ProofStep } from '../../kernel/proof/step'
 
 export type SeyricStartViolationCode =
   | 'diagram-structure'
@@ -266,7 +266,7 @@ export function analyzeSeyricStart(diagram: Diagram): SeyricStartAnalysis {
   }
 }
 
-const isQuantifierOperation = (step: GameStep): boolean =>
+const isQuantifierOperation = (step: ProofStep): boolean =>
   step.rule === 'comprehensionInstantiate'
   || step.rule === 'comprehensionAbstract'
   || step.rule === 'vacuousIntro'
@@ -279,7 +279,7 @@ const isQuantifierOperation = (step: GameStep): boolean =>
  */
 export function auditSeyricWitness(
   diagram: Diagram,
-  steps: readonly GameStep[],
+  steps: readonly ProofStep[],
 ): SeyricWitnessAudit {
   const start = analyzeSeyricStart(diagram)
   if (!start.ok || start.goalCut === null) {

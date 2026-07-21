@@ -2,25 +2,145 @@
   "puzzle": "sey-red-c01",
   "solution": [
     {
-      "rule": "erasure",
-      "sel": { "region": "r5", "regions": ["r7"], "nodes": [], "wires": [] }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r5",
+            "regions": [
+              "r7"
+            ],
+            "nodes": [],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": { "region": "r6", "regions": [], "nodes": ["n1"], "wires": [] },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r6",
+            "regions": [],
+            "nodes": [
+              "n1"
+            ],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r5",
+            "regions": [],
+            "nodes": [
+              "n0"
+            ],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r5",
+            "regionMap": [
+              [
+                "binder",
+                "r5"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n1",
+                "n0"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [
+              [
+                "binder",
+                "r2"
+              ]
+            ],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "erasure",
-      "sel": { "region": "r5", "regions": [], "nodes": ["n0"], "wires": [] }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r5",
+            "regions": [],
+            "nodes": [
+              "n0"
+            ],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
-    { "rule": "vacuousElim", "region": "r5" },
-    { "rule": "vacuousElim", "region": "r4" },
-    { "rule": "vacuousElim", "region": "r3" },
-    { "rule": "vacuousElim", "region": "r2" },
-    { "rule": "doubleCutElim", "region": "r1" }
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r5"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r4"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r3"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "vacuousElim",
+      "steps": [
+        {
+          "rule": "vacuousElim",
+          "region": "r2"
+        }
+      ],
+      "placements": []
+    },
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
+    }
   ],
   "availableArtifacts": [],
-  "expectedRules": ["erasure", "deiteration", "vacuousElim", "doubleCutElim"],
+  "expectedRules": [
+    "erasure",
+    "deiteration",
+    "vacuousElim",
+    "doubleCutElim"
+  ],
   "recognizedStates": []
 }

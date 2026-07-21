@@ -2,45 +2,151 @@
   "puzzle": "artifact-selected-downstream-bridge",
   "solution": [
     {
-      "rule": "theorem",
-      "name": "game:artifact:i-c3",
-      "at": {
-        "sel": {
-          "region": "r1",
-          "regions": [],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "forward"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:i-c3",
+          "at": {
+            "sel": {
+              "region": "r1",
+              "regions": [],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "forward"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r2",
-        "regions": [
-          "r1_0"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r2",
+            "regions": [
+              "r1_0"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r1",
+            "regions": [
+              "r1_1"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r1",
+            "regionMap": [
+              [
+                "root",
+                "r1"
+              ],
+              [
+                "r1_0",
+                "r1_1"
+              ],
+              [
+                "r2_0",
+                "r2_1"
+              ],
+              [
+                "r3",
+                "r3_0"
+              ],
+              [
+                "r4",
+                "r4_0"
+              ],
+              [
+                "r5",
+                "r5_0"
+              ],
+              [
+                "r6",
+                "r6_0"
+              ],
+              [
+                "r7",
+                "r7_0"
+              ],
+              [
+                "r8",
+                "r8_0"
+              ],
+              [
+                "r9",
+                "r9_0"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n2",
+                "n2_0"
+              ],
+              [
+                "n1",
+                "n1_0"
+              ],
+              [
+                "n4",
+                "n4_0"
+              ],
+              [
+                "n3",
+                "n3_0"
+              ],
+              [
+                "n5",
+                "n5_0"
+              ],
+              [
+                "n0",
+                "n0_0"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "erasure",
-      "sel": {
-        "region": "r1",
-        "regions": [
-          "r1_1"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r1",
+            "regions": [
+              "r1_1"
+            ],
+            "nodes": [],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [

@@ -2,53 +2,139 @@
   "puzzle": "useful-manifestation-target",
   "solution": [
     {
-      "rule": "theorem",
-      "name": "game:artifact:two-mark-projection",
-      "at": {
-        "sel": {
-          "region": "r3",
-          "regions": [],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "forward"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:two-mark-projection",
+          "at": {
+            "sel": {
+              "region": "r3",
+              "regions": [],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "forward"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r4",
-        "regions": [
-          "r1_0"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "r4",
+            "regions": [
+              "r1_0"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "r3",
+            "regions": [
+              "r1_1"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "r3",
+            "regionMap": [
+              [
+                "root",
+                "r3"
+              ],
+              [
+                "r1_0",
+                "r1_1"
+              ],
+              [
+                "r2_0",
+                "r2_1"
+              ],
+              [
+                "r3_0",
+                "r3_1"
+              ],
+              [
+                "r4_0",
+                "r4_1"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "n2",
+                "n2_0"
+              ],
+              [
+                "n0",
+                "n0_0"
+              ],
+              [
+                "n1",
+                "n1_0"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "erasure",
-      "sel": {
-        "region": "r3",
-        "regions": [
-          "r1_1"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r3",
+            "regions": [
+              "r1_1"
+            ],
+            "nodes": [],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r3"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r3"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r5"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r5"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [

@@ -2,40 +2,58 @@
   "puzzle": "sey-ref-sel-i01",
   "solution": [
     {
-      "rule": "theorem",
-      "name": "game:artifact:single-mark-return",
-      "at": {
-        "sel": {
-          "region": "r2",
-          "regions": [
-            "r1_0"
-          ],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "reverse"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:single-mark-return",
+          "at": {
+            "sel": {
+              "region": "r2",
+              "regions": [
+                "r1_0"
+              ],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "reverse"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "theorem",
-      "name": "game:artifact:nested-owner-introduction",
-      "at": {
-        "sel": {
-          "region": "r2",
-          "regions": [
-            "r1_1"
-          ],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "reverse"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:nested-owner-introduction",
+          "at": {
+            "sel": {
+              "region": "r2",
+              "regions": [
+                "r1_1"
+              ],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "reverse"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [

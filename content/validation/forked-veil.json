@@ -2,12 +2,37 @@
   "puzzle": "forked-veil",
   "solution": [
     {
-      "rule": "erasure",
-      "sel": { "region": "r1", "regions": ["r3"], "nodes": [], "wires": [] }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "r1",
+            "regions": [
+              "r3"
+            ],
+            "nodes": [],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
-    { "rule": "doubleCutElim", "region": "r1" }
+    {
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r1"
+        }
+      ],
+      "placements": []
+    }
   ],
   "availableArtifacts": [],
-  "expectedRules": ["erasure", "doubleCutElim"],
+  "expectedRules": [
+    "erasure",
+    "doubleCutElim"
+  ],
   "recognizedStates": []
 }

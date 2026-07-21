@@ -2,53 +2,163 @@
   "puzzle": "compound-theorem-source-choice",
   "solution": [
     {
-      "rule": "theorem",
-      "name": "game:artifact:sey-lem-c01",
-      "at": {
-        "sel": {
-          "region": "continuation-outer",
-          "regions": [],
-          "nodes": [],
-          "wires": []
-        },
-        "args": []
-      },
-      "direction": "forward"
+      "label": "theorem",
+      "steps": [
+        {
+          "rule": "theorem",
+          "name": "game:artifact:sey-lem-c01",
+          "at": {
+            "sel": {
+              "region": "continuation-outer",
+              "regions": [],
+              "nodes": [],
+              "wires": []
+            },
+            "args": []
+          },
+          "direction": "forward"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r8"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "r8"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "deiteration",
-      "sel": {
-        "region": "continuation-inner",
-        "regions": [
-          "target-outer"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
+      "label": "deiteration",
+      "steps": [
+        {
+          "rule": "deiteration",
+          "sel": {
+            "region": "continuation-inner",
+            "regions": [
+              "target-outer"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "justifier": {
+            "region": "continuation-outer",
+            "regions": [
+              "r1"
+            ],
+            "nodes": [],
+            "wires": []
+          },
+          "certificate": {
+            "region": "continuation-outer",
+            "regionMap": [
+              [
+                "root",
+                "continuation-outer"
+              ],
+              [
+                "target-outer",
+                "r1"
+              ],
+              [
+                "target-x",
+                "r2"
+              ],
+              [
+                "target-y",
+                "r3"
+              ],
+              [
+                "target-z",
+                "r4"
+              ],
+              [
+                "target-core",
+                "r5"
+              ],
+              [
+                "target-branch",
+                "r6"
+              ],
+              [
+                "target-mark",
+                "r7"
+              ]
+            ],
+            "nodeMap": [
+              [
+                "target-mark-x",
+                "n0"
+              ],
+              [
+                "target-mark-y",
+                "n1"
+              ],
+              [
+                "target-mark-z",
+                "n2"
+              ],
+              [
+                "target-open-x",
+                "n3"
+              ],
+              [
+                "target-open-y",
+                "n4"
+              ],
+              [
+                "target-open-z",
+                "n5"
+              ]
+            ],
+            "wireMap": [],
+            "attachments": [],
+            "binderMap": [],
+            "termCertificates": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "erasure",
-      "sel": {
-        "region": "continuation-outer",
-        "regions": [
-          "r1"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "label": "erasure",
+      "steps": [
+        {
+          "rule": "erasure",
+          "sel": {
+            "region": "continuation-outer",
+            "regions": [
+              "r1"
+            ],
+            "nodes": [],
+            "wires": []
+          }
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "continuation-outer"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "continuation-outer"
+        }
+      ],
+      "placements": []
     },
     {
-      "rule": "doubleCutElim",
-      "region": "outer"
+      "label": "doubleCutElim",
+      "steps": [
+        {
+          "rule": "doubleCutElim",
+          "region": "outer"
+        }
+      ],
+      "placements": []
     }
   ],
   "availableArtifacts": [
