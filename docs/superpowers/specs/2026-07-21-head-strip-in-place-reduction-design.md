@@ -16,6 +16,13 @@ nonlocal equation must first be represented at the local region, because
 deleting an ancestor-owned wire would remove its value at the wrong quantifier
 scope.
 
+The complete new ruleset retains the former append-only capability as a
+derived operation. Iterate the complete local equation subgraph—both term
+nodes and their internal output wire—into the same region, then apply
+destructive `headStrip` to the copied equation. The original subgraph remains
+because iteration owns copying; the argument equations remain because
+`headStrip` owns reduction. No append-only head-strip executor is retained.
+
 ## Selected Model
 
 The affected subgraph is exactly two distinct term nodes in one region plus
@@ -39,6 +46,11 @@ Unrelated regions, nodes, wires, scopes, and endpoints remain unchanged modulo
 Lean's dense-index reindexing. No retained-original alias, compatibility mode,
 or augmenting head-strip path remains.
 
+The two selected terms are co-resident, and their one shared output wire has
+one scope. There is no meaningful higher-scoped term to retain. If the wire is
+scoped above the term region, the wire belongs to outer structure and the
+local equation is not a head-strip redex.
+
 ## Alternatives Rejected
 
 Keeping the existing augmenting rule and adding a separate cleanup step leaves
@@ -47,6 +59,12 @@ Allowing multi-endpoint output wires while deleting only the selected endpoints
 would retain a weakened fragment rather than perform the selected equation
 reduction. Deleting the entire multi-endpoint wire would lose the additional
 equality. Both multi-endpoint variants are therefore rejected.
+
+Retaining one selected term as an output-wire anchor is also rejected. In the
+nonlocal or multi-endpoint shapes where such an anchor matters, the operation
+is redundant-occurrence management rather than reduction of a complete local
+equation. Iteration and deiteration retain ownership of copying and redundant
+occurrence removal.
 
 ## TypeScript Authority
 
@@ -63,7 +81,10 @@ the sole final structural validator.
 Tests observe the final graph, not source substrings: source nodes and the old
 equation wire are absent, nontrivial argument equations are present with the
 expected support, a trivial/nullary equation discharges, unrelated structure
-survives, and a third endpoint is refused without changing the input.
+survives, and a third endpoint or nonlocal output scope is refused without
+changing the input. A system-level test iterates the complete equation and
+head-strips the copy, then verifies directly that the original equation and
+exactly the expected argument equations remain.
 
 ## Lean Authority
 
@@ -82,9 +103,14 @@ The semantic proof establishes full replacement equivalence. The forward
 direction derives corresponding argument equalities from the shared rigid-head
 equation. The backward direction uses congruence of application and lambda
 abstraction to reconstruct equality of the removed aligned rigid-head terms
-from every corresponding argument equality. The old proposition and proof
-whose conclusion is `original ↔ original ∧ arguments` are removed or replaced;
-they are not an acceptable statement of the new rule.
+from every corresponding argument equality. A proposition whose conclusion is
+only `original ↔ original ∧ arguments` is not an acceptable soundness statement
+for the primitive replacement rule.
+
+The former append behavior is proved separately as composition of the
+authoritative iteration result and the authoritative destructive head-strip
+result. It may have helper theorems describing that composition, but it must
+not introduce an append-expanded raw diagram or alternate head-strip result.
 
 ## Interaction and Documentation Migration
 
@@ -92,7 +118,9 @@ The connection-drag interaction remains a way to select the two outputs, but a
 same-wire drag on a wire with a third endpoint now receives the kernel refusal.
 The earlier head-strip interaction design and tests that describe exact-pair
 selection while retaining a multi-output wire are updated to the binary-only,
-destructive behavior. Serialization and composition shapes do not change.
+destructive behavior. A planner may offer the old append capability as one
+multi-step action containing iteration followed by head-strip; serialization
+continues to record only those ordinary primitive steps.
 
 ## Validation
 
@@ -106,4 +134,8 @@ and interaction tests, the ordinary TypeScript suite, type checking, formal tag
 correspondence, and `lake build`. A repository search must find no active
 head-strip comment, test, theorem, or design statement that says the originals
 remain, all-trivial stripping is a no-op, or multi-endpoint stripping is
-allowed. `git diff --check` and the formal placeholder audit must also pass.
+allowed. It must also find no append-expanded raw head-strip diagram or
+survivor/anchor branch. A TypeScript macro test and Lean composition theorem
+must demonstrate the former append-only result through iteration followed by
+destructive head-strip. `git diff --check` and the formal placeholder audit
+must also pass.
