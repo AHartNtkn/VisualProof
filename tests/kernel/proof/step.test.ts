@@ -132,8 +132,8 @@ describe('applyStep mirrors the direct appliers', () => {
     const direct = exploreForm(applyHeadStrip(d, n1, n2, correspondence))
     expect(exploreForm(applyStep(d, step, ctx, 'forward'))).toBe(direct)
     expect(exploreForm(applyStep(d, step, ctx, 'backward'))).toBe(direct)
-    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'forward').nodes)).toHaveLength(4)
-    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'backward').nodes)).toHaveLength(4)
+    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'forward').nodes)).toHaveLength(2)
+    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'backward').nodes)).toHaveLength(2)
   })
 
   it('double-cut intro/elim and iteration/deiteration round-trip through steps', () => {

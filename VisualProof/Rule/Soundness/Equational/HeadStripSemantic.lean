@@ -81,54 +81,54 @@ private theorem allFin_add (n m : Nat) :
       rw [hleft, hmiddle, hlast]
       rfl
 
-@[simp] theorem headStripRaw_root
+@[simp] theorem headStripExpandedRaw_root
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
-    (headStripRaw input payload).root = input.val.root := rfl
+    (headStripExpandedRaw input payload).root = input.val.root := rfl
 
-@[simp] theorem headStripRaw_oldWire_scope
+@[simp] theorem headStripExpandedRaw_oldWire_scope
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (wire : Fin input.val.wireCount) :
-    ((headStripRaw input payload).wires
+    ((headStripExpandedRaw input payload).wires
       (Fin.castAdd payload.argumentIndices.length wire)).scope =
         (input.val.wires wire).scope := by
-  simp [headStripRaw]
+  simp [headStripExpandedRaw]
 
-@[simp] theorem headStripRaw_oldNode
+@[simp] theorem headStripExpandedRaw_oldNode
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (node : Fin input.val.nodeCount) :
-    (headStripRaw input payload).nodes
+    (headStripExpandedRaw input payload).nodes
         (Fin.castAdd (payload.argumentIndices.length +
           payload.argumentIndices.length) node) =
       input.val.nodes node := by
-  simp [headStripRaw]
+  simp [headStripExpandedRaw]
 
-theorem headStripRaw_oldEndpointOccurs_forward
+theorem headStripExpandedRaw_oldEndpointOccurs_forward
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (wire : Fin input.val.wireCount)
     (node : Fin input.val.nodeCount) (port : CPort)
     (occurs : input.val.EndpointOccurs wire { node := node, port := port }) :
-    (headStripRaw input payload).EndpointOccurs
+    (headStripExpandedRaw input payload).EndpointOccurs
       (Fin.castAdd payload.argumentIndices.length wire)
       { node := Fin.castAdd (payload.argumentIndices.length +
           payload.argumentIndices.length) node,
         port := port } := by
   unfold ConcreteDiagram.EndpointOccurs at occurs ⊢
-  simp only [headStripRaw, Fin.addCases_left]
+  simp only [headStripExpandedRaw, Fin.addCases_left]
   apply List.mem_append_left
   apply List.mem_append_left
   apply List.mem_map.mpr
   exact ⟨{ node := node, port := port }, occurs, by
     simp [headStripLiftEndpoint]⟩
 
-theorem headStripRaw_addedFreeEndpoint_node_fresh_first
+theorem headStripExpandedRaw_addedFreeEndpoint_node_fresh_first
     (payload : HeadStripPayload input first second)
     (wire : Fin input.val.wireCount) (endpoint)
     (member : endpoint ∈ payload.firstAddedFreeEndpoints wire) :
@@ -140,7 +140,7 @@ theorem headStripRaw_addedFreeEndpoint_node_fresh_first
   cases found
   simp [HeadStripPayload.firstAddedNode]
 
-theorem headStripRaw_addedFreeEndpoint_node_fresh_second
+theorem headStripExpandedRaw_addedFreeEndpoint_node_fresh_second
     (payload : HeadStripPayload input first second)
     (wire : Fin input.val.wireCount) (endpoint)
     (member : endpoint ∈ payload.secondAddedFreeEndpoints wire) :
@@ -152,13 +152,13 @@ theorem headStripRaw_addedFreeEndpoint_node_fresh_second
   cases found
   simp [HeadStripPayload.secondAddedNode]
 
-theorem headStripRaw_oldEndpointOccurs_backward
+theorem headStripExpandedRaw_oldEndpointOccurs_backward
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWire : Fin (headStripRaw input payload).wireCount)
+    (targetWire : Fin (headStripExpandedRaw input payload).wireCount)
     (node : Fin input.val.nodeCount) (port : CPort)
-    (occurs : (headStripRaw input payload).EndpointOccurs targetWire
+    (occurs : (headStripExpandedRaw input payload).EndpointOccurs targetWire
       { node := Fin.castAdd (payload.argumentIndices.length +
           payload.argumentIndices.length) node,
         port := port }) :
@@ -166,7 +166,7 @@ theorem headStripRaw_oldEndpointOccurs_backward
       Fin.castAdd payload.argumentIndices.length wire = targetWire ∧
         input.val.EndpointOccurs wire { node := node, port := port } := by
   refine Fin.addCases (motive := fun targetWire =>
-      (headStripRaw input payload).EndpointOccurs targetWire
+      (headStripExpandedRaw input payload).EndpointOccurs targetWire
         { node := Fin.castAdd (payload.argumentIndices.length +
             payload.argumentIndices.length) node, port := port } →
       ∃ wire,
@@ -175,7 +175,7 @@ theorem headStripRaw_oldEndpointOccurs_backward
     (fun wire occurrence => ?_)
     (fun position occurrence => ?_) targetWire occurs
   · unfold ConcreteDiagram.EndpointOccurs at occurrence ⊢
-    simp only [headStripRaw, Fin.addCases_left] at occurrence
+    simp only [headStripExpandedRaw, Fin.addCases_left] at occurrence
     rcases List.mem_append.mp occurrence with oldOrFirst | secondAdded
     rcases List.mem_append.mp oldOrFirst with old | firstAdded
     · obtain ⟨original, originalMember, equality⟩ := List.mem_map.mp old
@@ -189,19 +189,19 @@ theorem headStripRaw_oldEndpointOccurs_backward
         exact congrArg CEndpoint.port equality
       subst originalPort
       exact ⟨wire, rfl, originalMember⟩
-    · have fresh := headStripRaw_addedFreeEndpoint_node_fresh_first
+    · have fresh := headStripExpandedRaw_addedFreeEndpoint_node_fresh_first
         payload wire _ firstAdded
       change input.val.nodeCount ≤ node.val at fresh
       omega
-    · have fresh := headStripRaw_addedFreeEndpoint_node_fresh_second
+    · have fresh := headStripExpandedRaw_addedFreeEndpoint_node_fresh_second
         payload wire _ secondAdded
       change input.val.nodeCount ≤ node.val at fresh
       omega
   · unfold ConcreteDiagram.EndpointOccurs at occurrence
-    simp only [headStripRaw, Fin.addCases_right] at occurrence
+    simp only [headStripExpandedRaw, Fin.addCases_right] at occurrence
     change (⟨Fin.castAdd
         (payload.argumentIndices.length + payload.argumentIndices.length) node,
-          port⟩ : CEndpoint (headStripRaw input payload).nodeCount) ∈
+          port⟩ : CEndpoint (headStripExpandedRaw input payload).nodeCount) ∈
       [⟨payload.firstAddedNode position, .output⟩,
        ⟨payload.secondAddedNode position, .output⟩] at occurrence
     simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil,
@@ -214,12 +214,12 @@ theorem headStripRaw_oldEndpointOccurs_backward
       simp [HeadStripPayload.secondAddedNode] at impossible
       omega
 
-theorem headStripRaw_exactScopeWires
+theorem headStripExpandedRaw_exactScopeWires
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (region : Fin input.val.regionCount) :
-    ConcreteElaboration.exactScopeWires (headStripRaw input payload) region =
+    ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload) region =
       (ConcreteElaboration.exactScopeWires input.val region).map
           (Fin.castAdd payload.argumentIndices.length) ++
         if region = payload.region then
@@ -237,43 +237,43 @@ theorem headStripRaw_exactScopeWires
       List.filter predicate (allFin input.val.wireCount))
     funext wire
     simp only [Function.comp_apply]
-    rw [headStripRaw_oldWire_scope]
+    rw [headStripExpandedRaw_oldWire_scope]
     rfl
   · split <;> rename_i hregion
     · subst region
       apply congrArg (List.map (Fin.natAdd input.val.wireCount))
       apply List.filter_eq_self.mpr
       intro wire _
-      simp [headStripRaw]
+      simp [headStripExpandedRaw]
     · change List.map (Fin.natAdd input.val.wireCount)
           (List.filter _ (allFin payload.argumentIndices.length)) = []
       apply (List.map_eq_nil_iff).mpr
       apply List.filter_eq_nil_iff.mpr
       intro wire _ equality
       have decided : decide
-          (((headStripRaw input payload).wires
+          (((headStripExpandedRaw input payload).wires
             (Fin.natAdd input.val.wireCount wire)).scope = region) = true :=
         equality
-      simp only [decide_eq_true_eq, headStripRaw, Fin.addCases_right] at decided
+      simp only [decide_eq_true_eq, headStripExpandedRaw, Fin.addCases_right] at decided
       exact hregion decided.symm
 
 def liftOccurrence
     (payload : HeadStripPayload input first second)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount) :
-    ConcreteElaboration.LocalOccurrence (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount :=
+    ConcreteElaboration.LocalOccurrence (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount :=
   match occurrence with
   | .node node => .node (Fin.castAdd
       (payload.argumentIndices.length + payload.argumentIndices.length) node)
   | .child child => .child child
 
-theorem headStripRaw_regular_localOccurrences
+theorem headStripExpandedRaw_regular_localOccurrences
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (region : Fin input.val.regionCount) (regular : region ≠ payload.region) :
-    ConcreteElaboration.localOccurrences (headStripRaw input payload) region =
+    ConcreteElaboration.localOccurrences (headStripExpandedRaw input payload) region =
       (ConcreteElaboration.localOccurrences input.val region).map
         (liftOccurrence payload) := by
   unfold ConcreteElaboration.localOccurrences filterFin
@@ -294,22 +294,22 @@ theorem headStripRaw_regular_localOccurrences
   simp only [List.filter_map, List.map_append, List.map_map]
   have freshFalse : ∀ node : Fin (payload.argumentIndices.length +
       payload.argumentIndices.length),
-      ((headStripRaw input payload).nodes
+      ((headStripExpandedRaw input payload).nodes
         (Fin.natAdd input.val.nodeCount node)).region ≠ region := by
     intro node
     refine Fin.addCases (motive := fun node =>
-        ((headStripRaw input payload).nodes
+        ((headStripExpandedRaw input payload).nodes
           (Fin.natAdd input.val.nodeCount node)).region ≠ region)
       (fun position equality => ?_) (fun position equality => ?_) node
     · apply regular
-      simpa only [headStripRaw, Fin.addCases_right, Fin.addCases_left,
+      simpa only [headStripExpandedRaw, Fin.addCases_right, Fin.addCases_left,
         CNode.region] using equality.symm
     · apply regular
-      simpa only [headStripRaw, Fin.addCases_right, CNode.region] using
+      simpa only [headStripExpandedRaw, Fin.addCases_right, CNode.region] using
         equality.symm
   have freshEmpty :
       List.filter
-        ((fun node => decide (((headStripRaw input payload).nodes node).region =
+        ((fun node => decide (((headStripExpandedRaw input payload).nodes node).region =
           region)) ∘ Fin.natAdd input.val.nodeCount)
         (allFin (payload.argumentIndices.length +
           payload.argumentIndices.length)) = [] := by
@@ -318,7 +318,7 @@ theorem headStripRaw_regular_localOccurrences
     exact freshFalse node (of_decide_eq_true member)
   have oldFilter :
       List.filter
-        ((fun node => decide (((headStripRaw input payload).nodes node).region =
+        ((fun node => decide (((headStripExpandedRaw input payload).nodes node).region =
           region)) ∘ Fin.castAdd (payload.argumentIndices.length +
             payload.argumentIndices.length))
         (allFin input.val.nodeCount) =
@@ -327,9 +327,9 @@ theorem headStripRaw_regular_localOccurrences
     apply congrArg (fun predicate =>
       List.filter predicate (allFin input.val.nodeCount))
     funext node
-    simp only [Function.comp_apply, headStripRaw_oldNode]
+    simp only [Function.comp_apply, headStripExpandedRaw_oldNode]
     rfl
-  dsimp only [headStripRaw] at freshEmpty oldFilter ⊢
+  dsimp only [headStripExpandedRaw] at freshEmpty oldFilter ⊢
   rw [freshEmpty, oldFilter]
   simp only [List.map_nil, List.append_nil, List.map_map]
   congr 1
@@ -352,16 +352,16 @@ def sourceChildOccurrences (input : CheckedDiagram signature)
 def firstAddedOccurrences
     (payload : HeadStripPayload input first second) :
     List (ConcreteElaboration.LocalOccurrence
-      (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount) :=
+      (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount) :=
   (allFin payload.argumentIndices.length).map fun position =>
     .node (payload.firstAddedNode position)
 
 def secondAddedOccurrences
     (payload : HeadStripPayload input first second) :
     List (ConcreteElaboration.LocalOccurrence
-      (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount) :=
+      (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount) :=
   (allFin payload.argumentIndices.length).map fun position =>
     .node (payload.secondAddedNode position)
 
@@ -372,11 +372,11 @@ theorem source_localOccurrences
       sourceNodeOccurrences input region ++ sourceChildOccurrences input region :=
   rfl
 
-theorem headStripRaw_focused_localOccurrences
+theorem headStripExpandedRaw_focused_localOccurrences
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
-    ConcreteElaboration.localOccurrences (headStripRaw input payload)
+    ConcreteElaboration.localOccurrences (headStripExpandedRaw input payload)
         payload.region =
       (sourceNodeOccurrences input payload.region).map
           (liftOccurrence payload) ++
@@ -406,7 +406,7 @@ theorem headStripRaw_focused_localOccurrences
   simp only [List.filter_map, List.map_append, List.map_map]
   have oldFilter :
       List.filter
-        ((fun node => decide (((headStripRaw input payload).nodes node).region =
+        ((fun node => decide (((headStripExpandedRaw input payload).nodes node).region =
           payload.region)) ∘ Fin.castAdd (payload.argumentIndices.length +
             payload.argumentIndices.length))
         (allFin input.val.nodeCount) =
@@ -416,38 +416,38 @@ theorem headStripRaw_focused_localOccurrences
     apply congrArg (fun predicate =>
       List.filter predicate (allFin input.val.nodeCount))
     funext node
-    simp only [Function.comp_apply, headStripRaw_oldNode]
+    simp only [Function.comp_apply, headStripExpandedRaw_oldNode]
     rfl
   have firstFilter :
       List.filter
-        (((fun node => decide (((headStripRaw input payload).nodes node).region =
+        (((fun node => decide (((headStripExpandedRaw input payload).nodes node).region =
           payload.region)) ∘ Fin.natAdd input.val.nodeCount) ∘
             Fin.castAdd payload.argumentIndices.length)
         (allFin payload.argumentIndices.length) =
       allFin payload.argumentIndices.length := by
     apply List.filter_eq_self.mpr
     intro position member
-    simp only [Function.comp_apply, headStripRaw, Fin.addCases_right,
+    simp only [Function.comp_apply, headStripExpandedRaw, Fin.addCases_right,
       Fin.addCases_left, CNode.region, decide_true]
   have secondFilter :
       List.filter
-        (((fun node => decide (((headStripRaw input payload).nodes node).region =
+        (((fun node => decide (((headStripExpandedRaw input payload).nodes node).region =
           payload.region)) ∘ Fin.natAdd input.val.nodeCount) ∘
             Fin.natAdd payload.argumentIndices.length)
         (allFin payload.argumentIndices.length) =
       allFin payload.argumentIndices.length := by
     apply List.filter_eq_self.mpr
     intro position member
-    simp only [Function.comp_apply, headStripRaw, Fin.addCases_right,
+    simp only [Function.comp_apply, headStripExpandedRaw, Fin.addCases_right,
       CNode.region, decide_true]
   have childFilter :
       List.filter
-        (fun child => decide (((headStripRaw input payload).regions child).parent? =
+        (fun child => decide (((headStripExpandedRaw input payload).regions child).parent? =
           some payload.region)) (allFin input.val.regionCount) =
     filterFin fun child =>
         decide ((input.val.regions child).parent? = some payload.region) := by
     rfl
-  dsimp only [headStripRaw] at oldFilter firstFilter secondFilter childFilter ⊢
+  dsimp only [headStripExpandedRaw] at oldFilter firstFilter secondFilter childFilter ⊢
   rw [oldFilter, firstFilter, secondFilter]
   unfold filterFin
   have oldMap :
@@ -515,8 +515,8 @@ theorem headStripRaw_focused_localOccurrences
     congr 1
   let oldTarget := List.map
     ((@ConcreteElaboration.LocalOccurrence.node
-      (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount) ∘
+      (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount) ∘
       Fin.castAdd (payload.argumentIndices.length +
         payload.argumentIndices.length))
     (List.filter (fun node =>
@@ -531,32 +531,32 @@ theorem headStripRaw_focused_localOccurrences
       (allFin input.val.nodeCount))
   let firstTarget := List.map
     (((@ConcreteElaboration.LocalOccurrence.node
-      (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount) ∘ Fin.natAdd input.val.nodeCount) ∘
+      (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount) ∘ Fin.natAdd input.val.nodeCount) ∘
       Fin.castAdd payload.argumentIndices.length)
     (allFin payload.argumentIndices.length)
   let firstSource := List.map (fun position =>
       (@ConcreteElaboration.LocalOccurrence.node
-        (headStripRaw input payload).regionCount
-        (headStripRaw input payload).nodeCount)
+        (headStripExpandedRaw input payload).regionCount
+        (headStripExpandedRaw input payload).nodeCount)
         (payload.firstAddedNode position))
     (allFin payload.argumentIndices.length)
   let secondTarget := List.map
     (((@ConcreteElaboration.LocalOccurrence.node
-      (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount) ∘ Fin.natAdd input.val.nodeCount) ∘
+      (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount) ∘ Fin.natAdd input.val.nodeCount) ∘
       Fin.natAdd payload.argumentIndices.length)
     (allFin payload.argumentIndices.length)
   let secondSource := List.map (fun position =>
       (@ConcreteElaboration.LocalOccurrence.node
-        (headStripRaw input payload).regionCount
-        (headStripRaw input payload).nodeCount)
+        (headStripExpandedRaw input payload).regionCount
+        (headStripExpandedRaw input payload).nodeCount)
         (payload.secondAddedNode position))
     (allFin payload.argumentIndices.length)
   let childTarget := List.map
     (@ConcreteElaboration.LocalOccurrence.child
-      (headStripRaw input payload).regionCount
-      (headStripRaw input payload).nodeCount)
+      (headStripExpandedRaw input payload).regionCount
+      (headStripExpandedRaw input payload).nodeCount)
     (List.filter (fun child => decide
       ((input.val.regions child).parent? = some payload.region))
       (allFin input.val.regionCount))
@@ -582,7 +582,7 @@ structure ContextEmbedding
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (source : ConcreteElaboration.WireContext input.val)
-    (target : ConcreteElaboration.WireContext (headStripRaw input payload)) where
+    (target : ConcreteElaboration.WireContext (headStripExpandedRaw input payload)) where
   index : Fin source.length → Fin target.length
   get : ∀ i, target.get (index i) =
     Fin.castAdd payload.argumentIndices.length (source.get i)
@@ -596,7 +596,7 @@ noncomputable def ofMem
     {first second : Fin input.val.nodeCount}
     {payload : HeadStripPayload input first second}
     {source : ConcreteElaboration.WireContext input.val}
-    {target : ConcreteElaboration.WireContext (headStripRaw input payload)}
+    {target : ConcreteElaboration.WireContext (headStripExpandedRaw input payload)}
     (hmem : ∀ wire : Fin input.val.wireCount,
       Fin.castAdd payload.argumentIndices.length wire ∈ target ↔
         wire ∈ source) :
@@ -627,7 +627,7 @@ noncomputable def extend
       · apply List.mem_append_right
         apply (ConcreteElaboration.mem_exactScopeWires input.val region wire).mpr
         have scope := (ConcreteElaboration.mem_exactScopeWires
-          (headStripRaw input payload) region
+          (headStripExpandedRaw input payload) region
           (Fin.castAdd payload.argumentIndices.length wire)).mp localScope
         simpa using scope
     · intro member
@@ -635,7 +635,7 @@ noncomputable def extend
       · exact List.mem_append_left _ ((embedding.mem_old wire).mpr inherited)
       · apply List.mem_append_right
         apply (ConcreteElaboration.mem_exactScopeWires
-          (headStripRaw input payload) region
+          (headStripExpandedRaw input payload) region
           (Fin.castAdd payload.argumentIndices.length wire)).mpr
         have scope := (ConcreteElaboration.mem_exactScopeWires input.val region
           wire).mp localScope
@@ -647,11 +647,11 @@ theorem focusedExactScopeLength
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
-    (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+    (ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload)
         payload.region).length =
       (ConcreteElaboration.exactScopeWires input.val payload.region).length +
         payload.argumentIndices.length := by
-  rw [headStripRaw_exactScopeWires]
+  rw [headStripExpandedRaw_exactScopeWires]
   simp only [if_pos]
   calc
     (List.map (Fin.castAdd payload.argumentIndices.length)
@@ -675,7 +675,7 @@ noncomputable def extendedWireMapAtFocus
       (Fin.addCases
         (fun outer => Fin.castAdd
           (ConcreteElaboration.exactScopeWires
-            (headStripRaw input payload) payload.region).length
+            (headStripExpandedRaw input payload) payload.region).length
           (embedding.index outer))
         (fun localIndex => Fin.natAdd target.length
           (Fin.cast (focusedExactScopeLength input payload).symm
@@ -711,7 +711,7 @@ theorem extendedWireMapAtFocus_spec
           target payload.region).symm
         (Fin.castAdd
           (ConcreteElaboration.exactScopeWires
-            (headStripRaw input payload) payload.region).length
+            (headStripExpandedRaw input payload) payload.region).length
           (embedding.index outer)) := by
       apply Fin.ext
       simp [extendedWireMapAtFocus]
@@ -732,7 +732,7 @@ theorem extendedWireMapAtFocus_spec
       apply Fin.ext
       simp [extendedWireMapAtFocus]
     rw [mapped]
-    have exactWires := headStripRaw_exactScopeWires input payload payload.region
+    have exactWires := headStripExpandedRaw_exactScopeWires input payload payload.region
     simp [ConcreteElaboration.WireContext.extend, exactWires]
     change
       (List.map (Fin.castAdd payload.argumentIndices.length)
@@ -767,7 +767,7 @@ def focusedForwardLocal
     (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
       payload.region).length → D)
     (fresh : Fin payload.argumentIndices.length → D) :
-    Fin (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+    Fin (ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload)
       payload.region).length → D :=
   fun index =>
     Fin.addCases sourceLocal fresh
@@ -778,7 +778,7 @@ def focusedBackwardLocal
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (targetLocal : Fin (ConcreteElaboration.exactScopeWires
-      (headStripRaw input payload) payload.region).length → D) :
+      (headStripExpandedRaw input payload) payload.region).length → D) :
     Fin (ConcreteElaboration.exactScopeWires input.val
       payload.region).length → D :=
   fun index => targetLocal
@@ -823,7 +823,7 @@ theorem focusedBackwardExtendedEnvironment
     (targetOuter : Fin target.length → D)
     (outerAgrees : sourceOuter = targetOuter ∘ embedding.index)
     (targetLocal : Fin (ConcreteElaboration.exactScopeWires
-      (headStripRaw input payload) payload.region).length → D)
+      (headStripExpandedRaw input payload) payload.region).length → D)
     (targetNodup : (target.extend payload.region).Nodup) :
     ConcreteElaboration.extendedEnvironment source payload.region sourceOuter
         (focusedBackwardLocal input payload targetLocal) =
@@ -847,61 +847,61 @@ theorem focusedBackwardExtendedEnvironment
   · simp [ConcreteElaboration.extendedEnvironment, extendedWireMapAtFocus,
       focusedBackwardLocal, Diagram.extendWireEnv, Function.comp_def]
 
-@[simp] theorem headStripRaw_firstAddedNode
+@[simp] theorem headStripExpandedRaw_firstAddedNode
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length) :
-    (headStripRaw input payload).nodes (payload.firstAddedNode position) =
+    (headStripExpandedRaw input payload).nodes (payload.firstAddedNode position) =
       .term payload.region
         (payload.firstArgument
           (payload.argumentIndices.get position)).freeSupport.length
         (payload.firstArgument
           (payload.argumentIndices.get position)).compact := by
-  simp [headStripRaw, HeadStripPayload.firstAddedNode]
+  simp [headStripExpandedRaw, HeadStripPayload.firstAddedNode]
 
-@[simp] theorem headStripRaw_secondAddedNode
+@[simp] theorem headStripExpandedRaw_secondAddedNode
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length) :
-    (headStripRaw input payload).nodes (payload.secondAddedNode position) =
+    (headStripExpandedRaw input payload).nodes (payload.secondAddedNode position) =
       .term payload.region
         (payload.secondArgument
           (payload.argumentIndices.get position)).freeSupport.length
         (payload.secondArgument
           (payload.argumentIndices.get position)).compact := by
-  simp only [headStripRaw, HeadStripPayload.secondAddedNode,
+  simp only [headStripExpandedRaw, HeadStripPayload.secondAddedNode,
     Fin.addCases_right]
 
-theorem headStripRaw_firstAddedOutput_occurs
+theorem headStripExpandedRaw_firstAddedOutput_occurs
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length) :
-    (headStripRaw input payload).EndpointOccurs
+    (headStripExpandedRaw input payload).EndpointOccurs
       (Fin.natAdd input.val.wireCount position)
       { node := payload.firstAddedNode position, port := .output } := by
   unfold ConcreteDiagram.EndpointOccurs
-  simp only [headStripRaw, Fin.addCases_right]
+  simp only [headStripExpandedRaw, Fin.addCases_right]
   exact List.mem_cons_self
 
-theorem headStripRaw_secondAddedOutput_occurs
+theorem headStripExpandedRaw_secondAddedOutput_occurs
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length) :
-    (headStripRaw input payload).EndpointOccurs
+    (headStripExpandedRaw input payload).EndpointOccurs
       (Fin.natAdd input.val.wireCount position)
       { node := payload.secondAddedNode position, port := .output } := by
   unfold ConcreteDiagram.EndpointOccurs
-  simp only [headStripRaw, Fin.addCases_right]
+  simp only [headStripExpandedRaw, Fin.addCases_right]
   exact List.mem_cons.mpr (Or.inr (List.mem_singleton.mpr rfl))
 
-theorem headStripRaw_firstAddedFree_occurs
+theorem headStripExpandedRaw_firstAddedFree_occurs
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length)
     (port : Fin (payload.firstArgument
       (payload.argumentIndices.get position)).freeSupport.length) :
-    (headStripRaw input payload).EndpointOccurs
+    (headStripExpandedRaw input payload).EndpointOccurs
       (Fin.castAdd payload.argumentIndices.length
         (payload.firstWire ((payload.firstArgument
           (payload.argumentIndices.get position)).freeSupport.get port)))
       { node := payload.firstAddedNode position, port := .free port } := by
   unfold ConcreteDiagram.EndpointOccurs
-  simp only [headStripRaw, Fin.addCases_left]
+  simp only [headStripExpandedRaw, Fin.addCases_left]
   apply List.mem_append_left
   apply List.mem_append_right
   unfold HeadStripPayload.firstAddedFreeEndpoints
@@ -911,18 +911,18 @@ theorem headStripRaw_firstAddedFree_occurs
   refine ⟨port, mem_allFin port, ?_⟩
   simp
 
-theorem headStripRaw_secondAddedFree_occurs
+theorem headStripExpandedRaw_secondAddedFree_occurs
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length)
     (port : Fin (payload.secondArgument
       (payload.argumentIndices.get position)).freeSupport.length) :
-    (headStripRaw input payload).EndpointOccurs
+    (headStripExpandedRaw input payload).EndpointOccurs
       (Fin.castAdd payload.argumentIndices.length
         (payload.secondWire ((payload.secondArgument
           (payload.argumentIndices.get position)).freeSupport.get port)))
       { node := payload.secondAddedNode position, port := .free port } := by
   unfold ConcreteDiagram.EndpointOccurs
-  simp only [headStripRaw, Fin.addCases_left]
+  simp only [headStripExpandedRaw, Fin.addCases_left]
   apply List.mem_append_right
   unfold HeadStripPayload.secondAddedFreeEndpoints
   apply List.mem_flatMap.mpr
@@ -935,14 +935,14 @@ theorem firstAddedNode_denote
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (binders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) rels)
+      (headStripExpandedRaw input payload) rels)
     (position : Fin payload.argumentIndices.length)
     (item : Item signature context.length rels)
     (compiled : ConcreteElaboration.compileNode? signature
-      (headStripRaw input payload) context binders
+      (headStripExpandedRaw input payload) context binders
       (payload.firstAddedNode position) = some item)
     (common : Fin payload.commonPorts → Lambda.Individual)
     (env : Fin context.length → Lambda.Individual)
@@ -959,19 +959,19 @@ theorem firstAddedNode_denote
     (relEnv : RelEnv Lambda.Individual rels) :
     denoteItem Lambda.canonicalModel named env relEnv item := by
   let argument := payload.firstArgument (payload.argumentIndices.get position)
-  have nodeShape : (headStripRaw input payload).nodes
+  have nodeShape : (headStripExpandedRaw input payload).nodes
       (payload.firstAddedNode position) =
     .term payload.region argument.freeSupport.length argument.compact := by
-    simpa only [argument] using headStripRaw_firstAddedNode payload position
+    simpa only [argument] using headStripExpandedRaw_firstAddedNode payload position
   simp only [ConcreteElaboration.compileNode?, nodeShape] at compiled
   cases outputResult : ConcreteElaboration.resolvePort?
-      (headStripRaw input payload) context (payload.firstAddedNode position)
+      (headStripExpandedRaw input payload) context (payload.firstAddedNode position)
       .output with
   | none =>
       simp [outputResult] at compiled
   | some output =>
       cases freeResult : ConcreteElaboration.resolvePorts?
-          (headStripRaw input payload) context (payload.firstAddedNode position)
+          (headStripExpandedRaw input payload) context (payload.firstAddedNode position)
           argument.freeSupport.length (fun port => .free port) with
       | none =>
           simp [outputResult, freeResult] at compiled
@@ -984,7 +984,7 @@ theorem firstAddedNode_denote
               Fin.natAdd input.val.wireCount position :=
             ConcreteElaboration.endpoint_wire_unique
               targetWellFormed.wire_endpoints_are_disjoint outputOccurs
-                (headStripRaw_firstAddedOutput_occurs payload position)
+                (headStripExpandedRaw_firstAddedOutput_occurs payload position)
           have outputEquation := outputValue output (by
             simpa only [List.get_eq_getElem, outputWireEq] using outputGet)
           have freeEnvironment : env ∘ free =
@@ -997,7 +997,7 @@ theorem firstAddedNode_denote
                 (payload.firstWire (argument.freeSupport.get port)) :=
               ConcreteElaboration.endpoint_wire_unique
                 targetWellFormed.wire_endpoints_are_disjoint occurs
-                  (headStripRaw_firstAddedFree_occurs payload position port)
+                  (headStripExpandedRaw_firstAddedFree_occurs payload position port)
             simpa only [Function.comp_apply] using freeValue
               (argument.freeSupport.get port) (free port) (by
                 simpa only [List.get_eq_getElem, wireEq] using getWire)
@@ -1015,14 +1015,14 @@ theorem secondAddedNode_denote
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (binders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) rels)
+      (headStripExpandedRaw input payload) rels)
     (position : Fin payload.argumentIndices.length)
     (item : Item signature context.length rels)
     (compiled : ConcreteElaboration.compileNode? signature
-      (headStripRaw input payload) context binders
+      (headStripExpandedRaw input payload) context binders
       (payload.secondAddedNode position) = some item)
     (common : Fin payload.commonPorts → Lambda.Individual)
     (env : Fin context.length → Lambda.Individual)
@@ -1039,19 +1039,19 @@ theorem secondAddedNode_denote
     (relEnv : RelEnv Lambda.Individual rels) :
     denoteItem Lambda.canonicalModel named env relEnv item := by
   let argument := payload.secondArgument (payload.argumentIndices.get position)
-  have nodeShape : (headStripRaw input payload).nodes
+  have nodeShape : (headStripExpandedRaw input payload).nodes
       (payload.secondAddedNode position) =
     .term payload.region argument.freeSupport.length argument.compact := by
-    simpa only [argument] using headStripRaw_secondAddedNode payload position
+    simpa only [argument] using headStripExpandedRaw_secondAddedNode payload position
   simp only [ConcreteElaboration.compileNode?, nodeShape] at compiled
   cases outputResult : ConcreteElaboration.resolvePort?
-      (headStripRaw input payload) context (payload.secondAddedNode position)
+      (headStripExpandedRaw input payload) context (payload.secondAddedNode position)
       .output with
   | none =>
       simp [outputResult] at compiled
   | some output =>
       cases freeResult : ConcreteElaboration.resolvePorts?
-          (headStripRaw input payload) context (payload.secondAddedNode position)
+          (headStripExpandedRaw input payload) context (payload.secondAddedNode position)
           argument.freeSupport.length (fun port => .free port) with
       | none =>
           simp [outputResult, freeResult] at compiled
@@ -1064,7 +1064,7 @@ theorem secondAddedNode_denote
               Fin.natAdd input.val.wireCount position :=
             ConcreteElaboration.endpoint_wire_unique
               targetWellFormed.wire_endpoints_are_disjoint outputOccurs
-                (headStripRaw_secondAddedOutput_occurs payload position)
+                (headStripExpandedRaw_secondAddedOutput_occurs payload position)
           have outputEquation := outputValue output (by
             simpa only [List.get_eq_getElem, outputWireEq] using outputGet)
           have freeEnvironment : env ∘ free =
@@ -1077,7 +1077,7 @@ theorem secondAddedNode_denote
                 (payload.secondWire (argument.freeSupport.get port)) :=
               ConcreteElaboration.endpoint_wire_unique
                 targetWellFormed.wire_endpoints_are_disjoint occurs
-                  (headStripRaw_secondAddedFree_occurs payload position port)
+                  (headStripExpandedRaw_secondAddedFree_occurs payload position port)
             simpa only [Function.comp_apply] using freeValue
               (argument.freeSupport.get port) (free port) (by
                 simpa only [List.get_eq_getElem, wireEq] using getWire)
@@ -1095,21 +1095,21 @@ theorem firstAddedOccurrences_denote
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (recurse : ∀ {relations : RelCtx},
-      Fin (headStripRaw input payload).regionCount →
+      Fin (headStripExpandedRaw input payload).regionCount →
       (recurseContext : ConcreteElaboration.WireContext
-        (headStripRaw input payload)) →
+        (headStripExpandedRaw input payload)) →
       ConcreteElaboration.BinderContext
-        (headStripRaw input payload) relations →
+        (headStripExpandedRaw input payload) relations →
       Option (Region signature recurseContext.length relations))
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (binders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) rels)
+      (headStripExpandedRaw input payload) rels)
     (positions : List (Fin payload.argumentIndices.length))
     (items : ItemSeq signature context.length rels)
     (compiled : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload) recurse context binders
+      (headStripExpandedRaw input payload) recurse context binders
       (positions.map fun position =>
         ConcreteElaboration.LocalOccurrence.node
           (payload.firstAddedNode position)) = some items)
@@ -1136,13 +1136,13 @@ theorem firstAddedOccurrences_denote
       simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?]
         at compiled
       cases headResult : ConcreteElaboration.compileNode? signature
-          (headStripRaw input payload) context binders
+          (headStripExpandedRaw input payload) context binders
           (payload.firstAddedNode position) with
       | none => simp [ConcreteElaboration.compileOccurrenceWith?, headResult]
           at compiled
       | some head =>
           cases tailResult : ConcreteElaboration.compileOccurrencesWith?
-              signature (headStripRaw input payload) recurse context binders
+              signature (headStripExpandedRaw input payload) recurse context binders
               (rest.map fun current =>
                 ConcreteElaboration.LocalOccurrence.node
                   (payload.firstAddedNode current)) with
@@ -1162,21 +1162,21 @@ theorem secondAddedOccurrences_denote
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (recurse : ∀ {relations : RelCtx},
-      Fin (headStripRaw input payload).regionCount →
+      Fin (headStripExpandedRaw input payload).regionCount →
       (recurseContext : ConcreteElaboration.WireContext
-        (headStripRaw input payload)) →
+        (headStripExpandedRaw input payload)) →
       ConcreteElaboration.BinderContext
-        (headStripRaw input payload) relations →
+        (headStripExpandedRaw input payload) relations →
       Option (Region signature recurseContext.length relations))
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (binders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) rels)
+      (headStripExpandedRaw input payload) rels)
     (positions : List (Fin payload.argumentIndices.length))
     (items : ItemSeq signature context.length rels)
     (compiled : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload) recurse context binders
+      (headStripExpandedRaw input payload) recurse context binders
       (positions.map fun position =>
         ConcreteElaboration.LocalOccurrence.node
           (payload.secondAddedNode position)) = some items)
@@ -1203,13 +1203,13 @@ theorem secondAddedOccurrences_denote
       simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?]
         at compiled
       cases headResult : ConcreteElaboration.compileNode? signature
-          (headStripRaw input payload) context binders
+          (headStripExpandedRaw input payload) context binders
           (payload.secondAddedNode position) with
       | none => simp [ConcreteElaboration.compileOccurrenceWith?, headResult]
           at compiled
       | some head =>
           cases tailResult : ConcreteElaboration.compileOccurrencesWith?
-              signature (headStripRaw input payload) recurse context binders
+              signature (headStripExpandedRaw input payload) recurse context binders
               (rest.map fun current =>
                 ConcreteElaboration.LocalOccurrence.node
                   (payload.secondAddedNode current)) with
@@ -1230,7 +1230,7 @@ def focusedFreshLocalIndex
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length) :
-    Fin (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+    Fin (ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload)
       payload.region).length :=
   Fin.cast (focusedExactScopeLength input payload).symm
     (Fin.natAdd
@@ -1241,7 +1241,7 @@ def focusedFreshExtendedIndex
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (position : Fin payload.argumentIndices.length) :
     Fin (context.extend payload.region).length :=
   Fin.cast (ConcreteElaboration.WireContext.length_extend
@@ -1253,7 +1253,7 @@ theorem focusedFreshExtendedIndex_get
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (position : Fin payload.argumentIndices.length) :
     (context.extend payload.region).get
         (focusedFreshExtendedIndex input payload context position) =
@@ -1262,7 +1262,7 @@ theorem focusedFreshExtendedIndex_get
     payload.region (focusedFreshLocalIndex input payload position)
   rw [show (context.extend payload.region).get
       (focusedFreshExtendedIndex input payload context position) =
-        (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+        (ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload)
           payload.region).get
             (focusedFreshLocalIndex input payload position) by
       simpa [focusedFreshExtendedIndex] using localGet]
@@ -1271,9 +1271,9 @@ theorem focusedFreshExtendedIndex_get
   let freshWires := List.map (Fin.natAdd input.val.wireCount)
     (allFin payload.argumentIndices.length)
   have exactWires : ConcreteElaboration.exactScopeWires
-      (headStripRaw input payload) payload.region = oldWires ++ freshWires := by
+      (headStripExpandedRaw input payload) payload.region = oldWires ++ freshWires := by
     simpa [oldWires, freshWires] using
-      headStripRaw_exactScopeWires input payload payload.region
+      headStripExpandedRaw_exactScopeWires input payload payload.region
   let rightIndex : Fin (oldWires ++ freshWires).length :=
     ⟨oldWires.length + position.val, by
       simp [oldWires, freshWires, allFin_eq_finRange]⟩
@@ -1299,7 +1299,7 @@ theorem focusedForward_fresh_value
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (context : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (outer : Fin context.length → D)
     (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
       payload.region).length → D)
@@ -1369,18 +1369,18 @@ private theorem compileNode_old_core
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (source : ConcreteElaboration.WireContext input.val)
-    (target : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (target : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (embedding : ContextEmbedding input payload source target)
     (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) targetRels)
+      (headStripExpandedRaw input payload) targetRels)
     (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders)
+      (headStripExpandedRaw input payload) sourceBinders targetBinders)
     (targetNodup : target.Nodup)
     (node : Fin input.val.nodeCount) :
-    ConcreteElaboration.compileNode? signature (headStripRaw input payload)
+    ConcreteElaboration.compileNode? signature (headStripExpandedRaw input payload)
         target targetBinders
         (Fin.castAdd (payload.argumentIndices.length +
           payload.argumentIndices.length) node) =
@@ -1395,7 +1395,7 @@ private theorem compileNode_old_core
       payload.argumentIndices.length) node)
     id id embedding.index
     (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
-  · rw [headStripRaw_oldNode]
+  · rw [headStripExpandedRaw_oldNode]
     cases input.val.nodes node <;> rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence source target node
@@ -1404,10 +1404,10 @@ private theorem compileNode_old_core
       (Fin.castAdd payload.argumentIndices.length) embedding.index targetNodup
       embedding.get embedding.mem_old
     · intro wire candidatePort occurs
-      exact headStripRaw_oldEndpointOccurs_forward input payload wire node
+      exact headStripExpandedRaw_oldEndpointOccurs_forward input payload wire node
         candidatePort occurs
     · intro targetWire candidatePort occurs
-      exact headStripRaw_oldEndpointOccurs_backward input payload targetWire node
+      exact headStripExpandedRaw_oldEndpointOccurs_backward input payload targetWire node
         candidatePort occurs
     · exact targetWellFormed.wire_endpoints_are_disjoint
   · intro region binder nodeShape
@@ -1421,7 +1421,7 @@ theorem oldNodeOccurrences_simulation
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
@@ -1431,21 +1431,21 @@ theorem oldNodeOccurrences_simulation
       ConcreteElaboration.BinderContext input.val relations →
       Option (Region signature recurseContext.length relations))
     (targetRecurse : ∀ {relations : RelCtx},
-      Fin (headStripRaw input payload).regionCount →
+      Fin (headStripExpandedRaw input payload).regionCount →
       (recurseContext : ConcreteElaboration.WireContext
-        (headStripRaw input payload)) →
+        (headStripExpandedRaw input payload)) →
       ConcreteElaboration.BinderContext
-        (headStripRaw input payload) relations →
+        (headStripExpandedRaw input payload) relations →
       Option (Region signature recurseContext.length relations))
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext
-      (headStripRaw input payload))
+      (headStripExpandedRaw input payload))
     (embedding : ContextEmbedding input payload sourceContext targetContext)
     (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) targetRels)
+      (headStripExpandedRaw input payload) targetRels)
     (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders)
+      (headStripExpandedRaw input payload) sourceBinders targetBinders)
     (targetNodup : targetContext.Nodup)
     (sourceItems : ItemSeq signature sourceContext.length sourceRels)
     (targetItems : ItemSeq signature targetContext.length targetRels)
@@ -1453,7 +1453,7 @@ theorem oldNodeOccurrences_simulation
       input.val sourceRecurse sourceContext sourceBinders
       (sourceNodeOccurrences input payload.region) = some sourceItems)
     (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload) targetRecurse targetContext targetBinders
+      (headStripExpandedRaw input payload) targetRecurse targetContext targetBinders
       ((sourceNodeOccurrences input payload.region).map
         (liftOccurrence payload)) = some targetItems) :
     ConcreteElaboration.ItemSeqSimulation model named direction
@@ -1502,50 +1502,50 @@ theorem childOccurrence_simulation
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext
-      (headStripRaw input payload))
+      (headStripExpandedRaw input payload))
     (embedding : ContextEmbedding input payload sourceContext targetContext)
     (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) targetRels)
+      (headStripExpandedRaw input payload) targetRels)
     (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders)
+      (headStripExpandedRaw input payload) sourceBinders targetBinders)
     (sourceBindersCover : sourceBinders.Covers payload.region)
     (targetBindersCover : targetBinders.Covers payload.region)
     (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
       input.val sourceBinders payload.region)
     (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
-      (headStripRaw input payload) targetBinders payload.region)
+      (headStripExpandedRaw input payload) targetBinders payload.region)
     (recurse : ∀ {childDirection : ConcreteElaboration.SimulationDirection}
       {child : Fin input.val.regionCount}
       {childSourceRels childTargetRels : RelCtx}
       {childSourceBinders : ConcreteElaboration.BinderContext
         input.val childSourceRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
-        (headStripRaw input payload) childTargetRels}
+        (headStripExpandedRaw input payload) childTargetRels}
       {sourceBody : Region signature sourceContext.length childSourceRels}
       {targetBody : Region signature targetContext.length childTargetRels},
       (input.val.regions child).parent? = some payload.region →
-      ((headStripRaw input payload).regions child).parent? =
+      ((headStripExpandedRaw input payload).regions child).parent? =
         some payload.region →
       True →
       (childBinderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-        (headStripRaw input payload) childSourceBinders childTargetBinders) →
+        (headStripExpandedRaw input payload) childSourceBinders childTargetBinders) →
       childSourceBinders.Covers child →
       childTargetBinders.Covers child →
       ConcreteElaboration.BinderContext.Enumeration input.val
         childSourceBinders child →
       ConcreteElaboration.BinderContext.Enumeration
-        (headStripRaw input payload) childTargetBinders child →
+        (headStripExpandedRaw input payload) childTargetBinders child →
       ConcreteElaboration.compileRegion? signature input.val fuelSource child
           sourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
+      ConcreteElaboration.compileRegion? signature (headStripExpandedRaw input payload)
           fuelTarget child targetContext childTargetBinders = some targetBody →
       ConcreteElaboration.RegionSimulation model named childDirection
         (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
@@ -1561,16 +1561,16 @@ theorem childOccurrence_simulation
         fuelSource) sourceContext sourceBinders (.child child) =
       some sourceItem)
     (targetCompiled : ConcreteElaboration.compileOccurrenceWith? signature
-      (headStripRaw input payload)
+      (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) fuelTarget)
+        (headStripExpandedRaw input payload) fuelTarget)
       targetContext targetBinders (.child child) = some targetItem) :
     ConcreteElaboration.ItemSimulation model named direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
       (sourceItem.renameRelations
         (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
       targetItem := by
-  have targetParent : ((headStripRaw input payload).regions child).parent? =
+  have targetParent : ((headStripExpandedRaw input payload).regions child).parent? =
       some payload.region := parent
   cases sourceKind : input.val.regions child with
   | sheet =>
@@ -1581,7 +1581,7 @@ theorem childOccurrence_simulation
         rw [sourceKind] at parent
         exact Option.some.inj parent
       subst actualParent
-      have targetKind : (headStripRaw input payload).regions child =
+      have targetKind : (headStripExpandedRaw input payload).regions child =
           .cut payload.region := by
         exact sourceKind
       cases sourceResult : ConcreteElaboration.compileRegion? signature
@@ -1594,7 +1594,7 @@ theorem childOccurrence_simulation
             sourceResult] at sourceCompiled
           subst sourceItem
           cases targetResult : ConcreteElaboration.compileRegion? signature
-              (headStripRaw input payload) fuelTarget child targetContext
+              (headStripExpandedRaw input payload) fuelTarget child targetContext
               targetBinders with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
@@ -1629,7 +1629,7 @@ theorem childOccurrence_simulation
         rw [sourceKind] at parent
         exact Option.some.inj parent
       subst actualParent
-      have targetKind : (headStripRaw input payload).regions child =
+      have targetKind : (headStripExpandedRaw input payload).regions child =
           .bubble payload.region arity := by
         exact sourceKind
       let sourcePushed := sourceBinders.push child arity
@@ -1644,7 +1644,7 @@ theorem childOccurrence_simulation
             sourcePushed, sourceResult] at sourceCompiled
           subst sourceItem
           cases targetResult : ConcreteElaboration.compileRegion? signature
-              (headStripRaw input payload) fuelTarget child targetContext
+              (headStripExpandedRaw input payload) fuelTarget child targetContext
               targetPushed with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
@@ -1655,7 +1655,7 @@ theorem childOccurrence_simulation
               subst targetItem
               let pushedWitness :
                   ConcreteElaboration.IdentityBinderWitness input.val
-                    (headStripRaw input payload) sourcePushed targetPushed := by
+                    (headStripExpandedRaw input payload) sourcePushed targetPushed := by
                 rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
                 subst targetRels
                 cases bindersEq
@@ -1711,21 +1711,21 @@ theorem childOccurrences_simulation
       ConcreteElaboration.BinderContext input.val relations →
       Option (Region signature recurseContext.length relations))
     (targetRecurse : ∀ {relations : RelCtx},
-      Fin (headStripRaw input payload).regionCount →
+      Fin (headStripExpandedRaw input payload).regionCount →
       (recurseContext : ConcreteElaboration.WireContext
-        (headStripRaw input payload)) →
+        (headStripExpandedRaw input payload)) →
       ConcreteElaboration.BinderContext
-        (headStripRaw input payload) relations →
+        (headStripExpandedRaw input payload) relations →
       Option (Region signature recurseContext.length relations))
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext
-      (headStripRaw input payload))
+      (headStripExpandedRaw input payload))
     (embedding : ContextEmbedding input payload sourceContext targetContext)
     (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) targetRels)
+      (headStripExpandedRaw input payload) targetRels)
     (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders)
+      (headStripExpandedRaw input payload) sourceBinders targetBinders)
     (pointwise : ∀ child,
       (input.val.regions child).parent? = some payload.region →
       ∀ (sourceItem : Item signature sourceContext.length sourceRels)
@@ -1734,7 +1734,7 @@ theorem childOccurrences_simulation
           sourceRecurse sourceContext sourceBinders (.child child) =
         some sourceItem →
       ConcreteElaboration.compileOccurrenceWith? signature
-          (headStripRaw input payload) targetRecurse targetContext
+          (headStripExpandedRaw input payload) targetRecurse targetContext
           targetBinders (.child child) = some targetItem →
       ConcreteElaboration.ItemSimulation model named direction
         (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
@@ -1747,7 +1747,7 @@ theorem childOccurrences_simulation
       input.val sourceRecurse sourceContext sourceBinders
       (sourceChildOccurrences input payload.region) = some sourceItems)
     (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload) targetRecurse targetContext targetBinders
+      (headStripExpandedRaw input payload) targetRecurse targetContext targetBinders
       ((sourceChildOccurrences input payload.region).map
         (liftOccurrence payload)) = some targetItems) :
     ConcreteElaboration.ItemSeqSimulation model named direction
@@ -1775,18 +1775,18 @@ theorem compileNode_old
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (source : ConcreteElaboration.WireContext input.val)
-    (target : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (target : ConcreteElaboration.WireContext (headStripExpandedRaw input payload))
     (embedding : ContextEmbedding input payload source target)
     (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) targetRels)
+      (headStripExpandedRaw input payload) targetRels)
     (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders)
+      (headStripExpandedRaw input payload) sourceBinders targetBinders)
     (targetNodup : target.Nodup)
     (node : Fin input.val.nodeCount) :
-    ConcreteElaboration.compileNode? signature (headStripRaw input payload)
+    ConcreteElaboration.compileNode? signature (headStripExpandedRaw input payload)
         target targetBinders
         (Fin.castAdd (payload.argumentIndices.length +
           payload.argumentIndices.length) node) =
@@ -1801,7 +1801,7 @@ theorem compileNode_old
       payload.argumentIndices.length) node)
     id id embedding.index
     (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
-  · rw [headStripRaw_oldNode]
+  · rw [headStripExpandedRaw_oldNode]
     cases input.val.nodes node <;> rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence source target node
@@ -1810,10 +1810,10 @@ theorem compileNode_old
       (Fin.castAdd payload.argumentIndices.length) embedding.index targetNodup
       embedding.get embedding.mem_old
     · intro wire candidatePort occurs
-      exact headStripRaw_oldEndpointOccurs_forward input payload wire node
+      exact headStripExpandedRaw_oldEndpointOccurs_forward input payload wire node
         candidatePort occurs
     · intro targetWire candidatePort occurs
-      exact headStripRaw_oldEndpointOccurs_backward input payload targetWire node
+      exact headStripExpandedRaw_oldEndpointOccurs_backward input payload targetWire node
         candidatePort occurs
     · exact targetWellFormed.wire_endpoints_are_disjoint
   · intro region binder nodeShape
@@ -1962,7 +1962,7 @@ def targetOpen (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
-  diagram := headStripRaw input payload
+  diagram := headStripExpandedRaw input payload
   boundary := boundary.map (Fin.castAdd payload.argumentIndices.length)
 
 theorem expectedTransport
@@ -1972,27 +1972,27 @@ theorem expectedTransport
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
-    (headStripInterfaceTransport input payload).transportBoundary boundary =
+    (headStripExpandedInterfaceTransport input payload).transportBoundary boundary =
       some (boundary.map (Fin.castAdd payload.argumentIndices.length)) := by
   apply InterfaceTransport.transportBoundary_eq_map
   intro wire member
-  unfold headStripInterfaceTransport InterfaceTransport.append
+  unfold headStripExpandedInterfaceTransport InterfaceTransport.append
     InterfaceTransport.rootFiltered
   dsimp only
   have castEq :
       Fin.cast (show input.val.wireCount + payload.argumentIndices.length =
-        (headStripRaw input payload).wireCount by rfl)
+        (headStripExpandedRaw input payload).wireCount by rfl)
           (Fin.castAdd payload.argumentIndices.length wire) =
         Fin.castAdd payload.argumentIndices.length wire := by
     apply Fin.ext
     rfl
   rw [castEq]
-  change (if ((headStripRaw input payload).wires
+  change (if ((headStripExpandedRaw input payload).wires
       (Fin.castAdd payload.argumentIndices.length wire)).scope =
-        (headStripRaw input payload).root then
+        (headStripExpandedRaw input payload).root then
       some (Fin.castAdd payload.argumentIndices.length wire) else none) =
     some (Fin.castAdd payload.argumentIndices.length wire)
-  rw [headStripRaw_oldWire_scope]
+  rw [headStripExpandedRaw_oldWire_scope]
   simp [sourceRoot wire member]
 
 def targetCheckedOpen
@@ -2002,14 +2002,14 @@ def targetCheckedOpen
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature) :
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature) :
     CheckedOpenDiagram signature :=
   ⟨targetOpen input payload boundary, {
     diagram_well_formed := targetWellFormed
     boundary_is_root_scoped := by
       intro mapped member
       obtain ⟨wire, wireMember, rfl⟩ := List.mem_map.mp member
-      exact headStripRaw_oldWire_scope input payload wire |>.trans
+      exact headStripExpandedRaw_oldWire_scope input payload wire |>.trans
         (sourceRoot wire wireMember) }⟩
 
 end HeadStripSoundness

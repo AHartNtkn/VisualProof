@@ -628,12 +628,32 @@ def applyHeadStrip (input : Diagram.CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
     Except StepError (StepReceipt input) :=
-  match hcheck : Diagram.checkWellFormed signature
-      (headStripRaw input payload) with
+  match hexpanded : Diagram.checkWellFormed signature
+      (headStripExpandedRaw input payload) with
   | .error error => .error (.resultNotWellFormed error)
-  | .ok result => .ok (StepReceipt.ofChecked input
-      (headStripRaw input payload) (headStripWireProvenance input payload)
-      (headStripInterfaceTransport input payload) result hcheck)
+  | .ok _ =>
+      match hcheck : Diagram.checkWellFormed signature
+          (headStripRaw input payload) with
+      | .error error => .error (.resultNotWellFormed error)
+      | .ok result => .ok (StepReceipt.ofChecked input
+          (headStripRaw input payload) (headStripWireProvenance input payload)
+          (headStripInterfaceTransport input payload) result hcheck)
+
+theorem applyHeadStrip_expanded_wellFormed
+    {signature : List Nat}
+    {input : Diagram.CheckedDiagram signature}
+    {first second : Fin input.val.nodeCount}
+    {payload : HeadStripPayload input first second}
+    {result : StepReceipt input}
+    (happly : applyHeadStrip input payload = .ok result) :
+    (headStripExpandedRaw input payload).WellFormed signature := by
+  unfold applyHeadStrip at happly
+  split at happly <;> try contradiction
+  rename_i checked hexpanded
+  have preserves := Diagram.checkWellFormed_preserves_input hexpanded
+  have wellFormed := checked.property
+  rw [preserves] at wellFormed
+  exact wellFormed
 
 theorem applyHeadStrip_preserves_raw
     (happly : applyHeadStrip input payload = .ok result) :
@@ -641,9 +661,11 @@ theorem applyHeadStrip_preserves_raw
   unfold applyHeadStrip at happly
   split at happly
   · contradiction
-  · rename_i checked hcheck
-    cases happly
-    exact Diagram.checkWellFormed_preserves_input hcheck
+  · split at happly
+    · contradiction
+    · rename_i checked hcheck
+      cases happly
+      exact Diagram.checkWellFormed_preserves_input hcheck
 
 theorem applyHeadStrip_realizes
     (happly : applyHeadStrip input payload = .ok result) :
@@ -651,6 +673,7 @@ theorem applyHeadStrip_realizes
       (headStripWireProvenance input payload)
       (headStripInterfaceTransport input payload) := by
   unfold applyHeadStrip at happly
+  split at happly <;> try contradiction
   split at happly <;> try contradiction
   rename_i checked hcheck
   cases happly

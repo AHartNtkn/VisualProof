@@ -14,10 +14,10 @@ theorem regularExactScopeLength
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
     (region : Fin input.val.regionCount) (regular : region ≠ payload.region) :
-    (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+    (ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload)
         region).length =
       (ConcreteElaboration.exactScopeWires input.val region).length := by
-  rw [headStripRaw_exactScopeWires, if_neg regular, List.append_nil]
+  rw [headStripExpandedRaw_exactScopeWires, if_neg regular, List.append_nil]
   exact List.length_map _
 
 noncomputable def extendedWireMapRegular
@@ -61,7 +61,7 @@ theorem extendedWireMapRegular_spec
           (ConcreteElaboration.WireContext.length_extend target region).symm
           (Fin.castAdd
             (ConcreteElaboration.exactScopeWires
-              (headStripRaw input payload) region).length
+              (headStripExpandedRaw input payload) region).length
             (embedding.index outer)) := by
       apply Fin.ext
       simp [extendedWireMapRegular, extendWireRenaming]
@@ -78,7 +78,7 @@ theorem extendedWireMapRegular_spec
       apply Fin.ext
       simp [extendedWireMapRegular, extendWireRenaming]
     rw [mapped]
-    have exactWires := headStripRaw_exactScopeWires input payload region
+    have exactWires := headStripExpandedRaw_exactScopeWires input payload region
     rw [if_neg regular] at exactWires
     simp only [List.append_nil] at exactWires
     simp [ConcreteElaboration.WireContext.extend, exactWires]
@@ -103,7 +103,7 @@ theorem regularExtendWireEnv
     (region : Fin input.val.regionCount) (regular : region ≠ payload.region)
     (outer : Fin target.length → D)
     (localEnv : Fin (ConcreteElaboration.exactScopeWires
-      (headStripRaw input payload) region).length → D) :
+      (headStripExpandedRaw input payload) region).length → D) :
     (extendWireEnv outer localEnv ∘
         Fin.cast (ConcreteElaboration.WireContext.length_extend target region)) ∘
         extendedWireMapRegular embedding region regular =
@@ -209,19 +209,19 @@ theorem focusedLocalTransport
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (named : NamedEnv Lambda.Individual signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext
-      (headStripRaw input payload))
+      (headStripExpandedRaw input payload))
     (embedding : ContextEmbedding input payload sourceContext targetContext)
     (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext
-      (headStripRaw input payload) targetRels)
+      (headStripExpandedRaw input payload) targetRels)
     (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders)
+      (headStripExpandedRaw input payload) sourceBinders targetBinders)
     (sourceExact : (sourceContext.extend payload.region).Exact payload.region)
     (targetExact : (targetContext.extend payload.region).Exact payload.region)
     (sourceBindersCover : sourceBinders.Covers payload.region)
@@ -229,34 +229,34 @@ theorem focusedLocalTransport
     (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
       input.val sourceBinders payload.region)
     (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
-      (headStripRaw input payload) targetBinders payload.region)
+      (headStripExpandedRaw input payload) targetBinders payload.region)
     (recurse : ∀ {childDirection : ConcreteElaboration.SimulationDirection}
       {child : Fin input.val.regionCount}
       {childSourceRels childTargetRels : RelCtx}
       {childSourceBinders : ConcreteElaboration.BinderContext
         input.val childSourceRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
-        (headStripRaw input payload) childTargetRels}
+        (headStripExpandedRaw input payload) childTargetRels}
       {sourceBody : Region signature
         (sourceContext.extend payload.region).length childSourceRels}
       {targetBody : Region signature
         (targetContext.extend payload.region).length childTargetRels},
       (input.val.regions child).parent? = some payload.region →
-      ((headStripRaw input payload).regions child).parent? =
+      ((headStripExpandedRaw input payload).regions child).parent? =
         some payload.region →
       True →
       (childBinderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-        (headStripRaw input payload) childSourceBinders childTargetBinders) →
+        (headStripExpandedRaw input payload) childSourceBinders childTargetBinders) →
       childSourceBinders.Covers child →
       childTargetBinders.Covers child →
       ConcreteElaboration.BinderContext.Enumeration input.val
         childSourceBinders child →
       ConcreteElaboration.BinderContext.Enumeration
-        (headStripRaw input payload) childTargetBinders child →
+        (headStripExpandedRaw input payload) childTargetBinders child →
       ConcreteElaboration.compileRegion? signature input.val fuelSource child
           (sourceContext.extend payload.region) childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
+      ConcreteElaboration.compileRegion? signature (headStripExpandedRaw input payload)
           fuelTarget child (targetContext.extend payload.region)
           childTargetBinders = some targetBody →
       ConcreteElaboration.RegionSimulation Lambda.canonicalModel named
@@ -276,11 +276,11 @@ theorem focusedLocalTransport
       (ConcreteElaboration.localOccurrences input.val payload.region) =
         some sourceItems)
     (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload)
+      (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) fuelTarget)
+        (headStripExpandedRaw input payload) fuelTarget)
       (targetContext.extend payload.region) targetBinders
-      (ConcreteElaboration.localOccurrences (headStripRaw input payload)
+      (ConcreteElaboration.localOccurrences (headStripExpandedRaw input payload)
         payload.region) = some targetItems) :
     ∀ relEnv, ConcreteElaboration.DirectionalLocalTransport direction
       sourceContext targetContext payload.region payload.region
@@ -305,11 +305,11 @@ theorem focusedLocalTransport
       (sourceNodeOccurrences input payload.region)
       (sourceChildOccurrences input payload.region)
       sourceItems sourceCompiled
-  rw [headStripRaw_focused_localOccurrences] at targetCompiled
+  rw [headStripExpandedRaw_focused_localOccurrences] at targetCompiled
   have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload)
+      (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) fuelTarget)
+        (headStripExpandedRaw input payload) fuelTarget)
       (targetContext.extend payload.region) sourceBinders
       ((sourceNodeOccurrences input payload.region).map
           (liftOccurrence payload) ++
@@ -321,7 +321,7 @@ theorem focusedLocalTransport
       targetRestCompiled, targetItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (fun {rels} => ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) fuelTarget)
+        (headStripExpandedRaw input payload) fuelTarget)
       (targetContext.extend payload.region) sourceBinders
       ((sourceNodeOccurrences input payload.region).map
         (liftOccurrence payload))
@@ -331,9 +331,9 @@ theorem focusedLocalTransport
       targetItems targetCompiled'
   have targetRestCompiled' :
       ConcreteElaboration.compileOccurrencesWith? signature
-        (headStripRaw input payload)
+        (headStripExpandedRaw input payload)
         (ConcreteElaboration.compileRegion? signature
-          (headStripRaw input payload) fuelTarget)
+          (headStripExpandedRaw input payload) fuelTarget)
         (targetContext.extend payload.region) sourceBinders
         (firstAddedOccurrences payload ++
           (secondAddedOccurrences payload ++
@@ -344,7 +344,7 @@ theorem focusedLocalTransport
       targetRestItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (fun {rels} => ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) fuelTarget)
+        (headStripExpandedRaw input payload) fuelTarget)
       (targetContext.extend payload.region) sourceBinders
       (firstAddedOccurrences payload)
       (secondAddedOccurrences payload ++
@@ -355,7 +355,7 @@ theorem focusedLocalTransport
       targetTailItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (fun {rels} => ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) fuelTarget)
+        (headStripExpandedRaw input payload) fuelTarget)
       (targetContext.extend payload.region) sourceBinders
       (secondAddedOccurrences payload)
       ((sourceChildOccurrences input payload.region).map
@@ -365,7 +365,7 @@ theorem focusedLocalTransport
     targetWellFormed Lambda.canonicalModel named direction
     (ConcreteElaboration.compileRegion? signature input.val fuelSource)
     (ConcreteElaboration.compileRegion? signature
-      (headStripRaw input payload) fuelTarget)
+      (headStripExpandedRaw input payload) fuelTarget)
     (sourceContext.extend payload.region)
     (targetContext.extend payload.region) (embedding.extend payload.region)
     sourceBinders sourceBinders
@@ -375,7 +375,7 @@ theorem focusedLocalTransport
     Lambda.canonicalModel named direction
     (ConcreteElaboration.compileRegion? signature input.val fuelSource)
     (ConcreteElaboration.compileRegion? signature
-      (headStripRaw input payload) fuelTarget)
+      (headStripExpandedRaw input payload) fuelTarget)
     (sourceContext.extend payload.region)
     (targetContext.extend payload.region) (embedding.extend payload.region)
     sourceBinders sourceBinders ⟨rfl, HEq.rfl⟩
@@ -460,7 +460,7 @@ theorem focusedLocalTransport
       have firstDenotes := firstAddedOccurrences_denote input payload
         targetWellFormed
         (ConcreteElaboration.compileRegion? signature
-          (headStripRaw input payload) fuelTarget)
+          (headStripExpandedRaw input payload) fuelTarget)
         (targetContext.extend payload.region) sourceBinders
         (allFin payload.argumentIndices.length) firstItems (by
           simpa [firstAddedOccurrences] using firstCompiled)
@@ -480,7 +480,7 @@ theorem focusedLocalTransport
       have secondDenotes := secondAddedOccurrences_denote input payload
         targetWellFormed
         (ConcreteElaboration.compileRegion? signature
-          (headStripRaw input payload) fuelTarget)
+          (headStripExpandedRaw input payload) fuelTarget)
         (targetContext.extend payload.region) sourceBinders
         (allFin payload.argumentIndices.length) secondItems (by
           simpa [secondAddedOccurrences] using secondCompiled)
@@ -511,10 +511,10 @@ noncomputable def semanticSimulation
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (named : NamedEnv Lambda.Individual signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature input.val
-      (headStripRaw input payload) Lambda.canonicalModel named where
+      (headStripExpandedRaw input payload) Lambda.canonicalModel named where
   source_wellFormed := input.property
   target_wellFormed := targetWellFormed
   regionMap := id
@@ -532,13 +532,13 @@ noncomputable def semanticSimulation
   root_eq := rfl
   region_shape := by
     intro parent regular child childParent
-    cases kind : input.val.regions child <;> simp [headStripRaw, kind]
+    cases kind : input.val.regions child <;> simp [headStripExpandedRaw, kind]
   localOccurrences_map := by
     intro region regular
-    exact headStripRaw_regular_localOccurrences input payload region regular
+    exact headStripExpandedRaw_regular_localOccurrences input payload region regular
   BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders =>
     ConcreteElaboration.IdentityBinderWitness input.val
-      (headStripRaw input payload) sourceBinders targetBinders
+      (headStripExpandedRaw input payload) sourceBinders targetBinders
   relationMap := fun witness =>
     ConcreteElaboration.IdentityBinderWitness.relationMap witness
   binders_empty := ⟨rfl, HEq.rfl⟩
@@ -710,9 +710,9 @@ theorem targetOpen_hiddenWires
   change List.filter
       (fun wire => decide
         (wire ∉ (targetOpen input payload boundary).exposedWires))
-      (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+      (ConcreteElaboration.exactScopeWires (headStripExpandedRaw input payload)
         input.val.root) = _
-  rw [headStripRaw_exactScopeWires, targetOpen_exposedWires]
+  rw [headStripExpandedRaw_exactScopeWires, targetOpen_exposedWires]
   have oldPart :
       List.filter
           (fun wire => decide
@@ -919,7 +919,7 @@ noncomputable def rootEmbedding
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature) :
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature) :
     ContextEmbedding input payload
       (sourceOpen input boundary).rootWires
       (targetOpen input payload boundary).rootWires where
@@ -934,10 +934,10 @@ noncomputable def rootEmbedding
           targetWellFormed).val
         (targetCheckedOpen input payload boundary sourceRoot
           targetWellFormed).property _).mp member
-      change ((headStripRaw input payload).wires
+      change ((headStripExpandedRaw input payload).wires
         (Fin.castAdd payload.argumentIndices.length wire)).scope =
           input.val.root at scope
-      rw [headStripRaw_oldWire_scope] at scope
+      rw [headStripExpandedRaw_oldWire_scope] at scope
       exact (OpenConcreteDiagram.mem_rootWires_iff
         (sourceCheckedOpen input boundary sourceRoot).val
         (sourceCheckedOpen input boundary sourceRoot).property _).mpr scope
@@ -950,10 +950,10 @@ noncomputable def rootEmbedding
           targetWellFormed).val
         (targetCheckedOpen input payload boundary sourceRoot
           targetWellFormed).property _).mpr
-      change ((headStripRaw input payload).wires
+      change ((headStripExpandedRaw input payload).wires
         (Fin.castAdd payload.argumentIndices.length wire)).scope =
           input.val.root
-      rw [headStripRaw_oldWire_scope]
+      rw [headStripExpandedRaw_oldWire_scope]
       exact scope
 
 theorem targetExposedLength
@@ -1293,7 +1293,7 @@ theorem rootForwardFreshValue
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (rootSite : input.val.root = payload.region)
     (targetOuter : Fin
       (targetOpen input payload boundary).exposedWires.length → D)
@@ -1344,7 +1344,7 @@ theorem rootForwardOldValue
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (sourceOuter : Fin
       (sourceOpen input boundary).exposedWires.length → D)
     (targetOuter : Fin
@@ -1402,7 +1402,7 @@ theorem focusedRootTransport
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (named : NamedEnv Lambda.Individual signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (rootSite : input.val.root = payload.region)
@@ -1412,28 +1412,28 @@ theorem focusedRootTransport
       {childSourceBinders : ConcreteElaboration.BinderContext
         input.val childSourceRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
-        (headStripRaw input payload) childTargetRels}
+        (headStripExpandedRaw input payload) childTargetRels}
       {sourceBody : Region signature
         (sourceOpen input boundary).rootWires.length childSourceRels}
       {targetBody : Region signature
         (targetOpen input payload boundary).rootWires.length childTargetRels},
       (input.val.regions child).parent? = some input.val.root →
-      ((headStripRaw input payload).regions child).parent? =
-        some (headStripRaw input payload).root →
+      ((headStripExpandedRaw input payload).regions child).parent? =
+        some (headStripExpandedRaw input payload).root →
       True →
       (childBinderWitness : ConcreteElaboration.IdentityBinderWitness input.val
-        (headStripRaw input payload) childSourceBinders childTargetBinders) →
+        (headStripExpandedRaw input payload) childSourceBinders childTargetBinders) →
       childSourceBinders.Covers child →
       childTargetBinders.Covers child →
       ConcreteElaboration.BinderContext.Enumeration input.val
         childSourceBinders child →
       ConcreteElaboration.BinderContext.Enumeration
-        (headStripRaw input payload) childTargetBinders child →
+        (headStripExpandedRaw input payload) childTargetBinders child →
       ConcreteElaboration.compileRegion? signature input.val
           input.val.regionCount child (sourceOpen input boundary).rootWires
           childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
-          (headStripRaw input payload).regionCount child
+      ConcreteElaboration.compileRegion? signature (headStripExpandedRaw input payload)
+          (headStripExpandedRaw input payload).regionCount child
           (targetOpen input payload boundary).rootWires childTargetBinders =
         some targetBody →
       ConcreteElaboration.RegionSimulation Lambda.canonicalModel named
@@ -1455,13 +1455,13 @@ theorem focusedRootTransport
       (ConcreteElaboration.localOccurrences input.val input.val.root) =
         some sourceItems)
     (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload)
+      (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       (targetOpen input payload boundary).rootWires
       ConcreteElaboration.BinderContext.empty
-      (ConcreteElaboration.localOccurrences (headStripRaw input payload)
-        (headStripRaw input payload).root) = some targetItems) :
+      (ConcreteElaboration.localOccurrences (headStripExpandedRaw input payload)
+        (headStripExpandedRaw input payload).root) = some targetItems) :
     ConcreteElaboration.DirectionalRootTransport direction
       (sourceOpen input boundary).exposedWires
       (sourceOpen input boundary).hiddenWires
@@ -1482,13 +1482,13 @@ theorem focusedRootTransport
         some sourceItems := by
     simpa [sourceContext, rootSite] using sourceCompiled
   have targetCompiledFocus : ConcreteElaboration.compileOccurrencesWith?
-      signature (headStripRaw input payload)
+      signature (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       targetContext ConcreteElaboration.BinderContext.empty
-      (ConcreteElaboration.localOccurrences (headStripRaw input payload)
+      (ConcreteElaboration.localOccurrences (headStripExpandedRaw input payload)
         payload.region) = some targetItems := by
-    simpa [targetContext, headStripRaw, rootSite] using targetCompiled
+    simpa [targetContext, headStripExpandedRaw, rootSite] using targetCompiled
   rw [source_localOccurrences] at sourceCompiledFocus
   obtain ⟨sourceNodeItems, sourceChildItems, sourceNodeCompiled,
       sourceChildCompiled, sourceItemsEq⟩ :=
@@ -1499,11 +1499,11 @@ theorem focusedRootTransport
       (sourceNodeOccurrences input payload.region)
       (sourceChildOccurrences input payload.region)
       sourceItems sourceCompiledFocus
-  rw [headStripRaw_focused_localOccurrences] at targetCompiledFocus
+  rw [headStripExpandedRaw_focused_localOccurrences] at targetCompiledFocus
   have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
-      (headStripRaw input payload)
+      (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       targetContext ConcreteElaboration.BinderContext.empty
       ((sourceNodeOccurrences input payload.region).map
           (liftOccurrence payload) ++
@@ -1515,16 +1515,16 @@ theorem focusedRootTransport
       targetRestCompiled, targetItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (fun {rels} => ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       targetContext ConcreteElaboration.BinderContext.empty
       ((sourceNodeOccurrences input payload.region).map (liftOccurrence payload))
       (firstAddedOccurrences payload ++ secondAddedOccurrences payload ++
         (sourceChildOccurrences input payload.region).map
           (liftOccurrence payload)) targetItems targetCompiled'
   have targetRestCompiled' : ConcreteElaboration.compileOccurrencesWith?
-      signature (headStripRaw input payload)
+      signature (headStripExpandedRaw input payload)
       (ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       targetContext ConcreteElaboration.BinderContext.empty
       (firstAddedOccurrences payload ++
         (secondAddedOccurrences payload ++
@@ -1535,7 +1535,7 @@ theorem focusedRootTransport
       targetRestItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (fun {rels} => ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       targetContext ConcreteElaboration.BinderContext.empty
       (firstAddedOccurrences payload)
       (secondAddedOccurrences payload ++
@@ -1545,7 +1545,7 @@ theorem focusedRootTransport
       targetTailItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (fun {rels} => ConcreteElaboration.compileRegion? signature
-        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
       targetContext ConcreteElaboration.BinderContext.empty
       (secondAddedOccurrences payload)
       ((sourceChildOccurrences input payload.region).map (liftOccurrence payload))
@@ -1558,7 +1558,7 @@ theorem focusedRootTransport
   have targetExact : ConcreteElaboration.WireContext.Exact targetContext
       payload.region := by
     rw [← rootSite]
-    simpa [targetContext, headStripRaw] using
+    simpa [targetContext, headStripExpandedRaw] using
       (ConcreteElaboration.openRootWires_exact
         (targetCheckedOpen input payload boundary sourceRoot
           targetWellFormed).property)
@@ -1570,41 +1570,41 @@ theorem focusedRootTransport
     exact ConcreteElaboration.BinderContext.empty_covers_root input.property
   have targetCover :
       (ConcreteElaboration.BinderContext.empty :
-        ConcreteElaboration.BinderContext (headStripRaw input payload) []).Covers
+        ConcreteElaboration.BinderContext (headStripExpandedRaw input payload) []).Covers
           payload.region := by
     rw [← rootSite]
-    simpa [headStripRaw] using
+    simpa [headStripExpandedRaw] using
       (ConcreteElaboration.BinderContext.empty_covers_root targetWellFormed)
   have sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
       input.val ConcreteElaboration.BinderContext.empty payload.region := by
     rw [← rootSite]
     exact ConcreteElaboration.BinderContext.Enumeration.empty input.val
   have targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
-      (headStripRaw input payload) ConcreteElaboration.BinderContext.empty
+      (headStripExpandedRaw input payload) ConcreteElaboration.BinderContext.empty
       payload.region := by
     rw [← rootSite]
-    simpa [headStripRaw] using
+    simpa [headStripExpandedRaw] using
       (ConcreteElaboration.BinderContext.Enumeration.empty
-        (headStripRaw input payload))
+        (headStripExpandedRaw input payload))
   have oldSimulation := oldNodeOccurrences_simulation input payload
     targetWellFormed Lambda.canonicalModel named direction
     (ConcreteElaboration.compileRegion? signature input.val input.val.regionCount)
-    (ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
-      (headStripRaw input payload).regionCount)
+    (ConcreteElaboration.compileRegion? signature (headStripExpandedRaw input payload)
+      (headStripExpandedRaw input payload).regionCount)
     sourceContext targetContext embedding ConcreteElaboration.BinderContext.empty
     ConcreteElaboration.BinderContext.empty ⟨rfl, HEq.rfl⟩ targetExact.nodup
     sourceNodeItems targetNodeItems sourceNodeCompiled targetNodeCompiled
   have childSimulation := childOccurrences_simulation input payload
     Lambda.canonicalModel named direction
     (ConcreteElaboration.compileRegion? signature input.val input.val.regionCount)
-    (ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
-      (headStripRaw input payload).regionCount)
+    (ConcreteElaboration.compileRegion? signature (headStripExpandedRaw input payload)
+      (headStripExpandedRaw input payload).regionCount)
     sourceContext targetContext embedding ConcreteElaboration.BinderContext.empty
     ConcreteElaboration.BinderContext.empty ⟨rfl, HEq.rfl⟩
     (fun child parent sourceItem targetItem sourceOccurrence targetOccurrence =>
       childOccurrence_simulation input payload targetWellFormed
         Lambda.canonicalModel named direction input.val.regionCount
-        (headStripRaw input payload).regionCount sourceContext targetContext
+        (headStripExpandedRaw input payload).regionCount sourceContext targetContext
         embedding ConcreteElaboration.BinderContext.empty
         ConcreteElaboration.BinderContext.empty ⟨rfl, HEq.rfl⟩ sourceCover
         targetCover sourceEnumeration targetEnumeration (by
@@ -1613,7 +1613,7 @@ theorem focusedRootTransport
             sourceParent targetParent allowed childWitness sourceCovers
             targetCovers sourceEnum targetEnum sourceResult targetResult
           exact recurse (by simpa [rootSite] using sourceParent)
-            (by simpa [headStripRaw, rootSite] using targetParent) allowed
+            (by simpa [headStripExpandedRaw, rootSite] using targetParent) allowed
             childWitness sourceCovers targetCovers sourceEnum targetEnum
             sourceResult targetResult)
         child parent sourceItem targetItem sourceOccurrence targetOccurrence)
@@ -1724,7 +1724,7 @@ theorem focusedRootTransport
       have firstDenotes := firstAddedOccurrences_denote input payload
         targetWellFormed
         (ConcreteElaboration.compileRegion? signature
-          (headStripRaw input payload) (headStripRaw input payload).regionCount)
+          (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
         targetContext ConcreteElaboration.BinderContext.empty
         (allFin payload.argumentIndices.length) firstItems (by
           simpa [firstAddedOccurrences] using firstCompiled)
@@ -1746,7 +1746,7 @@ theorem focusedRootTransport
       have secondDenotes := secondAddedOccurrences_denote input payload
         targetWellFormed
         (ConcreteElaboration.compileRegion? signature
-          (headStripRaw input payload) (headStripRaw input payload).regionCount)
+          (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
         targetContext ConcreteElaboration.BinderContext.empty
         (allFin payload.argumentIndices.length) secondItems (by
           simpa [secondAddedOccurrences] using secondCompiled)
@@ -1786,7 +1786,7 @@ noncomputable def rootContext
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (named : NamedEnv Lambda.Individual signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let simulation := semanticSimulation input payload targetWellFormed named
@@ -1869,13 +1869,13 @@ noncomputable def rootContext
           some sourceItems := by
       simpa only [OpenConcreteDiagram.rootWires] using sourceCompiled
     have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
-        (headStripRaw input payload)
+        (headStripExpandedRaw input payload)
         (ConcreteElaboration.compileRegion? signature
-          (headStripRaw input payload) (headStripRaw input payload).regionCount)
+          (headStripExpandedRaw input payload) (headStripExpandedRaw input payload).regionCount)
         (targetOpen input payload boundary).rootWires
         ConcreteElaboration.BinderContext.empty
-        (ConcreteElaboration.localOccurrences (headStripRaw input payload)
-          (headStripRaw input payload).root) = some targetItems := by
+        (ConcreteElaboration.localOccurrences (headStripExpandedRaw input payload)
+          (headStripExpandedRaw input payload).root) = some targetItems := by
       simpa only [OpenConcreteDiagram.rootWires] using targetCompiled
     have relationMapEq :
         (fun {arity} =>
@@ -1903,7 +1903,7 @@ theorem boundaryWitness
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (targetWellFormed : (headStripExpandedRaw input payload).WellFormed signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)

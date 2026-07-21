@@ -2,7 +2,7 @@ import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.Congruence
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractInterface
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractCoalescedCompactionOpen
-import VisualProof.Rule.Soundness.Equational.HeadStripSimulation
+import VisualProof.Rule.Soundness.Equational.HeadStripCompaction
 import VisualProof.Rule.Soundness.Equational.FusionOpen
 import VisualProof.Rule.Soundness.Equational.FissionBoundary
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
@@ -2528,62 +2528,145 @@ theorem applyHeadStrip_sound
     SuccessfulReceiptSound context orientation input
       (.headStrip first second payload) receipt := by
   have realizes := applyHeadStrip_realizes happly
-  have targetWellFormed : (headStripRaw input payload).WellFormed signature :=
+  have reducedWellFormed : (headStripRaw input payload).WellFormed signature :=
     realizes.result_eq ▸ receipt.result.property
+  have expandedWellFormed :
+      (headStripExpandedRaw input payload).WellFormed signature :=
+    applyHeadStrip_expanded_wellFormed happly
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := fun boundary sourceRoot mapped htransport =>
-      HeadStripSoundness.targetCheckedOpen input payload boundary sourceRoot
-        targetWellFormed)
-    (operationalIso := fun boundary sourceRoot mapped htransport =>
-      realizes.operationalIso_to_rawResultOpen htransport
-        (boundary.map (Fin.castAdd payload.argumentIndices.length))
-        (HeadStripSoundness.expectedTransport input payload boundary sourceRoot))
+      ⟨realizes.rawResultOpen mapped,
+        realizes.rawResultOpen_wellFormed sourceRoot htransport⟩)
+    (operationalIso := fun _ _ mapped _ =>
+      Diagram.OpenConcreteIso.refl (realizes.rawResultOpen mapped))
   intro boundary sourceRoot mapped htransport valid args
+  let rawMapped := realizes.targetBoundary mapped
+  have rawTransport :
+      (headStripInterfaceTransport input payload).transportBoundary boundary =
+        some rawMapped := realizes.transportBoundary_expected htransport
+  have rawRoot : ∀ wire, wire ∈ rawMapped →
+      ((headStripRaw input payload).wires wire).scope =
+        (headStripRaw input payload).root :=
+    (headStripInterfaceTransport input payload).transportBoundary_root_scoped
+      sourceRoot rawTransport
+  have expandedBoundaryEq :
+      rawMapped.map (HeadStripCompaction.expandWire input payload) =
+        boundary.map (Fin.castAdd payload.argumentIndices.length) :=
+    HeadStripCompaction.expandedBoundary_of_transport input payload boundary
+      rawMapped rawTransport
   let source := HeadStripSoundness.sourceCheckedOpen input boundary sourceRoot
-  let target := HeadStripSoundness.targetCheckedOpen input payload boundary
-    sourceRoot targetWellFormed
+  let expanded := HeadStripSoundness.targetCheckedOpen input payload boundary
+    sourceRoot expandedWellFormed
+  let reduced := HeadStripCompaction.reducedCheckedOpen input payload
+    reducedWellFormed rawMapped rawRoot
+  let compactExpanded := HeadStripCompaction.expandedCheckedOpen input payload
+    expandedWellFormed rawMapped rawRoot
   let model := Lambda.canonicalModel
   let named := Theory.interpretDefinitions context.definitions
-  let simulation := HeadStripSoundness.semanticSimulation input payload
-    targetWellFormed named
-  let targetArgs := args ∘ Fin.cast
+  let expansionSimulation := HeadStripSoundness.semanticSimulation input payload
+    expandedWellFormed named
+  let compactionSimulation := HeadStripCompaction.semanticSimulation input payload
+    reducedWellFormed expandedWellFormed named
+  let expandedArgs := args ∘ Fin.cast
     (HeadStripSoundness.boundaryLengthEq input payload boundary)
-  have forwardAllowed : simulation.Allowed .forward input.val.root := by
+  let reducedArgs := args ∘ Fin.cast
+    ((headStripInterfaceTransport input payload).transportBoundary_length
+      rawTransport)
+  let compactExpandedArgs := reducedArgs ∘ Fin.cast
+    (HeadStripCompaction.boundaryLengthEq input payload rawMapped)
+  have expansionForwardAllowed : expansionSimulation.Allowed .forward
+      input.val.root := by
     trivial
-  have backwardAllowed : simulation.Allowed .backward input.val.root := by
+  have expansionBackwardAllowed : expansionSimulation.Allowed .backward
+      input.val.root := by
     trivial
-  have forwardSemantic :=
+  have compactionForwardAllowed : compactionSimulation.Allowed .forward
+      (headStripRaw input payload).root := by
+    trivial
+  have compactionBackwardAllowed : compactionSimulation.Allowed .backward
+      (headStripRaw input payload).root := by
+    trivial
+  have expansionForward :=
     Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source target model named simulation .forward
+      source expanded model named expansionSimulation .forward
       (HeadStripSoundness.rootContext input payload boundary sourceRoot
-        targetWellFormed named .forward)
-      forwardAllowed args targetArgs
+        expandedWellFormed named .forward)
+      expansionForwardAllowed args expandedArgs
       (HeadStripSoundness.boundaryWitness input payload boundary sourceRoot
-        targetWellFormed .forward model named args)
-  have backwardSemantic :=
+        expandedWellFormed .forward model named args)
+  have expansionBackward :=
     Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source target model named simulation .backward
+      source expanded model named expansionSimulation .backward
       (HeadStripSoundness.rootContext input payload boundary sourceRoot
-        targetWellFormed named .backward)
-      backwardAllowed args targetArgs
+        expandedWellFormed named .backward)
+      expansionBackwardAllowed args expandedArgs
       (HeadStripSoundness.boundaryWitness input payload boundary sourceRoot
-        targetWellFormed .backward model named args)
+        expandedWellFormed .backward model named args)
+  have compactionForward :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      reduced compactExpanded model named compactionSimulation .forward
+      (HeadStripCompaction.rootContext input payload reducedWellFormed
+        expandedWellFormed rawMapped rawRoot named .forward)
+      compactionForwardAllowed reducedArgs compactExpandedArgs
+      (HeadStripCompaction.boundaryWitness input payload reducedWellFormed
+        expandedWellFormed rawMapped rawRoot .forward model named reducedArgs)
+  have compactionBackward :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      reduced compactExpanded model named compactionSimulation .backward
+      (HeadStripCompaction.rootContext input payload reducedWellFormed
+        expandedWellFormed rawMapped rawRoot named .backward)
+      compactionBackwardAllowed reducedArgs compactExpandedArgs
+      (HeadStripCompaction.boundaryWitness input payload reducedWellFormed
+        expandedWellFormed rawMapped rawRoot .backward model named reducedArgs)
+  have expandedOpenEq : compactExpanded.val = expanded.val := by
+    change HeadStripCompaction.expandedOpen input payload rawMapped =
+      HeadStripSoundness.targetOpen input payload boundary
+    unfold HeadStripCompaction.expandedOpen HeadStripSoundness.targetOpen
+      HeadStripCompaction.Expanded
+    rw [expandedBoundaryEq]
+    rfl
+  let expandedIso : Diagram.OpenConcreteIso expanded.val compactExpanded.val :=
+    Diagram.OpenConcreteIso.ofEq expandedOpenEq.symm
+  have expandedDenoteIff := expandedIso.denote_iff expanded.property
+    compactExpanded.property model named expandedArgs
   dsimp only
   unfold DirectedEntailment
   simp only [Step.tag, StepTag.semanticMode]
   cases orientation with
   | forward =>
       intro sourceDenotes
-      have targetDenotes := forwardSemantic sourceDenotes
-      simpa [source, target, targetArgs, model, named,
-        HeadStripSoundness.sourceCheckedOpen,
-        HeadStripSoundness.targetCheckedOpen] using targetDenotes
+      have expandedDenotes := expansionForward sourceDenotes
+      have compactExpandedDenotes : compactExpanded.denote model named
+          compactExpandedArgs := by
+        have transported := expandedDenoteIff.mp expandedDenotes
+        simpa [expanded, compactExpanded, compactExpandedArgs, reducedArgs,
+          expandedArgs, Function.comp_def,
+          HeadStripSoundness.targetCheckedOpen,
+          HeadStripSoundness.targetOpen,
+          HeadStripCompaction.expandedCheckedOpen,
+          HeadStripCompaction.expandedOpen, expandedBoundaryEq] using
+            transported
+      have reducedDenotes := compactionBackward compactExpandedDenotes
+      simpa [reduced, reducedArgs, rawMapped, model, named,
+        HeadStripCompaction.reducedCheckedOpen,
+        HeadStripCompaction.reducedOpen] using reducedDenotes
   | backward =>
-      intro targetDenotes
-      apply backwardSemantic
-      simpa [source, target, targetArgs, model, named,
-        HeadStripSoundness.sourceCheckedOpen,
-        HeadStripSoundness.targetCheckedOpen] using targetDenotes
+      intro reducedDenotes
+      have reducedDenotes' : reduced.denote model named reducedArgs := by
+        simpa [reduced, reducedArgs, rawMapped, model, named,
+          HeadStripCompaction.reducedCheckedOpen,
+          HeadStripCompaction.reducedOpen] using reducedDenotes
+      have compactExpandedDenotes := compactionForward reducedDenotes'
+      have expandedDenotes : expanded.denote model named expandedArgs := by
+        apply expandedDenoteIff.mpr
+        simpa [expanded, compactExpanded, compactExpandedArgs, reducedArgs,
+          expandedArgs, Function.comp_def,
+          HeadStripSoundness.targetCheckedOpen,
+          HeadStripSoundness.targetOpen,
+          HeadStripCompaction.expandedCheckedOpen,
+          HeadStripCompaction.expandedOpen, expandedBoundaryEq] using
+            compactExpandedDenotes
+      exact expansionBackward expandedDenotes
 
 private theorem applyFusionOrdered_sound
     (context : ProofContext signature) (orientation : Orientation)
