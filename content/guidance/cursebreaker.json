@@ -11,7 +11,7 @@
           "repeat": "once",
           "pages": [
             "Move the pointer over a boundary. A glow appears when that part of the seal can be acted on.",
-            "Click a highlighted boundary to select it. The selection remains lit after the pointer moves away; click it again to deselect it, or click the empty field to clear the selection.",
+            "Click a highlighted boundary to select it. Clicking a selected boundary keeps it selected so it can be dragged; hold Shift while clicking or brushing selected parts to deselect them, or click the empty field to clear the selection.",
             "Select the outer boundary of the paired veils. Right-click and choose ‘Eliminate the double cut,’ or press Delete or Backspace, to lift both veils."
           ]
         }
@@ -90,7 +90,7 @@
           "repeat": "once",
           "pages": [
             "Move the pointer over a mark or boundary. A glow appears when that part of the seal can be acted on.",
-            "Click a highlighted part to select it. The selection remains lit when the pointer moves away; click it again to deselect it, or click the empty field to clear the selection.",
+            "Click a highlighted part to select it. Clicking a selected part keeps it selected so it can be dragged; hold Shift while clicking or brushing selected parts to deselect them, or click the empty field to clear the selection.",
             "The timeline at the bottom records every move. Drag its handle backward to revisit an earlier state; making a move there creates a new branch without deleting the earlier attempt.",
             "The inner repeated mark has an equal ancestor outside its field, so it may be removed by deiteration. Select that inner mark and choose Deiterate; then clear the remaining negative-field mark and release the empty boundaries."
           ]
@@ -103,6 +103,21 @@
           "repeat": "once",
           "pages": [
             "Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "interventions": [
+        {
+          "id": "opening-nested-owners",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The rings are nested, but they do not share a mark. Follow each color back to its own ring before lifting either echo."
           ]
         }
       ]
@@ -209,21 +224,6 @@
           "repeat": "once",
           "pages": [
             "Carry the common A into both alternatives: A∧(B∨C) expands to (A∧B)∨(A∧C). Keep B and C in separate branches while preserving the same A owner in each."
-          ]
-        }
-      ]
-    },
-    {
-      "puzzle": "nested-owner-introduction",
-      "interventions": [
-        {
-          "id": "opening-nested-owners",
-          "trigger": {
-            "kind": "opening"
-          },
-          "repeat": "once",
-          "pages": [
-            "The rings are nested, but they do not share a mark. Follow each color back to its own ring before lifting either echo."
           ]
         }
       ]

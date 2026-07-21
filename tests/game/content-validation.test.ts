@@ -707,6 +707,27 @@ describe('build-only game content evidence', () => {
     })).toThrow(/Myratic.*immediateComplementPattern.*Seyric/i)
   })
 
+  it('rejects a Seyric-form start assigned to Myratic', () => {
+    expect(() => validateFixture((root) => {
+      const seyric = readJson(join(root, 'puzzles/empty-ring-release.json'))
+      const path = join(root, 'puzzles/blank-witness.json')
+      const myratic = readJson(path)
+      myratic.diagram = structuredClone(seyric.diagram)
+      writeJson(path, myratic)
+    })).toThrow(/global-prefix quantifier-free starts must be owned by Seyric.*blank-witness/i)
+  })
+
+  it('rejects a multi-owner Seyric puzzle that bypasses ownership instruction', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'progression/core.json')
+      const progression = readJson(path)
+      progression.placements.find(
+        ({ puzzle }: JsonRecord) => puzzle === 'marked-echo-deiteration',
+      ).prerequisites = ['single-mark-return']
+      writeJson(path, progression)
+    })).toThrow(/multi-owner Seyric puzzles must depend on nested-owner-introduction.*marked-echo/i)
+  })
+
   it('rejects an unapproved empty-cut truth witness with competing content', () => {
     expect(() => validateFixture((root) => {
       const path = join(root, 'puzzles/single-mark-return.json')

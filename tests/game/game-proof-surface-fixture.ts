@@ -79,16 +79,32 @@ const worldToClient = (point: { readonly x: number; readonly y: number }) => {
 const cutBoundaryPoint = () => {
   const region = surface.engine.regions.get(fixture.guard)
   if (region === undefined) throw new Error('guard cut has no rendered geometry')
-  for (let index = 0; index < 360; index += 1) {
-    const angle = index * Math.PI / 180
-    const point = {
-      x: region.center.x + Math.cos(angle) * region.radius,
-      y: region.center.y + Math.sin(angle) * region.radius,
+  for (const inset of [3, 5, 7, 9]) {
+    for (let index = 0; index < 360; index += 1) {
+      const angle = index * Math.PI / 180
+      const point = {
+        x: region.center.x + Math.cos(angle) * (region.radius - inset),
+        y: region.center.y + Math.sin(angle) * (region.radius - inset),
+      }
+      const neighborhood = [
+        point,
+        { x: point.x - 0.75, y: point.y },
+        { x: point.x + 0.75, y: point.y },
+        { x: point.x, y: point.y - 0.75 },
+        { x: point.x, y: point.y + 0.75 },
+      ]
+      if (neighborhood.every((sample) => {
+        const hit = brushHitTest(
+          surface.engine,
+          sample,
+          { scale: surface.view.scale },
+          false,
+        )
+        return hit?.kind === 'region' && hit.id === fixture.guard
+      })) return worldToClient(point)
     }
-    const hit = brushHitTest(surface.engine, point, { scale: surface.view.scale }, false)
-    if (hit?.kind === 'region' && hit.id === fixture.guard) return worldToClient(point)
   }
-  throw new Error('guard cut has no pointer-reachable boundary point')
+  throw new Error('guard cut has no robust pointer-reachable drag point')
 }
 
 const rootTargetPoint = () => {
@@ -136,6 +152,9 @@ const state = {
     start: cutBoundaryPoint(),
     target: rootTargetPoint(),
   }),
+  selectIterationCut: (): void => {
+    surface.interaction.setSelection([{ kind: 'region', id: fixture.guard }])
+  },
   iterationSnapshot: () => ({
     prepared,
     lastStep: preparedSteps.at(-1) ?? null,

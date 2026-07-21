@@ -326,7 +326,7 @@ export function auditSeyricWitness(
 }
 
 export type SeyricPropositionalShape = {
-  /** Matrix structure with global proposition names minimized over prefix order. */
+  /** Prefix cardinality and matrix structure, minimized over proposition-binder order. */
   readonly quantifierOrderFingerprint: string
   /** Whether direct matrix siblings exactly match a direct cut's complete contents. */
   readonly immediateComplement: boolean
@@ -451,9 +451,11 @@ const exposesImmediateComplement = (diagram: Diagram, matrix: RegionId): boolean
 
 /**
  * Analyze only already-valid Seyric authored starts. The order fingerprint
- * preserves every cut boundary while ignoring alpha names and the order of
- * the harmless global proposition prefix. Immediate-complement recognition is
- * a separate exact-occurrence audit and deliberately does not affect that fingerprint.
+ * preserves every cut boundary and the number of global binders while ignoring
+ * alpha names and binder order. Preserving cardinality distinguishes a vacuous
+ * ownership-ring exercise from the same cut matrix with no ring. Immediate-
+ * complement recognition is a separate exact-occurrence audit and deliberately
+ * does not affect that fingerprint.
  */
 export function analyzeSeyricPropositionalShape(diagram: Diagram): SeyricPropositionalShape {
   const start = analyzeSeyricStart(diagram)
@@ -475,11 +477,13 @@ export function analyzeSeyricPropositionalShape(diagram: Diagram): SeyricProposi
     start.prefix.map((binder, index) => [binder, index] as const),
   )
   return {
-    quantifierOrderFingerprint: quantifierOrderFingerprint ?? matrixStructure(
-      diagram,
-      start.matrixRoot,
-      defaultBinderLabels,
-    ),
+    quantifierOrderFingerprint: `prefix:${start.prefix.length}|${
+      quantifierOrderFingerprint ?? matrixStructure(
+        diagram,
+        start.matrixRoot,
+        defaultBinderLabels,
+      )
+    }`,
     immediateComplement: exposesImmediateComplement(diagram, start.matrixRoot),
   }
 }

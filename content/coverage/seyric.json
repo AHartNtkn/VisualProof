@@ -29,6 +29,20 @@
       "stoppingRule": "Stop after the first mark-free ancestor-supported removal separates deiteration authority from mere depth."
     },
     {
+      "id": "vacuous-ring-elimination",
+      "kind": "onboarding",
+      "family": "onboarding-ownership",
+      "distinction": "Dissolve an empty ownership ring while preserving the surrounding paired veils and their polarity.",
+      "stoppingRule": "Stop after one empty ring distinguishes ownership from polarity before owned marks appear."
+    },
+    {
+      "id": "ownership-nested-discrimination",
+      "kind": "onboarding",
+      "family": "onboarding-ownership",
+      "distinction": "Discriminate the actual proposition owner among nested global binders.",
+      "stoppingRule": "Stop after nesting defeats selection by superficial containment before multi-owner practice unlocks."
+    },
+    {
       "id": "marked-fragment-supported-deiteration",
       "kind": "onboarding",
       "family": "onboarding-structural-editing",
@@ -791,6 +805,17 @@
       "immediateComplementPattern": "empty-cut-ancestor-echo"
     },
     {
+      "puzzle": "empty-ring-release",
+      "obligations": [
+        "vacuous-ring-elimination"
+      ],
+      "visibleSituation": "One empty ownership ring sits between two familiar veils and can dissolve without changing their polarity.",
+      "defeats": "Rings and veils are not interchangeable boundaries: only veils reverse the field, while this unowned ring is vacuous.",
+      "experientialNeighbors": [
+        "single-mark-return"
+      ]
+    },
+    {
       "puzzle": "single-mark-return",
       "obligations": [
         "deiteration-ancestor-supported-descendant",
@@ -800,6 +825,19 @@
       "defeats": "It overturns the hypothesis that only peer duplicates authorize removal: an equal ancestor occurrence supports a descendant. It also defeats a controls-only exercise by attaching the interaction explanation to a real ancestry choice.",
       "experientialNeighbors": [],
       "immediateComplementPattern": "atomic-ancestor-echo"
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "obligations": [
+        "ownership-nested-discrimination"
+      ],
+      "visibleSituation": "Two globally bound propositions occur beneath nested prefix rings and repeat together below one cut, requiring each occurrence to be matched to its actual owner.",
+      "defeats": "Nearest visual enclosure does not determine proposition identity; the complete prefix ownership path does.",
+      "experientialNeighbors": [
+        "single-mark-return",
+        "transfer-duplication-recognition"
+      ],
+      "immediateComplementPattern": "nested-two-owner-return"
     },
     {
       "puzzle": "seyric-field-edit-contrast",

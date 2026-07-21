@@ -37,7 +37,9 @@ describe('assembled game catalog', () => {
       puzzleId('two-veils'),
       puzzleId('forked-veil'),
       puzzleId('echoed-veil'),
+      puzzleId('empty-ring-release'),
       puzzleId('single-mark-return'),
+      puzzleId('nested-owner-introduction'),
     ].sort())
     expect(requiredPuzzles(catalog).has(puzzleId('four-veils'))).toBe(false)
   })

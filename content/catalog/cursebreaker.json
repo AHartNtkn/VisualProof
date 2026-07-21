@@ -76,6 +76,17 @@
       }
     },
     {
+      "puzzle": "empty-ring-release",
+      "name": {
+        "professional": "The Seyr Empty-Ring Exercise",
+        "curatorShorthand": "empty ring between veils"
+      },
+      "provenance": {
+        "summary": "an unpigmented steatite practice fragment from the Seyr workshop refuse; its central ring encloses no mark and was cut deliberately.",
+        "function": "isolated terminal removal of an empty ownership ring between a familiar pair of veils."
+      }
+    },
+    {
       "puzzle": "single-mark-return",
       "name": {
         "professional": "The Auten Reliquary Closure",
@@ -84,6 +95,17 @@
       "provenance": {
         "summary": "a bronze-faced reliquary closure from Auten, preserving the first securely dated Seyric ring with a bound colored mark. Its discovery forced a revision of the horizon's chronology.",
         "function": "returned a marked condition through a veiled chamber while keeping both occurrences under one ring."
+      }
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "name": {
+        "professional": "Seyric Nested-Owner Tablet S-12",
+        "curatorShorthand": "nested owner return"
+      },
+      "provenance": {
+        "summary": "A two-pigment Seyric exercise places distinct globally bound marks beneath nested ownership rings.",
+        "function": "Trained readers to follow each occurrence to its actual owner rather than the nearest visible boundary."
       }
     },
     {
@@ -1014,28 +1036,6 @@
       "provenance": {
         "summary": "an alabaster votive from the isolated Myrat complex. Wear and residue establish that its empty face is intentional and integral to the seal, not unfinished work or later damage.",
         "function": "required the maker or breaker to supply one complete pattern for its deliberate hollow."
-      }
-    },
-    {
-      "puzzle": "empty-ring-release",
-      "name": {
-        "professional": "Myratic Empty-Owner Exercise",
-        "curatorShorthand": "empty owner ring"
-      },
-      "provenance": {
-        "summary": "A Myrat workshop fragment isolates an unoccupied owner ring between a familiar pair of fields.",
-        "function": "Introduced terminal removal of an owner ring that binds no occurrence."
-      }
-    },
-    {
-      "puzzle": "nested-owner-introduction",
-      "name": {
-        "professional": "Myratic Nested-Owner Tablet M-12",
-        "curatorShorthand": "nested owner return"
-      },
-      "provenance": {
-        "summary": "A two-pigment Myrat exercise places distinct owned marks beneath nested local binders.",
-        "function": "Trained readers to follow each occurrence to its actual local owner rather than the nearest visible boundary."
       }
     },
     {

@@ -345,6 +345,40 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
     throw new GameDomainError(`Seyric authored starts violate the global-prefix propositional grammar: ${seyricLanguageViolations.join('; ')}`)
   }
 
+  const misplacedSeyricStarts = catalog.cultureIds
+    .filter((culture) => culture !== seyricCulture)
+    .flatMap((culture) => catalog.puzzlesInCulture(culture))
+    .filter((id) => analyzeSeyricStart(catalog.puzzle(id).diagram).ok)
+  if (misplacedSeyricStarts.length > 0) {
+    throw new GameDomainError(
+      `global-prefix quantifier-free starts must be owned by Seyric: ${misplacedSeyricStarts.join(', ')}`,
+    )
+  }
+
+  const nestedOwnerIntroduction = puzzleId('nested-owner-introduction')
+  const dependsOn = (start: PuzzleId, required: PuzzleId): boolean => {
+    const pending = [...catalog.placement(start).prerequisites]
+    const visited = new Set<PuzzleId>()
+    while (pending.length > 0) {
+      const current = pending.pop()!
+      if (current === required) return true
+      if (visited.has(current)) continue
+      visited.add(current)
+      pending.push(...catalog.placement(current).prerequisites)
+    }
+    return false
+  }
+  const ownerInstructionGaps = seyricIds.filter((id) => {
+    if (id === nestedOwnerIntroduction) return false
+    const analysis = analyzeSeyricStart(catalog.puzzle(id).diagram)
+    return analysis.prefix.length > 1 && !dependsOn(id, nestedOwnerIntroduction)
+  })
+  if (ownerInstructionGaps.length > 0) {
+    throw new GameDomainError(
+      `multi-owner Seyric puzzles must depend on nested-owner-introduction: ${ownerInstructionGaps.join(', ')}`,
+    )
+  }
+
   const seyricCoverage = coverageByCulture.get(seyricCulture)
   if (seyricCoverage === undefined) throw new GameDomainError('Seyric has no manifest-owned coverage file')
   const seyricCoverageByPuzzle = new Map(

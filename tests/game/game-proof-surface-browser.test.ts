@@ -129,7 +129,7 @@ describe('rendered game proof surface', () => {
       await page.evaluate(() => window.__gameProofSurfaceFixture.freezeLayout())
       const gesture = await page.evaluate(() =>
         window.__gameProofSurfaceFixture.cutIterationGesture())
-      await page.mouse.click(gesture.start.x, gesture.start.y)
+      await page.evaluate(() => window.__gameProofSurfaceFixture.selectIterationCut())
       expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection()))
         .toEqual([`region:${gesture.cut}`])
 

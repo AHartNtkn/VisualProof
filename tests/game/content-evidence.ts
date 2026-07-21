@@ -6,6 +6,7 @@ import forkedVeil from '../../content/validation/forked-veil.json'
 import echoedVeil from '../../content/validation/echoed-veil.json'
 import emptyRingRelease from '../../content/validation/empty-ring-release.json'
 import singleMarkReturn from '../../content/validation/single-mark-return.json'
+import nestedOwnerIntroduction from '../../content/validation/nested-owner-introduction.json'
 import twoMarkProjection from '../../content/validation/two-mark-projection.json'
 import blankWitness from '../../content/validation/blank-witness.json'
 
@@ -22,6 +23,7 @@ const evidence = [
   echoedVeil,
   emptyRingRelease,
   singleMarkReturn,
+  nestedOwnerIntroduction,
   twoMarkProjection,
   blankWitness,
 ] as RawEvidence[]

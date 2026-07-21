@@ -4,7 +4,7 @@
 
 **Goal:** Add a trivial additive Seyric onboarding spine before the preserved current practice collection and make that spine the sole Seyric prerequisite closure for the first Myratic puzzle.
 
-**Architecture:** Five new strict JSON puzzle bundles join the existing layered content package. Progression remains the only runtime authority for gates: four mandatory new records lead into the unchanged `single-mark-return`, while `four-veils` is optional repetition and every existing optional practice root depends on `single-mark-return`. Catalog, guidance, validation witnesses, and build-time coverage remain separate owners.
+**Architecture:** Five new strict JSON puzzle bundles join the existing layered content package. Progression remains the only runtime authority for gates: the boundary exercises lead through `single-mark-return` and `nested-owner-introduction`, while `four-veils` is optional repetition and multi-owner practice depends on the nested-owner tutorial. Catalog, guidance, validation witnesses, and build-time coverage remain separate owners.
 
 **Tech Stack:** TypeScript, strict JSON content, Vitest, existing diagram kernel and backward proof replay, Vite renderer build.
 
@@ -13,9 +13,9 @@
 - Preserve every current puzzle core, witness, catalog entry, guidance entry, coverage row, and existing inter-practice prerequisite edge.
 - Do not delete, replace, or rewrite any current puzzle.
 - Add `two-veils`, `four-veils`, `forked-veil`, `echoed-veil`, and `empty-ring-release`.
-- Mandatory Seyric closure: `two-veils -> forked-veil -> echoed-veil -> empty-ring-release -> single-mark-return`.
+- Mandatory Seyric closure: `two-veils -> forked-veil -> echoed-veil -> empty-ring-release -> single-mark-return -> nested-owner-introduction`.
 - `four-veils` depends on `two-veils` and remains outside the Myratic closure.
-- Every existing optional Seyric root depends on `single-mark-return`; descendants inherit that prerequisite transitively.
+- Every multi-owner optional Seyric puzzle depends transitively on `nested-owner-introduction`; single-owner practice may depend directly on `single-mark-return`.
 - The first four added cut-topology records contain no nodes, bubbles, or wires. `empty-ring-release` contains one empty arity-zero bubble at odd cut depth.
 - Guidance remains passive and ignorable; witnesses demonstrate feasibility and never prescribe a unique solution.
 - No separate required/optional field and no authoritative puzzle count.
@@ -198,10 +198,11 @@ forked-veil prerequisites = [two-veils]
 echoed-veil prerequisites = [forked-veil]
 empty-ring-release prerequisites = [echoed-veil]
 single-mark-return prerequisites = [empty-ring-release]
-Myratic unlocksAfter = [single-mark-return]
+nested-owner-introduction prerequisites = [single-mark-return]
+Myratic unlocksAfter = [nested-owner-introduction]
 ```
 
-For each of the other 43 incumbent Seyric root records, replace only its empty prerequisite array with `[single-mark-return]`. Preserve every nonempty incumbent prerequisite array unchanged.
+For each multi-owner Seyric root, add the minimal prerequisite edge needed to make it depend transitively on `nested-owner-introduction`. Preserve unrelated prerequisite edges.
 
 - [x] **Step 5: Run focused tests and content validation**
 

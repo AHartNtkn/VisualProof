@@ -310,6 +310,20 @@ describe('Seyric authored-content authority', () => {
     )
   })
 
+  it('preserves prefix cardinality when the extra proposition binder is vacuous', () => {
+    const bare = new DiagramBuilder()
+    const bareGoal = bare.cut(bare.root)
+    bare.cut(bareGoal)
+
+    const ringed = new DiagramBuilder()
+    const ringedGoal = ringed.cut(ringed.root)
+    const vacuous = ringed.bubble(ringedGoal, 0)
+    ringed.cut(vacuous)
+
+    expect(authority.analyzeSeyricPropositionalShape(ringed.build()).quantifierOrderFingerprint)
+      .not.toBe(authority.analyzeSeyricPropositionalShape(bare.build()).quantifierOrderFingerprint)
+  })
+
   it('detects direct atomic and sibling-group complements without treating an implication chain as immediate', () => {
     const atomic = new DiagramBuilder()
     const atomicGoal = atomic.cut(atomic.root)

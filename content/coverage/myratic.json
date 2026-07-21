@@ -8,20 +8,6 @@
       "stoppingRule": "Stop after one blank comprehension witness establishes existential pattern completion."
     },
     {
-      "id": "vacuous-ring-elimination",
-      "kind": "onboarding",
-      "family": "onboarding-ownership",
-      "distinction": "Dissolve an empty ownership ring while preserving the surrounding paired veils and their polarity.",
-      "stoppingRule": "Stop after one empty ring distinguishes ownership from polarity before owned marks appear."
-    },
-    {
-      "id": "ownership-nested-discrimination",
-      "kind": "isolated",
-      "family": "ownership-and-vacuity",
-      "distinction": "Discriminate the actual semantic owner among nested candidate hosts.",
-      "stoppingRule": "Stop after nesting defeats selection by superficial containment."
-    },
-    {
       "id": "ownership-useful-vacuous-introduction",
       "kind": "isolated",
       "family": "ownership-and-vacuity",
@@ -128,26 +114,6 @@
       ],
       "visibleSituation": "A hollow existential bubble appears directly on the sheet.",
       "defeats": "The bubble requires a comprehension witness; it is not a universal prefix or terminal vacuous cleanup.",
-      "experientialNeighbors": []
-    },
-    {
-      "puzzle": "empty-ring-release",
-      "obligations": [
-        "vacuous-ring-elimination"
-      ],
-      "visibleSituation": "One empty ownership ring sits between two familiar veils and can dissolve without changing their polarity.",
-      "defeats": "Rings and veils are not interchangeable boundaries: only veils reverse the field, while this unowned ring is vacuous.",
-      "experientialNeighbors": [
-        "single-mark-return"
-      ]
-    },
-    {
-      "puzzle": "nested-owner-introduction",
-      "obligations": [
-        "ownership-nested-discrimination"
-      ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 2 cuts. Discriminate the actual semantic owner among nested candidate hosts.",
-      "defeats": "It overturns the hypothesis that nearest visual enclosure determines ownership; nested semantic owners distinguish otherwise similar occurrences.",
       "experientialNeighbors": []
     },
     {

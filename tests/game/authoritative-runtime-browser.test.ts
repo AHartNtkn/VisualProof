@@ -671,6 +671,13 @@ describe('authoritative production renderer runtime', () => {
       await toggle.click()
       await expect(toggle.getAttribute('aria-expanded')).resolves.toBe('true')
       const firstRecord = page.locator('.curse-folio-record').first()
+      await page.waitForFunction(() => {
+        const record = document.querySelector<HTMLElement>('.curse-folio-record')
+        if (record === null) return false
+        const bounds = record.getBoundingClientRect()
+        const center = bounds.x + bounds.width / 2
+        return center > 0 && center < innerWidth
+      })
       const recordBounds = await firstRecord.boundingBox()
       if (recordBounds === null) throw new Error('opened compact folio has no record bounds')
       expect(recordBounds.x + recordBounds.width / 2).toBeGreaterThan(0)
@@ -834,14 +841,15 @@ describe('authoritative production renderer runtime', () => {
   it('reveals the required Seyric spine before optional culture practice', async () => {
     const page = await openFixture('opening')
     try {
-      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles().slice(0, 6)))
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles().slice(0, 7)))
         .toEqual([
           'two-veils',
           'four-veils',
           'forked-veil',
           'echoed-veil',
+          'empty-ring-release',
           'single-mark-return',
-          'marked-echo-deiteration',
+          'nested-owner-introduction',
         ])
       const status = async (puzzle: string): Promise<string | null> => page
         .locator(`[data-puzzle="${puzzle}"]`).getAttribute('data-status')
@@ -858,9 +866,15 @@ describe('authoritative production renderer runtime', () => {
       await completeProductionPuzzle(page, 'forked-veil', 2)
       expect(await status('echoed-veil')).toBe('unlocked')
       await completeProductionPuzzle(page, 'echoed-veil', 3)
+      expect(await status('empty-ring-release')).toBe('unlocked')
+      expect(await status('single-mark-return')).toBe('locked')
+      await completeProductionPuzzle(page, 'empty-ring-release', 2)
       expect(await status('single-mark-return')).toBe('unlocked')
       expect(await status('two-mark-projection')).toBe('locked')
       await completeProductionPuzzle(page, 'single-mark-return', 4)
+      expect(await status('nested-owner-introduction')).toBe('unlocked')
+      expect(await status('two-mark-projection')).toBe('locked')
+      await completeProductionPuzzle(page, 'nested-owner-introduction', 6)
       expect(await status('two-mark-projection')).toBe('unlocked')
       expect(await status('atomic-fragment-erasure')).toBe('locked')
       await page.locator('.curse-folio-culture-tab').nth(1).click()
@@ -899,7 +913,7 @@ describe('authoritative production renderer runtime', () => {
       expect(await note.locator('button').count()).toBe(0)
       expect(pages).toEqual([
         expect.stringMatching(/pointer.*boundary.*glow/i),
-        expect.stringMatching(/highlighted boundary.*selection remains lit.*deselect.*empty field/i),
+        expect.stringMatching(/selected boundary.*keeps it selected.*Shift.*deselect.*empty field/i),
         expect.stringMatching(/outer boundary.*double cut.*Delete or Backspace.*lift both veils/i),
       ])
       await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
@@ -1004,7 +1018,9 @@ describe('authoritative production renderer runtime', () => {
       await completeProductionPuzzle(page, 'two-veils', 1)
       await completeProductionPuzzle(page, 'forked-veil', 2)
       await completeProductionPuzzle(page, 'echoed-veil', 3)
+      await completeProductionPuzzle(page, 'empty-ring-release', 2)
       await completeProductionPuzzle(page, 'single-mark-return', 4)
+      await completeProductionPuzzle(page, 'nested-owner-introduction', 6)
       const record = page.locator(`[data-puzzle="${puzzle}"]`)
       expect(await record.getAttribute('data-status')).toBe('unlocked')
       await record.click()

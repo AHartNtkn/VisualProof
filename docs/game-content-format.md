@@ -60,6 +60,12 @@ Its `cultures` array owns culture order, cross-culture unlock requirements, each
 culture gateway, and folio puzzle order. Its `placements` array gives every
 puzzle exactly one record with `puzzle` and `prerequisites`.
 
+Culture ownership follows logical structure. A puzzle with one outer goal cut,
+a leading chain of arity-zero proposition binders, and a quantifier-free matrix
+of cuts and bound proposition occurrences belongs to Seyric. Myratic begins when
+binder scope, placement, or transformation is itself part of the proof problem.
+Validation enforces this boundary in both directions.
+
 The Seyric puzzles that must be completed before the first Myratic puzzle unlocks
 are derived solely from the Myratic culture-unlock conditions and their transitive
 prerequisite closure. Every other Seyric puzzle is practice outside that mandatory
@@ -141,11 +147,12 @@ A Seyric authored start has exactly one ordinary outer goal cut. Inside it is an
 optional uninterrupted prefix of arity-zero bubbles followed by a matrix made
 only of atom marks and ordinary cuts. The matrix contains no bubbles or wires,
 and every atom is owned by a bubble in that outer prefix. The prefix supplies
-global closure only: Seyric puzzles never require nontrivial binder placement,
-scope, ownership, introduction, or movement. A validation witness may remove
-only the contiguous vacuous prefix, deepest first, after the propositional work;
-only trailing double-cut cleanup may follow. Quantifier mechanics and
-content-bearing binder reasoning belong to Myratic.
+global proposition ownership: identifying which global ring owns an occurrence
+and removing the vacuous prefix during terminal cleanup are Seyric mechanics.
+A validation witness may remove only that contiguous prefix, deepest first,
+after the propositional work; only trailing double-cut cleanup may follow.
+Nontrivial local binder placement, scope, introduction, or transformation belongs
+to Myratic.
 
 This authoring boundary does not restrict the proof moves available to the
 player. It constrains production starts and their feasibility witnesses so the
@@ -155,7 +162,8 @@ Content validation applies three distinct redundancy checks to Seyric starts:
 
 - the existing canonical logical fingerprint rejects exact duplicates;
 - a structural matrix fingerprint rejects starts that differ only by the order
-  or names of the harmless global prefix while preserving cut topology; and
+  or names of the harmless global prefix while preserving binder cardinality and
+  cut topology; and
 - exact graphical sibling-occurrence starts require a unique approved
   `immediateComplementPattern`, making each retained shortcut's experiential
   purpose explicit. The audit uses the same extracted subgraph, canonical

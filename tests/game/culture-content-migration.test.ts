@@ -7,9 +7,7 @@ import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content/files'
 import { puzzleId } from '../../src/game/types'
 
-const moved = [
-  'empty-ring-release',
-  'nested-owner-introduction',
+const myraticOwned = [
   'useful-vacuous-owner-workspace',
   'shallow-edit-legality-contrast',
   'compound-copy-authority-contrast',
@@ -28,8 +26,6 @@ const moved = [
 
 const expectedMyraticOrder = [
   'blank-witness',
-  'empty-ring-release',
-  'nested-owner-introduction',
   'useful-vacuous-owner-workspace',
   'shallow-edit-legality-contrast',
   'compound-copy-authority-contrast',
@@ -46,9 +42,7 @@ const expectedMyraticOrder = [
   'artifact-selected-downstream-bridge',
 ] as const
 
-const expectedMovedPrerequisites: Record<(typeof moved)[number], readonly string[]> = {
-  'empty-ring-release': ['blank-witness', 'echoed-veil'],
-  'nested-owner-introduction': ['blank-witness', 'single-mark-return'],
+const expectedMyraticPrerequisites: Record<(typeof myraticOwned)[number], readonly string[]> = {
   'useful-vacuous-owner-workspace': ['blank-witness', 'empty-ring-release', 'marked-echo-deiteration'],
   'shallow-edit-legality-contrast': ['blank-witness', 'single-mark-return'],
   'compound-copy-authority-contrast': ['blank-witness', 'marked-echo-deiteration'],
@@ -77,21 +71,22 @@ const removed = ['weakening-introduction', 'sey-red-i01'] as const
 const catalog = loadGameContent(gameContentFiles)
 
 describe('culture ownership migration', () => {
-  it('owns the gateway and all moved practice in Myratic in coherent order', () => {
+  it('owns the gateway and local-scope practice in Myratic in coherent order', () => {
     expect(catalog.culture('myratic-tradition' as never)).toMatchObject({
       gateway: 'blank-witness',
-      unlocksAfter: ['single-mark-return'],
+      unlocksAfter: ['nested-owner-introduction'],
     })
     expect(catalog.puzzlesInCulture('myratic-tradition' as never)).toEqual(expectedMyraticOrder)
-    expect(catalog.puzzlesInCulture('seyric-horizon' as never)).not.toEqual(expect.arrayContaining([...moved]))
+    expect(catalog.puzzlesInCulture('seyric-horizon' as never))
+      .not.toEqual(expect.arrayContaining([...myraticOwned]))
   })
 
-  it('makes every moved record optional Myratic practice behind blank-witness without losing prerequisites', () => {
-    for (const id of moved) {
+  it('makes every local-scope record optional Myratic practice behind blank-witness', () => {
+    for (const id of myraticOwned) {
       expect(catalog.placement(puzzleId(id))).toEqual({
         puzzle: id,
         culture: 'myratic-tradition',
-        prerequisites: expectedMovedPrerequisites[id],
+        prerequisites: expectedMyraticPrerequisites[id],
       })
     }
     expect(catalog.placement(puzzleId('blank-witness'))).toEqual({
@@ -105,7 +100,11 @@ describe('culture ownership migration', () => {
     expect(catalog.placement(puzzleId('two-veils')).prerequisites).toEqual([])
     expect(catalog.placement(puzzleId('forked-veil')).prerequisites).toEqual([puzzleId('two-veils')])
     expect(catalog.placement(puzzleId('echoed-veil')).prerequisites).toEqual([puzzleId('forked-veil')])
-    expect(catalog.placement(puzzleId('single-mark-return')).prerequisites).toEqual([puzzleId('echoed-veil')])
+    expect(catalog.placement(puzzleId('empty-ring-release')).prerequisites).toEqual([puzzleId('echoed-veil')])
+    expect(catalog.placement(puzzleId('single-mark-return')).prerequisites)
+      .toEqual([puzzleId('empty-ring-release')])
+    expect(catalog.placement(puzzleId('nested-owner-introduction')).prerequisites)
+      .toEqual([puzzleId('single-mark-return')])
     expect(catalog.placement(puzzleId('four-veils')).prerequisites).toEqual([puzzleId('two-veils')])
 
     expect(catalog.puzzlesInCulture('seyric-horizon' as never)).toEqual(expect.arrayContaining([...seyricOwnedAdditions]))
@@ -119,13 +118,13 @@ describe('culture ownership migration', () => {
     expect(seyric.indexOf(puzzleId('seyric-extraction-continuation')))
       .toBe(seyric.indexOf(puzzleId('recollect-shared-branch-context')) + 1)
     expect(catalog.placement(puzzleId('seyric-field-edit-contrast')).prerequisites)
-      .toEqual([puzzleId('single-mark-return')])
+      .toEqual([puzzleId('nested-owner-introduction')])
     expect(catalog.placement(puzzleId('seyric-compound-copy-authority')).prerequisites)
       .toEqual([puzzleId('marked-echo-deiteration')])
     expect(catalog.placement(puzzleId('seyric-atomic-double-cut-selection')).prerequisites)
       .toEqual([puzzleId('marked-echo-deiteration')])
     expect(catalog.placement(puzzleId('seyric-extraction-continuation')).prerequisites)
-      .toEqual([puzzleId('single-mark-return')])
+      .toEqual([puzzleId('nested-owner-introduction')])
     expect(catalog.placement(puzzleId('compound-double-cut-selection')).prerequisites)
       .toEqual([puzzleId('seyric-atomic-double-cut-selection')])
     expect(catalog.placement(puzzleId('double-cut-insertion-workspace')).prerequisites)
@@ -149,7 +148,7 @@ describe('culture ownership migration', () => {
     expect(catalog.placement(puzzleId('compound-weakening-boundary')).prerequisites)
       .toEqual([puzzleId('two-mark-projection')])
     expect(catalog.placement(puzzleId('sey-red-c01')).prerequisites)
-      .toEqual([puzzleId('single-mark-return')])
+      .toEqual([puzzleId('nested-owner-introduction')])
 
     const coverageRow = seyricCoverage.puzzles.find(({ puzzle }) =>
       puzzle === 'assumption-relevant-structured-reductio')
@@ -160,9 +159,13 @@ describe('culture ownership migration', () => {
   it('moves and splits culture-owned coverage without dangling rows', () => {
     const seyricRows = new Map(seyricCoverage.puzzles.map((row) => [row.puzzle, row]))
     const myraticRows = new Map(myraticCoverage.puzzles.map((row) => [row.puzzle, row]))
-    for (const id of moved) {
+    for (const id of myraticOwned) {
       expect(seyricRows.has(id), id).toBe(false)
       expect(myraticRows.has(id), id).toBe(true)
+    }
+    for (const id of ['empty-ring-release', 'nested-owner-introduction'] as const) {
+      expect(seyricRows.has(id), id).toBe(true)
+      expect(myraticRows.has(id), id).toBe(false)
     }
 
     expect(myraticRows.get('shallow-edit-legality-contrast')?.obligations)

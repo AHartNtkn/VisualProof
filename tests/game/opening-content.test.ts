@@ -12,16 +12,14 @@ const onboardingIds = [
   'forked-veil',
   'echoed-veil',
 ] as const
-const singleMarkRootIds = [
+const nestedOwnerRootIds = [
   'transfer-duplication-recognition',
   'common-conjunction-factor-base',
   'common-disjunction-factor-base',
   'disjunction-over-conjunction-base',
   'i-dao',
-  'conjunction-idempotence-introduction',
   'two-mark-projection',
   'left-injection-introduction',
-  'disjunction-idempotence-introduction',
   'atomic-conjunction-exchange',
   'disjunction-exchange-recognition',
   'conjunction-reassociation-recognition',
@@ -59,7 +57,7 @@ const reconstructedPrerequisites = [
   ['content-bearing-annulus-choice', ['compound-double-cut-selection']],
   ['double-cut-insertion-workspace', ['seyric-atomic-double-cut-selection', 'atomic-content-insertion']],
   ['compound-weakening-boundary', ['two-mark-projection']],
-  ['sey-red-c01', ['single-mark-return']],
+  ['sey-red-c01', ['nested-owner-introduction']],
 ] as const
 describe('reconstructed opening content', () => {
   it('matches the accepted Seyric collection structurally without making its count authoritative', () => {
@@ -72,7 +70,7 @@ describe('reconstructed opening content', () => {
     )
   })
 
-  it('keeps the early Seyric cut exercises mark-free and retains the Myratic empty-owner exercise', () => {
+  it('keeps the early cut exercises mark-free and introduces the Seyric empty-owner exercise', () => {
     for (const id of onboardingIds) {
       const diagram = catalog.puzzle(puzzleId(id)).diagram
       expect(Object.values(diagram.regions).every(({ kind }) => kind !== 'bubble')).toBe(true)
@@ -93,10 +91,18 @@ describe('reconstructed opening content', () => {
     expect(catalog.placement(puzzleId('four-veils')).prerequisites).toEqual([puzzleId('two-veils')])
     expect(catalog.placement(puzzleId('forked-veil')).prerequisites).toEqual([puzzleId('two-veils')])
     expect(catalog.placement(puzzleId('echoed-veil')).prerequisites).toEqual([puzzleId('forked-veil')])
-    expect(catalog.placement(puzzleId('single-mark-return')).prerequisites)
+    expect(catalog.placement(puzzleId('empty-ring-release')).prerequisites)
       .toEqual([puzzleId('echoed-veil')])
+    expect(catalog.placement(puzzleId('single-mark-return')).prerequisites)
+      .toEqual([puzzleId('empty-ring-release')])
+    expect(catalog.placement(puzzleId('nested-owner-introduction')).prerequisites)
+      .toEqual([puzzleId('single-mark-return')])
 
-    for (const id of singleMarkRootIds) {
+    for (const id of nestedOwnerRootIds) {
+      expect(catalog.placement(puzzleId(id)).prerequisites)
+        .toEqual([puzzleId('nested-owner-introduction')])
+    }
+    for (const id of ['conjunction-idempotence-introduction', 'disjunction-idempotence-introduction']) {
       expect(catalog.placement(puzzleId(id)).prerequisites)
         .toEqual([puzzleId('single-mark-return')])
     }
@@ -109,8 +115,8 @@ describe('reconstructed opening content', () => {
   it('introduces marked ancestor-supported deiteration after the first marked problem', () => {
     const id = puzzleId('marked-echo-deiteration')
     const seyric = catalog.puzzlesInCulture('seyric-horizon' as never)
-    expect(seyric.indexOf(id)).toBeGreaterThan(seyric.indexOf(puzzleId('single-mark-return')))
-    expect(catalog.placement(id).prerequisites).toEqual([puzzleId('single-mark-return')])
+    expect(seyric.indexOf(id)).toBeGreaterThan(seyric.indexOf(puzzleId('nested-owner-introduction')))
+    expect(catalog.placement(id).prerequisites).toEqual([puzzleId('nested-owner-introduction')])
 
     const diagram = catalog.puzzle(id).diagram
     const start = analyzeSeyricStart(diagram)
@@ -141,7 +147,7 @@ describe('reconstructed opening content', () => {
   it('preserves progression, artifact, and optional guidance as separate ownership layers', () => {
     const first = puzzleId('single-mark-return')
     expect(catalog.placement(first)).toEqual({
-      puzzle: first, culture: 'seyric-horizon', prerequisites: [puzzleId('echoed-veil')],
+      puzzle: first, culture: 'seyric-horizon', prerequisites: [puzzleId('empty-ring-release')],
     })
     expect(catalog.artifact(first).name).toEqual({
       professional: 'The Auten Reliquary Closure',
@@ -155,8 +161,6 @@ describe('reconstructed opening content', () => {
     expect(catalog.cultureIds).toEqual(['seyric-horizon', 'myratic-tradition'])
     expect(catalog.puzzlesInCulture('myratic-tradition' as never)).toEqual([
       'blank-witness',
-      'empty-ring-release',
-      'nested-owner-introduction',
       'useful-vacuous-owner-workspace',
       'shallow-edit-legality-contrast',
       'compound-copy-authority-contrast',
@@ -174,14 +178,14 @@ describe('reconstructed opening content', () => {
     ])
     expect(catalog.culture('myratic-tradition' as never)).toMatchObject({
       gateway: 'blank-witness',
-      unlocksAfter: ['single-mark-return'],
+      unlocksAfter: ['nested-owner-introduction'],
     })
     expect(catalog.placement(puzzleId('blank-witness'))).toEqual({
       puzzle: 'blank-witness', culture: 'myratic-tradition', prerequisites: [],
     })
     expect(catalog.placement(puzzleId('empty-ring-release'))).toEqual({
-      puzzle: 'empty-ring-release', culture: 'myratic-tradition',
-      prerequisites: [puzzleId('blank-witness'), puzzleId('echoed-veil')],
+      puzzle: 'empty-ring-release', culture: 'seyric-horizon',
+      prerequisites: [puzzleId('echoed-veil')],
     })
 
     const blankWitness = catalog.puzzle(puzzleId('blank-witness')).diagram

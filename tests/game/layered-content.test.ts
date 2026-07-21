@@ -265,10 +265,10 @@ describe('layered portable game content', () => {
     }
 
     for (const [id, prerequisites] of [
-      ['seyric-field-edit-contrast', ['single-mark-return']],
+      ['seyric-field-edit-contrast', ['nested-owner-introduction']],
       ['seyric-compound-copy-authority', ['marked-echo-deiteration']],
       ['seyric-atomic-double-cut-selection', ['marked-echo-deiteration']],
-      ['seyric-extraction-continuation', ['single-mark-return']],
+      ['seyric-extraction-continuation', ['nested-owner-introduction']],
       ['compound-double-cut-selection', ['seyric-atomic-double-cut-selection']],
       ['compound-weakening-boundary', ['two-mark-projection']],
       ['compound-projection', ['two-mark-projection']],
@@ -286,10 +286,9 @@ describe('layered portable game content', () => {
 
     expect(catalog.culture('myratic-tradition' as never)).toMatchObject({
       gateway: 'blank-witness',
-      unlocksAfter: ['single-mark-return'],
+      unlocksAfter: ['nested-owner-introduction'],
       puzzles: expect.arrayContaining([
         'blank-witness',
-        'nested-owner-introduction',
         'artifact-selected-downstream-bridge',
       ]),
     })

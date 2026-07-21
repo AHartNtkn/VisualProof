@@ -79,7 +79,7 @@ const armMotionTrace = async (page: Page, channel: string, subject: string): Pro
     const observer = new MutationObserver(() => {
       if (started || !root.classList.contains(`is-motion-${channel}`)) return
       started = true
-      requestAnimationFrame(frame)
+      frame()
       observer.disconnect()
     })
     observer.observe(root, { attributes: true })

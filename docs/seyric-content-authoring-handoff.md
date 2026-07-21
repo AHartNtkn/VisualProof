@@ -96,11 +96,12 @@ atom marks and ordinary cuts. The matrix contains no bubbles or wires, and every
 atom is owned by one of the outer-prefix bubbles. Equivalently, its authored
 logical shape is `∀X,Y,Z,… . P(X,Y,Z,…)`, where `P` contains no quantifiers.
 
-Those outer bubbles close global proposition names; they are not Seyric puzzle
-content. A feasibility witness may remove only the contiguous vacuous prefix,
-deepest first, after all propositional work, with only trailing double-cut cleanup
-afterward. Nontrivial bubble placement, scope, ownership, introduction, movement,
-distribution, and other quantifier reasoning belong to Myratic.
+Those outer bubbles close global proposition names. Identifying which global ring
+owns each proposition occurrence and removing the prefix as terminal vacuous
+cleanup are Seyric content. A feasibility witness may remove only the contiguous
+prefix, deepest first, after all propositional work, with only trailing double-cut
+cleanup afterward. Nontrivial local bubble placement, scope, introduction,
+movement, distribution, and other quantifier reasoning belong to Myratic.
 
 Do not include puzzles whose reasoning nontrivially quantifies over propositions, predicates, formulas, proof rules, or other second-order objects. That material belongs to Myratic content.
 
@@ -140,8 +141,10 @@ Use the engine’s authoritative logical canonicalization to fingerprint every s
 Canonical duplicates must be consolidated or removed. Puzzle names, prose, guidance, artifact metadata, and witnesses must not affect logical identity.
 
 Also compare Seyric matrices modulo the names and order of their harmless global
-prefix. Starts with the same atom/cut topology under such a permutation are
-redundant even when their exact canonical fingerprints differ. A deliberately
+prefix while preserving the number of binders. Starts with the same binder
+cardinality and atom/cut topology under such a permutation are redundant even
+when their exact canonical fingerprints differ; adding or removing a vacuous
+binder is a distinct interaction, not an ordering permutation. A deliberately
 retained start whose matrix contains a direct cut and a sibling subset exactly
 matching that cut's complete contents must have one unique approved
 `immediateComplementPattern` in Seyric coverage; no two such starts may claim

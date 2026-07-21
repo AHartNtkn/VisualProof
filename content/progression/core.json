@@ -10,7 +10,9 @@
         "four-veils",
         "forked-veil",
         "echoed-veil",
+        "empty-ring-release",
         "single-mark-return",
+        "nested-owner-introduction",
         "marked-echo-deiteration",
         "seyric-field-edit-contrast",
         "atomic-content-insertion",
@@ -104,13 +106,11 @@
       "id": "myratic-tradition",
       "order": 1,
       "unlocksAfter": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ],
       "gateway": "blank-witness",
       "puzzles": [
         "blank-witness",
-        "empty-ring-release",
-        "nested-owner-introduction",
         "useful-vacuous-owner-workspace",
         "shallow-edit-legality-contrast",
         "compound-copy-authority-contrast",
@@ -154,20 +154,19 @@
     {
       "puzzle": "empty-ring-release",
       "prerequisites": [
-        "blank-witness",
         "echoed-veil"
       ]
     },
     {
       "puzzle": "single-mark-return",
       "prerequisites": [
-        "echoed-veil"
+        "empty-ring-release"
       ]
     },
     {
       "puzzle": "marked-echo-deiteration",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -193,7 +192,7 @@
     {
       "puzzle": "transfer-duplication-recognition",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -206,13 +205,13 @@
     {
       "puzzle": "common-conjunction-factor-base",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "common-disjunction-factor-base",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -236,19 +235,18 @@
     {
       "puzzle": "disjunction-over-conjunction-base",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "i-dao",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "nested-owner-introduction",
       "prerequisites": [
-        "blank-witness",
         "single-mark-return"
       ]
     },
@@ -293,7 +291,7 @@
     {
       "puzzle": "two-mark-projection",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -311,7 +309,7 @@
     {
       "puzzle": "left-injection-introduction",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -330,7 +328,8 @@
     {
       "puzzle": "compound-conjunction-idempotence",
       "prerequisites": [
-        "conjunction-idempotence-introduction"
+        "conjunction-idempotence-introduction",
+        "nested-owner-introduction"
       ]
     },
     {
@@ -342,13 +341,14 @@
     {
       "puzzle": "compound-disjunction-idempotence",
       "prerequisites": [
-        "disjunction-idempotence-introduction"
+        "disjunction-idempotence-introduction",
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "atomic-conjunction-exchange",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -360,7 +360,7 @@
     {
       "puzzle": "disjunction-exchange-recognition",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -372,7 +372,7 @@
     {
       "puzzle": "conjunction-reassociation-recognition",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -384,7 +384,7 @@
     {
       "puzzle": "disjunction-reassociation-recognition",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -403,7 +403,7 @@
     {
       "puzzle": "i-c3",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -421,13 +421,13 @@
     {
       "puzzle": "i-cs",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "i-al",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -439,7 +439,7 @@
     {
       "puzzle": "i-case2",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -451,7 +451,7 @@
     {
       "puzzle": "i-om",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -469,7 +469,7 @@
     {
       "puzzle": "i-aa",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -481,7 +481,7 @@
     {
       "puzzle": "i-ao",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -493,7 +493,7 @@
     {
       "puzzle": "sey-ctr-i01",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -525,7 +525,8 @@
       "puzzle": "atomic-negated-disjunction-forward",
       "prerequisites": [
         "conjunction-idempotence-introduction",
-        "disjunction-idempotence-introduction"
+        "disjunction-idempotence-introduction",
+        "nested-owner-introduction"
       ]
     },
     {
@@ -537,7 +538,7 @@
     {
       "puzzle": "sey-dm-ec-i01",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -557,7 +558,7 @@
     {
       "puzzle": "sey-dm-fc-i01",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -570,13 +571,13 @@
     {
       "puzzle": "sey-red-c01",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "sey-pei-i01",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -600,7 +601,7 @@
     {
       "puzzle": "weakening-injection-weave",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -636,7 +637,7 @@
     {
       "puzzle": "b3",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -669,19 +670,19 @@
     {
       "puzzle": "de-morgan-product-consumer",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "de-morgan-sum-consumer",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "double-cut-copy-license",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -694,25 +695,25 @@
     {
       "puzzle": "preserve-sole-structural-source",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "r4",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "r5",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
       "puzzle": "recollect-shared-branch-context",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -797,7 +798,7 @@
     {
       "puzzle": "seyric-field-edit-contrast",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     },
     {
@@ -815,7 +816,7 @@
     {
       "puzzle": "seyric-extraction-continuation",
       "prerequisites": [
-        "single-mark-return"
+        "nested-owner-introduction"
       ]
     }
   ]

@@ -79,13 +79,13 @@ marks and ordinary cuts. The matrix contains no bubbles or wires, and every atom
 is owned by one of the global-prefix bubbles. Its shape is therefore
 `∀X,Y,Z,… . P(X,Y,Z,…)`, where `P` contains no quantifiers.
 
-The prefix exists only to close global proposition names. Seyric does not teach
-bubble scope, binder ownership, vacuity, introduction, movement, distribution,
-or artifact-mediated quantifier reasoning. A Seyric feasibility witness may
-remove only the contiguous vacuous prefix, deepest first, after the propositional
-work, followed only by trailing double-cut cleanup. Those quantifier mechanics
-belong to Myratic. This is a content-authoring restriction and does not remove or
-limit player proof moves.
+The prefix closes global proposition names. Seyric teaches how those global rings
+identify proposition occurrences and how to remove them as terminal vacuous
+cleanup. A Seyric feasibility witness may remove only the contiguous prefix,
+deepest first, after the propositional work, followed only by trailing double-cut
+cleanup. Nontrivial local binder placement, scope, introduction, movement,
+distribution, and artifact-mediated quantifier reasoning belong to Myratic. This
+is a content-authoring restriction and does not remove or limit player proof moves.
 
 ## Additive onboarding augmentation
 
@@ -96,21 +96,29 @@ two-veils
 ├── four-veils (practice)
 └── forked-veil
     └── echoed-veil
-        └── single-mark-return
-            ├── first Myratic unlock
-            └── preserved Seyric practice graph
+        └── empty-ring-release
+            └── single-mark-return
+                └── nested-owner-introduction
+                    ├── first Myratic unlock
+                    └── preserved Seyric practice graph
 ```
 
 The empty starts are substantive onboarding content, not incomplete propositional
 exercises. They isolate boundary highlighting and selection, double-cut release,
 negative-field fragment erasure, and ancestor-supported cut-form deiteration.
-`single-mark-return` is the first atom-bearing propositional problem. `four-veils`
-adds open-order repetition but is not in the Myratic prerequisite closure.
+`empty-ring-release` distinguishes an ownership ring from a veil and teaches the
+terminal cleanup required by every bound Seyric proposition. `single-mark-return`
+is the first atom-bearing propositional problem, and `nested-owner-introduction`
+teaches owner identity before any multi-owner practice unlocks. `four-veils` adds
+open-order repetition but is not in the Myratic prerequisite closure.
 
 Progression remains the only authority for this distinction. The mandatory Seyric
 closure is exactly `two-veils`, `forked-veil`, `echoed-veil`, and
-`single-mark-return`; every other Seyric record is practice. `empty-ring-release`
-and all other content-bearing bubble-mechanics records belong to Myratic.
+`empty-ring-release`, `single-mark-return`, and `nested-owner-introduction`; every
+other Seyric record is practice. A start with one outer goal cut, a leading global
+arity-zero proposition-binder prefix, and a quantifier-free matrix belongs to
+Seyric. Myratic begins where binder scope, placement, or transformation is itself
+part of the proof problem.
 
 ## Approved isolated coverage
 
@@ -199,7 +207,8 @@ For every current Seyric puzzle:
 1. compute its canonical starting fingerprint;
 2. group exact duplicates;
 3. compute its structural matrix fingerprint modulo global-prefix name and order,
-   while preserving every cut boundary, and reject unapproved collisions;
+   while preserving prefix cardinality and every cut boundary, and reject
+   unapproved collisions;
 4. identify exact graphical sibling-occurrence starts using canonical extracted
    patterns and binder attachments, without normalizing through proof
    transformations, and require a unique approved `immediateComplementPattern`

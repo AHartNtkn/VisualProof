@@ -8,6 +8,7 @@ import { analyzeSeyricPropositionalShape } from '../../src/game/content/seyric-a
 const approvedExactStarts = [
   'echoed-veil',
   'single-mark-return',
+  'nested-owner-introduction',
   'compound-weakening-boundary',
   'two-mark-projection',
   'compound-projection',
