@@ -8,13 +8,12 @@ longer retains the two source term nodes or their shared output wire. When all
 argument positions are trivial, including the nullary rigid-head case, the
 matched equation discharges completely.
 
-The rule refuses an output wire with any endpoint beyond the two selected term
-outputs, and refuses a wire whose scope is not the selected nodes' region.
-Users must sever a multi-endpoint equality before applying `headStrip`; no
-implementation may silently lose or preserve the additional equality. A
-nonlocal equation must first be represented at the local region, because
-deleting an ancestor-owned wire would remove its value at the wrong quantifier
-scope.
+The rule applies only when the equation has exactly the two selected term
+attachments. An extra explicit endpoint is an ordinary additional attachment;
+a wire scoped above the terms has an existential attachment, shown as a node in
+the user-facing diagram. Both are already outside the binary-equation pattern.
+Users must sever or deiterate that additional structure before applying
+`headStrip`; no implementation may silently lose or preserve it.
 
 The complete new ruleset retains the former append-only capability as a
 derived operation. Iterate the complete local equation subgraph—both term
@@ -26,10 +25,12 @@ because iteration owns copying; the argument equations remain because
 ## Selected Model
 
 The affected subgraph is exactly two distinct term nodes in one region plus
-their shared binary output wire. Existing rigid-head, head-normal-form, spine
-alignment, and port-correspondence gates remain authoritative. The binary-wire
-and exact-scope gates run after identifying the shared output wire and before
-any result is constructed.
+their shared self-contained binary output wire. Existing rigid-head,
+head-normal-form, spine-alignment, and port-correspondence gates remain
+authoritative. The concrete checks for extra explicit endpoints and an
+external existential attachment run after identifying the shared output wire
+and before any result is constructed; together they enforce one user-level
+binary-equation condition.
 
 On success, the result is built from survivors rather than from an augmented
 copy:
@@ -46,10 +47,9 @@ Unrelated regions, nodes, wires, scopes, and endpoints remain unchanged modulo
 Lean's dense-index reindexing. No retained-original alias, compatibility mode,
 or augmenting head-strip path remains.
 
-The two selected terms are co-resident, and their one shared output wire has
-one scope. There is no meaningful higher-scoped term to retain. If the wire is
-scoped above the term region, the wire belongs to outer structure and the
-local equation is not a head-strip redex.
+The two selected terms are co-resident. If their shared wire is scoped above
+their region, its user-visible existential node is an additional attachment,
+so the pair is not a complete binary head-strip redex.
 
 ## Alternatives Rejected
 
@@ -69,9 +69,10 @@ occurrence removal.
 ## TypeScript Authority
 
 `applyHeadStrip` performs all gates before mutation. The shared output wire must
-contain exactly the two selected output endpoints and its scope must equal the
-nodes' region. A larger endpoint list raises a `RuleError` that says the wire
-must be severed first; a nonlocal wire raises an exact-scope refusal.
+contain exactly the two selected output endpoints, and its existential
+attachment must be local to the nodes' region. A larger endpoint list raises a
+`RuleError` that says the wire must be severed first; an external existential
+attachment raises the same conceptual binary-applicability refusal.
 
 The final `nodes` and `wires` records omit the selected nodes and shared output
 wire from the outset. Surviving wires filter the selected nodes' endpoints;
@@ -81,17 +82,17 @@ the sole final structural validator.
 Tests observe the final graph, not source substrings: source nodes and the old
 equation wire are absent, nontrivial argument equations are present with the
 expected support, a trivial/nullary equation discharges, unrelated structure
-survives, and a third endpoint or nonlocal output scope is refused without
+survives, and an ordinary or existential third attachment is refused without
 changing the input. A system-level test iterates the complete equation and
 head-strips the copy, then verifies directly that the original equation and
 exactly the expected argument equations remain.
 
 ## Lean Authority
 
-`HeadStripPayload` proves that the shared output wire is binary and scoped at
-the selected nodes' region in addition to proving both selected output
-occurrences. These are the formal counterparts of the TypeScript refusal
-gates.
+`HeadStripPayload` proves that the shared output wire has exactly the two
+selected explicit endpoints and no external existential attachment. These are
+the representation-level components of the same binary-applicability contract
+used by TypeScript.
 
 The executable raw transformation uses the established concrete survivor-domain
 machinery to remove the two selected nodes and the shared output wire, then adds

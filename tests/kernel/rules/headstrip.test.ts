@@ -215,7 +215,7 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(out.wires[wo]!.scope).toBe(cut)
   })
 
-  it('refuses an equation wire owned by an ancestor region', () => {
+  it('refuses a binary wire with an additional existential attachment above the terms', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const n1 = h.termNode(cut, p('\\x. x a'))
@@ -226,7 +226,7 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const d = h.build()
 
     expect(() => applyHeadStrip(d, n1, n2))
-      .toThrowError(/equation wire.*scoped.*nodes.*region/i)
+      .toThrowError(/binary equation.*additional existential attachment/i)
     expect(d.nodes[n1]).toBeDefined()
     expect(d.nodes[n2]).toBeDefined()
     expect(d.wires[equation]).toBeDefined()

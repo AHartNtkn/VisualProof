@@ -53,7 +53,9 @@ export function applyHeadStrip(
   const region = na.region
   validatePortCorrespondence(correspondence, na.freePorts, nb.freePorts)
 
-  // Gate 2: the outputs share ONE wire — that is what makes the pair an equation.
+  // Gate 2: the outputs form one self-contained binary equation. Explicit
+  // endpoints are ordinary attachments; a higher wire scope is the encoded
+  // existential attachment shown as a node in the user-facing diagram.
   const oa = wireAt(d, a, { kind: 'output' })
   const ob = wireAt(d, b, { kind: 'output' })
   if (oa !== ob) {
@@ -69,7 +71,7 @@ export function applyHeadStrip(
   }
   if (equation.scope !== region) {
     throw new RuleError(
-      `head strip requires the equation wire '${oa}' to be scoped at the nodes' region '${region}'; found scope '${equation.scope}'`,
+      `head strip requires a binary equation with no additional existential attachment; wire '${oa}' is attached at scope '${equation.scope}' outside the nodes' region '${region}'`,
     )
   }
 

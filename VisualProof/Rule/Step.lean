@@ -1547,7 +1547,10 @@ structure HeadStripPayload (input : Diagram.CheckedDiagram signature)
     secondOriginalSpine.args.length
   outputWire : Fin input.val.wireCount
   outputBinary : (input.val.wires outputWire).endpoints.length = 2
-  outputScope : (input.val.wires outputWire).scope = region
+  /-- The wire's existential attachment is local, so its only user-visible
+  attachments are the two explicit term outputs certified by `outputBinary`. -/
+  noAdditionalExistentialAttachment :
+    (input.val.wires outputWire).scope = region
   firstOutput : input.val.EndpointOccurs outputWire
     { node := first, port := .output }
   secondOutput : input.val.EndpointOccurs outputWire
