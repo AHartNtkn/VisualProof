@@ -504,7 +504,7 @@ const outputEnd = (wire: string, node: string): ConnectionEnd => ({
 })
 
 describe('proof connection resolution', () => {
-  it('head-strips exactly the two output legs dragged on a three-output equality wire', () => {
+  it('refuses head-strip on a three-output equality wire until it is severed', () => {
     const b = new DiagramBuilder()
     const a = b.termNode(b.root, p('\\x. x y z'))
     const ignored = b.termNode(b.root, p('\\x. x q r'))
@@ -515,11 +515,9 @@ describe('proof connection resolution', () => {
       { node: c, port: { kind: 'output' } },
     ])
 
-    expect(proofConnectionStep(b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
-      .toEqual({
-        rule: 'headStrip', a, b: c,
-        correspondence: { commonArity: 4, left: { s0: 0, s1: 1 }, right: { s0: 2, s1: 3 } },
-      })
+    expect(() => proofConnectionStep(
+      b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64,
+    )).toThrow(/binary equation wire.*extra endpoints.*sever/i)
   })
 
   it('does not guess a head-strip pair from a same-wire trunk', () => {

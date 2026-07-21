@@ -1,5 +1,11 @@
 # Head-strip Interaction Implementation Plan
 
+> **Semantic update (2026-07-21):** `headStrip` now destructively replaces a
+> binary equation and refuses multi-endpoint wires until they are severed. The
+> interaction architecture below remains historical implementation context;
+> any retained-original or three-output acceptance language is superseded by
+> this constraint.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `headStrip` directly authorable by dragging between two term output legs on one equality wire, through the same connection-drag implementation used by Edit-mode wire joining, while deleting double-click severing.
@@ -11,8 +17,8 @@
 ## Global Constraints
 
 - A still primary press remains selection-owned.
-- Same-wire `headStrip` requires two distinct concrete term output endpoints; trunks and junctions never guess.
-- The original equation remains; the kernel `headStrip` applier owns the rewrite.
+- Same-wire `headStrip` requires exactly two distinct concrete term output endpoints on a binary wire; trunks and junctions never guess.
+- The original equation is replaced by its argument equations; the kernel `headStrip` applier owns the rewrite.
 - Edit and Proof connection drags use one implementation and the existing green preview.
 - The transverse right-drag slash is the only sever interaction; remove double-click severing and its toggle.
 - Do not run the opt-in physics suite because physics behavior is unchanged.
@@ -151,15 +157,16 @@ git commit -m "refactor: share the connection drag gesture"
 Test these exact cases:
 
 1. Same wire plus two output endpoints returns `{ rule: 'headStrip', a, b }`.
-2. A three-output wire returns the exact dragged pair, excluding the third node.
+2. A three-output wire identifies the dragged pair but is refused by the kernel with a sever-first error.
 3. Same-wire trunk, junction, same endpoint, or non-output endpoint throws a targeted refusal.
 4. Distinct wires choose a valid `wireJoin` when its polarity gate permits.
 5. Distinct output wires of βη-equal nodes choose `congruenceJoin` with a replayable certificate when ordinary join is unavailable.
 6. Distinct equally anchored wires choose `anchoredWireContract` with deterministic redundant/survivor orientation when the other joins are unavailable.
 
 ```ts
-expect(proofConnectionStep(d, { wire, endpoint: out(a) }, { wire, endpoint: out(c) }, 'forward', 64))
-  .toEqual({ rule: 'headStrip', a, b: c })
+expect(() => proofConnectionStep(
+  d, { wire, endpoint: out(a) }, { wire, endpoint: out(c) }, 'forward', 64,
+)).toThrow(/binary equation wire.*sever/i)
 ```
 
 - [ ] **Step 2: Verify the resolver tests fail**

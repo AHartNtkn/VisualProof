@@ -94,7 +94,7 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(termEq(termOf(out, added[1]!), p('\\x. s0'))).toBe(true)
   })
 
-  it('strips \\x. x a b —o— \\x. x a c into ONE added equation pair', () => {
+  it('replaces \\x. x a b —o— \\x. x a c with one argument equation pair', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x a b'))
     const n2 = h.termNode(h.root, p('\\x. x a c'))
@@ -129,15 +129,12 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(d.wires[wo]).toBeUndefined()
     expect(out.wires[wo]!.scope).toBe(h.root)
     expect(out.wires[wo]!.endpoints).toHaveLength(2)
-    // originals untouched (both parents canonicalize to the SAME spelling —
-    // their distinction lives entirely in the wiring)
-    expect(termEq(termOf(out, n1), p('\\x. x s0 s1'))).toBe(true)
-    expect(termEq(termOf(out, n2), p('\\x. x s0 s1'))).toBe(true)
-    expect(outputWire(out, n1)).toBe(weq)
-    expect(outputWire(out, n2)).toBe(weq)
-    expect(out.wires[weq]!.endpoints).toHaveLength(2)
-    // The skipped occurrence position remains attached only to the originals.
-    expect(out.wires[wa]!.endpoints).toHaveLength(2)
+    // The matched equation is replaced, including the skipped trivial
+    // position: neither original node nor its output wire survives.
+    expect(out.nodes[n1]).toBeUndefined()
+    expect(out.nodes[n2]).toBeUndefined()
+    expect(out.wires[weq]).toBeUndefined()
+    expect(out.wires[wa]!.endpoints).toEqual([])
   })
 
   it('rejects a shared correspondence column whose native ports ride different host wires', () => {
@@ -301,16 +298,51 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(out.wires[wo]!.scope).toBe(inner)
   })
 
-  it('is a no-op when every position is trivial (nothing added, nothing removed)', () => {
+  it('discharges the equation when every argument position is trivial', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x a'))
     const n2 = h.termNode(h.root, p('\\x. x a'))
-    h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
-    h.wire(h.root, [outp(n1), outp(n2)])
+    const support = h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
+    const equation = h.wire(h.root, [outp(n1), outp(n2)])
     const d = h.build()
     const out = applyHeadStrip(d, n1, n2)
     expect(addedNodes(d, out)).toHaveLength(0)
-    expect(Object.keys(out.wires).sort()).toEqual(Object.keys(d.wires).sort())
+    expect(out.nodes[n1]).toBeUndefined()
+    expect(out.nodes[n2]).toBeUndefined()
+    expect(out.wires[equation]).toBeUndefined()
+    expect(out.wires[support]!.endpoints).toEqual([])
+  })
+
+  it('discharges a nullary rigid-head equation completely', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x'))
+    const n2 = h.termNode(h.root, p('\\x. x'))
+    const equation = h.wire(h.root, [outp(n1), outp(n2)])
+    const out = applyHeadStrip(h.build(), n1, n2)
+
+    expect(out.nodes[n1]).toBeUndefined()
+    expect(out.nodes[n2]).toBeUndefined()
+    expect(out.wires[equation]).toBeUndefined()
+    expect(Object.keys(out.nodes)).toEqual([])
+    expect(Object.keys(out.wires)).toEqual([])
+  })
+
+  it('refuses a shared output wire with a third endpoint and requires severing first', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x a'))
+    const n2 = h.termNode(h.root, p('\\x. x b'))
+    const n3 = h.termNode(h.root, p('\\x. x c'))
+    h.wire(h.root, [fv(n1, 'a')])
+    h.wire(h.root, [fv(n2, 'b')])
+    h.wire(h.root, [fv(n3, 'c')])
+    const equation = h.wire(h.root, [outp(n1), outp(n2), outp(n3)])
+    const d = h.build()
+
+    expect(() => applyHeadStrip(d, n1, n2)).toThrowError(/extra endpoints.*sever/i)
+    expect(d.nodes[n1]).toBeDefined()
+    expect(d.nodes[n2]).toBeDefined()
+    expect(d.nodes[n3]).toBeDefined()
+    expect(d.wires[equation]!.endpoints).toHaveLength(3)
   })
 
   it('refuses the same node twice', () => {

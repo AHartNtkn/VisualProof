@@ -24,11 +24,11 @@ import {
  * arguments are βη-equal as open terms, hence their prefix-closures are
  * equal.
  *
- * Soundness — polarity-blindness: the rule ADDS the argument equations next
- * to the two co-resident equation nodes. Locally-entailed addition is an
- * equivalence (φ ⟺ φ ∧ ψ when φ ⊢ ψ within the region) — the same
- * justification as congruenceJoin, valid under any polarity. Nothing is
- * removed and no polarity is touched.
+ * Soundness — polarity-blindness: under the rigid aligned-head gates, the
+ * original equation and the conjunction of corresponding argument equations
+ * entail each other. Head stripping therefore REPLACES the original equation
+ * with those argument equations. This full equivalence is valid under either
+ * polarity; a nullary or wholly trivial equation discharges completely.
  *
  * Only bound heads are rigid under the diagram semantics. A free head is an
  * arbitrary lambda-model individual and may denote a non-injective function,
@@ -59,6 +59,12 @@ export function applyHeadStrip(
   if (oa !== ob) {
     throw new RuleError(
       `head strip requires the outputs of '${a}' and '${b}' to share one wire (an equation); found '${oa}' and '${ob}'`,
+    )
+  }
+  const equation = d.wires[oa]!
+  if (equation.endpoints.length !== 2) {
+    throw new RuleError(
+      `head strip requires a binary equation wire; '${oa}' has extra endpoints that must be severed first`,
     )
   }
 
@@ -129,13 +135,26 @@ export function applyHeadStrip(
     pairs.push({ ca, cb })
   }
 
-  // Step 7: add the equation pairs in R — closures on fresh nodes, each free
-  // port riding the wire that port rides on its parent node, outputs sharing
-  // one fresh wire scoped at R. The originals stay untouched.
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes }
-  const wires: Record<WireId, Wire> = { ...d.wires }
-  const takenNodes = new Set(Object.keys(nodes))
-  const takenWires = new Set(Object.keys(wires))
+  // Replace the matched binary equation in R. The source nodes and their
+  // output wire do not survive; every other wire loses the removed endpoints.
+  // Fresh closure nodes retain only their actual support and each argument
+  // pair receives one fresh binary output wire scoped at R.
+  const nodes: Record<NodeId, DiagramNode> = {}
+  for (const [id, node] of Object.entries(d.nodes)) {
+    if (id !== a && id !== b) nodes[id] = node
+  }
+  const wires: Record<WireId, Wire> = {}
+  for (const [id, wire] of Object.entries(d.wires)) {
+    if (id === oa) continue
+    wires[id] = {
+      scope: wire.scope,
+      endpoints: wire.endpoints.filter((endpoint) => endpoint.node !== a && endpoint.node !== b),
+    }
+  }
+  // Deleted identifiers remain reserved so the replacement cannot masquerade
+  // as either source object through a caller-supplied reservation.
+  const takenNodes = new Set(Object.keys(d.nodes))
+  const takenWires = new Set(Object.keys(d.wires))
   const attach = (wid: WireId, node: NodeId, name: string): void => {
     const w = wires[wid]!
     wires[wid] = { scope: w.scope, endpoints: [...w.endpoints, { node, port: { kind: 'freeVar', name } }] }
