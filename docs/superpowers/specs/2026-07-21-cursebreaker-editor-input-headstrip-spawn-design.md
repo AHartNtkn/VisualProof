@@ -28,7 +28,7 @@ The additive Cursebreaker variant and tests that permit the source equation to s
 
 `Delete` and `Backspace` share one resolver. Before generic contextual deletion, the resolver recognizes exactly two selected term nodes and constructs a `headStrip` step using their attached-port correspondence. The real kernel preflights the step; a valid step is committed, while an inapplicable pair falls through to existing deletion behavior.
 
-This selection route is the keyboard affordance for head-strip. Existing connection behavior outside this request is not broadened or reinterpreted.
+This selection route is the only interaction affordance for head-strip. Same-wire output dragging no longer authors `headStrip`; connection gestures remain responsible only for connection operations. The drag-based head-strip route and the tests that encode it are removed rather than preserved as an alternate path.
 
 ## Construction Spawn Menu
 
@@ -53,6 +53,7 @@ Implementation follows focused test-first cycles:
 - construction tests prove both destructive keys delete selected draft objects;
 - kernel head-strip tests prove exact replacement semantics and structural gates;
 - puzzle-controller tests prove both keys author the same head-strip step;
+- connection tests prove dragging cannot author head-strip;
 - spawn tests prove menu order and both empty-region callbacks;
 - TypeScript type checking verifies the integrated contracts.
 
