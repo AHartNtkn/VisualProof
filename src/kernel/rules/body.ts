@@ -37,6 +37,33 @@ export function applyBodyAttach(
 ): Diagram {
   const wire = d.wires[wireId]
   if (wire === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
+  const need = orientation === 'forward' ? 'negative' : 'positive'
+  const have = polarity(d, wire.scope)
+  if (have !== need) {
+    throw new RuleError(
+      `${orientation === 'backward' ? 'backward ' : ''}body attach requires a ${need} scope; wire '${wireId}' scope '${wire.scope}' is ${have}`,
+    )
+  }
+  return attachBodyCore(d, wireId, content, params, reservation)
+}
+
+/**
+ * The polarity-FREE core of body attachment: the signature, boundary-arithmetic,
+ * parameter, and single-body gates plus the node+endpoint construction —
+ * everything `applyBodyAttach` does except its polarity gate. Shared with bodied
+ * vacuous introduction (the comprehension axiom `∃R. R=G`), which attaches a
+ * body to a freshly minted wire at ANY polarity: introducing the tautology
+ * `∃R. R=G ≡ ⊤` is valid everywhere, so no polarity gate belongs in the core.
+ */
+export function attachBodyCore(
+  d: Diagram,
+  wireId: WireId,
+  content: DiagramWithBoundary,
+  params: readonly WireId[],
+  reservation?: IdReservation,
+): Diagram {
+  const wire = d.wires[wireId]
+  if (wire === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
   if (wire.sig.kind !== 'rel') {
     throw new RuleError(`wire '${wireId}' sig '${sigKey(wire.sig)}' is not a relation signature; only relational wires carry bodies`)
   }
@@ -67,14 +94,6 @@ export function applyBodyAttach(
         `parameter wire '${pid}' (scope '${pw.scope}') must be at or outside the target wire's scope '${wire.scope}'`,
       )
     }
-  }
-
-  const need = orientation === 'forward' ? 'negative' : 'positive'
-  const have = polarity(d, wire.scope)
-  if (have !== need) {
-    throw new RuleError(
-      `${orientation === 'backward' ? 'backward ' : ''}body attach requires a ${need} scope; wire '${wireId}' scope '${wire.scope}' is ${have}`,
-    )
   }
 
   for (const ep of wire.endpoints) {

@@ -22,6 +22,7 @@ import { app, bvar, freePorts, lam, type Term } from '../kernel/term/term'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Vec2 } from '../view/vec'
 import type { ProofOrientation } from './interact/moves'
+import { relationSig } from '../theories/macros'
 
 export type CopyDestination =
   | { readonly kind: 'workspace'; readonly draft: Diagram; readonly region: RegionId; readonly at: Vec2 }
@@ -251,7 +252,7 @@ function planStructural(
         const wire = freshId(taken, `copy_boundary_${extraction.attachments[index] ?? index}`)
         taken.add(wire)
         representative.set(stub, wire)
-        wires[wire] = { scope: host.root, endpoints: [] }
+        wires[wire] = { scope: host.root, sig: pattern.diagram.wires[stub]!.sig, endpoints: [] }
         return wire
       })
       const seeded = mkDiagram({ root: host.root, regions: { ...host.regions }, nodes: { ...host.nodes }, wires })
@@ -358,16 +359,17 @@ function pairedCutChoice(diagram: Diagram, outer: RegionId, memo: Map<RegionId, 
 
 function regionRootConstructible(diagram: Diagram, region: RegionId, memo: Map<RegionId, RegionId | null>): boolean {
   const value = diagram.regions[region]!
-  return value.kind === 'bubble'
-    ? regionChildrenConstructible(diagram, region, memo)
-    : value.kind === 'cut' && pairedCutChoice(diagram, region, memo) !== null
+  // Only cuts are regions now (second-order existentials are relational WIRES,
+  // compiled by vacuousIntro, not regions); each cut must be one half of a
+  // complete parent-child double-cut pairing.
+  return value.kind === 'cut' && pairedCutChoice(diagram, region, memo) !== null
 }
 
 function regionChildrenConstructible(diagram: Diagram, parent: RegionId, memo: Map<RegionId, RegionId | null>): boolean {
   return childRegions(diagram, parent).every((child) => regionRootConstructible(diagram, child, memo))
 }
 
-function emit(compiler: Compiler, step: ProofStep): { readonly regions: readonly RegionId[]; readonly nodes: readonly NodeId[] } {
+function emit(compiler: Compiler, step: ProofStep): { readonly regions: readonly RegionId[]; readonly nodes: readonly NodeId[]; readonly wires: readonly WireId[] } {
   const before = compiler.diagram
   compiler.diagram = applyStep(
     before,
@@ -380,6 +382,7 @@ function emit(compiler: Compiler, step: ProofStep): { readonly regions: readonly
   return {
     regions: Object.freeze(Object.keys(compiler.diagram.regions).filter((id) => before.regions[id] === undefined).sort()),
     nodes: Object.freeze(Object.keys(compiler.diagram.nodes).filter((id) => before.nodes[id] === undefined).sort()),
+    wires: Object.freeze(Object.keys(compiler.diagram.wires).filter((id) => before.wires[id] === undefined).sort()),
   }
 }
 
@@ -394,14 +397,6 @@ function compileRegionRoot(
   pairing: Map<RegionId, RegionId | null>,
 ): void {
   const value = compiler.pattern.diagram.regions[patternRegion]!
-  if (value.kind === 'bubble') {
-    const made = emit(compiler, { rule: 'vacuousIntro', sel: emptySelection(compiler.diagram, destinationParent), arity: value.arity })
-    if (made.regions.length !== 1) throw new Error('vacuous introduction did not create exactly one bubble')
-    const destinationRegion = made.regions[0]!
-    compiler.regionMap.set(patternRegion, destinationRegion)
-    compileRegionChildren(compiler, patternRegion, destinationRegion, pairing)
-    return
-  }
   if (value.kind !== 'cut') throw new Error('the extracted pattern root cannot be compiled as content')
   const inner = pairedCutChoice(compiler.pattern.diagram, patternRegion, pairing)
   if (inner === null) throw new Error(`cut '${patternRegion}' has no complete parent-child double-cut pairing`)
@@ -506,16 +501,22 @@ function compileNodes(compiler: Compiler, fissions: readonly FissionTree[]): voi
         made = { nodes: [emitTermNode(compiler, region, node.term)] }
         break
       case 'ref':
-        made = emit(compiler, { rule: 'relationSpawn', region, defId: node.defId, arity: node.arity })
+        made = emit(compiler, { rule: 'relationSpawn', region, defId: node.defId, sig: node.sig })
         break
       case 'atom': {
-        const binder = compiler.regionMap.get(node.binder)
-        if (binder === undefined) throw new Error(`bound relation references unconstructed binder '${node.binder}'`)
-        const value = pd.regions[node.binder]
-        if (value === undefined || value.kind !== 'bubble') throw new Error(`bound relation binder '${node.binder}' is not a bubble`)
-        made = emit(compiler, { rule: 'boundRelationSpawn', region, binder, arity: value.arity })
+        // The atom's head rides a relational wire (the old bound-relation binder,
+        // now a line of identity). The wire was compiled first (vacuousIntro for
+        // an internal ∃R, or mapped to a host attachment for a crossing one).
+        const headWire = Object.keys(pd.wires).find((wid) =>
+          pd.wires[wid]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'head'))
+        if (headWire === undefined) throw new Error(`bound relation atom '${id}' has no head wire`)
+        const wire = compiler.wireMap.get(headWire)
+        if (wire === undefined) throw new Error(`bound relation atom '${id}' head wire '${headWire}' was not constructed`)
+        made = emit(compiler, { rule: 'boundRelationSpawn', region, wire })
         break
       }
+      case 'body':
+        throw new Error(`cannot copy a witness body node ('${id}'); attach the body at the destination instead`)
     }
     if (made.nodes.length !== 1) throw new Error(`atomic constructor for '${id}' did not create exactly one node`)
     compiler.nodeMap.set(id, made.nodes[0]!)
@@ -590,6 +591,42 @@ function compileWires(compiler: Compiler, extraction: Extraction): ReadonlyMap<W
   return new Map(explicitAttachments)
 }
 
+/**
+ * Compile the pattern's relational wires — the second-order existentials that
+ * were bubble regions in the old model. An INTERNAL ∃R is introduced by
+ * `vacuousIntro` at its (mapped) scope; a CROSSING relational wire (a boundary
+ * stub) maps to its host attachment line, which already exists. Both are entered
+ * into `wireMap`, so bound atoms can spawn their heads onto the constructed line.
+ * Runs after region construction (scopes must exist) and before node
+ * construction (atoms need their wire). Returns the host attachment wires used
+ * for crossing relational stubs — they retain their identity, so they count as
+ * preserved attachments alongside the term attachments compileWires reports.
+ */
+function compileRelationWires(compiler: Compiler, extraction: Extraction): WireId[] {
+  const pd = compiler.pattern.diagram
+  const relationalAttachments: WireId[] = []
+  for (const wireId of Object.keys(pd.wires).sort()) {
+    const wire = pd.wires[wireId]!
+    if (wire.sig.kind !== 'rel') continue
+    const boundaryIndex = compiler.pattern.boundary.indexOf(wireId)
+    if (boundaryIndex >= 0) {
+      const attachment = extraction.attachments[boundaryIndex]!
+      if (compiler.diagram.wires[attachment] === undefined) {
+        throw new Error(`relational attachment wire '${attachment}' does not exist`)
+      }
+      compiler.wireMap.set(wireId, attachment)
+      relationalAttachments.push(attachment)
+      continue
+    }
+    const scope = compiler.regionMap.get(wire.scope)
+    if (scope === undefined) throw new Error(`relational wire scope '${wire.scope}' was not constructed`)
+    const made = emit(compiler, { rule: 'vacuousIntro', scope, sig: wire.sig })
+    if (made.wires.length !== 1) throw new Error(`vacuous introduction for '${wireId}' did not create exactly one wire`)
+    compiler.wireMap.set(wireId, made.wires[0]!)
+  }
+  return relationalAttachments
+}
+
 function compileConstruction(
   before: Diagram,
   extraction: Extraction,
@@ -613,9 +650,11 @@ function compileConstruction(
   }
   try {
     compileRegionChildren(compiler, extraction.pattern.diagram.root, destination.region, pairing)
+    const relationalAttachments = compileRelationWires(compiler, extraction)
     compileNodes(compiler, fissions)
     const attachments = compileWires(compiler, extraction)
-    if (attachments.size !== new Set(extraction.attachments).size) {
+    const coveredAttachments = new Set<WireId>([...attachments.keys(), ...relationalAttachments])
+    if (coveredAttachments.size !== new Set(extraction.attachments).size) {
       return deny('invalid-attachment', 'ordinary construction did not preserve every crossing attachment identity')
     }
     if (compiler.steps.length === 0) {
@@ -665,7 +704,7 @@ function compileContextualRelation(
     }
     try {
       const made = emit(compiler, {
-        rule: 'relationSpawn', region: destination.region, defId, arity: relation.boundary.length,
+        rule: 'relationSpawn', region: destination.region, defId, sig: relationSig(relation),
       })
       if (made.nodes.length !== 1) throw new Error(`contextual relation '${defId}' did not create exactly one reference`)
       const reference = made.nodes[0]!
@@ -680,7 +719,7 @@ function compileContextualRelation(
         if (survivor !== attachment) throw new Error(`contextual relation changed attachment '${attachment}'`)
         attachmentMap.set(attachment, survivor)
       }
-      emit(compiler, { rule: 'relUnfold', node: reference })
+      emit(compiler, { rule: 'unfold', nodeId: reference })
       return Object.freeze({
         steps: Object.freeze([...compiler.steps]),
         attachmentMap: new Map(attachmentMap),
@@ -911,12 +950,10 @@ export function planCopy(
   } catch (error) {
     return deny('invalid-selection', error instanceof Error ? error.message : String(error))
   }
-  if (extraction.binderStubs.length > 0) {
-    return deny(
-      'external-binder',
-      `selection leaves ${extraction.binderStubs.length} external binder stub(s); include every binder in the copied pattern`,
-    )
-  }
+  // No external-binder gate: a relational wire crossing the selection is now a
+  // legitimate higher-order boundary attachment (the copied atom's head rides an
+  // enclosing ∃R line), not a dangling binder projection. The kernel's spawn
+  // scope gates reject an unsound attachment at construction time.
   switch (destination.kind) {
     case 'workspace': return planStructural('workspace', source, selection, extraction, destination)
     case 'edit': return planStructural('edit', source, selection, extraction, destination)
