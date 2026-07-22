@@ -1,4 +1,5 @@
-import type { Diagram, RegionId } from '../kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import { sigOrder } from '../kernel/diagram/sig'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
@@ -9,14 +10,16 @@ import { existentialStubs, legPaths } from './wires'
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
  * world-space shapes; `canvas.ts` renders them under the view transform. Two
  * first-class themes ship: Light/Manuscript (warm paper, inset wells, unified
- * dark linework) and Dark/Slate (glowing cyan linework, deepened wells, SO-
- * quantifier bubble rings glowing in their binder hue like their atoms).
+ * dark linework) and Dark/Slate (glowing cyan linework, deepened wells,
+ * relational wires glowing in their order-ladder hue like their atoms).
  *
  * Laws enforced by construction and checked in paint.test.ts: text appears
  * ONLY on named discs (law 2); boundary wires exit the frame while internal
  * singletons get an ∃ stub (law 3); wires and λ-anatomy share one stroke and
- * width from the theme (law 5); atom strokes and bubble rings both derive from
- * the per-bubble hue, and Dark glows both (law 6).
+ * width from the theme (law 5); a wire's colour codes the ORDER of its
+ * signature (term wires the base wire colour, order-1 relations the next
+ * ladder hue, order-2 the next, …) and an atom strokes in its head wire's
+ * rung, with Dark glowing both (law 6).
  */
 
 export type Theme = {
@@ -64,7 +67,6 @@ export type Shape =
   | { readonly kind: 'label'; readonly center: Vec2; readonly text: string; readonly color: string; readonly r: number; readonly font: string }
 
 const FRAME_STROKE_W = 2
-const BUBBLE_RING_W = 2.0
 const DISC_RIM_W = 1.4
 const JUNCTION_OUTER_R = 3.6
 const JUNCTION_INNER_R = 2.6
@@ -84,17 +86,31 @@ export function referenceDisplayLabel(defId: string): string {
   return slash < 0 ? defId : defId.slice(slash + 1)
 }
 
-/** Per-bubble hue (golden-angle spread from binder violet); the ONLY node
-    colour code (law 6/8). Same map feeds atom strokes and the bubble ring. */
-export function bubbleHues(d: Diagram, lightness: number): Map<RegionId, string> {
-  const out = new Map<RegionId, string>()
-  let k = 0
-  for (const [rid, r] of Object.entries(d.regions)) {
-    if (r.kind === 'bubble') {
-      const hue = (268 + k * 137.5) % 360
-      out.set(rid, `hsl(${hue.toFixed(0)}, 48%, ${lightness}%)`)
-      k++
-    }
+/**
+ * The order ladder: every relational wire is coloured by the ORDER (depth) of
+ * its signature — the canonical colours-as-sort code (law 6), replacing the old
+ * colours-as-names per-bubble hue. Order 1 is binder violet; each further order
+ * steps one golden angle. Term wires (order 0) are absent from the map: they
+ * keep the theme's base wire colour (ladder rung 0), so the caller reads
+ * `hues.get(wid) ?? st.wire`. This is the single ladder authority — the app
+ * (spawn option colours, proof-front hover) imports it from here.
+ */
+export function relationWireHues(d: Diagram, lightness: number): Map<WireId, string> {
+  const out = new Map<WireId, string>()
+  for (const [wid, w] of Object.entries(d.wires)) {
+    if (w.sig.kind !== 'rel') continue
+    const hue = (268 + (sigOrder(w.sig) - 1) * 137.5) % 360
+    out.set(wid, `hsl(${hue.toFixed(0)}, 48%, ${lightness}%)`)
+  }
+  return out
+}
+
+/** The relational wire an atom's head port binds, per node — the wire whose
+    order-ladder rung the atom body strokes in, and the group key for hover. */
+function atomHeadWires(d: Diagram): Map<NodeId, WireId> {
+  const out = new Map<NodeId, WireId>()
+  for (const [wid, w] of Object.entries(d.wires)) {
+    for (const ep of w.endpoints) if (ep.port.kind === 'head') out.set(ep.node, wid)
   }
   return out
 }
@@ -138,6 +154,10 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
+  const hues = relationWireHues(e.d, st.bubbleLightness)
+  // A wire strokes in its order-ladder rung; a term wire keeps the base wire
+  // colour (rung 0). One colour, uniform along the whole wire (law 6).
+  const wireStroke = (wid: WireId): string => hues.get(wid) ?? st.wire
   const shapes: Shape[] = []
   // ≥3-leg interior junctions are drawn as a soap-film Steiner tree with tangential
   // tributary merging (round-8 · D, the user-approved look), NOT as a star of legs
@@ -145,12 +165,13 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // hub-point branch dot is NOT drawn (USER 2026-07-07: branch points are unmarked).
   // wires (traced elastica legs) — the ACTUAL physics wire, junctions included
   for (const { wid, pts } of legPaths(e)) {
-    void wid
-    shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+    const stroke = wireStroke(wid)
+    shapes.push({ kind: 'polyline', pts, stroke, width: st.wireW, glow: glow(stroke) })
   }
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
-    shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+    const stroke = wireStroke(s.wid)
+    shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke, width: st.wireW, glow: glow(stroke) })
   }
   // An unattached boundary wire is already a formal port: paint it exactly at
   // its canonical frame slot rather than inventing a floating existential body.
@@ -188,44 +209,37 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
 export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Shape[] = paintWires): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
-  const hues = bubbleHues(e.d, st.bubbleLightness)
+  const hues = relationWireHues(e.d, st.bubbleLightness)
+  const headWireOf = atomHeadWires(e.d)
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
   const shapes: Shape[] = []
 
   // sheet frame
   shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerW: FRAME_CORNER_W, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
 
-  // regions, outer first: cuts fill + inset well + ink rim; bubbles are hue rings
+  // regions, outer first: cuts get fill + inset well + ink rim. Regions are only
+  // sheet/cut now — the bubble kind is deleted; relational quantifiers are wires.
   const rs = [...e.regions.entries()]
     .filter(([rid]) => e.d.regions[rid]!.kind !== 'sheet')
     .sort((a, b) => b[1].radius - a[1].radius)
   for (const [rid, g] of rs) {
-    const kind = e.d.regions[rid]!.kind
-    if (kind === 'bubble') {
-      const hue = hues.get(rid)!
-      shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke: hue, width: BUBBLE_RING_W, insetColor: null, glow: glow(hue) })
-      continue
-    }
     const fill = cutDepth(e.d, rid) % 2 === 1 ? st.negFill : st.paper
     shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill, stroke: st.ink, width: st.rimW, insetColor: st.insetColor, glow: null })
   }
 
   for (const s of wires(e, st)) shapes.push(s) // no spread: big diagrams overflow the arg stack
 
-  // The port-order pip: nodes with two or more ORDERED ports (refs by arity,
-  // atoms by their binder's arity) get a filled dot on their rim at port a0's
-  // angle; ports read clockwise from it (canvas y-down). Device-pixel sized
-  // like junction dots so it survives every zoom, drawn in the node's own
-  // stroke, rotating with the body. Without it a featureless rotating disc
-  // gives no way to tell which leg is which.
+  // The port-order pip: nodes with two or more ORDERED ports (refs/atoms by
+  // their signature arity, bodies by their parameter count) get a filled dot on
+  // their rim at port a0/p0's angle; ports read clockwise from it (canvas
+  // y-down). Device-pixel sized like junction dots so it survives every zoom,
+  // drawn in the node's own stroke, rotating with the body. Without it a
+  // featureless rotating disc gives no way to tell which leg is which.
   const pipArity = (b: Body): number => {
     const node = b.node
     if (node === null) return 0
-    if (node.kind === 'ref') return node.arity
-    if (node.kind === 'atom') {
-      const binder = e.d.regions[node.binder]!
-      return binder.kind === 'bubble' ? binder.arity : 0
-    }
+    if (node.kind === 'ref' || node.kind === 'atom') return node.sig.args.length
+    if (node.kind === 'body') return node.content.boundary.length - node.sig.args.length
     return 0
   }
   const pipAt = (b: Body, rimR: number, fill: string): Shape => {
@@ -233,7 +247,8 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     return { kind: 'dot', center: { x: b.pos.x + c * rimR, y: b.pos.y + s * rimR }, rPx: PIP_R, fill }
   }
 
-  // node bodies: anatomy (shared linework / binder-hue atoms) + named discs
+  // node bodies: anatomy (shared linework / order-ladder atoms) + named discs +
+  // sealed comprehension bodies
   for (const b of e.bodies.values()) {
     if (b.kind === 'junction' || b.kind === 'anchor') continue
     const node = b.node!
@@ -246,10 +261,12 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     }
     const g = b.geometry!
     const ascale = ascaleOf(b.kind) * e.scale
-    const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
+    // an atom strokes in its head wire's order-ladder rung (colours-as-sort); a
+    // body is a sealed disc in the shared linework; terms are shared linework.
+    const atomHue = node.kind === 'atom' ? (hues.get(headWireOf.get(b.id) ?? '') ?? st.wire) : null
     const stroke = atomHue ?? st.wire
-    shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
-    if (node.kind === 'atom' && pipArity(b) >= 2) {
+    shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(stroke)))
+    if ((node.kind === 'atom' || node.kind === 'body') && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
     }
     if (node.kind === 'term') {
@@ -273,22 +290,25 @@ export function nextTheme(t: Theme): Theme {
 }
 
 /**
- * Hover-group highlight: brighten a whole binder group (its bubble ring and
- * every atom bound to it) in the shared hue — same hue family, brighter and
- * wider, glowing in Dark. Returns overlay shapes drawn over the base paint;
- * empty when `binderRid` is not a bubble.
+ * Hover-group highlight: brighten a whole relation group — the shared head wire
+ * (its traced legs) and every atom bound to it — in the wire's order-ladder hue,
+ * brighter and wider, glowing in Dark. The group key is the WIRE itself (heads
+ * share a wire, replacing the old bubble-region key). Returns overlay shapes
+ * drawn over the base paint; empty when `wireId` is not a relational wire.
  */
-export function highlightGroup(e: Engine, st: Theme, binderRid: RegionId): Shape[] {
-  const hue = bubbleHues(e.d, Math.min(st.bubbleLightness + HL_BRIGHT, 88)).get(binderRid)
+export function highlightGroup(e: Engine, st: Theme, wireId: WireId): Shape[] {
+  const hue = relationWireHues(e.d, Math.min(st.bubbleLightness + HL_BRIGHT, 88)).get(wireId)
   if (hue === undefined) return []
   const out: Shape[] = []
-  const g = e.regions.get(binderRid)
-  if (g !== undefined) {
-    out.push({ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke: hue, width: BUBBLE_RING_W + HL_WIDTH, insetColor: null, glow: st.wireGlow ? hue : null })
+  const wireGlow = st.wireGlow ? hue : null
+  for (const { wid, pts } of legPaths(e)) {
+    if (wid === wireId) out.push({ kind: 'polyline', pts, stroke: hue, width: st.wireW + HL_WIDTH, glow: wireGlow })
   }
+  const w = e.d.wires[wireId]
+  const atomIds = new Set(w === undefined ? [] : w.endpoints.filter((ep) => ep.port.kind === 'head').map((ep) => ep.node))
   for (const b of e.bodies.values()) {
-    if (b.node?.kind !== 'atom' || b.node.binder !== binderRid) continue
-    out.push(...anatomyOutline(e, b, b.geometry!, hue, st.wireW + HL_WIDTH, st.wireGlow ? hue : null))
+    if (b.node?.kind !== 'atom' || !atomIds.has(b.id)) continue
+    out.push(...anatomyOutline(e, b, b.geometry!, hue, st.wireW + HL_WIDTH, wireGlow))
   }
   return out
 }

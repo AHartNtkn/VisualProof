@@ -127,6 +127,7 @@ export function mkGeomMorph(from: NodeGeometry, to: NodeGeometry): (p: number) =
       arcs: outArcs,
       radials: outRadials,
       outputAnchor,
+      headAnchor: null, // morph only ever interpolates term geometries (no head port)
       portAnchors,
       exitLine,
       exitArc,
@@ -339,6 +340,7 @@ export function mkGridMorph(gF: TrompGrid, gT: TrompGrid): (p: number) => NodeGe
       arcs: outArcs,
       radials: outRadials,
       outputAnchor,
+      headAnchor: null, // morph only ever interpolates term geometries (no head port)
       portAnchors,
       exitArc: { r: exitR, a0, a1: theta(outputCol) },
       exitLine: [polar(a0, exitR), outputAnchor],

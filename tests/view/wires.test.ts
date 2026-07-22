@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { buildFregeTheory } from '../../src/theories/frege'
+
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkEngine, DISC_R, worldBindAnchor, carryOver, frameSlots } from '../../src/view/engine'
 import { recomputeRegions, resolveOverlaps, establishProofFrame, establishProofSlotShift } from '../../src/view/relax'
 
@@ -10,7 +14,7 @@ const p = (s: string) => parseTerm(s)
 describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded clearance disc (USER LAW: no floating attachments)', () => {
   it('a ref binds on its DISC_R rim, strictly inside the padded clearance disc', () => {
     const h = new DiagramBuilder()
-    const r = h.ref(h.root, 'plus', 3)
+    const r = h.ref(h.root, 'plus', rel(3))
     for (let i = 0; i < 3; i++) h.wire(h.root, [{ node: r, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     const b = e.bodies.get(r)!
@@ -32,9 +36,9 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     const t = h.termNode(h.root, p('\\x. x y'))
     h.wire(h.root, [{ node: t, port: { kind: 'output' } }])
     h.wire(h.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }])
-    const bub = h.bubble(h.root, 2)
-    const at = h.atom(bub, bub)
-    for (let i = 0; i < 2; i++) h.wire(bub, [{ node: at, port: { kind: 'arg', index: i } }])
+    // an atom on an order-1 relation wire (its head auto-wires the relation)
+    const at = h.atom(h.root, rel(2))
+    for (let i = 0; i < 2; i++) h.wire(h.root, [{ node: at, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     for (const id of [t, at]) {
       const b = e.bodies.get(id)!

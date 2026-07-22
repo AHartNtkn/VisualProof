@@ -7,8 +7,7 @@ import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import { seedProject } from '../view/relax'
 import type { Shape, Theme } from '../view/paint'
-import { highlightGroup, paint } from '../view/paint'
-import { sigOrder } from '../kernel/diagram/sig'
+import { highlightGroup, paint, relationWireHues } from '../view/paint'
 import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { existentialStubs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
@@ -93,21 +92,9 @@ export function retainedFrontIds(
   }
 }
 
-/**
- * Color each relational wire by the order (depth) of its signature — the
- * order ladder replacing the old per-bubble hue. Wires of the same second-order
- * depth share a hue. The VIEW consumes this in Task 12; here the app provides
- * the sig-order-keyed mapping.
- */
-export function relationWireHues(d: Diagram, lightness: number): Map<WireId, string> {
-  const out = new Map<WireId, string>()
-  for (const [wid, w] of Object.entries(d.wires)) {
-    if (w.sig.kind !== 'rel') continue
-    const hue = (268 + (sigOrder(w.sig) - 1) * 137.5) % 360
-    out.set(wid, `hsl(${hue.toFixed(0)}, 48%, ${lightness}%)`)
-  }
-  return out
-}
+/** The order ladder (colours-as-sort) is the rendering layer's authority; the
+    app re-exports it for spawn-option colours and relation-workspace previews. */
+export { relationWireHues } from '../view/paint'
 
 /** The relational wire a hover targets: the head-carrying wire of a hovered atom,
  * or a hovered relational wire itself. */

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
@@ -22,9 +25,9 @@ import { computeLegs, existentialStubs } from '../../src/view/wires'
 /** Three refs sharing a 3-way line (the k-adic showcase core). */
 function threeWay(): { d: Diagram; b: WireId[] } {
   const b = new DiagramBuilder()
-  const r1 = b.ref(b.root, 'plus', 3)
-  const r2 = b.ref(b.root, 'times', 3)
-  const r3 = b.ref(b.root, 'succ', 2)
+  const r1 = b.ref(b.root, 'plus', rel(3))
+  const r2 = b.ref(b.root, 'times', rel(3))
+  const r3 = b.ref(b.root, 'succ', rel(2))
   b.wire(b.root, [
     { node: r1, port: { kind: 'arg', index: 0 } },
     { node: r2, port: { kind: 'arg', index: 0 } },
@@ -36,7 +39,7 @@ function threeWay(): { d: Diagram; b: WireId[] } {
 /** A dangling wire: one endpoint, free ∃ end homed at scope. */
 function dangling(): { d: Diagram; b: WireId[]; node: string; wid: WireId } {
   const b = new DiagramBuilder()
-  const n = b.ref(b.root, 'nat', 1)
+  const n = b.ref(b.root, 'nat', rel(1))
   const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
   return { d: b.build(), b: [], node: n, wid: w }
 }
@@ -46,8 +49,8 @@ function dangling(): { d: Diagram; b: WireId[]; node: string; wid: WireId } {
 function forallShape(): { d: Diagram; b: WireId[]; wid: WireId } {
   const b = new DiagramBuilder()
   const cut = b.cut(b.root)
-  const r1 = b.ref(cut, 'lt', 2)
-  const r2 = b.ref(cut, 'gt', 2)
+  const r1 = b.ref(cut, 'lt', rel(2))
+  const r2 = b.ref(cut, 'gt', rel(2))
   const w = b.wire(b.root, [
     { node: r1, port: { kind: 'arg', index: 0 } },
     { node: r2, port: { kind: 'arg', index: 0 } },
@@ -58,9 +61,9 @@ function forallShape(): { d: Diagram; b: WireId[]; wid: WireId } {
 /** Crowded: a 2-ender forced to route past an interposed disc. */
 function interposed(): { d: Diagram; b: WireId[] } {
   const b = new DiagramBuilder()
-  const r1 = b.ref(b.root, 'a', 1)
-  const r2 = b.ref(b.root, 'b', 1)
-  b.ref(b.root, 'wall', 1)
+  const r1 = b.ref(b.root, 'a', rel(1))
+  const r2 = b.ref(b.root, 'b', rel(1))
+  b.ref(b.root, 'wall', rel(1))
   b.termNode(b.root, parseTerm('\\x. x'))
   b.wire(b.root, [
     { node: r1, port: { kind: 'arg', index: 0 } },
@@ -72,7 +75,7 @@ function interposed(): { d: Diagram; b: WireId[] } {
 /** A boundary wire: one ref, one boundary endpoint reaching a frame slot. */
 function boundaryOne(): { d: Diagram; b: WireId[]; wid: WireId } {
   const b = new DiagramBuilder()
-  const n = b.ref(b.root, 'p', 1)
+  const n = b.ref(b.root, 'p', rel(1))
   b.termNode(b.root, parseTerm('\\x. x'))
   const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
   return { d: b.build(), b: [w], wid: w }

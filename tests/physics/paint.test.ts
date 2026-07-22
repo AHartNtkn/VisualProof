@@ -1,23 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { buildLambdaTheory } from '../../src/theories/lambda'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
-import { paint, bubbleHues, highlightGroup, LIGHT, DARK } from '../../src/view/paint'
+import { paint, relationWireHues, highlightGroup, LIGHT, DARK } from '../../src/view/paint'
 import { computeLegs } from '../../src/view/wires'
-import { addBubble } from '../../src/app/edit'
-import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 
 const p = (s: string) => parseTerm(s)
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 
 describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
   it('emits exactly one label per ref, at the ref disc, and none over term anatomy', () => {
     const h = new DiagramBuilder()
     h.termNode(h.root, p('\\n. n')) // pure λ anatomy — no text of any kind
-    h.ref(h.root, 'Nat', 1) // one ref disc
+    h.ref(h.root, 'Nat', rel(1)) // one ref disc
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
@@ -65,8 +66,8 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
 
   it('emits complete long namespace leaves and complete unqualified labels', () => {
     const h = new DiagramBuilder()
-    h.ref(h.root, 'arithmetic/VeryLongQualifiedRelation', 0)
-    h.ref(h.root, 'VeryLongUnqualifiedRelation', 0)
+    h.ref(h.root, 'arithmetic/VeryLongQualifiedRelation', rel(0))
+    h.ref(h.root, 'VeryLongUnqualifiedRelation', rel(0))
     const e = mkEngine(h.build(), [])
     settle(e, 400)
 
@@ -203,55 +204,64 @@ describe('law 5 — linework coherence: wires and lambda-anatomy share stroke an
   })
 })
 
-describe('law 6 — colour codes binder identity, and Dark glows the bubble ring like its atoms', () => {
-  const bubbleAtom = () => {
+describe('law 6 — colour codes signature ORDER (the order ladder), and Dark glows the relation wire like its atoms', () => {
+  // An atom on an order-1 head wire. The head port auto-wires the relation; the
+  // atom strokes in that wire's ladder rung and the wire's legs carry the same
+  // hue. No bubble ring — the relation IS the wire.
+  const wireAtom = (order1Sig = rel(1)) => {
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 1)
-    h.atom(bub, bub)
+    const a = h.atom(h.root, order1Sig)
+    const head = h.wire(h.root, [{ node: a, port: { kind: 'head' } }], order1Sig)
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
-    return { d, e, bub }
+    return { d, e, head }
   }
 
-  it('atom strokes and the bubble ring both derive from the per-bubble hue', () => {
-    const { d, e, bub } = bubbleAtom()
-    const hue = bubbleHues(d, LIGHT.bubbleLightness).get(bub)!
+  it('atom strokes and its head wire both carry the order-ladder hue', () => {
+    const { d, e, head } = wireAtom()
+    const hue = relationWireHues(d, LIGHT.bubbleLightness).get(head)!
     const shapes = paint(e, LIGHT)
-    const ring = shapes.filter((s) => s.kind === 'circle' && s.fill === null && s.stroke === hue)
-    expect(ring).toHaveLength(1)
+    // the head wire's traced legs carry the hue (no bubble ring exists)
+    const wireLegs = shapes.filter((s) => s.kind === 'polyline' && s.stroke === hue)
+    expect(wireLegs.length).toBeGreaterThan(0)
     const atomArcs = shapes.filter((s) => s.kind === 'arc' && s.stroke === hue)
     expect(atomArcs.length).toBeGreaterThan(0)
   })
 
-  it('a directly wrapped predicate changes to the new bubble hue atomically', () => {
-    const b = new DiagramBuilder()
-    const oldBinder = b.bubble(b.root, 1)
-    const atom = b.atom(oldBinder, oldBinder)
-    const d = b.build()
-    const selection = mkSelection(d, { region: oldBinder, regions: [], nodes: [atom], wires: [] })
-    const wrapped = addBubble(d, selection, 1)
-    const e = mkEngine(wrapped.diagram, [])
-    settle(e, 400)
-    const hue = bubbleHues(wrapped.diagram, LIGHT.bubbleLightness).get(wrapped.region)!
-    const shapes = paint(e, LIGHT)
-    expect(shapes.some((shape) => shape.kind === 'circle' && shape.fill === null && shape.stroke === hue)).toBe(true)
-    expect(shapes.some((shape) => shape.kind === 'arc' && shape.stroke === hue)).toBe(true)
+  it('order 0/1/2 wires map to three distinct ladder entries (colours-as-sort)', () => {
+    // A term wire (order 0), an order-1 relation wire, and an order-2 relation
+    // wire (a relation taking a relation argument): three distinct rungs.
+    const h = new DiagramBuilder()
+    const t = h.termNode(h.root, p('x'))
+    const w0 = h.wire(h.root, [{ node: t, port: { kind: 'freeVar', name: 'x' } }]) // order 0 (term)
+    const a1 = h.atom(h.root, rel(1))
+    const w1 = h.wire(h.root, [{ node: a1, port: { kind: 'head' } }], rel(1)) // order 1
+    const a2 = h.atom(h.root, relSig([rel(1)]))
+    const w2 = h.wire(h.root, [{ node: a2, port: { kind: 'head' } }], relSig([rel(1)])) // order 2
+    const d = h.build()
+    const hues = relationWireHues(d, LIGHT.bubbleLightness)
+    // term wire is NOT in the ladder map: it keeps the base wire colour (rung 0)
+    expect(hues.get(w0)).toBeUndefined()
+    const c0 = hues.get(w0) ?? LIGHT.wire
+    const c1 = hues.get(w1)!
+    const c2 = hues.get(w2)!
+    expect(new Set([c0, c1, c2]).size).toBe(3) // three distinct ladder entries
   })
 
-  it('Dark: bubble ring AND atom anatomy glow in the binder hue; Light does not glow', () => {
-    const { d, e, bub } = bubbleAtom()
+  it('Dark: the relation wire AND atom anatomy glow in the order hue; Light does not glow', () => {
+    const { d, e, head } = wireAtom()
     const darkShapes = paint(e, DARK)
-    const darkHue = bubbleHues(d, DARK.bubbleLightness).get(bub)!
-    const darkRing = darkShapes.find((s) => s.kind === 'circle' && s.fill === null && s.stroke === darkHue)!
-    expect(darkRing.kind === 'circle' && darkRing.glow).toBe(darkHue)
+    const darkHue = relationWireHues(d, DARK.bubbleLightness).get(head)!
+    const darkWire = darkShapes.find((s) => s.kind === 'polyline' && s.stroke === darkHue)!
+    expect(darkWire.kind === 'polyline' && darkWire.glow).toBe(darkHue)
     const darkAtomArc = darkShapes.find((s) => s.kind === 'arc' && s.stroke === darkHue)!
     expect(darkAtomArc.kind === 'arc' && darkAtomArc.glow).toBe(darkHue)
 
     const lightShapes = paint(e, LIGHT)
-    const lightHue = bubbleHues(d, LIGHT.bubbleLightness).get(bub)!
-    const lightRing = lightShapes.find((s) => s.kind === 'circle' && s.fill === null && s.stroke === lightHue)!
-    expect(lightRing.kind === 'circle' && lightRing.glow).toBeNull()
+    const lightHue = relationWireHues(d, LIGHT.bubbleLightness).get(head)!
+    const lightWire = lightShapes.find((s) => s.kind === 'polyline' && s.stroke === lightHue)!
+    expect(lightWire.kind === 'polyline' && lightWire.glow).toBeNull()
     const lightAtomArc = lightShapes.find((s) => s.kind === 'arc' && s.stroke === lightHue)!
     expect(lightAtomArc.kind === 'arc' && lightAtomArc.glow).toBeNull()
   })
@@ -280,39 +290,44 @@ describe('theme toggle', () => {
 })
 
 describe('hover-group highlight', () => {
+  // Two atoms sharing ONE order-1 head wire: the group key is the wire (heads
+  // share it), replacing the old bubble-region key.
   const grp = () => {
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 1)
-    h.atom(bub, bub)
-    h.atom(bub, bub)
+    const a1 = h.atom(h.root, rel(1))
+    const a2 = h.atom(h.root, rel(1))
+    const head = h.wire(h.root, [
+      { node: a1, port: { kind: 'head' } },
+      { node: a2, port: { kind: 'head' } },
+    ], rel(1))
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
-    return { d, e, bub }
+    return { d, e, head }
   }
 
-  it('brightens the bubble ring and every bound atom in the shared (brighter) hue', () => {
-    const { d, e, bub } = grp()
-    const base = bubbleHues(d, DARK.bubbleLightness).get(bub)!
-    const shapes = highlightGroup(e, DARK, bub)
-    const rings = shapes.filter((s) => s.kind === 'circle')
-    expect(rings).toHaveLength(1)
-    const ring = rings[0]!
-    if (ring.kind !== 'circle') throw new Error('unreachable')
-    expect(ring.stroke).not.toBe(base) // same hue family, brighter — not the base
-    expect(ring.stroke!.startsWith('hsl')).toBe(true)
+  it('brightens the shared head wire and every bound atom in the shared (brighter) hue', () => {
+    const { d, e, head } = grp()
+    const base = relationWireHues(d, DARK.bubbleLightness).get(head)!
+    const shapes = highlightGroup(e, DARK, head)
+    const wireLegs = shapes.filter((s) => s.kind === 'polyline')
+    expect(wireLegs.length).toBeGreaterThan(0) // the shared wire's legs
+    const leg = wireLegs[0]!
+    if (leg.kind !== 'polyline') throw new Error('unreachable')
+    expect(leg.stroke).not.toBe(base) // same hue family, brighter — not the base
+    expect(leg.stroke.startsWith('hsl')).toBe(true)
     const arcs = shapes.filter((s) => s.kind === 'arc')
     expect(arcs.length).toBeGreaterThan(0) // both atoms' outlines
-    for (const a of arcs) if (a.kind === 'arc') expect(a.stroke).toBe(ring.stroke) // one shared hue
+    for (const a of arcs) if (a.kind === 'arc') expect(a.stroke).toBe(leg.stroke) // one shared hue
   })
 
-  it('glows in Dark, not in Light; empty for a non-bubble region', () => {
-    const { e, bub } = grp()
-    const dark = highlightGroup(e, DARK, bub).find((s) => s.kind === 'circle')!
-    const light = highlightGroup(e, LIGHT, bub).find((s) => s.kind === 'circle')!
-    expect(dark.kind === 'circle' && dark.glow).not.toBeNull()
-    expect(light.kind === 'circle' && light.glow).toBeNull()
-    expect(highlightGroup(e, DARK, e.d.root)).toEqual([]) // the sheet is not a bubble group
+  it('glows in Dark, not in Light; empty for a non-relational wire key', () => {
+    const { e, head } = grp()
+    const dark = highlightGroup(e, DARK, head).find((s) => s.kind === 'polyline')!
+    const light = highlightGroup(e, LIGHT, head).find((s) => s.kind === 'polyline')!
+    expect(dark.kind === 'polyline' && dark.glow).not.toBeNull()
+    expect(light.kind === 'polyline' && light.glow).toBeNull()
+    expect(highlightGroup(e, DARK, e.d.root)).toEqual([]) // a non-relational key highlights nothing
   })
 })
 
@@ -325,7 +340,7 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
   const p2 = (s: string) => parseTerm(s)
   const build = (arity: number) => {
     const h = new DiagramBuilder()
-    const ref = h.ref(h.root, 'rel', arity)
+    const ref = h.ref(h.root, 'rel', rel(arity))
     for (let i = 0; i < arity; i++) h.wire(h.root, [{ node: ref, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     settle(e, 200)
@@ -352,10 +367,9 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
       && !jpos.some((jp) => Math.hypot(s.center.x - jp.x, s.center.y - jp.y) < 1e-9))
     expect(near).toHaveLength(0)
   })
-  it('an atom bound to an arity-2 bubble carries a pip in its own stroke', () => {
+  it('an atom on an arity-2 relation wire carries a pip in its own stroke', () => {
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 2)
-    const a = h.atom(bub, bub)
+    const a = h.atom(h.root, rel(2)) // head + both arg ports auto-wire
     void p2
     const e = mkEngine(h.build(), [])
     settle(e, 200)

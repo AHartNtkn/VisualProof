@@ -30,6 +30,9 @@ export type NodeGeometry = {
   readonly arcs: readonly NodeArc[]
   readonly radials: readonly NodeRadial[]
   readonly outputAnchor: Vec2
+  /** The head-port rim anchor of an atom (the wire designating its relation);
+      null for every node without a head port (terms, refs, bodies). */
+  readonly headAnchor: Vec2 | null
   readonly portAnchors: Readonly<Record<string, Vec2>>
   /** Innermost arc carrying the output around to the gap edge (null when the
       output column already sits at the first column next to the gap). */
@@ -151,6 +154,7 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
     arcs,
     radials,
     outputAnchor,
+    headAnchor: null,
     portAnchors,
     exitArc,
     exitLine,
@@ -158,29 +162,91 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
   }
 }
 
+/** The rail radius of every sealed disc (atom / ref / body). */
+const RAIL_R = 2
+
+/** The n numbered ports of a sealed disc, evenly spaced clockwise (canvas
+    y-down) from a0/p0 at the top (angle π/2 — where the port-order pip sits). */
+function ringAngles(n: number): number[] {
+  const out: number[] = []
+  for (let i = 0; i < n; i++) out.push(Math.PI / 2 + (i * 2 * Math.PI) / Math.max(n, 1))
+  return out
+}
+
+/** The rim angle of a sealed disc's ONE non-numbered port — an atom's head or a
+    body's output. It bisects the arc between the last and first numbered port
+    (the widest empty slot), so it never coincides with an argument at any arity.
+    A port-less disc (arity 0) puts it at the top. */
+function mainAngle(n: number): number {
+  return n === 0 ? Math.PI / 2 : Math.PI / 2 - Math.PI / n
+}
+
+/** Anchor keys use portKey spelling without the colon ('a0', 'p0', …) purely as
+    local labels; anchorOf maps arg/freeVar ports onto them. */
+function railAnchors(prefix: string, n: number): Record<string, Vec2> {
+  const angles = ringAngles(n)
+  const out: Record<string, Vec2> = {}
+  for (let i = 0; i < n; i++) out[`${prefix}${i}`] = polar(angles[i]!, RAIL_R)
+  return out
+}
+
+const RAIL_ARC: NodeArc = { r: RAIL_R, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }
+
 /**
- * Atoms (relation-variable applications) and relation refs have no term
- * structure: a small disc with arg anchors spread evenly around it. Anchor
- * keys use portKey spelling without the colon ('a0', 'a1', …) purely as local
- * labels. A ref's name is not a geometry glyph — the paint layer draws it as
- * the disc's label from the node's defId (law 2: named nodes, not text on
- * anatomy).
+ * An atom (a relation application) has no term structure: a bare rail circle
+ * with `arity` argument ports on the rim plus one HEAD port designating its
+ * relation wire. A wire meets the drawn circle directly; the port-order pip
+ * marks a0's direction and ports read clockwise from it.
  */
 export function atomGeometry(arity: number): NodeGeometry {
-  const r = 2
-  // A predicate node is a bare rail circle. Its ports sit on the rim, so a wire
-  // meets the drawn circle directly; the port-order pip marks a0's direction.
-  const portAnchors: Record<string, Vec2> = {}
-  for (let i = 0; i < arity; i++) {
-    const angle = Math.PI / 2 + (i * 2 * Math.PI) / Math.max(arity, 1)
-    portAnchors[`a${i}`] = polar(angle, r)
-  }
   return {
-    outerRadius: r + 0.5,
-    arcs: [{ r, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }],
+    outerRadius: RAIL_R + 0.5,
+    arcs: [RAIL_ARC],
     radials: [],
-    outputAnchor: polar(0, r),
-    portAnchors,
+    outputAnchor: polar(0, RAIL_R),
+    headAnchor: polar(mainAngle(arity), RAIL_R),
+    portAnchors: railAnchors('a', arity),
+    exitArc: null,
+    exitLine: null,
+    occurrences: [],
+  }
+}
+
+/**
+ * A relation ref is a named sealed disc with `arity` argument ports and no head
+ * (the name designates the relation, so no head wire). The paint layer draws
+ * the name as the disc's label from the node's defId (law 2: named nodes, not
+ * text on anatomy).
+ */
+export function refGeometry(arity: number): NodeGeometry {
+  return {
+    outerRadius: RAIL_R + 0.5,
+    arcs: [RAIL_ARC],
+    radials: [],
+    outputAnchor: polar(0, RAIL_R),
+    headAnchor: null,
+    portAnchors: railAnchors('a', arity),
+    exitArc: null,
+    exitLine: null,
+    occurrences: [],
+  }
+}
+
+/**
+ * A comprehension body renders as a single SEALED disc — its internal diagram
+ * is never inlined (authored/inspected in the relation workspace). It carries
+ * an OUTPUT port (the relation it defines) plus `paramCount` parameter ports
+ * p0…p(k-1) attaching to outer wires. Output takes the head slot; params spread
+ * like an atom's arguments.
+ */
+export function bodyGeometry(paramCount: number): NodeGeometry {
+  return {
+    outerRadius: RAIL_R + 0.5,
+    arcs: [RAIL_ARC],
+    radials: [],
+    outputAnchor: polar(mainAngle(paramCount), RAIL_R),
+    headAnchor: null,
+    portAnchors: railAnchors('p', paramCount),
     exitArc: null,
     exitLine: null,
     occurrences: [],

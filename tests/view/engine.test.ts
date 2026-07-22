@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { requiredPorts } from '../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, type FrameBounds } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
@@ -17,7 +21,7 @@ describe('mkEngine', () => {
   it('creates exactly one body per diagram node', () => {
     const h = new DiagramBuilder()
     h.termNode(h.root, p('\\x. x'))
-    h.ref(h.root, 'Nat', 1)
+    h.ref(h.root, 'Nat', rel(1))
     const d = h.build()
     const e = mkEngine(d, [])
     const nodeBodies = [...e.bodies.values()].filter((b) => b.kind !== 'junction')
@@ -27,8 +31,8 @@ describe('mkEngine', () => {
 
   it('ref discs use the single standard disc size (uniform-disc law)', () => {
     const h = new DiagramBuilder()
-    h.ref(h.root, 'Nat', 1)
-    h.ref(h.root, 'ReallyLongRelationName', 3)
+    h.ref(h.root, 'Nat', rel(1))
+    h.ref(h.root, 'ReallyLongRelationName', rel(3))
     const d = h.build()
     const e = mkEngine(d, [])
     const refs = [...e.bodies.values()].filter((b) => b.kind === 'ref')
@@ -41,7 +45,7 @@ describe('mkEngine', () => {
     const e = mkEngine(d, boundary)
     for (const [id, node] of Object.entries(d.nodes)) {
       if (node.kind === 'term') continue // term outputs may exit; law 4 is about refs/atoms
-      for (const port of requiredPorts(d, node)) {
+      for (const port of requiredPorts(node)) {
         let count = 0
         for (const w of e.wires.values()) {
           count += w.binds.filter((b) => b.body === id && b.key === pkey(port)).length

@@ -3,7 +3,7 @@ export { vec, add, sub, scale, length, polar } from './vec'
 export type { TrompGrid, Bar, Stem, Rail } from './tromp'
 export { trompGrid } from './tromp'
 export type { NodeGeometry, NodeArc, NodeRadial } from './bend'
-export { bendGrid, atomGeometry, GAP_ANGLE } from './bend'
+export { bendGrid, atomGeometry, refGeometry, bodyGeometry, GAP_ANGLE } from './bend'
 export type { Body, BodyKind, Engine, Leg, LegEnd, RegionCircle } from './engine'
 export {
   mkEngine, worldAnchor, portNormal, pkey, nodeGeometry, anchorOf, ascaleOf, frameBounds, frameSlots,
@@ -13,4 +13,4 @@ export { settle, settleStep, recomputeRegions, resolveOverlaps, REGION_PAD, SIB_
 export type { LegGeom, ExStub } from './wires'
 export { computeLegs, legPaths, existentialStubs } from './wires'
 export type { Theme, Shape } from './paint'
-export { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from './paint'
+export { paint, relationWireHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from './paint'

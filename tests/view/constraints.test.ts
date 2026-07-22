@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { commitBodyPositions, probeBodyPositions, projectDragToSemanticFrontier, semanticConflicts } from '../../src/view/constraints'
 import { recomputeRegions } from '../../src/view/relax'
+
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 
 function arrange(e: Engine, positions: Readonly<Record<string, { x: number; y: number }>>): void {
   for (const [id, pos] of Object.entries(positions)) e.bodies.get(id)!.pos = pos
@@ -15,9 +19,9 @@ function inverseExpansionScene(nested = false): { e: Engine; moving: string; fix
   const b = new DiagramBuilder()
   const outerCut = b.cut(b.root)
   const home = nested ? b.cut(outerCut) : outerCut
-  const fixedInside = b.ref(home, 'fixed', 0)
-  const moving = b.ref(home, 'moving', 0)
-  const outside = b.ref(b.root, 'outside', 0)
+  const fixedInside = b.ref(home, 'fixed', rel(0))
+  const moving = b.ref(home, 'moving', rel(0))
+  const outside = b.ref(b.root, 'outside', rel(0))
   const e = mkEngine(b.build(), [])
   arrange(e, {
     [fixedInside]: { x: -12, y: 0 },
@@ -53,9 +57,9 @@ describe('semantic drag constraints', () => {
 
   it('prevents direct entry into a foreign cut through the same frontier', () => {
     const b = new DiagramBuilder()
-    const rootNode = b.ref(b.root, 'root', 0)
+    const rootNode = b.ref(b.root, 'root', rel(0))
     const cut = b.cut(b.root)
-    const cutNode = b.ref(cut, 'inside', 0)
+    const cutNode = b.ref(cut, 'inside', rel(0))
     const e = mkEngine(b.build(), [])
     arrange(e, { [rootNode]: { x: -45, y: 0 }, [cutNode]: { x: 15, y: 0 } })
     expect(semanticConflicts(e)).toEqual([])

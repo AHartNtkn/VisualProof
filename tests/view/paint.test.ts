@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkEngine, DISC_R, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
@@ -9,7 +12,7 @@ import { computeLegs } from '../../src/view/wires'
 describe('authoritative content scale', () => {
   it('paint derives node size directly from Engine.scale', () => {
     const h = new DiagramBuilder()
-    const ref = h.ref(h.root, 'R', 0)
+    const ref = h.ref(h.root, 'R', rel(0))
     const e = mkEngine(h.build(), [])
     settle(e, 1)
     e.scale = 2

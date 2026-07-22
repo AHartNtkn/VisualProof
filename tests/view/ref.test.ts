@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 import { referenceDisplayLabel } from '../../src/view/paint'
+
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 
 describe('reference-node rendering', () => {
   it('renders the defId as a disc label (the named-node vocabulary, never text on anatomy)', () => {
     const b = new DiagramBuilder()
-    b.ref(b.root, 'Nat', 1)
+    b.ref(b.root, 'Nat', rel(1))
     const d = b.build()
     const e = mkEngine(d, [])
     settle(e, 400)
@@ -17,7 +21,7 @@ describe('reference-node rendering', () => {
 
   it('an arity-0 reference still renders its label (a sentential relation)', () => {
     const b = new DiagramBuilder()
-    b.ref(b.root, 'Even', 0)
+    b.ref(b.root, 'Even', rel(0))
     const d = b.build()
     const e = mkEngine(d, [])
     settle(e, 400)
@@ -29,7 +33,7 @@ describe('reference-node rendering', () => {
   it('displays the full namespace leaf without changing the qualified semantic id', () => {
     const defId = 'logic/relations/ExtraordinarilyLongPredicate'
     const b = new DiagramBuilder()
-    const ref = b.ref(b.root, defId, 0)
+    const ref = b.ref(b.root, defId, rel(0))
     const d = b.build()
     const e = mkEngine(d, [])
     settle(e, 400)

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkEngine } from '../../src/view/engine'
 import {
   advanceInteractivePhysics,
@@ -12,8 +15,8 @@ import { semanticConflicts } from '../../src/view/constraints'
 
 function connectedPair(): { engine: ReturnType<typeof mkEngine>; moving: string; neighbour: string } {
   const b = new DiagramBuilder()
-  const moving = b.ref(b.root, 'moving', 1)
-  const neighbour = b.ref(b.root, 'neighbour', 1)
+  const moving = b.ref(b.root, 'moving', rel(1))
+  const neighbour = b.ref(b.root, 'neighbour', rel(1))
   b.wire(b.root, [
     { node: moving, port: { kind: 'arg', index: 0 } },
     { node: neighbour, port: { kind: 'arg', index: 0 } },

@@ -5,7 +5,7 @@ import type { Vec2 } from './vec'
 import { add } from './vec'
 import { buildJunctionTree } from './soaptree'
 import type { NodeGeometry } from './bend'
-import { bendGrid, atomGeometry } from './bend'
+import { bendGrid, atomGeometry, refGeometry, bodyGeometry } from './bend'
 import { trompGrid } from './tromp'
 import type { LegCache, Sol } from './elastica'
 import { mkLegCache, solveLeg, closeAt, trace, QN, WELL_S } from './elastica'
@@ -35,7 +35,7 @@ export const FRAME_MARGIN = 6
     visible frame line exactly. */
 export const FRAME_CORNER_W = 8
 
-export type BodyKind = 'term' | 'ref' | 'atom' | 'junction' | 'anchor'
+export type BodyKind = 'term' | 'ref' | 'atom' | 'body' | 'junction' | 'anchor'
 
 export type Body = {
   readonly id: string
@@ -181,7 +181,7 @@ export type StoredFrame = { readonly center: Vec2; readonly half: number }
 /** Local anatomy scale per node kind — atoms and terms are drawn larger so
     their structure is legible against the wire rhythm. */
 export function ascaleOf(kind: BodyKind): number {
-  return kind === 'atom' ? 2.0 : kind === 'term' ? 1.4 : 1
+  return kind === 'atom' ? 2.0 : kind === 'term' || kind === 'body' ? 1.4 : 1
 }
 
 export function pkey(p: Port): string {
@@ -196,18 +196,22 @@ export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
   switch (n.kind) {
     case 'term':
       return bendGrid(trompGrid(n.term))
-    case 'atom': {
-      const binder = d.regions[n.binder]!
-      return atomGeometry(binder.kind === 'bubble' ? binder.arity : 0)
-    }
+    case 'atom':
+      return atomGeometry(n.sig.args.length)
     case 'ref':
-      return atomGeometry(n.arity)
+      return refGeometry(n.sig.args.length)
+    case 'body':
+      return bodyGeometry(n.content.boundary.length - n.sig.args.length)
   }
 }
 
 /** World-space anchor of (geometry, centre, port). */
 export function anchorOf(geometry: NodeGeometry, center: Vec2, port: Port): Vec2 {
   if (port.kind === 'output') return add(center, geometry.outputAnchor)
+  if (port.kind === 'head') {
+    if (geometry.headAnchor === null) throw new Error('geometry has no head anchor for a head port')
+    return add(center, geometry.headAnchor)
+  }
   const key = port.kind === 'freeVar' ? port.name : `a${port.index}`
   const local = geometry.portAnchors[key]
   if (local === undefined) throw new Error(`geometry has no anchor for port '${portKey(port)}'`)

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+/** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
+const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkEngine } from '../../src/view/engine'
 import {
   beginBodyPlacement,
@@ -13,7 +16,7 @@ describe('semantic placement preview', () => {
   it('moves and cancels a body without changing the fixed destination geometry', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
-    const node = b.ref(cut, 'R', 0)
+    const node = b.ref(cut, 'R', rel(0))
     const engine = mkEngine(b.build(), [])
     const beforeCircle = engine.regions.get(cut)
     const placement = beginBodyPlacement(engine, node)
@@ -28,7 +31,7 @@ describe('semantic placement preview', () => {
 
   it('seeds a fresh body at an invocation point', () => {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, 'R', 0)
+    const node = b.ref(b.root, 'R', rel(0))
     const engine = mkEngine(b.build(), [])
     seedBodyPlacement(engine, node, { x: -7, y: 11 })
     expect(engine.bodies.get(node)!.pos).toEqual({ x: -7, y: 11 })
@@ -36,8 +39,8 @@ describe('semantic placement preview', () => {
 
   it('holds the placed body while connected passive physics stays live', () => {
     const b = new DiagramBuilder()
-    const held = b.ref(b.root, 'held', 1)
-    const neighbour = b.ref(b.root, 'neighbour', 1)
+    const held = b.ref(b.root, 'held', rel(1))
+    const neighbour = b.ref(b.root, 'neighbour', rel(1))
     b.wire(b.root, [
       { node: held, port: { kind: 'arg', index: 0 } },
       { node: neighbour, port: { kind: 'arg', index: 0 } },
