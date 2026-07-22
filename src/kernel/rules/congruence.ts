@@ -82,7 +82,7 @@ export function applyCongruenceJoin(
   for (const [id, w] of Object.entries(d.wires)) {
     if (id === drop) continue
     wires[id] = id === keep
-      ? { scope: w.scope, endpoints: [...w.endpoints, ...d.wires[drop]!.endpoints] }
+      ? { scope: w.scope, sig: w.sig, endpoints: [...w.endpoints, ...d.wires[drop]!.endpoints] }
       : w
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
