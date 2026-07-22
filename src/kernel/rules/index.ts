@@ -25,6 +25,8 @@ export { applyClosedTermIntro } from './intro'
 export { applyFusion, applyFission } from './fusion'
 export type { AbstractionOccurrence } from './comprehension'
 export { applyComprehensionInstantiate, applyComprehensionAbstract } from './comprehension'
+export type { FoldTarget } from './fold'
+export { applyUnfold, applyFold } from './fold'
 export { applyVacuousIntro, applyVacuousElim } from './vacuous'
 export type { InconsistentCutDiscovery } from './inconsistent-cut'
 export {

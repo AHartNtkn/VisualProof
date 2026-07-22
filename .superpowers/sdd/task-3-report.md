@@ -196,3 +196,12 @@ unscoped expansion likely to collide with concurrent work.
 - `tests/kernel/diagram/boundary.test.ts`
 - `tests/kernel/diagram/builder.test.ts`
 - `tests/kernel/diagram/spawn.test.ts` (new)
+
+## Known gap (controller-added, closing the dangling reference above)
+
+The old boundary JSON round-trip scenario was replaced by a raw mkDiagram
+reconstruction because `src/kernel/diagram/json.ts` is not yet migrated (7 tsc
+errors in bubble/binder vocabulary). Consequence: DiagramWithBoundary's
+root-scoped-boundary invariant is currently untested end-to-end through JSON
+(de)serialization. Task 9 (kernel serialization) must restore that round-trip
+coverage.
