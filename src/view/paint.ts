@@ -20,6 +20,7 @@ import { existentialStubs, legPaths } from './wires'
  */
 
 export type Theme = {
+  readonly mode: 'light' | 'dark'
   readonly name: string
   /** Page background behind the sheet (owned by the shell/canvas element). */
   readonly canvas: string
@@ -37,6 +38,27 @@ export type Theme = {
   readonly wireGlow: boolean
   readonly bubbleLightness: number
   readonly interaction: InteractionPalette
+  readonly controls: ControlPalette
+}
+
+export type ControlPalette = {
+  readonly surface: string
+  readonly foreground: string
+  readonly border: string
+  readonly hoverSurface: string
+  readonly activeSurface: string
+  readonly primarySurface: string
+  readonly primaryForeground: string
+  readonly primaryBorder: string
+  readonly primaryHoverSurface: string
+  readonly primaryActiveSurface: string
+  readonly disabledSurface: string
+  readonly disabledForeground: string
+  readonly disabledBorder: string
+  readonly focusRing: string
+  readonly menuSurface: string
+  readonly menuHoverSurface: string
+  readonly mutedForeground: string
 }
 
 export type InteractionPalette = {
@@ -294,6 +316,7 @@ export function highlightGroup(e: Engine, st: Theme, binderRid: RegionId): Shape
 }
 
 export const LIGHT: Theme = {
+  mode: 'light',
   name: 'Light (Manuscript)', canvas: '#e8e4d8', paper: '#faf7ee', ink: '#2a2118', frame: '#7a7263',
   wire: '#26343a', wireW: 2.2, negFill: 'rgba(90, 78, 58, 0.12)', rimW: 1.3,
   discFill: '#fffdf6', discText: '#2a2118', font: 'Georgia, serif',
@@ -302,9 +325,19 @@ export const LIGHT: Theme = {
     selection: '#d97706', hover: '#2563eb', selectedHover: '#92400e', pin: '#dc2626',
     valid: '#16a34a', validWash: '#16a34a10', refusal: '#dc2626',
   },
+  controls: {
+    surface: '#fffdf6', foreground: '#2a2118', border: '#8a806f',
+    hoverSurface: '#f1eadc', activeSurface: '#e4d8c5',
+    primarySurface: '#8a3f0a', primaryForeground: '#fffaf0', primaryBorder: '#743306',
+    primaryHoverSurface: '#743306', primaryActiveSurface: '#5f2905',
+    disabledSurface: '#e8e0d2', disabledForeground: '#655e54', disabledBorder: '#857b6a',
+    focusRing: '#a94f00', menuSurface: '#fffdf6', menuHoverSurface: '#f4e6cb',
+    mutedForeground: '#665d51',
+  },
 }
 
 export const DARK: Theme = {
+  mode: 'dark',
   name: 'Dark (Slate)', canvas: '#0e1013', paper: '#1c2026', ink: '#e6e1d6', frame: '#4a5058',
   wire: '#5bd2de', wireW: 2.2, negFill: 'rgba(255, 255, 255, 0.06)', rimW: 1.2,
   discFill: '#262c33', discText: '#eae5da', font: 'Georgia, serif',
@@ -312,6 +345,15 @@ export const DARK: Theme = {
   interaction: {
     selection: '#f59e0b', hover: '#60a5fa', selectedHover: '#fbbf24', pin: '#fb7185',
     valid: '#4ade80', validWash: '#4ade8018', refusal: '#fb7185',
+  },
+  controls: {
+    surface: '#282d33', foreground: '#f1eadf', border: '#737b85',
+    hoverSurface: '#353c45', activeSurface: '#414a55',
+    primarySurface: '#f0a43a', primaryForeground: '#1a1611', primaryBorder: '#ffc15c',
+    primaryHoverSurface: '#ffc15c', primaryActiveSurface: '#d98a20',
+    disabledSurface: '#25292e', disabledForeground: '#a9a39a', disabledBorder: '#737b85',
+    focusRing: '#f3aa3d', menuSurface: '#1f242a', menuHoverSurface: '#343b43',
+    mutedForeground: '#b8b0a5',
   },
 }
 
