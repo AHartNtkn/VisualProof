@@ -28,7 +28,7 @@ export const TERM: Sig = Object.freeze({ kind: 'term' })
  * @returns a RelSig value
  */
 export function relSig(args: readonly Sig[]): RelSig {
-  return Object.freeze({ kind: 'rel', args: Object.freeze(args) })
+  return Object.freeze({ kind: 'rel', args: Object.freeze([...args]) })
 }
 
 /**

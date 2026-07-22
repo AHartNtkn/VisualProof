@@ -1,7 +1,8 @@
 export type {
   RegionId, NodeId, WireId, Region, DiagramNode, Port, Endpoint, Wire, Diagram,
 } from './diagram'
-export { mkDiagram, portKey, requiredPorts, DiagramError } from './diagram'
+export { mkDiagram, portKey, requiredPorts, portSig, DiagramError } from './diagram'
+export * from './sig'
 export { isAncestorOrEqual, cutDepth, polarity } from './regions'
 export { DiagramBuilder } from './builder'
 export { diagramToJson, diagramFromJson } from './json'

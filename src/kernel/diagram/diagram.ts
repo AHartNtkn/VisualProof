@@ -1,5 +1,11 @@
 import type { Term } from '../term/term'
 import { freePorts, renameFreePorts, assertWellFormedTerm } from '../term/term'
+import type { Sig, RelSig } from './sig'
+import { TERM, sigEquals, sigKey, assertWellFormedSig } from './sig'
+// Type-only: `DiagramWithBoundary` payloads live on body nodes. This import is
+// erased at runtime, so it introduces no cycle with boundary.ts (which imports
+// runtime values from here).
+import type { DiagramWithBoundary } from './boundary'
 
 export type RegionId = string
 export type NodeId = string
@@ -8,7 +14,6 @@ export type WireId = string
 export type Region =
   | { readonly kind: 'sheet' }
   | { readonly kind: 'cut'; readonly parent: RegionId }
-  | { readonly kind: 'bubble'; readonly parent: RegionId; readonly arity: number }
 
 export type TermDiagramNode = {
   readonly kind: 'term'
@@ -20,8 +25,9 @@ export type TermDiagramNode = {
 
 export type DiagramNode =
   | TermDiagramNode
-  | { readonly kind: 'atom'; readonly region: RegionId; readonly binder: RegionId }
-  | { readonly kind: 'ref'; readonly region: RegionId; readonly defId: string; readonly arity: number }
+  | { readonly kind: 'atom'; readonly region: RegionId; readonly sig: RelSig }
+  | { readonly kind: 'ref'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }
+  | { readonly kind: 'body'; readonly region: RegionId; readonly sig: RelSig; readonly content: DiagramWithBoundary }
 
 /** Construction-only input. Validated Diagram values always materialize `freePorts`. */
 export type DiagramNodeInput =
@@ -32,11 +38,15 @@ export type Port =
   | { readonly kind: 'output' }
   | { readonly kind: 'freeVar'; readonly name: string }
   | { readonly kind: 'arg'; readonly index: number }
+  | { readonly kind: 'head' }
 
 export type Endpoint = { readonly node: NodeId; readonly port: Port }
 
-/** One wire = one line of identity = one existentially scoped individual. */
-export type Wire = { readonly scope: RegionId; readonly endpoints: readonly Endpoint[] }
+/**
+ * One wire = one line of identity = one existentially scoped individual of a
+ * fixed sort. `sig` is the sort every attached port must accept.
+ */
+export type Wire = { readonly scope: RegionId; readonly sig: Sig; readonly endpoints: readonly Endpoint[] }
 
 export type Diagram = {
   readonly root: RegionId
@@ -57,33 +67,93 @@ export function portKey(p: Port): string {
     case 'output': return 'out'
     case 'freeVar': return `v:${p.name}`
     case 'arg': return `a:${p.index}`
+    case 'head': return 'hd'
   }
 }
 
 /**
- * The exact port set a node must have attached: output plus one freeVar port
- * per declared free port (declared order) for term nodes; arg
- * 0..arity-1 for atoms, arity read from the binder bubble.
+ * The exact port set a node must have attached. Context-free: every node's port
+ * shape is read from its own inline data.
+ * - term: output plus one freeVar port per declared free port (declared order).
+ * - atom: head plus arg 0..sig.args.length-1.
+ * - ref: arg 0..sig.args.length-1 (no head, no output).
+ * - body: output plus one freeVar port p0..p(k-1) per parameter, where the
+ *   parameters are the boundary wires past the arg stubs
+ *   (k = boundary.length - sig.args.length).
  */
-export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }, node: DiagramNode): Port[] {
+export function requiredPorts(node: DiagramNode): Port[] {
   switch (node.kind) {
     case 'term':
       return [
         { kind: 'output' },
         ...node.freePorts.map((name): Port => ({ kind: 'freeVar', name })),
       ]
-    case 'atom': {
-      const binder = d.regions[node.binder]
-      if (binder === undefined || binder.kind !== 'bubble') {
-        throw new DiagramError(`atom binder '${node.binder}' is not a bubble`)
-      }
-      return Array.from({ length: binder.arity }, (_, index): Port => ({ kind: 'arg', index }))
-    }
+    case 'atom':
+      return [
+        { kind: 'head' },
+        ...node.sig.args.map((_, index): Port => ({ kind: 'arg', index })),
+      ]
     case 'ref':
-      // arity is stored inline on the node (mkDiagram is context-free); the
-      // ref has arg ports 0..arity-1 and no output.
-      return Array.from({ length: node.arity }, (_, index): Port => ({ kind: 'arg', index }))
+      return node.sig.args.map((_, index): Port => ({ kind: 'arg', index }))
+    case 'body': {
+      const paramCount = node.content.boundary.length - node.sig.args.length
+      return [
+        { kind: 'output' },
+        ...Array.from({ length: paramCount }, (_, j): Port => ({ kind: 'freeVar', name: `p${j}` })),
+      ]
+    }
   }
+}
+
+/**
+ * The sort a port accepts.
+ * - term node: every port is `TERM` (output and each declared freeVar).
+ * - atom: head accepts `node.sig`; arg i accepts `node.sig.args[i]`.
+ * - ref: arg i accepts `node.sig.args[i]` (no head/output).
+ * - body: output accepts `node.sig`; freeVar pj accepts the sig of the
+ *   parameter boundary wire `content.boundary[argCount + j]`.
+ *
+ * Throws `DiagramError` for a port the node does not have.
+ */
+export function portSig(node: DiagramNode, port: Port): Sig {
+  switch (node.kind) {
+    case 'term':
+      if (port.kind === 'output') return TERM
+      if (port.kind === 'freeVar' && node.freePorts.includes(port.name)) return TERM
+      break
+    case 'atom':
+      if (port.kind === 'head') return node.sig
+      if (port.kind === 'arg') {
+        const s = node.sig.args[port.index]
+        if (s !== undefined) return s
+      }
+      break
+    case 'ref':
+      if (port.kind === 'arg') {
+        const s = node.sig.args[port.index]
+        if (s !== undefined) return s
+      }
+      break
+    case 'body': {
+      if (port.kind === 'output') return node.sig
+      if (port.kind === 'freeVar') {
+        const argCount = node.sig.args.length
+        const paramCount = node.content.boundary.length - argCount
+        for (let j = 0; j < paramCount; j++) {
+          if (port.name === `p${j}`) {
+            const wid = node.content.boundary[argCount + j]!
+            const w = node.content.diagram.wires[wid]
+            if (w === undefined) {
+              throw new DiagramError(`body node parameter wire '${wid}' is missing from content`)
+            }
+            return w.sig
+          }
+        }
+      }
+      break
+    }
+  }
+  throw new DiagramError(`node of kind '${node.kind}' has no port '${portKey(port)}'`)
 }
 
 /**
@@ -93,6 +163,10 @@ export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }
  * pass, so swaps like {s0→s1, s1→s0} cannot cascade. Runs after term
  * well-formedness checks (renaming presupposes meaningful names) and before
  * port validation, so all downstream invariants hold over canonical names.
+ *
+ * Only term nodes carry renamable free ports. Atom, ref, and body nodes are
+ * returned untouched; body freeVar ports are already canonical `p0…p(k-1)` by
+ * construction and are validated (not renamed) by the port-membership check.
  *
  * An endpoint whose name is not an original free of its node is left for the
  * port-membership check to reject — except when it spells a canonical name
@@ -113,7 +187,9 @@ function canonicalizeFreePorts(
       case 'atom':
         return n
       case 'ref':
-        // no free ports to canonicalize (arg ports only)
+        return n
+      case 'body':
+        // Parameter freeVar ports are canonical p0… by construction.
         return n
       case 'term': {
         const map = new Map<string, string>()
@@ -144,7 +220,7 @@ function canonicalizeFreePorts(
     let epsChanged = false
     const endpoints = w.endpoints.map((ep): Endpoint => {
       if (ep.port.kind !== 'freeVar') return ep
-      const map = renames.get(ep.node) // undefined for atoms and missing nodes: validation rejects those endpoints
+      const map = renames.get(ep.node) // undefined for atom/ref/body and missing nodes: validation rejects those endpoints
       if (map === undefined) return ep
       const to = map.get(ep.port.name)
       if (to === undefined) {
@@ -163,7 +239,7 @@ function canonicalizeFreePorts(
       wiresOut[wid] = w
       continue
     }
-    wiresOut[wid] = { scope: w.scope, endpoints }
+    wiresOut[wid] = { scope: w.scope, sig: w.sig, endpoints }
     wiresChanged = true
   }
   return {
@@ -184,11 +260,13 @@ function ancestorOrEqualRaw(regions: Readonly<Record<RegionId, Region>>, anc: Re
 
 /**
  * The single validating constructor. Checks, in order: root is the unique
- * sheet; the parent graph is a tree rooted there; bubble arities are sane;
- * node regions and atom binders are valid (binder a bubble enclosing the
- * atom); wire scopes enclose every endpoint; and the wire endpoint sets
- * exactly partition the set of all required ports. Throws DiagramError with
- * a specific message on the first violation found.
+ * sheet; the parent graph is a tree rooted there; node regions and inline
+ * signatures are valid (atom/ref/body sigs are relation signatures; body
+ * content is coherent with the node sig); every wire sig is well-formed and
+ * matches the sort of each port it attaches to; wire scopes enclose every
+ * endpoint; and the wire endpoint sets exactly partition the set of all
+ * required ports. Throws DiagramError with a specific message on the first
+ * violation found.
  */
 export function mkDiagram(parts: {
   root: RegionId
@@ -210,9 +288,6 @@ export function mkDiagram(parts: {
     if (r.kind === 'sheet' && id !== rootId) {
       fail(`region '${id}' is a second sheet; only the root may be a sheet`)
     }
-    if (r.kind === 'bubble' && (!Number.isSafeInteger(r.arity) || r.arity < 0)) {
-      fail(`bubble '${id}' arity must be a non-negative safe integer, got ${r.arity}`)
-    }
     if (r.kind !== 'sheet' && regions[r.parent] === undefined) {
       fail(`region '${id}' has missing parent '${r.parent}'`)
     }
@@ -228,6 +303,15 @@ export function mkDiagram(parts: {
       if (r.kind === 'sheet') break
       cur = r.parent
     }
+  }
+
+  const assertRelSig = (id: NodeId, kindLabel: string, sig: RelSig): void => {
+    try {
+      assertWellFormedSig(sig)
+    } catch (e) {
+      fail(`${kindLabel} node '${id}' sig: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    if (sig.kind !== 'rel') fail(`${kindLabel} node '${id}' sig must be a relation signature, got '${sigKey(sig)}'`)
   }
 
   for (const [id, n] of Object.entries(inputNodes)) {
@@ -261,23 +345,47 @@ export function mkDiagram(parts: {
             }
         break
       }
-      case 'atom': {
-        const binder = regions[n.binder] ?? fail(`atom '${id}' references missing binder '${n.binder}'`)
-        if (binder.kind !== 'bubble') fail(`atom '${id}' binder '${n.binder}' must be a bubble, got '${binder.kind}'`)
-        if (!ancestorOrEqualRaw(regions, n.binder, n.region)) {
-          fail(`atom '${id}' must lie inside its binder bubble '${n.binder}'`)
+      case 'atom':
+        assertRelSig(id, 'atom', n.sig)
+        nodes[id] = n
+        break
+      case 'ref':
+        // Context-free: sig is stored inline and validated here; defId
+        // resolution (exists? sig agrees?) is the rules' / verifyTheory's job.
+        assertRelSig(id, 'ref', n.sig)
+        nodes[id] = n
+        break
+      case 'body': {
+        assertRelSig(id, 'body', n.sig)
+        const argCount = n.sig.args.length
+        const content = n.content
+        const b = content.boundary
+        if (b.length < argCount) {
+          fail(`body node '${id}' boundary length ${b.length} is shorter than sig arity ${argCount}`)
+        }
+        // Content is a frozen Diagram, valid by construction (same trust model
+        // as any Diagram value); we only re-establish the coherence layer that
+        // makes portSig well-defined: boundary wires exist, are root-scoped,
+        // and the arg stubs carry the sig's argument sorts.
+        for (let i = 0; i < b.length; i++) {
+          const wid = b[i]!
+          const w = content.diagram.wires[wid]
+          if (w === undefined) fail(`body node '${id}' boundary[${i}] references missing wire '${wid}' in content`)
+          if (w!.scope !== content.diagram.root) {
+            fail(`body node '${id}' boundary[${i}] wire '${wid}' must be scoped at content root '${content.diagram.root}', got '${w!.scope}'`)
+          }
+        }
+        for (let i = 0; i < argCount; i++) {
+          const wid = b[i]!
+          const w = content.diagram.wires[wid]!
+          const argSig = n.sig.args[i]!
+          if (!sigEquals(w.sig, argSig)) {
+            fail(`body node '${id}' boundary[${i}] wire '${wid}' sig '${sigKey(w.sig)}' does not match sig arg ${i} '${sigKey(argSig)}'`)
+          }
         }
         nodes[id] = n
         break
       }
-      case 'ref':
-        // Context-free: arity is stored inline and validated here; defId
-        // resolution (exists? arity agrees?) is the rules' / verifyTheory's job.
-        if (!Number.isSafeInteger(n.arity) || n.arity < 0) {
-          fail(`ref '${id}' arity must be a non-negative safe integer, got ${n.arity}`)
-        }
-        nodes[id] = n
-        break
       default:
         // Exhaustiveness: a new node kind must add its own validation here.
         n satisfies never
@@ -293,7 +401,7 @@ export function mkDiagram(parts: {
   // partition check below.
   const portsByNode = new Map<NodeId, Port[]>()
   for (const [id, n] of Object.entries(canonNodes)) {
-    portsByNode.set(id, requiredPorts({ regions }, n))
+    portsByNode.set(id, requiredPorts(n))
   }
 
   // Nested map (node -> portKey -> wire) rather than a composite string key:
@@ -301,6 +409,11 @@ export function mkDiagram(parts: {
   // serialization has an aliasing seam.
   const attached = new Map<NodeId, Map<string, WireId>>()
   for (const [wid, w] of Object.entries(canonWires)) {
+    try {
+      assertWellFormedSig(w.sig)
+    } catch (e) {
+      fail(`wire '${wid}' sig: ${e instanceof Error ? e.message : String(e)}`)
+    }
     if (regions[w.scope] === undefined) fail(`wire '${wid}' has missing scope region '${w.scope}'`)
     for (const ep of w.endpoints) {
       const n = canonNodes[ep.node] ?? fail(`wire '${wid}' endpoint references missing node '${ep.node}'`)
@@ -308,6 +421,11 @@ export function mkDiagram(parts: {
       const req = portsByNode.get(ep.node)!
       if (!req.some((q) => portKey(q) === key)) {
         fail(`wire '${wid}' endpoint references non-existent port '${key}' of node '${ep.node}'`)
+      }
+      // Port exists (membership passed): portSig cannot throw here.
+      const expected = portSig(n, ep.port)
+      if (!sigEquals(w.sig, expected)) {
+        fail(`wire '${wid}' sig '${sigKey(w.sig)}' does not match port '${key}' of node '${ep.node}' expecting '${sigKey(expected)}'`)
       }
       let byPort = attached.get(ep.node)
       if (byPort === undefined) {
