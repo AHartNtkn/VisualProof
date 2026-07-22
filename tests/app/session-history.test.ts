@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
@@ -30,6 +31,8 @@ import {
 } from '../../src/app/session'
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { singleStepAction } from '../../src/kernel/proof/action'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 
 const ctx = verifyTheory(buildFregeTheory())
 const gesture = (step: ProofStep) => singleStepAction(step.rule, step)
@@ -80,8 +83,8 @@ describe('authoritative proof timeline', () => {
     const rewound = moveTrack(s2, 0)
     const replacementStep = {
       rule: 'vacuousIntro' as const,
-      sel: mkSelection(currentTrack(rewound), { region: currentTrack(rewound).root, regions: [], nodes: [], wires: [] }),
-      arity: 0,
+      scope: currentTrack(rewound).root,
+      sig: R(0),
     }
     const replacement = applyTrack(rewound, replacementStep)
 
@@ -130,8 +133,8 @@ describe('authoritative proof timeline', () => {
     const s0 = startSession(side, side, ctx)
     const first = {
       rule: 'vacuousIntro' as const,
-      sel: mkSelection(currentSide(s0, 'backward'), { region: currentSide(s0, 'backward').root, regions: [], nodes: [], wires: [] }),
-      arity: 0,
+      scope: currentSide(s0, 'backward').root,
+      sig: R(0),
     }
     const s1 = applyBackward(s0, first)
     const abandoned = intro(currentSide(s1, 'backward'))
@@ -142,8 +145,8 @@ describe('authoritative proof timeline', () => {
 
     const replacement = {
       rule: 'vacuousIntro' as const,
-      sel: mkSelection(currentSide(rewound, 'backward'), { region: currentSide(rewound, 'backward').root, regions: [], nodes: [], wires: [] }),
-      arity: 1,
+      scope: currentSide(rewound, 'backward').root,
+      sig: R(1),
     }
     const diverged = applyBackward(rewound, replacement)
 
