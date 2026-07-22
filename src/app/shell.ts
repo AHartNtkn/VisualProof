@@ -4,7 +4,9 @@ import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { parseTerm } from '../kernel/term/parse'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
-import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
+import { applyFold, applyUnfold } from '../kernel/rules/fold'
+import { relationSig } from '../theories/macros'
+import { relationWireHues } from './proof-front'
 import { applyFission } from '../kernel/rules/fusion'
 import type { ProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
@@ -17,7 +19,7 @@ import { mkEngine, carryOver } from '../view/engine'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
-import { paint, bubbleHues, highlightGroup, LIGHT, THEMES } from '../view/paint'
+import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
@@ -175,7 +177,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
   let spawnCascade!: SpawnCascade
   let proofSpawn!: ProofSpawnController
-  let spawnHoverBinder: RegionId | null = null
+  let spawnHoverBinder: WireId | null = null
   const feedback = new FeedbackController()
   let lastPointerClient: Vec2 = { x: window.innerWidth / 2, y: window.innerHeight / 2 }
   let refusalElement: HTMLOutputElement | null = null
@@ -1092,14 +1094,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             // plays which argument is an occurrence match — inferred, never
             // hand-picked
             const args = inferFoldArgs(mode === 'edit' ? editDiagram : currentDiagram(), psel, name, ctx)
+            const sig = relationSig(ctx.relations.get(name)!)
             if (mode === 'edit') {
-              const next = applyRelFold(editDiagram, psel, name, args, ctx.relations)
+              const next = applyFold(editDiagram, psel, args, {
+                defId: name, sig, resolve: (id) => ctx.relations.get(id),
+              })
               pending = null
               pushEdit(next)
               return
             }
             pending = null
-            applyProofStep({ rule: 'relFold', sel: psel, defId: name, args })
+            applyProofStep({ rule: 'fold', occurrence: psel, args, target: { defId: name, sig } })
           })))
         }
       }
@@ -1153,7 +1158,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0
           && displayed.nodes[sel.nodes[0]!]?.kind === 'ref') {
           menuDiv.append(button('Unfold relation', guard(() => {
-            pushEdit(applyRelUnfold(editDiagram, sel.nodes[0]!, ctx.relations))
+            pushEdit(applyUnfold(editDiagram, sel.nodes[0]!, (id) => ctx.relations.get(id)))
           })))
         }
       }
@@ -1167,15 +1172,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Hover-group target: hovering an atom or its bubble highlights the WHOLE
   // binder group (bubble ring + every atom bound to it) in their shared hue.
   // Returns the binder region id, or null when the hit is not part of a group.
-  const hoverGroupBinder = (hit: Hit): RegionId | null => {
+  const hoverGroupBinder = (hit: Hit): WireId | null => {
     if (hit.kind === 'node') {
-      const n = displayed.nodes[hit.id]
-      return n !== undefined && n.kind === 'atom' ? n.binder : null
+      if (displayed.nodes[hit.id]?.kind !== 'atom') return null
+      for (const [wid, w] of Object.entries(displayed.wires)) {
+        if (w.endpoints.some((ep) => ep.node === hit.id && ep.port.kind === 'head')) return wid
+      }
+      return null
     }
-    if (hit.kind === 'region') {
-      const r = displayed.regions[hit.id]
-      return r !== undefined && r.kind === 'bubble' ? hit.id : null
-    }
+    if (hit.kind === 'wire') return displayed.wires[hit.id]?.sig.kind === 'rel' ? hit.id : null
     return null
   }
 
@@ -1515,7 +1520,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const relation = ctx.relations.get(defId)
         if (relation === undefined) throw new Error(`relation '${defId}' is no longer loaded`)
         if (relation.boundary.length !== relationArity) throw new Error(`relation '${defId}' changed while the spawn menu was open`)
-        const added = spawnRelationNode(editDiagram, invocation.region, defId, relationArity)
+        const added = spawnRelationNode(editDiagram, invocation.region, defId, relationSig(relation))
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1523,10 +1528,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return false
       }
     },
-    spawnBoundPredicate: ({ binder, invocation }) => {
+    spawnBoundPredicate: ({ wire, invocation }) => {
       try {
         requireEdit()
-        const added = spawnBoundRelationNode(editDiagram, invocation.region, binder)
+        const added = spawnBoundRelationNode(editDiagram, invocation.region, wire)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1534,12 +1539,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return false
       }
     },
-    binderColor: (binder) => {
-      const color = bubbleHues(editDiagram, theme.bubbleLightness).get(binder)
-      if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+    binderColor: (wire) => {
+      const color = relationWireHues(editDiagram, theme.bubbleLightness).get(wire)
+      if (color === undefined) throw new Error(`bound-predicate option references missing relation wire '${wire}'`)
       return color
     },
-    hoverBinder: (binder) => { spawnHoverBinder = binder },
+    hoverBinder: (wire) => { spawnHoverBinder = wire },
   })
   proofSpawn = new ProofSpawnController({
     host: document.body,
@@ -1552,12 +1557,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     place: (node, at) => seedBodyPlacement(engine, node, at),
     refuse,
-    binderColor: (binder) => {
-      const color = bubbleHues(currentDiagram(), theme.bubbleLightness).get(binder)
-      if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+    binderColor: (wire) => {
+      const color = relationWireHues(currentDiagram(), theme.bubbleLightness).get(wire)
+      if (color === undefined) throw new Error(`bound-predicate option references missing relation wire '${wire}'`)
       return color
     },
-    hoverBinder: (binder) => { spawnHoverBinder = binder },
+    hoverBinder: (wire) => { spawnHoverBinder = wire },
   })
   construct = new ConstructController({
     host: document.body,
@@ -1901,7 +1906,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             kind: node.kind,
             region: node.region,
             defId: node.kind === 'ref' ? node.defId : null,
-            binder: node.kind === 'atom' ? node.binder : null,
+            binder: node.kind === 'atom'
+              ? (Object.entries(displayed.wires).find(([, w]) =>
+                  w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'head'))?.[0] ?? null)
+              : null,
           })),
           wires: Object.entries(displayed.wires).map(([id, wire]) => ({ id, scope: wire.scope, endpoints: wire.endpoints.length })),
           regions: Object.entries(displayed.regions).map(([id, region]) => ({
