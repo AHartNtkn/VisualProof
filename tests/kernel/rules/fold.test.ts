@@ -296,6 +296,37 @@ describe('fold: round-trips unfold for a bodied atom', () => {
   })
 })
 
+describe('fold: argument order is load-bearing (asymmetric multi-arg body)', () => {
+  it('round-trips with correct arg order, refuses transposed args (fingerprint mismatch)', () => {
+    // binaryBody = E x y, structurally asymmetric under arg swap.
+    const { d, atomId, W, argWires, region } = bodiedAtom({ sig: R2, content: binaryBody(), negative: true })
+    const [a0, a1] = [argWires[0]!, argWires[1]!]
+    const un = applyUnfold(d, atomId, noResolve)
+    const nodes = freshNodes(d, un).filter((id) => un.nodes[id]!.region === region)
+
+    const folded = applyFold(un, occFrom(un, nodes, region), [a0, a1], { wireId: W })
+    expect(exploreForm(folded)).toBe(exploreForm(d))
+
+    // Transposed args pin the occurrence against the body in the wrong order: E x y
+    // does not equal E y x, so the boundary-pinned canonical forms differ.
+    expect(() => applyFold(un, occFrom(un, nodes, region), [a1, a0], { wireId: W })).toThrow(RuleError)
+    expect(() => applyFold(un, occFrom(un, nodes, region), [a1, a0], { wireId: W })).toThrow(/does not match/)
+  })
+})
+
+describe('fold: a diagonal occurrence round-trips with repeated args', () => {
+  it('unfolds R(x,x) then folds back with args [w, w] to the exact diagram', () => {
+    const { d, atomId, W, argWires, region } = bodiedAtom({
+      sig: R2, content: binaryBody(), negative: true, diagonal: true,
+    })
+    const shared = argWires[0]!
+    const un = applyUnfold(d, atomId, noResolve)
+    const nodes = freshNodes(d, un).filter((id) => un.nodes[id]!.region === region)
+    const folded = applyFold(un, occFrom(un, nodes, region), [shared, shared], { wireId: W })
+    expect(exploreForm(folded)).toBe(exploreForm(d))
+  })
+})
+
 describe('fold: refuses a target wire with no body to fold against', () => {
   it('throws when the target wire is bare', () => {
     // Unfold a bodied atom, then remove the body by folding onto a DIFFERENT bare wire.
