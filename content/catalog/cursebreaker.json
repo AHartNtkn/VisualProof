@@ -276,6 +276,139 @@
       }
     },
     {
+      "puzzle": "seyric-metamath-pm2-82",
+      "name": {
+        "professional": "Seyric Complementary-Pivot Resolution Tablet",
+        "curatorShorthand": "pm2.82 pivot tablet"
+      },
+      "provenance": {
+        "summary": "Two nested disjunctive wards share A and expose C in complementary polarity before a common D-bearing conclusion can be recovered.",
+        "function": "Preserves the Metamath pm2.82 problem as a coordinated complementary-pivot resolution rather than ordinary implication chaining."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-4exmid",
+      "name": {
+        "professional": "Seyric Four-Valuation Excluded-Middle Tablet",
+        "curatorShorthand": "4exmid valuation tablet"
+      },
+      "provenance": {
+        "summary": "Four denied valuation cells cover every positive and negative pairing of two proposition owners.",
+        "function": "Requires two constructive resolution blocks to establish the four-way excluded-middle assertion recorded as Metamath 4exmid."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-cases2-hard-direction",
+      "name": {
+        "professional": "Seyric Guarded-Branch Construction Tablet",
+        "curatorShorthand": "cases2 hard direction"
+      },
+      "provenance": {
+        "summary": "Positive and negative handlers for A must be reorganized into the explicit guarded branches A-and-B or not-A-and-C.",
+        "function": "Isolates the constructive handlers-to-branches implication that forms the hard direction of Metamath cases2."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-cases2",
+      "name": {
+        "professional": "Seyric Guarded-Case Equivalence Tablet",
+        "curatorShorthand": "full cases2 equivalence"
+      },
+      "provenance": {
+        "summary": "Explicit guarded branches and their paired positive and negative handlers appear as two independent obligations of one equivalence.",
+        "function": "Preserves the complete Metamath cases2 biconditional and requires both its branch-to-handler and handler-to-branch directions."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-4cases",
+      "name": {
+        "professional": "Seyric Four-Case Convergence Tablet",
+        "curatorShorthand": "4cases convergence tablet"
+      },
+      "provenance": {
+        "summary": "Four handlers cover every valuation of A and B and converge on the same denied result C.",
+        "function": "Internalizes the Metamath 4cases inference as one closed implication, consumes all four handler outputs, then reuses the four-valuation resolution structure."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-anddi",
+      "name": {
+        "professional": "Seyric Two-by-Two Conjunction Cross-Product Tablet",
+        "curatorShorthand": "conjunction cross-product",
+        "accession": "SEY-241E90DF"
+      },
+      "provenance": {
+        "summary": "Two independent binary alternatives are multiplied into four product branches and reconstructed in the reverse direction.",
+        "function": "Required complete two-by-two conjunction distribution in both directions without collapsing either factor boundary."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-orddi",
+      "name": {
+        "professional": "Seyric Two-by-Two Disjunction Cross-Product Tablet",
+        "curatorShorthand": "disjunction cross-product",
+        "accession": "SEY-612B215C"
+      },
+      "provenance": {
+        "summary": "Two product alternatives are expanded into the four clauses of their dual cross-product and reconstructed in reverse.",
+        "function": "Required complete two-by-two disjunction distribution in both directions without reducing the four-clause product to a smaller proxy."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-ccase",
+      "name": {
+        "professional": "Seyric Four-Handler Cross-Case Tablet",
+        "curatorShorthand": "four-handler cross-case",
+        "accession": "SEY-2AE53AF4"
+      },
+      "provenance": {
+        "summary": "Four handlers cover the cross-product of two supplied alternatives and converge on one result.",
+        "function": "Required distributing both alternative axes and consuming the matching handler in every one of the four resulting cases."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-majority",
+      "name": {
+        "professional": "Seyric Majority Normal-Form Equivalence Tablet",
+        "curatorShorthand": "majority DNF-CNF equivalence",
+        "accession": "SEY-760A0E90"
+      },
+      "provenance": {
+        "summary": "The three-input majority relation is carried between its three-product disjunctive form and its three-clause conjunctive form.",
+        "function": "Required both distribution directions while preserving the shared two-of-three threshold structure."
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-peirceroll",
+      "name": {
+        "professional": "Seyric Peirce Roll Feedback Tablet"
+      },
+      "provenance": {
+        "summary": "A three-owner theorem tablet whose Peirce feedback path returns through an intermediate C trace.",
+        "function": "Peirce feedback rerouted through an intermediate proposition"
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-meredith",
+      "name": {
+        "professional": "Seyric Meredith Five-Owner Tablet"
+      },
+      "provenance": {
+        "summary": "A five-owner theorem tablet whose implication chain passes recognition authority through A, E, C, D, and back to A.",
+        "function": "Meredith's five-owner single axiom"
+      }
+    },
+    {
+      "puzzle": "seyric-metamath-dn1",
+      "name": {
+        "professional": "Seyric DN1 Nested-Negation Tablet"
+      },
+      "provenance": {
+        "summary": "A four-owner Boolean-algebra tablet whose repeated C sources unlock a deep nested-negation cleanup.",
+        "function": "The DN1 Boolean-algebra single axiom"
+      }
+    },
+    {
       "puzzle": "conjunction-idempotence-introduction",
       "name": {
         "professional": "Seyr Workshop Tablet S-34",

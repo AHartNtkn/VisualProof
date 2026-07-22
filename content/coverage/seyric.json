@@ -755,6 +755,90 @@
       "family": "classical-consensus-factor-boundary",
       "distinction": "A product-collapsing relation combines factoring or distribution with excluded middle across a factor boundary.",
       "stoppingRule": "Stop after one product-collapsing dual topology."
+    },
+    {
+      "id": "metamath-pm2-82-complementary-pivot",
+      "kind": "mixed",
+      "family": "metamath-resolution-challenges",
+      "distinction": "Resolve a complementary pivot nested inside two disjunctive contexts while preserving the shared A context and downstream D alternative.",
+      "stoppingRule": "Stop after one four-owner instance proves that exposing and consuming the complementary C pivot, rather than flattening the implications, is causally necessary."
+    },
+    {
+      "id": "metamath-four-way-excluded-middle",
+      "kind": "mixed",
+      "family": "metamath-valuation-challenges",
+      "distinction": "Constructively resolve all four positive and negative valuations of two proposition owners into a closed four-way excluded middle.",
+      "stoppingRule": "Stop at two owners and four valuation cells; further owners multiply cases without adding a new resolution dependency."
+    },
+    {
+      "id": "metamath-cases2-hard-direction",
+      "kind": "mixed",
+      "family": "metamath-valuation-challenges",
+      "distinction": "Convert paired A and not-A handlers into the explicit guarded branch disjunction A-and-B or not-A-and-C.",
+      "stoppingRule": "Stop after the handlers-to-branches implication isolates the constructive direction without the reverse obligation."
+    },
+    {
+      "id": "metamath-cases2-equivalence",
+      "kind": "mixed",
+      "family": "metamath-valuation-challenges",
+      "distinction": "Satisfy both independent directions between explicit guarded branches and their paired positive and negative handlers.",
+      "stoppingRule": "Stop at the complete three-owner biconditional; repeating either direction separately does not establish the equivalence."
+    },
+    {
+      "id": "metamath-four-cases-elimination",
+      "kind": "mixed",
+      "family": "metamath-valuation-challenges",
+      "distinction": "Consume four handlers covering every A and B valuation, then resolve the resulting valuation clauses to the common result.",
+      "stoppingRule": "Stop after the two-owner four-handler inference; an additional antecedent would add saturated case count without a new convergence mechanism."
+    },
+    {
+      "id": "mixed-two-by-two-conjunction-cross-product",
+      "kind": "mixed",
+      "family": "complete-cross-product-distribution",
+      "distinction": "Two binary alternatives distribute to all four conjunction products and factor back without losing a branch.",
+      "stoppingRule": "Stop after one complete two-by-two conjunction cross-product equivalence."
+    },
+    {
+      "id": "mixed-two-by-two-disjunction-cross-product",
+      "kind": "mixed",
+      "family": "complete-cross-product-distribution",
+      "distinction": "Two binary products distribute to all four disjunction clauses and factor back without losing a clause.",
+      "stoppingRule": "Stop after one complete two-by-two disjunction cross-product equivalence."
+    },
+    {
+      "id": "mixed-four-handler-cross-case",
+      "kind": "mixed",
+      "family": "complete-cross-product-case-analysis",
+      "distinction": "Two independent alternative axes select four handlers that converge on one result.",
+      "stoppingRule": "Stop after one explicit four-handler two-axis case proof."
+    },
+    {
+      "id": "mixed-majority-normal-form-equivalence",
+      "kind": "mixed",
+      "family": "threshold-normal-form-equivalence",
+      "distinction": "The two-of-three majority threshold is preserved across complete DNF and CNF forms.",
+      "stoppingRule": "Stop after one three-input majority DNF-CNF equivalence."
+    },
+    {
+      "id": "peirce-feedback-intermediate-rerouting",
+      "kind": "isolated",
+      "family": "peirce-feedback",
+      "distinction": "Follow a Peirce feedback dependency rerouted through an intermediate proposition.",
+      "stoppingRule": "Stop after the intermediate feedback chain, rather than a redundant opening, is causally required."
+    },
+    {
+      "id": "meredith-five-owner-recognition-chain",
+      "kind": "isolated",
+      "family": "metamath-optional-challenges",
+      "distinction": "Resolve Meredith’s five-link recognition chain before owner and cut cleanup.",
+      "stoppingRule": "Stop after the five-owner chain is recognized and the exact theorem start is discharged."
+    },
+    {
+      "id": "dn1-recognition-plus-nested-cleanup",
+      "kind": "isolated",
+      "family": "metamath-optional-challenges",
+      "distinction": "Recognize six repeated-source matches, then complete the distinct nested-cut cleanup burden.",
+      "stoppingRule": "Stop only after both the six recognition actions and the twenty-eight cleanup actions are required by the exact DN1 start."
     }
   ],
   "puzzles": [
@@ -1021,6 +1105,161 @@
         "rm-fa",
         "rm-c3",
         "two-mark-projection"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-pm2-82",
+      "obligations": [
+        "metamath-pm2-82-complementary-pivot"
+      ],
+      "visibleSituation": "Two nested disjunctive implication blocks share A; one carries C and the other carries not-C, while D must survive into the common conclusion.",
+      "defeats": "Ordinary chain composition cannot bridge the blocks: the complementary C pivot must first be exposed, consumed in both contexts, and cleaned up without losing A or D.",
+      "experientialNeighbors": [
+        "i-c4",
+        "branch-preparation-common-tail",
+        "classical-consensus-branch-building"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-4exmid",
+      "obligations": [
+        "metamath-four-way-excluded-middle"
+      ],
+      "visibleSituation": "Four denied cells enumerate A-and-B, not-A-and-not-B, A-and-not-B, and B-and-not-A without supplying a single decisive complement.",
+      "defeats": "One excluded-middle split or one resolution pair is insufficient: both constructive valuation-resolution blocks are independently required.",
+      "experientialNeighbors": [
+        "sey-lem-c01",
+        "excluded-middle-manufactures-cases",
+        "classical-consensus-branch-building"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-cases2-hard-direction",
+      "obligations": [
+        "metamath-cases2-hard-direction"
+      ],
+      "visibleSituation": "The A-to-B and not-A-to-C handlers are present, but the explicit A-and-B or not-A-and-C guarded branches are denied and must be built.",
+      "defeats": "Merely applying the handlers does not construct the disjunction: branch copying, specialization, and both valuation-resolution blocks are required.",
+      "experientialNeighbors": [
+        "i-case2",
+        "branch-preparation-local-chains",
+        "classical-consensus-branch-building"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-cases2",
+      "obligations": [
+        "metamath-cases2-equivalence"
+      ],
+      "visibleSituation": "The full biconditional places explicit guarded branches and positive and negative handlers in opposite implication blocks under one closed denial.",
+      "defeats": "Solving only the easy branch-to-handler implication or only the constructive handler-to-branch implication leaves the other half of the equivalence intact.",
+      "experientialNeighbors": [
+        "seyric-metamath-cases2-hard-direction",
+        "i-case2",
+        "classical-consensus-product-collapsing"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-4cases",
+      "obligations": [
+        "metamath-four-cases-elimination"
+      ],
+      "visibleSituation": "Four implication handlers cover every valuation of A and B and each produces C, while one final C remains denied.",
+      "defeats": "Three handler consumptions do not suffice, and consuming all four outputs is not the endpoint: their residual valuation clauses require the same two-block construction exposed by 4exmid.",
+      "experientialNeighbors": [
+        "seyric-metamath-4exmid",
+        "rm-case3",
+        "excluded-middle-manufactures-cases"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-anddi",
+      "obligations": [
+        "mixed-two-by-two-conjunction-cross-product"
+      ],
+      "visibleSituation": "Two binary alternatives on each axis must generate and then recollect all four conjunction products.",
+      "defeats": "Defeats solving only one distributive direction or omitting one cross-product branch.",
+      "experientialNeighbors": [
+        "i-dao",
+        "common-conjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-orddi",
+      "obligations": [
+        "mixed-two-by-two-disjunction-cross-product"
+      ],
+      "visibleSituation": "Two product alternatives must generate and then recollect the complete four-clause disjunction cross-product.",
+      "defeats": "Defeats solving only one dual direction or collapsing the clause product before every clause is consumed.",
+      "experientialNeighbors": [
+        "disjunction-over-conjunction-base",
+        "common-disjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-ccase",
+      "obligations": [
+        "mixed-four-handler-cross-case"
+      ],
+      "visibleSituation": "Four handlers consume every pairing generated by two supplied binary alternatives before reaching the shared result.",
+      "defeats": "Defeats treating the two alternative axes as one split or retaining only a single representative handler.",
+      "experientialNeighbors": [
+        "seyric-metamath-4cases",
+        "branch-preparation-local-chains"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-majority",
+      "obligations": [
+        "mixed-majority-normal-form-equivalence"
+      ],
+      "visibleSituation": "Three pairwise products and three pairwise clauses encode the same two-of-three threshold but require opposite distribution routes.",
+      "defeats": "Defeats recognizing semantic symmetry without constructing both complete graphical normal forms.",
+      "experientialNeighbors": [
+        "classical-consensus-branch-building",
+        "classical-consensus-product-collapsing"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-peirceroll",
+      "obligations": [
+        "peirce-feedback-intermediate-rerouting"
+      ],
+      "visibleSituation": "Closed wire-free start with 3 semantic owners, 10 owned atomic occurrences, and 18 cuts. Peirce feedback returns through an intermediate proposition.",
+      "defeats": "It overturns the strategy of treating the theorem as generic opening cleanup; the two recognition deiterations traverse the intermediate feedback structure.",
+      "experientialNeighbors": [
+        "sey-pei-i01",
+        "sey-pei-c01"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-meredith",
+      "obligations": [
+        "meredith-five-owner-recognition-chain"
+      ],
+      "visibleSituation": "Closed wire-free start with 5 semantic owners, 10 owned atomic occurrences, and 20 cuts. Five sequential recognition links precede structural cleanup.",
+      "defeats": "It overturns the strategy of treating a large implication seal as undifferentiated cleanup; the A–E–C–D–A recognition chain is sequential.",
+      "experientialNeighbors": [
+        "four-veils",
+        "echoed-veil",
+        "marked-echo-deiteration",
+        "single-mark-return",
+        "r5"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-dn1",
+      "obligations": [
+        "dn1-recognition-plus-nested-cleanup"
+      ],
+      "visibleSituation": "Closed wire-free start with 4 semantic owners, 16 owned atomic occurrences, and 56 cuts. Six repeated-source recognitions unlock twenty-eight cleanup actions.",
+      "defeats": "It overturns the strategy of treating source recognition as completion; most of the challenge remains in exact nested-form cleanup.",
+      "experientialNeighbors": [
+        "four-veils",
+        "echoed-veil",
+        "marked-echo-deiteration",
+        "single-mark-return",
+        "r5"
       ]
     },
     {

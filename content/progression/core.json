@@ -99,7 +99,19 @@
         "r4",
         "r5",
         "recollect-shared-branch-context",
-        "seyric-extraction-continuation"
+        "seyric-extraction-continuation",
+        "seyric-metamath-pm2-82",
+        "seyric-metamath-4exmid",
+        "seyric-metamath-cases2-hard-direction",
+        "seyric-metamath-cases2",
+        "seyric-metamath-4cases",
+        "seyric-metamath-anddi",
+        "seyric-metamath-orddi",
+        "seyric-metamath-ccase",
+        "seyric-metamath-majority",
+        "seyric-metamath-peirceroll",
+        "seyric-metamath-meredith",
+        "seyric-metamath-dn1"
       ]
     },
     {
@@ -817,6 +829,103 @@
       "puzzle": "seyric-extraction-continuation",
       "prerequisites": [
         "nested-owner-introduction"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-pm2-82",
+      "prerequisites": [
+        "i-c4",
+        "branch-preparation-common-tail",
+        "classical-consensus-branch-building"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-4exmid",
+      "prerequisites": [
+        "sey-lem-c01",
+        "excluded-middle-manufactures-cases",
+        "classical-consensus-branch-building"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-cases2-hard-direction",
+      "prerequisites": [
+        "i-case2",
+        "branch-preparation-local-chains",
+        "classical-consensus-branch-building"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-cases2",
+      "prerequisites": [
+        "seyric-metamath-cases2-hard-direction",
+        "classical-consensus-product-collapsing"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-4cases",
+      "prerequisites": [
+        "seyric-metamath-4exmid",
+        "rm-case3"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-anddi",
+      "prerequisites": [
+        "nested-owner-introduction",
+        "i-dao",
+        "disjunction-over-conjunction-base",
+        "common-conjunction-factor-base",
+        "common-disjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-orddi",
+      "prerequisites": [
+        "nested-owner-introduction",
+        "i-dao",
+        "disjunction-over-conjunction-base",
+        "common-conjunction-factor-base",
+        "common-disjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-ccase",
+      "prerequisites": [
+        "nested-owner-introduction",
+        "i-case2",
+        "seyric-metamath-4cases",
+        "disjunction-over-conjunction-base"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-majority",
+      "prerequisites": [
+        "nested-owner-introduction",
+        "common-conjunction-factor-base",
+        "common-disjunction-factor-base",
+        "classical-consensus-branch-building",
+        "classical-consensus-product-collapsing"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-peirceroll",
+      "prerequisites": [
+        "sey-pei-c01",
+        "r5"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-meredith",
+      "prerequisites": [
+        "r5"
+      ]
+    },
+    {
+      "puzzle": "seyric-metamath-dn1",
+      "prerequisites": [
+        "compound-conjunction-de-morgan",
+        "r5"
       ]
     }
   ]
