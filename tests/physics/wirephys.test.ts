@@ -88,6 +88,20 @@ const settled = (mk: () => { d: Diagram; b: WireId[] }, ticks = 8000): Engine =>
   return e
 }
 
+// A fixture settled to its FIXED POINT, memoized by fixture name and SHARED across
+// every read-only law assertion. The plan-24 fixed-point stop makes one settle reach
+// rest (every fixture here converges in <300 ticks, far under the caps these tests
+// used), so all read-only tests observe the IDENTICAL resting engine — sharing
+// changes WHEN it is settled, never WHAT is read. Tests that MUTATE after settling
+// (the E-band + no-orbit observation loops, the purity orbit attack, the dangle-tow
+// drag, the boundary slot sweep) build their OWN engine via `settled` / mkEngine.
+const sharedCache = new Map<string, Engine>()
+const sharedSettled = (mk: () => { d: Diagram; b: WireId[] }): Engine => {
+  let e = sharedCache.get(mk.name)
+  if (e === undefined) { e = settled(mk, 8000); sharedCache.set(mk.name, e) }
+  return e
+}
+
 /** Every leg of a wire, resolved against the live state. */
 function eachLeg(e: Engine, f: (w: WireView, leg: WireLeg) => void): void {
   for (const [, w] of e.wires) for (const leg of w.legs) f(w, leg)
@@ -98,7 +112,7 @@ function eachLeg(e: Engine, f: (w: WireView, leg: WireLeg) => void): void {
 describe('wire physics — loops and kinks are unrepresentable at the engine level', () => {
   it('every leg in every settled fixture has tangent range < 2π (no self-crossing loop)', () => {
     for (const mk of [threeWay, dangling, forallShape, interposed, boundaryOne]) {
-      const e = settled(mk)
+      const e = sharedSettled(mk)
       eachLeg(e, (w, leg) => {
         const s = resolveLeg(e, w, leg)
         // a monotone-curvature θ-quadratic self-crosses only past total turning
@@ -110,7 +124,7 @@ describe('wire physics — loops and kinks are unrepresentable at the engine lev
 
   it('every leg is C¹: adjacent trace tangents differ by O(1/QN) (no kink)', () => {
     for (const mk of [threeWay, dangling, forallShape, interposed]) {
-      const e = settled(mk)
+      const e = sharedSettled(mk)
       eachLeg(e, (w, leg) => {
         const s = resolveLeg(e, w, leg)
         const maxTurnPerStep = (Math.abs(s.sol.c1) + 2 * Math.abs(s.sol.c2)) / QN
@@ -187,7 +201,7 @@ describe('wire physics — rim closure', () => {
 describe('wire physics — perpendicular port exits at rest', () => {
   it('every leg starts ON its port rim and leaves along the port normal', () => {
     for (const mk of [threeWay, dangling, forallShape, interposed, boundaryOne]) {
-      const e = settled(mk)
+      const e = sharedSettled(mk)
       for (const g of computeLegs(e)) {
         const w = e.wires.get(g.leg.wid)!
         const bind = w.binds.find((bd) => bd.body === g.leg.from.body && bd.key === g.leg.from.key)
@@ -266,9 +280,8 @@ describe('wire physics — energy discipline', () => {
 
 describe('wire physics — equilibria', () => {
   it('the ∃ dot never rests sunk into its own wire (standoff law)', () => {
-    const { d, b, wid } = dangling()
-    const e = mkEngine(d, b)
-    settle(e, 8000)
+    const { wid } = dangling()
+    const e = sharedSettled(dangling)
     const w = e.wires.get(wid)!
     const tip = e.bodies.get(w.tipBodyId!)!
     const bd = w.binds[0]!
@@ -353,7 +366,7 @@ describe('wire physics — equilibria', () => {
     // the most-opposite arrival pair exceeds 120°, so the junction no longer
     // reads as a symmetric point-star. (Asymmetric junctions form a far stronger
     // trunk; see the pure-rule test and the app screenshots.)
-    const e = settled(threeWay, 6000)
+    const e = sharedSettled(threeWay)
     const w = [...e.wires.values()].find((x) => x.branches.length > 0)!
     expect(w.branches, 'the three-way interior junction is a branch tree').toHaveLength(1)
     const dirs: number[] = []
@@ -380,9 +393,8 @@ describe('wire physics — equilibria', () => {
 
 describe('wire physics — bodyless boundary attachment (plan 24, the reset ruling)', () => {
   it('a 1-port boundary wire is ONE bodyless leg to the fixed inner-frame slot (no exit body, no dot)', () => {
-    const { d, b, wid } = boundaryOne()
-    const e = mkEngine(d, b)
-    settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
+    const { wid } = boundaryOne()
+    const e = sharedSettled(boundaryOne)
     const w = e.wires.get(wid)!
     expect(w.slots, 'the boundary wire owns its fixed frame incidence').toEqual([0])
     expect(w.hub, 'a 1-port boundary wire has NO hub').toBeNull()
@@ -475,7 +487,7 @@ describe('wire physics — nothing is ever drawn outside the frame at rest (USER
     // escape is the node rotating / the hub migrating (Task-3/4 dynamics), never a
     // diagram-wrapping arc.
     for (const mk of [threeWay, boundaryOne, forallShape, interposed]) {
-      const e = settled(mk, 2000)
+      const e = sharedSettled(mk)
       const fb = frameBounds(e)!
       const outside = (p: { x: number; y: number }): number => Math.max(
         p.x - fb.maxX, fb.minX - p.x, p.y - fb.maxY, fb.minY - p.y)

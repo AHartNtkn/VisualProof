@@ -1062,13 +1062,13 @@ const MU = 0.1
     expanding search): capped, strictly E-gated per visit, so every move lowers
     the DOF's local energy — the guarantee pure momentum lacked (it conveyored
     and converged slowly at theorem scale). */
-function gatedStep(get: () => number, set: (v: number) => void, energy: () => number, h: number, mob: number, cap: number): void {
+function gatedStep(get: () => number, set: (v: number) => void, energy: () => number, h: number, mob: number, cap: number): boolean {
   const v0 = get()
   set(v0 + h); const ep = energy()
   set(v0 - h); const em = energy()
   set(v0); let Ecur = energy()
   const g = (ep - em) / (2 * h)
-  if (g === 0) { set(v0); return }
+  if (g === 0) { set(v0); return false }
   let mv = Math.max(-cap, Math.min(cap, -g * mob))
   let acc = 0
   for (let k = 0; k < 3; k++) { set(v0 + mv); const E1 = energy(); if (E1 < Ecur) { Ecur = E1; acc = mv; break } set(v0); mv /= 4 }
@@ -1085,11 +1085,18 @@ function gatedStep(get: () => number, set: (v: number) => void, energy: () => nu
     if (E2 < Ecur) { Ecur = E2; acc = next } else break
   }
   set(v0 + acc)
+  // acc !== 0 ⟺ the committed value differs from v0 at a STRICTLY lower energy (a
+  // trial evaluated at set(v0+acc) accepted E1<Ecur), so this exactly reports
+  // whether the DOF changed state. A whole sweep of `false` means every gate left
+  // its base value → the sweep was a bit-identical no-op → a proven fixed point.
+  return acc !== 0
 }
-/** Gated descent of a wire-owned POINT (x then y — coordinate descent). */
-function gatedPoint(pt: { pos: Vec2 }, energy: () => number, mob: number, cap: number): void {
-  gatedStep(() => pt.pos.x, (v) => { pt.pos = { x: v, y: pt.pos.y } }, energy, HX, mob, cap)
-  gatedStep(() => pt.pos.y, (v) => { pt.pos = { x: pt.pos.x, y: v } }, energy, HX, mob, cap)
+/** Gated descent of a wire-owned POINT (x then y — coordinate descent). Returns
+    whether either coordinate step changed the point. */
+function gatedPoint(pt: { pos: Vec2 }, energy: () => number, mob: number, cap: number): boolean {
+  const mx = gatedStep(() => pt.pos.x, (v) => { pt.pos = { x: v, y: pt.pos.y } }, energy, HX, mob, cap)
+  const my = gatedStep(() => pt.pos.y, (v) => { pt.pos = { x: pt.pos.x, y: v } }, energy, HX, mob, cap)
+  return mx || my
 }
 /** Gated 2D descent of a BODY position with the legality projection folded into
     candidate evaluation (plan 23): the ±HX gradient probes (tiny, always feasible)
@@ -1098,7 +1105,7 @@ function gatedPoint(pt: { pos: Vec2 }, energy: () => number, mob: number, cap: n
     onto the feasible set (`project`) and measured with the true grid `energy`,
     accepted only if strictly lower — so every accepted state is feasible AND lower
     in the true total (strict descent inside the feasible set). */
-function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) => Vec2, gradEnergy: () => number, energy: () => number, mob: number, cap: number): void {
+function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) => Vec2, gradEnergy: () => number, energy: () => number, mob: number, cap: number): boolean {
   const p0 = get()
   set({ x: p0.x + HX, y: p0.y }); const exP = gradEnergy()
   set({ x: p0.x - HX, y: p0.y }); const exM = gradEnergy()
@@ -1107,7 +1114,7 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
   set(p0); let Ecur = energy()
   const gx = (exP - exM) / (2 * HX), gy = (eyP - eyM) / (2 * HX)
   const gm = Math.hypot(gx, gy)
-  if (gm === 0) { set(p0); return }
+  if (gm === 0) { set(p0); return false }
   const ux = -gx / gm, uy = -gy / gm
   const step = Math.min(cap, gm * mob)
   let acc = 0, accP = p0
@@ -1130,6 +1137,9 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
   // rejected trial's energy() left the region circles recomputed at that trial,
   // so re-evaluate at accP to re-sync them for the next body in the sweep.
   set(accP); energy()
+  // acc > 0 ⟺ accP is a strictly-lower-energy trial distinct from p0, so this
+  // exactly reports whether the body moved (the fixed-point signal, see gatedStep).
+  return acc > 0
 }
 
 /**
@@ -1154,8 +1164,8 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
  * deterministic (Map insertion order over bodies/wires) and stable across frames
  * for a fixed diagram, so a persistent integer cursor resumes correctly.
  */
-function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void)[] {
-  const dofs: (() => void)[] = []
+function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => boolean)[] {
+  const dofs: (() => boolean)[] = []
   const sc = e.scale
   const discs: DiscRec[] = []
   for (const b of e.bodies.values()) if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') discs.push({ id: b.id, body: b, r: b.discR * sc })
@@ -1307,7 +1317,8 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null, true) + contentFrame() }
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null) + contentFrame() }
     dofs.push(() => {
-      if (!posPinned) gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc)
+      let moved = false
+      if (!posPinned) moved = gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc) || moved
       if (touched.length > 0) {
         // Node angle is FREE and UNLIMITED (USER RULING 2026-07-06: "Node angle is
         // ARBITRARY. It encodes NO information and is FREE in the physics"). The
@@ -1318,9 +1329,10 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
         // bounded only at π (an angle wraps, so a larger cap is meaningless). Strict
         // E-gating still forbids any move that does not lower energy, so it settles.
         const rW = b.discR * sc // world radius: the rotation probe/mobility scale with the drawn node
-        gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / rW, (4 * MU) / (rW * rW), Math.PI)
+        moved = gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / rW, (4 * MU) / (rW * rW), Math.PI) || moved
       }
       for (const r of touched) refresh(r)
+      return moved
     })
   }
   // ---- wire-owned TRANSLATION DOF: ∃ tips and ∀ via-body hubs (boundary slots
@@ -1348,8 +1360,9 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     // into a small limit cycle (measured: an ∃ tip cycling E ±0.4 forever).
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, null, null) + contentFrame() }
     dofs.push(() => {
-      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, (light ? 0.55 : 0.28) * sc)
+      const moved = gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, (light ? 0.55 : 0.28) * sc)
       for (const r of touched) refresh(r)
+      return moved
     })
   }
   // trunk-AXIS DOF (interior hubs): the hub orientation `phi` is a stiff/slow
@@ -1360,9 +1373,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
   for (const [wid, w] of e.wires) {
     void wid
     if (w.hub === null || w.slots.length > 0) continue
-    dofs.push(() => {
-      gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06)
-    })
+    dofs.push(() => gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06))
   }
   // hub points (∀ via-body / legacy point hub)
   for (const [wid, w] of e.wires) {
@@ -1370,8 +1381,9 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     const hub = w.hub
     const touched = legsOfWire.get(wid)!.filter((r) => r.leg.b.kind === 'hub')
     dofs.push(() => {
-      gatedPoint(hub, () => localE(touched, null, null), MU, 0.28 * sc)
+      const moved = gatedPoint(hub, () => localE(touched, null, null), MU, 0.28 * sc)
       for (const r of touched) refresh(r)
+      return moved
     })
   }
   // junction BRANCH points: the soap-film Steiner TREE is the physics. Each branch
@@ -1387,12 +1399,14 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       const touched = recs.filter((r) => (r.leg.a.kind === 'branch' && r.leg.a.i === bi) || (r.leg.b.kind === 'branch' && r.leg.b.i === bi))
       const holder = { get pos(): Vec2 { return w.branches[bi]! }, set pos(p: Vec2) { w.branches[bi] = p } }
       dofs.push(() => {
-        gatedPoint(holder, () => localE(touched, null, null), MU, 0.28 * sc)
+        const moved = gatedPoint(holder, () => localE(touched, null, null), MU, 0.28 * sc)
         for (const r of touched) refresh(r)
+        return moved
       })
       dofs.push(() => {
-        gatedStep(() => w.branchPhi[bi]!, (v) => { w.branchPhi[bi] = v }, () => localE(touched, null, null), HX / 8, MU / 64, 0.06)
+        const moved = gatedStep(() => w.branchPhi[bi]!, (v) => { w.branchPhi[bi] = v }, () => localE(touched, null, null), HX / 8, MU / 64, 0.06)
         for (const r of touched) refresh(r)
+        return moved
       })
     }
   }
@@ -1403,8 +1417,9 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       if (rec.leg.b.kind !== 'hub') continue
       const leg = rec.leg
       dofs.push(() => {
-        gatedStep(() => leg.hubAngle, (v) => { leg.hubAngle = v }, () => localE([rec], null, w), HX / 8, MU / 64, 0.06)
+        const moved = gatedStep(() => leg.hubAngle, (v) => { leg.hubAngle = v }, () => localE([rec], null, w), HX / 8, MU / 64, 0.06)
         refresh(rec)
+        return moved
       })
     }
   }
@@ -1415,9 +1430,19 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     candidate step once, in the deterministic worklist order. There is no
     time-slicing and no resume cursor — a sweep is always run whole (plan 24:
     smoothness comes from small frequent steps on ALL DOF every frame, not from
-    slicing one region of the worklist per frame, which read as hard clicking). */
-function descentSweep(e: Engine, pinned: ReadonlySet<string> | null): void {
-  for (const dof of descentDofs(e, pinned)) dof()
+    slicing one region of the worklist per frame, which read as hard clicking).
+
+    Returns whether ANY DOF changed state. Because the mover is deterministic,
+    strictly value-gated (a move is committed only at a strictly lower energy), and
+    the worklist is a pure function of current engine state (rebuilt each sweep from
+    positions — no tick index, no stored per-DOF scale, no randomness), a sweep that
+    changes nothing leaves the state bit-identical; the next sweep rebuilds the same
+    worklist over the same state and again changes nothing. So a single all-`false`
+    sweep is a PROVEN fixed point — the layout is settled forever. */
+function descentSweep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
+  let moved = false
+  for (const dof of descentDofs(e, pinned)) moved = dof() || moved
+  return moved
 }
 
 /** One relaxation tick — STRICT TOTAL-ENERGY DESCENT (plan 23), the USER's
@@ -1431,17 +1456,20 @@ function descentSweep(e: Engine, pinned: ReadonlySet<string> | null): void {
     across the whole tick. Deterministic: no randomness, seed from mkEngine's
     spiral. `pinned` bodies are held by the caller and skipped by every gate; the
     layout relaxes around them. The app frame loop calls this once per frame (a
-    full sweep every frame — plan 24 motion policy). */
-export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
+    full sweep every frame — plan 24 motion policy). Returns whether the sweep
+    changed any DOF; `false` means the layout reached a proven fixed point (see
+    descentSweep) and further ticks are no-ops. */
+export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): boolean {
   recomputeRegions(e)
   // establish the fixed frame once, on first display (a raw settleStep loop with
   // no construction projection); the app/settle paths establish it from the LEGAL
   // seed beforehand (seedProject / settle's leading projection), so this is a
   // no-op there. Never re-established during settling — the frame is constant.
   if (e.frame === null) establishFrame(e)
-  descentSweep(e, pinned)
+  const moved = descentSweep(e, pinned)
   recomputeRegions(e)
   e.tick++
+  return moved
 }
 
 /** Run a tick budget of strict descent, bracketed by the DISCRETE construction-
@@ -1465,13 +1493,21 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     unconverged tail (the drift the plan-23 close-out mismeasured as rest).
 
     The TRAILING projection remains the at-rest guarantee for a layout an external
-    rewrite constructs overlapping after the descent has run. */
-export function settle(e: Engine, ticks: number): void {
+    rewrite constructs overlapping after the descent has run.
+
+    `ticks` is a CAP, not a fixed schedule: the descent stops the sweep AFTER the
+    first that changes nothing (a proven fixed point — see descentSweep), so a
+    settled diagram terminates in far fewer ticks than the backstop budget. Stopping
+    there is bit-identical to burning the full budget, since every skipped sweep
+    would have been a no-op. Returns the number of ticks actually run. */
+export function settle(e: Engine, ticks: number): number {
   recomputeRegions(e)
   resolveOverlaps(e)
   establishFrame(e) // fix the frame from the legal seed, before any settling
   reseedUnrepresentableBranches(e) // stale boundary-Steiner seeds start representable
-  for (let t = 0; t < ticks; t++) settleStep(e)
+  let used = 0
+  for (let t = 0; t < ticks; t++) { used++; if (!settleStep(e)) break }
   recomputeRegions(e)
   resolveOverlaps(e)
+  return used
 }

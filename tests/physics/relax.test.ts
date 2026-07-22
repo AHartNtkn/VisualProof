@@ -6,7 +6,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { carryOver, mkEngine, resolveLeg } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame } from '../../src/view/relax'
+import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame, recomputeRegions, resolveOverlaps, establishFrame } from '../../src/view/relax'
 import { thetaRange, legCache } from '../../src/view/elastica'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
@@ -26,6 +26,21 @@ const cases: [string, Diagram, readonly WireId[]][] = [
   ['natBody', natRelation.diagram, natRelation.boundary],
   ['succShiftS.rhs', succShiftS.rhs.diagram, succShiftS.rhs.boundary],
 ]
+
+// Every READ-ONLY law assertion below (containment, disc-in-frame, port facing, no
+// leg wraps) needs a SETTLED fixture, and settling a framed fixture is the dominant
+// test cost. Settle each case ONCE and share the resting engine across all of those
+// assertions — they only READ it, never mutate, so sharing changes WHEN the engine
+// is built, never WHAT is asserted. Tests that MUTATE after settling (the frame-
+// breathe run, drag clamp, twist, angular-speed knock) keep their OWN engines. The
+// shared cap 1100 is the highest budget any of these read-only tests used; the plan-
+// 24 fixed-point stop terminates well under it for the converging fixtures.
+const settledShared = new Map<string, Engine>()
+function settledCase(name: string, d: Diagram, boundary: readonly WireId[]): Engine {
+  let e = settledShared.get(name)
+  if (e === undefined) { e = mkEngine(d, boundary); settle(e, 1100); settledShared.set(name, e) }
+  return e
+}
 
 /** Two circles are legal iff disjoint or one strictly contains the other. */
 function partiallyOverlaps(a: { center: { x: number; y: number }; radius: number }, b: { center: { x: number; y: number }; radius: number }): boolean {
@@ -81,11 +96,75 @@ function assertRestsLegalMonotone(name: string, e: Engine, driftBound: number): 
   expect(maxRise, `${name}: total E rose ${maxRise.toFixed(4)} in a post-settle tick (un-gated mover?)`).toBeLessThanOrEqual(1e-3)
 }
 
+describe('settle stops at a proven fixed point (plan-24 perf — no wasted budget)', () => {
+  // The strict-descent mover is deterministic, strictly value-gated (a DOF commits a
+  // move only at a strictly LOWER energy), and its proposals depend ONLY on current
+  // state — the DOF worklist is rebuilt each sweep from positions, with no tick
+  // index, no stored per-DOF scale, and no randomness. So a sweep that accepts zero
+  // moves leaves the state BIT-IDENTICAL, and the next sweep rebuilds the same
+  // worklist over the same state and again moves nothing: it is a proven fixed point,
+  // and stopping there is identical to burning the whole budget. `settle` now takes
+  // `ticks` as a CAP and returns the ticks actually run.
+  const twoTerms = (): { d: Diagram; b: readonly WireId[] } => {
+    const h = new DiagramBuilder()
+    h.termNode(h.root, idp('\\x. x'))
+    h.termNode(h.root, idp('\\x. \\y. x'))
+    return { d: h.build(), b: [] }
+  }
+  const snap = (e: Engine): number[] => [...e.bodies.values()].flatMap((b) => [b.pos.x, b.pos.y, b.theta])
+
+  it('a settling diagram stops far short of the cap and rests exactly there', () => {
+    const { d, b } = twoTerms()
+    const e = mkEngine(d, b)
+    const cap = 20000
+    const used = settle(e, cap)
+    expect(used, `settle burned the whole ${cap}-tick budget — the fixed-point stop never fired`).toBeLessThan(cap)
+    expect(used, 'two floating terms rest quickly; a large tick count means the stop is late').toBeLessThan(500)
+    // proven fixed point: 50 further sweeps must change NOTHING (bit-identical)
+    const s0 = snap(e)
+    for (let i = 0; i < 50; i++) settleStep(e)
+    const s1 = snap(e)
+    let maxd = 0
+    for (let i = 0; i < s0.length; i++) maxd = Math.max(maxd, Math.abs(s0[i]! - s1[i]!))
+    expect(maxd, `state drifted ${maxd} over 50 post-stop ticks — the stop was not a true fixed point`).toBe(0)
+  })
+
+  it('re-settling an already-settled diagram stops after a single sweep', () => {
+    const { d, b } = twoTerms()
+    const e = mkEngine(d, b)
+    settle(e, 20000)
+    const again = settle(e, 20000)
+    expect(again, 'a settled diagram must detect the fixed point on the first re-settle sweep').toBe(1)
+  })
+
+  it('early-stop settle is BIT-IDENTICAL to burning the full tick budget', () => {
+    // Full-budget reference: the SAME leading construction projection settle applies
+    // (recomputeRegions + resolveOverlaps + establishFrame; the branch re-seed is a
+    // no-op here — no boundary Steiner wires), then a FIXED settleStep loop with no
+    // early stop, then the same trailing projection.
+    const { d, b } = twoTerms()
+    const N = 4000
+    const ref = mkEngine(d, b)
+    recomputeRegions(ref); resolveOverlaps(ref); establishFrame(ref)
+    for (let t = 0; t < N; t++) settleStep(ref)
+    recomputeRegions(ref); resolveOverlaps(ref)
+
+    const es = mkEngine(d, b)
+    const used = settle(es, N)
+    expect(used, 'early stop should fire well within the budget').toBeLessThan(N)
+
+    const r = snap(ref), s = snap(es)
+    expect(s.length).toBe(r.length)
+    let maxd = 0
+    for (let i = 0; i < r.length; i++) maxd = Math.max(maxd, Math.abs(r[i]! - s[i]!))
+    expect(maxd, `early-stop layout differs from the full-budget layout by ${maxd} (must be exactly 0)`).toBe(0)
+  })
+})
+
 describe('law 1 — containment: no two region circles ever intersect', () => {
   for (const [name, d, boundary] of cases) {
     it(`holds after settle for ${name}`, () => {
-      const e = mkEngine(d, boundary)
-      settle(e, 1100)
+      const e = settledCase(name, d, boundary)
       expect(anyOverlap(e), `regions overlap in ${name}`).toBe(false)
     })
   }
@@ -249,8 +328,7 @@ describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => 
 
   it('every content disc rests INSIDE the fixed frame (the hard edge holds it in)', () => {
     for (const [name, diagram, boundary] of cases) {
-      const e = mkEngine(diagram, boundary)
-      settle(e, 800)
+      const e = settledCase(name, diagram, boundary)
       const f = e.frame!
       for (const b of e.bodies.values()) {
         if (b.id.startsWith('e:')) continue // frame terminals ride ON the edge
@@ -413,8 +491,7 @@ describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => 
     // multi-port node cannot face all its ports at once; that is geometry, not a
     // rotation failure, so this law is scoped to single-port nodes.)
     for (const [name, diagram, boundary] of cases) {
-      const e = mkEngine(diagram, boundary)
-      settle(e, 800)
+      const e = settledCase(name, diagram, boundary)
       for (const [, w] of e.wires) for (const leg of w.legs) {
         if (leg.a.kind !== 'bind') continue
         const b = e.bodies.get(w.binds[leg.a.i]!.body)!
@@ -431,8 +508,7 @@ describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => 
     // Free rotation keeps every port within a representable turn of its target, so
     // no leg falls into the >π blind cone that would draw a diagram-wrapping arc.
     for (const [name, diagram, boundary] of cases) {
-      const e = mkEngine(diagram, boundary)
-      settle(e, 800)
+      const e = settledCase(name, diagram, boundary)
       for (const [, w] of e.wires) for (const leg of w.legs) {
         const sh = resolveLeg(e, w, leg)
         // the elastica enforces range ≤ π by construction; assert the resting
