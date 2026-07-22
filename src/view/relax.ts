@@ -1,9 +1,10 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, LegShape, WireLeg, WireView, StoredFrame } from './engine'
-import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, frameSlots, FRAME_MARGIN } from './engine'
-import { ELASTICA, QN, mkLegCache } from './elastica'
+import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, frameSlots, resolvedFrameSlot, FRAME_MARGIN } from './engine'
+import { ELASTICA, QN, mkLegCache, thetaRange, RANGE_B } from './elastica'
 import type { LegCache } from './elastica'
+import { buildJunctionTree } from './soaptree'
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
     round-10 demo's `P`). The leg's own tension/bend live in ELASTICA (the
@@ -455,10 +456,43 @@ export function applyContentScale(e: Engine): void {
     is a variant (establishProofFrame + establishProofSlotShift over all steps);
     see seedProjectReplay. `noScale` skips the content scale for scale-invariant
     measurements (frame box / slots) that must read natural geometry. */
+/** Re-seed a wire's Steiner branch points from its REAL terminal geometry when the
+    construction seed is UNREPRESENTABLE. mkEngine builds a boundary wire's branch
+    points BEFORE the frame exists, so it seeds them against a placeholder slot ring
+    (a 30-wu circle) and the pre-separation spiral node positions — geometry that can
+    strand a branch inside a leg's blind cone (the > π tangent range the elastica
+    cannot draw, so the leg solves to a diagram-wrapping arc fallback that is a genuine
+    energy well the strict per-DOF descent cannot climb out of). Once the construction
+    projection has established the frame and separated the nodes, this recomputes any
+    branch whose current seed makes an incident leg unrepresentable, from the TRUE
+    terminals (real port anchors + real frame slots), placing the descent's start
+    inside the representable family. A branch whose seed already draws representable
+    legs — including a carried, settled glide across a rewrite — is left untouched, so
+    the no-snap continuity of a surviving junction is preserved. Requires an
+    established frame (slot terminals need it). */
+function reseedUnrepresentableBranches(e: Engine): void {
+  if (e.frame === null) return
+  for (const [, w] of e.wires) {
+    if (w.branches.length === 0) continue
+    let wraps = false
+    for (const leg of w.legs) {
+      const sh = resolveLeg(e, w, leg)
+      if (Math.abs(thetaRange(sh.sol.c1, sh.sol.c2)) > RANGE_B) { wraps = true; break }
+    }
+    if (!wraps) continue
+    const terms: Vec2[] = []
+    for (const bd of w.binds) terms.push(worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key))
+    for (const si of w.slots) { const s = resolvedFrameSlot(e, si); if (s !== null) terms.push(s.point) }
+    const tree = buildJunctionTree(terms)
+    for (let k = 0; k < w.branches.length && k < tree.branchPts.length; k++) w.branches[k] = tree.branchPts[k]!
+  }
+}
+
 export function seedProject(e: Engine, noScale = false): void {
   recomputeRegions(e)
   resolveOverlaps(e)
   establishFrame(e)
+  reseedUnrepresentableBranches(e)
   if (!noScale) { applyContentScale(e); clampContentToFrame(e) }
 }
 
@@ -1436,6 +1470,7 @@ export function settle(e: Engine, ticks: number): void {
   recomputeRegions(e)
   resolveOverlaps(e)
   establishFrame(e) // fix the frame from the legal seed, before any settling
+  reseedUnrepresentableBranches(e) // stale boundary-Steiner seeds start representable
   for (let t = 0; t < ticks; t++) settleStep(e)
   recomputeRegions(e)
   resolveOverlaps(e)
