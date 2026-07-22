@@ -147,6 +147,10 @@ Amendment to Global Constraints: Tasks 2–9 gate on (a) their own test files pa
 
 - [ ] Steps: failing round-trip tests (diagram with depth-2 atom + body node survives encode/decode identically; decoding a payload containing `"bubble"` or `"binder"` fails loudly as unknown), implement, file tests PASS, commit `feat: serialize sigs, bodies, and primitive steps; delete monolithic comprehension rules`.
 
+### Task 9b: Mechanical sig threading through remaining kernel rules
+
+Added during execution. "Structural rules untouched" (rule set §5) is true at the *calculus* level but false at the representation level: every rule that constructs `Wire` literals or copies wires (iteration/deiteration, insertion/erasure, double cut, intro/spawn rules, anchored-wire split/contraction, congruence, conversion) must thread `sig` through construction and copying. No semantic gate changes — polarity and applicability logic byte-preserved; only sig propagation, plus their test suites migrated off `builder.bubble()`/binder vocabulary. Exit gate: `npx vitest run tests/kernel/` fully green and zero tsc errors under `src/kernel/`.
+
 ### Task 10: App adaptation
 
 **Files:**
