@@ -3,7 +3,8 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { boundaryForm, exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { mkDiagram, type Diagram, type NodeId, type WireId } from '../../src/kernel/diagram/diagram'
-import { spawnTermNode } from '../../src/kernel/diagram/spawn'
+import { spawnTermNode, spawnBoundRelationNode } from '../../src/kernel/diagram/spawn'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyAction } from '../../src/kernel/proof/action'
@@ -19,6 +20,7 @@ import {
 } from '../../src/app/copy-planner'
 
 const p = (source: string) => parseTerm(source)
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 function refusal(value: CopyPlan | CopyRefusal): CopyRefusal {
@@ -71,6 +73,7 @@ function reversedEndpointOrder(diagram: Diagram): Diagram {
     nodes: { ...diagram.nodes },
     wires: Object.fromEntries(Object.entries(diagram.wires).map(([id, wire]) => [id, {
       scope: wire.scope,
+      sig: wire.sig,
       endpoints: [...wire.endpoints].reverse(),
     }])),
   })
@@ -144,7 +147,7 @@ describe('CopyPlanner proof destinations', () => {
       root: 'sroot',
       regions: { sroot: { kind: 'sheet' }, scut: { kind: 'cut', parent: 'sroot' } },
       nodes: { r0_intro: { kind: 'term', region: 'scut', term: p('\\x. x') } },
-      wires: { sw: { scope: 'scut', endpoints: [{ node: 'r0_intro', port: { kind: 'output' } }] } },
+      wires: { sw: { scope: 'scut', sig: TERM, endpoints: [{ node: 'r0_intro', port: { kind: 'output' } }] } },
     })
     const selection = mkSelection(source, {
       region: 'scut', regions: [], nodes: ['r0_intro'], wires: ['sw'],
@@ -170,7 +173,7 @@ describe('CopyPlanner proof destinations', () => {
       root: 'sroot',
       regions: { sroot: { kind: 'sheet' }, scut: { kind: 'cut', parent: 'sroot' } },
       nodes: { sourceNode: { kind: 'term', region: 'scut', term: p('\\x. x') } },
-      wires: { r0_intro: { scope: 'scut', endpoints: [{ node: 'sourceNode', port: { kind: 'output' } }] } },
+      wires: { r0_intro: { scope: 'scut', sig: TERM, endpoints: [{ node: 'sourceNode', port: { kind: 'output' } }] } },
     })
     const selection = mkSelection(source, {
       region: 'scut', regions: [], nodes: ['sourceNode'], wires: ['r0_intro'],
@@ -196,7 +199,7 @@ describe('CopyPlanner proof destinations', () => {
         dc_0: { kind: 'cut', parent: 'dc' },
       },
       nodes: { dc_2_intro: { kind: 'term', region: 'dc_0', term: p('\\x. x') } },
-      wires: { dc_2_intro: { scope: 'dc_0', endpoints: [{ node: 'dc_2_intro', port: { kind: 'output' } }] } },
+      wires: { dc_2_intro: { scope: 'dc_0', sig: TERM, endpoints: [{ node: 'dc_2_intro', port: { kind: 'output' } }] } },
     })
     const selection = mkSelection(source, {
       region: 'scut', regions: ['dc'], nodes: [], wires: [],
@@ -276,17 +279,19 @@ describe('CopyPlanner proof destinations', () => {
     if (doublePlan.kind !== 'proof') throw new Error('expected proof plan')
     expect(doublePlan.action.steps.map((step) => step.rule)).toEqual(['doubleCutIntro'])
 
-    const bubble = new DiagramBuilder()
-    const bubbleSource = bubble.cut(bubble.root)
-    const selectedBubble = bubble.bubble(bubbleSource, 3)
-    const bubbleDiagram = bubble.build()
-    const bubbleSelection = mkSelection(bubbleDiagram, { region: bubbleSource, regions: [selectedBubble], nodes: [], wires: [] })
-    const bubblePlan = plan(planCopy(bubbleDiagram, bubbleSelection, {
-      kind: 'proof', diagram: bubbleDiagram, region: bubbleDiagram.root, orientation: 'forward', ctx,
+    // A bare relational wire (the old empty bubble) copies through a single
+    // vacuousIntro that mints a fresh second-order existential line.
+    const rel = new DiagramBuilder()
+    const relSource = rel.cut(rel.root)
+    const selectedWire = rel.relWire(relSource, R(3))
+    const relDiagram = rel.build()
+    const relSelection = mkSelection(relDiagram, { region: relSource, regions: [], nodes: [], wires: [selectedWire] })
+    const relPlan = plan(planCopy(relDiagram, relSelection, {
+      kind: 'proof', diagram: relDiagram, region: relDiagram.root, orientation: 'forward', ctx,
     }))
-    expect(bubblePlan.kind).toBe('proof')
-    if (bubblePlan.kind !== 'proof') throw new Error('expected proof plan')
-    expect(bubblePlan.action.steps.map((step) => step.rule)).toEqual(['vacuousIntro'])
+    expect(relPlan.kind).toBe('proof')
+    if (relPlan.kind !== 'proof') throw new Error('expected proof plan')
+    expect(relPlan.action.steps.map((step) => step.rule)).toEqual(['vacuousIntro'])
   })
 
   it('uses an exact contextual relation constructor for an otherwise unsupported complete pattern', () => {
@@ -307,17 +312,21 @@ describe('CopyPlanner proof destinations', () => {
 
     expect(copied.kind).toBe('proof')
     if (copied.kind !== 'proof') throw new Error('expected proof plan')
-    expect(copied.action.steps.map((step) => step.rule)).toEqual(['relationSpawn', 'relUnfold'])
+    expect(copied.action.steps.map((step) => step.rule)).toEqual(['relationSpawn', 'unfold'])
     expect(copied.resultFingerprint).toBe(exploreForm(applyAction(diagram, copied.action, relationCtx, 'backward')))
   })
 
-  it('constructs a bound atom only when its selected binder is recreated in the recipe', () => {
+  it('constructs a bound atom only when its relational wire is recreated in the recipe', () => {
     const builder = new DiagramBuilder()
     const sourceRegion = builder.cut(builder.root)
-    const binder = builder.bubble(sourceRegion, 1)
-    builder.atom(binder, binder)
-    const diagram = builder.build()
-    const selection = mkSelection(diagram, { region: sourceRegion, regions: [binder], nodes: [], wires: [] })
+    const W = builder.relWire(sourceRegion, R(1))
+    const built = builder.build()
+    const { diagram, node: atom } = spawnBoundRelationNode(built, sourceRegion, W)
+    const argWire = Object.keys(diagram.wires).find((wid) =>
+      diagram.wires[wid]!.endpoints.some((ep) => ep.node === atom && ep.port.kind === 'arg'))!
+    // select the relational wire and the atom riding it (with its private arg line):
+    // the wire is minted by vacuousIntro, then the atom spawns onto it.
+    const selection = mkSelection(diagram, { region: sourceRegion, regions: [], nodes: [atom], wires: [W, argWire] })
 
     const copied = plan(planCopy(diagram, selection, {
       kind: 'proof', diagram, region: diagram.root, orientation: 'backward', ctx,
@@ -445,22 +454,23 @@ describe('CopyPlanner proof destinations', () => {
     expect(copied.resultFingerprint).toBe(exploreForm(replayed))
   })
 
-  it('constructs a fission component inside a constructible bubble', () => {
+  it('copies a relational wire alongside a term node: vacuousIntro then the node build', () => {
+    // The old "fission component inside a bubble region" has no wire counterpart
+    // — a relational wire is a line of identity, not a container (fission
+    // reconstruction itself is covered by the two tests above). Its honest
+    // analogue is a relational wire copied ALONGSIDE other content in the same
+    // region: the wire is minted first by vacuousIntro, then the content builds.
     const builder = new DiagramBuilder()
     const sourceRegion = builder.cut(builder.root)
-    const wrapper = builder.bubble(sourceRegion, 0)
-    const producer = builder.termNode(wrapper, p('\\x. x'))
-    const consumer = builder.termNode(wrapper, p('q (\\z. z)'))
-    builder.wire(wrapper, [
-      { node: producer, port: { kind: 'output' } },
-      { node: consumer, port: { kind: 'freeVar', name: 'q' } },
-    ])
+    const wrapper = builder.relWire(sourceRegion, R(0))
+    const node = builder.termNode(sourceRegion, p('\\x. x'))
+    const internal = builder.wire(sourceRegion, [{ node, port: { kind: 'output' } }])
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: sourceRegion,
-      regions: [wrapper],
-      nodes: [],
-      wires: [],
+      regions: [],
+      nodes: [node],
+      wires: [wrapper, internal],
     })
     const sourcePattern = extractSubgraph(diagram, selection)
 
@@ -470,13 +480,10 @@ describe('CopyPlanner proof destinations', () => {
 
     expect(copied.kind).toBe('proof')
     if (copied.kind !== 'proof') throw new Error('expected proof plan')
-    expect(copied.action.steps.map((step) => step.rule))
-      .toEqual(['vacuousIntro', 'closedTermIntro', 'fission'])
-    expect(copied.action.steps[2]).toMatchObject({ rule: 'fission', path: ['fn'] })
+    expect(copied.action.steps.map((step) => step.rule)).toEqual(['vacuousIntro', 'closedTermIntro'])
     const replayed = applyAction(diagram, copied.action, ctx, 'forward')
     const alleged = extractSubgraph(replayed, introducedSelection(diagram, replayed, diagram.root))
     expect(boundaryForm(alleged.pattern)).toBe(boundaryForm(sourcePattern.pattern))
-    expect(alleged.attachments).toEqual(sourcePattern.attachments)
     expect(copied.resultFingerprint).toBe(exploreForm(replayed))
   })
 
@@ -632,19 +639,19 @@ describe('CopyPlanner proof destinations', () => {
 })
 
 describe('CopyPlanner refusals and revalidation', () => {
-  it('rejects an external binder stub unless the binder is included', () => {
+  it('copies a lone atom whose relational head wire crosses the selection (higher-order attachment)', () => {
+    // No external-binder refusal: an atom's crossing relational head wire is a
+    // legitimate higher-order boundary attachment, so a lone atom copies fine.
     const builder = new DiagramBuilder()
-    const binder = builder.bubble(builder.root, 1)
-    const selected = builder.atom(binder, binder)
-    const diagram = builder.build()
-    const selection = mkSelection(diagram, { region: binder, regions: [], nodes: [selected], wires: [] })
+    const W = builder.relWire(builder.root, R(1))
+    const built = builder.build()
+    const { diagram, node: selected } = spawnBoundRelationNode(built, built.root, W)
+    const selection = mkSelection(diagram, { region: diagram.root, regions: [], nodes: [selected], wires: [] })
 
-    const denied = refusal(planCopy(diagram, selection, {
-      kind: 'edit', diagram, region: binder, at: { x: 0, y: 0 },
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'edit', diagram, region: diagram.root, at: { x: 0, y: 0 },
     }))
-
-    expect(denied.code).toBe('external-binder')
-    expect(denied).not.toHaveProperty('result')
+    expect(copied.kind).not.toBe('refusal')
   })
 
   it('returns typed whole-plan refusals for unsupported cuts, wrong polarity, and missing attachments', () => {
@@ -786,8 +793,8 @@ describe('CopyPlanner refusals and revalidation', () => {
       nodes: { ...diagram.nodes },
       wires: {
         ...diagram.wires,
-        [firstId]: { scope: first.scope, endpoints: second.endpoints },
-        [secondId]: { scope: second.scope, endpoints: first.endpoints },
+        [firstId]: { scope: first.scope, sig: first.sig, endpoints: second.endpoints },
+        [secondId]: { scope: second.scope, sig: second.sig, endpoints: first.endpoints },
       },
     })
 
