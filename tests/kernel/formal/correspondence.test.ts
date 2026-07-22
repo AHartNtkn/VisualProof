@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
-import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import type { Diagram } from '../../../src/kernel/diagram/diagram'
 import type { OccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
@@ -70,29 +68,6 @@ function runBoundaryAliasesBareWire(fixture: Fixture) {
   }
 }
 
-function runNestedExactness() {
-  const builder = new DiagramBuilder()
-  const bubble = builder.bubble(builder.root, 1)
-  const cut = builder.cut(bubble)
-  const term = builder.termNode(cut, parseTerm('\\a. a'))
-  const atom = builder.atom(cut, bubble)
-  builder.wire(bubble, [
-    { node: term, port: { kind: 'output' } },
-    { node: atom, port: { kind: 'arg', index: 0 } },
-  ])
-  const host = builder.build()
-  const result = findOccurrences(host, mkDiagramWithBoundary(host, []), {
-    fuel: 1000,
-    explorationFuel: 1000,
-    mode: 'exact',
-    attachments: [],
-  })
-  return {
-    status: result.status,
-    found: result.matches.map(match => footprint(host, match)),
-  }
-}
-
 function runSymmetricFootprints() {
   const hostBuilder = new DiagramBuilder()
   hostBuilder.termNode(hostBuilder.root, parseTerm('\\a. a'))
@@ -114,47 +89,25 @@ function runSymmetricFootprints() {
   }
 }
 
-function runOpenBinderIdentity(fixture: Fixture) {
-  const builder = new DiagramBuilder()
-  const outer = builder.bubble(builder.root, 1)
-  const inner = builder.bubble(outer, 1)
-  const cut = builder.cut(inner)
-  const outerAtom = builder.atom(cut, outer)
-  const innerAtom = builder.atom(cut, inner)
-  builder.wire(outer, [
-    { node: outerAtom, port: { kind: 'arg', index: 0 } },
-  ])
-  builder.wire(inner, [
-    { node: innerAtom, port: { kind: 'arg', index: 0 } },
-  ])
-  const host = builder.build()
-  const selection = mkSelection(host, {
-    region: cut,
-    regions: [],
-    nodes: [outerAtom, innerAtom],
-    wires: [],
-  })
-  const extracted = extractSubgraph(host, selection)
-  const hostWireByOrdinal = Object.keys(host.wires).sort()
-  const attachments = fixture.attachments.map(index => hostWireByOrdinal[index]!)
-  const result = findOccurrences(host, extracted.pattern, {
-    fuel: 1000,
-    explorationFuel: 1000,
-    mode: 'exact',
-    attachments,
-    openBinders: new Map([
-      [extracted.binderStubs[0]!, outer],
-      [extracted.binderStubs[1]!, inner],
-    ]),
-  })
-  return {
-    status: result.status,
-    found: result.matches.map(match => footprint(host, match)),
-  }
-}
+// nestedExactness and openBinderIdentity (bubble/binder-shaped matcher
+// scenarios) are dropped here, pending Plan 2 (the Lean rearchitecture to
+// the same sig-indexed model — docs/superpowers/specs/
+// 2026-07-22-signature-indexed-wires-design.md). There is no TS-side
+// successor to reconstruct against yet: a sig-model atom always requires a
+// wired head port that the old bubble/binder model didn't need, so these
+// two scenarios' Lean-emitted fixtures (shaped by the old model) can never
+// match a TS reconstruction until the Lean side re-emits them in the
+// sig-indexed model. Correspondence coverage for these shapes is
+// re-established once that lands.
+
+// Bubble/binder-shaped fixtures with no TS-side successor yet (see the
+// comment above); excluded by name, not by a runtime/environment check —
+// the Lean emitter still produces them until Plan 2 lands.
+const PENDING_LEAN_REARCHITECTURE = new Set(['nestedExactness', 'openBinderIdentity'])
 
 describe('Lean/TypeScript exact matcher correspondence', () => {
   for (const fixture of emittedFixtures()) {
+    if (PENDING_LEAN_REARCHITECTURE.has(fixture.fixture)) continue
     it(fixture.fixture, () => {
       switch (fixture.fixture) {
         case 'boundaryAliasesBareWire': {
@@ -163,20 +116,8 @@ describe('Lean/TypeScript exact matcher correspondence', () => {
           expect(result.found).toEqual(fixture.found)
           break
         }
-        case 'nestedExactness': {
-          const result = runNestedExactness()
-          expect(result.status).toBe(fixture.status)
-          expect(result.found).toEqual(fixture.found)
-          break
-        }
         case 'symmetricFootprints': {
           const result = runSymmetricFootprints()
-          expect(result.status).toBe(fixture.status)
-          expect(result.found).toEqual(fixture.found)
-          break
-        }
-        case 'openBinderIdentity': {
-          const result = runOpenBinderIdentity(fixture)
           expect(result.status).toBe(fixture.status)
           expect(result.found).toEqual(fixture.found)
           break
