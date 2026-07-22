@@ -20,7 +20,7 @@ import { anchorAvailability, applyAnchoredWireSplit, applyAnchoredWireContract }
 import { applyHeadStrip } from '../rules/headstrip'
 import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
-import { applyVacuousIntro, applyVacuousElim } from '../rules/vacuous'
+import { applyVacuousIntro, applyVacuousElim, type VacuousBody } from '../rules/vacuous'
 import { applyBodyAttach, applyBodyDetach } from '../rules/body'
 import { applyUnfold, applyFold, type FoldTarget } from '../rules/fold'
 import type { TheoremApplication } from './theorem'
@@ -55,7 +55,7 @@ export type ProofStep =
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
-  | { readonly rule: 'vacuousIntro'; readonly scope: RegionId; readonly sig: Sig }
+  | { readonly rule: 'vacuousIntro'; readonly scope: RegionId; readonly sig: Sig; readonly body?: VacuousBody }
   | { readonly rule: 'vacuousElim'; readonly wireId: WireId }
   | { readonly rule: 'bodyAttach'; readonly wireId: WireId; readonly content: DiagramWithBoundary; readonly params: readonly WireId[] }
   | { readonly rule: 'bodyDetach'; readonly bodyNodeId: NodeId }
@@ -170,7 +170,7 @@ function applyStepRaw(
     case 'theorem': {
       return applyTheorem(d, ctx, step.name, step.at, step.direction, orientation, reservation)
     }
-    case 'vacuousIntro': return applyVacuousIntro(d, step.scope, step.sig, reservation)
+    case 'vacuousIntro': return applyVacuousIntro(d, step.scope, step.sig, reservation, step.body)
     case 'vacuousElim': return applyVacuousElim(d, step.wireId)
     case 'bodyAttach': return applyBodyAttach(d, step.wireId, step.content, step.params, orientation, reservation)
     case 'bodyDetach': return applyBodyDetach(d, step.bodyNodeId, orientation)

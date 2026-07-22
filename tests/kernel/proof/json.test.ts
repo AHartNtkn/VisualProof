@@ -140,6 +140,8 @@ describe('step round-trips through JSON', () => {
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
       { rule: 'vacuousIntro', scope: 'r1', sig: TERM },
       { rule: 'vacuousIntro', scope: 'r1', sig: relSig([relSig([TERM]), TERM]) },
+      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([TERM]), body: { content: pat, params: [] } },
+      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([TERM]), body: { content: pat, params: ['w3', 'w7'] } },
       { rule: 'vacuousElim', wireId: 'w0' },
       { rule: 'bodyAttach', wireId: 'w0', content: pat, params: [] },
       { rule: 'bodyAttach', wireId: 'w0', content: pat, params: ['w3', 'w7'] },

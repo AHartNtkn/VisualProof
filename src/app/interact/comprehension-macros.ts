@@ -17,32 +17,30 @@ import { applyVacuousIntro, applyVacuousElim } from '../../kernel/rules/vacuous'
  * existential relation variable `∃R`, a body node on it IS a witness `R := G`,
  * an atom whose head rides it IS an occurrence `R(⃗t)`.
  *
- * ORIENTATION PAIRING (derived from the primitive gates, not chosen freely).
- * A relational wire at a negative scope carries the forward-instantiation
- * direction; at a positive scope the backward one. Each primitive rule gates on
- * the polarity of the scope it touches, so within one macro the sub-rules that
- * touch the SAME scope must take opposite orientations:
+ * ORIENTATION-UNIFORM COMPOSITES. Each macro carries EXACTLY ONE polarity-gated
+ * step, run at the macro `orientation`; every other step is polarity-free, so
+ * the whole composite replays under a proof's single orientation (no
+ * mid-sequence flip — the blocker that a detach-at-flipped-orientation created).
  *
- *   • body attach forward ⇒ negative scope; backward ⇒ positive scope.
- *   • body detach forward ⇒ positive scope; backward ⇒ negative scope.
+ *   • Instantiate `∃R.φ(R) ⟶ φ(G)`: bodyAttach(orientation) → unfold* →
+ *     BODIED vacuousElim. The attach is the actual quantifier instantiation (the
+ *     one gated step: forward ⇒ negative wire, refuses a positive wire exactly as
+ *     the old rule refused a positive bubble). After unfolding every occurrence
+ *     the leftover wire is the tautology `∃R. R=G`, deleted by bodied vacuousElim
+ *     at any polarity — no detach step, no flip.
  *
- * Instantiate touches a wire at its own scope. Forward instantiate is a NEGATIVE
- * wire: attach uses the macro orientation (forward ⇒ negative, refuses a
- * positive wire exactly as the old rule refused a positive bubble); the trailing
- * detach removes the witness at that SAME negative scope, so it takes the
- * opposite orientation. Hence `attach = orientation`, `detach = flip(orientation)`.
+ *   • Abstract `φ(G) ⟶ ∃R.φ(R)`: BODIED vacuousIntro (any polarity — the
+ *     comprehension axiom `∃R. R=G ≡ ⊤`) → fold* → bodyDetach(orientation). The
+ *     detach is the actual abstraction, forgetting the witness `G` (the one gated
+ *     step: forward ⇒ positive region, refuses a negative region exactly as the
+ *     old rule refused a negative wrap).
  *
- * Abstract is the involution of instantiate: forward abstract is a POSITIVE
- * region. Attach must land the witness at that positive scope, so it takes the
- * FLIPPED orientation (backward ⇒ positive, refuses a negative region exactly as
- * the old rule refused a negative wrap); the trailing detach, at the same
- * positive scope, takes the macro orientation. Hence `attach = flip(orientation)`,
- * `detach = orientation`.
+ * The pairing is PROVEN by the round-trip tests at both polarities: abstraction
+ * and instantiation are mutually inverse with attach/detach both at the macro
+ * orientation.
  */
 
 type Orientation = 'forward' | 'backward'
-
-const flip = (o: Orientation): Orientation => (o === 'forward' ? 'backward' : 'forward')
 
 /** Unfold never consults a resolver for an atom flavor: the body node supplies the content. */
 const noResolve = (_defId: string): DiagramWithBoundary | undefined => undefined
@@ -116,9 +114,8 @@ export function macroComprehensionInstantiate(
   for (const atomId of atoms) {
     cur = applyUnfold(cur, atomId, noResolve, reservation)
   }
-  const bodyId = bodyIdOnWire(cur, wireId)
-  if (bodyId === undefined) throw new DiagramError(`instantiation lost the witness body on wire '${wireId}'`)
-  cur = applyBodyDetach(cur, bodyId, flip(orientation))
+  // The wire now carries only its own body's output — the tautology ∃R.R=G —
+  // deleted (wire + body) by bodied vacuous elimination at any polarity.
   return applyVacuousElim(cur, wireId)
 }
 
@@ -157,15 +154,18 @@ export function macroComprehensionAbstract(
 ): Diagram {
   const sig = argBoundarySig(comp, params.length)
   const before = new Set(Object.keys(d.wires))
-  const introduced = applyVacuousIntro(d, wrapScope, sig, reservation)
+  // Bodied vacuous introduction: the wire AND its witness `R=G` in one step, at
+  // any polarity (the comprehension axiom ∃R.R=G ≡ ⊤).
+  const introduced = applyVacuousIntro(d, wrapScope, sig, reservation, { content: comp, params })
   const wireId = Object.keys(introduced.wires).find((id) => !before.has(id))
   if (wireId === undefined) throw new DiagramError('vacuous introduction minted no wire')
 
-  let cur = applyBodyAttach(introduced, wireId, comp, params, flip(orientation), reservation)
+  let cur = introduced
   for (const occ of occurrences) {
     cur = applyFold(cur, occ.sel, occ.args, { wireId }, reservation)
   }
   const bodyId = bodyIdOnWire(cur, wireId)
   if (bodyId === undefined) throw new DiagramError(`abstraction lost the witness body on wire '${wireId}'`)
+  // Detach the witness (forget G): the one polarity-gated step, at `orientation`.
   return applyBodyDetach(cur, bodyId, orientation)
 }

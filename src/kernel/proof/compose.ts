@@ -126,7 +126,13 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     case 'theorem':
       return { ...step, at: { sel: mapSel(iso, step.at.sel), args: step.at.args.map((w) => mapId(iso.wires, w, 'wire')) } }
     case 'vacuousIntro':
-      return { ...step, scope: mapId(iso.regions, step.scope, 'region') }
+      return {
+        ...step,
+        scope: mapId(iso.regions, step.scope, 'region'),
+        ...(step.body !== undefined
+          ? { body: { content: step.body.content, params: step.body.params.map((w) => mapId(iso.wires, w, 'wire')) } }
+          : {}),
+      }
     case 'vacuousElim':
       return { ...step, wireId: mapId(iso.wires, step.wireId, 'wire') }
     case 'bodyAttach':

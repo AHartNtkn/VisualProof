@@ -1,15 +1,34 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import type { Diagram } from '../../../src/kernel/diagram/diagram'
-import { DiagramError } from '../../../src/kernel/diagram/diagram'
+import type { Diagram, DiagramNode, Wire } from '../../../src/kernel/diagram/diagram'
+import { DiagramError, mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { polarity } from '../../../src/kernel/diagram/regions'
 import type { Sig } from '../../../src/kernel/diagram/sig'
 import { TERM, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../../src/kernel/rules/error'
+import { applyBodyAttach } from '../../../src/kernel/rules/body'
 import { applyVacuousIntro, applyVacuousElim } from '../../../src/kernel/rules/vacuous'
 
 const p = (s: string) => parseTerm(s)
+const R1 = relSig([TERM])
+
+/** Content interface: arg stubs then param stubs, root-scoped endpoint-free. */
+function mkContent(argSigs: readonly Sig[], paramSigs: readonly Sig[]): DiagramWithBoundary {
+  const wires: Record<string, Wire> = {}
+  const boundary: string[] = []
+  argSigs.forEach((s, i) => { wires[`aw${i}`] = { scope: 'c0', sig: s, endpoints: [] }; boundary.push(`aw${i}`) })
+  paramSigs.forEach((s, j) => { wires[`pw${j}`] = { scope: 'c0', sig: s, endpoints: [] }; boundary.push(`pw${j}`) })
+  return mkDiagramWithBoundary(
+    mkDiagram({ root: 'c0', regions: { c0: { kind: 'sheet' } }, wires }),
+    boundary,
+  )
+}
+
+const bodyNodesOf = (d: Diagram): [string, Extract<DiagramNode, { kind: 'body' }>][] =>
+  Object.entries(d.nodes).filter((e): e is [string, Extract<DiagramNode, { kind: 'body' }>] => e[1].kind === 'body')
 
 /** A diagram with one WIRED (endpoint-carrying) wire of exactly `sig`, plus
  * that wire's id — used to exercise elim's endpoints.length > 0 refusal. */
@@ -88,5 +107,87 @@ describe('vacuous wire intro/elim', () => {
   it('elim with an unknown wire id throws DiagramError', () => {
     const d = new DiagramBuilder().build()
     expect(() => applyVacuousElim(d, 'ghost')).toThrow(DiagramError)
+  })
+})
+
+/**
+ * Bodied vacuous intro/elim: the comprehension axiom ∃R.R=G ≡ ⊤. Creatable and
+ * deletable at ANY polarity, with or without parameters; the solely-bodied
+ * shape is the only nonempty wire elim accepts.
+ */
+describe('bodied vacuous intro/elim (comprehension axiom)', () => {
+  for (const [label, scopeOf, wantPolarity] of [
+    ['positive root', (h: DiagramBuilder) => h.root, 'positive'],
+    ['negative cut', (h: DiagramBuilder) => h.cut(h.root), 'negative'],
+  ] as const) {
+    it(`bodied intro adds wire + witness body at a ${label}`, () => {
+      const h = new DiagramBuilder()
+      const scope = scopeOf(h)
+      const d = h.build()
+      expect(polarity(d, scope)).toBe(wantPolarity)
+      const out = applyVacuousIntro(d, scope, R1, undefined, { content: mkContent([TERM], []), params: [] })
+      const wireId = Object.keys(out.wires).find((id) => d.wires[id] === undefined)!
+      const bodies = bodyNodesOf(out)
+      expect(bodies).toHaveLength(1)
+      const [bid, body] = bodies[0]!
+      expect(body.region).toBe(scope)
+      // the wire's SOLE endpoint is that body's output
+      expect(out.wires[wireId]!.endpoints).toEqual([{ node: bid, port: { kind: 'output' } }])
+    })
+
+    it(`bodied intro then bodied elim round-trips at a ${label}`, () => {
+      const h = new DiagramBuilder()
+      const scope = scopeOf(h)
+      const d = h.build()
+      const out = applyVacuousIntro(d, scope, R1, undefined, { content: mkContent([TERM], []), params: [] })
+      const wireId = Object.keys(out.wires).find((id) => d.wires[id] === undefined)!
+      const back = applyVacuousElim(out, wireId)
+      expect(exploreForm(back)).toBe(exploreForm(d))
+    })
+  }
+
+  it('bodied intro with a parameter lands the body freeVar on the param wire; elim trims it back', () => {
+    const h = new DiagramBuilder()
+    const pW = h.wire(h.root, [], TERM) // param host line
+    const d = h.build()
+    const out = applyVacuousIntro(d, d.root, R1, undefined, { content: mkContent([TERM], [TERM]), params: [pW] })
+    const [bid] = bodyNodesOf(out)[0]!
+    // param wire carries the body's p0 freeVar
+    expect(out.wires[pW]!.endpoints).toEqual([{ node: bid, port: { kind: 'freeVar', name: 'p0' } }])
+    // elim removes wire + body and trims p0 off the param wire
+    const wireId = Object.keys(out.wires).find((id) => d.wires[id] === undefined)!
+    const back = applyVacuousElim(out, wireId)
+    expect(bodyNodesOf(back)).toHaveLength(0)
+    expect(back.wires[pW]!.endpoints).toHaveLength(0)
+    expect(exploreForm(back)).toBe(exploreForm(d))
+  })
+
+  it('bodied intro refuses a TERM sig (bodies attach only to relational wires)', () => {
+    const d = new DiagramBuilder().build()
+    expect(() => applyVacuousIntro(d, d.root, TERM, undefined, { content: mkContent([TERM], []), params: [] }))
+      .toThrowError(/not a relation signature/)
+  })
+
+  it('bodied intro refuses a parameter scoped strictly inside the new wire scope', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const inner = h.cut(cut)
+    const captured = h.wire(inner, [], TERM)
+    const d = h.build()
+    expect(() => applyVacuousIntro(d, cut, R1, undefined, { content: mkContent([TERM], [TERM]), params: [captured] }))
+      .toThrowError(/at or outside the target wire's scope/)
+  })
+
+  it('bodied elim refuses when an atom still rides the wire (not solely bodied)', () => {
+    // Mid-instantiate shape: the wire carries a body output AND an atom head.
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const atom = h.atom(cut, R1)
+    const W = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R1)
+    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], TERM)
+    const withBody = applyBodyAttach(h.build(), W, mkContent([TERM], []), [], 'forward')
+    expect(withBody.wires[W]!.endpoints).toHaveLength(2)
+    expect(() => applyVacuousElim(withBody, W)).toThrowError(/has 2 endpoint\(s\)/)
+    expect(() => applyVacuousElim(withBody, W)).toThrow(RuleError)
   })
 })

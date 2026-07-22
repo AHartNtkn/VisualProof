@@ -295,7 +295,14 @@ export function stepToJson(s: ProofStep): unknown {
     case 'theorem':
       return { rule: s.rule, name: s.name, at: appToJson(s.at), direction: s.direction }
     case 'vacuousIntro':
-      return { rule: s.rule, scope: s.scope, sig: sigToJson(s.sig) }
+      return {
+        rule: s.rule,
+        scope: s.scope,
+        sig: sigToJson(s.sig),
+        ...(s.body !== undefined
+          ? { body: { content: dwbToJson(s.body.content), params: [...s.body.params] } }
+          : {}),
+      }
     case 'vacuousElim':
       return { rule: s.rule, wireId: s.wireId }
     case 'bodyAttach':
@@ -417,9 +424,14 @@ export function stepFromJson(j: unknown): ProofStep {
       if (direction !== 'forward' && direction !== 'reverse') fail("direction must be 'forward'|'reverse'")
       return { rule, name: str(j.name, 'name'), at: appFromJson(j.at, 'at'), direction }
     }
-    case 'vacuousIntro':
-      assertOnlyKeys(j, ['rule', 'scope', 'sig'], 'vacuousIntro step')
-      return { rule, scope: str(j.scope, 'scope'), sig: sigFromJson(j.sig, 'sig') }
+    case 'vacuousIntro': {
+      assertOnlyKeys(j, ['rule', 'scope', 'sig', 'body'], 'vacuousIntro step')
+      const base = { rule, scope: str(j.scope, 'scope'), sig: sigFromJson(j.sig, 'sig') } as const
+      if (j.body === undefined) return base
+      if (!isRecord(j.body)) fail('vacuousIntro.body must be an object')
+      assertOnlyKeys(j.body, ['content', 'params'], 'vacuousIntro.body')
+      return { ...base, body: { content: dwbFromJson(j.body.content, 'body.content'), params: strArray(j.body.params, 'body.params') } }
+    }
     case 'vacuousElim':
       assertOnlyKeys(j, ['rule', 'wireId'], 'vacuousElim step')
       return { rule, wireId: str(j.wireId, 'wireId') }
