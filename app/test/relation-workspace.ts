@@ -5,7 +5,8 @@ import type { PlacementHint } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
-import { LIGHT, type Shape } from '../../src/view/paint'
+import { DARK, LIGHT, type Shape, type Theme } from '../../src/view/paint'
+import { applyControlTheme } from '../../src/app/control-theme'
 import type { MutableView } from '../../src/app/interact/viewport'
 import {
   RelationWorkspace,
@@ -44,12 +45,20 @@ const source: Diagram = mkDiagram({
 let hostEngine = mkEngine(source, [])
 const view: MutableView = { scale: 1, offsetX: 0, offsetY: 0 }
 const context: ProofContext = EMPTY_PROOF_CONTEXT
+let activeTheme: Theme = LIGHT
+applyControlTheme(document, activeTheme)
 
 let workspace: RelationWorkspace | null = null
 let cancelCount = 0
 let finalizeCount = 0
 let refusals: string[] = []
 let staleSourceAction: (() => void) | null = null
+
+function setTheme(mode: Theme['mode']): void {
+  activeTheme = mode === 'dark' ? DARK : LIGHT
+  applyControlTheme(document, activeTheme)
+  workspace?.frame(performance.now())
+}
 
 function initialDraft(mode: Mode): RelationWorkspaceDraft {
   const draft = mode === 'substitute'
@@ -91,7 +100,7 @@ function mount(mode: Mode, finalizeBehavior: FinalizeBehavior = 'succeed'): void
     engine: () => hostEngine,
     view: () => view,
     context: () => context,
-    theme: () => LIGHT,
+    theme: () => activeTheme,
     fuel: () => 100,
     refuse: (text) => { refusals.push(text) },
     changed: () => { workspace?.frame(performance.now()) },
@@ -213,7 +222,7 @@ function mountAbstractionScenario(scenario: AbstractionScenario): void {
     apply: () => { finalizeCount += 1 },
     cancel: () => { cancelCount += 1 },
     engine: () => hostEngine,
-    theme: () => LIGHT,
+    theme: () => activeTheme,
     matcherFuel: () => scenario === 'matcher-exhausted' ? 1 : 4096,
     solverFuel: () => scenario === 'solver-exhausted' ? 1 : 100000,
   })
@@ -244,6 +253,7 @@ declare global {
     relationWorkspaceFixture: {
       mount(mode: Mode, finalizeBehavior?: FinalizeBehavior): void
       mountAbstractionScenario(scenario: AbstractionScenario): void
+      setTheme(mode: Theme['mode']): void
       staleSource(): void
       state(): {
         cancelCount: number
@@ -258,6 +268,7 @@ declare global {
 window.relationWorkspaceFixture = {
   mount,
   mountAbstractionScenario,
+  setTheme,
   staleSource: () => { staleSourceAction?.() },
   state: () => ({
     cancelCount,

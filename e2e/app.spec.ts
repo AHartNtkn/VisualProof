@@ -1333,8 +1333,8 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   // Save serializes the relation. Capture the live theory JSON (the same object
   // Save theory writes) and confirm it carries the exact qualified id.
   const json = await page.evaluate(() => window.__vpaDebug!.theoryJson())
-  const theory = JSON.parse(json) as { relations: Record<string, unknown> }
-  expect(theory.relations['logic/R']).toBeDefined()
+  const theory = JSON.parse(json) as { relations: [string, unknown][] }
+  expect(new Map(theory.relations).has('logic/R')).toBe(true)
 
   // Reload round-trip: a FRESH empty app loads the saved JSON through the real
   // #open-file-input; the loaded group lists the qualified relation again.

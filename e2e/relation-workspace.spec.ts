@@ -27,6 +27,7 @@ declare global {
     relationWorkspaceFixture: {
       mount(mode: 'substitute' | 'abstract', finalizeBehavior?: 'succeed' | 'refuse'): void
       mountAbstractionScenario(scenario: 'multi-set' | 'zero-match' | 'matcher-exhausted' | 'solver-exhausted' | 'stale-source' | 'kernel-refusal' | 'invalid-ports'): void
+      setTheme(mode: 'light' | 'dark'): void
       staleSource(): void
       state(): FixtureState
     }
@@ -178,7 +179,7 @@ test('mounted strip gestures reorder ports and consume Delete without touching c
   await page.keyboard.press('Delete')
   expect((await state(page)).debug!.historyLength).toBe(historyBeforeInvalidCanvasEdit)
   expect((await state(page)).debug!.draftWires.some((wire) => wire.wire === 'arg1')).toBe(true)
-  expect((await state(page)).refusals.at(-1)).toMatch(/missing wire 'arg1'/i)
+  expect((await state(page)).refusals.at(-1)).toMatch(/boundary wire 'arg1' does not exist/i)
 
   const body = (await state(page)).debug!.draftBodies.find((candidate) => candidate.kind === 'term')!
   await page.mouse.click(body.point.x, body.point.y)
