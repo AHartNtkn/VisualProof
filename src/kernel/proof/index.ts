@@ -12,6 +12,6 @@ export { checkTheorem, applyTheorem } from './theorem'
 export type { CompositionBoundaries, CompositionOptions } from './compose'
 export { composeActions, mapStepIds } from './compose'
 export {
-  stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbToJson, dwbFromJson,
+  stepToJson, stepFromJson, theoremToJson, theoremFromJson,
 } from './json'
 export { theoryToJson, theoryFromJson, loadTheory } from './store'

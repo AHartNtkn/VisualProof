@@ -4,6 +4,7 @@ import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { dwbToJson, dwbFromJson } from '../../../src/kernel/diagram/json'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import {
   actionFromJson,
@@ -12,8 +13,6 @@ import {
   stepFromJson,
   theoremToJson,
   theoremFromJson,
-  dwbToJson,
-  dwbFromJson,
 } from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { ProofAction } from '../../../src/kernel/proof/action'

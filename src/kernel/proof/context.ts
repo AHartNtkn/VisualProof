@@ -2,7 +2,8 @@ import type { Diagram } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { Theorem } from './theorem'
 import { checkTheorem } from './theorem'
-import { dwbFromJson, dwbToJson, theoremFromJson, theoremToJson } from './json'
+import { dwbFromJson, dwbToJson } from '../diagram/json'
+import { theoremFromJson, theoremToJson } from './json'
 import { ProofError } from './error'
 
 const proofContextBrand: unique symbol = Symbol('ProofContext')

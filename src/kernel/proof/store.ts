@@ -1,7 +1,8 @@
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { ProofContext, Theory } from './context'
 import { verifyTheory } from './context'
-import { dwbToJson, dwbFromJson, theoremToJson, theoremFromJson } from './json'
+import { dwbToJson, dwbFromJson } from '../diagram/json'
+import { theoremToJson, theoremFromJson } from './json'
 
 /**
  * A theory: named relations (comprehensions) and theorems in registration

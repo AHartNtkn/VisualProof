@@ -13,7 +13,8 @@ import {
   type ProofAction,
   type ProofAllocation,
 } from '../kernel/proof/action'
-import { dwbToJson, theoremToJson } from '../kernel/proof/json'
+import { dwbToJson } from '../kernel/diagram/json'
+import { theoremToJson } from '../kernel/proof/json'
 import { applyStep, type ProofStep } from '../kernel/proof/step'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'

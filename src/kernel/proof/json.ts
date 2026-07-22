@@ -80,11 +80,6 @@ function endpointFromJson(v: unknown, what: string): Endpoint {
   return { node: str(v.node, `${what}.node`), port: parsePortKey(str(v.port, `${what}.port`)) }
 }
 
-// The DiagramWithBoundary codec lives at the diagram layer (boundary.ts is a
-// diagram-layer concept and body-node content recurses through it). Re-exported
-// here for proof-layer consumers.
-export { dwbToJson, dwbFromJson }
-
 function reductionStepsToJson(steps: readonly ReductionStep[]): unknown {
   return steps.map((step) => ({ kind: step.kind, path: [...step.path] }))
 }
