@@ -4,7 +4,6 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
-import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../../../src/kernel/rules/vacuous'
 
 const p = (s: string) => parseTerm(s)
 
@@ -70,43 +69,6 @@ describe('open iteration / deiteration', () => {
   })
 })
 
-describe('vacuous bubble intro/elim', () => {
-  it('wraps and dissolves at ANY polarity, round-tripping by fingerprint', () => {
-    for (const depth of [0, 1, 2]) {
-      const h = new DiagramBuilder()
-      let region = h.root
-      for (let i = 0; i < depth; i++) region = h.cut(region)
-      const n = h.termNode(region, p('\\x. x'))
-      const d = h.build()
-      const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
-      const wrapped = applyVacuousBubbleIntro(d, sel, 2)
-      const bub = Object.entries(wrapped.regions).find(
-        ([id, r]) => r.kind === 'bubble' && d.regions[id] === undefined,
-      )!
-      expect(bub[1].kind === 'bubble' && bub[1].arity).toBe(2)
-      expect(wrapped.nodes[n]?.region).toBe(bub[0])
-      const back = applyVacuousBubbleElim(wrapped, bub[0])
-      expect(exploreForm(back)).toBe(exploreForm(d))
-    }
-  })
-
-  it('elim refuses bubbles that bind atoms, by name', () => {
-    const h = new DiagramBuilder()
-    const rB = h.bubble(h.root, 1)
-    h.atom(rB, rB)
-    const d = h.build()
-    expect(() => applyVacuousBubbleElim(d, rB))
-      .toThrowError(/binds 1 atom/)
-  })
-
-  it('intro at a non-root region parents the bubble there', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const n = h.termNode(cut, p('y'))
-    const d = h.build()
-    const sel = mkSelection(d, { region: cut, regions: [], nodes: [n], wires: [] })
-    const out = applyVacuousBubbleIntro(d, sel, 0)
-    const bub = Object.entries(out.regions).find(([, r]) => r.kind === 'bubble')!
-    expect(bub[1].kind === 'bubble' && bub[1].parent).toBe(cut)
-  })
-})
+// Vacuous intro/elim now operates on endpoint-free WIRES, not bubble regions
+// (bubbles are gone from the Region type). Its test matrix lives in
+// tests/kernel/rules/vacuous.test.ts.

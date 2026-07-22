@@ -1,13 +1,17 @@
 import type { Diagram, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { isAncestorOrEqual, polarity } from '../diagram/regions'
+import { sigEquals, sigKey } from '../diagram/sig'
 import { RuleError } from './error'
 
 /**
  * Rule 1b: join two wires (assert identity of their individuals). Replaces
  * the inner quantifier's content `∃y ψ(y)` by the stronger `ψ(x)`, so the
  * INNER wire's scope must be negative. Scopes must be comparable; the merged
- * wire keeps the outer scope (and the outer wire's id).
+ * wire keeps the outer scope (and the outer wire's id). Only wires of the
+ * SAME signature can be identified — asserting x = y presupposes x and y
+ * range over the same sort — so mismatched signatures are refused before any
+ * scope/polarity reasoning runs.
  */
 export function applyWireJoin(d: Diagram, a: WireId, b: WireId, orientation: 'forward' | 'backward' = 'forward'): Diagram {
   const wa = d.wires[a]
@@ -15,6 +19,9 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId, orientation: 'fo
   if (wa === undefined) throw new DiagramError(`unknown wire '${a}'`)
   if (wb === undefined) throw new DiagramError(`unknown wire '${b}'`)
   if (a === b) throw new RuleError(`cannot join a wire with itself ('${a}')`)
+  if (!sigEquals(wa.sig, wb.sig)) {
+    throw new RuleError(`cannot join wires of different signatures: '${sigKey(wa.sig)}' vs '${sigKey(wb.sig)}'`)
+  }
   let outerId: WireId
   let innerId: WireId
   if (isAncestorOrEqual(d, wa.scope, wb.scope)) {
@@ -42,7 +49,7 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId, orientation: 'fo
   for (const [id, w] of Object.entries(d.wires)) {
     if (id === innerId) continue
     wires[id] = id === outerId
-      ? { scope: outer.scope, endpoints: [...outer.endpoints, ...inner.endpoints] }
+      ? { scope: outer.scope, sig: outer.sig, endpoints: [...outer.endpoints, ...inner.endpoints] }
       : w
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
