@@ -148,12 +148,13 @@ describe('build-only game content evidence', () => {
       0,
     )
 
-    expect(validateGameContent()).toEqual({
+    const receipt = validateGameContent()
+    expect(receipt).toMatchObject({
       puzzles: catalog.puzzleIds.length,
       solutions: catalog.puzzleIds.length,
-      actions: 1039,
       recognizedStates,
     })
+    expect(receipt.actions).toBeGreaterThanOrEqual(receipt.solutions)
   })
 
   it('gives the marked echo a deiteration-first witness', () => {

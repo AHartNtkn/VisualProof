@@ -186,13 +186,15 @@ A puzzle is ready for integration only as a complete bundle:
 5. one validation sidecar with a replayable complete witness and any recognized-
    state demonstrations;
 6. a guidance entry only when a specific authored intervention is warranted;
-7. the puzzle path in manifest order and the corresponding static runtime import.
+7. the puzzle path in manifest order; Vite derives build-time availability
+   automatically from the approved runtime content directories.
 
 If the bundle introduces a culture or logical definition, it also includes the
-matching progression, catalog, definition, manifest, and static-import records.
-Partial bundles do not enter production. Deleted puzzles are removed from every
-layer and import surface; aliases, tombstones, compatibility maps, and fallback
-content paths are not authoring mechanisms.
+matching progression, catalog, definition, and manifest records. The manifest
+alone registers and orders content; discovery makes files available but does not
+register them. Partial bundles do not enter production. Deleted puzzles are
+removed from every layer and import surface; aliases, tombstones, compatibility
+maps, and fallback content paths are not authoring mechanisms.
 
 Run `npm run content:validate` after assembling a bundle. It schema-validates
 every layer, checks graph and cross-reference integrity, validates culture-owned

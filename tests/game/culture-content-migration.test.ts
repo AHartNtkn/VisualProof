@@ -139,7 +139,6 @@ describe('culture ownership migration', () => {
       'content/guidance/cursebreaker.json',
       'content/coverage/seyric.json',
       'content/coverage/myratic.json',
-      'src/game/content/files.ts',
     ].map((path) => readFileSync(resolve(process.cwd(), path), 'utf8')).join('\n')
     for (const id of removed) {
       expect(allAuthorityText, id).not.toContain(id)

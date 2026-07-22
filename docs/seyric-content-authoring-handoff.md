@@ -259,7 +259,9 @@ Before reporting completion, prove that:
 - every puzzle on that path has a concrete unlock or prerequisite edge, and no unnecessary edge enlarges the path;
 - no separate required-or-optional declaration competes with the actual progression graph;
 - artifact-dependent witnesses use only artifacts available through valid prerequisite closure;
-- progression, catalog, guidance, coverage, validation, static imports, and puzzle cores agree;
+- progression, catalog, guidance, coverage, validation, and puzzle cores agree;
+- Vite derives runtime availability from the approved content directories, while
+  manifest registration and ordering remain mandatory;
 - discarded content has no production registration, alias, tombstone, adapter, or compatibility path;
 - no inventory quota, replacement authority, or normalization authority controls the collection;
 - content validation, focused tests, type checking, and the renderer build pass.
