@@ -139,9 +139,18 @@ relation otherwise), which grounds vacuous intro/elim at both polarities.
 Five signature-blind primitive move families; the cut-based structural rules
 are untouched.
 
-1. **Vacuous wire intro/elim.** A wire with no endpoints may be created or
-   deleted at any scope, any signature, either polarity. Subsumes vacuous
-   bubble moves.
+1. **Vacuous wire intro/elim.** A wire with no endpoints — or whose ONLY
+   attachment is its own body node's output (params allowed) — may be
+   created or deleted at any scope, any signature, either polarity. The
+   bare case is nonempty-domain (∃x.⊤); the bodied case is the
+   comprehension axiom itself (∃R. R=G ≡ ⊤ for any drawable G, any
+   parameters). Subsumes vacuous bubble moves, and makes the derived
+   comprehension macros orientation-uniform: after unfolding every
+   occurrence, the leftover bodied wire is a tautology deleted by this
+   rule — no polarity-flipped detach step appears in the composite.
+   (Implementation discovery: without the bodied case, the instantiate
+   composite needs a mid-sequence orientation flip that cannot replay
+   under a proof's single orientation.)
 2. **Body attach/detach.** Polarity-gated exactly as the existing equation
    gates at `ι`; the same gates govern comprehension bodies at relational
    sorts. Attaching a body is the actual quantifier instantiation — the
