@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { freePorts } from '../../src/kernel/term/term'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
@@ -74,18 +77,19 @@ describe('applicableActions', () => {
     expect(onDirty.map((a) => a.kind)).not.toContain('doubleCutElim')
   })
 
-  it('offers vacuous elimination only on atom-free bubbles, and instantiation only on negative ones', () => {
+  it('offers vacuous elimination only on endpoint-free relation wires, and instantiation only on negative bound ones', () => {
     const h = new DiagramBuilder()
-    const empty = h.bubble(h.root, 1)
+    const empty = h.relWire(h.root, R(1))
     const cut = h.cut(h.root)
-    const negBub = h.bubble(cut, 1)
-    h.atom(negBub, negBub)
+    const atom = h.atom(cut, R(1))
+    const negW = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R(1))
+    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }])
     const d = h.build()
     const ctx = verifyTheory(buildFregeTheory())
-    const onEmpty = applicableActions(d, mkSelection(d, { region: d.root, regions: [empty], nodes: [], wires: [] }), ctx).map((a) => a.kind)
+    const onEmpty = applicableActions(d, mkSelection(d, { region: d.root, regions: [], nodes: [], wires: [empty] }), ctx).map((a) => a.kind)
     expect(onEmpty).toContain('vacuousElim')
     expect(onEmpty).not.toContain('instantiate')
-    const onNeg = applicableActions(d, mkSelection(d, { region: cut, regions: [negBub], nodes: [], wires: [] }), ctx).map((a) => a.kind)
+    const onNeg = applicableActions(d, mkSelection(d, { region: cut, regions: [], nodes: [atom], wires: [negW] }), ctx).map((a) => a.kind)
     expect(onNeg).toContain('instantiate')
     expect(onNeg).not.toContain('vacuousElim')
   })
@@ -141,7 +145,7 @@ describe('double-cut elimination annulus content', () => {
 describe('reference-node gates', () => {
   const refHost = (defId: string) => {
     const b = new DiagramBuilder()
-    const ref = b.ref(b.root, defId, 1)
+    const ref = b.ref(b.root, defId, R(1))
     const carrier = b.termNode(b.root, p('y'))
     b.wire(b.root, [
       { node: ref, port: { kind: 'arg', index: 0 } },
@@ -199,7 +203,7 @@ describe('descriptor → step construction (the shell contract)', () => {
 
   it('relUnfold: an enumerated unfold commits via applyStep against ctx.relations', () => {
     const b = new DiagramBuilder()
-    const ref = b.ref(b.root, 'nat', 1)
+    const ref = b.ref(b.root, 'nat', R(1))
     const carrier = b.termNode(b.root, p('y'))
     b.wire(b.root, [
       { node: ref, port: { kind: 'arg', index: 0 } },
@@ -209,7 +213,7 @@ describe('descriptor → step construction (the shell contract)', () => {
     const ctx = verifyTheory(buildFregeTheory())
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('relUnfold')
-    const out = applyStep(d, { rule: 'relUnfold', node: ref }, ctx)
+    const out = applyStep(d, { rule: 'unfold', nodeId: ref }, ctx)
     // the nat reference is gone and the nat body has been inlined (the body
     // itself contains zero/succ references — nat is defined over them)
     expect(Object.values(out.nodes).some((n) => n.kind === 'ref' && n.defId === 'nat')).toBe(false)

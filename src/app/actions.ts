@@ -86,15 +86,16 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
 
   // single selected relational wire: second-order eliminations. A relational
   // wire is a second-order existential line; an endpoint-free one is vacuous
-  // (dissolvable by vacuous elim), and one carrying atoms may be instantiated by
-  // attaching a witnessing body. Instantiation's gate flips with orientation
-  // like every polarity gate.
-  if (sel.wires.length === 1 && sel.nodes.length === 0 && sel.regions.length === 0) {
+  // (dissolvable by vacuous elim, selectable alone), and one carrying atoms may
+  // be instantiated by attaching a witnessing body (its selection necessarily
+  // includes the riding atoms). Instantiation's gate flips with orientation like
+  // every polarity gate.
+  if (sel.wires.length === 1 && sel.regions.length === 0) {
     const wid = sel.wires[0]!
     const w = d.wires[wid]!
     if (w.sig.kind === 'rel') {
       const bound = w.endpoints.length > 0
-      if (!bound) out.push({ kind: 'vacuousElim', label: 'Dissolve the vacuous relation wire' })
+      if (!bound && sel.nodes.length === 0) out.push({ kind: 'vacuousElim', label: 'Dissolve the vacuous relation wire' })
       if (bound && polarity(d, w.scope) === (backward ? 'positive' : 'negative')) {
         out.push({ kind: 'instantiate', label: 'Instantiate the relation…', needsInput: 'comprehension' })
       }
