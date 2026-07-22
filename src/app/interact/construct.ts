@@ -11,13 +11,14 @@ import type { Vec2 } from '../../view/vec'
 import { computeLegs, type LegGeom } from '../../view/wires'
 import {
   absorbHits,
-  addBubble,
+  addRelationWire,
   addCut,
   deleteHits,
   joinWires,
   reparentNode,
   severEndpoint,
 } from '../edit'
+import { relSig, TERM } from '../../kernel/diagram/sig'
 import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { FissionDragController, type FissionRequest } from './fission'
@@ -347,8 +348,12 @@ export class ConstructController {
         return
       }
       if (this.#tryCommit(
-        () => addBubble(this.#options.diagram(), buildSelection(this.#options.diagram(), selected), arity).diagram,
-        'wrapped in a bubble',
+        () => addRelationWire(
+          this.#options.diagram(),
+          buildSelection(this.#options.diagram(), selected).region,
+          relSig(Array.from({ length: arity }, () => TERM)),
+        ).diagram,
+        'added a relation wire',
       )) this.#closePrompt()
     })
     input.addEventListener('input', () => {

@@ -56,13 +56,9 @@ export function defineRelation(
   }
 
   // Non-destructive: extractSubgraph copies the selection out; `diagram` is
-  // untouched.
-  const { pattern, attachments, binderStubs } = extractSubgraph(diagram, sel)
-  if (binderStubs.length > 0) {
-    throw new Error(
-      'the selection binds atoms outside itself, so it is not a self-contained relation; include the binder in the selection or pick a closed subgraph',
-    )
-  }
+  // untouched. Crossing relational wires become higher-order boundary
+  // parameters — a self-contained relation may still take relation arguments.
+  const { pattern, attachments } = extractSubgraph(diagram, sel)
 
   // The picks must be exactly the crossing wires, each once: the boundary IS the
   // crossing-wire set, and the argument order is the pick order.
@@ -100,12 +96,7 @@ export function defineRelation(
  * remains available to override.
  */
 export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): WireId[] {
-  const { pattern, attachments, binderStubs } = extractSubgraph(diagram, sel)
-  if (binderStubs.length > 0) {
-    throw new Error(
-      'the selection binds atoms outside itself, so it is not a self-contained relation; include the binder in the selection or pick a closed subgraph',
-    )
-  }
+  const { pattern, attachments } = extractSubgraph(diagram, sel)
   const ord = exploreLabeling(pattern.diagram).wireOrd
   return [...attachments]
     .map((host, i) => ({ host, o: ord.get(pattern.boundary[i]!)! }))

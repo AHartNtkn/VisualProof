@@ -1,5 +1,6 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { mkDiagram, portKey, requiredPorts } from '../kernel/diagram/diagram'
+import type { RelSig } from '../kernel/diagram/sig'
 import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { selectionContents } from '../kernel/diagram/subgraph/selection'
@@ -25,8 +26,9 @@ export type ConstructionHit =
 function moveNodeToRegion(node: DiagramNode, region: RegionId): DiagramNode {
   switch (node.kind) {
     case 'term': return { kind: 'term', region, term: node.term, freePorts: node.freePorts }
-    case 'atom': return { kind: 'atom', region, binder: node.binder }
-    case 'ref': return { kind: 'ref', region, defId: node.defId, arity: node.arity }
+    case 'atom': return { kind: 'atom', region, sig: node.sig }
+    case 'ref': return { kind: 'ref', region, defId: node.defId, sig: node.sig }
+    case 'body': return { kind: 'body', region, sig: node.sig, content: node.content }
   }
 }
 
@@ -47,7 +49,7 @@ function wrap(d: Diagram, sel: SubgraphSelection, make: (parent: RegionId) => Re
   const selectedRoots = new Set(sel.regions)
   for (const [id, r] of Object.entries(d.regions)) {
     if (r.kind !== 'sheet' && selectedRoots.has(id)) {
-      regions[id] = r.kind === 'cut' ? { kind: 'cut', parent: region } : { kind: 'bubble', parent: region, arity: r.arity }
+      regions[id] = { kind: 'cut', parent: region }
     }
   }
   const selectedNodes = new Set(sel.nodes)
@@ -64,7 +66,7 @@ function wrap(d: Diagram, sel: SubgraphSelection, make: (parent: RegionId) => Re
         ? wire.endpoints.every((endpoint) => subtreeContains(wrappedTree, region, nodes[endpoint.node]!.region))
         : selectedWires.has(id)
     )
-    wires[id] = enclosed ? { scope: region, endpoints: wire.endpoints } : wire
+    wires[id] = enclosed ? { scope: region, sig: wire.sig, endpoints: wire.endpoints } : wire
   }
   return { diagram: mkDiagram({ root: d.root, regions, nodes, wires }), region }
 }
@@ -74,24 +76,18 @@ export function addCut(d: Diagram, sel: SubgraphSelection): { diagram: Diagram; 
   return wrap(d, sel, (parent) => ({ kind: 'cut', parent }), 'cut')
 }
 
-export function addBubble(d: Diagram, sel: SubgraphSelection, arity: number): { diagram: Diagram; region: RegionId } {
-  const wrapped = wrap(d, sel, (parent) => ({ kind: 'bubble', parent, arity }), 'bub')
-  const directlyWrapped = new Set(sel.nodes)
-  const nodes: Record<NodeId, DiagramNode> = {}
-  for (const [id, node] of Object.entries(wrapped.diagram.nodes)) {
-    nodes[id] = directlyWrapped.has(id) && node.kind === 'atom'
-      ? { kind: 'atom', region: wrapped.region, binder: wrapped.region }
-      : node
-  }
-  return {
-    region: wrapped.region,
-    diagram: mkDiagram({
-      root: wrapped.diagram.root,
-      regions: { ...wrapped.diagram.regions },
-      nodes,
-      wires: { ...wrapped.diagram.wires },
-    }),
-  }
+/**
+ * Introduce a fresh endpoint-free relational wire of sort `sig`, scoped at
+ * `scope`. A relational wire IS the second-order existential variable (the old
+ * "bubble"): atoms attach their head to it, and a body node witnesses it. An
+ * endpoint-free relational wire is a vacuous existential, deletable by vacuous
+ * elimination — the construction-level counterpart of applyVacuousIntro.
+ */
+export function addRelationWire(d: Diagram, scope: RegionId, sig: RelSig): { diagram: Diagram; wire: WireId } {
+  if (d.regions[scope] === undefined) throw new Error(`unknown region '${scope}'`)
+  const wire = freshId(new Set(Object.keys(d.wires)), 'w')
+  const wires: Record<WireId, Wire> = { ...d.wires, [wire]: { scope, sig, endpoints: [] } }
+  return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires }), wire }
 }
 
 /** Identify any number of semantic wires directly. The lexicographically first
@@ -113,7 +109,7 @@ export function joinWires(d: Diagram, wireIds: readonly WireId[]): Diagram {
   const merged = new Set(ids)
   const wires: Record<WireId, Wire> = {}
   for (const [id, wire] of Object.entries(d.wires)) {
-    if (id === survivor) wires[id] = { scope, endpoints }
+    if (id === survivor) wires[id] = { scope, sig: d.wires[survivor]!.sig, endpoints }
     else if (!merged.has(id)) wires[id] = wire
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
@@ -134,7 +130,7 @@ export function joinPorts(d: Diagram, a: Endpoint, b: Endpoint): Diagram {
     // pre-construction spelling is invalid input, not a missing wire.
     const node = d.nodes[ep.node]
     if (node === undefined) throw new Error(`no node '${ep.node}' in the diagram`)
-    const ports = requiredPorts(d, node)
+    const ports = requiredPorts(node)
     if (!ports.some((q) => portKey(q) === portKey(ep.port))) {
       throw new Error(`node '${ep.node}' has no port '${portKey(ep.port)}' (its ports are ${ports.map(portKey).join(', ')}; free-port names are canonical s0, s1, …)`)
     }
@@ -163,8 +159,8 @@ export function severEndpoint(d: Diagram, wireId: WireId, endpoint: Endpoint): D
   const rest = wire.endpoints.filter((_, candidate) => candidate !== index)
   const wires: Record<WireId, Wire> = {
     ...d.wires,
-    [wireId]: { scope: wire.scope, endpoints: rest },
-    [fresh]: { scope: wire.scope, endpoints: [detached] },
+    [wireId]: { scope: wire.scope, sig: wire.sig, endpoints: rest },
+    [fresh]: { scope: wire.scope, sig: wire.sig, endpoints: [detached] },
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
 }
@@ -198,30 +194,20 @@ export function dissolveRegion(d: Diagram, regionId: RegionId): Diagram {
   if (target === undefined) throw new Error(`unknown region '${regionId}'`)
   if (target.kind === 'sheet') throw new Error('the sheet cannot be dissolved')
   const parent = target.parent
-  // Atoms are projections of their binder, not independent contents. Once a
-  // bubble is dissolved no valid diagram can retain atoms bound by it.
-  const dependentAtoms = new Set<NodeId>(Object.entries(d.nodes)
-    .filter(([, node]) => node.kind === 'atom' && node.binder === regionId)
-    .map(([id]) => id))
   const regions: Record<RegionId, Region> = {}
   for (const [id, region] of Object.entries(d.regions)) {
     if (id === regionId) continue
     regions[id] = region.kind !== 'sheet' && region.parent === regionId
-      ? region.kind === 'cut'
-        ? { kind: 'cut', parent }
-        : { kind: 'bubble', parent, arity: region.arity }
+      ? { kind: 'cut', parent }
       : region
   }
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, node] of Object.entries(d.nodes)) {
-    if (dependentAtoms.has(id)) continue
     nodes[id] = node.region === regionId ? moveNodeToRegion(node, parent) : node
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, wire] of Object.entries(d.wires)) {
-    const endpoints = wire.endpoints.filter((endpoint) => !dependentAtoms.has(endpoint.node))
-    if (wire.endpoints.length > 0 && endpoints.length === 0) continue
-    wires[id] = { scope: wire.scope === regionId ? parent : wire.scope, endpoints }
+    wires[id] = { scope: wire.scope === regionId ? parent : wire.scope, sig: wire.sig, endpoints: wire.endpoints }
   }
   return mkDiagram({ root: d.root, regions, nodes, wires })
 }
@@ -260,7 +246,7 @@ export function deleteHits(d: Diagram, hits: readonly ConstructionHit[]): Diagra
   const wires: Record<WireId, Wire> = {}
   for (const [id, wire] of Object.entries(d.wires)) {
     if (deadWires.has(id)) continue
-    wires[id] = { scope: wire.scope, endpoints: wire.endpoints.filter((endpoint) => !deadNodes.has(endpoint.node)) }
+    wires[id] = { scope: wire.scope, sig: wire.sig, endpoints: wire.endpoints.filter((endpoint) => !deadNodes.has(endpoint.node)) }
   }
   let current = mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 
@@ -297,7 +283,7 @@ export function reparentNode(d: Diagram, nodeId: NodeId, region: RegionId): Diag
       continue
     }
     if (wire.endpoints.every((endpoint) => endpoint.node === nodeId)) {
-      wires[id] = { scope: region, endpoints: wire.endpoints }
+      wires[id] = { scope: region, sig: wire.sig, endpoints: wire.endpoints }
       continue
     }
     const endpointRegions = wire.endpoints.map((endpoint) => nodes[endpoint.node]!.region)
@@ -308,7 +294,7 @@ export function reparentNode(d: Diagram, nodeId: NodeId, region: RegionId): Diag
         (current, endpointRegion) => deepestCommonAncestor(d, current, endpointRegion),
         endpointRegions[0]!,
       )
-    wires[id] = { scope, endpoints: wire.endpoints }
+    wires[id] = { scope, sig: wire.sig, endpoints: wire.endpoints }
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 }

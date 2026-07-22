@@ -1,4 +1,4 @@
-export { emptyDiagram, addCut, addBubble, joinPorts, deleteSelection } from './edit'
+export { emptyDiagram, addCut, addRelationWire, joinPorts, deleteSelection } from './edit'
 export type { ProofTimeline, ProofSession } from './session'
 export { startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, currentSide, moveSide, timelineActiveActions, meet, assembleTheorem, adoptTheorem } from './session'
 export { sessionTheory } from './persist'

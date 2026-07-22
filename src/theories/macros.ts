@@ -3,6 +3,8 @@ import { freePorts, termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
+import { relSig, type RelSig } from '../kernel/diagram/sig'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
@@ -19,6 +21,15 @@ import { proposePortCorrespondence } from '../kernel/rules/port-correspondence'
  * throws a loud RuleError naming the budget.
  */
 const CONVERSION_FUEL = 8192
+
+/** The relation signature of a named definition: its boundary stub sorts, in order. */
+export function relationSig(relation: DiagramWithBoundary): RelSig {
+  return relSig(relation.boundary.map((wid) => {
+    const w = relation.diagram.wires[wid]
+    if (w === undefined) throw new Error(`relation boundary wire '${wid}' is missing from its content`)
+    return w.sig
+  }))
+}
 
 /**
  * Replay cursor for building derivations: each push applies the step through
@@ -100,20 +111,27 @@ export class DerivationCursor {
     const relation = this.ctx.relations.get(defId)
     if (relation === undefined) throw new Error(`unknown relation '${defId}'`)
     const before = this.cur
-    this.push(tag, { rule: 'relationSpawn', region, defId, arity: relation.boundary.length })
+    this.push(tag, { rule: 'relationSpawn', region, defId, sig: relationSig(relation) })
     const found = Object.entries(this.cur.nodes).find(([id, node]) =>
       node.kind === 'ref' && node.region === region && node.defId === defId && before.nodes[id] === undefined)
     if (found === undefined) throw new Error(`no new '${defId}' relation appeared in region '${region}'`)
     return found[0]
   }
 
-  spawnBoundRelation(tag: string, region: RegionId, binder: RegionId): NodeId {
-    const value = this.cur.regions[binder]
-    if (value === undefined || value.kind !== 'bubble') throw new Error(`bound relation binder '${binder}' is not a bubble`)
+  /**
+   * Spawn a fresh atom bound to an existing relational `wire` (a second-order
+   * existential line). The atom's head endpoint lands on `wire`; its sig is read
+   * from the wire itself.
+   */
+  spawnBoundRelation(tag: string, region: RegionId, wire: WireId): NodeId {
+    const value = this.cur.wires[wire]
+    if (value === undefined) throw new Error(`bound relation wire '${wire}' does not exist`)
+    if (value.sig.kind !== 'rel') throw new Error(`bound relation wire '${wire}' is not a relational wire`)
     const before = this.cur
-    this.push(tag, { rule: 'boundRelationSpawn', region, binder, arity: value.arity })
+    this.push(tag, { rule: 'boundRelationSpawn', region, wire })
     const found = Object.entries(this.cur.nodes).find(([id, node]) =>
-      node.kind === 'atom' && node.region === region && node.binder === binder && before.nodes[id] === undefined)
+      node.kind === 'atom' && node.region === region && before.nodes[id] === undefined &&
+      this.cur.wires[wire]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'head'))
     if (found === undefined) throw new Error(`no new bound relation appeared in region '${region}'`)
     return found[0]
   }
