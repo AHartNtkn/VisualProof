@@ -3,6 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { TERM, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
 
@@ -93,21 +94,22 @@ describe('findOccurrences basics', () => {
     expect(restricted.matches[0]?.region).toBe(cut)
   })
 
-  it('atoms match only when binder images agree', () => {
+  it('atoms match only when their relational signatures are equal', () => {
+    // pattern: a lone unary-relation atom (sig rel([ι])), head + arg auto-wired
     const mkPattern = () => {
       const b = new DiagramBuilder()
-      const bub = b.bubble(b.root, 0)
-      b.atom(bub, bub)
+      b.atom(b.root, relSig([TERM]))
       return mkDiagramWithBoundary(b.build(), [])
     }
+    // host holds one unary-relation atom and one nullary-relation atom; only
+    // the equal-sig atom is a compatible image
     const h = new DiagramBuilder()
-    const outer = h.bubble(h.root, 0)
-    const inner = h.bubble(outer, 0)
-    h.atom(inner, outer) // bound to the OUTER bubble
+    const unary = h.atom(h.root, relSig([TERM]))
+    h.atom(h.root, relSig([]))
     const host = h.build()
-    // pattern (bubble directly holding its own atom) must not match the inner
-    // bubble, whose atom is bound elsewhere
-    expect(findOccurrences(host, mkPattern(), { fuel: 100 }).matches).toHaveLength(0)
+    const r = findOccurrences(host, mkPattern(), { fuel: 100 })
+    expect(r.matches).toHaveLength(1)
+    expect(r.matches[0]?.nodeMap.get('n0')).toBe(unary)
   })
 
   it('refuses UNSEEDED bare boundary stubs, non-positive fuel, unknown inRegion', () => {
@@ -228,8 +230,8 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
         'a b': { kind: 'term', region: 'r0', term: p('\\x. x x') },
       },
       wires: {
-        w0: { scope: 'r0', endpoints: [{ node: 'a', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', endpoints: [{ node: 'a b', port: { kind: 'output' } }] },
+        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a b', port: { kind: 'output' } }] },
       },
     })
     const pattern = mkDiagramWithBoundary(pd, [])
@@ -243,8 +245,8 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
         'c': { kind: 'term', region: 'r0', term: p('\\x. x') },
       },
       wires: {
-        w0: { scope: 'r0', endpoints: [{ node: 'b c', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'b c', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
       },
     })
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(0)
@@ -264,10 +266,10 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
       regions: { r0: { kind: 'sheet' } },
       nodes: { 'a': mkNode(), 'b,c': mkNode(), 'a,b': mkNode(), 'c': mkNode() },
       wires: {
-        'wa': { scope: 'r0', endpoints: [{ node: 'a', port: { kind: 'output' } }] },
-        'wb,wc': { scope: 'r0', endpoints: [{ node: 'b,c', port: { kind: 'output' } }] },
-        'wa,wb': { scope: 'r0', endpoints: [{ node: 'a,b', port: { kind: 'output' } }] },
-        'wc': { scope: 'r0', endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+        'wa': { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
+        'wb,wc': { scope: 'r0', sig: TERM, endpoints: [{ node: 'b,c', port: { kind: 'output' } }] },
+        'wa,wb': { scope: 'r0', sig: TERM, endpoints: [{ node: 'a,b', port: { kind: 'output' } }] },
+        'wc': { scope: 'r0', sig: TERM, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
       },
     })
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(6)

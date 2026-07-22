@@ -4,6 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { TERM, relSig } from '../../../src/kernel/diagram/sig'
 import type { Diagram, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
@@ -63,15 +64,16 @@ describe('splice → match round-trip', () => {
     expectFound(h.build(), 'r0', pattern, [hw])
   })
 
-  it('finds a bubble-with-atom pattern after splicing', () => {
+  it('finds a relational-atom pattern after splicing', () => {
+    // pattern: R(t) — a unary-relation atom whose arg rides a term node's
+    // output, head auto-wired; closed (empty boundary)
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 1)
-    const a = b.atom(bub, bub)
-    const t = b.termNode(bub, p('\\x. x'))
-    b.wire(bub, [
+    const a = b.atom(b.root, relSig([TERM]))
+    const t = b.termNode(b.root, p('\\x. x'))
+    b.wire(b.root, [
       { node: t, port: { kind: 'output' } },
       { node: a, port: { kind: 'arg', index: 0 } },
-    ])
+    ], TERM)
     const pattern = mkDiagramWithBoundary(b.build(), [])
 
     const h = new DiagramBuilder()

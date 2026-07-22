@@ -24,14 +24,8 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
   if (c.allRegions.has(targetRegion)) {
     throw new RuleError(`iteration target '${targetRegion}' lies inside the iterated subgraph`)
   }
-  const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
-  for (const hb of binderAttachments) {
-    if (!isAncestorOrEqual(d, hb, targetRegion)) {
-      throw new RuleError(`iteration target '${targetRegion}' lies outside binder '${hb}'; atoms cannot escape their quantifier`)
-    }
-  }
-  const binderMap = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
-  return spliceSubgraphMapped(d, targetRegion, pattern, attachments, { binderMap, reserved: reservation }).diagram
+  const { pattern, attachments } = extractSubgraph(d, sel)
+  return spliceSubgraphMapped(d, targetRegion, pattern, attachments, { reserved: reservation }).diagram
 }
 
 export type DeiterationEvidence = {
@@ -55,9 +49,8 @@ function evidenceGate(
   certificate: OccurrenceCertificate,
 ): { readonly contents: ReturnType<typeof selectionContents> } {
   const c = selectionContents(d, sel)
-  const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
-  const openBinders = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
-  const checked = checkOccurrenceCertificate(d, pattern, certificate, { openBinders })
+  const { pattern, attachments } = extractSubgraph(d, sel)
+  const checked = checkOccurrenceCertificate(d, pattern, certificate)
   if (!checked.ok) throw new RuleError(`invalid deiteration occurrence certificate: ${checked.reason}`)
   const suppliedJustifier = mkValidatedSelection(d, justifier)
   const certifiedJustifier = occurrenceToSelection(d, pattern, certificate)
@@ -102,11 +95,9 @@ export function findDeiterationEvidence(
   fuel: number,
 ): DeiterationEvidence {
   const c = selectionContents(d, sel)
-  const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
-  const openBinders = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
+  const { pattern, attachments } = extractSubgraph(d, sel)
   const { matches, undecided } = findOccurrences(d, pattern, {
     fuel,
-    openBinders,
     attachments,
   })
   const disjoint = (m: Occurrence): boolean => {

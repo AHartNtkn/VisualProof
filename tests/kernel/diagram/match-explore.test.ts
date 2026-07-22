@@ -5,6 +5,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { findOccurrences, __benchCounter } from '../../../src/kernel/diagram/subgraph/match'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 import { termShapeKey, positionalPortKey } from '../../../src/kernel/diagram/canonical/shape'
+import { sigKey } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
@@ -265,11 +266,10 @@ function epKey(d: Diagram, ep: Endpoint): string {
 
 function nodeContent(d: Diagram, id: NodeId): string {
   const n = d.nodes[id]!
-  return n.kind === 'term' ? `t:${termShapeKey(n.term, n.freePorts)}` : n.kind === 'ref' ? `r:${n.defId}:${n.arity}` : 'atom'
+  return n.kind === 'term' ? `t:${termShapeKey(n.term, n.freePorts)}` : n.kind === 'ref' ? `r:${n.defId}:${sigKey(n.sig)}` : 'atom'
 }
 function regionContent(d: Diagram, id: RegionId): string {
-  const r = d.regions[id]!
-  return r.kind === 'bubble' ? `b/${r.arity}` : r.kind
+  return d.regions[id]!.kind
 }
 
 /** All injective maps sources→targets respecting `ok(s,t)`, as an array of Maps. */

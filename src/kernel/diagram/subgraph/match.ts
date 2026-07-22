@@ -1,9 +1,11 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
 import { isAncestorOrEqual } from '../regions'
+import { sigEquals } from '../sig'
 import type { DiagramWithBoundary } from '../boundary'
 import { positionalPortKey } from '../canonical/shape'
 import { termShapeKey } from '../canonical/shape'
+import { boundaryForm } from '../canonical/explore'
 import { termsMatchModuloBetaEta } from '../canonical/matchkey'
 import type { ConversionCertificate } from '../../term/certificate'
 import { checkOccurrenceCertificate } from './occurrence-certificate'
@@ -50,16 +52,21 @@ type Idx = {
 function posKey(d: Diagram, ep: Endpoint): string {
   const n = d.nodes[ep.node]!
   // Return-typed switch (no default): a new node kind forces its positional
-  // port key to be decided here.
+  // port key to be decided here. The vocabulary mirrors canonical exploration.
   switch (n.kind) {
     case 'term':
       return positionalPortKey(n.term, ep.port, n.freePorts)
     case 'atom':
+      if (ep.port.kind === 'head') return 'hd'
       if (ep.port.kind === 'arg') return `a${ep.port.index}`
       throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
     case 'ref':
       if (ep.port.kind === 'arg') return `a${ep.port.index}`
       throw new DiagramError(`ref '${ep.node}' cannot carry port '${ep.port.kind}'`)
+    case 'body':
+      if (ep.port.kind === 'output') return 'out'
+      if (ep.port.kind === 'freeVar') return `p:${ep.port.name}`
+      throw new DiagramError(`body '${ep.node}' cannot carry port '${ep.port.kind}'`)
   }
 }
 
@@ -97,23 +104,20 @@ function buildIdx(d: Diagram): Idx {
 }
 
 /**
- * Exploration-driven occurrence search. The pattern's effective-root items are
- * matched against a host region, its nested regions corresponding exactly, and
- * the interior filled by exhaustive finite injection enumeration. Candidate
- * order is deterministic but has no semantic role: every region, node, and
+ * Exploration-driven occurrence search. The pattern's root items are matched
+ * against a host region, its nested regions corresponding exactly, and the
+ * interior filled by exhaustive finite injection enumeration. Candidate order
+ * is deterministic but has no semantic role: every region, node, and
  * otherwise-undetermined internal wire assignment is explored.
  *
  * Endpointful wire images are determined by the port-partition invariant (each
- * endpoint lies on exactly one host wire). Bare internal wire images are finite
- * choices and are therefore enumerated rather than canonically guessed.
- * Occurrences are deduplicated by footprint. In `betaEta` mode (default) term-node comparison
- * is modulo beta-eta with the fuel + `undecided` contract; in `exact` mode it
- * is name-blind structural (de Bruijn) equality with no fuel and no undecided.
- *
- * With openBinders, atoms bound to stub bubbles match only when the stub
- * binder maps to the specified host bubble (exact identity, not isomorphism).
- * Candidates outside an open binder are skipped (atoms cannot escape their
- * quantifier).
+ * endpoint lies on exactly one host wire); a corresponded pair of wires must
+ * additionally carry equal signatures — the wire is a line of identity of a
+ * fixed sort. Bare internal wire images are finite choices and are therefore
+ * enumerated rather than canonically guessed. Occurrences are deduplicated by
+ * footprint. In `betaEta` mode (default) term-node comparison is modulo
+ * beta-eta with the fuel + `undecided` contract; in `exact` mode it is
+ * name-blind structural (de Bruijn) equality with no fuel and no undecided.
  */
 export function findOccurrences(
   host: Diagram,
@@ -123,14 +127,14 @@ export function findOccurrences(
     /** Optional backtracking-probe budget, separate from beta-eta conversion fuel. */
     explorationFuel?: number
     inRegion?: RegionId
-    openBinders?: ReadonlyMap<RegionId, RegionId>
     mode?: MatchMode
     /**
      * Citation-supplied boundary anchors, index-aligned with `pattern.boundary`.
      * A BARE boundary wire (no endpoints) has nothing to discover, so its
-     * attachment is taken directly from here (the only check is the visibility
-     * gate); an endpointful boundary wire's discovered attachment must equal the
-     * one here, so occurrences are restricted to this exact seam.
+     * attachment is taken directly from here (the only checks are the visibility
+     * gate and signature equality); an endpointful boundary wire's discovered
+     * attachment must equal the one here, so occurrences are restricted to this
+     * exact seam.
      */
     attachments?: readonly WireId[]
   },
@@ -183,51 +187,13 @@ export function findOccurrences(
     throw new DiagramError(`unknown region '${opts.inRegion}'`)
   }
 
-  const openBinders = opts.openBinders ?? new Map<RegionId, RegionId>()
-  for (const [stub, hb] of openBinders) {
-    const ps = pd.regions[stub]
-    if (ps === undefined) throw new DiagramError(`open binder '${stub}' is not a pattern region`)
-    if (ps.kind !== 'bubble') throw new DiagramError(`open binder '${stub}' is not a bubble`)
-    const target = host.regions[hb]
-    if (target === undefined) throw new DiagramError(`open binder target '${hb}' does not exist`)
-    if (target.kind !== 'bubble') throw new DiagramError(`open binder target '${hb}' is not a bubble`)
-    if (target.arity !== ps.arity) {
-      throw new DiagramError(`open binder arity mismatch: '${stub}' has ${ps.arity}, '${hb}' has ${target.arity}`)
-    }
-  }
   const hIdx = buildIdx(host)
   const pIdx = buildIdx(pd)
 
-  // stubs must form a pure chain root → s1 → … → sk: nothing else lives on it
-  let effectiveRoot: RegionId = pd.root
-  {
-    const stubSet = new Set(openBinders.keys())
-    let cur: RegionId = pd.root
-    while (true) {
-      const kids = pIdx.childrenOf.get(cur)!
-      const stubKids = kids.filter((k) => stubSet.has(k))
-      if (stubKids.length === 0) break
-      if (stubKids.length > 1 || kids.length > 1 || pIdx.nodesIn.get(cur)!.length > 0) {
-        throw new DiagramError(`open binder stubs must form a pure chain below the pattern root; '${cur}' has other content`)
-      }
-      const nonBoundaryAtCur = Object.entries(pd.wires).some(
-        ([wid, w]) => w.scope === cur && !boundarySet.has(wid),
-      )
-      if (nonBoundaryAtCur) {
-        throw new DiagramError(`wires scoped at '${cur}' above the binder-stub chain are not matchable`)
-      }
-      cur = stubKids[0]!
-      stubSet.delete(cur)
-      effectiveRoot = cur
-    }
-    if (stubSet.size > 0) {
-      throw new DiagramError(`open binder stub(s) ${[...stubSet].map((s) => `'${s}'`).join(', ')} are not on the root chain`)
-    }
-  }
+  const effectiveRoot: RegionId = pd.root
   const rootRegions = [...pIdx.childrenOf.get(effectiveRoot)!].sort()
   const rootNodes = [...pIdx.nodesIn.get(effectiveRoot)!].sort()
 
-  const binderImage = new Map(openBinders)
   const regionMap = new Map<RegionId, RegionId>()
   const nodeMap = new Map<NodeId, NodeId>()
   const usedRegions = new Set<RegionId>()
@@ -247,11 +213,6 @@ export function findOccurrences(
     : Object.keys(host.regions).sort()
   for (const R of candidates) {
     if (explorationExhausted) break
-    let ok = true
-    for (const hb of openBinders.values()) {
-      if (!isAncestorOrEqual(host, hb, R)) { ok = false; break }
-    }
-    if (!ok) continue
     regionMap.set(effectiveRoot, R)
     assignContainer(rootRegions, rootNodes, R, () => finishWires(R))
     regionMap.delete(effectiveRoot)
@@ -309,13 +270,15 @@ export function findOccurrences(
     switch (pnode.kind) {
       case 'atom': {
         if (hnode.kind !== 'atom') return false // impossible given the equality guard; narrows hnode
-        const viaOpen = binderImage.get(pnode.binder)
-        if (viaOpen !== undefined) return viaOpen === hnode.binder
-        return regionMap.get(pnode.binder) === hnode.binder
+        return sigEquals(pnode.sig, hnode.sig)
       }
       case 'ref': {
         if (hnode.kind !== 'ref') return false // impossible given the equality guard; narrows hnode
-        return pnode.defId === hnode.defId && pnode.arity === hnode.arity
+        return pnode.defId === hnode.defId && sigEquals(pnode.sig, hnode.sig)
+      }
+      case 'body': {
+        if (hnode.kind !== 'body') return false // impossible given the equality guard; narrows hnode
+        return sigEquals(pnode.sig, hnode.sig) && boundaryForm(pnode.content) === boundaryForm(hnode.content)
       }
       case 'term':
         return termVerdict(pn, hn) !== false
@@ -323,11 +286,7 @@ export function findOccurrences(
   }
 
   function regionsShallowCompatible(pr: RegionId, hr: RegionId): boolean {
-    const pReg = pd.regions[pr]!
-    const hReg = host.regions[hr]!
-    if (pReg.kind !== hReg.kind) return false
-    if (pReg.kind === 'bubble' && hReg.kind === 'bubble') return pReg.arity === hReg.arity
-    return true
+    return pd.regions[pr]!.kind === host.regions[hr]!.kind
   }
 
   // Assign a container's pattern items to a host region: region-phase (child
@@ -412,6 +371,7 @@ export function findOccurrences(
       const hostWire = host.wires[hw]!
       if (hostWire.scope !== regionMap.get(w.scope)) return
       if (hostWire.endpoints.length !== images.length) return
+      if (!sigEquals(w.sig, hostWire.sig)) return
       const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))
       for (const im of images) {
         if (!hostSet.has(`${im.node} ${im.key}`)) return
@@ -432,7 +392,9 @@ export function findOccurrences(
         // the seam is an ordered attachment vector and splice accepts that
         // call-site quotient. Only internal copied wires remain injective.
         const hw = opts.attachments![i]!
-        if (!isAncestorOrEqual(host, host.wires[hw]!.scope, R)) return
+        const hostWire = host.wires[hw]!
+        if (!isAncestorOrEqual(host, hostWire.scope, R)) return
+        if (!sigEquals(stub.sig, hostWire.sig)) return
         if (priorImage !== undefined) {
           if (priorImage !== hw) return
           attachments.push(hw)
@@ -456,6 +418,7 @@ export function findOccurrences(
       }
       if (usedImages.has(hw)) return
       const hostWire = host.wires[hw]!
+      if (!sigEquals(stub.sig, hostWire.sig)) return
       const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))
       for (const im of images) {
         if (!hostSet.has(`${im.node} ${im.key}`)) return
@@ -487,9 +450,11 @@ export function findOccurrences(
         return
       }
       const choice = bareChoices[index]!
+      const patternSig = pd.wires[choice.patternWire]!.sig
       for (const hostWire of choice.candidates) {
         if (!spendExploration()) return
         if (usedImages.has(hostWire) || boundaryImages.has(hostWire)) continue
+        if (!sigEquals(patternSig, host.wires[hostWire]!.sig)) continue
         usedImages.add(hostWire)
         wireMap.set(choice.patternWire, hostWire)
         assignBare(index + 1)
@@ -521,7 +486,6 @@ export function findOccurrences(
         nodeMap: new Map(nodeMap),
         wireMap: new Map(wireMap),
         attachments: Object.freeze([...attachments]),
-        binderMap: new Map(binderImage),
         termCertificates: new Map(
           [...nodeMap].flatMap(([patternNode, hostNode]) => {
             if (pd.nodes[patternNode]?.kind !== 'term') return []
@@ -530,7 +494,7 @@ export function findOccurrences(
           }),
         ),
       })
-      const checked = checkOccurrenceCertificate(host, pattern, occurrence, { openBinders })
+      const checked = checkOccurrenceCertificate(host, pattern, occurrence)
       if (!checked.ok) {
         throw new DiagramError(`matcher constructed an invalid occurrence certificate: ${checked.reason}`)
       }

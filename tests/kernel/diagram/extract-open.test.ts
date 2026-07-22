@@ -3,42 +3,44 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { mkDiagram, type Diagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { TERM, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
-/** Host: bubble rB(1) containing an atom + a term node sharing a wire, plus a cut inside rB. */
-function host() {
-  const h = new DiagramBuilder()
-  const rB = h.bubble(h.root, 1)
-  const n = h.termNode(rB, p('\\x. x'))
-  const a = h.atom(rB, rB)
-  const w = h.wire(rB, [
-    { node: n, port: { kind: 'output' } },
-    { node: a, port: { kind: 'arg', index: 0 } },
-  ])
-  const cut = h.cut(rB)
-  return { d: h.build(), rB, n, a, w, cut }
-}
-
-describe('open extraction', () => {
-  it('builds a stub-bubble layer for an externally bound atom', () => {
-    const { d, rB, n, a } = host()
-    const sel = mkSelection(d, { region: rB, regions: [], nodes: [n, a], wires: [] })
+/**
+ * Wire-model counterpart of the deleted open-binder extraction suite. There is
+ * no binder machinery: an atom whose head wire lies outside the selection
+ * contributes that head wire as an ordinary relational boundary stub, uniformly
+ * with any arg wire crossing the boundary.
+ */
+describe('extraction with externally-scoped relation lines', () => {
+  it('an externally-scoped relation line becomes a sig-carrying boundary stub', () => {
+    // ∃R at the root; inside a cut, R(t). Select the cut: R's line crosses the
+    // boundary. (Counterpart of "builds a stub-bubble layer for an externally
+    // bound atom" — the stub is now the head wire, carrying the relational sig.)
+    const S = relSig([TERM])
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const t = b.termNode(cut, p('\\x. x'))
+    const a = b.atom(cut, S)
+    b.wire(cut, [
+      { node: t, port: { kind: 'output' } },
+      { node: a, port: { kind: 'arg', index: 0 } },
+    ], TERM)
+    const headWire = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], S)
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
     const ex = extractSubgraph(d, sel)
-    expect(ex.binderStubs).toHaveLength(1)
-    expect(ex.binderAttachments).toEqual([rB])
-    const stub = ex.binderStubs[0]!
-    const pd = ex.pattern.diagram
-    const stubRegion = pd.regions[stub]!
-    expect(stubRegion.kind).toBe('bubble')
-    expect(stubRegion.kind === 'bubble' && stubRegion.arity).toBe(1)
-    expect(stubRegion.kind === 'bubble' && stubRegion.parent).toBe(pd.root)
-    // the extracted atom is inside the stub and bound to it
-    const atomEntry = Object.values(pd.nodes).find((x) => x.kind === 'atom')!
-    expect(atomEntry.kind === 'atom' && atomEntry.binder).toBe(stub)
-    expect(atomEntry.region).toBe(stub)
+    expect(ex.attachments).toEqual([headWire])
+    expect(ex.pattern.boundary).toHaveLength(1)
+    const stub = ex.pattern.diagram.wires[ex.pattern.boundary[0]!]!
+    expect(stub.scope).toBe(ex.pattern.diagram.root)
+    expect(sigEquals(stub.sig, S)).toBe(true)
+    // the extracted atom keeps its head endpoint on the stub
+    expect(stub.endpoints).toEqual([{ node: a, port: { kind: 'head' } }])
     // the pattern is a VALID closed diagram (mkDiagram re-validates)
+    const pd = ex.pattern.diagram
     expect(() => mkDiagram({
       root: pd.root,
       regions: { ...pd.regions },
@@ -47,102 +49,66 @@ describe('open extraction', () => {
     })).not.toThrow()
   })
 
-  it('keeps closed extractions exactly as before (no stubs)', () => {
-    const { d, rB, n } = host()
-    const sel = mkSelection(d, { region: rB, regions: [], nodes: [n], wires: [] })
-    const ex = extractSubgraph(d, sel)
-    expect(ex.binderStubs).toEqual([])
-    expect(ex.binderAttachments).toEqual([])
-    const content = Object.values(ex.pattern.diagram.nodes)
-    expect(content).toHaveLength(1)
-    expect(content[0]!.region).toBe(ex.pattern.diagram.root)
-  })
-
-  it('orders multiple external binders outermost-first', () => {
-    const h = new DiagramBuilder()
-    const outer = h.bubble(h.root, 1)
-    const inner = h.bubble(outer, 2)
-    const a1 = h.atom(inner, outer)
-    const a2 = h.atom(inner, inner)
-    const d = h.build()
-    const sel = mkSelection(d, { region: inner, regions: [], nodes: [a1, a2], wires: [] })
-    const ex = extractSubgraph(d, sel)
-    expect(ex.binderAttachments).toEqual([outer, inner])
-    const pd = ex.pattern.diagram
-    const [sOuter, sInner] = ex.binderStubs
-    expect((pd.regions[sInner!]! as { parent: string }).parent).toBe(sOuter)
-    expect((pd.regions[sOuter!]! as { parent: string }).parent).toBe(pd.root)
-  })
-
-  it('a binder below the anchor rides inside the selection: the extraction is CLOSED', () => {
-    // A binder below the anchor must be selected content to contain its atoms
-    // (mkSelection admits no deeper direct nodes), so it always travels with
-    // the pattern and never produces a stub.
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const bub = h.bubble(cut, 1)
-    const a = h.atom(bub, bub)
-    const d = h.build()
-    const sel = mkSelection(d, { region: cut, regions: [bub], nodes: [], wires: [] })
-    const ex = extractSubgraph(d, sel)
-    expect(ex.binderStubs).toEqual([]) // binder inside the selection: closed
-    void a
-  })
-
-  it('the non-enclosing-binder guard is unreachable through valid hosts and fires loudly on forged ones', () => {
-    // mkDiagram enforces that an atom lies inside its binder bubble, so on a
-    // validated host every unselected binder of a selected atom encloses the
-    // anchor — the rejection is a pure invariant guard. Its loudness is
-    // pinned by forging the one host shape that reaches it.
-    expect(() => mkDiagram({
-      root: 'r0',
-      regions: {
-        r0: { kind: 'sheet' },
-        b1: { kind: 'bubble', parent: 'r0', arity: 0 },
-        c1: { kind: 'cut', parent: 'r0' },
-      },
-      nodes: { n0: { kind: 'atom', region: 'c1', binder: 'b1' } },
-      wires: {},
-    })).toThrowError(/must lie inside its binder bubble/)
-    const forged = {
-      root: 'r0',
-      regions: {
-        r0: { kind: 'sheet' },
-        b1: { kind: 'bubble', parent: 'r0', arity: 0 },
-        c1: { kind: 'cut', parent: 'r0' },
-      },
-      nodes: { n0: { kind: 'atom', region: 'c1', binder: 'b1' } },
-      wires: {},
-    } as unknown as Diagram
-    const sel = mkSelection(forged, { region: 'c1', regions: [], nodes: ['n0'], wires: [] })
-    expect(() => extractSubgraph(forged, sel))
-      .toThrowError(/atom 'n0' is bound to 'b1', which neither lies in the selection nor encloses its anchor/)
-  })
-
-  it('boundary wires stay root-scoped with endpoints inside the stub', () => {
-    const { d, rB, a } = host()
-    const sel = mkSelection(d, { region: rB, regions: [], nodes: [a], wires: [] })
-    const ex = extractSubgraph(d, sel)
-    expect(ex.attachments).toHaveLength(1) // the shared wire is now a boundary
-    const pd = ex.pattern.diagram
-    for (const b of ex.pattern.boundary) {
-      expect(pd.wires[b]!.scope).toBe(pd.root)
-    }
-  })
-})
-
-describe('closed-only consumers refuse open occurrences by name', () => {
-  it('comprehension abstraction refuses externally bound occurrences', async () => {
-    const { applyComprehensionAbstract } = await import('../../../src/kernel/rules/comprehension')
-    const { mkDiagramWithBoundary } = await import('../../../src/kernel/diagram/boundary')
-    const { d, rB, n, a, w } = host()
+  it('keeps fully-internal extractions with no boundary stubs', () => {
+    // Counterpart of "keeps closed extractions exactly as before (no stubs)":
+    // every wire of the selected atom is scoped inside the selection.
+    const S = relSig([TERM])
     const b = new DiagramBuilder()
-    const bn = b.termNode(b.root, p('\\x. x'))
-    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
-    const comp = mkDiagramWithBoundary(b.build(), [bw])
-    const wrap = mkSelection(d, { region: rB, regions: [], nodes: [n, a], wires: [] })
-    const occ = { sel: mkSelection(d, { region: rB, regions: [], nodes: [a], wires: [] }), args: [w] }
-    expect(() => applyComprehensionAbstract(d, wrap, comp, [occ]))
-      .toThrowError(/bound outside the occurrence cannot be abstracted/)
+    const cut = b.cut(b.root)
+    const a = b.atom(cut, S)
+    b.wire(cut, [{ node: a, port: { kind: 'head' } }], S) // R scoped inside the cut
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const ex = extractSubgraph(d, sel)
+    expect(ex.attachments).toEqual([])
+    expect(ex.pattern.boundary).toEqual([])
+  })
+
+  it('orders multiple relational stubs deterministically by host wire id', () => {
+    // Counterpart of "orders multiple external binders outermost-first": with no
+    // binder chain, multiple crossing relation lines order by host wire id.
+    const S1 = relSig([TERM])
+    const S2 = relSig([])
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const a1 = b.atom(cut, S1)
+    const a2 = b.atom(cut, S2)
+    // both head wires scoped at the root (external to the selected cut)
+    b.wire(b.root, [{ node: a1, port: { kind: 'head' } }], S1)
+    b.wire(b.root, [{ node: a2, port: { kind: 'head' } }], S2)
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const ex = extractSubgraph(d, sel)
+    expect([...ex.attachments]).toEqual([...ex.attachments].sort())
+    expect(ex.pattern.boundary).toHaveLength(2)
+    // each stub carries its own atom's signature
+    const stubSigs = ex.pattern.boundary.map((w) => ex.pattern.diagram.wires[w]!.sig)
+    expect(stubSigs.some((s) => sigEquals(s, S1))).toBe(true)
+    expect(stubSigs.some((s) => sigEquals(s, S2))).toBe(true)
+  })
+
+  it('an arg wire crossing the boundary is a boundary stub exactly like a head wire', () => {
+    // Counterpart of "boundary wires stay root-scoped with endpoints inside the
+    // stub": arg and head wires are treated uniformly.
+    const S = relSig([TERM])
+    const b = new DiagramBuilder()
+    const t = b.termNode(b.root, p('\\x. x'))
+    const cut = b.cut(b.root)
+    const a = b.atom(cut, S)
+    b.wire(cut, [{ node: a, port: { kind: 'head' } }], S) // head internal
+    // arg wire scoped at the root, joining the atom arg to an outside term
+    b.wire(b.root, [
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: t, port: { kind: 'output' } },
+    ], TERM)
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const ex = extractSubgraph(d, sel)
+    expect(ex.attachments).toHaveLength(1) // the crossing arg wire
+    const pd = ex.pattern.diagram
+    for (const bw of ex.pattern.boundary) {
+      expect(pd.wires[bw]!.scope).toBe(pd.root)
+      expect(sigEquals(pd.wires[bw]!.sig, TERM)).toBe(true) // an arg line is a TERM line
+    }
   })
 })

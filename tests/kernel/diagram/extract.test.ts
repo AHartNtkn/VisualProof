@@ -4,6 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { boundaryArity } from '../../../src/kernel/diagram/boundary'
+import { TERM, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
@@ -71,31 +72,42 @@ describe('extractSubgraph', () => {
   })
 })
 
-describe('extractSubgraph atom-binder boundary', () => {
-  it('extracts atoms whose binder is inside the selection', () => {
+describe('extractSubgraph relational-atom boundary', () => {
+  it('an atom whose head wire is internal produces no boundary stub', () => {
+    // ∃R inside the cut, with R(t): the head wire is scoped in the selection, so
+    // the relation line travels with the pattern and crosses no boundary.
+    const S = relSig([TERM])
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 0)
-    b.atom(bub, bub)
+    const cut = b.cut(b.root)
+    const a = b.atom(cut, S)
+    b.wire(cut, [{ node: a, port: { kind: 'head' } }], S) // R scoped INSIDE the cut
     const d = b.build()
-    const sel = mkSelection(d, { region: d.root, regions: [bub], nodes: [], wires: [] })
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const ex = extractSubgraph(d, sel)
+    expect(ex.attachments).toEqual([])
+    expect(boundaryArity(ex.pattern)).toBe(0)
     expect(() => extractSubgraph(d, sel)).not.toThrow()
   })
 
-  it('allows atoms bound to the anchor to extract as open patterns', () => {
-    // atoms bound to an enclosing binder (including the anchor itself)
-    // extract as open patterns with stub-bubble layers; only binders off the
-    // ancestor chain are rejected
+  it('an atom whose head wire is external contributes a relational boundary stub of the atom sig', () => {
+    // ∃R OUTSIDE the cut; inside the cut sits R(t). Selecting the cut leaves R's
+    // line of identity crossing the boundary — it becomes a root-scoped
+    // relational stub carrying the atom's signature, uniformly with an arg wire.
+    const S = relSig([TERM])
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 0)
-    const cut = b.cut(bub)
-    const a = b.atom(cut, bub)
-    void a
+    const cut = b.cut(b.root)
+    const a = b.atom(cut, S)
+    const headWire = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], S) // R scoped at ROOT
     const d = b.build()
-    const sel = mkSelection(d, { region: bub, regions: [cut], nodes: [], wires: [] })
-    // Atoms in selected regions whose binders are external (not selected)
-    // are now extracted as open patterns
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
     const ex = extractSubgraph(d, sel)
-    expect(ex.binderStubs.length).toBeGreaterThan(0) // has external binders
+    expect(ex.attachments).toEqual([headWire])
+    expect(boundaryArity(ex.pattern)).toBe(1)
+    const stubId = ex.pattern.boundary[0]!
+    const stub = ex.pattern.diagram.wires[stubId]!
+    expect(stub.scope).toBe(ex.pattern.diagram.root)
+    expect(sigEquals(stub.sig, S)).toBe(true) // the stub CARRIES the relational sig
+    expect(stub.endpoints).toHaveLength(1)
+    expect(stub.endpoints[0]).toEqual({ node: a, port: { kind: 'head' } })
   })
-
 })

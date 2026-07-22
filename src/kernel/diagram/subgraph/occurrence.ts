@@ -4,7 +4,6 @@ import type { DiagramWithBoundary } from '../boundary'
 import type { Occurrence } from './match'
 import type { SubgraphSelection } from './selection'
 import { mkSelection } from './selection'
-import { occurrenceContentRoot } from './occurrence-certificate'
 
 /**
  * Convert a matcher occurrence into the selection of its host subgraph —
@@ -23,9 +22,7 @@ export function occurrenceToSelection(
   // maps means the caller passed a malformed Occurrence — a structural
   // invariant violation, not a rule-gate refusal.
   const pd = pattern.diagram
-  const content = occurrenceContentRoot(pattern, occ.binderMap)
-  if (!content.ok) throw new DiagramError(`malformed occurrence binder map: ${content.reason}`)
-  const root = content.root
+  const root = pd.root
   const boundary = new Set(pattern.boundary)
   const regions: RegionId[] = []
   // Only direct root-children enter sel.regions (mkSelection requires

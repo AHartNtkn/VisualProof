@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { TERM, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 
 const p = (s: string) => parseTerm(s)
@@ -167,16 +168,16 @@ describe('findOccurrences adversarial battery', () => {
     expect(findOccurrences(mkHost(false), pattern, { fuel: 100 }).matches).toHaveLength(0)
   })
 
-  it('nested bubble-with-atom patterns match exactly and respect arity', () => {
+  it('relational atom patterns match exactly and respect signature arity', () => {
+    // pattern: a single relation atom of the given arity, head + args auto-wired
     const mkPattern = (arity: number) => {
       const b = new DiagramBuilder()
-      const bub = b.bubble(b.root, arity)
-      b.atom(bub, bub)
+      b.atom(b.root, relSig(Array.from({ length: arity }, () => TERM)))
       return mkDiagramWithBoundary(b.build(), [])
     }
+    // host holds a unary-relation atom; only the arity-1 pattern is compatible
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 1)
-    h.atom(bub, bub)
+    h.atom(h.root, relSig([TERM]))
     const host = h.build()
     expect(findOccurrences(host, mkPattern(1), { fuel: 100 }).matches).toHaveLength(1)
     expect(findOccurrences(host, mkPattern(2), { fuel: 100 }).matches).toHaveLength(0)

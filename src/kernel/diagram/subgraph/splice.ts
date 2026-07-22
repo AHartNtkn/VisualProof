@@ -2,13 +2,13 @@ import type { Diagram, DiagramNode, Endpoint, Region, RegionId, Wire, WireId } f
 import { DiagramError, mkDiagram } from '../diagram'
 import { isAncestorOrEqual } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
+import { sigEquals, sigKey } from '../sig'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
 import { freshId, type IdReservation } from './freshId'
 import { port } from '../../term/term'
 
 export type SpliceOptions = {
-  readonly binderMap?: ReadonlyMap<RegionId, RegionId>
   readonly reserved?: IdReservation | undefined
 }
 
@@ -37,6 +37,7 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
     if (internal.has(id)) continue
     wires[id] = {
       scope: w.scope,
+      sig: w.sig,
       endpoints: w.endpoints.filter((ep) => !c.allNodes.has(ep.node)),
     }
   }
@@ -55,9 +56,10 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
  * connection seam cannot honor any other scope. Pattern content gets
  * fresh host ids deterministically; the result is re-validated by mkDiagram.
  *
- * With a binder map, mapped stubs are location-transparent layers (not copied
- * as fresh bubbles); their children reparent to the splice region, and atoms
- * bound to them rebind to the host bubbles indicated in the map.
+ * Landing a boundary stub onto a host wire requires their signatures to be
+ * equal: the stub is a line of identity of a fixed sort, and it may only be
+ * glued to a host line of the same sort. Every copied wire carries its pattern
+ * signature.
  */
 export function spliceSubgraphMapped(
   host: Diagram,
@@ -66,7 +68,6 @@ export function spliceSubgraphMapped(
   attachments: readonly WireId[],
   options: SpliceOptions = {},
 ): MappedSplice {
-  const binderMap = options.binderMap ?? new Map<RegionId, RegionId>()
   if (host.regions[atRegion] === undefined) {
     throw new DiagramError(`splice region '${atRegion}' does not exist`)
   }
@@ -80,13 +81,20 @@ export function spliceSubgraphMapped(
       throw new DiagramError(`invalid DiagramWithBoundary: boundary wire '${b}' is not scoped at the pattern root`)
     }
   }
-  for (const a of attachments) {
+  pattern.boundary.forEach((stub, i) => {
+    const a = attachments[i]!
     const w = host.wires[a]
     if (w === undefined) throw new DiagramError(`attachment wire '${a}' does not exist`)
     if (!isAncestorOrEqual(host, w.scope, atRegion)) {
       throw new DiagramError(`attachment wire '${a}' (scope '${w.scope}') does not enclose splice region '${atRegion}'`)
     }
-  }
+    const stubSig = pd.wires[stub]!.sig
+    if (!sigEquals(stubSig, w.sig)) {
+      throw new DiagramError(
+        `boundary stub '${stub}' (sig '${sigKey(stubSig)}') cannot land on attachment wire '${a}' (sig '${sigKey(w.sig)}')`,
+      )
+    }
+  })
 
   // A repeated boundary identity is an equality constraint at the application
   // site, not permission to identify the host wires globally. Keep the first
@@ -111,34 +119,11 @@ export function spliceSubgraphMapped(
     }
   })
 
-  const binderTargets = new Set<RegionId>()
-  for (const [stub, hb] of binderMap) {
-    if (binderTargets.has(hb)) {
-      throw new DiagramError(`binder map target '${hb}' is used by more than one stub`)
-    }
-    binderTargets.add(hb)
-    const ps = pd.regions[stub]
-    if (ps === undefined) throw new DiagramError(`binder map stub '${stub}' is not a pattern region`)
-    if (ps.kind !== 'bubble') throw new DiagramError(`binder map stub '${stub}' is not a bubble`)
-    const target = host.regions[hb]
-    if (target === undefined) throw new DiagramError(`binder map target '${hb}' does not exist`)
-    if (target.kind !== 'bubble') throw new DiagramError(`binder map target '${hb}' is not a bubble`)
-    if (target.arity !== ps.arity) {
-      throw new DiagramError(`binder map arity mismatch: stub '${stub}' has arity ${ps.arity}, host bubble '${hb}' has ${target.arity}`)
-    }
-    if (!isAncestorOrEqual(host, hb, atRegion)) {
-      throw new DiagramError(`binder map target '${hb}' does not enclose the splice region '${atRegion}'`)
-    }
-  }
-
   // fresh-id maps for pattern regions (except root), nodes, internal wires
   const takenRegions = new Set(Object.keys(host.regions))
   const regionMap = new Map<RegionId, RegionId>([[pd.root, atRegion]])
-  // mapped binder stubs are location-transparent layers: their children land
-  // at the splice region and atoms bound to them rebind to the host bubble
-  for (const stub of binderMap.keys()) regionMap.set(stub, atRegion)
   for (const id of Object.keys(pd.regions)) {
-    if (id === pd.root || binderMap.has(id)) continue
+    if (id === pd.root) continue
     const fresh = freshId(takenRegions, id, options.reserved?.regions)
     takenRegions.add(fresh)
     regionMap.set(id, fresh)
@@ -171,20 +156,19 @@ export function spliceSubgraphMapped(
 
   const regions: Record<RegionId, Region> = { ...host.regions }
   for (const [id, r] of Object.entries(pd.regions)) {
-    if (id === pd.root || binderMap.has(id)) continue
+    if (id === pd.root) continue
     const mapped = regionMap.get(id)!
     if (r.kind === 'sheet') continue // impossible: single sheet is the root
-    regions[mapped] = r.kind === 'cut'
-      ? { kind: 'cut', parent: regionMap.get(r.parent)! }
-      : { kind: 'bubble', parent: regionMap.get(r.parent)!, arity: r.arity }
+    regions[mapped] = { kind: 'cut', parent: regionMap.get(r.parent)! }
   }
 
   // Return-typed switch (no default): a new node kind forces its rebuild here.
   const rebuildNode = (n: DiagramNode): DiagramNode => {
     switch (n.kind) {
       case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term, freePorts: n.freePorts }
-      case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
-      case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, arity: n.arity }
+      case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, sig: n.sig }
+      case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, sig: n.sig }
+      case 'body': return { kind: 'body', region: regionMap.get(n.region)!, sig: n.sig, content: n.content }
     }
   }
   const nodes: Record<string, DiagramNode> = { ...host.nodes }
@@ -203,6 +187,7 @@ export function spliceSubgraphMapped(
     if (boundarySet.has(id)) continue
     wires[wireMap.get(id)!] = {
       scope: regionMap.get(w.scope)!,
+      sig: w.sig,
       endpoints: mapEndpoints(w.endpoints),
     }
   }
@@ -215,6 +200,7 @@ export function spliceSubgraphMapped(
     const existing = wires[hostWireId]!
     wires[hostWireId] = {
       scope: existing.scope,
+      sig: existing.sig,
       endpoints: [...existing.endpoints, ...mapEndpoints(stub.endpoints)],
     }
   })
@@ -224,6 +210,7 @@ export function spliceSubgraphMapped(
     if (alias.representative === alias.attachment) {
       wires[alias.representative] = {
         scope: representative.scope,
+        sig: representative.sig,
         endpoints: [
           ...representative.endpoints,
           { node: alias.id, port: { kind: 'output' } },
@@ -233,10 +220,12 @@ export function spliceSubgraphMapped(
     } else {
       wires[alias.representative] = {
         scope: representative.scope,
+        sig: representative.sig,
         endpoints: [...representative.endpoints, { node: alias.id, port: { kind: 'output' } }],
       }
       wires[alias.attachment] = {
         scope: attachment.scope,
+        sig: attachment.sig,
         endpoints: [...attachment.endpoints, { node: alias.id, port: { kind: 'freeVar', name: 's0' } }],
       }
     }
@@ -256,7 +245,6 @@ export function spliceSubgraph(
   atRegion: RegionId,
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
-  binderMap: ReadonlyMap<RegionId, RegionId> = new Map(),
 ): Diagram {
-  return spliceSubgraphMapped(host, atRegion, pattern, attachments, { binderMap }).diagram
+  return spliceSubgraphMapped(host, atRegion, pattern, attachments).diagram
 }
