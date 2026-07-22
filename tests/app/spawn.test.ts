@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import {
   SpawnCascade,
   SpawnRecents,
@@ -79,18 +82,21 @@ describe('real relation spawn catalog', () => {
 })
 
 describe('bound predicate spawn options', () => {
-  it('returns none outside bubbles and every enclosing bubble innermost first', () => {
+  it('returns none outside relational wires and every enclosing wire innermost first', () => {
+    // The old "bubble binders" are relational wires now; a bound predicate may be
+    // spawned onto any relational wire enclosing the invocation region.
     const b = new DiagramBuilder()
-    const outer = b.bubble(b.root, 1)
-    const cut = b.cut(outer)
-    const inner = b.bubble(cut, 3)
-    const leaf = b.cut(inner)
+    const cut = b.cut(b.root)
+    const outerW = b.relWire(cut, R(1))
+    const cut2 = b.cut(cut)
+    const innerW = b.relWire(cut2, R(3))
+    const leaf = b.cut(cut2)
     const d = b.build()
 
     expect(boundPredicateOptions(d, b.root)).toEqual([])
     expect(boundPredicateOptions(d, leaf)).toEqual([
-      { source: 'draft', binder: inner, arity: 3, position: 1, total: 2 },
-      { source: 'draft', binder: outer, arity: 1, position: 2, total: 2 },
+      { source: 'draft', wire: innerW, arity: 3, position: 1, total: 2 },
+      { source: 'draft', wire: outerW, arity: 1, position: 2, total: 2 },
     ])
   })
 

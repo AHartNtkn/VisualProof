@@ -10,6 +10,9 @@ import { RuleError } from '../../src/kernel/rules/error'
 import { applyBodyAttach, applyBodyDetach } from '../../src/kernel/rules/body'
 import { applyUnfold } from '../../src/kernel/rules/fold'
 import { applyVacuousElim } from '../../src/kernel/rules/vacuous'
+import type { ProofStep } from '../../src/kernel/proof/step'
+import { replayProof } from '../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import {
   macroComprehensionInstantiate,
   macroComprehensionAbstract,
@@ -938,6 +941,59 @@ describe('macro round-trip: abstraction and instantiation are mutually inverse',
 
     expect(() => macroComprehensionAbstract(inst, region, binaryComp(), [{ sel: sel(), args: [x, zId] }]))
       .toThrowError(/is not one of the occurrence's attachment wires/)
+  })
+})
+
+/* ========================================================================== */
+/* PROOF REPLAY — the composite records as a single-orientation step sequence   */
+/* ========================================================================== */
+
+describe('instantiate composite replays under ONE orientation (Task 10 blocker resolved)', () => {
+  // Two atoms on a relational wire, plus a shared parameter line, at `scope`.
+  function host(negative: boolean) {
+    const h = new DiagramBuilder()
+    const scope = negative ? h.cut(h.root) : h.root
+    const a1 = h.atom(scope, R1)
+    const a2 = h.atom(scope, R1)
+    const W = h.wire(scope, [
+      { node: a1, port: { kind: 'head' } },
+      { node: a2, port: { kind: 'head' } },
+    ], R1)
+    h.wire(scope, [{ node: a1, port: { kind: 'arg', index: 0 } }], TERM)
+    h.wire(scope, [{ node: a2, port: { kind: 'arg', index: 0 } }], TERM)
+    const wParam = h.wire(h.root, [], TERM)
+    return { d: h.build(), W, a1, a2, wParam }
+  }
+
+  // bodyAttach(orientation) → unfold* → bodied vacuousElim — NO detach, NO flip.
+  const composite = (W: string, a1: string, a2: string, wParam: string): ProofStep[] => [
+    { rule: 'bodyAttach', wireId: W, content: paramComp(), params: [wParam] },
+    { rule: 'unfold', nodeId: a1 },
+    { rule: 'unfold', nodeId: a2 },
+    { rule: 'vacuousElim', wireId: W },
+  ]
+
+  it('forward composite replays under orientation=forward and equals the macro', () => {
+    const { d, W, a1, a2, wParam } = host(true) // negative wire
+    const replayed = replayProof(d, composite(W, a1, a2, wParam), EMPTY_PROOF_CONTEXT, undefined, 'forward')
+    const macroed = macroComprehensionInstantiate(d, W, paramComp(), [wParam], 'forward')
+    expect(exploreForm(replayed)).toBe(exploreForm(macroed))
+  })
+
+  it('backward composite replays under orientation=backward and equals the macro', () => {
+    const { d, W, a1, a2, wParam } = host(false) // positive wire → backward instantiation
+    const replayed = replayProof(d, composite(W, a1, a2, wParam), EMPTY_PROOF_CONTEXT, undefined, 'backward')
+    const macroed = macroComprehensionInstantiate(d, W, paramComp(), [wParam], 'backward')
+    expect(exploreForm(replayed)).toBe(exploreForm(macroed))
+  })
+
+  it('the forward composite does NOT replay under orientation=backward (single gated step is real)', () => {
+    // The one polarity-gated step (bodyAttach) fires forward at a negative wire;
+    // replaying it backward demands a positive wire and refuses — confirming the
+    // orientation is load-bearing, not vestigial.
+    const { d, W, a1, a2, wParam } = host(true)
+    expect(() => replayProof(d, composite(W, a1, a2, wParam), EMPTY_PROOF_CONTEXT, undefined, 'backward'))
+      .toThrow(/requires a positive/)
   })
 })
 

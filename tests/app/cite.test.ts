@@ -5,10 +5,13 @@ import type { ProofContext } from '../../src/kernel/proof/context'
 import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { citationCandidates, citationDirection, citationStep } from '../../src/app/interact/cite'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 
 function unaryPattern(defId: string) {
   const b = new DiagramBuilder()
-  const node = b.ref(b.root, defId, 1)
+  const node = b.ref(b.root, defId, R(1))
   const boundary = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
   return { side: mkDiagramWithBoundary(b.build(), [boundary]), node }
 }
@@ -32,9 +35,9 @@ function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; 
     actions: [],
   }
   const h = new DiagramBuilder()
-  const first = h.ref(h.root, 'p', 1)
+  const first = h.ref(h.root, 'p', R(1))
   const firstWire = h.wire(h.root, [{ node: first, port: { kind: 'arg', index: 0 } }])
-  const second = h.ref(h.root, 'p', 1)
+  const second = h.ref(h.root, 'p', R(1))
   h.wire(h.root, [{ node: second, port: { kind: 'arg', index: 0 } }])
   return {
     host: h.build(),
