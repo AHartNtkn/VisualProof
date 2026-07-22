@@ -5,7 +5,11 @@ import type { WireId } from '../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
-import { applyRelFold, applyRelUnfold } from '../../src/kernel/rules/reldef'
+import { applyFold, applyUnfold } from '../../src/kernel/rules/fold'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relationSig } from '../../src/theories/macros'
+import { spawnBoundRelationNode } from '../../src/kernel/diagram/spawn'
+import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { emptyDiagram } from '../../src/app/edit'
@@ -18,6 +22,13 @@ const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
   return found[0]
 }
 
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+type Rels = ReadonlyMap<string, DiagramWithBoundary>
+const foldR = (d: Parameters<typeof applyFold>[0], sel: Parameters<typeof applyFold>[1], name: string, args: readonly string[], relations: Rels) =>
+  applyFold(d, sel, args, { defId: name, sig: relationSig(relations.get(name)!), resolve: (id) => relations.get(id) })
+const unfoldR = (d: Parameters<typeof applyUnfold>[0], node: string, relations: Rels) =>
+  applyUnfold(d, node, (id) => relations.get(id))
+
 describe('defineRelation — the extracted copy round-trips through fold/unfold', () => {
   it('defines a relation whose fold-then-unfold reproduces the original sheet', () => {
     const { d, sel, wY, wZ } = sheetBody()
@@ -25,11 +36,11 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
     expect(relation.boundary).toHaveLength(2)
 
     const relations = new Map([['R', relation]])
-    const folded = applyRelFold(d, sel, 'R', [wY, wZ], relations)
+    const folded = foldR(d, sel, 'R', [wY, wZ], relations)
     const ref = refNodeOf(folded)
-    expect(folded.nodes[ref]).toMatchObject({ kind: 'ref', defId: 'R', arity: 2 })
+    expect(folded.nodes[ref]).toMatchObject({ kind: 'ref', defId: 'R', sig: R(2) })
 
-    const unfolded = applyRelUnfold(folded, ref, relations)
+    const unfolded = unfoldR(folded, ref, relations)
     expect(exploreForm(unfolded)).toBe(exploreForm(d))
   })
 
@@ -39,10 +50,10 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
     const { relation } = defineRelation(d, sel, [wZ, wY], 'R', emptyCtx)
     const relations = new Map([['R', relation]])
     // Folding the same body with the same (reversed) arg order matches.
-    expect(() => applyRelFold(d, sel, 'R', [wZ, wY], relations)).not.toThrow()
+    expect(() => foldR(d, sel, 'R', [wZ, wY], relations)).not.toThrow()
     // Folding with the sorted order does NOT — proving the boundary honors picks,
     // not the extraction's host-wire-id order.
-    expect(() => applyRelFold(d, sel, 'R', [wY, wZ], relations)).toThrow(/does not match relation 'R'/)
+    expect(() => foldR(d, sel, 'R', [wY, wZ], relations)).toThrow(/does not match the body/)
   })
 
   it('does not mutate the input diagram', () => {
@@ -100,22 +111,24 @@ describe('defineRelation — refusals (each message observed)', () => {
     expect(() => defineRelation(d, sel, [wY, wZ, wOut], 'R', emptyCtx)).toThrow(/is not a crossing wire/)
   })
 
-  it('refuses an open subgraph — a selection that binds atoms outside itself', () => {
-    // An atom inside a bubble, bound by that (enclosing) bubble, but the bubble
-    // is NOT in the selection: the extracted body would reference a variable it
-    // does not bind, so it could never be folded — the same gate abstraction and
-    // relFold apply.
+  it('defines a HIGHER-ORDER relation from a selection whose atom rides an unselected relational wire', () => {
+    // The old "open subgraph" refusal has no wire-model successor: an atom whose
+    // head wire crosses the selection is a legitimate higher-order boundary
+    // argument (the relation takes a relation), not a dangling binder. Every
+    // crossing wire — the term arg AND the relational head line — must be picked.
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 1)
-    const at = b.atom(bub, bub)
-    const d = b.build()
-    const sel = mkSelection(d, { region: bub, regions: [], nodes: [at], wires: [] as WireId[] })
-    const wArg = Object.keys(d.wires).find((wid) =>
-      d.wires[wid]!.endpoints.some((ep) => ep.node === at),
+    const W = b.relWire(b.root, R(1))
+    const built = b.build()
+    const { diagram, node: at } = spawnBoundRelationNode(built, built.root, W)
+    const wArg = Object.keys(diagram.wires).find((wid) =>
+      diagram.wires[wid]!.endpoints.some((ep) => ep.node === at && ep.port.kind === 'arg'),
     )!
-    expect(() => defineRelation(d, sel, [wArg], 'R', emptyCtx)).toThrow(
-      /binds atoms outside itself/,
-    )
+    const sel = mkSelection(diagram, { region: diagram.root, regions: [], nodes: [at], wires: [] as WireId[] })
+    const { relation } = defineRelation(diagram, sel, [wArg, W], 'R', emptyCtx)
+    expect(relation.boundary).toHaveLength(2)
+    // one boundary wire is the higher-order (relational) argument, one is term
+    expect(relation.boundary.map((wid) => relation.diagram.wires[wid]!.sig.kind).sort())
+      .toEqual(['rel', 'term'])
   })
 })
 
@@ -135,14 +148,18 @@ describe('canonicalArgOrder — a deterministic default argument order', () => {
     expect(relation.boundary).toHaveLength(2)
   })
 
-  it('refuses open subgraphs with the self-containment message', () => {
-    // an atom whose binder bubble is NOT part of the selection: open subgraph
+  it('orders the crossing wires of a higher-order selection (relational arg included)', () => {
+    // No open-subgraph refusal: a selection whose atom rides an unselected
+    // relational wire has that wire as a higher-order crossing argument, so the
+    // canonical order simply covers both crossing wires.
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 1)
-    const atom = b.atom(bub, bub)
-    const d = b.build()
-    const sel = mkSelection(d, { region: bub, regions: [], nodes: [atom], wires: [] })
-    expect(() => canonicalArgOrder(d, sel)).toThrowError(/binds atoms outside itself/)
+    const W = b.relWire(b.root, R(1))
+    const built = b.build()
+    const { diagram, node: atom } = spawnBoundRelationNode(built, built.root, W)
+    const sel = mkSelection(diagram, { region: diagram.root, regions: [], nodes: [atom], wires: [] })
+    const ord = canonicalArgOrder(diagram, sel)
+    expect(ord).toHaveLength(2)
+    expect(new Set(ord)).toEqual(new Set([W, ...ord.filter((w) => w !== W)]))
   })
 })
 
@@ -155,7 +172,7 @@ describe('inferFoldArgs — the fold arguments come from occurrence matching', (
     // the body is asymmetric, so exactly one assignment is valid — the pick order
     expect(args).toEqual([wY, wZ])
     // and applying the fold with the inferred args succeeds
-    const folded = applyRelFold(d, sel, 'R', args, ctx.relations)
+    const folded = foldR(d, sel, 'R', args, ctx.relations)
     expect(Object.values(folded.nodes).some((n) => n.kind === 'ref')).toBe(true)
   })
 
