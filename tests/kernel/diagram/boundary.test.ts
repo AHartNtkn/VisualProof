@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { boundaryArity, mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { dwbFromJson, dwbToJson } from '../../../src/kernel/proof/json'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { TERM, relSig } from '../../../src/kernel/diagram/sig'
 
 const p = (source: string) => parseTerm(source)
 
@@ -32,6 +33,17 @@ describe('mkDiagramWithBoundary', () => {
     expect(() => mkDiagramWithBoundary(b.build(), ['ghost']))
       .toThrowError(/boundary wire 'ghost' does not exist/)
   })
+
+  it('accepts a boundary wire of relational sig — the boundary is sort-agnostic', () => {
+    const b = new DiagramBuilder()
+    const sig = relSig([TERM, TERM])
+    const a = b.atom(b.root, sig)
+    const head = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], sig)
+    const relation = mkDiagramWithBoundary(b.build(), [head])
+
+    expect(boundaryArity(relation)).toBe(1)
+    expect(relation.diagram.wires[head]!.sig).toEqual(sig)
+  })
 })
 
 describe('DiagramWithBoundary root-open invariant', () => {
@@ -44,16 +56,24 @@ describe('DiagramWithBoundary root-open invariant', () => {
       .toThrowError(/boundary wire.*must be scoped at the diagram root/i)
   })
 
-  it('rejects a nested boundary wire during strict JSON reconstruction', () => {
+  it('rejects a nested boundary wire on a Diagram value reconstructed independently of the builder', () => {
+    // The invariant must hold for any Diagram, not merely ones produced
+    // through DiagramBuilder's convenience layer — e.g. a value rebuilt from
+    // an external representation (JSON, a copy transform, …) that happens to
+    // carry the identical regions/nodes/wires.
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const nested = b.wire(cut, [])
-    const serialized = dwbToJson(mkDiagramWithBoundary(b.build(), [])) as { diagram: unknown }
+    const built = b.build()
+    const reconstructed = mkDiagram({
+      root: built.root,
+      regions: { ...built.regions },
+      nodes: { ...built.nodes },
+      wires: { ...built.wires },
+    })
 
-    expect(() => dwbFromJson({
-      diagram: serialized.diagram,
-      boundary: [nested],
-    }, 'nested pattern')).toThrowError(/nested pattern.*boundary wire.*diagram root/i)
+    expect(() => mkDiagramWithBoundary(reconstructed, [nested]))
+      .toThrowError(/boundary wire.*must be scoped at the diagram root/i)
   })
 
   it('preserves repeated ordered occurrences of a root-scoped boundary wire', () => {

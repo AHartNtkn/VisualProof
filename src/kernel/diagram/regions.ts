@@ -49,10 +49,7 @@ export function cutDepth(d: Diagram, id: RegionId): number {
   }
 }
 
-/**
- * Positive iff the cut depth is even. Bubbles are quantifiers, not negations:
- * they never affect parity (spec §2.1).
- */
+/** Positive iff the cut depth is even (spec §2.1). */
 export function polarity(d: Diagram, id: RegionId): 'positive' | 'negative' {
   return cutDepth(d, id) % 2 === 0 ? 'positive' : 'negative'
 }

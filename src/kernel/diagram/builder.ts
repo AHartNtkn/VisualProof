@@ -1,7 +1,9 @@
 import type { Term } from '../term/term'
 import { freePorts } from '../term/term'
 import type { Diagram, Endpoint, NodeId, Region, RegionId, DiagramNode, Wire, WireId } from './diagram'
-import { mkDiagram, portKey, requiredPorts } from './diagram'
+import { mkDiagram, portKey, portSig, requiredPorts } from './diagram'
+import type { RelSig, Sig } from './sig'
+import { TERM } from './sig'
 
 /**
  * Ergonomic incremental construction with deterministic ids (r0, r1, …; n0, …;
@@ -26,33 +28,43 @@ export class DiagramBuilder {
     return id
   }
 
-  bubble(parent: RegionId, arity: number): RegionId {
-    const id = `r${this.regionCount++}`
-    this.regions[id] = { kind: 'bubble', parent, arity }
-    return id
-  }
-
   termNode(region: RegionId, term: Term, declaredFreePorts: readonly string[] = freePorts(term)): NodeId {
     const id = `n${this.nodeCount++}`
     this.nodes[id] = { kind: 'term', region, term, freePorts: [...declaredFreePorts] }
     return id
   }
 
-  atom(region: RegionId, binder: RegionId): NodeId {
+  atom(region: RegionId, sig: RelSig): NodeId {
     const id = `n${this.nodeCount++}`
-    this.nodes[id] = { kind: 'atom', region, binder }
+    this.nodes[id] = { kind: 'atom', region, sig }
     return id
   }
 
-  ref(region: RegionId, defId: string, arity: number): NodeId {
+  ref(region: RegionId, defId: string, sig: RelSig): NodeId {
     const id = `n${this.nodeCount++}`
-    this.nodes[id] = { kind: 'ref', region, defId, arity }
+    this.nodes[id] = { kind: 'ref', region, defId, sig }
     return id
   }
 
-  wire(scope: RegionId, endpoints: Endpoint[]): WireId {
+  /**
+   * Generic wire constructor. `sig` defaults to TERM since most manually
+   * wired ports (term output/freeVar, atom/ref arg) accept TERM; a wire
+   * touching an atom's head or a ref's arg on a relational sig must pass its
+   * sig explicitly — mkDiagram enforces the match at every endpoint.
+   */
+  wire(scope: RegionId, endpoints: Endpoint[], sig: Sig = TERM): WireId {
     const id = `w${this.wireCount++}`
-    this.wires[id] = { scope, endpoints }
+    this.wires[id] = { scope, sig, endpoints }
+    return id
+  }
+
+  /**
+   * An endpoint-free relational wire: a placeholder line of identity with no
+   * attached ports yet, later bound by e.g. `spawnBoundRelationNode`.
+   */
+  relWire(scope: RegionId, sig: RelSig): WireId {
+    const id = `w${this.wireCount++}`
+    this.wires[id] = { scope, sig, endpoints: [] }
     return id
   }
 
@@ -71,9 +83,9 @@ export class DiagramBuilder {
     const autoWires: Record<WireId, Wire> = {}
     let auto = this.wireCount
     for (const [id, n] of Object.entries(this.nodes)) {
-      for (const q of requiredPorts({ regions: this.regions }, n)) {
+      for (const q of requiredPorts(n)) {
         if (attached.get(id)?.has(portKey(q)) !== true) {
-          autoWires[`w${auto++}`] = { scope: n.region, endpoints: [{ node: id, port: q }] }
+          autoWires[`w${auto++}`] = { scope: n.region, sig: portSig(n, q), endpoints: [{ node: id, port: q }] }
         }
       }
     }

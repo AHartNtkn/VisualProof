@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { mkDiagram, type Region } from '../../../src/kernel/diagram/diagram'
 import { isAncestorOrEqual, deepestCommonAncestor, cutDepth, polarity } from '../../../src/kernel/diagram/regions'
 
-// sheet > cut1 > bubble > {cut2, cut3} ; sheet > bubble2
+// sheet r0 > cut r1 > cut r2 > {cut r3, cut r5} ; sheet r0 > cut r4 (separate branch)
 const regions: Record<string, Region> = {
   r0: { kind: 'sheet' },
   r1: { kind: 'cut', parent: 'r0' },
-  r2: { kind: 'bubble', parent: 'r1', arity: 1 },
+  r2: { kind: 'cut', parent: 'r1' },
   r3: { kind: 'cut', parent: 'r2' },
-  r4: { kind: 'bubble', parent: 'r0', arity: 0 },
+  r4: { kind: 'cut', parent: 'r0' },
   r5: { kind: 'cut', parent: 'r2' },
 }
 const d = mkDiagram({ root: 'r0', regions })
@@ -52,20 +52,22 @@ describe('deepestCommonAncestor', () => {
 })
 
 describe('cutDepth and polarity', () => {
-  it('counts cuts on the path from root, inclusive; bubbles do not count', () => {
+  it('counts cuts on the path from root, inclusive', () => {
     expect(cutDepth(d, 'r0')).toBe(0)
     expect(cutDepth(d, 'r1')).toBe(1)
-    expect(cutDepth(d, 'r2')).toBe(1) // bubble does not add
-    expect(cutDepth(d, 'r3')).toBe(2)
-    expect(cutDepth(d, 'r4')).toBe(0)
+    expect(cutDepth(d, 'r2')).toBe(2)
+    expect(cutDepth(d, 'r3')).toBe(3)
+    expect(cutDepth(d, 'r4')).toBe(1)
+    expect(cutDepth(d, 'r5')).toBe(3)
   })
 
-  it('polarity is positive iff cut depth is even — bubbles never flip it', () => {
+  it('polarity is positive iff cut depth is even', () => {
     expect(polarity(d, 'r0')).toBe('positive')
     expect(polarity(d, 'r1')).toBe('negative')
-    expect(polarity(d, 'r2')).toBe('negative')
-    expect(polarity(d, 'r3')).toBe('positive')
-    expect(polarity(d, 'r4')).toBe('positive')
+    expect(polarity(d, 'r2')).toBe('positive')
+    expect(polarity(d, 'r3')).toBe('negative')
+    expect(polarity(d, 'r4')).toBe('negative')
+    expect(polarity(d, 'r5')).toBe('negative')
   })
 
   it('throws on unknown region ids', () => {
