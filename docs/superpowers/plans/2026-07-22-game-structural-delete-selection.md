@@ -34,7 +34,7 @@
 - Consumes: `discoverGameProofActions(diagram: Diagram, hits: readonly Hit[], context: ProofContext): Discovery | null`, `vacuousEliminationChainSteps(...)`, `GameProofMoveController.keyDown(...)`, and `GameProofMoveController.contextMenu(...)`.
 - Produces: the same public signatures, with `Discovery.actions` filtered by exact structural intent and failed macro refusal limited to all-bubble selections.
 
-- [ ] **Step 1: Write failing exact-intent regressions**
+- [x] **Step 1: Write failing exact-intent regressions**
 
 Import `discoverGameProofActions` and `Hit` in `tests/game/game-proof-controller-routes.test.ts`. Add this focused block; the fallback fixtures live inside a negative enclosing cut so ordinary backward erasure is available after structural candidates are filtered.
 
@@ -188,7 +188,7 @@ describe('exact structural deletion intent', () => {
 
 Use `Diagram` and `ProofStep` type imports for `deleteSteps`. Reuse the existing `controllerFor`, `MenuDocument`, `MenuElement`, `pointerSample`, and `stepsFrom` helpers; do not introduce mocks of discovery or dispatch.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run:
 
@@ -198,7 +198,7 @@ npx vitest run tests/game/game-proof-controller-routes.test.ts -t "exact structu
 
 Expected: failures show `doubleCutElim` and `vacuousElim` remain present for mixed selections, mixed multi-bubble selection refuses as a batch request, and the menu still contains the structural labels.
 
-- [ ] **Step 3: Filter structural descriptors using exact hits**
+- [x] **Step 3: Filter structural descriptors using exact hits**
 
 Add private game-owned predicates beside `discoverGameProofActions`:
 
@@ -242,7 +242,7 @@ return { selection, actions }
 
 Do not change `applicableActions`, `absorbHits`, kernel appliers, contextual precedence, or `vacuousEliminationChainSteps`.
 
-- [ ] **Step 4: Let mixed multi-bubble selections fall through**
+- [x] **Step 4: Let mixed multi-bubble selections fall through**
 
 Replace the broad count in `isVacuousBatchRequest` with an exact all-bubble request predicate:
 
@@ -254,7 +254,7 @@ const isVacuousBatchRequest = (diagram: Diagram, hits: readonly Hit[]): boolean 
 
 This retains the focused refusal for invalid all-bubble selections while allowing any mixed-content selection to reach filtered ordinary discovery.
 
-- [ ] **Step 5: Run focused GREEN and existing macro tests**
+- [x] **Step 5: Run focused GREEN and existing macro tests**
 
 Run:
 
@@ -264,18 +264,18 @@ npx vitest run tests/game/game-proof-controller-routes.test.ts
 
 Expected: the exact-intent regressions pass together with the existing macro tests proving gapless recognition, deepest-first ordering, atomic history, one selection clear, and invalid-chain refusal.
 
-- [ ] **Step 6: Run proportional validation**
+- [x] **Step 6: Run proportional validation**
 
 Run:
 
 ```bash
 npm run typecheck
-npm test
+npx vitest run --config vitest.config.ts --exclude 'tests/physics/**/*.test.ts'
 ```
 
-Expected: typecheck exits 0 and the ordinary Vitest configuration passes while excluding `tests/physics/**/*.test.ts` through `vitest.suites.ts`.
+Expected: typecheck exits 0 and the non-physics tests pass. The explicit CLI exclusion is required because this branch's ordinary Vitest configuration excludes only the dedicated physics battery, not every file under `tests/physics/`.
 
-- [ ] **Step 7: Inspect the final diff and commit**
+- [x] **Step 7: Inspect the final diff and commit**
 
 Run:
 

@@ -82,6 +82,26 @@ export function selectedHeadStripStep(
 
 type Discovery = { readonly selection: SubgraphSelection; readonly actions: readonly ActionDescriptor[] }
 
+function exactDoubleCutIntent(
+  diagram: Diagram,
+  hits: readonly Hit[],
+  selection: SubgraphSelection,
+): boolean {
+  const outer = selection.regions.length === 1 ? selection.regions[0] : undefined
+  if (outer === undefined || hits.some((hit) => hit.kind !== 'region')) return false
+  const ids = hits.map((hit) => hit.id)
+  if (new Set(ids).size !== ids.length || !ids.includes(outer)) return false
+  if (ids.length === 1) return true
+  if (ids.length !== 2) return false
+  const inner = ids.find((id) => id !== outer)!
+  const region = diagram.regions[inner]
+  return region?.kind === 'cut' && region.parent === outer
+}
+
+function exactSingletonRegionIntent(hits: readonly Hit[], region: RegionId): boolean {
+  return hits.length === 1 && hits[0]?.kind === 'region' && hits[0].id === region
+}
+
 export function discoverGameProofActions(
   diagram: Diagram,
   hits: readonly Hit[],
@@ -90,11 +110,17 @@ export function discoverGameProofActions(
   if (hits.length === 0) return null
   try {
     const selection = buildSelection(diagram, absorbHits(diagram, hits))
-    return {
-      selection,
-      actions: applicableActions(diagram, selection, context, true)
-        .filter((action) => action.kind !== 'citeTheorem'),
-    }
+    const actions = applicableActions(diagram, selection, context, true)
+      .filter((action) => action.kind !== 'citeTheorem')
+      .filter((action) => {
+        if (action.kind === 'doubleCutElim') return exactDoubleCutIntent(diagram, hits, selection)
+        if (action.kind === 'vacuousElim') {
+          return selection.regions.length === 1
+            && exactSingletonRegionIntent(hits, selection.regions[0]!)
+        }
+        return true
+      })
+    return { selection, actions }
   } catch {
     return null
   }
@@ -152,7 +178,8 @@ export function vacuousEliminationChainSteps(
 }
 
 const isVacuousBatchRequest = (diagram: Diagram, hits: readonly Hit[]): boolean =>
-  hits.filter((hit) => hit.kind === 'region' && diagram.regions[hit.id]?.kind === 'bubble').length >= 2
+  hits.length >= 2 && hits.every((hit) =>
+    hit.kind === 'region' && diagram.regions[hit.id]?.kind === 'bubble')
 
 const iterationTargets = (diagram: Diagram, selection: SubgraphSelection): readonly RegionId[] => {
   const insideSelection = (region: RegionId): boolean => {

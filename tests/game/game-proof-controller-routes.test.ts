@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { portKey } from '../../src/kernel/diagram/diagram'
+import { portKey, type Diagram } from '../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection, type SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { EMPTY_PROOF_CONTEXT, extendRelations } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
@@ -11,8 +12,10 @@ import { DARK } from '../../src/view/paint'
 import { applyGameAction, currentDiagram, startPuzzle } from '../../src/game/session'
 import { puzzleId } from '../../src/game/types'
 import type { ActionDescriptor } from '../../src/interaction/actions'
+import type { Hit } from '../../src/interaction/hittest'
 import { FakeDocument, FakeElement } from './interface-fake-dom'
 import {
+  discoverGameProofActions,
   GameProofMoveController,
   selectedHeadStripStep,
   vacuousEliminationChainSteps,
@@ -155,6 +158,152 @@ describe('actual game proof controller routes', () => {
       { kind: 'node', id: b },
       { kind: 'wire', id: unrelated },
     ], EMPTY_PROOF_CONTEXT)).toBeNull()
+  })
+
+  describe('exact structural deletion intent', () => {
+    const deleteSteps = (diagram: Diagram, hits: readonly Hit[]): readonly ProofStep[] => {
+      const applied: ProofAction[] = []
+      const selection = { value: hits }
+      const controller = controllerFor(diagram, selection, applied, [])
+      expect(controller.keyDown(key({ key: 'Delete' }))).toBe(true)
+      return stepsFrom(applied)
+    }
+
+    it('offers double-cut elimination only for the outer rim or outer-plus-inner rims', () => {
+      const builder = new DiagramBuilder()
+      const outer = builder.cut(builder.root)
+      const inner = builder.cut(outer)
+      const node = builder.termNode(inner, parseTerm('x'))
+      const diagram = builder.build()
+      const kinds = (hits: readonly Hit[]) => discoverGameProofActions(
+        diagram, hits, EMPTY_PROOF_CONTEXT,
+      )!.actions.map(({ kind }) => kind)
+
+      expect(kinds([{ kind: 'region', id: outer }])).toContain('doubleCutElim')
+      expect(kinds([
+        { kind: 'region', id: inner },
+        { kind: 'region', id: outer },
+      ])).toContain('doubleCutElim')
+      expect(kinds([
+        { kind: 'region', id: outer },
+        { kind: 'node', id: node },
+      ])).not.toContain('doubleCutElim')
+
+      for (const hits of [
+        [{ kind: 'region' as const, id: outer }],
+        [{ kind: 'region' as const, id: inner }, { kind: 'region' as const, id: outer }],
+      ]) expect(deleteSteps(diagram, hits).map(({ rule }) => rule)).toEqual(['doubleCutElim'])
+    })
+
+    it('offers singleton vacuous elimination only for the bubble rim', () => {
+      const builder = new DiagramBuilder()
+      const bubble = builder.bubble(builder.root, 0)
+      const node = builder.termNode(bubble, parseTerm('x'))
+      const diagram = builder.build()
+      const kinds = (hits: readonly Hit[]) => discoverGameProofActions(
+        diagram, hits, EMPTY_PROOF_CONTEXT,
+      )!.actions.map(({ kind }) => kind)
+
+      expect(kinds([{ kind: 'region', id: bubble }])).toContain('vacuousElim')
+      expect(kinds([
+        { kind: 'region', id: bubble },
+        { kind: 'node', id: node },
+      ])).not.toContain('vacuousElim')
+
+      expect(deleteSteps(diagram, [{ kind: 'region', id: bubble }]).map(({ rule }) => rule))
+        .toEqual(['vacuousElim'])
+    })
+
+    it('falls through to erasure for a selected double cut plus interior content', () => {
+      const builder = new DiagramBuilder()
+      const enclosing = builder.cut(builder.root)
+      const outer = builder.cut(enclosing)
+      const inner = builder.cut(outer)
+      const node = builder.termNode(inner, parseTerm('x'))
+      const diagram = builder.build()
+
+      expect(deleteSteps(diagram, [
+        { kind: 'region', id: outer },
+        { kind: 'region', id: inner },
+        { kind: 'node', id: node },
+      ]).map(({ rule }) => rule)).toEqual(['erasure'])
+    })
+
+    it('falls through to erasure for a selected vacuous bubble plus interior content', () => {
+      const builder = new DiagramBuilder()
+      const enclosing = builder.cut(builder.root)
+      const bubble = builder.bubble(enclosing, 0)
+      const node = builder.termNode(bubble, parseTerm('x'))
+      const diagram = builder.build()
+
+      expect(deleteSteps(diagram, [
+        { kind: 'region', id: bubble },
+        { kind: 'node', id: node },
+      ]).map(({ rule }) => rule)).toEqual(['erasure'])
+    })
+
+    it('falls through to erasure for a selected vacuous chain plus interior content', () => {
+      const builder = new DiagramBuilder()
+      const enclosing = builder.cut(builder.root)
+      const outer = builder.bubble(enclosing, 0)
+      const inner = builder.bubble(outer, 0)
+      const node = builder.termNode(inner, parseTerm('x'))
+      const diagram = builder.build()
+
+      expect(deleteSteps(diagram, [
+        { kind: 'region', id: outer },
+        { kind: 'region', id: inner },
+        { kind: 'node', id: node },
+      ]).map(({ rule }) => rule)).toEqual(['erasure'])
+    })
+
+    it('omits mixed-selection structural actions from the context menu', () => {
+      const builder = new DiagramBuilder()
+      const enclosing = builder.cut(builder.root)
+      const outer = builder.cut(enclosing)
+      const inner = builder.cut(outer)
+      const cutNode = builder.termNode(inner, parseTerm('x'))
+      const bubble = builder.bubble(enclosing, 0)
+      const bubbleNode = builder.termNode(bubble, parseTerm('y'))
+      const diagram = builder.build()
+      const labels = (hits: readonly Hit[]): readonly string[] => {
+        const document = new MenuDocument()
+        const host = new MenuElement(document)
+        const controller = new GameProofMoveController({
+          host: host as unknown as HTMLElement,
+          active: () => true,
+          diagram: () => diagram,
+          engine: () => mkEngine(diagram, []),
+          viewScale: () => 1,
+          selection: () => hits,
+          setSelection: () => undefined,
+          context: () => EMPTY_PROOF_CONTEXT,
+          apply: () => undefined,
+          refuse: (message) => { throw new Error(message) },
+          theme: () => DARK,
+          fuel: () => 256,
+          openConstruction: () => undefined,
+        })
+        expect(controller.contextMenu(pointerSample(hits[0]!))).toBe(true)
+        return host.querySelectorAll<MenuElement>('.curse-context-menu__action')
+          .map(({ textContent }) => textContent)
+      }
+
+      const doubleCutLabels = labels([
+        { kind: 'region', id: outer },
+        { kind: 'region', id: inner },
+        { kind: 'node', id: cutNode },
+      ])
+      expect(doubleCutLabels).not.toContain('Eliminate the double cut')
+      expect(doubleCutLabels).toContain('Erase (negative region)')
+
+      const bubbleLabels = labels([
+        { kind: 'region', id: bubble },
+        { kind: 'node', id: bubbleNode },
+      ])
+      expect(bubbleLabels).not.toContain('Dissolve the vacuous bubble')
+      expect(bubbleLabels).toContain('Erase (negative region)')
+    })
   })
 
   it('recognizes only a gapless nested chain of selected vacuous bubble rims, deepest first', () => {
@@ -378,7 +527,7 @@ describe('actual game proof controller routes', () => {
     expect(refusals).toEqual(['select one gapless chain of vacuous bubble rims'])
   })
 
-  it('refuses a mixed multi-bubble selection instead of deleting any generic sub-selection', () => {
+  it('falls through to later deletion rules for multiple bubbles plus another selected figure', () => {
     const builder = new DiagramBuilder()
     const outer = builder.bubble(builder.root, 0)
     const inner = builder.bubble(outer, 0)
@@ -411,7 +560,7 @@ describe('actual game proof controller routes', () => {
     expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
     expect(applied).toEqual([])
     expect(selection.value).toBe(original)
-    expect(refusals).toEqual(['select one gapless chain of vacuous bubble rims'])
+    expect(refusals).toEqual([`no justifying occurrence found for deiteration at '${builder.root}'`])
   })
 
   it('claims iteration from a selected cut and commits that cut-rooted subtree', () => {
