@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { applyAction } from '../../src/kernel/proof/action'
 import { parseTerm } from '../../src/kernel/term/parse'
@@ -220,9 +223,15 @@ describe('shared proof move discovery', () => {
     expect(contextualDeleteStep(inconsistent.diagram, staged([
       'deiterate', 'erase', 'inconsistentCutElim', 'vacuousElim', 'doubleCutElim',
     ]), 64)).toEqual({ rule: 'doubleCutElim', region: inconsistent.cut })
-    expect(contextualDeleteStep(inconsistent.diagram, staged([
+    // vacuousElim targets a relational WIRE now, so exercise the priority against
+    // a discovery that selects an endpoint-free relational wire.
+    const vac = (() => { const b = new DiagramBuilder(); const W = b.relWire(b.root, R(1)); return { d: b.build(), W } })()
+    const vacFound = discoverProofActions(vac.d, [{ kind: 'wire', id: vac.W }], ctx(), 'forward')!
+    const stagedVac = (kinds: Array<'doubleCutElim' | 'vacuousElim' | 'inconsistentCutElim' | 'erase' | 'deiterate'>) =>
+      ({ ...vacFound, actions: kinds.map((kind) => ({ kind, label: kind })) })
+    expect(contextualDeleteStep(vac.d, stagedVac([
       'deiterate', 'erase', 'inconsistentCutElim', 'vacuousElim',
-    ]), 64)).toEqual({ rule: 'vacuousElim', region: inconsistent.cut })
+    ]), 64)).toEqual({ rule: 'vacuousElim', wireId: vac.W })
     expect(contextualDeleteStep(inconsistent.diagram, staged([
       'deiterate', 'erase', 'inconsistentCutElim',
     ]), 64)).toMatchObject({ rule: 'inconsistentCutElim', region: inconsistent.cut })
@@ -490,7 +499,7 @@ describe('proof move parameters', () => {
     const proof = ctx()
     const comp = foldedComprehension(proof, 'succ')
     const refs = Object.values(comp.diagram.nodes)
-    expect(refs).toEqual([{ kind: 'ref', region: comp.diagram.root, defId: 'succ', arity: 2 }])
+    expect(refs).toEqual([{ kind: 'ref', region: comp.diagram.root, defId: 'succ', sig: R(2) }])
     expect(comp.boundary).toHaveLength(2)
     expect(comp.boundary.map((wire) => comp.diagram.wires[wire]!.endpoints[0]!.port)).toEqual([
       { kind: 'arg', index: 0 },
@@ -498,13 +507,13 @@ describe('proof move parameters', () => {
     ])
   })
 
-  it('commits the complete named-relation step resolved against the live bubble', () => {
+  it('commits the complete named-relation step resolved against the live relation wire', () => {
     const builder = new DiagramBuilder()
     const guard = builder.cut(builder.root)
-    const bubble = builder.bubble(guard, 2)
-    const atom = builder.atom(bubble, bubble)
-    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 0 } }])
-    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 1 } }])
+    const atom = builder.atom(guard, relSig([TERM, TERM]))
+    const wire = builder.wire(guard, [{ node: atom, port: { kind: 'head' } }], relSig([TERM, TERM]))
+    builder.wire(guard, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    builder.wire(guard, [{ node: atom, port: { kind: 'arg', index: 1 } }])
     const diagram = builder.build()
     const menu = menuHost()
     const steps: ProofStep[] = []
@@ -514,7 +523,7 @@ describe('proof move parameters', () => {
       diagram: () => diagram,
       engine: () => mkEngine(diagram, []),
       viewScale: () => 1,
-      selection: () => [{ kind: 'region' as const, id: bubble }],
+      selection: () => [{ kind: 'wire' as const, id: wire }, { kind: 'node' as const, id: atom }],
       setSelection: () => {},
       context: ctx,
       orientation: () => 'forward',
@@ -528,13 +537,13 @@ describe('proof move parameters', () => {
       openSpawn: () => {},
     })
 
-    expect(controller.contextMenu(contextPointer({ kind: 'region', id: bubble }))).toBe(true)
+    expect(controller.contextMenu(contextPointer({ kind: 'node', id: atom }))).toBe(true)
     const namedChoice = menu.appended[0]!.children.filter((element) => element.textContent === 'succ').at(-1)
     expect(namedChoice).toBeDefined()
     namedChoice!.click()
 
     expect(steps).toEqual([
-      resolveNamedRelationInstantiation(diagram, bubble, ctx(), 'succ', 'forward'),
+      resolveNamedRelationInstantiation(diagram, wire, ctx(), 'succ', 'forward'),
     ])
   })
 })
@@ -640,9 +649,10 @@ describe('proof connection resolution', () => {
 
   it('uses anchored contraction for equal closed witnesses in different regions', () => {
     const b = new DiagramBuilder()
-    const bubble = b.bubble(b.root, 0)
+    const outer = b.cut(b.root)
+    const nested = b.cut(outer)
     const redundant = b.termNode(b.root, p('\\x. x'))
-    const survivor = b.termNode(bubble, p('\\x. x'))
+    const survivor = b.termNode(nested, p('\\x. x'))
     const d = b.build()
     const drop = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === redundant && ep.port.kind === 'output'))![0]
     const keep = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === survivor && ep.port.kind === 'output'))![0]
