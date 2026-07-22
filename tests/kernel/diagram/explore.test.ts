@@ -2,17 +2,25 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../../../src/kernel/diagram/diagram'
-import { exploreForm, exploreLabeling, exploreIso } from '../../../src/kernel/diagram/canonical/explore'
-import { termShapeKey } from '../../../src/kernel/diagram/canonical/shape'
-import { positionalPortKey } from '../../../src/kernel/diagram/canonical/shape'
+import type {
+  Diagram, DiagramNode, DiagramNodeInput, Endpoint, NodeId, Region, RegionId, Wire, WireId,
+} from '../../../src/kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import type { RelSig } from '../../../src/kernel/diagram/sig'
+import { TERM, relSig, sigEquals, sigKey } from '../../../src/kernel/diagram/sig'
+import { exploreForm, exploreLabeling, exploreIso, boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
+import { termShapeKey, positionalPortKey } from '../../../src/kernel/diagram/canonical/shape'
 
 const p = (s: string) => parseTerm(s)
 
 // ---------------------------------------------------------------------------
-// Independent brute-force isomorphism reference. Writes NONE of explore.ts's
-// machinery: it enumerates id bijections and checks structure directly, so it
-// is a genuine oracle for the labeling's completeness.
+// Independent brute-force isomorphism reference for the SIGNATURE-INDEXED model.
+// It writes NONE of explore.ts's individualization/refinement machinery: it
+// enumerates id bijections and checks structure directly. Leaf payloads are
+// compared by the shared canonical helpers (term shape via `termShapeKey`; a
+// body's content sub-diagram by its boundary-anchored fingerprint `boundaryForm`)
+// exactly as an isomorphism would identify them — the top-level region/node/wire
+// correspondence is what the brute force independently searches.
 // ---------------------------------------------------------------------------
 
 function permutations<T>(xs: readonly T[]): T[][] {
@@ -25,23 +33,39 @@ function permutations<T>(xs: readonly T[]): T[][] {
   return out
 }
 
+/** Region-, name-, and id-independent intrinsic content of a node. */
 function nodeContent(n: DiagramNode): string {
   switch (n.kind) {
     case 'term': return `term:${termShapeKey(n.term, n.freePorts)}`
-    case 'atom': return 'atom'
-    case 'ref': return `ref:${n.defId}:${n.arity}`
+    case 'atom': return `atom:${sigKey(n.sig)}`
+    case 'ref': return `ref:${n.defId}:${sigKey(n.sig)}`
+    case 'body': return `body:${sigKey(n.sig)}:${boundaryForm(n.content)}`
   }
 }
 
+/** Region kind — `sheet` | `cut` (no bubbles in the sig-indexed model). */
 function regionContent(r: Region): string {
-  return r.kind === 'bubble' ? `bubble/${r.arity}` : r.kind
+  return r.kind
 }
 
+/** Positional (name-blind) key of an endpoint's port, per node kind. */
 function epKey(d: Diagram, ep: Endpoint): string {
   const n = d.nodes[ep.node]!
-  if (n.kind === 'term') return positionalPortKey(n.term, ep.port, n.freePorts)
-  if (ep.port.kind === 'arg') return `a${ep.port.index}`
-  throw new Error('unexpected port')
+  switch (n.kind) {
+    case 'term':
+      return positionalPortKey(n.term, ep.port, n.freePorts)
+    case 'atom':
+      if (ep.port.kind === 'head') return 'hd'
+      if (ep.port.kind === 'arg') return `a${ep.port.index}`
+      throw new Error(`atom endpoint has unexpected port '${ep.port.kind}'`)
+    case 'ref':
+      if (ep.port.kind === 'arg') return `a${ep.port.index}`
+      throw new Error(`ref endpoint has unexpected port '${ep.port.kind}'`)
+    case 'body':
+      if (ep.port.kind === 'output') return 'out'
+      if (ep.port.kind === 'freeVar') return ep.port.name
+      throw new Error(`body endpoint has unexpected port '${ep.port.kind}'`)
+  }
 }
 
 /** Structural isomorphism by exhaustive bijection search (small diagrams only). */
@@ -54,10 +78,9 @@ function bruteIsomorphic(a: Diagram, b: Diagram): boolean {
   const bWire = Object.keys(b.wires)
   if (aReg.length !== bReg.length || aNode.length !== bNode.length || aWire.length !== bWire.length) return false
 
-  // For each a-region, the candidate b-regions of the same content.
   for (const regPerm of permutations(bReg)) {
     const rmap = new Map<RegionId, RegionId>(aReg.map((r, i) => [r, regPerm[i]!]))
-    // region content + parent structure + root
+    // region content + parent structure
     let ok = true
     for (const r of aReg) {
       const ri = rmap.get(r)!
@@ -80,9 +103,8 @@ function bruteIsomorphic(a: Diagram, b: Diagram): boolean {
         const an = a.nodes[n]!
         const bn = b.nodes[ni]!
         if (an.kind !== bn.kind) { nok = false; break }
-        if (nodeContent(an) !== nodeContent(bn)) { nok = false; break }
+        if (nodeContent(an) !== nodeContent(bn)) { nok = false; break } // carries sigKey for atom/ref/body
         if (rmap.get(an.region) !== bn.region) { nok = false; break }
-        if (an.kind === 'atom' && bn.kind === 'atom' && rmap.get(an.binder) !== bn.binder) { nok = false; break }
       }
       if (!nok) continue
 
@@ -94,6 +116,7 @@ function bruteIsomorphic(a: Diagram, b: Diagram): boolean {
           const aw = a.wires[w]!
           const bw = b.wires[wi]!
           if (rmap.get(aw.scope) !== bw.scope) { wok = false; break }
+          if (!sigEquals(aw.sig, bw.sig)) { wok = false; break } // wire sort is intrinsic content
           if (aw.endpoints.length !== bw.endpoints.length) { wok = false; break }
           const bset = new Set(bw.endpoints.map((ep) => `${ep.node}#${epKey(b, ep)}`))
           for (const ep of aw.endpoints) {
@@ -110,7 +133,9 @@ function bruteIsomorphic(a: Diagram, b: Diagram): boolean {
 
 // ---------------------------------------------------------------------------
 // Randomized small-diagram generator (valid by construction: DiagramBuilder
-// auto-fills every unattached port with a singleton wire).
+// auto-fills every unattached port with a singleton wire of the right sort —
+// atom heads and args, ref args, term output/freeVars). Signature arities are
+// capped at 1 to keep the brute-force reference tractable.
 // ---------------------------------------------------------------------------
 
 function mulberry32(seed: number): () => number {
@@ -124,51 +149,30 @@ function mulberry32(seed: number): () => number {
 }
 
 const termPool = ['\\x. x', '\\x. \\y. x', '\\x. \\y. y', 'y', 'y x']
-
-type RegMeta = { kind: 'sheet' | 'cut' | 'bubble'; parent: RegionId | null; arity: number }
+const sigPool: RelSig[] = [relSig([]), relSig([TERM])]
+const defIdPool = ['Nat', 'Fin']
 
 function randomDiagram(rng: () => number): Diagram {
   const b = new DiagramBuilder()
-  const meta = new Map<RegionId, RegMeta>([[b.root, { kind: 'sheet', parent: null, arity: 0 }]])
   const regions: RegionId[] = [b.root]
-  const encloses = (anc: RegionId, desc: RegionId): boolean => {
-    let cur: RegionId | null = desc
-    while (cur !== null) {
-      if (cur === anc) return true
-      cur = meta.get(cur)!.parent
-    }
-    return false
-  }
-  const nRegions = Math.floor(rng() * 3) // 0..2 extra regions
+  const nRegions = Math.floor(rng() * 3) // 0..2 extra cuts
   for (let i = 0; i < nRegions; i++) {
     const parent = regions[Math.floor(rng() * regions.length)]!
-    if (rng() < 0.5) {
-      const id = b.cut(parent)
-      meta.set(id, { kind: 'cut', parent, arity: 0 })
-      regions.push(id)
-    } else {
-      const arity = Math.floor(rng() * 3)
-      const id = b.bubble(parent, arity)
-      meta.set(id, { kind: 'bubble', parent, arity })
-      regions.push(id)
-    }
+    regions.push(b.cut(parent))
   }
   const nNodes = 1 + Math.floor(rng() * 3) // 1..3 nodes
   const outPorts: Endpoint[] = []
   for (let i = 0; i < nNodes; i++) {
     const region = regions[Math.floor(rng() * regions.length)]!
-    if (rng() < 0.7) {
+    const roll = rng()
+    if (roll < 0.55) {
       const t = termPool[Math.floor(rng() * termPool.length)]!
       const id = b.termNode(region, p(t))
       outPorts.push({ node: id, port: { kind: 'output' } })
+    } else if (roll < 0.8) {
+      b.atom(region, sigPool[Math.floor(rng() * sigPool.length)]!)
     } else {
-      const bubbles = regions.filter((r) => meta.get(r)!.kind === 'bubble' && encloses(r, region))
-      if (bubbles.length === 0) {
-        const id = b.termNode(region, p('\\x. x'))
-        outPorts.push({ node: id, port: { kind: 'output' } })
-      } else {
-        b.atom(region, bubbles[Math.floor(rng() * bubbles.length)]!)
-      }
+      b.ref(region, defIdPool[Math.floor(rng() * defIdPool.length)]!, sigPool[Math.floor(rng() * sigPool.length)]!)
     }
   }
   // optionally join a couple of output ports on one shared root-scoped wire
@@ -200,32 +204,124 @@ function relabel(d: Diagram, rng: () => number): Diagram {
   const wTo = new Map(wIds.map((id, i) => [id, `W${wPerm[i]!}`]))
   const regions: Record<RegionId, Region> = {}
   for (const [id, r] of Object.entries(d.regions)) {
-    regions[rTo.get(id)!] = r.kind === 'sheet' ? r
-      : r.kind === 'cut' ? { kind: 'cut', parent: rTo.get(r.parent)! }
-      : { kind: 'bubble', parent: rTo.get(r.parent)!, arity: r.arity }
+    regions[rTo.get(id)!] = r.kind === 'sheet' ? r : { kind: 'cut', parent: rTo.get(r.parent)! }
   }
-  const nodes: Record<NodeId, DiagramNode> = {}
+  const nodes: Record<NodeId, DiagramNodeInput> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
     nodes[nTo.get(id)!] = n.kind === 'term'
       ? { kind: 'term', region: rTo.get(n.region)!, term: n.term, freePorts: n.freePorts }
-      : n.kind === 'atom' ? { kind: 'atom', region: rTo.get(n.region)!, binder: rTo.get(n.binder)! }
-      : { kind: 'ref', region: rTo.get(n.region)!, defId: n.defId, arity: n.arity }
+      : n.kind === 'atom' ? { kind: 'atom', region: rTo.get(n.region)!, sig: n.sig }
+      : n.kind === 'ref' ? { kind: 'ref', region: rTo.get(n.region)!, defId: n.defId, sig: n.sig }
+      : { kind: 'body', region: rTo.get(n.region)!, sig: n.sig, content: n.content }
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
     wires[wTo.get(id)!] = {
       scope: rTo.get(w.scope)!,
+      sig: w.sig,
       endpoints: w.endpoints.map((ep) => ({ node: nTo.get(ep.node)!, port: ep.port })),
     }
   }
   return mkDiagram({ root: rTo.get(d.root)!, regions, nodes, wires })
 }
 
+// ---------------------------------------------------------------------------
+// Curated family exercising the sig-indexed distinctions the random generator
+// under-samples: same-scope relational wire pairs (order permuted), atoms that
+// differ only in sig, body nodes with equal-vs-differing content, and head-port
+// wiring (a symmetric swap between two same-sig wires + shared-vs-separate heads).
+// ---------------------------------------------------------------------------
+
+/** Two same-scope relational (atom-head) wires inserted in either order. */
+function relWirePair(swap: boolean): Diagram {
+  const sigA = relSig([TERM]) // nA: head + a0
+  const sigB = relSig([]) // nB: head only
+  const nodes: Record<NodeId, DiagramNodeInput> = {
+    nA: { kind: 'atom', region: 'r0', sig: sigA },
+    nB: { kind: 'atom', region: 'r0', sig: sigB },
+  }
+  const hA: Wire = { scope: 'r0', sig: sigA, endpoints: [{ node: 'nA', port: { kind: 'head' } }] }
+  const hB: Wire = { scope: 'r0', sig: sigB, endpoints: [{ node: 'nB', port: { kind: 'head' } }] }
+  const aA0: Wire = { scope: 'r0', sig: TERM, endpoints: [{ node: 'nA', port: { kind: 'arg', index: 0 } }] }
+  return mkDiagram({
+    root: 'r0',
+    regions: { r0: { kind: 'sheet' } },
+    nodes,
+    wires: swap ? { hB, hA, aA0 } : { hA, hB, aA0 },
+  })
+}
+
+/** One atom whose sig differs only in the SORT of its single argument. */
+function atomOfArgSort(relArg: boolean): Diagram {
+  const b = new DiagramBuilder()
+  b.atom(b.root, relArg ? relSig([relSig([])]) : relSig([TERM]))
+  return b.build()
+}
+
+/** One body node whose payload is the given closed content term. */
+function bodyOfContent(contentTerm: string): Diagram {
+  const cb = new DiagramBuilder()
+  cb.termNode(cb.root, p(contentTerm))
+  const content = mkDiagramWithBoundary(cb.build(), [])
+  return mkDiagram({
+    root: 'r0',
+    regions: { r0: { kind: 'sheet' } },
+    nodes: { nb: { kind: 'body', region: 'r0', sig: relSig([]), content } },
+    wires: { wo: { scope: 'r0', sig: relSig([]), endpoints: [{ node: 'nb', port: { kind: 'output' } }] } },
+  })
+}
+
+/** Two arity-0 atom heads, each on its own same-sig wire; heads swapped or not. */
+function headSwap(swap: boolean): Diagram {
+  const sig = relSig([])
+  const nodes: Record<NodeId, DiagramNodeInput> = {
+    nA: { kind: 'atom', region: 'r0', sig },
+    nB: { kind: 'atom', region: 'r0', sig },
+  }
+  const wires: Record<WireId, Wire> = {
+    wP: { scope: 'r0', sig, endpoints: [{ node: swap ? 'nB' : 'nA', port: { kind: 'head' } }] },
+    wQ: { scope: 'r0', sig, endpoints: [{ node: swap ? 'nA' : 'nB', port: { kind: 'head' } }] },
+  }
+  return mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires })
+}
+
+/** Two arity-0 atoms: heads sharing ONE relation wire, vs on two separate ones. */
+function headSharing(shared: boolean): Diagram {
+  const sig = relSig([])
+  const nodes: Record<NodeId, DiagramNodeInput> = {
+    nA: { kind: 'atom', region: 'r0', sig },
+    nB: { kind: 'atom', region: 'r0', sig },
+  }
+  const wires: Record<WireId, Wire> = shared
+    ? {
+        w: {
+          scope: 'r0', sig,
+          endpoints: [{ node: 'nA', port: { kind: 'head' } }, { node: 'nB', port: { kind: 'head' } }],
+        },
+      }
+    : {
+        wA: { scope: 'r0', sig, endpoints: [{ node: 'nA', port: { kind: 'head' } }] },
+        wB: { scope: 'r0', sig, endpoints: [{ node: 'nB', port: { kind: 'head' } }] },
+      }
+  return mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires })
+}
+
+function curatedCorpus(): Diagram[] {
+  return [
+    relWirePair(false), relWirePair(true), // isomorphic (wire insertion order permuted)
+    atomOfArgSort(false), atomOfArgSort(true), // NON-iso: differ only in arg sort
+    bodyOfContent('y'), bodyOfContent('z'), // iso: content equal up to free-port name
+    bodyOfContent('\\x. x'), // NON-iso vs the above: different content shape
+    headSwap(false), headSwap(true), // iso: symmetric head-port swap
+    headSharing(true), headSharing(false), // NON-iso: shared vs separate head relations
+  ]
+}
+
 describe('exploreLabeling — invariance property vs brute-force reference', () => {
-  it('form equality agrees with brute-force isomorphism across random pairs', () => {
+  it('form equality agrees with brute-force isomorphism across random + curated pairs', () => {
     const rng = mulberry32(0xC0FFEE)
-    const corpus: Diagram[] = []
-    for (let i = 0; i < 60; i++) corpus.push(randomDiagram(rng))
+    const corpus: Diagram[] = curatedCorpus()
+    for (let i = 0; i < 40; i++) corpus.push(randomDiagram(rng))
     let sawIso = false
     let sawNonIso = false
     for (let i = 0; i < corpus.length; i++) {
@@ -240,6 +336,26 @@ describe('exploreLabeling — invariance property vs brute-force reference', () 
     // the corpus is discriminating in both directions
     expect(sawNonIso).toBe(true)
     expect(sawIso).toBe(true)
+  })
+
+  it('the curated cases realize the intended iso / non-iso outcomes', () => {
+    // same-scope relational wire pair: order-independent
+    expect(exploreForm(relWirePair(false))).toBe(exploreForm(relWirePair(true)))
+    expect(bruteIsomorphic(relWirePair(false), relWirePair(true))).toBe(true)
+    // atoms differing only in the SORT of one argument: distinguished
+    expect(exploreForm(atomOfArgSort(false))).not.toBe(exploreForm(atomOfArgSort(true)))
+    expect(bruteIsomorphic(atomOfArgSort(false), atomOfArgSort(true))).toBe(false)
+    // body content: equal up to name → same; different shape → different
+    expect(exploreForm(bodyOfContent('y'))).toBe(exploreForm(bodyOfContent('z')))
+    expect(bruteIsomorphic(bodyOfContent('y'), bodyOfContent('z'))).toBe(true)
+    expect(exploreForm(bodyOfContent('y'))).not.toBe(exploreForm(bodyOfContent('\\x. x')))
+    expect(bruteIsomorphic(bodyOfContent('y'), bodyOfContent('\\x. x'))).toBe(false)
+    // head-port swap between two same-sig wires: an automorphism
+    expect(exploreForm(headSwap(false))).toBe(exploreForm(headSwap(true)))
+    expect(bruteIsomorphic(headSwap(false), headSwap(true))).toBe(true)
+    // head incidence is significant: shared relation ≠ two separate relations
+    expect(exploreForm(headSharing(true))).not.toBe(exploreForm(headSharing(false)))
+    expect(bruteIsomorphic(headSharing(true), headSharing(false))).toBe(false)
   })
 
   it('is invariant under random id relabeling (isomorphic by construction)', () => {
