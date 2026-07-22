@@ -1,4 +1,4 @@
-import type { Diagram, NodeId } from '../../kernel/diagram/diagram'
+import type { Diagram, NodeId } from '../kernel/diagram/diagram'
 
 export function introducedNodeId(before: Diagram, after: Diagram): NodeId {
   const introduced = Object.keys(after.nodes).filter((id) => before.nodes[id] === undefined)

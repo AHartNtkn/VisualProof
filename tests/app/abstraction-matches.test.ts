@@ -13,7 +13,7 @@ import {
   solveMaximalOccurrenceSets,
   toggleOccurrenceExclusion,
   type AbstractionCandidate,
-} from '../../src/app/abstraction-matches'
+} from '../../src/interaction/abstraction-matches'
 
 const p = (source: string) => parseTerm(source)
 

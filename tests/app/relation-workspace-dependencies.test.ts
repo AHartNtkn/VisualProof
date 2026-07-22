@@ -8,7 +8,7 @@ import {
   planRelationHostPatternDrop,
   relationHostSelectionRoute,
   relationWorkspaceBoundPredicateOptions,
-} from '../../src/app/relation-workspace'
+} from '../../src/interaction/relation-workspace'
 import {
   applyCapturedRelationHostPatternImport,
   beginAbstractionDraft,
@@ -21,7 +21,7 @@ import {
   planRelationHostPatternImport,
   replaceRelationDiagram,
   type RelationWorkspaceSnapshot,
-} from '../../src/app/relation-workspace-draft'
+} from '../../src/interaction/relation-workspace-draft'
 import type { ComprehensionDependencyState } from '../../src/interaction/comprehension-dependencies'
 
 function nestedHost(): {

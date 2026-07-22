@@ -238,6 +238,99 @@ describe('rendered game proof surface', () => {
     } finally { await page.close() }
   })
 
+  it('opens, edits, filters, and submits the live abstraction workspace from Shift+W', async () => {
+    const page = await openFixture()
+    try {
+      await page.evaluate(() => {
+        window.__gameProofSurfaceFixture.freezeLayout()
+        window.__gameProofSurfaceFixture.selectAbstractionTerms()
+      })
+      const before = await page.evaluate(() => window.__gameProofSurfaceFixture.prepared())
+      await page.locator('.curse-game-proof-canvas').focus()
+      await page.keyboard.press('Shift+W')
+      await page.waitForSelector('.vpa-relation-workspace')
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.prepared())).toBe(before)
+
+      const editor = page.locator('.vpa-relation-canvas')
+      await editor.click({ button: 'right', position: { x: 120, y: 80 } })
+      await page.getByRole('button', { name: /λ term/ }).click()
+      await page.locator('.vpa-spawn-search').fill('\\x. x')
+      await page.keyboard.press('Enter')
+      const draftWire = await page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()!.draftWires.find(({ point }) => point !== null)!.point!)
+      const portStrip = await page.locator('.vpa-relation-port-strip').boundingBox()
+      if (portStrip === null) throw new Error('relation port strip has no rendered box')
+      await page.mouse.move(draftWire.x, draftWire.y)
+      await page.mouse.down()
+      await page.mouse.move(portStrip.x + portStrip.width / 2, portStrip.y + portStrip.height / 2, { steps: 8 })
+      await page.mouse.up()
+      await expect.poll(async () => page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()?.transaction)).toMatchObject({
+          kind: 'matches', candidateCount: 2, activeKeys: expect.any(Array),
+        })
+
+      const [excludedPoint] = await page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstractionTermPoints())
+      await page.mouse.click(excludedPoint!.x, excludedPoint!.y)
+      await expect.poll(async () => page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()?.transaction)).toMatchObject({
+          excludedKeys: expect.any(Array), activeKeys: expect.any(Array),
+        })
+      const filtered = await page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()!.transaction as {
+          excludedKeys: string[]; activeKeys: string[]
+        })
+      expect(filtered.excludedKeys).toHaveLength(1)
+      expect(filtered.activeKeys).toHaveLength(1)
+
+      const historyCursor = await page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()!.cursor)
+      await page.keyboard.press('Control+z')
+      await expect.poll(() => page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()!.cursor)).toBe(historyCursor - 1)
+      await page.keyboard.press('Control+Shift+z')
+      await expect.poll(() => page.evaluate(() =>
+        window.__gameProofSurfaceFixture.abstraction()!.cursor)).toBe(historyCursor)
+      await page.mouse.click(excludedPoint!.x, excludedPoint!.y)
+      await expect.poll(async () => page.evaluate(() =>
+        (window.__gameProofSurfaceFixture.abstraction()!.transaction as {
+          activeKeys: string[]
+        }).activeKeys.length)).toBe(1)
+      await page.keyboard.press('Tab')
+      await page.getByRole('button', { name: 'Abstract' }).click()
+      const submitted = await page.evaluate(() => ({
+        abstraction: window.__gameProofSurfaceFixture.abstraction(),
+        prepared: window.__gameProofSurfaceFixture.prepared(),
+        refusals: window.__gameProofSurfaceFixture.refusals(),
+      }))
+      expect(submitted).toEqual({ abstraction: null, prepared: before + 1, refusals: 0 })
+      await expect.poll(() => page.evaluate(() =>
+        window.__gameProofSurfaceFixture.prepared())).toBe(before + 1)
+      const step = await page.evaluate(() => window.__gameProofSurfaceFixture.lastPreparedStep())
+      expect(step).toMatchObject({ rule: 'comprehensionAbstract', occurrences: [expect.any(Object)] })
+    } finally { await page.close() }
+  })
+
+  it('cancels the live abstraction workspace without preparing or changing the proof', async () => {
+    const page = await openFixture()
+    try {
+      await page.evaluate(() => window.__gameProofSurfaceFixture.selectAbstractionTerms())
+      const before = await page.evaluate(() => ({
+        prepared: window.__gameProofSurfaceFixture.prepared(),
+        snapshot: window.__gameProofSurfaceFixture.iterationSnapshot(),
+      }))
+      await page.locator('.curse-game-proof-canvas').focus()
+      await page.keyboard.press('Shift+W')
+      await page.waitForSelector('.vpa-relation-workspace')
+      await page.keyboard.press('Escape')
+      await page.waitForSelector('.vpa-relation-workspace', { state: 'detached' })
+      expect(await page.evaluate(() => ({
+        prepared: window.__gameProofSurfaceFixture.prepared(),
+        snapshot: window.__gameProofSurfaceFixture.iterationSnapshot(),
+      }))).toEqual(before)
+    } finally { await page.close() }
+  })
+
   it('selects and imports an enclosing nullary binder through the live proof viewport', async () => {
     const page = await openFixture()
     try {

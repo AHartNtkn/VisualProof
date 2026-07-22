@@ -21,8 +21,9 @@ describe('game-owned proof surface boundaries', () => {
     const combined = `${source('proof-surface.ts')}\n${source('proof-moves.ts')}`
     expect(combined).toMatch(/clearRect/)
     expect(combined).toMatch(/construction\.hostClaim/)
-    expect(combined).toMatch(/physicsEnabled:[^\n]*construction === null/)
-    expect(combined).toMatch(/zoomEnabled:[^\n]*construction === null/)
+    expect(combined).toMatch(/get editing\(\): boolean \{[^}]*construction[^}]*abstraction/)
+    expect(combined).toMatch(/physicsEnabled:[^\n]*!this\.editing/)
+    expect(combined).toMatch(/zoomEnabled:[^\n]*!this\.editing/)
     expect(combined).not.toMatch(/fillRect\s*\(/)
     expect(combined).not.toMatch(/Applicable theorems|Closed theorems|citation cycle|armed reference/i)
   })

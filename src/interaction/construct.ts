@@ -1,14 +1,14 @@
-import type { Diagram, Endpoint, NodeId, RegionId } from '../../kernel/diagram/diagram'
-import { pkey, type Engine, type Leg } from '../../view/engine'
-import type { Shape, Theme } from '../../view/paint'
+import type { Diagram, Endpoint, NodeId, RegionId } from '../kernel/diagram/diagram'
+import { pkey, type Engine, type Leg } from '../view/engine'
+import type { Shape, Theme } from '../view/paint'
 import {
   beginBodyPlacement,
   cancelBodyPlacement,
   previewBodyPlacement,
   type BodyPlacement,
-} from '../../view/placement'
-import type { Vec2 } from '../../view/vec'
-import { computeLegs, type LegGeom } from '../../view/wires'
+} from '../view/placement'
+import type { Vec2 } from '../view/vec'
+import { computeLegs, type LegGeom } from '../view/wires'
 import {
   absorbHits,
   addBubble,
@@ -17,13 +17,13 @@ import {
   joinWires,
   reparentNode,
   severEndpoint,
-} from '../../interaction/edit'
-import { buildSelection, type Hit } from '../../interaction/hittest'
-import { ConnectionDragController } from '../../interaction/controllers/connection'
-import { FissionDragController, type FissionRequest } from '../../interaction/controllers/fission'
-import { CopyDragController, copyDestinationPreview } from '../../interaction/controllers/copy'
-import type { KeySample, PointerClaim, PointerSample } from '../../interaction/controllers/viewport'
-import type { CopyDestination, CopyPlan } from '../../interaction/copy-planner'
+} from './edit'
+import { buildSelection, type Hit } from './hittest'
+import { ConnectionDragController } from './controllers/connection'
+import { FissionDragController, type FissionRequest } from './controllers/fission'
+import { CopyDragController, copyDestinationPreview } from './controllers/copy'
+import type { KeySample, PointerClaim, PointerSample } from './controllers/viewport'
+import type { CopyDestination, CopyPlan } from './copy-planner'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
 

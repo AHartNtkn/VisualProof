@@ -11,7 +11,7 @@ import {
   type FissionRequest,
 } from '../../src/interaction/controllers/fission'
 import type { PointerSample } from '../../src/interaction/controllers/viewport'
-import { ConstructController } from '../../src/app/interact/construct'
+import { ConstructController } from '../../src/interaction/construct'
 import { ProofMoveController } from '../../src/app/interact/moves'
 import { wireHitTest } from '../../src/interaction/hittest'
 import { applyFission, applyFusion } from '../../src/kernel/rules/fusion'

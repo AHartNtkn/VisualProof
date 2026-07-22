@@ -8,7 +8,7 @@ import {
   boundPredicateOptions,
   searchSpawnCatalog,
   snapshotSpawnInvocation,
-} from '../../src/app/interact/spawn'
+} from '../../src/interaction/spawn'
 
 const relations = (entries: readonly (readonly [string, number])[]) => new Map(
   entries.map(([defId, arity]) => [defId, { boundary: Array.from({ length: arity }, () => 'w') }] as const),

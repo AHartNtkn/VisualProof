@@ -1,4 +1,5 @@
 import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofStep } from '../../kernel/proof/step'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import type { ProofContext } from '../../kernel/proof/context'
@@ -15,6 +16,8 @@ import type { ArtifactAction } from '../artifact'
 import type { GameSessionAction } from '../session'
 import { planArtifactDrop, type ArtifactDropPlan, type ArtifactDropTarget } from './artifact-drop'
 import { ConstructionLoupe, type ConstructionLoupeDebug } from './construction-loupe'
+import { RelationWorkspace, type RelationWorkspaceDebug } from '../../interaction/relation-workspace'
+import { AbstractTransaction } from '../../interaction/relation-transactions'
 import { hitTest, type Hit } from '../../interaction/hittest'
 import { isHitSelected } from '../../interaction/controllers/brush'
 import {
@@ -93,12 +96,13 @@ export type GameProofViewportModel = {
   inputAllowed(): boolean
   refuse(text: string, pointer: Vec2): void
   changed(): void
-  constructionChanged?(open: boolean): void
+  editorChanged?(open: boolean): void
 }
 
 export type GameProofViewportDebug = {
   readonly rebuilds: number
   readonly construction: ConstructionLoupeDebug | null
+  readonly abstraction: RelationWorkspaceDebug | null
   readonly view: Readonly<MutableView>
   readonly selection: readonly Hit[]
   readonly pins: readonly string[]
@@ -136,6 +140,7 @@ export class GameProofViewport {
   readonly #moves: GameProofMoveController
   #engine: Engine
   #construction: ConstructionLoupe | null = null
+  #abstraction: RelationWorkspace | null = null
   #disposed = false
   #rebuilds = 1
 
@@ -174,6 +179,7 @@ export class GameProofViewport {
       theme: model.theme,
       fuel: model.fuel,
       openConstruction: (bubble, pointer) => this.openConstruction(bubble, pointer),
+      openAbstraction: (selection, pointer) => this.openAbstraction(selection, pointer),
     })
     this.interaction = new InteractiveViewport({
       canvas: this.canvas,
@@ -182,11 +188,16 @@ export class GameProofViewport {
       diagram: model.diagram,
       selectionEnabled: () => true,
       brushMode: (sample) => sample.shiftKey ? 'deselect' : 'select',
-      claim: (sample) => routeGameProofClaim(this.#construction, this.#moves, sample),
-      doubleClick: (sample) => this.#construction === null && this.#moves.doubleClick(sample),
-      contextMenu: (sample) => { if (this.#construction === null) this.#moves.contextMenu(sample) },
-      pointerChanged: (client) => this.#construction?.hostPointerChanged(client),
+      claim: (sample) => this.#abstraction?.hostClaim(sample)
+        ?? routeGameProofClaim(this.#construction, this.#moves, sample),
+      doubleClick: (sample) => !this.editing && this.#moves.doubleClick(sample),
+      contextMenu: (sample) => { if (!this.editing) this.#moves.contextMenu(sample) },
+      pointerChanged: (client) => {
+        this.#construction?.hostPointerChanged(client)
+        this.#abstraction?.hostPointerChanged(client)
+      },
       keyDown: (sample) => {
+        if (this.#abstraction !== null) return false
         if (this.#construction !== null) return true
         if (sample.key === 'Home') {
           this.interaction.resetZoom()
@@ -202,15 +213,15 @@ export class GameProofViewport {
       selectionCommitted: model.changed,
       mapClient: (client) => this.mapClient(client),
       inputAllowed: () => proofSurfaceViewportAllowed(this.motion.playing, model.inputAllowed()),
-      physicsEnabled: () => this.#construction === null,
-      zoomEnabled: () => this.#construction === null,
+      physicsEnabled: () => !this.editing,
+      zoomEnabled: () => !this.editing,
       keyScope: 'focused',
     })
   }
 
   get engine(): Engine { return this.#engine }
   get playing(): boolean { return this.motion.playing }
-  get editing(): boolean { return this.#construction !== null }
+  get editing(): boolean { return this.#construction !== null || this.#abstraction !== null }
 
   mapClient(client: Vec2): { readonly screen: Vec2; readonly world: Vec2 } {
     const rect = this.canvas.getBoundingClientRect()
@@ -268,7 +279,7 @@ export class GameProofViewport {
   }
 
   openConstruction(bubble: RegionId, invocation: Vec2): boolean {
-    if (this.#disposed || this.#construction !== null || !this.#inputAllowed()) return false
+    if (this.#disposed || this.editing || !this.#inputAllowed()) return false
     let construction: ConstructionLoupe
     construction = new ConstructionLoupe({
       mount: this.#model.overlayHost ?? this.#model.host.ownerDocument.body,
@@ -286,12 +297,51 @@ export class GameProofViewport {
       changed: this.#model.changed,
       openChanged: (open) => {
         if (!open && this.#construction === construction) this.#construction = null
-        this.#model.constructionChanged?.(open)
+        this.#model.editorChanged?.(open)
         this.#model.changed()
       },
       reducedMotion: () => this.#model.motionPreferences().hoverEaseMs === 0,
     }, bubble, invocation)
     this.#construction = construction
+    this.#moves.cancel()
+    this.#model.changed()
+    return true
+  }
+
+  openAbstraction(selection: SubgraphSelection, invocation: Vec2): boolean {
+    if (this.#disposed || this.editing || !this.#inputAllowed()) return false
+    let abstraction: RelationWorkspace
+    const transaction = new AbstractTransaction({
+      diagram: this.#model.diagram,
+      boundary: this.#model.boundary,
+      wrap: selection,
+      context: this.#model.context,
+      orientation: this.#model.orientation(),
+      apply: (action) => this.#applyAction(action),
+      cancel: () => {},
+      engine: () => this.#engine,
+      theme: this.#model.theme,
+      matcherFuel: this.#model.fuel,
+      solverFuel: () => Math.max(1024, this.#model.fuel()),
+    })
+    abstraction = new RelationWorkspace({
+      mount: this.#model.overlayHost ?? this.#model.host.ownerDocument.body,
+      canvas: this.canvas,
+      engine: () => this.#engine,
+      view: () => this.view,
+      selection: () => this.interaction.selection,
+      context: this.#model.context,
+      theme: this.#model.theme,
+      fuel: this.#model.fuel,
+      refuse: this.#model.refuse,
+      changed: this.#model.changed,
+      openChanged: (open) => {
+        if (!open && this.#abstraction === abstraction) this.#abstraction = null
+        this.#model.editorChanged?.(open)
+        this.#model.changed()
+      },
+    }, transaction, transaction.initialDraft(), invocation)
+    this.#abstraction = abstraction
     this.#moves.cancel()
     this.#model.changed()
     return true
@@ -340,7 +390,7 @@ export class GameProofViewport {
   frame(now = this.#window.performance.now()): void {
     if (this.#disposed) return
     this.motion.frame(now)
-    if (!this.motion.playing) this.interaction.advance(this.#construction === null)
+    if (!this.motion.playing) this.interaction.advance(!this.editing)
     const theme = this.#model.theme()
     const shapes: Shape[] = paint(this.#engine, theme).filter((shape) => shape.kind !== 'frame')
     for (const id of this.interaction.pins) {
@@ -369,6 +419,7 @@ export class GameProofViewport {
     }
     shapes.push(...this.#moves.overlay())
     if (this.#construction !== null) shapes.push(...this.#construction.hostOverlays())
+    if (this.#abstraction !== null) shapes.push(...this.#abstraction.hostOverlays())
     this.#context.clearRect(0, 0, this.canvas.width, this.canvas.height)
     drawShapes(this.#context, shapes, this.view)
     this.#context.save()
@@ -377,12 +428,14 @@ export class GameProofViewport {
     this.#context.restore()
     drawShapes(this.#context, this.motion.overlays(now), this.view)
     this.#construction?.frame(now)
+    this.#abstraction?.frame(now)
   }
 
   debug(): GameProofViewportDebug {
     return {
       rebuilds: this.#rebuilds,
       construction: this.#construction?.debugState() ?? null,
+      abstraction: this.#abstraction?.debugState() ?? null,
       view: { ...this.view },
       selection: [...this.interaction.selection],
       pins: [...this.interaction.pins],
@@ -396,13 +449,15 @@ export class GameProofViewport {
     this.#moves.dispose()
     this.#construction?.dispose()
     this.#construction = null
+    this.#abstraction?.dispose()
+    this.#abstraction = null
     this.motion.dispose()
     this.interaction.dispose()
     this.canvas.remove()
   }
 
   #inputAllowed(): boolean {
-    return proofSurfaceInputAllowed(this.#construction !== null, this.motion.playing, this.#model.inputAllowed())
+    return proofSurfaceInputAllowed(this.editing, this.motion.playing, this.#model.inputAllowed())
   }
 
   #apply(step: ProofStep): void {

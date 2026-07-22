@@ -236,6 +236,7 @@ export type GameProofMoveOptions = {
   readonly theme: () => Theme
   readonly fuel: () => number
   readonly openConstruction: (bubble: RegionId, pointer: Vec2) => void
+  readonly openAbstraction: (selection: SubgraphSelection, pointer: Vec2) => void
 }
 
 type IterationDrag = {
@@ -433,7 +434,7 @@ export class GameProofMoveController {
       else this.#commit(step)
       return true
     }
-    if (sample.shiftKey) this.#openArityPrompt(discovery.selection)
+    if (sample.shiftKey) this.#options.openAbstraction(discovery.selection, this.#lastPointer)
     else this.#commit({ rule: 'doubleCutIntro', sel: discovery.selection })
     return true
   }
@@ -498,16 +499,7 @@ export class GameProofMoveController {
         return true
       }
       case 'abstractWrap': {
-        if (input?.kind !== 'relation') return false
-        const comp = this.#options.context().relations.get(input.name)
-        if (comp === undefined) throw new Error(`unknown relation '${input.name}'`)
-        const args = inferFoldArgs(
-          this.#options.diagram(), selection, input.name, this.#options.context(),
-        )
-        this.#commit({
-          rule: 'comprehensionAbstract', wrap: selection, comp,
-          occurrences: [{ sel: selection, args }],
-        })
+        this.#options.openAbstraction(selection, this.#lastPointer)
         return true
       }
       case 'inconsistentCutElim': {
@@ -636,6 +628,10 @@ export class GameProofMoveController {
     if (discovery === null) return false
     if (hits.length === 0) this.#appendSpawnActions(row, discovery.selection.region, sample.world)
     for (const action of discovery.actions) this.#appendAction(row, action, discovery.selection)
+    if (hits.length > 0) row('Wrap in a vacuous bubble…', () => {
+      this.#closeMenu()
+      this.#openArityPrompt(discovery.selection)
+    })
     if (menu.childElementCount <= 1) return false
     this.#menu = menu
     this.#options.host.append(menu)
@@ -658,8 +654,9 @@ export class GameProofMoveController {
       case 'iterate': row(action.label, null); return
       case 'convert': this.#appendConversions(row, selection.nodes[0]!); return
       case 'abstractWrap': {
-        for (const name of this.#options.context().relations.keys()) row(`Abstract as ${name}`, () => {
-          this.invokeAction(action, selection, { kind: 'relation', name })
+        row(action.label, () => {
+          this.#closeMenu()
+          this.invokeAction(action, selection)
         })
         return
       }

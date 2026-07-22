@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest'
 
 const shellSource = readFileSync('src/app/shell.ts', 'utf8')
 const viewportSource = readFileSync('src/interaction/controllers/viewport.ts', 'utf8')
-const constructSource = readFileSync('src/app/interact/construct.ts', 'utf8')
-const spawnSource = readFileSync('src/app/interact/spawn.ts', 'utf8')
+const constructSource = readFileSync('src/interaction/construct.ts', 'utf8')
+const spawnSource = readFileSync('src/interaction/spawn.ts', 'utf8')
 const movesSource = readFileSync('src/app/interact/moves.ts', 'utf8')
+const proofFrontSource = readFileSync('src/app/proof-front.ts', 'utf8')
+const gameProofSurfaceSource = readFileSync('src/game/interface/proof-surface.ts', 'utf8')
+const relationWorkspaceSource = readFileSync('src/interaction/relation-workspace.ts', 'utf8')
 
 const canvasInteractionEvents = [
   'pointerdown', 'pointermove', 'pointerup', 'pointercancel',
@@ -79,5 +82,26 @@ describe('production interaction ownership', () => {
       "kind: 'iterate'; readonly sel",
     ]) expect(shellSource, `shell retains displaced proof path ${displaced}`).not.toContain(displaced)
     expect(movesSource).not.toMatch(/window\.addEventListener|document\.addEventListener|canvas\.addEventListener/)
+  })
+
+  it('makes both products consume the shared relation-workspace authority', () => {
+    expect(proofFrontSource).toMatch(
+      /from ['"]\.\.\/interaction\/relation-workspace['"]/,
+    )
+    expect(gameProofSurfaceSource).toMatch(
+      /from ['"]\.\.\/\.\.\/interaction\/relation-workspace['"]/,
+    )
+    expect(gameProofSurfaceSource).toMatch(
+      /from ['"]\.\.\/\.\.\/interaction\/relation-transactions['"]/,
+    )
+    expect(gameProofSurfaceSource).not.toMatch(/from ['"][^'"]*\/app(?:\/|['"])/)
+  })
+
+  it('leaves workspace keyboard and modifier arbitration with its own viewport', () => {
+    expect(proofFrontSource).toContain('if (this.#relationWorkspace !== null) return false')
+    expect(gameProofSurfaceSource).toContain('if (this.#abstraction !== null) return false')
+    expect(relationWorkspaceSource).toContain(
+      'modifiersChanged: (ctrlHeld) => this.modifiersChanged(ctrlHeld)',
+    )
   })
 })

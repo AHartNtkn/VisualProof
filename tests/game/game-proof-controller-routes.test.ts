@@ -14,7 +14,7 @@ import { puzzleId } from '../../src/game/types'
 import type { ActionDescriptor } from '../../src/interaction/actions'
 import type { Hit } from '../../src/interaction/hittest'
 import { resolveNamedRelationInstantiation } from '../../src/interaction/named-relation'
-import { FakeDocument, FakeElement } from './interface-fake-dom'
+import { eventWith, FakeDocument, FakeElement } from './interface-fake-dom'
 import {
   discoverGameProofActions,
   GameProofMoveController,
@@ -33,6 +33,7 @@ const controllerFor = (
   applied: ProofAction[],
   opened: string[],
   relations = new Map(),
+  abstractions: SubgraphSelection[] = [],
 ) => new GameProofMoveController({
   host: { ownerDocument: {} } as HTMLElement,
   active: () => true,
@@ -47,6 +48,7 @@ const controllerFor = (
   theme: () => DARK,
   fuel: () => 256,
   openConstruction: (bubble) => { opened.push(bubble) },
+  openAbstraction: (wrap) => { abstractions.push(wrap) },
 })
 
 const stepsFrom = (actions: readonly ProofAction[]) => actions.flatMap(({ steps }) => steps)
@@ -92,6 +94,96 @@ const clickMenuAction = (host: MenuElement, label: string): void => {
 }
 
 describe('actual game proof controller routes', () => {
+  it('opens a live abstraction workspace from Shift+W without applying an action', () => {
+    const builder = new DiagramBuilder()
+    const term = builder.termNode(builder.root, parseTerm('x'))
+    const diagram = builder.build()
+    const applied: ProofAction[] = []
+    const abstractions: SubgraphSelection[] = []
+    const selected = { value: [{ kind: 'node' as const, id: term }] }
+    const controller = controllerFor(diagram, selected, applied, [], new Map(), abstractions)
+
+    expect(controller.keyDown(key({ key: 'W', shiftKey: true }))).toBe(true)
+    expect(abstractions).toEqual([
+      mkSelection(diagram, { region: builder.root, regions: [], nodes: [term], wires: [] }),
+    ])
+    expect(applied).toEqual([])
+    expect(selected.value).toEqual([{ kind: 'node', id: term }])
+  })
+
+  it('retains vacuous introduction as an explicit selection-menu action', () => {
+    const builder = new DiagramBuilder()
+    const term = builder.termNode(builder.root, parseTerm('x'))
+    const diagram = builder.build()
+    const document = new MenuDocument()
+    const host = new MenuElement(document)
+    const applied: ProofAction[] = []
+    const selected = [{ kind: 'node' as const, id: term }]
+    const controller = new GameProofMoveController({
+      host: host as unknown as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      viewScale: () => 1,
+      selection: () => selected,
+      setSelection: () => undefined,
+      context: () => EMPTY_PROOF_CONTEXT,
+      apply: (action) => { applied.push(action) },
+      refuse: (message) => { throw new Error(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+      openAbstraction: () => undefined,
+    })
+
+    expect(controller.contextMenu(pointerSample(selected[0]!))).toBe(true)
+    clickMenuAction(host, 'Wrap in a vacuous bubble…')
+    const input = host.querySelector<MenuElement>('input')!
+    input.value = '2'
+    input.dispatchEvent(eventWith('keydown', { key: 'Enter' }))
+
+    expect(stepsFrom(applied)).toEqual([{
+      rule: 'vacuousIntro',
+      sel: mkSelection(diagram, { region: builder.root, regions: [], nodes: [term], wires: [] }),
+      arity: 2,
+    }])
+  })
+
+  it('opens anonymous live abstraction from the selection menu without named relations', () => {
+    const builder = new DiagramBuilder()
+    const term = builder.termNode(builder.root, parseTerm('x'))
+    const diagram = builder.build()
+    const document = new MenuDocument()
+    const host = new MenuElement(document)
+    const applied: ProofAction[] = []
+    const opened: SubgraphSelection[] = []
+    const selected = [{ kind: 'node' as const, id: term }]
+    const controller = new GameProofMoveController({
+      host: host as unknown as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      viewScale: () => 1,
+      selection: () => selected,
+      setSelection: () => undefined,
+      context: () => EMPTY_PROOF_CONTEXT,
+      apply: (action) => { applied.push(action) },
+      refuse: (message) => { throw new Error(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+      openAbstraction: (selection) => { opened.push(selection) },
+    })
+
+    expect(controller.contextMenu(pointerSample(selected[0]!))).toBe(true)
+    clickMenuAction(host, 'Abstract as a relation…')
+
+    expect(opened).toEqual([
+      mkSelection(diagram, { region: builder.root, regions: [], nodes: [term], wires: [] }),
+    ])
+    expect(applied).toEqual([])
+  })
+
   it.each(['Delete', 'Backspace'])('%s head-strips a selected binary rigid-head equation', (pressed) => {
     const builder = new DiagramBuilder()
     const a = builder.termNode(builder.root, parseTerm('\\x. x'))
@@ -283,8 +375,9 @@ describe('actual game proof controller routes', () => {
           refuse: (message) => { throw new Error(message) },
           theme: () => DARK,
           fuel: () => 256,
-          openConstruction: () => undefined,
-        })
+      openConstruction: () => undefined,
+      openAbstraction: () => undefined,
+    })
         expect(controller.contextMenu(pointerSample(hits[0]!))).toBe(true)
         return host.querySelectorAll<MenuElement>('.curse-context-menu__action')
           .map(({ textContent }) => textContent)
@@ -358,6 +451,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
 
     expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
@@ -401,6 +495,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
 
     expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
@@ -438,6 +533,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
 
     expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
@@ -486,6 +582,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
 
     expect(controller.keyDown(key({ key: 'Delete' }))).toBe(true)
@@ -519,6 +616,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
 
     expect(controller.keyDown(key({ key: 'Delete' }))).toBe(true)
@@ -556,6 +654,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
 
     expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
@@ -725,6 +824,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
     const open = (): void => {
       expect(controller.contextMenu(pointerSample(null, center))).toBe(true)
@@ -785,6 +885,7 @@ describe('actual game proof controller routes', () => {
       theme: () => DARK,
       fuel: () => 256,
       openConstruction: () => undefined,
+      openAbstraction: () => undefined,
     })
     const open = (): void => {
       expect(controller.contextMenu(pointerSample(hit))).toBe(true)

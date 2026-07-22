@@ -20,14 +20,14 @@ import {
   relationWorkspaceCanFinalize,
   resizeRelationWorkspace,
   SubstituteTransaction,
-} from '../../src/app/relation-workspace'
+} from '../../src/interaction/relation-workspace'
 import {
   beginAbstractionDraft,
   beginSubstitutionDraft,
   currentRelationDraft,
   importRelationHostBinderOccurrence,
   replaceRelationDiagram,
-} from '../../src/app/relation-workspace-draft'
+} from '../../src/interaction/relation-workspace-draft'
 import { planCopy } from '../../src/interaction/copy-planner'
 
 const context = (): ProofContext => (EMPTY_PROOF_CONTEXT)

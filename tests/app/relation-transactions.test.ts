@@ -9,8 +9,8 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { existentialStubs, legPaths } from '../../src/view/wires'
-import { AbstractTransaction } from '../../src/app/relation-transactions'
-import type { RelationWorkspaceSnapshot } from '../../src/app/relation-workspace-draft'
+import { AbstractTransaction } from '../../src/interaction/relation-transactions'
+import type { RelationWorkspaceSnapshot } from '../../src/interaction/relation-workspace-draft'
 
 const context = () => (EMPTY_PROOF_CONTEXT)
 

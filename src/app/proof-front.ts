@@ -23,10 +23,10 @@ import {
   RelationWorkspace,
   SubstituteTransaction,
   type RelationWorkspaceDebug,
-} from './relation-workspace'
-import { AbstractTransaction } from './relation-transactions'
+} from '../interaction/relation-workspace'
+import { AbstractTransaction } from '../interaction/relation-transactions'
 import { ProofSpawnController } from './interact/proof-spawn'
-import { introducedNodeId } from './interact/closed-term-intro'
+import { introducedNodeId } from '../interaction/introduced-node'
 import { seedBodyPlacement } from '../view/placement'
 import { fissionDropPoint, fissionTargetPoint } from '../interaction/controllers/fission'
 
@@ -192,10 +192,9 @@ export class ProofFrontViewport {
       passiveSample: (sample) => this.#moves.passiveSample(sample),
       modifiersChanged: (ctrlHeld) => {
         this.#moves.modifiersChanged(ctrlHeld)
-        this.#relationWorkspace?.modifiersChanged(ctrlHeld)
       },
       keyDown: (sample) => {
-        if (this.#relationWorkspace !== null) return this.#relationWorkspace.keyDown(sample)
+        if (this.#relationWorkspace !== null) return false
         const routed = frontKeyRoute(model.focused(), sample)
         if (routed === null) return false
         if (model.keyCommand(routed)) return true

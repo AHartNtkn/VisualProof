@@ -25,7 +25,7 @@ import {
   wrapRelationNode,
   wrapRelationNodes,
   type RelationWorkspaceDraft,
-} from '../../src/app/relation-workspace-draft'
+} from '../../src/interaction/relation-workspace-draft'
 
 function hostWithBubble(arity = 2): Diagram {
   return mkDiagram({

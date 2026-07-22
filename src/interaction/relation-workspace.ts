@@ -16,15 +16,15 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { seedProject } from '../view/relax'
 import { existentialStubs, legPaths } from '../view/wires'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
-import { buildSelection, wireHitTest, type Hit } from '../interaction/hittest'
-import { absorbHits } from '../interaction/edit'
-import { ConstructController } from './interact/construct'
-import { CopyDragController, copyDestinationPreview } from '../interaction/controllers/copy'
-import type { CopyDestination, CopyPlan } from '../interaction/copy-planner'
-import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
-import { introducedNodeId } from './interact/closed-term-intro'
-import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from '../interaction/controllers/viewport'
-import { enclosingComprehensionBinders } from '../interaction/comprehension-dependencies'
+import { buildSelection, wireHitTest, type Hit } from './hittest'
+import { absorbHits } from './edit'
+import { ConstructController } from './construct'
+import { CopyDragController, copyDestinationPreview } from './controllers/copy'
+import type { CopyDestination, CopyPlan } from './copy-planner'
+import { SpawnCascade, boundPredicateOptions } from './spawn'
+import { introducedNodeId } from './introduced-node'
+import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './controllers/viewport'
+import { enclosingComprehensionBinders } from './comprehension-dependencies'
 import {
   applyRelationConnection,
   applyCapturedRelationHostPatternImport,
@@ -46,7 +46,8 @@ import {
   type RelationPort,
   type RelationHostPatternImportPlan,
 } from './relation-workspace-draft'
-import type { SpawnBoundPredicateOption } from './interact/spawn'
+import type { SpawnBoundPredicateOption } from './spawn'
+import './relation-workspace.css'
 
 export type WorkspaceStatus = {
   readonly kind: 'ready' | 'refused'
@@ -720,7 +721,7 @@ export class RelationWorkspace {
       },
       pointerChanged: (client) => this.#pointerChanged('draft', client),
       passiveSample: (sample) => this.#construct.passiveSample(sample),
-      modifiersChanged: (ctrlHeld) => this.#construct.modifiersChanged(ctrlHeld),
+      modifiersChanged: (ctrlHeld) => this.modifiersChanged(ctrlHeld),
       keyDown: (sample) => this.keyDown(sample),
       selectionChanged: host.changed,
       selectionCommitted: host.changed,
@@ -767,6 +768,7 @@ export class RelationWorkspace {
   hostPointerChanged(client: Vec2): void { this.#pointerChanged('host', client) }
 
   modifiersChanged(ctrlHeld: boolean): void {
+    this.#construct.modifiersChanged(ctrlHeld)
     this.#hostCopy.modifiersChanged(ctrlHeld)
     if (ctrlHeld) this.#cancelHostPatternImport()
   }

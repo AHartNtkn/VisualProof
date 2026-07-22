@@ -5,8 +5,8 @@ import type { ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
-import { AbstractTransaction } from '../../src/app/relation-transactions'
-import { currentRelationDraft } from '../../src/app/relation-workspace-draft'
+import { AbstractTransaction } from '../../src/interaction/relation-transactions'
+import { currentRelationDraft } from '../../src/interaction/relation-workspace-draft'
 
 describe('provisional abstraction interaction', () => {
   for (const configured of [

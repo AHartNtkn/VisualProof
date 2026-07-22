@@ -1,5 +1,5 @@
-import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
-import type { Vec2 } from '../../view/vec'
+import type { Diagram, RegionId } from '../kernel/diagram/diagram'
+import type { Vec2 } from '../view/vec'
 
 export const UNQUALIFIED_GROUP_LABEL = 'Unqualified'
 const DEFAULT_RECENTS_LIMIT = 5
@@ -247,11 +247,11 @@ export class SpawnCascade {
     const viewport = this.#document.defaultView
     const maxLeft = Math.max(0, (viewport?.innerWidth ?? snapshot.screen.x + 360) - 360)
     const maxTop = Math.max(0, (viewport?.innerHeight ?? snapshot.screen.y + 320) - 320)
-    menu.style.cssText = `position:fixed;left:${Math.max(0, Math.min(snapshot.screen.x, maxLeft))}px;top:${Math.max(0, Math.min(snapshot.screen.y, maxTop))}px;z-index:31;display:flex;align-items:flex-start;font:13px system-ui,sans-serif`
+    menu.style.cssText = `position:fixed;left:${Math.max(0, Math.min(snapshot.screen.x, maxLeft))}px;top:${Math.max(0, Math.min(snapshot.screen.y, maxTop))}px;z-index:81;display:flex;align-items:flex-start;font:13px system-ui,sans-serif`
 
     const backdrop = this.#document.createElement('div')
     backdrop.className = 'vpa-spawn-backdrop'
-    backdrop.style.cssText = 'position:fixed;inset:0;z-index:30;background:transparent'
+    backdrop.style.cssText = 'position:fixed;inset:0;z-index:80;background:transparent'
     backdrop.addEventListener('pointerdown', () => this.close())
 
     const column = this.#document.createElement('div')

@@ -23,7 +23,7 @@ export const GAME_PROOF_RULE_ROUTES = {
   erasure: 'selection-menu',
   doubleCutIntro: 'selection-key',
   doubleCutElim: 'selection-menu',
-  vacuousIntro: 'selection-key',
+  vacuousIntro: 'selection-menu',
   vacuousElim: 'selection-menu',
   iteration: 'selection-drag',
   deiteration: 'selection-menu',
@@ -38,7 +38,7 @@ export const GAME_PROOF_RULE_ROUTES = {
   wireSever: 'line-menu',
   anchoredWireSplit: 'line-menu',
   comprehensionInstantiate: 'construction-loupe',
-  comprehensionAbstract: 'selection-menu',
+  comprehensionAbstract: 'selection-key',
   relFold: 'selection-menu',
   relUnfold: 'selection-menu',
 } as const satisfies Record<GameKernelRule, GameProofInteractionRoute>

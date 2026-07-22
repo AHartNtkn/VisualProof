@@ -17,8 +17,8 @@ import {
   replaceComprehensionDependencyBoundary,
   validateComprehensionDependencies,
   type ComprehensionDependencyState,
-} from '../interaction/comprehension-dependencies'
-import { addBubble, addCut } from '../interaction/edit'
+} from './comprehension-dependencies'
+import { addBubble, addCut } from './edit'
 
 export type RelationPort = {
   readonly id: string

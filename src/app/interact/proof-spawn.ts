@@ -5,8 +5,8 @@ import type { ProofStep } from '../../kernel/proof/step'
 import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import type { Vec2 } from '../../view/vec'
-import { introducedNodeId } from './closed-term-intro'
-import { boundPredicateOptions, SpawnCascade, type SpawnInvocation } from './spawn'
+import { introducedNodeId } from '../../interaction/introduced-node'
+import { boundPredicateOptions, SpawnCascade, type SpawnInvocation } from '../../interaction/spawn'
 
 export type ProofSpawnControllerOptions = {
   readonly host: HTMLElement

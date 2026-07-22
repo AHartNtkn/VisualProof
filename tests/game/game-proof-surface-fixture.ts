@@ -151,10 +151,7 @@ const state = {
   freezeLayout: (): void => { layoutFrozen = true },
   mapping: (client: { readonly x: number; readonly y: number }) => surface.mapClient(client),
   proofNodePoint: () => worldToClient([...surface.engine.bodies.values()].find((body) => body.node !== null)!.pos),
-  proofNodePoints: () => [...surface.engine.bodies.values()]
-    .filter((body) => body.node !== null)
-    .slice(0, 2)
-    .map((body) => worldToClient(body.pos)),
+  proofNodePoints: () => fixture.proofSelectionNodes.map(nodePoint),
   dependentBubblePoint: () => regionBoundaryPoint(fixture.dependentBubble),
   dependentBubble: () => fixture.dependentBubble,
   hostAtomPoint: () => nodePoint(fixture.hostAtom),
@@ -180,8 +177,13 @@ const state = {
   selection: () => surface.debug().selection.map((hit) => `${hit.kind}:${hit.id}`),
   clearSelection: (): void => surface.interaction.setSelection([]),
   selectParameter: (): void => surface.interaction.setSelection([{ kind: 'wire', id: fixture.parameter }]),
+  abstractionTermPoints: () => fixture.abstractionTerms.map(nodePoint),
+  selectAbstractionTerms: (): void => surface.interaction.setSelection(
+    fixture.abstractionTerms.map((id) => ({ kind: 'node' as const, id })),
+  ),
   open: (): boolean => surface.openConstruction(fixture.dependentBubble, { x: 170, y: 170 }),
   construction: () => surface.debug().construction,
+  abstraction: () => surface.debug().abstraction,
   lastPreparedStep: (): ProofStep | null => preparedSteps.at(-1) ?? null,
   editing: (): boolean => surface.editing,
   prepared: (): number => prepared,

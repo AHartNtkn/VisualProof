@@ -1,0 +1,118 @@
+.vpa-relation-workspace {
+  position: fixed;
+  z-index: 70;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 0.65rem;
+  background: #f7f2e8;
+  color: #201b16;
+  box-shadow: 0 1rem 3rem #0008;
+  font: 0.8rem system-ui, sans-serif;
+}
+
+.vpa-relation-title,
+.vpa-relation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.vpa-relation-title {
+  cursor: move;
+  border-bottom: 1px solid #201b1630;
+}
+
+.vpa-relation-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.vpa-relation-workspace button {
+  border: 1px solid #201b1650;
+  border-radius: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  background: #fffaf0;
+  color: inherit;
+}
+
+.vpa-relation-workspace button.is-primary {
+  border-color: #8f5b22;
+  background: #8f5b22;
+  color: #fffaf0;
+}
+
+.vpa-relation-workspace button:disabled {
+  opacity: 0.45;
+}
+
+.vpa-relation-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  outline: none;
+}
+
+.vpa-relation-port-strip {
+  display: flex;
+  min-height: 1.8rem;
+  gap: 0.25rem;
+  align-items: center;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  list-style: none;
+  border-top: 1px solid #201b1630;
+  border-bottom: 1px solid #201b1630;
+}
+
+.vpa-relation-port {
+  display: grid;
+  width: 1.3rem;
+  height: 1.3rem;
+  place-items: center;
+  border: 1px solid #201b1660;
+  border-radius: 50%;
+}
+
+.vpa-relation-port.is-selected {
+  outline: 2px solid #8f5b22;
+}
+
+.vpa-relation-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vpa-relation-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1rem;
+  height: 1rem;
+  cursor: nwse-resize;
+}
+
+.vpa-relation-gesture {
+  position: fixed;
+  z-index: 71;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.vpa-relation-join-gesture {
+  stroke: #b8742e;
+  stroke-width: 2;
+}

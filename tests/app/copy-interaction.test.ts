@@ -8,7 +8,7 @@ import { mkEngine } from '../../src/view/engine'
 import { computeLegs, recomputeRegions } from '../../src/view/index'
 import { LIGHT } from '../../src/view/paint'
 import { CopyDragController } from '../../src/interaction/controllers/copy'
-import { ConstructController } from '../../src/app/interact/construct'
+import { ConstructController } from '../../src/interaction/construct'
 import type { Hit } from '../../src/interaction/hittest'
 import type { PointerSample } from '../../src/interaction/controllers/viewport'
 

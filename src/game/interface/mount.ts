@@ -456,7 +456,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       inputAllowed: () => this.#proofInputAllowed(),
       refuse: (text, pointer) => this.#presentRefusal(text, pointer),
       changed: () => {},
-      constructionChanged: (open) => this.dispatch({ kind: open ? 'openEditor' : 'closeEditor' }),
+      editorChanged: (open) => this.dispatch({ kind: open ? 'openEditor' : 'closeEditor' }),
     })
     this.#proofResize = new this.#window.ResizeObserver((entries) => {
       const entry = entries.find(({ target }) => target === this.#environment.proofCanvasSlot)
