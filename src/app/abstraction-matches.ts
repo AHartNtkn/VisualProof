@@ -2,7 +2,6 @@ import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagra
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { findOccurrences } from '../kernel/diagram/subgraph/match'
 import { occurrenceToSelection } from '../kernel/diagram/subgraph/occurrence'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { diagonalize } from '../kernel/rules/fold'
 
@@ -207,11 +206,6 @@ export function deriveAbstractionMatches(
           || !subset(contents.allNodes, wrapContents.allNodes)
           || !subset(contents.allRegions, wrapContents.allRegions)
           || !subset(contents.internalWires, wrapWires)) continue
-
-        const extraction = extractSubgraph(host, selection)
-        if (extraction.binderStubs.length > 0) {
-          throw new Error('subgraphs with atoms bound outside the occurrence cannot be abstracted')
-        }
 
         const args = Object.freeze(effectiveClasses.map((boundaryClass) => match.attachments[boundaryClass]!))
         const footprint = Object.freeze({

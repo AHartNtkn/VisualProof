@@ -1,4 +1,4 @@
-import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
 import type { Vec2 } from '../../view/vec'
 
 export const UNQUALIFIED_GROUP_LABEL = 'Unqualified'
@@ -30,19 +30,29 @@ export type SpawnCatalog = {
 
 export type SpawnBoundPredicateOption = {
   readonly source: 'draft' | 'host'
-  readonly binder: RegionId
+  readonly wire: WireId
   readonly arity: number
   readonly position: number
   readonly total: number
 }
 
+/**
+ * Every relational wire enclosing `region` is a second-order existential line an
+ * atom may be spawned onto (the old "bound predicate binder"). Ordered
+ * innermost-scope first, deterministic within a scope by wire id.
+ */
 export function boundPredicateOptions(d: Diagram, region: RegionId): readonly SpawnBoundPredicateOption[] {
-  const found: { binder: RegionId; arity: number }[] = []
-  let current = region
+  const found: { wire: WireId; arity: number }[] = []
+  let current: RegionId | undefined = region
   for (;;) {
-    const value = d.regions[current]
+    const value: Diagram['regions'][string] | undefined = d.regions[current]
     if (value === undefined) throw new Error(`unknown region '${current}'`)
-    if (value.kind === 'bubble') found.push({ binder: current, arity: value.arity })
+    const here = Object.entries(d.wires)
+      .filter(([, w]) => w.scope === current && w.sig.kind === 'rel')
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    for (const [wid, w] of here) {
+      if (w.sig.kind === 'rel') found.push({ wire: wid, arity: w.sig.args.length })
+    }
     if (value.kind === 'sheet') break
     current = value.parent
   }
@@ -73,7 +83,7 @@ export type SpawnRelationRequest = {
 
 export type SpawnBoundPredicateRequest = {
   readonly source: SpawnBoundPredicateOption['source']
-  readonly binder: RegionId
+  readonly wire: WireId
   readonly arity: number
   readonly invocation: SpawnInvocation
 }
@@ -86,11 +96,11 @@ export type SpawnCascadeOptions = {
   readonly spawnRelation: (request: SpawnRelationRequest) => boolean | void
   /** Return false to keep the cascade open after a refused edit. */
   readonly spawnBoundPredicate: (request: SpawnBoundPredicateRequest) => boolean | void
-  /** Presentation color derived from the renderer's authoritative binder hue. */
-  readonly binderColor: (binder: RegionId, source: SpawnBoundPredicateOption['source']) => string
-  /** View-only binder emphasis. Null clears every cascade-owned emphasis. */
+  /** Presentation color derived from the renderer's authoritative relation-wire hue. */
+  readonly binderColor: (wire: WireId, source: SpawnBoundPredicateOption['source']) => string
+  /** View-only relation-wire emphasis. Null clears every cascade-owned emphasis. */
   readonly hoverBinder?: (
-    binder: RegionId | null,
+    wire: WireId | null,
     source: SpawnBoundPredicateOption['source'] | null,
   ) => void
   readonly openChanged?: (open: boolean) => void
@@ -337,7 +347,7 @@ export class SpawnCascade {
     const pickBoundPredicate = (entry: SpawnBoundPredicateOption): void => {
       if (!current()) return
       const accepted = this.#spawnBoundPredicate({
-        source: entry.source, binder: entry.binder, arity: entry.arity, invocation: snapshot,
+        source: entry.source, wire: entry.wire, arity: entry.arity, invocation: snapshot,
       })
       if (accepted === false) return
       if (current()) this.close()
@@ -346,15 +356,15 @@ export class SpawnCascade {
     const boundPredicateRow = (entry: SpawnBoundPredicateOption): HTMLElement => {
       const item = row(binderLabel(entry), `/${entry.arity}`, () => pickBoundPredicate(entry))
       item.classList.add('vpa-spawn-bound-predicate')
-      item.dataset.binder = entry.binder
+      item.dataset.wire = entry.wire
       item.dataset.source = entry.source
       const swatch = this.#document.createElement('span')
       swatch.className = 'vpa-spawn-binder-swatch'
       swatch.setAttribute('aria-hidden', 'true')
-      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#binderColor(entry.binder, entry.source)};box-shadow:0 0 0 1px #0002`
+      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#binderColor(entry.wire, entry.source)};box-shadow:0 0 0 1px #0002`
       item.firstElementChild?.prepend(swatch)
       item.addEventListener('pointerenter', () => {
-        if (current()) this.#setHoveredBinder(entry.binder, entry.source)
+        if (current()) this.#setHoveredBinder(entry.wire, entry.source)
       })
       item.addEventListener('pointerleave', () => {
         if (current()) this.#setHoveredBinder(null, null)
@@ -446,10 +456,10 @@ export class SpawnCascade {
   }
 
   #setHoveredBinder(
-    binder: RegionId | null,
+    wire: WireId | null,
     source: SpawnBoundPredicateOption['source'] | null,
   ): void {
-    this.#hoverBinder?.(binder, source)
+    this.#hoverBinder?.(wire, source)
   }
 
   close(): boolean {

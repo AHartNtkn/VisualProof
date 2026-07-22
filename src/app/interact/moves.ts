@@ -20,6 +20,7 @@ import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import { applicableActions, type ActionDescriptor } from '../actions'
 import { inferFoldArgs } from '../define'
+import { relationSig } from '../../theories/macros'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
@@ -130,7 +131,7 @@ export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel
   const doubleCut = byKind('doubleCutElim')
   if (doubleCut !== undefined) return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
   const vacuous = byKind('vacuousElim')
-  if (vacuous !== undefined) return { rule: 'vacuousElim', region: discovery.sel.regions[0]! }
+  if (vacuous !== undefined) return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
   if (byKind('inconsistentCutElim') !== undefined) {
     const inconsistent = inconsistentCutStep(d, discovery.sel.regions[0]!, fuel)
     if (inconsistent !== null) return inconsistent
@@ -236,7 +237,7 @@ export type ProofMoveControllerOptions = {
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
-  readonly openComprehension: (bubble: RegionId, pointer: Vec2) => void
+  readonly openComprehension: (wire: WireId, pointer: Vec2) => void
   readonly openAbstraction: (selection: SubgraphSelection, pointer: Vec2) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
 }
@@ -552,7 +553,7 @@ export class ProofMoveController {
         this.#closeMenu()
         this.#options.openAbstraction(sel, this.#lastPointer)
       }); return
-      case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', region: sel.regions[0]! })); return
+      case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', wireId: sel.wires[0]! })); return
       case 'iterate': row('Copy by dragging the selection', null); return
       case 'deiterate': row(action.label, () => this.#commit(
         deiterationStep(this.#options.diagram(), sel, this.#options.fuel()),
@@ -560,26 +561,31 @@ export class ProofMoveController {
       case 'convert': this.#appendConversions(row, sel.nodes[0]!); return
       case 'instantiate': {
         row('Instantiate with', null)
-        const bubble = sel.regions[0]!
-        const bubbleRegion = this.#options.diagram().regions[bubble]!
-        const arity = bubbleRegion.kind === 'bubble' ? bubbleRegion.arity : -1
+        const wire = sel.wires[0]!
+        const targetWire = this.#options.diagram().wires[wire]!
+        const arity = targetWire.sig.kind === 'rel' ? targetWire.sig.args.length : -1
         const context = this.#context()
         for (const choice of instantiationChoices(context, arity)) {
           if (choice.kind === 'anonymous') row(choice.label, () => {
             this.#closeMenu()
-            this.#options.openComprehension(bubble, this.#lastPointer)
+            this.#options.openComprehension(wire, this.#lastPointer)
           })
           else row(choice.label, () => this.#commit(resolveNamedRelationInstantiation(
-            this.#options.diagram(), bubble, this.#context(), choice.name, this.#options.orientation(),
+            this.#options.diagram(), wire, this.#context(), choice.name, this.#options.orientation(),
           )))
         }
         return
       }
-      case 'relUnfold': row(action.label, () => this.#commit({ rule: 'relUnfold', node: sel.nodes[0]! })); return
+      case 'relUnfold': row(action.label, () => this.#commit({ rule: 'unfold', nodeId: sel.nodes[0]! })); return
       case 'relFold': {
         row('Fold into', null)
         const context = this.#context()
-        for (const name of context.relations.keys()) row(name, () => this.#commit({ rule: 'relFold', sel, defId: name, args: inferFoldArgs(this.#options.diagram(), sel, name, this.#context()) }))
+        for (const [name, relation] of context.relations) row(name, () => this.#commit({
+          rule: 'fold',
+          occurrence: sel,
+          args: inferFoldArgs(this.#options.diagram(), sel, name, this.#context()),
+          target: { defId: name, sig: relationSig(relation) },
+        }))
         return
       }
       case 'citeTheorem': return

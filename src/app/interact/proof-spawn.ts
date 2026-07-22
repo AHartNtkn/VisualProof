@@ -1,7 +1,8 @@
-import type { Diagram, NodeId, RegionId } from '../../kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
 import type { ProofStep } from '../../kernel/proof/step'
+import { relationSig } from '../../theories/macros'
 import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import type { Vec2 } from '../../view/vec'
@@ -15,8 +16,8 @@ export type ProofSpawnControllerOptions = {
   readonly commit: (step: ProofStep) => Diagram
   readonly place: (node: NodeId, at: Vec2) => void
   readonly refuse: (text: string, pointer: Vec2) => void
-  readonly binderColor: (binder: RegionId) => string
-  readonly hoverBinder?: (binder: RegionId | null) => void
+  readonly binderColor: (wire: WireId) => string
+  readonly hoverBinder?: (wire: WireId | null) => void
   readonly openChanged?: (open: boolean) => void
 }
 
@@ -39,11 +40,13 @@ export class ProofSpawnController {
     this.#cascade = new SpawnCascade({
       host: options.host,
       spawnTerm: ({ source, invocation }) => this.#attempt(invocation, () => proofTermSpawnStep(source, invocation.region)),
-      spawnRelation: ({ defId, arity, invocation }) => this.#attempt(invocation, () => ({
-        rule: 'relationSpawn', region: invocation.region, defId, arity,
-      })),
-      spawnBoundPredicate: ({ binder, arity, invocation }) => this.#attempt(invocation, () => ({
-        rule: 'boundRelationSpawn', region: invocation.region, binder, arity,
+      spawnRelation: ({ defId, invocation }) => this.#attempt(invocation, () => {
+        const relation = options.context().relations.get(defId)
+        if (relation === undefined) throw new Error(`unknown relation '${defId}'`)
+        return { rule: 'relationSpawn', region: invocation.region, defId, sig: relationSig(relation) }
+      }),
+      spawnBoundPredicate: ({ wire, invocation }) => this.#attempt(invocation, () => ({
+        rule: 'boundRelationSpawn', region: invocation.region, wire,
       })),
       binderColor: options.binderColor,
       ...(options.hoverBinder === undefined ? {} : { hoverBinder: options.hoverBinder }),

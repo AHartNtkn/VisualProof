@@ -7,7 +7,8 @@ import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import { seedProject } from '../view/relax'
 import type { Shape, Theme } from '../view/paint'
-import { bubbleHues, highlightGroup, paint } from '../view/paint'
+import { highlightGroup, paint } from '../view/paint'
+import { sigOrder } from '../kernel/diagram/sig'
 import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { existentialStubs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
@@ -92,12 +93,33 @@ export function retainedFrontIds(
   }
 }
 
-const hoverBinder = (diagram: Diagram, hit: Hit): RegionId | null => {
-  if (hit.kind === 'node') {
-    const node = diagram.nodes[hit.id]
-    return node?.kind === 'atom' ? node.binder : null
+/**
+ * Color each relational wire by the order (depth) of its signature — the
+ * order ladder replacing the old per-bubble hue. Wires of the same second-order
+ * depth share a hue. The VIEW consumes this in Task 12; here the app provides
+ * the sig-order-keyed mapping.
+ */
+export function relationWireHues(d: Diagram, lightness: number): Map<WireId, string> {
+  const out = new Map<WireId, string>()
+  for (const [wid, w] of Object.entries(d.wires)) {
+    if (w.sig.kind !== 'rel') continue
+    const hue = (268 + (sigOrder(w.sig) - 1) * 137.5) % 360
+    out.set(wid, `hsl(${hue.toFixed(0)}, 48%, ${lightness}%)`)
   }
-  if (hit.kind === 'region') return diagram.regions[hit.id]?.kind === 'bubble' ? hit.id : null
+  return out
+}
+
+/** The relational wire a hover targets: the head-carrying wire of a hovered atom,
+ * or a hovered relational wire itself. */
+const hoverBinder = (diagram: Diagram, hit: Hit): WireId | null => {
+  if (hit.kind === 'node') {
+    if (diagram.nodes[hit.id]?.kind !== 'atom') return null
+    for (const [wid, w] of Object.entries(diagram.wires)) {
+      if (w.endpoints.some((ep) => ep.node === hit.id && ep.port.kind === 'head')) return wid
+    }
+    return null
+  }
+  if (hit.kind === 'wire') return diagram.wires[hit.id]?.sig.kind === 'rel' ? hit.id : null
   return null
 }
 
@@ -110,7 +132,7 @@ export class ProofFrontViewport {
   #engine: Engine
   #moves: ProofMoveController
   #spawn: ProofSpawnController
-  #spawnHoverBinder: RegionId | null = null
+  #spawnHoverBinder: WireId | null = null
   #relationWorkspace: RelationWorkspace | null = null
   #surface: CanvasAdapter
   #model: ProofFrontModel
@@ -141,12 +163,12 @@ export class ProofFrontViewport {
       },
       place: (node, at) => seedBodyPlacement(this.#engine, node, at),
       refuse: model.refuse,
-      binderColor: (binder) => {
-        const color = bubbleHues(model.diagram(), model.theme().bubbleLightness).get(binder)
-        if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+      binderColor: (wire) => {
+        const color = relationWireHues(model.diagram(), model.theme().bubbleLightness).get(wire)
+        if (color === undefined) throw new Error(`bound-predicate option references missing relation wire '${wire}'`)
         return color
       },
-      hoverBinder: (binder) => { this.#spawnHoverBinder = binder },
+      hoverBinder: (wire) => { this.#spawnHoverBinder = wire },
       openChanged: model.changed,
     })
 
