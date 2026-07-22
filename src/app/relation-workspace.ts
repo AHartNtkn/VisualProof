@@ -601,7 +601,7 @@ export class RelationWorkspace {
     this.#redo = this.#button('Redo', () => this.#moveHistory(1))
     const cancel = this.#button('Cancel', () => this.cancel())
     this.#finalizeButton = this.#button(transaction.finalizeLabel, () => this.#finalize())
-    this.#finalizeButton.classList.add('is-primary')
+    this.#finalizeButton.classList.add('vpa-control-primary')
     actions.append(this.#undo, this.#redo, cancel, this.#finalizeButton)
     title.append(label, actions)
     this.#canvas = document.createElement('canvas')

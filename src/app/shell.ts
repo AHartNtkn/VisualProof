@@ -58,6 +58,7 @@ import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
 import { RelationWorkspace, SubstituteTransaction } from './relation-workspace'
 import { AbstractTransaction } from './relation-transactions'
+import { applyControlTheme } from './control-theme'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -262,7 +263,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
     canvas.ownerDocument.body.style.background = theme.canvas
-    chrome.dataset.colorMode = theme.name.startsWith('Dark') ? 'dark' : 'light'
+    applyControlTheme(canvas.ownerDocument, theme)
   }
   applyThemeBackdrop()
   // There is NO pan: the camera is a fit — centered on the sheet circle with

@@ -9,7 +9,30 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
 canvas { display: block; }
 canvas[hidden] { display: none; }
 button, input { font: inherit; }
-button { color: inherit; }
+button {
+  border: 1px solid var(--vpa-control-border);
+  background: var(--vpa-control-surface);
+  color: var(--vpa-control-foreground);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--vpa-control-hover-surface); }
+button:active:not(:disabled) { background: var(--vpa-control-active-surface); }
+button:focus-visible { outline: 2px solid var(--vpa-control-focus-ring); outline-offset: 2px; }
+button:disabled {
+  border-color: var(--vpa-control-disabled-border);
+  background: var(--vpa-control-disabled-surface);
+  color: var(--vpa-control-disabled-foreground);
+  cursor: default;
+  opacity: 1;
+}
+.vpa-control-primary {
+  border-color: var(--vpa-control-primary-border);
+  background: var(--vpa-control-primary-surface);
+  color: var(--vpa-control-primary-foreground);
+  font-weight: 700;
+}
+.vpa-control-primary:hover:not(:disabled) { background: var(--vpa-control-primary-hover-surface); }
+.vpa-control-primary:active:not(:disabled) { background: var(--vpa-control-primary-active-surface); }
 
 #chrome { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
 #chrome button, #chrome input, #chrome section, #chrome aside { pointer-events: auto; }
@@ -21,10 +44,8 @@ button { color: inherit; }
   backdrop-filter: blur(12px); pointer-events: auto;
 }
 .vpa-compass-north button, .vpa-compass-surface button, .vpa-temporal button {
-  border: 1px solid rgba(69, 66, 55, .22); border-radius: 7px; padding: 5px 9px;
-  background: rgba(255, 255, 252, .8); cursor: pointer;
+  border-radius: 7px; padding: 5px 9px;
 }
-.vpa-compass-north button:hover, .vpa-compass-surface button:hover { border-color: #7d6543; }
 .vpa-status { padding: 0 8px; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #666154; }
 .vpa-compass-surface {
   position: fixed; top: 62px; max-height: calc(100vh - 110px); box-sizing: border-box;
@@ -64,10 +85,11 @@ button { color: inherit; }
 .vpa-proof-front.is-focused .vpa-proof-front-status { border-color: #d17832; color: #8a481c; }
 .vpa-fixed-side-seam { z-index: 4; cursor: col-resize; background: rgba(75,70,59,.22); touch-action: none; }
 .vpa-fixed-side-seam::before { content: ""; position: absolute; inset: 0 3px; background: rgba(75,70,59,.58); }
-.vpa-fixed-side-declare { position: absolute; left: 50%; top: 50%; width: 116px; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; border: 1px solid rgba(69,66,55,.3); border-radius: 999px; padding: 5px 9px; background: rgba(250,249,243,.96); font-size: 10px; letter-spacing: .08em; cursor: pointer; }
-.vpa-fixed-side-declare:disabled { color: #777165; cursor: default; }
+.vpa-fixed-side-declare { position: absolute; left: 50%; top: 50%; width: 116px; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; border-radius: 999px; padding: 5px 9px; font-size: 10px; letter-spacing: .08em; }
 .vpa-fixed-side-seam.is-met::before { background: #d17832; }
-.vpa-fixed-side-seam.is-met .vpa-fixed-side-declare { border-color: #d17832; color: #8a481c; font-weight: 700; }
+.vpa-fixed-side-seam.is-met .vpa-fixed-side-declare { border-color: var(--vpa-control-primary-border); background: var(--vpa-control-primary-surface); color: var(--vpa-control-primary-foreground); font-weight: 700; }
+.vpa-fixed-side-seam.is-met .vpa-fixed-side-declare:hover:not(:disabled) { background: var(--vpa-control-primary-hover-surface); }
+.vpa-fixed-side-seam.is-met .vpa-fixed-side-declare:active:not(:disabled) { background: var(--vpa-control-primary-active-surface); }
 .vpa-fixed-side-too-narrow { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 32px; box-sizing: border-box; background: rgba(250,249,243,.97); color: #5f2c1b; font-size: 14px; text-align: center; }
 .vpa-fixed-side-too-narrow[hidden] { display: none; }
 .vpa-action-instruction { flex-basis: 100%; margin: 0 0 3px; }
@@ -81,9 +103,7 @@ button { color: inherit; }
 .vpa-relation-title { display: flex; align-items: center; gap: 8px; padding: 0 7px 0 11px; border-bottom: 1px solid rgba(69,66,55,.18); background: rgba(251,250,246,.97); color: #b45309; cursor: move; user-select: none; }
 .vpa-relation-title strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 11px "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .06em; }
 .vpa-relation-actions { display: flex; gap: 4px; }
-.vpa-relation-actions button { border: 1px solid rgba(69,66,55,.35); border-radius: 999px; padding: 3px 7px; background: #fffefa; color: #292524; font: 11px system-ui,sans-serif; cursor: pointer; }
-.vpa-relation-actions button:disabled { opacity: .38; cursor: default; }
-.vpa-relation-actions .is-primary { border-color: #08796b; background: #08796b; color: white; font-weight: 700; }
+.vpa-relation-actions button { border-radius: 999px; padding: 3px 7px; font: 11px system-ui,sans-serif; }
 .vpa-relation-canvas { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; touch-action: none; background: #f4f2ec; }
 .vpa-relation-port-strip { display: flex; align-items: center; gap: 7px; min-width: 0; margin: 0; padding: 5px 28px 5px 10px; list-style: none; border-top: 1px solid rgba(69,66,55,.18); background: rgba(251,250,246,.97); }
 .vpa-relation-port { display: grid; place-items: center; width: 21px; height: 21px; border: 2px solid #78716c; border-radius: 50%; color: #44403c; font: 700 10px "IBM Plex Mono", ui-monospace, monospace; cursor: grab; }
@@ -93,35 +113,28 @@ button { color: inherit; }
 .vpa-relation-port.is-selected { outline: 2px solid #08796b; outline-offset: 2px; }
 .vpa-relation-footer { display: flex; align-items: stretch; min-width: 0; border-top: 1px solid rgba(69,66,55,.18); }
 .vpa-relation-status { display: flex; flex: 1; align-items: center; min-width: 0; padding: 4px 10px; overflow: hidden; color: #5f574c; font: 11px "IBM Plex Mono", ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.vpa-relation-empty-marker { flex: none; margin: 3px 24px 3px 3px; border: 1px solid #08796b; border-radius: 999px; padding: 1px 7px; background: rgba(8,121,107,.1); color: #08796b; font: 10px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; }
-.vpa-relation-empty-marker[aria-pressed="false"] { border-color: #78716c; background: transparent; color: #57534e; }
+.vpa-relation-empty-marker { flex: none; margin: 3px 24px 3px 3px; border-radius: 999px; padding: 1px 7px; font: 10px "IBM Plex Mono", ui-monospace, monospace; }
+.vpa-relation-empty-marker[aria-pressed="true"] { border-color: var(--vpa-control-primary-border); background: var(--vpa-control-primary-surface); color: var(--vpa-control-primary-foreground); }
+.vpa-relation-empty-marker[aria-pressed="true"]:hover { background: var(--vpa-control-primary-hover-surface); }
+.vpa-relation-empty-marker[aria-pressed="true"]:active { background: var(--vpa-control-primary-active-surface); }
 .vpa-relation-status[data-status="ready"] { color: #08796b; }
 .vpa-relation-status[data-status$="exhausted"], .vpa-relation-status[data-status="zero-match"], .vpa-relation-status[data-status="invalid-ports"], .vpa-relation-status[data-status="stale-source"], .vpa-relation-status[data-status="kernel-refusal"] { color: #b45309; }
 .vpa-relation-resize { position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; cursor: nwse-resize; }
 .vpa-relation-resize::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 10px; height: 10px; border-right: 2px solid #72797b; border-bottom: 2px solid #72797b; }
 .vpa-relation-gesture { position: fixed; inset: 0; z-index: 26; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .vpa-relation-join-gesture { stroke: #08796b; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 7 5; }
-.vpa-menu { position: fixed; z-index: 50; max-width: 350px; padding: 8px; border-radius: 8px; background: rgba(250,249,243,.98); box-shadow: 0 8px 28px rgba(50,45,30,.18); }
-@media (prefers-color-scheme: dark) {
-  .vpa-compass-north, .vpa-compass-surface, .vpa-temporal, .vpa-menu { color-scheme: dark; background: rgba(32, 31, 29, .96); color: #eee9df; border-color: rgba(238,233,223,.24); }
-  .vpa-status, .vpa-temporal-copy, .vpa-ledger > header small { color: #bbb4a8; }
-  .vpa-relation-workspace, .vpa-relation-canvas { background: #121719; }
-  .vpa-relation-title, .vpa-relation-port-strip { background: rgba(26,32,35,.97); color: #f59e0b; border-color: rgba(238,233,223,.2); }
-  .vpa-relation-actions button { background: #22292d; color: #edf0ea; border-color: rgba(238,233,223,.3); }
-}
-#chrome[data-color-mode="dark"] .vpa-compass-north,
-#chrome[data-color-mode="dark"] .vpa-compass-surface,
-#chrome[data-color-mode="dark"] .vpa-temporal,
-#chrome[data-color-mode="dark"] .vpa-menu { color-scheme: dark; background: rgba(28, 32, 38, .96); color: #e6e1d6; border-color: rgba(230,225,214,.24); }
-#chrome[data-color-mode="dark"] .vpa-status,
-#chrome[data-color-mode="dark"] .vpa-temporal-copy,
-#chrome[data-color-mode="dark"] .vpa-ledger > header small { color: #b8b3aa; }
-#chrome[data-color-mode="dark"] ~ .vpa-fixed-side-workspace,
-body:has(#chrome[data-color-mode="dark"]) .vpa-proof-front { background: #0e1013; }
-body:has(#chrome[data-color-mode="dark"]) .vpa-proof-front-status,
-body:has(#chrome[data-color-mode="dark"]) .vpa-fixed-side-declare { color-scheme: dark; background: rgba(28,32,38,.94); color: #d9d3c8; border-color: rgba(230,225,214,.24); }
-body:has(#chrome[data-color-mode="dark"]) .vpa-relation-workspace,
-body:has(#chrome[data-color-mode="dark"]) .vpa-relation-canvas { background: #121719; }
-body:has(#chrome[data-color-mode="dark"]) .vpa-relation-title,
-body:has(#chrome[data-color-mode="dark"]) .vpa-relation-port-strip { background: rgba(26,32,35,.97); color: #f59e0b; border-color: rgba(238,233,223,.2); }
-body:has(#chrome[data-color-mode="dark"]) .vpa-relation-actions button { background: #22292d; color: #edf0ea; border-color: rgba(238,233,223,.3); }
+.vpa-menu { position: fixed; z-index: 50; max-width: 350px; padding: 8px; border-radius: 8px; background: var(--vpa-control-menu-surface); box-shadow: 0 8px 28px rgba(50,45,30,.18); }
+:root[data-color-mode="dark"] .vpa-compass-north,
+:root[data-color-mode="dark"] .vpa-compass-surface,
+:root[data-color-mode="dark"] .vpa-temporal,
+:root[data-color-mode="dark"] .vpa-menu { color-scheme: dark; background: rgba(28, 32, 38, .96); color: #e6e1d6; border-color: rgba(230,225,214,.24); }
+:root[data-color-mode="dark"] .vpa-status,
+:root[data-color-mode="dark"] .vpa-temporal-copy,
+:root[data-color-mode="dark"] .vpa-ledger > header small { color: #b8b3aa; }
+:root[data-color-mode="dark"] .vpa-fixed-side-workspace,
+:root[data-color-mode="dark"] .vpa-proof-front { background: #0e1013; }
+:root[data-color-mode="dark"] .vpa-proof-front-status { color-scheme: dark; background: rgba(28,32,38,.94); color: #d9d3c8; border-color: rgba(230,225,214,.24); }
+:root[data-color-mode="dark"] .vpa-relation-workspace,
+:root[data-color-mode="dark"] .vpa-relation-canvas { background: #121719; }
+:root[data-color-mode="dark"] .vpa-relation-title,
+:root[data-color-mode="dark"] .vpa-relation-port-strip { background: rgba(26,32,35,.97); color: #f59e0b; border-color: rgba(238,233,223,.2); }
