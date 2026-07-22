@@ -1,4 +1,4 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, NodeId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { parseTerm } from '../kernel/term/parse'
@@ -936,13 +936,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     applyProofAction(singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step))
   }
 
-  const openComprehension = (bubble: RegionId, pointer: Vec2): void => {
+  const openComprehension = (wire: WireId, pointer: Vec2): void => {
     if (mode !== 'prove' || proof?.kind !== 'track' || relationWorkspace !== null) return
     let workspace: RelationWorkspace
     const transaction = new SubstituteTransaction({
       diagram: currentDiagram,
       boundary: () => proof?.kind === 'track' ? trackBoundary(proof.track) : [],
-      bubble,
+      wire,
       context: () => ctx,
       orientation: proof.track.direction,
       apply: applyProofAction,

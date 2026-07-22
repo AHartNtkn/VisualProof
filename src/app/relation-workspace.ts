@@ -4,13 +4,14 @@ import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { parseTerm } from '../kernel/term/parse'
+import { relSig, TERM } from '../kernel/diagram/sig'
 import { applyFission } from '../kernel/rules/fusion'
-import { applyComprehensionInstantiate } from '../kernel/rules/comprehension'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
-import { applyAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
+import { applyAction, singleStepAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
+import type { ProofStep } from '../kernel/proof/step'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../view/engine'
-import { bubbleHues, paint, type Shape, type Theme } from '../view/paint'
+import { paint, type Shape, type Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
 import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { seedProject } from '../view/relax'
@@ -24,7 +25,7 @@ import type { CopyDestination, CopyPlan } from './copy-planner'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './interact/viewport'
-import { enclosingComprehensionBinders } from '../interaction/comprehension-dependencies'
+import { relationWireHues } from './proof-front'
 import {
   applyRelationConnection,
   applyCapturedRelationHostPatternImport,
@@ -140,23 +141,43 @@ export function previewRelationWorkspaceSnapshot(
   return mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
 }
 
+/**
+ * The relational wires enclosing the target wire (its scope or an ancestor
+ * scope, excluding the target), innermost first — the outer binders a
+ * substitution body may reference. Mirrors `boundPredicateOptions` for the host
+ * surface, tagged `source: 'host'`.
+ */
+function hostEnclosingBoundPredicateOptions(
+  host: Diagram,
+  targetWireId: WireId,
+): readonly SpawnBoundPredicateOption[] {
+  const target = host.wires[targetWireId]
+  if (target === undefined) throw new Error(`instantiation target wire '${targetWireId}' does not exist`)
+  const found: { wire: WireId; arity: number }[] = []
+  let current: RegionId | undefined = target.scope
+  for (;;) {
+    const region: Diagram['regions'][string] | undefined = host.regions[current!]
+    if (region === undefined) throw new Error(`region '${current}' on the target scope chain does not exist`)
+    const here = Object.entries(host.wires)
+      .filter(([id, w]) => w.scope === current && w.sig.kind === 'rel' && id !== targetWireId)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    for (const [wid, w] of here) if (w.sig.kind === 'rel') found.push({ wire: wid, arity: w.sig.args.length })
+    if (region.kind === 'sheet') break
+    current = region.parent
+  }
+  return Object.freeze(found.map((option, index) => Object.freeze({
+    source: 'host' as const, wire: option.wire, arity: option.arity,
+    position: index + 1, total: found.length,
+  })))
+}
+
 export function relationWorkspaceBoundPredicateOptions(
   draft: RelationWorkspaceDraft,
   region: RegionId,
 ): readonly SpawnBoundPredicateOption[] {
   const local = boundPredicateOptions(currentRelationDraft(draft).diagram, region)
   if (draft.mode !== 'substitute' || draft.instantiationTarget === undefined) return local
-  const binders = enclosingComprehensionBinders(draft.host, draft.instantiationTarget)
-  const host = binders.map((binder, index): SpawnBoundPredicateOption => {
-    const value = draft.host.regions[binder]
-    if (value === undefined || value.kind !== 'bubble') {
-      throw new Error(`host bound-predicate option references missing bubble '${binder}'`)
-    }
-    return Object.freeze({
-      source: 'host', binder, arity: value.arity,
-      position: binders.length - index, total: binders.length,
-    })
-  })
+  const host = hostEnclosingBoundPredicateOptions(draft.host, draft.instantiationTarget)
   return Object.freeze([...local, ...host])
 }
 
@@ -166,7 +187,10 @@ export function relationHostSelectionRoute(
   selection: SubgraphSelection,
 ): 'copy' | 'import' | 'refused' {
   const extraction = extractSubgraph(source, selection)
-  if (extraction.binderStubs.length === 0) return 'copy'
+  const referencesOuterBinder = extraction.pattern.boundary.some(
+    (stub) => extraction.pattern.diagram.wires[stub]!.sig.kind === 'rel',
+  )
+  if (!referencesOuterBinder) return 'copy'
   return draft.mode === 'substitute' ? 'import' : 'refused'
 }
 
@@ -264,7 +288,7 @@ export function relationWorkspaceCanFinalize(
 export type SubstituteTransactionOptions = {
   readonly diagram: () => Diagram
   readonly boundary: () => readonly WireId[]
-  readonly bubble: RegionId
+  readonly wire: WireId
   readonly context: () => ProofContext
   readonly orientation?: 'forward' | 'backward'
   readonly apply: (action: ProofAction) => void
@@ -277,21 +301,21 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
   readonly #source: Diagram
   readonly #boundary: readonly WireId[]
   readonly #sourceFingerprint: string
-  readonly #bubble: RegionId
+  readonly #wire: WireId
   readonly #arity: number
   readonly #opts: SubstituteTransactionOptions
 
   constructor(opts: SubstituteTransactionOptions) {
     assertProofContext(opts.context())
     const source = opts.diagram()
-    const bubble = source.regions[opts.bubble]
-    if (bubble === undefined || bubble.kind !== 'bubble') throw new Error(`'${opts.bubble}' is not a relation bubble`)
+    const wire = source.wires[opts.wire]
+    if (wire === undefined || wire.sig.kind !== 'rel') throw new Error(`'${opts.wire}' is not a relational wire`)
     this.#opts = opts
     this.#source = source
     this.#boundary = [...opts.boundary()]
     this.#sourceFingerprint = exploreForm(source, this.#boundary)
-    this.#bubble = opts.bubble
-    this.#arity = bubble.arity
+    this.#wire = opts.wire
+    this.#arity = wire.sig.args.length
   }
 
   get title(): string { return `SUBSTITUTE · NEW RELATION /${this.#arity}` }
@@ -299,23 +323,44 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
   liveSourceDiagram = (): Diagram => this.#opts.diagram()
   sourceBoundary = (): readonly WireId[] => this.#boundary
   previewShapes(): readonly Shape[] { return [] }
-  initialDraft(): RelationWorkspaceDraft { return beginSubstitutionDraft(this.#source, this.#bubble) }
+  initialDraft(): RelationWorkspaceDraft { return beginSubstitutionDraft(this.#source, this.#wire) }
+
+  /**
+   * Build the primitive instantiation composite against `base`, discovering the
+   * occurrence atom ids as it applies: `macroComprehensionInstantiate` recorded
+   * step-by-step — bodyAttach(orientation) → unfold every atom riding the wire →
+   * bodied vacuousElim. Applying each step validates the whole composite.
+   */
+  #instantiationSteps(base: Diagram, snapshot: RelationWorkspaceSnapshot): readonly ProofStep[] {
+    const forced = snapshot.ports.filter((port) => port.kind === 'forced')
+    if (forced.length !== this.#arity) throw new Error(`substitution requires ${this.#arity} forced ports`)
+    const materialized = materializeRelationSnapshot(snapshot, this.mode)
+    const orientation = this.#opts.orientation ?? 'forward'
+    const ctx = this.#opts.context()
+    const steps: ProofStep[] = []
+    let cur = base
+    const attach: ProofStep = {
+      rule: 'bodyAttach', wireId: this.#wire, content: materialized.relation, params: [...materialized.params],
+    }
+    cur = applyAction(cur, singleStepAction('attach', attach), ctx, orientation)
+    steps.push(attach)
+    const atoms = cur.wires[this.#wire]!.endpoints
+      .filter((ep) => ep.port.kind === 'head' && cur.nodes[ep.node]?.kind === 'atom')
+      .map((ep) => ep.node)
+    for (const nodeId of atoms) {
+      const unfold: ProofStep = { rule: 'unfold', nodeId }
+      cur = applyAction(cur, singleStepAction('unfold', unfold), ctx, orientation)
+      steps.push(unfold)
+    }
+    const elim: ProofStep = { rule: 'vacuousElim', wireId: this.#wire }
+    applyAction(cur, singleStepAction('vacuousElim', elim), ctx, orientation)
+    steps.push(elim)
+    return steps
+  }
 
   status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus {
     try {
-      const forced = snapshot.ports.filter((port) => port.kind === 'forced')
-      if (forced.length !== this.#arity) throw new Error(`substitution requires ${this.#arity} forced ports`)
-      const materialized = materializeRelationSnapshot(
-        snapshot, this.mode, this.#source, this.#bubble,
-      )
-      applyComprehensionInstantiate(
-        this.#source,
-        this.#bubble,
-        materialized.relation,
-        materialized.attachments,
-        materialized.binders,
-        this.#opts.orientation ?? 'forward',
-      )
+      this.#instantiationSteps(this.#source, snapshot)
       return { kind: 'ready', code: 'ready', message: 'ready to instantiate' }
     } catch (error) {
       return { kind: 'refused', code: 'invalid-ports', message: error instanceof Error ? error.message : String(error) }
@@ -336,20 +381,9 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
     if (exploreForm(live, this.#boundary) !== this.#sourceFingerprint) {
       throw new Error('substitution source changed while the relation workspace was open')
     }
-    const status = this.status(snapshot)
-    if (status.kind !== 'ready') throw new Error(status.message)
-    const materialized = materializeRelationSnapshot(
-      snapshot, this.mode, this.#source, this.#bubble,
-    )
     const action: ProofAction = {
       label: 'substitute relation',
-      steps: [{
-        rule: 'comprehensionInstantiate',
-        bubble: this.#bubble,
-        comp: materialized.relation,
-        attachments: materialized.attachments,
-        binders: materialized.binders,
-      }],
+      steps: this.#instantiationSteps(live, snapshot),
       placements,
     }
     applyAction(live, action, this.#opts.context(), this.#opts.orientation ?? 'forward')
@@ -564,7 +598,7 @@ export class RelationWorkspace {
   #draftHoverWire: WireId | null = null
   #hostHoverWire: WireId | null = null
   #selectedPort: string | null = null
-  #spawnHover: { readonly source: 'draft' | 'host'; readonly binder: RegionId } | null = null
+  #spawnHover: { readonly source: 'draft' | 'host'; readonly wire: WireId } | null = null
   #hostImportDrag: HostPatternImportDrag | null = null
   #statusOverride: WorkspaceStatus | null = null
   #disposed = false
@@ -640,16 +674,16 @@ export class RelationWorkspace {
     this.#spawn = new SpawnCascade({
       host: host.mount,
       spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => spawnTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
-      spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, arity), at.world),
-      spawnBoundPredicate: ({ source, binder, invocation: at }) => source === 'host'
-        ? this.#importHostBinder(binder, at.region, at.world)
-        : this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, binder), at.world),
-      binderColor: (binder, source) => {
+      spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, relSig(Array.from({ length: arity }, () => TERM))), at.world),
+      spawnBoundPredicate: ({ source, wire, invocation: at }) => source === 'host'
+        ? this.#importHostBinder(wire, at.region, at.world)
+        : this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, wire), at.world),
+      binderColor: (wire, source) => {
         const diagram = source === 'host' ? this.#transaction.sourceDiagram() : this.#diagram()
-        return bubbleHues(diagram, host.theme().bubbleLightness).get(binder) ?? host.theme().interaction.hover
+        return relationWireHues(diagram, host.theme().bubbleLightness).get(wire) ?? host.theme().interaction.hover
       },
-      hoverBinder: (binder, source) => {
-        this.#spawnHover = binder === null || source === null ? null : { binder, source }
+      hoverBinder: (wire, source) => {
+        this.#spawnHover = wire === null || source === null ? null : { wire, source }
         host.changed()
       },
       openChanged: host.changed,
@@ -795,7 +829,7 @@ export class RelationWorkspace {
 
   hostOverlays(): readonly Shape[] {
     const spawnHover = this.#spawnHover?.source === 'host'
-      ? itemShapes(this.#host.engine(), { kind: 'region', id: this.#spawnHover.binder }, this.#host.theme().interaction.hover)
+      ? itemShapes(this.#host.engine(), { kind: 'wire', id: this.#spawnHover.wire }, this.#host.theme().interaction.hover)
       : []
     return [...this.#transaction.previewShapes(), ...this.#connectionShapes('host'), ...this.#hostCopy.sourceOverlay(), ...spawnHover]
   }
@@ -812,7 +846,7 @@ export class RelationWorkspace {
       if (body !== undefined) shapes.push({ kind: 'circle', center: body.pos, r: body.discR * this.#engine.scale + 1, fill: null, stroke: theme.interaction.pin, width: 1.5, insetColor: null, glow: null })
     }
     if (this.#spawnHover?.source === 'draft') {
-      shapes.push(...itemShapes(this.#engine, { kind: 'region', id: this.#spawnHover.binder }, theme.interaction.hover))
+      shapes.push(...itemShapes(this.#engine, { kind: 'wire', id: this.#spawnHover.wire }, theme.interaction.hover))
     }
     const importDestination = this.#hostImportDrag
     shapes.push(

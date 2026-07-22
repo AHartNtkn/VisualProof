@@ -72,12 +72,14 @@ describe('AbstractTransaction', () => {
     expect(fixture.transaction.debugState()).toMatchObject({ kind: 'matches', activeIndex: 0, candidateCount: 2 })
     fixture.transaction.finalize(draft, [])
     expect(fixture.actions).toHaveLength(1)
-    expect(fixture.actions[0]).toMatchObject({
-      label: 'abstract relation',
-      steps: [{ rule: 'comprehensionAbstract', wrap: fixture.scene.wrap }],
-      placements: [],
-    })
-    expect(fixture.actions[0]!.steps[0]).toMatchObject({ occurrences: expect.any(Array) })
+    expect(fixture.actions[0]).toMatchObject({ label: 'abstract relation', placements: [] })
+    // The abstraction composite is the primitive sequence: bodied vacuousIntro,
+    // one fold per abstracted occurrence, then bodyDetach.
+    const rules = fixture.actions[0]!.steps.map((step) => step.rule)
+    expect(rules[0]).toBe('vacuousIntro')
+    expect(rules.at(-1)).toBe('bodyDetach')
+    expect(rules.slice(1, -1).length).toBeGreaterThan(0)
+    expect(rules.slice(1, -1).every((rule) => rule === 'fold')).toBe(true)
     expect(exploreForm(fixture.scene.diagram)).toBe(before)
   })
 
@@ -181,19 +183,21 @@ describe('AbstractTransaction', () => {
     expect(() => selected.transaction.moveEmptyMarker(diagram.root, { x: 1_000_000, y: 1_000_000 }))
       .toThrow(/outside the wrap/i)
     selected.transaction.finalize(draft, [])
-    expect(selected.actions[0]).toMatchObject({
-      steps: [{ rule: 'comprehensionAbstract', occurrences: [{ sel: { region: cut }, args: [] }] }],
-      placements: [{ introducedNode: 0, x: nestedPoint.x, y: nestedPoint.y }],
+    // Selected nullary marker: vacuousIntro, one fold of the empty occurrence
+    // anchored at the nested cut, then bodyDetach.
+    expect(selected.actions[0]!.steps.map((step) => step.rule)).toEqual(['vacuousIntro', 'fold', 'bodyDetach'])
+    expect(selected.actions[0]!.steps[1]).toMatchObject({
+      rule: 'fold', occurrence: expect.objectContaining({ region: cut }), args: [],
     })
+    expect(selected.actions[0]!.placements).toEqual([{ introducedNode: 0, x: nestedPoint.x, y: nestedPoint.y }])
 
     const deselected = transactionFixture(scene)
     deselected.transaction.draftChanged(draft)
     deselected.transaction.toggleEmptyMarker()
     deselected.transaction.finalize(draft, [])
-    expect(deselected.actions[0]).toMatchObject({
-      steps: [{ rule: 'comprehensionAbstract', occurrences: [] }],
-      placements: [],
-    })
+    // Deselected marker: no occurrence to fold — vacuousIntro then bodyDetach.
+    expect(deselected.actions[0]!.steps.map((step) => step.rule)).toEqual(['vacuousIntro', 'bodyDetach'])
+    expect(deselected.actions[0]!.placements).toEqual([])
   })
 
   it('does not expose the empty-marker route for a nonempty draft with zero matches', () => {

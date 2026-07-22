@@ -1,4 +1,4 @@
-import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
@@ -373,13 +373,13 @@ export class ProofFrontViewport {
 
   #focus = (): void => { this.#model.focus() }
 
-  #openComprehension(bubble: RegionId, pointer: Vec2): void {
+  #openComprehension(wire: WireId, pointer: Vec2): void {
     if (this.#relationWorkspace !== null) return
     let workspace: RelationWorkspace
     const transaction = new SubstituteTransaction({
       diagram: this.#model.diagram,
       boundary: this.#model.boundary,
-      bubble,
+      wire,
       context: this.#model.context,
       orientation: this.side,
       apply: (action) => {

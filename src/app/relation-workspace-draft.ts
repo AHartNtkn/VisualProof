@@ -1,25 +1,28 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { DiagramError, mkDiagram, portKey } from '../kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
-import { spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
+import type { RelSig } from '../kernel/diagram/sig'
+import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import { deepestCommonAncestor } from '../kernel/diagram/regions'
-import { freshId } from '../kernel/diagram/subgraph/freshId'
+import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
+import { spliceSubgraphMapped } from '../kernel/diagram/subgraph/splice'
+import { freshId, type IdReservation } from '../kernel/diagram/subgraph/freshId'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import type { ComprehensionBinderPair } from '../kernel/rules/comprehension'
 import type { Term } from '../kernel/term/term'
-import {
-  addComprehensionBoundOccurrence,
-  createComprehensionDependencyState,
-  materializeComprehensionDependencies,
-  mergeSelectedComprehensionDependencies,
-  reconcileComprehensionDependencies,
-  replaceComprehensionDependencyBoundary,
-  validateComprehensionDependencies,
-  type ComprehensionDependencyState,
-} from '../interaction/comprehension-dependencies'
-import { addBubble, addCut } from './edit'
+import { addCut } from './edit'
 
+/**
+ * A relation editor boundary port. `forced` ports are the relation's own
+ * argument positions (a fixed ordered prefix, one per arity slot). `optional`
+ * ports are trailing boundary wires: in an abstraction draft they are extra
+ * argument positions; in a substitution draft they must each carry a `hostWire`
+ * and are the outer-bound-dependency PARAMETERS — a draft param wire designated
+ * to a host line (an outer term wire, or an outer relational wire the body's
+ * bound atoms ride). Materialization feeds every `hostWire` to the comprehension
+ * as a macro parameter; `applyBodyAttach`'s at-or-outside scope gate enforces
+ * that a relational host line is a genuine enclosing binder.
+ */
 export type RelationPort = {
   readonly id: string
   readonly wire: WireId
@@ -30,21 +33,27 @@ export type RelationPort = {
 export type RelationWorkspaceSnapshot = {
   readonly diagram: Diagram
   readonly ports: readonly RelationPort[]
-  readonly comprehension?: ComprehensionDependencyState
 }
 
 export type RelationWorkspaceDraft = {
   readonly host: Diagram
   readonly mode: 'substitute' | 'abstract'
-  readonly instantiationTarget?: RegionId
+  /** The relational wire being instantiated (substitute mode only). */
+  readonly instantiationTarget?: WireId
   readonly history: readonly RelationWorkspaceSnapshot[]
   readonly cursor: number
 }
 
+/**
+ * The materialized instantiation/abstraction interface. `relation.boundary` is
+ * `[forced args…, optional wires…]`; `params` are the trailing optional ports'
+ * host wires (empty in abstraction). `attachments` is an alias of `params` kept
+ * for call sites that read the host-line record by that name.
+ */
 export type MaterializedRelationDraft = {
   readonly relation: DiagramWithBoundary
-  readonly attachments: WireId[]
-  readonly binders: readonly ComprehensionBinderPair[]
+  readonly attachments: readonly WireId[]
+  readonly params: readonly WireId[]
 }
 
 export type RelationExternalReferencePresentation = {
@@ -86,7 +95,6 @@ export type RelationHostPatternImportPlan = {
   readonly snapshot: RelationWorkspaceSnapshot
   readonly introduced: readonly NodeId[]
   readonly at: Readonly<{ x: number; y: number }>
-  readonly binders: readonly ComprehensionBinderPair[]
 }
 
 const HOST_BINDING_UNAVAILABLE = 'host bindings are available only during substitution'
@@ -99,32 +107,66 @@ function emptyRelation(): Diagram {
   return mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
 }
 
-function substitutionSnapshot(arity: number): RelationWorkspaceSnapshot {
+function compareWireIds(a: WireId, b: WireId): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
+
+/**
+ * The relational wires enclosing `targetWireId` — every relational line at the
+ * target wire's scope or an ancestor scope, excluding the target itself,
+ * innermost first. These are the host binders a substitution body may reference
+ * as an outer-bound parameter (spec: at-or-outside the target wire's scope).
+ */
+function enclosingHostBinders(host: Diagram, targetWireId: WireId): readonly WireId[] {
+  const target = host.wires[targetWireId]
+  if (target === undefined) throw new Error(`instantiation target wire '${targetWireId}' does not exist`)
+  const found: WireId[] = []
+  let current: RegionId | undefined = target.scope
+  for (;;) {
+    const region: Diagram['regions'][string] | undefined = host.regions[current!]
+    if (region === undefined) throw new Error(`region '${current}' on the target scope chain does not exist`)
+    const here = Object.entries(host.wires)
+      .filter(([id, w]) => w.scope === current && w.sig.kind === 'rel' && id !== targetWireId)
+      .map(([id]) => id)
+      .sort(compareWireIds)
+    found.push(...here)
+    if (region.kind === 'sheet') break
+    current = region.parent
+  }
+  return found
+}
+
+function assertEnclosingHostBinder(host: Diagram, targetWireId: WireId, hostWire: WireId): void {
+  const w = host.wires[hostWire]
+  if (w === undefined) throw new Error(`host wire '${hostWire}' does not exist`)
+  if (w.sig.kind !== 'rel') throw new Error(`host binder '${hostWire}' is not a relational wire`)
+  if (!enclosingHostBinders(host, targetWireId).includes(hostWire)) {
+    throw new Error(`host binder '${hostWire}' must properly enclose the instantiation target '${targetWireId}'`)
+  }
+}
+
+function substitutionSnapshot(sig: RelSig): RelationWorkspaceSnapshot {
   const wires: Record<WireId, Wire> = {}
   const ports: RelationPort[] = []
-  for (let index = 0; index < arity; index++) {
+  sig.args.forEach((argSig, index) => {
     const wire = `arg${index + 1}`
-    wires[wire] = { scope: 'r0', endpoints: [] }
+    wires[wire] = { scope: 'r0', sig: argSig, endpoints: [] }
     ports.push({ id: `forced${index + 1}`, wire, kind: 'forced' })
-  }
-  const snapshot = {
+  })
+  return {
     diagram: mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, wires }),
     ports,
   }
-  const comprehension = createComprehensionDependencyState(
-    mkDiagramWithBoundary(snapshot.diagram, ports.map((port) => port.wire)),
-  )
-  return { ...snapshot, comprehension }
 }
 
-export function beginSubstitutionDraft(host: Diagram, bubble: RegionId): RelationWorkspaceDraft {
-  const region = host.regions[bubble]
-  if (region === undefined || region.kind !== 'bubble') throw new Error(`'${bubble}' is not a relation bubble`)
+export function beginSubstitutionDraft(host: Diagram, target: WireId): RelationWorkspaceDraft {
+  const wire = host.wires[target]
+  if (wire === undefined || wire.sig.kind !== 'rel') throw new Error(`'${target}' is not a relational wire`)
   return {
     host,
     mode: 'substitute',
-    instantiationTarget: bubble,
-    history: [substitutionSnapshot(region.arity)],
+    instantiationTarget: target,
+    history: [substitutionSnapshot(wire.sig)],
     cursor: 0,
   }
 }
@@ -191,59 +233,11 @@ function validateSnapshot(draft: RelationWorkspaceDraft, snapshot: RelationWorks
       }
     }
   }
-
-  if (draft.mode === 'abstract') {
-    if (snapshot.comprehension !== undefined) {
-      throw new Error('abstraction snapshots cannot contain comprehension dependencies')
-    }
-    return
-  }
-  const target = draft.instantiationTarget
-  const comprehension = snapshot.comprehension
-  if (target === undefined || comprehension === undefined) {
-    throw new Error('substitution snapshots must contain comprehension dependency state')
-  }
-  if (comprehension.pattern.diagram !== snapshot.diagram) {
-    throw new Error('substitution snapshot diagram must be owned by its comprehension dependency state')
-  }
-  const expectedBoundary = snapshot.ports.map((port) => port.wire)
-  if (JSON.stringify(comprehension.pattern.boundary) !== JSON.stringify(expectedBoundary)) {
-    throw new Error('substitution snapshot dependency boundary must match its relation ports')
-  }
-  validateComprehensionDependencies(comprehension, draft.host, target)
-}
-
-function reconcileSnapshot(
-  draft: RelationWorkspaceDraft,
-  snapshot: RelationWorkspaceSnapshot,
-): RelationWorkspaceSnapshot {
-  if (draft.mode === 'abstract') return snapshot
-  const target = draft.instantiationTarget
-  const previous = currentRelationDraft(draft).comprehension
-  const proposed = snapshot.comprehension ?? previous
-  if (target === undefined || proposed === undefined) {
-    throw new Error('substitution snapshots must contain comprehension dependency state')
-  }
-  const boundary = snapshot.ports.map((port) => port.wire)
-  const sameDiagram = proposed.pattern.diagram === snapshot.diagram
-  const sameBoundary = JSON.stringify(proposed.pattern.boundary) === JSON.stringify(boundary)
-  const comprehension = sameDiagram
-    ? sameBoundary
-      ? proposed
-      : replaceComprehensionDependencyBoundary(proposed, boundary, draft.host, target)
-    : reconcileComprehensionDependencies(
-        proposed,
-        mkDiagramWithBoundary(snapshot.diagram, boundary),
-        draft.host,
-        target,
-      )
-  return { ...snapshot, diagram: comprehension.pattern.diagram, comprehension }
 }
 
 function appendSnapshot(draft: RelationWorkspaceDraft, snapshot: RelationWorkspaceSnapshot): RelationWorkspaceDraft {
-  const reconciled = reconcileSnapshot(draft, snapshot)
-  validateSnapshot(draft, reconciled)
-  const history = [...draft.history.slice(0, draft.cursor + 1), reconciled]
+  validateSnapshot(draft, snapshot)
+  const history = [...draft.history.slice(0, draft.cursor + 1), snapshot]
   return { ...draft, history, cursor: history.length - 1 }
 }
 
@@ -272,7 +266,10 @@ export function insertOptionalPort(
 ): RelationWorkspaceDraft {
   const current = currentRelationDraft(draft)
   if (current.diagram.wires[wire] === undefined) throw new Error(`draft wire '${wire}' does not exist`)
-  if (hostWire !== undefined && draft.host.wires[hostWire] === undefined) throw new Error(`host wire '${hostWire}' does not exist`)
+  if (hostWire !== undefined) {
+    assertHostBindingAllowed(draft.mode)
+    if (draft.host.wires[hostWire] === undefined) throw new Error(`host wire '${hostWire}' does not exist`)
+  }
   const position = optionalPosition(current, optionalIndex, true)
   const id = freshId(new Set(current.ports.map((port) => port.id)), 'port')
   const port: RelationPort = hostWire === undefined
@@ -315,6 +312,7 @@ export function bindOptionalPort(
   const current = currentRelationDraft(draft)
   const { port, index } = findPort(current, portId)
   if (port.kind === 'forced') throw new Error(`forced port '${portId}' cannot be bound`)
+  assertHostBindingAllowed(draft.mode)
   if (draft.host.wires[hostWire] === undefined) throw new Error(`host wire '${hostWire}' does not exist`)
   const ports = current.ports.map((candidate, candidateIndex) => candidateIndex === index
     ? { ...candidate, hostWire }
@@ -325,14 +323,12 @@ export function bindOptionalPort(
 export function materializeRelationDraft(draft: RelationWorkspaceDraft): MaterializedRelationDraft {
   const current = currentRelationDraft(draft)
   validateSnapshot(draft, current)
-  return materializeRelationSnapshot(current, draft.mode, draft.host, draft.instantiationTarget)
+  return materializeRelationSnapshot(current, draft.mode)
 }
 
 export function materializeRelationSnapshot(
   snapshot: RelationWorkspaceSnapshot,
   mode: RelationWorkspaceDraft['mode'],
-  host?: Diagram,
-  instantiationTarget?: RegionId,
 ): MaterializedRelationDraft {
   if (mode === 'abstract' && snapshot.ports.some((port) => port.hostWire !== undefined)) {
     assertHostBindingAllowed(mode)
@@ -341,20 +337,9 @@ export function materializeRelationSnapshot(
     const unbound = snapshot.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
     if (unbound !== undefined) throw new Error(`optional substitution port '${unbound.id}' must be bound or removed before finalization`)
   }
-  const relation = mode === 'substitute'
-    ? snapshot.comprehension?.pattern
-    : mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
-  if (relation === undefined) throw new Error('substitution snapshot has no comprehension dependency state')
-  const binders = mode === 'substitute'
-    ? host === undefined || instantiationTarget === undefined
-      ? (() => { throw new Error('substitution materialization requires its host and target') })()
-      : materializeComprehensionDependencies(snapshot.comprehension!, host, instantiationTarget)
-    : Object.freeze([])
-  return {
-    relation,
-    attachments: snapshot.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : []),
-    binders,
-  }
+  const relation = mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
+  const params = snapshot.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : [])
+  return { relation, attachments: params, params }
 }
 
 export function replaceRelationDiagram(draft: RelationWorkspaceDraft, diagram: Diagram): RelationWorkspaceDraft {
@@ -362,33 +347,55 @@ export function replaceRelationDiagram(draft: RelationWorkspaceDraft, diagram: D
   return appendSnapshot(draft, { diagram, ports: current.ports })
 }
 
+/**
+ * Reference an outer host binder from the substitution body: designate a draft
+ * param wire bound to `hostWire` (reusing an existing designation for that host
+ * line), then spawn one bound-predicate atom on it in `requestedRegion`. The
+ * param wire becomes a trailing boundary port; on materialization `hostWire` is
+ * a macro parameter and each spawned atom is an occurrence of the outer relation.
+ */
 export function importRelationHostBinderOccurrence(
   draft: RelationWorkspaceDraft,
-  hostBinder: RegionId,
+  hostWire: WireId,
   requestedRegion?: RegionId,
 ): RelationWorkspaceDraft {
   if (draft.mode !== 'substitute' || draft.instantiationTarget === undefined) {
     throw new Error(HOST_BINDING_UNAVAILABLE)
   }
   const current = currentRelationDraft(draft)
-  if (current.comprehension === undefined) {
-    throw new Error('substitution snapshot has no comprehension dependency state')
+  const binder = draft.host.wires[hostWire]
+  if (binder === undefined || binder.sig.kind !== 'rel') throw new Error(`host binder '${hostWire}' is not a relational wire`)
+  assertEnclosingHostBinder(draft.host, draft.instantiationTarget, hostWire)
+
+  const existing = current.ports.find((port) => port.hostWire === hostWire)
+  let diagram = current.diagram
+  let ports = current.ports
+  let paramWire: WireId
+  if (existing !== undefined) {
+    paramWire = existing.wire
+  } else {
+    paramWire = freshId(new Set(Object.keys(diagram.wires)), 'param')
+    diagram = mkDiagram({
+      root: diagram.root,
+      regions: { ...diagram.regions },
+      nodes: { ...diagram.nodes },
+      wires: { ...diagram.wires, [paramWire]: { scope: diagram.root, sig: binder.sig, endpoints: [] } },
+    })
+    const id = freshId(new Set(current.ports.map((port) => port.id)), 'port')
+    ports = [...current.ports, { id, wire: paramWire, kind: 'optional', hostWire }]
   }
-  const selectedRegion = requestedRegion === current.diagram.root ? undefined : requestedRegion
-  const added = addComprehensionBoundOccurrence(
-    current.comprehension,
-    draft.host,
-    draft.instantiationTarget,
-    hostBinder,
-    selectedRegion,
-  )
-  return appendSnapshot(draft, {
-    ...current,
-    diagram: added.state.pattern.diagram,
-    comprehension: added.state,
-  })
+  const region = requestedRegion === undefined ? diagram.root : requestedRegion
+  const added = spawnBoundRelationNode(diagram, region, paramWire)
+  return appendSnapshot(draft, { diagram: added.diagram, ports })
 }
 
+/**
+ * Plan a drag import of a host selection into the substitution body: extract the
+ * selection (its boundary already carries every crossing wire, relational
+ * crossings included), designate one deduped param port per distinct relational
+ * host line the body references, keep term crossings as loose draft wires, and
+ * splice the pattern into `requestedRegion`.
+ */
 export function planRelationHostPatternImport(
   draft: RelationWorkspaceDraft,
   source: Diagram,
@@ -399,33 +406,70 @@ export function planRelationHostPatternImport(
   if (draft.mode !== 'substitute' || draft.instantiationTarget === undefined) {
     throw new Error(HOST_BINDING_UNAVAILABLE)
   }
+  if (source !== draft.host) {
+    throw new Error('host pattern import requires the instantiation host to be the exact source')
+  }
   const captured = currentRelationDraft(draft)
-  if (captured.comprehension === undefined) {
-    throw new Error('substitution snapshot has no comprehension dependency state')
+  const extraction = extractSubgraph(source, selection)
+  const root = captured.diagram.root
+  const region = requestedRegion === undefined ? root : requestedRegion
+  if (captured.diagram.regions[region] === undefined) {
+    throw new Error(`selected comprehension body region '${region}' does not exist`)
   }
-  const merged = mergeSelectedComprehensionDependencies(
-    captured.comprehension,
-    draft.host,
-    draft.instantiationTarget,
-    source,
-    selection,
-    requestedRegion,
-  )
-  const snapshot: RelationWorkspaceSnapshot = {
-    ...captured,
-    diagram: merged.state.pattern.diagram,
-    comprehension: merged.state,
+
+  const wires: Record<WireId, Wire> = { ...captured.diagram.wires }
+  const taken = new Set<string>([
+    ...Object.keys(source.wires),
+    ...Object.keys(wires),
+    ...Object.keys(extraction.pattern.diagram.wires),
+  ])
+  const ports: RelationPort[] = [...captured.ports]
+  const usedPortIds = new Set(ports.map((port) => port.id))
+  const paramByHost = new Map<WireId, WireId>()
+  for (const port of ports) if (port.hostWire !== undefined) paramByHost.set(port.hostWire, port.wire)
+
+  const landings = extraction.pattern.boundary.map((stub, index) => {
+    const attachment = extraction.attachments[index]!
+    const stubSig = extraction.pattern.diagram.wires[stub]!.sig
+    if (stubSig.kind === 'rel') {
+      assertEnclosingHostBinder(source, draft.instantiationTarget!, attachment)
+      const reuse = paramByHost.get(attachment)
+      if (reuse !== undefined) return reuse
+      const wire = freshId(taken, 'param')
+      taken.add(wire)
+      wires[wire] = { scope: root, sig: stubSig, endpoints: [] }
+      const id = freshId(usedPortIds, 'port')
+      usedPortIds.add(id)
+      ports.push({ id, wire, kind: 'optional', hostWire: attachment })
+      paramByHost.set(attachment, wire)
+      return wire
+    }
+    const wire = freshId(taken, 'loose')
+    taken.add(wire)
+    wires[wire] = { scope: root, sig: stubSig, endpoints: [] }
+    return wire
+  })
+
+  const seeded = mkDiagram({
+    root,
+    regions: { ...captured.diagram.regions },
+    nodes: { ...captured.diagram.nodes },
+    wires,
+  })
+  const reserved: IdReservation = {
+    regions: new Set(Object.keys(source.regions)),
+    nodes: new Set(Object.keys(source.nodes)),
+    wires: new Set(Object.keys(source.wires)),
   }
+  const spliced = spliceSubgraphMapped(seeded, region, extraction.pattern, landings, { reserved })
+  const snapshot: RelationWorkspaceSnapshot = { diagram: spliced.diagram, ports }
   validateSnapshot(draft, snapshot)
   return Object.freeze({
     source,
     captured,
     snapshot,
-    introduced: merged.introduced,
+    introduced: Object.freeze([...spliced.nodeMap.values()].sort()),
     at: Object.freeze({ x: at.x, y: at.y }),
-    binders: materializeComprehensionDependencies(
-      merged.state, draft.host, draft.instantiationTarget,
-    ),
   })
 }
 
@@ -441,10 +485,6 @@ export function applyCapturedRelationHostPatternImport(
     throw new Error('host pattern import cancelled because the draft changed')
   }
   return appendSnapshot(draft, plan.snapshot)
-}
-
-function compareWireIds(a: WireId, b: WireId): number {
-  return a < b ? -1 : a > b ? 1 : 0
 }
 
 function compareEndpoints(a: Endpoint, b: Endpoint): number {
@@ -478,7 +518,7 @@ function planLocalFusion(draft: RelationWorkspaceDraft, first: WireId, second: W
   for (const [id, wire] of Object.entries(current.diagram.wires)) {
     if (id === drop) continue
     wires[id] = id === keep
-      ? { scope, endpoints: [...kept.endpoints, ...dropped.endpoints].sort(compareEndpoints) }
+      ? { scope, sig: kept.sig, endpoints: [...kept.endpoints, ...dropped.endpoints].sort(compareEndpoints) }
       : wire
   }
   return {
@@ -556,7 +596,6 @@ export function planRelationConnection(
         }
       }
     }
-    snapshot = reconcileSnapshot(draft, snapshot)
     validateSnapshot(draft, snapshot)
   } catch (error) {
     if (error instanceof DiagramError || error instanceof Error) {
@@ -596,9 +635,9 @@ export function addRelationTerm(draft: RelationWorkspaceDraft, term: Term): Rela
   return replaceRelationDiagram(draft, spawnTermNode(current.diagram, current.diagram.root, term).diagram)
 }
 
-export function addRelationRef(draft: RelationWorkspaceDraft, defId: string, arity: number): RelationWorkspaceDraft {
+export function addRelationRef(draft: RelationWorkspaceDraft, defId: string, sig: RelSig): RelationWorkspaceDraft {
   const current = currentRelationDraft(draft)
-  return replaceRelationDiagram(draft, spawnRelationNode(current.diagram, current.diagram.root, defId, arity).diagram)
+  return replaceRelationDiagram(draft, spawnRelationNode(current.diagram, current.diagram.root, defId, sig).diagram)
 }
 
 export function attachRelationPort(draft: RelationWorkspaceDraft, portId: string, source: WireId): RelationWorkspaceDraft {
@@ -618,7 +657,7 @@ export function deleteRelationNode(draft: RelationWorkspaceDraft, node: NodeId):
   const wires: Record<WireId, Wire> = {}
   for (const [id, wire] of Object.entries(current.diagram.wires)) {
     const endpoints = wire.endpoints.filter((endpoint) => endpoint.node !== node)
-    if (endpoints.length > 0 || interfaceWires.has(id)) wires[id] = { scope: wire.scope, endpoints }
+    if (endpoints.length > 0 || interfaceWires.has(id)) wires[id] = { scope: wire.scope, sig: wire.sig, endpoints }
   }
   return replaceRelationDiagram(draft, mkDiagram({
     root: current.diagram.root,
@@ -639,7 +678,6 @@ export function wrapRelationNode(draft: RelationWorkspaceDraft, node: NodeId): R
 export function wrapRelationNodes(
   draft: RelationWorkspaceDraft,
   nodes: readonly NodeId[],
-  arity: number | null,
 ): RelationWorkspaceDraft {
   if (nodes.length === 0) throw new Error('select what the boundary should wrap')
   const current = currentRelationDraft(draft)
@@ -649,10 +687,7 @@ export function wrapRelationNodes(
     if (current.diagram.nodes[node]?.region !== first.region) throw new Error('the selected nodes must share one region')
   }
   const selection = mkSelection(current.diagram, { region: first.region, regions: [], nodes: [...nodes], wires: [] })
-  const result = arity === null
-    ? addCut(current.diagram, selection)
-    : addBubble(current.diagram, selection, arity)
-  return replaceRelationDiagram(draft, result.diagram)
+  return replaceRelationDiagram(draft, addCut(current.diagram, selection).diagram)
 }
 
 export function severRelationEndpoint(
@@ -673,8 +708,8 @@ export function severRelationEndpoint(
     nodes: { ...current.diagram.nodes },
     wires: {
       ...current.diagram.wires,
-      [wireId]: { scope: wire.scope, endpoints: rest },
-      [fresh]: { scope: wire.scope, endpoints: [endpoint] },
+      [wireId]: { scope: wire.scope, sig: wire.sig, endpoints: rest },
+      [fresh]: { scope: wire.scope, sig: wire.sig, endpoints: [endpoint] },
     },
   }))
 }

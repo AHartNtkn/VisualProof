@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { applyComprehensionAbstract } from '../../src/kernel/rules/comprehension'
+import { macroComprehensionAbstract } from '../../src/app/interact/comprehension-macros'
 import {
   createOccurrenceSetState,
   cycleOccurrenceSet,
@@ -103,7 +103,7 @@ describe('exact abstraction candidates', () => {
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]!.occurrence.args).toEqual([hostWire, hostWire])
     expect(result.candidates[0]!.occurrence.args.every((wire) => wire !== undefined)).toBe(true)
-    expect(() => applyComprehensionAbstract(host, wrap, pattern, [result.candidates[0]!.occurrence])).not.toThrow()
+    expect(() => macroComprehensionAbstract(host, wrap.region, pattern, [result.candidates[0]!.occurrence])).not.toThrow()
   })
 
   test('distinguishes exhaustive zero matches from matcher exhaustion', () => {

@@ -3,6 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkDiagram, type Diagram } from '../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import {
@@ -32,16 +33,16 @@ import { planCopy } from '../../src/app/copy-planner'
 
 const context = (): ProofContext => (EMPTY_PROOF_CONTEXT)
 
-function hostWithBubble(arity = 2): Diagram {
+// The substitution target is a relational wire `target`; h1/h2 are outer term
+// lines the body may take as parameters.
+function hostWithRelWire(arity = 2): Diagram {
   return mkDiagram({
     root: 'r0',
-    regions: {
-      r0: { kind: 'sheet' },
-      bubble: { kind: 'bubble', parent: 'r0', arity },
-    },
+    regions: { r0: { kind: 'sheet' } },
     wires: {
-      h1: { scope: 'r0', endpoints: [] },
-      h2: { scope: 'r0', endpoints: [] },
+      target: { scope: 'r0', sig: relSig(Array.from({ length: arity }, () => TERM)), endpoints: [] },
+      h1: { scope: 'r0', sig: TERM, endpoints: [] },
+      h2: { scope: 'r0', sig: TERM, endpoints: [] },
     },
   })
 }
@@ -126,12 +127,12 @@ describe('shared relation workspace mechanics', () => {
   })
 
   it('inserts on wire-to-strip drop, reorders by port drag, and deletes only optional ports', () => {
-    let draft = beginSubstitutionDraft(hostWithBubble(1), 'bubble')
+    let draft = beginSubstitutionDraft(hostWithRelWire(1), 'target')
     const initial = currentRelationDraft(draft)
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: initial.diagram.root,
       regions: { ...initial.diagram.regions },
-      wires: { ...initial.diagram.wires, w1: { scope: 'r0', endpoints: [] }, w2: { scope: 'r0', endpoints: [] } },
+      wires: { ...initial.diagram.wires, w1: { scope: 'r0', sig: TERM, endpoints: [] }, w2: { scope: 'r0', sig: TERM, endpoints: [] } },
     }))
     draft = applyPortStripDrop(draft, 'w1', 0)
     expect(previewRelationWorkspaceSnapshot(currentRelationDraft(draft)).boundary).toEqual(['arg1', 'w1'])
@@ -146,13 +147,13 @@ describe('shared relation workspace mechanics', () => {
   })
 
   it('shares checked connection targets and rejects a gesture captured from a stale snapshot', () => {
-    const host = hostWithBubble(0)
-    let draft = beginSubstitutionDraft(host, 'bubble')
+    const host = hostWithRelWire(0)
+    let draft = beginSubstitutionDraft(host, 'target')
     const initial = currentRelationDraft(draft)
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: initial.diagram.root,
       regions: { ...initial.diagram.regions },
-      wires: { w1: { scope: 'r0', endpoints: [] }, w2: { scope: 'r0', endpoints: [] } },
+      wires: { w1: { scope: 'r0', sig: TERM, endpoints: [] }, w2: { scope: 'r0', sig: TERM, endpoints: [] } },
     }))
     const captured = currentRelationDraft(draft)
     expect([...relationConnectionTargets(draft, { kind: 'host', wire: 'h1' }).draft]).toEqual(['w1', 'w2'])
@@ -170,13 +171,13 @@ describe('shared relation workspace mechanics', () => {
 
 describe('substitution transaction', () => {
   it('scratch-checks status and finalizes one labeled proof action with materialized attachments', () => {
-    const current = hostWithBubble(1)
+    const current = hostWithRelWire(1)
     const actions: ProofAction[] = []
     const cancelled: boolean[] = []
     const transaction = new SubstituteTransaction({
       diagram: () => current,
       boundary: () => [],
-      bubble: 'bubble',
+      wire: 'target',
       context,
       orientation: 'backward',
       apply: (action) => { actions.push(action) },
@@ -190,7 +191,7 @@ describe('substitution transaction', () => {
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: snapshot.diagram.root,
       regions: { ...snapshot.diagram.regions },
-      wires: { ...snapshot.diagram.wires, extra: { scope: 'r0', endpoints: [] } },
+      wires: { ...snapshot.diagram.wires, extra: { scope: 'r0', sig: TERM, endpoints: [] } },
     }))
     const unbound = applyPortStripDrop(draft, 'extra', 0)
     expect(relationWorkspaceCanFinalize(transaction, currentRelationDraft(unbound))).toBe(false)
@@ -200,57 +201,51 @@ describe('substitution transaction', () => {
 
     expect(ready).toEqual({ kind: 'ready', code: 'ready', message: 'ready to instantiate' })
     transaction.finalize(currentRelationDraft(draft), [])
-    expect(actions).toEqual([{
-      label: 'substitute relation',
-      steps: [expect.objectContaining({
-        rule: 'comprehensionInstantiate', bubble: 'bubble', attachments: ['h1'], binders: [],
-      })],
-      placements: [],
-    }])
+    // The composite is the primitive instantiation sequence, recorded step by
+    // step: bodyAttach carries the materialized host parameter, and (no atoms
+    // ride the target) it closes directly with the bodied vacuousElim.
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.label).toBe('substitute relation')
+    expect(actions[0]!.placements).toEqual([])
+    expect(actions[0]!.steps.map((step) => step.rule)).toEqual(['bodyAttach', 'vacuousElim'])
+    expect(actions[0]!.steps[0]).toMatchObject({ rule: 'bodyAttach', wireId: 'target', params: ['h1'] })
     expect(cancelled).toEqual([])
 
+    const result = applyAction(current, actions[0]!, context(), 'backward')
+    expect(result.wires['target']).toBeUndefined()
   })
 
-  it('dry-runs and applies the exact nonempty materialized binder array', () => {
+  it('imports an outer host binder as a macro parameter and instantiates its bound occurrences', () => {
     const builder = new DiagramBuilder()
-    const hostBinder = builder.bubble(builder.root, 0)
-    const guard = builder.cut(hostBinder)
-    const target = builder.bubble(guard, 0)
-    builder.atom(target, target)
+    const hostBinder = builder.relWire(builder.root, relSig([]))
+    const guard = builder.cut(builder.root)
+    const occ = builder.atom(guard, relSig([]))
+    const target = builder.wire(guard, [{ node: occ, port: { kind: 'head' } }], relSig([]))
     const current = builder.build()
     const actions: ProofAction[] = []
     const transaction = new SubstituteTransaction({
       diagram: () => current,
       boundary: () => [],
-      bubble: target,
+      wire: target,
       context,
       apply: (action) => { actions.push(action) },
       cancel: () => {},
     })
     const draft = importRelationHostBinderOccurrence(transaction.initialDraft(), hostBinder)
-    const pair = currentRelationDraft(draft).comprehension?.dependencies[0]
-    if (pair === undefined) throw new Error('expected imported binder pair')
 
     expect(transaction.status(currentRelationDraft(draft))).toEqual({
       kind: 'ready', code: 'ready', message: 'ready to instantiate',
     })
     expect(() => transaction.finalize(currentRelationDraft(draft), [])).not.toThrow()
-    expect(actions).toEqual([{
-      label: 'substitute relation',
-      steps: [{
-        rule: 'comprehensionInstantiate',
-        bubble: target,
-        comp: currentRelationDraft(draft).comprehension?.pattern,
-        attachments: [],
-        binders: [pair],
-      }],
-      placements: [],
-    }])
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.steps.map((step) => step.rule)).toEqual(['bodyAttach', 'unfold', 'vacuousElim'])
+    expect(actions[0]!.steps[0]).toMatchObject({ rule: 'bodyAttach', wireId: target, params: [hostBinder] })
+
     const result = applyAction(current, actions[0]!, context())
-    expect(result.regions[target]).toBeUndefined()
-    expect(Object.values(result.nodes).some((node) =>
-      node.kind === 'atom' && node.binder === hostBinder)).toBe(true)
-    expect(Object.values(result.nodes).some((node) =>
-      node.kind === 'atom' && node.binder === target)).toBe(false)
+    // The instantiated occurrence is now a bound atom riding the outer host
+    // binder; the ∃R target wire is gone.
+    expect(result.wires[target]).toBeUndefined()
+    expect(result.wires[hostBinder]!.endpoints.some((ep) => ep.port.kind === 'head'
+      && result.nodes[ep.node]?.kind === 'atom')).toBe(true)
   })
 })

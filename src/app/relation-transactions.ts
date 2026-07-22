@@ -1,9 +1,11 @@
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
-import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import { mkSelection, selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import { relSig } from '../kernel/diagram/sig'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
-import { applyAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
+import { applyAction, singleStepAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
+import type { ProofStep } from '../kernel/proof/step'
 import type { Engine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
@@ -19,6 +21,7 @@ import {
 import {
   beginAbstractionDraft,
   materializeRelationSnapshot,
+  type MaterializedRelationDraft,
   type RelationWorkspaceDraft,
   type RelationWorkspaceSnapshot,
 } from './relation-workspace-draft'
@@ -302,23 +305,68 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
     return shapes
   }
 
+  /**
+   * Build the primitive abstraction composite against `base`, discovering the
+   * fresh ∃R wire and the witness body id as it applies: `macroComprehension-
+   * Abstract` recorded step-by-step — bodied vacuousIntro at `wrapScope` → fold
+   * every chosen occurrence into an atom riding the wire → bodyDetach(orientation).
+   */
+  #abstractionSteps(
+    base: Diagram,
+    comp: MaterializedRelationDraft['relation'],
+    params: readonly WireId[],
+    occurrences: readonly { readonly sel: SubgraphSelection; readonly args: readonly WireId[] }[],
+  ): readonly ProofStep[] {
+    const sig = relSig(comp.boundary.map((wid) => {
+      const w = comp.diagram.wires[wid]
+      if (w === undefined) throw new Error(`abstraction boundary wire '${wid}' is missing from the relation`)
+      return w.sig
+    }))
+    const orientation = this.#opts.orientation ?? 'forward'
+    const ctx = this.#opts.context()
+    const steps: ProofStep[] = []
+    let cur = base
+    const before = new Set(Object.keys(cur.wires))
+    const intro: ProofStep = { rule: 'vacuousIntro', scope: this.#wrap.region, sig, body: { content: comp, params: [...params] } }
+    cur = applyAction(cur, singleStepAction('intro', intro), ctx, orientation)
+    steps.push(intro)
+    const wireId = Object.keys(cur.wires).find((id) => !before.has(id))
+    if (wireId === undefined) throw new Error('abstraction introduced no relational wire')
+    for (const occ of occurrences) {
+      const fold: ProofStep = {
+        rule: 'fold',
+        occurrence: mkSelection(cur, { region: occ.sel.region, regions: [...occ.sel.regions], nodes: [...occ.sel.nodes], wires: [...occ.sel.wires] }),
+        args: [...occ.args],
+        target: { wireId },
+      }
+      cur = applyAction(cur, singleStepAction('fold', fold), ctx, orientation)
+      steps.push(fold)
+    }
+    const bodyEp = cur.wires[wireId]!.endpoints.find((ep) => ep.port.kind === 'output' && cur.nodes[ep.node]?.kind === 'body')
+    if (bodyEp === undefined) throw new Error(`abstraction lost the witness body on wire '${wireId}'`)
+    const detach: ProofStep = { rule: 'bodyDetach', bodyNodeId: bodyEp.node }
+    applyAction(cur, singleStepAction('detach', detach), ctx, orientation)
+    steps.push(detach)
+    return steps
+  }
+
   finalize(snapshot: RelationWorkspaceSnapshot, placements: readonly PlacementHint[]): void {
     this.draftChanged(snapshot)
     this.#validateLiveSource()
     const ready = this.status(snapshot)
     if (ready.kind !== 'ready') throw new Error(ready.message)
-    const comp = materializeRelationSnapshot(snapshot, this.mode).relation
+    const materialized = materializeRelationSnapshot(snapshot, this.mode)
+    const live = this.#opts.diagram()
     const occurrences = this.#empty
-      ? (this.#markerSelected ? [{ sel: { region: this.#markerAnchor, regions: [], nodes: [], wires: [] }, args: [] }] : [])
+      ? (this.#markerSelected ? [{ sel: mkSelection(live, { region: this.#markerAnchor, regions: [], nodes: [], wires: [] }), args: [] as readonly WireId[] }] : [])
       : this.#activeSet().map(({ occurrence }) => occurrence)
     const action: ProofAction = {
       label: 'abstract relation',
-      steps: [{ rule: 'comprehensionAbstract', wrap: this.#wrap, comp, occurrences }],
+      steps: this.#abstractionSteps(live, materialized.relation, materialized.params, occurrences),
       placements: this.#empty && this.#markerSelected
         ? [{ introducedNode: 0, x: this.#markerPoint.x, y: this.#markerPoint.y }]
         : placements,
     }
-    const live = this.#opts.diagram()
     applyAction(live, action, this.#opts.context(), this.#opts.orientation ?? 'forward')
     this.#opts.apply(action)
   }

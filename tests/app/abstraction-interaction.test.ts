@@ -48,10 +48,11 @@ describe('provisional abstraction interaction', () => {
 
       transaction.finalize(currentRelationDraft(draft), [])
       expect(actions).toHaveLength(1)
-      expect(actions[0]).toMatchObject({
-        label: 'abstract relation',
-        steps: [{ rule: 'comprehensionAbstract', wrap }],
-      })
+      expect(actions[0]).toMatchObject({ label: 'abstract relation' })
+      // The abstraction composite: bodied vacuousIntro → fold(s) → bodyDetach.
+      const rules = actions[0]!.steps.map((step) => step.rule)
+      expect(rules[0]).toBe('vacuousIntro')
+      expect(rules.at(-1)).toBe('bodyDetach')
     })
   }
 })

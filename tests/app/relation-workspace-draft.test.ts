@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { mkDiagram, type Diagram, type Endpoint, type Wire } from '../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import { bvar, lam } from '../../src/kernel/term/term'
 import {
   addRelationRef,
@@ -27,24 +28,24 @@ import {
   type RelationWorkspaceDraft,
 } from '../../src/app/relation-workspace-draft'
 
-function hostWithBubble(arity = 2): Diagram {
+// The substitution target is a relational wire `target` of the given arity;
+// h1/h2/h3 are outer term lines the body may take as parameters.
+function hostWithRelWire(arity = 2): Diagram {
   return mkDiagram({
     root: 'r0',
-    regions: {
-      r0: { kind: 'sheet' },
-      bubble: { kind: 'bubble', parent: 'r0', arity },
-    },
+    regions: { r0: { kind: 'sheet' } },
     wires: {
-      h1: { scope: 'r0', endpoints: [] },
-      h2: { scope: 'r0', endpoints: [] },
-      h3: { scope: 'r0', endpoints: [] },
+      target: { scope: 'r0', sig: relSig(Array.from({ length: arity }, () => TERM)), endpoints: [] },
+      h1: { scope: 'r0', sig: TERM, endpoints: [] },
+      h2: { scope: 'r0', sig: TERM, endpoints: [] },
+      h3: { scope: 'r0', sig: TERM, endpoints: [] },
     },
   })
 }
 
 function withLooseDraftWires(draft: ReturnType<typeof beginAbstractionDraft>, ids: readonly string[]) {
   const wires: Record<string, Wire> = Object.fromEntries(
-    ids.map((id) => [id, { scope: 'r0', endpoints: [] }]),
+    ids.map((id) => [id, { scope: 'r0', sig: TERM, endpoints: [] }]),
   )
   return replaceRelationDiagram(draft, mkDiagram({
     root: 'r0',
@@ -63,10 +64,10 @@ function twoTermDiagram(joined = false): Diagram {
       n2: { kind: 'term', region: 'r0', term: lam(bvar(0)) },
     },
     wires: joined
-      ? { w1: { scope: 'r0', endpoints: [output('n1'), output('n2')] } }
+      ? { w1: { scope: 'r0', sig: TERM, endpoints: [output('n1'), output('n2')] } }
       : {
-          w1: { scope: 'r0', endpoints: [output('n1')] },
-          w2: { scope: 'r0', endpoints: [output('n2')] },
+          w1: { scope: 'r0', sig: TERM, endpoints: [output('n1')] },
+          w2: { scope: 'r0', sig: TERM, endpoints: [output('n2')] },
         },
   })
 }
@@ -79,7 +80,7 @@ function expectOneSnapshot(before: RelationWorkspaceDraft, after: RelationWorksp
 
 describe('relation workspace port model', () => {
   test('substitution starts with a locked ordered forced block matching the target arity', () => {
-    const draft = beginSubstitutionDraft(hostWithBubble(3), 'bubble')
+    const draft = beginSubstitutionDraft(hostWithRelWire(3), 'target')
     const ports = currentRelationDraft(draft).ports
 
     expect(ports.map(({ wire, kind }) => ({ wire, kind }))).toEqual([
@@ -92,14 +93,14 @@ describe('relation workspace port model', () => {
   })
 
   test('abstraction starts with no ports', () => {
-    const draft = beginAbstractionDraft(hostWithBubble())
+    const draft = beginAbstractionDraft(hostWithRelWire())
 
     expect(currentRelationDraft(draft).ports).toEqual([])
     expect(materializeRelationDraft(draft).relation.boundary).toEqual([])
   })
 
   test('inserting a draft wire at an optional strip index preserves that spatial position', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1', 'w2', 'w3'])
+    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithRelWire()), ['w1', 'w2', 'w3'])
     draft = insertOptionalPort(draft, 'w1', 0)
     draft = insertOptionalPort(draft, 'w3', 1)
     draft = insertOptionalPort(draft, 'w2', 1)
@@ -108,7 +109,7 @@ describe('relation workspace port model', () => {
   })
 
   test('optional ports reorder within the optional strip', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1', 'w2', 'w3'])
+    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithRelWire()), ['w1', 'w2', 'w3'])
     draft = insertOptionalPort(draft, 'w1', 0)
     draft = insertOptionalPort(draft, 'w2', 1)
     draft = insertOptionalPort(draft, 'w3', 2)
@@ -120,7 +121,7 @@ describe('relation workspace port model', () => {
   })
 
   test('deleting an optional port removes its pending host binding', () => {
-    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
+    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithRelWire(0), 'target'), ['w1'])
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
     const port = currentRelationDraft(draft).ports[0]!
 
@@ -131,13 +132,13 @@ describe('relation workspace port model', () => {
   })
 
   test('an optional substitution parameter must be bound or removed before materialization', () => {
-    let draft = beginSubstitutionDraft(hostWithBubble(1), 'bubble')
+    let draft = beginSubstitutionDraft(hostWithRelWire(1), 'target')
     const current = currentRelationDraft(draft)
     const diagram = mkDiagram({
       root: current.diagram.root,
       regions: { ...current.diagram.regions },
       nodes: { ...current.diagram.nodes },
-      wires: { ...current.diagram.wires, extra: { scope: 'r0', endpoints: [] } },
+      wires: { ...current.diagram.wires, extra: { scope: 'r0', sig: TERM, endpoints: [] } },
     })
     draft = replaceRelationDiagram(draft, diagram)
     draft = insertOptionalPort(draft, 'extra', 0)
@@ -153,7 +154,7 @@ describe('relation workspace port model', () => {
   })
 
   test('abstraction boundary order and arity come from the submitted strip', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['x', 'y'])
+    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithRelWire()), ['x', 'y'])
     draft = insertOptionalPort(draft, 'y', 0)
     draft = insertOptionalPort(draft, 'x', 0)
 
@@ -164,19 +165,19 @@ describe('relation workspace port model', () => {
   })
 
   test('substitution and abstraction project snapshots through one canonical materializer', () => {
-    let substitution = beginSubstitutionDraft(hostWithBubble(1), 'bubble')
+    let substitution = beginSubstitutionDraft(hostWithRelWire(1), 'target')
     const subCurrent = currentRelationDraft(substitution)
     substitution = replaceRelationDiagram(substitution, mkDiagram({
       root: subCurrent.diagram.root,
       regions: { ...subCurrent.diagram.regions },
-      wires: { ...subCurrent.diagram.wires, parameter: { scope: 'r0', endpoints: [] } },
+      wires: { ...subCurrent.diagram.wires, parameter: { scope: 'r0', sig: TERM, endpoints: [] } },
     }))
     substitution = insertOptionalPort(substitution, 'parameter', 0, 'h1')
     expect(materializeRelationDraft(substitution)).toEqual(
-      materializeRelationSnapshot(currentRelationDraft(substitution), 'substitute', substitution.host, 'bubble'),
+      materializeRelationSnapshot(currentRelationDraft(substitution), 'substitute'),
     )
 
-    let abstraction = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['x'])
+    let abstraction = withLooseDraftWires(beginAbstractionDraft(hostWithRelWire()), ['x'])
     abstraction = insertOptionalPort(abstraction, 'x', 0)
     expect(materializeRelationDraft(abstraction)).toEqual(
       materializeRelationSnapshot(currentRelationDraft(abstraction), 'abstract'),
@@ -186,7 +187,7 @@ describe('relation workspace port model', () => {
   })
 
   test('each port mutation is one snapshot and undo/redo restores order and bindings', () => {
-    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1', 'w2'])
+    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithRelWire(0), 'target'), ['w1', 'w2'])
     const initialLength = draft.history.length
 
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
@@ -225,14 +226,14 @@ describe('relation workspace port model', () => {
   })
 
   test('diagram replacement commits the complete diagram and retained ports in one snapshot', () => {
-    const draft = beginSubstitutionDraft(hostWithBubble(1), 'bubble')
+    const draft = beginSubstitutionDraft(hostWithRelWire(1), 'target')
     const replacement = mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
       nodes: { n1: { kind: 'term', region: 'r0', term: lam(bvar(0)) } },
       wires: {
-        arg1: { scope: 'r0', endpoints: [] },
-        result: { scope: 'r0', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+        arg1: { scope: 'r0', sig: TERM, endpoints: [] },
+        result: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
 
@@ -243,12 +244,11 @@ describe('relation workspace port model', () => {
       diagram: replacement,
       ports: [{ id: 'forced1', wire: 'arg1', kind: 'forced' }],
     })
-    expect(currentRelationDraft(replaced).comprehension?.pattern.diagram).toEqual(replacement)
     expect(currentRelationDraft(draft).diagram.nodes).toEqual({})
   })
 
   test('substitution connection preview is pure and connection commit applies its checked host binding atomically', () => {
-    const draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
+    const draft = withLooseDraftWires(beginSubstitutionDraft(hostWithRelWire(0), 'target'), ['w1'])
     const before = currentRelationDraft(draft)
 
     const preview = planRelationConnection(
@@ -276,7 +276,7 @@ describe('relation workspace port model', () => {
   })
 
   test('abstraction refuses host bindings before they can enter a draft snapshot', () => {
-    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithRelWire()), ['w1'])
     const before = currentRelationDraft(draft)
 
     expect(planRelationConnection(
@@ -305,7 +305,7 @@ describe('relation workspace port model', () => {
   })
 
   test('refused connection previews and commits add no snapshot', () => {
-    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
+    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithRelWire(0), 'target'), ['w1'])
     draft = applyRelationConnection(
       draft,
       { kind: 'draft', wire: 'w1' },
@@ -329,7 +329,7 @@ describe('relation workspace port model', () => {
   })
 
   test('spawning a term commits its node and complete port wiring in one snapshot', () => {
-    const draft = beginAbstractionDraft(hostWithBubble())
+    const draft = beginAbstractionDraft(hostWithRelWire())
 
     const spawned = addRelationTerm(draft, lam(bvar(0)))
 
@@ -338,29 +338,29 @@ describe('relation workspace port model', () => {
       { kind: 'term', region: 'r0', term: lam(bvar(0)), freePorts: [] },
     ])
     expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
-      { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'output' } }] },
+      { scope: 'r0', sig: TERM, endpoints: [{ node: 'n', port: { kind: 'output' } }] },
     ])
     expect(currentRelationDraft(spawned).ports).toEqual([])
   })
 
   test('spawning a named relation commits its arity and argument wiring in one snapshot', () => {
-    const draft = beginAbstractionDraft(hostWithBubble())
+    const draft = beginAbstractionDraft(hostWithRelWire())
 
-    const spawned = addRelationRef(draft, 'named-relation', 2)
+    const spawned = addRelationRef(draft, 'named-relation', relSig([TERM, TERM]))
 
     expectOneSnapshot(draft, spawned)
     expect(Object.values(currentRelationDraft(spawned).diagram.nodes)).toEqual([
-      { kind: 'ref', region: 'r0', defId: 'named-relation', arity: 2 },
+      { kind: 'ref', region: 'r0', defId: 'named-relation', sig: relSig([TERM, TERM]) },
     ])
     expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
-      { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'arg', index: 0 } }] },
-      { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'arg', index: 1 } }] },
+      { scope: 'r0', sig: TERM, endpoints: [{ node: 'n', port: { kind: 'arg', index: 0 } }] },
+      { scope: 'r0', sig: TERM, endpoints: [{ node: 'n', port: { kind: 'arg', index: 1 } }] },
     ])
     expect(currentRelationDraft(spawned).ports).toEqual([])
   })
 
   test('local attachment fuses wire topology and rewrites its port in one snapshot', () => {
-    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), twoTermDiagram())
+    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithRelWire(0), 'target'), twoTermDiagram())
     draft = insertOptionalPort(draft, 'w2', 0, 'h1')
     const port = currentRelationDraft(draft).ports[0]!
 
@@ -378,7 +378,7 @@ describe('relation workspace port model', () => {
   })
 
   test('attaching a port to its existing identity is a no-op with no snapshot', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithRelWire()), ['w1'])
     draft = insertOptionalPort(draft, 'w1', 0)
     const port = currentRelationDraft(draft).ports[0]!
 
@@ -390,7 +390,7 @@ describe('relation workspace port model', () => {
   })
 
   test('node deletion retains a bound interface wire and commits one complete snapshot', () => {
-    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), twoTermDiagram())
+    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithRelWire(0), 'target'), twoTermDiagram())
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
     const before = currentRelationDraft(draft)
 
@@ -399,14 +399,14 @@ describe('relation workspace port model', () => {
     expectOneSnapshot(draft, deleted)
     expect(currentRelationDraft(deleted).diagram.nodes).toEqual({ n2: before.diagram.nodes.n2 })
     expect(currentRelationDraft(deleted).diagram.wires).toEqual({
-      w1: { scope: 'r0', endpoints: [] },
+      w1: { scope: 'r0', sig: TERM, endpoints: [] },
       w2: before.diagram.wires.w2,
     })
     expect(currentRelationDraft(deleted).ports).toEqual(before.ports)
   })
 
   test('wrapping a node in a cut moves its node and wire under one new boundary snapshot', () => {
-    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithRelWire()), twoTermDiagram())
 
     const wrapped = wrapRelationNode(draft, 'n1')
 
@@ -420,37 +420,37 @@ describe('relation workspace port model', () => {
     expect(currentRelationDraft(wrapped).ports).toEqual([])
   })
 
-  test('wrapping nodes in a bubble records arity and moves the selected contents in one snapshot', () => {
-    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+  test('wrapping several nodes in one cut moves the selected contents in one snapshot', () => {
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithRelWire()), twoTermDiagram())
 
-    const wrapped = wrapRelationNodes(draft, ['n1', 'n2'], 3)
+    const wrapped = wrapRelationNodes(draft, ['n1', 'n2'])
 
     expectOneSnapshot(draft, wrapped)
     expect(currentRelationDraft(wrapped).diagram.regions).toEqual({
       r0: { kind: 'sheet' },
-      bub: { kind: 'bubble', parent: 'r0', arity: 3 },
+      cut: { kind: 'cut', parent: 'r0' },
     })
-    expect(Object.values(currentRelationDraft(wrapped).diagram.nodes).map((node) => node.region)).toEqual(['bub', 'bub'])
-    expect(Object.values(currentRelationDraft(wrapped).diagram.wires).map((wire) => wire.scope)).toEqual(['bub', 'bub'])
+    expect(Object.values(currentRelationDraft(wrapped).diagram.nodes).map((node) => node.region)).toEqual(['cut', 'cut'])
+    expect(Object.values(currentRelationDraft(wrapped).diagram.wires).map((wire) => wire.scope)).toEqual(['cut', 'cut'])
     expect(currentRelationDraft(wrapped).ports).toEqual([])
   })
 
   test('endpoint severing splits one incidence onto a fresh wire in one snapshot', () => {
-    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram(true))
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithRelWire()), twoTermDiagram(true))
     const endpoint = { node: 'n1', port: { kind: 'output' as const } }
 
     const severed = severRelationEndpoint(draft, 'w1', endpoint)
 
     expectOneSnapshot(draft, severed)
     expect(currentRelationDraft(severed).diagram.wires).toEqual({
-      w1: { scope: 'r0', endpoints: [{ node: 'n2', port: { kind: 'output' } }] },
-      w: { scope: 'r0', endpoints: [endpoint] },
+      w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n2', port: { kind: 'output' } }] },
+      w: { scope: 'r0', sig: TERM, endpoints: [endpoint] },
     })
     expect(currentRelationDraft(severed).ports).toEqual([])
   })
 
   test('refused endpoint severing leaves diagram, ports, and history unchanged', () => {
-    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram(true))
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithRelWire()), twoTermDiagram(true))
     const severed = severRelationEndpoint(draft, 'w1', { node: 'n1', port: { kind: 'output' } })
     const before = currentRelationDraft(severed)
 
@@ -464,7 +464,7 @@ describe('relation workspace port model', () => {
   })
 
   test('undo and redo restore fused diagram topology together with bound ports', () => {
-    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), twoTermDiagram())
+    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithRelWire(0), 'target'), twoTermDiagram())
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
     draft = insertOptionalPort(draft, 'w2', 1, 'h2')
     const beforeFusion = currentRelationDraft(draft)
@@ -494,7 +494,7 @@ describe('relation workspace port model', () => {
   })
 
   test('plans the same local quotient regardless of connection gesture direction', () => {
-    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithRelWire()), twoTermDiagram())
     const left = planRelationConnection(draft, { kind: 'draft', wire: 'w1' }, { kind: 'draft', wire: 'w2' })
     const right = planRelationConnection(draft, { kind: 'draft', wire: 'w2' }, { kind: 'draft', wire: 'w1' })
 
@@ -502,7 +502,7 @@ describe('relation workspace port model', () => {
   })
 
   test('plans external references symmetrically and refuses host-only connections', () => {
-    const draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
+    const draft = withLooseDraftWires(beginSubstitutionDraft(hostWithRelWire(0), 'target'), ['w1'])
     const draftFirst = planRelationConnection(draft, { kind: 'draft', wire: 'w1' }, { kind: 'host', wire: 'h1' })
     const hostFirst = planRelationConnection(draft, { kind: 'host', wire: 'h1' }, { kind: 'draft', wire: 'w1' })
 
@@ -526,8 +526,8 @@ describe('relation workspace port model', () => {
   })
 
   test('cancels by returning the exact immutable host snapshot', () => {
-    const host = hostWithBubble()
-    const draft = beginSubstitutionDraft(host, 'bubble')
+    const host = hostWithRelWire()
+    const draft = beginSubstitutionDraft(host, 'target')
 
     expect(cancelRelationDraft(draft)).toBe(host)
   })
