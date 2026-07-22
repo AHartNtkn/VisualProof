@@ -114,8 +114,8 @@ describe('step round-trips through JSON', () => {
     }
     const steps: ProofStep[] = [
       { rule: 'openTermSpawn', region: 'r1', term: p('x'), freePorts: ['x', 'unused'] },
-      { rule: 'relationSpawn', region: 'r1', defId: 'nat', arity: 1 },
-      { rule: 'boundRelationSpawn', region: 'r1', binder: 'r2', arity: 2 },
+      { rule: 'relationSpawn', region: 'r1', defId: 'nat', sig: relSig([TERM]) },
+      { rule: 'boundRelationSpawn', region: 'r1', wire: 'w2' },
       { rule: 'wireJoin', a: 'w0', b: 'w1' },
       { rule: 'erasure', sel },
       { rule: 'wireSever', wire: 'w0', keep: [{ node: 'n0', port: { kind: 'freeVar', name: 'y' } }] },

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Diagram, WireId } from '../../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../../src/kernel/term/parse'
@@ -9,6 +10,9 @@ import type { Theorem } from '../../../src/kernel/proof/theorem'
 import { EMPTY_PROOF_CONTEXT, verifyTheory } from '../../../src/kernel/proof/context'
 import { applyStep, applyStepWithReceipt, transportBoundary } from '../../../src/kernel/proof/step'
 import { findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
+import { applyBodyAttach } from '../../../src/kernel/rules/body'
+
+const arity2 = relSig([TERM, TERM])
 
 const closedIdentity = parseTerm('\\x. x')
 const reflexive = { leftSteps: [], rightSteps: [] } as const
@@ -90,12 +94,12 @@ describe('high-level attachment-alias materialization parity', () => {
     const context = verifyTheory({ relations: [['Alias', relation]], theorems: [] })
 
     const host = new DiagramBuilder()
-    const reference = host.ref(host.root, 'Alias', 2)
+    const reference = host.ref(host.root, 'Alias', arity2)
     const first = host.wire(host.root, [{ node: reference, port: { kind: 'arg', index: 0 } }])
     const second = host.wire(host.root, [{ node: reference, port: { kind: 'arg', index: 1 } }])
     const marker = host.wire(host.root, [])
     const diagram = host.build()
-    const receipt = applyStepWithReceipt(diagram, { rule: 'relUnfold', node: reference }, context)
+    const receipt = applyStepWithReceipt(diagram, { rule: 'unfold', nodeId: reference }, context)
 
     expectDiscreteAliasReceipt(diagram, receipt, first, marker, second)
   })
@@ -108,60 +112,57 @@ describe('high-level attachment-alias materialization parity', () => {
 
     const host = new DiagramBuilder()
     const cut = host.cut(host.root)
-    const bubble = host.bubble(cut, 2)
-    const atom = host.atom(bubble, bubble)
+    const atom = host.atom(cut, arity2)
+    const headWire = host.wire(cut, [{ node: atom, port: { kind: 'head' } }], arity2)
     const first = host.wire(host.root, [{ node: atom, port: { kind: 'arg', index: 0 } }])
     const second = host.wire(host.root, [{ node: atom, port: { kind: 'arg', index: 1 } }])
     const marker = host.wire(host.root, [])
-    const diagram = host.build()
-    const receipt = applyStepWithReceipt(diagram, {
-      rule: 'comprehensionInstantiate',
-      bubble,
-      comp: comprehension,
-      attachments: [],
-      binders: [],
-    }, verifyTheory({ relations: [], theorems: [] }))
+    const built = host.build()
+    // Witnessing the relational head wire with a concrete comprehension IS
+    // instantiation in the sig model (bodyAttach); the metered step is the
+    // materializing unfold that follows.
+    const diagram = applyBodyAttach(built, headWire, comprehension, [], 'forward')
+    const receipt = applyStepWithReceipt(diagram, { rule: 'unfold', nodeId: atom }, verifyTheory({ relations: [], theorems: [] }))
 
     expectDiscreteAliasReceipt(diagram, receipt, first, marker, second)
   })
 })
 
 describe('certified deiteration external-order parity', () => {
-  it('rejects binder and attachment tampering before changing the source diagram', () => {
+  // Successor of the old binder-tampering half of this test: there is no
+  // binder machinery in the sig model (extractSubgraph's doc comment), so a
+  // relation's identity is carried entirely by its head wire — an ordinary
+  // attachment. This still covers the surviving concern: tampering with the
+  // certificate's ordered attachments is refused before the source mutates.
+  it('rejects attachment tampering before changing the source diagram', () => {
     const builder = new DiagramBuilder()
-    const binder = builder.bubble(builder.root, 2)
-    const justifier = builder.atom(binder, binder)
-    const targetRegion = builder.cut(binder)
-    const target = builder.atom(targetRegion, binder)
-    const first = builder.wire(builder.root, [
+    const outer = builder.cut(builder.root)
+    const justifier = builder.atom(outer, arity2)
+    const targetRegion = builder.cut(outer)
+    const target = builder.atom(targetRegion, arity2)
+    const headWire = builder.wire(outer, [
+      { node: justifier, port: { kind: 'head' } },
+      { node: target, port: { kind: 'head' } },
+    ], arity2)
+    const first = builder.wire(outer, [
       { node: justifier, port: { kind: 'arg', index: 0 } },
       { node: target, port: { kind: 'arg', index: 0 } },
     ])
-    const second = builder.wire(builder.root, [
+    const second = builder.wire(outer, [
       { node: justifier, port: { kind: 'arg', index: 1 } },
       { node: target, port: { kind: 'arg', index: 1 } },
     ])
-    const decoyBinder = builder.bubble(builder.root, 2)
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: targetRegion, regions: [], nodes: [target], wires: [],
     })
     const evidence = findDeiterationEvidence(diagram, selection, 100)
-    expect(evidence.certificate.attachments).toEqual([first, second])
+    expect(new Set(evidence.certificate.attachments)).toEqual(new Set([headWire, first, second]))
     const before = exploreForm(diagram)
-
-    const binderEntry = [...evidence.certificate.binderMap][0]!
-    const wrongBinder = {
-      ...evidence.certificate,
-      binderMap: new Map([[binderEntry[0], decoyBinder]]),
-    }
-    expect(() => applyStep(diagram, {
-      rule: 'deiteration', sel: selection, justifier: evidence.justifier, certificate: wrongBinder,
-    }, EMPTY_PROOF_CONTEXT)).toThrow(/external-binder map/)
 
     const wrongOrder = {
       ...evidence.certificate,
-      attachments: [second, first],
+      attachments: [...evidence.certificate.attachments].reverse(),
     }
     expect(() => applyStep(diagram, {
       rule: 'deiteration', sel: selection, justifier: evidence.justifier, certificate: wrongOrder,

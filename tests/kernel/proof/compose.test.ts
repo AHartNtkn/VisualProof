@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayActions } from '../../../src/kernel/proof/action'
@@ -337,54 +338,20 @@ describe('composeActions', () => {
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
-  it('maps comprehensionInstantiate binder targets through the iso', () => {
-    // Marker-first vs marker-last builds give the ∃-chain DIFFERENT region
-    // ids: db's rOuter id names the chain CUT in da. An unmapped binder
-    // target therefore points at a cut — refused inside the composed replay —
-    // while the mapped target lands on da's rOuter and the sides agree.
-    const mk = (markerFirst: boolean) => {
-      const h = new DiagramBuilder()
-      const marker = () => {
-        const c = h.cut(h.root)
-        h.termNode(c, p('\\a. \\b. a'))
-      }
-      if (markerFirst) marker()
-      const cut = h.cut(h.root)
-      const rOuter = h.bubble(cut, 1)
-      const rInner = h.bubble(rOuter, 1)
-      const a = h.atom(rInner, rInner)
-      const t = h.termNode(rInner, p('\\x. x'))
-      h.wire(rInner, [
-        { node: a, port: { kind: 'arg', index: 0 } },
-        { node: t, port: { kind: 'output' } },
-      ])
-      if (!markerFirst) marker()
-      return { d: h.build(), rOuter, rInner }
-    }
-    const { d: da } = mk(true)
-    const { d: db, rOuter: bOuter, rInner: bInner } = mk(false)
+  // The old "maps comprehensionInstantiate binder targets through the iso"
+  // case has no successor: a body node's `content` is a self-contained
+  // DiagramWithBoundary (fresh namespace) in the sig model — it can no
+  // longer reference an OUTER host region at all, the exact cross-boundary
+  // nesting this test exercised. bodyAttach's own host-side identifiers
+  // (its target wire and its params) are ordinary attachments, covered by
+  // the parameter-attachment case below and by mapStepIds's bodyAttach
+  // coverage.
 
-    // the open comp "x : R′(x)"
-    const c = new DiagramBuilder()
-    const stub = c.bubble(c.root, 1)
-    const atom = c.atom(stub, stub)
-    const bx = c.wire(c.root, [{ node: atom, port: { kind: 'arg', index: 0 } }])
-    const comp = mkDiagramWithBoundary(c.build(), [bx])
-
-    const tail = [action('instantiate comprehension', [
-      { rule: 'comprehensionInstantiate', bubble: bInner, comp, attachments: [], binders: [[stub, bOuter]] },
-    ])]
-    const composed = composeActions(da, db, tail, ctx)
-    const viaA = replayActions(da, composed, ctx)
-    const viaB = replayActions(db, tail, ctx)
-    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
-  })
-
-  it('maps comprehensionInstantiate parameter attachments through the iso', () => {
+  it('maps bodyAttach parameter attachments through the iso', () => {
     // Marker-first vs marker-last builds shift the explicit wire ids: db's
-    // parameter-wire id names the atom's ARG wire in da. That wire still
-    // encloses the splice region, so an unmapped id would not be refused —
-    // it would silently attach the copy's parameter port to the wrong wire,
+    // parameter-wire id names a different wire in da. An unmapped id would
+    // not be refused (that wire still encloses the splice region) — it
+    // would silently attach the copy's parameter port to the wrong wire,
     // which only the fingerprint comparison catches.
     const mk = (markerFirst: boolean) => {
       const h = new DiagramBuilder()
@@ -395,25 +362,23 @@ describe('composeActions', () => {
       }
       if (markerFirst) marker()
       const cut = h.cut(h.root)
-      const bub = h.bubble(cut, 1)
-      const a = h.atom(bub, bub)
-      h.wire(cut, [{ node: a, port: { kind: 'arg', index: 0 } }])
-      const wParam = h.wire(h.root, [])
+      const rel = h.relWire(cut, relSig([TERM]))
+      const wParam = h.wire(h.root, [], TERM)
       if (!markerFirst) marker()
-      return { d: h.build(), bub, wParam }
+      return { d: h.build(), rel, wParam }
     }
     const { d: da } = mk(true)
-    const { d: db, bub: bBub, wParam: bParam } = mk(false)
+    const { d: db, rel: bRel, wParam: bParam } = mk(false)
 
-    // parameterized comp: R(x) := "x —o— q", boundary [stub, parameter]
+    // parameterized comp: R(x) := "x —o— q", boundary [arg stub, parameter]
     const c = new DiagramBuilder()
     const n = c.termNode(c.root, p('q'))
     const wx = c.wire(c.root, [{ node: n, port: { kind: 'output' } }])
     const wq = c.wire(c.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }])
     const comp = mkDiagramWithBoundary(c.build(), [wx, wq])
 
-    const tail = [action('instantiate parameterized comprehension', [
-      { rule: 'comprehensionInstantiate', bubble: bBub, comp, attachments: [bParam], binders: [] },
+    const tail = [action('attach parameterized comprehension', [
+      { rule: 'bodyAttach', wireId: bRel, content: comp, params: [bParam] },
     ])]
     const composed = composeActions(da, db, tail, ctx)
     const viaA = replayActions(da, composed, ctx)
@@ -530,40 +495,24 @@ describe('mapStepIds', () => {
       .toThrowError(/cannot map region 'missing'/)
   })
 
-  it('remaps comprehensionInstantiate attachments through iso.wires (order preserved)', () => {
+  it('remaps bodyAttach wireId and params through iso.wires (order preserved)', () => {
     const b = new DiagramBuilder()
     const bn = b.termNode(b.root, p('\\x. x'))
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
-    const pat = mkDiagramWithBoundary(b.build(), [bw])
+    const content = mkDiagramWithBoundary(b.build(), [bw])
     const iso: DiagramIso = {
-      regions: new Map([['r1', 'R1'], ['r2', 'R2'], ['r3', 'R3']]),
+      regions: new Map(),
       nodes: new Map(),
-      wires: new Map([['w0', 'W0'], ['w1', 'W1']]),
+      wires: new Map([['w0', 'W0'], ['w1', 'W1'], ['w2', 'W2']]),
     }
     expect(mapStepIds(
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w1', 'w0'], binders: [] },
+      { rule: 'bodyAttach', wireId: 'w0', content, params: ['w2', 'w1'] },
       iso,
-    )).toEqual({ rule: 'comprehensionInstantiate', bubble: 'R1', comp: pat, attachments: ['W1', 'W0'], binders: [] })
+    )).toEqual({ rule: 'bodyAttach', wireId: 'W0', content, params: ['W2', 'W1'] })
     expect(() => mapStepIds(
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['missing'], binders: [] },
+      { rule: 'bodyAttach', wireId: 'missing', content, params: [] },
       iso,
     )).toThrowError(/cannot map wire 'missing'/)
-    expect(mapStepIds(
-      {
-        rule: 'comprehensionInstantiate',
-        bubble: 'r1',
-        comp: pat,
-        attachments: [],
-        binders: [['10', 'r2'], ['2', 'r3']],
-      },
-      iso,
-    )).toEqual({
-      rule: 'comprehensionInstantiate',
-      bubble: 'R1',
-      comp: pat,
-      attachments: [],
-      binders: [['10', 'R2'], ['2', 'R3']],
-    })
   })
 
   it('remaps BOTH node ids of a headStrip step through the iso', () => {
@@ -579,26 +528,38 @@ describe('mapStepIds', () => {
       .toThrowError(/cannot map node 'missing'/)
   })
 
-  it('remaps the node id of a relUnfold step through the iso', () => {
+  it('remaps the node id of an unfold step through the iso', () => {
     const iso: DiagramIso = {
       regions: new Map(),
       nodes: new Map([['n0', 'N0']]),
       wires: new Map(),
     }
-    expect(mapStepIds({ rule: 'relUnfold', node: 'n0' }, iso))
-      .toEqual({ rule: 'relUnfold', node: 'N0' })
-    expect(() => mapStepIds({ rule: 'relUnfold', node: 'missing' }, iso))
+    expect(mapStepIds({ rule: 'unfold', nodeId: 'n0' }, iso))
+      .toEqual({ rule: 'unfold', nodeId: 'N0' })
+    expect(() => mapStepIds({ rule: 'unfold', nodeId: 'missing' }, iso))
       .toThrowError(/cannot map node 'missing'/)
   })
 
-  it('remaps a relFold step sel and args through the iso; defId is not mapped', () => {
+  it('remaps a fold step occurrence and args through the iso; a defId target is not mapped', () => {
     const iso: DiagramIso = {
       regions: new Map([['r0', 'R0']]),
       nodes: new Map([['n0', 'N0']]),
       wires: new Map([['w0', 'W0']]),
     }
-    const sel = { region: 'r0', regions: [], nodes: ['n0'], wires: [] }
-    expect(mapStepIds({ rule: 'relFold', sel, defId: 'nat', args: ['w0'] }, iso))
-      .toEqual({ rule: 'relFold', sel: { region: 'R0', regions: [], nodes: ['N0'], wires: [] }, defId: 'nat', args: ['W0'] })
+    const occurrence = { region: 'r0', regions: [], nodes: ['n0'], wires: [] }
+    expect(mapStepIds({ rule: 'fold', occurrence, args: ['w0'], target: { defId: 'nat', sig: relSig([TERM]) } }, iso))
+      .toEqual({
+        rule: 'fold',
+        occurrence: { region: 'R0', regions: [], nodes: ['N0'], wires: [] },
+        args: ['W0'],
+        target: { defId: 'nat', sig: relSig([TERM]) },
+      })
+    expect(mapStepIds({ rule: 'fold', occurrence, args: ['w0'], target: { wireId: 'w0' } }, iso))
+      .toEqual({
+        rule: 'fold',
+        occurrence: { region: 'R0', regions: [], nodes: ['N0'], wires: [] },
+        args: ['W0'],
+        target: { wireId: 'W0' },
+      })
   })
 })

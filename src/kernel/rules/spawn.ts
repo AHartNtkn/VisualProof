@@ -1,10 +1,11 @@
-import type { Diagram, RegionId } from '../diagram/diagram'
+import type { Diagram, RegionId, WireId } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
-import { isAncestorOrEqual, polarity } from '../diagram/regions'
+import { polarity } from '../diagram/regions'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../diagram/spawn'
 import type { Term } from '../term/term'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { assertOpenFreePortInterface } from '../term/term'
+import type { RelSig } from '../diagram/sig'
 import { RuleError } from './error'
 
 export type SpawnOrientation = 'forward' | 'backward'
@@ -38,7 +39,7 @@ export function applyRelationSpawn(
   d: Diagram,
   region: RegionId,
   defId: string,
-  expectedArity: number,
+  expectedSig: RelSig,
   relations: ReadonlyMap<string, DiagramWithBoundary>,
   orientation: SpawnOrientation = 'forward',
   reservation?: IdReservation,
@@ -46,26 +47,25 @@ export function applyRelationSpawn(
   requireSpawnPolarity(d, region, orientation)
   const relation = relations.get(defId)
   if (relation === undefined) throw new RuleError(`relation '${defId}' is no longer loaded`)
-  if (relation.boundary.length !== expectedArity) {
-    throw new RuleError(`relation '${defId}' changed arity from ${expectedArity} to ${relation.boundary.length}`)
+  if (relation.boundary.length !== expectedSig.args.length) {
+    throw new RuleError(`relation '${defId}' changed arity from ${expectedSig.args.length} to ${relation.boundary.length}`)
   }
-  return spawnRelationNode(d, region, defId, expectedArity, reservation).diagram
+  return spawnRelationNode(d, region, defId, expectedSig, reservation).diagram
 }
 
+/**
+ * Spawn a fresh atom bound to an existing relational `wire`: any relational
+ * wire enclosing `region` qualifies (spawnBoundRelationNode reads the atom's
+ * sig off the wire itself; mkDiagram enforces scope-encloses-region on the
+ * modified wire).
+ */
 export function applyBoundRelationSpawn(
   d: Diagram,
   region: RegionId,
-  binder: RegionId,
-  expectedArity: number,
+  wire: WireId,
   orientation: SpawnOrientation = 'forward',
   reservation?: IdReservation,
 ): Diagram {
   requireSpawnPolarity(d, region, orientation)
-  const value = d.regions[binder]
-  if (value === undefined || value.kind !== 'bubble') throw new RuleError(`bound relation binder '${binder}' is not a bubble`)
-  if (value.arity !== expectedArity) {
-    throw new RuleError(`bound relation binder '${binder}' changed arity from ${expectedArity} to ${value.arity}`)
-  }
-  if (!isAncestorOrEqual(d, binder, region)) throw new RuleError(`bubble '${binder}' does not enclose spawn region '${region}'`)
-  return spawnBoundRelationNode(d, region, binder, reservation).diagram
+  return spawnBoundRelationNode(d, region, wire, reservation).diagram
 }

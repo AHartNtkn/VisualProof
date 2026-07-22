@@ -133,12 +133,7 @@ function applyVerifiedTheorem(
       `theorem '${thm.name}' applied ${direction}${orientation === 'backward' ? ' (backward)' : ''} requires a ${need} region; '${at.sel.region}' is ${have}`,
     )
   }
-  const { pattern, attachments, binderStubs } = extractSubgraph(d, at.sel)
-  if (binderStubs.length > 0) {
-    throw new RuleError(
-      `theorem '${thm.name}' cannot be applied at an occurrence with atoms bound outside it (open theorem sides are not supported)`,
-    )
-  }
+  const { pattern, attachments } = extractSubgraph(d, at.sel)
   if (at.args.length !== from.boundary.length) {
     throw new RuleError(
       `theorem '${thm.name}' has ${from.boundary.length} boundary positions but ${at.args.length} arguments were given`,

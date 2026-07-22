@@ -58,21 +58,9 @@ describe('closed-term introduction', () => {
     expect(addedWires[0]![1].endpoints).toHaveLength(1)
   })
 
-  it('introduces inside a bubble; wire scoped at the bubble', () => {
-    const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 1)
-    const a = h.atom(bub, bub)
-    h.wire(bub, [{ node: a, port: { kind: 'arg', index: 0 } }])
-    const d = h.build()
-    const t = p('\\x. x')
-    const out = applyClosedTermIntro(d, bub, t)
-    const made = newNode(out, d)
-    const n = out.nodes[made]!
-    expect(n.kind === 'term' && n.region === bub && termEq(n.term, t)).toBe(true)
-    const addedWires = Object.entries(out.wires).filter(([id]) => d.wires[id] === undefined)
-    expect(addedWires).toHaveLength(1)
-    expect(addedWires[0]![1].scope).toBe(bub)
-  })
+  // The old "introduces inside a bubble" case has no successor: Region has
+  // no third kind, so root (sheet) and cut are the only regions this rule
+  // could ever see — both already covered above.
 
   it('refuses an open term, naming the closed-term gate and the offending free ports', () => {
     const d = new DiagramBuilder().build()

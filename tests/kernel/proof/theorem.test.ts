@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
@@ -234,14 +235,14 @@ describe('applyTheorem', () => {
 
   it('does not invent a call-site alias between distinct theorem boundary identities', () => {
     const sideBuilder = new DiagramBuilder()
-    const sideNode = sideBuilder.ref(sideBuilder.root, 'Pair', 2)
+    const sideNode = sideBuilder.ref(sideBuilder.root, 'Pair', relSig([TERM, TERM]))
     const a = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 0 } }])
     const b = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 1 } }])
     const side = mkDiagramWithBoundary(sideBuilder.build(), [a, b])
     const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, actions: [] }
 
     const host = new DiagramBuilder()
-    const node = host.ref(host.root, 'Pair', 2)
+    const node = host.ref(host.root, 'Pair', relSig([TERM, TERM]))
     const shared = host.wire(host.root, [
       { node, port: { kind: 'arg', index: 0 } },
       { node, port: { kind: 'arg', index: 1 } },

@@ -246,9 +246,9 @@ export function stepToJson(s: ProofStep): unknown {
     case 'openTermSpawn':
       return { rule: s.rule, region: s.region, term: serializeTerm(s.term), freePorts: [...s.freePorts] }
     case 'relationSpawn':
-      return { rule: s.rule, region: s.region, defId: s.defId, arity: s.arity }
+      return { rule: s.rule, region: s.region, defId: s.defId, sig: sigToJson(s.sig) }
     case 'boundRelationSpawn':
-      return { rule: s.rule, region: s.region, binder: s.binder, arity: s.arity }
+      return { rule: s.rule, region: s.region, wire: s.wire }
     case 'wireJoin':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'erasure':
@@ -325,14 +325,12 @@ export function stepFromJson(j: unknown): ProofStep {
       return { rule, region: str(j.region, 'region'), term, freePorts: declaredFreePorts }
     }
     case 'relationSpawn': {
-      assertOnlyKeys(j, ['rule', 'region', 'defId', 'arity'], 'relationSpawn step')
-      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
-      return { rule, region: str(j.region, 'region'), defId: str(j.defId, 'defId'), arity: j.arity }
+      assertOnlyKeys(j, ['rule', 'region', 'defId', 'sig'], 'relationSpawn step')
+      return { rule, region: str(j.region, 'region'), defId: str(j.defId, 'defId'), sig: relSigFromJson(j.sig, 'sig') }
     }
     case 'boundRelationSpawn':
-      assertOnlyKeys(j, ['rule', 'region', 'binder', 'arity'], 'boundRelationSpawn step')
-      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
-      return { rule, region: str(j.region, 'region'), binder: str(j.binder, 'binder'), arity: j.arity }
+      assertOnlyKeys(j, ['rule', 'region', 'wire'], 'boundRelationSpawn step')
+      return { rule, region: str(j.region, 'region'), wire: str(j.wire, 'wire') }
     case 'wireJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'wireJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }

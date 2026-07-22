@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { DiagramError, type Diagram, type NodeId } from '../../../src/kernel/diagram/diagram'
+import { relSig } from '../../../src/kernel/diagram/sig'
 import { freePorts, type Term } from '../../../src/kernel/term/term'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyConversion, applyConversionByCertificate } from '../../../src/kernel/rules/conversion'
@@ -184,8 +185,7 @@ describe('applyConversion', () => {
 
   it('rejects atoms and unknown nodes with the right vocabulary', () => {
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 0)
-    const a = h.atom(bub, bub)
+    const a = h.atom(h.root, relSig([]))
     const d = h.build()
     const correspondence = { commonArity: 1, left: {}, right: { y: 0 } }
     expect(() => applyConversion(d, a, p('y'), correspondence, 10)).toThrowError(/term nodes/)

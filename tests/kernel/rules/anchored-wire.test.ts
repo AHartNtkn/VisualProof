@@ -3,6 +3,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { app, bvar, lam, port, termEq } from '../../../src/kernel/term/term'
+import { relSig } from '../../../src/kernel/diagram/sig'
 import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { portKey } from '../../../src/kernel/diagram/diagram'
 import {
@@ -42,11 +43,14 @@ function redistribute(
 function splitFixture({ inCut = false }: { inCut?: boolean } = {}) {
   const b = new DiagramBuilder()
   const base = inCut ? b.cut(b.root) : b.root
-  const target = b.bubble(base, 1)
-  const internal = b.bubble(target, 1)
+  // The witness sits directly at `target`, its own output wire also scoped
+  // there — anchorAvailability is then the trivial base case (no region to
+  // cross: there is no bubble kind left, so availability never extends past
+  // a witness's own region).
+  const target = b.cut(base)
   const outerCut = b.cut(target)
   const innerCut = b.cut(outerCut)
-  const witness = b.termNode(internal, CLOSED)
+  const witness = b.termNode(target, CLOSED)
   const firstNode = b.termNode(outerCut, port('s0'))
   const secondNode = b.termNode(innerCut, port('s0'))
   const first = { node: firstNode, port: { kind: 'freeVar' as const, name: 's0' } }
@@ -75,7 +79,9 @@ function contractFixture({
   certificate?: typeof EMPTY_CERT
 } = {}) {
   const b = new DiagramBuilder()
-  const survivorRegion = survivorBehindCut ? b.cut(b.root) : b.bubble(b.root, 1)
+  // Default: survivor sits directly at root (its own output wire scoped
+  // there too) — the trivial anchorAvailability base case; see splitFixture.
+  const survivorRegion = survivorBehindCut ? b.cut(b.root) : b.root
   const redundantRegion = shieldRedundant ? b.cut(b.root) : b.root
   const movedRegion = movedAtRoot ? b.root : b.cut(b.root)
   const redundant = b.termNode(redundantRegion, redundantTerm)
@@ -167,37 +173,25 @@ function newClosedWitness(after: Diagram, before: Diagram, target: string): Node
 }
 
 describe('anchorAvailability', () => {
-  it('crosses bubbles to the witness wire scope', () => {
-    const b = new DiagramBuilder()
-    const outer = b.bubble(b.root, 1)
-    const inner = b.bubble(outer, 1)
-    const witness = b.termNode(inner, CLOSED)
-    b.wire(b.root, [{ node: witness, port: { kind: 'output' } }])
-    expect(anchorAvailability(b.build(), witness)).toBe(b.root)
-  })
-
+  // The old "crosses bubbles" and "never walks above the output wire scope"
+  // cases have no successor: Region has no third (depth-transparent) kind
+  // any more, so a witness's availability never extends past its own
+  // region — every non-root ancestor is a cut, and cutDepth changes on the
+  // very first step up. What remains provable, and still is below: a wire
+  // scoped strictly outside the witness's own region (through a real cut)
+  // never widens its availability past that region.
   it('stops inside the first enclosing cut', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
-    const bubble = b.bubble(cut, 1)
-    const witness = b.termNode(bubble, CLOSED)
+    const witness = b.termNode(cut, CLOSED)
     b.wire(b.root, [{ node: witness, port: { kind: 'output' } }])
     expect(anchorAvailability(b.build(), witness)).toBe(cut)
-  })
-
-  it('never walks above the output wire scope', () => {
-    const b = new DiagramBuilder()
-    const scope = b.bubble(b.root, 1)
-    const inner = b.bubble(scope, 1)
-    const witness = b.termNode(inner, CLOSED)
-    b.wire(scope, [{ node: witness, port: { kind: 'output' } }])
-    expect(anchorAvailability(b.build(), witness)).toBe(scope)
   })
 
   it('refuses open and non-term witnesses', () => {
     const b = new DiagramBuilder()
     const open = b.termNode(b.root, port('x'))
-    const ref = b.ref(b.root, 'R', 0)
+    const ref = b.ref(b.root, 'R', relSig([]))
     b.wire(b.root, [{ node: open, port: { kind: 'output' } }])
     expect(() => anchorAvailability(b.build(), open)).toThrow(/closed witness/)
     expect(() => anchorAvailability(b.build(), ref)).toThrow(/term nodes/)

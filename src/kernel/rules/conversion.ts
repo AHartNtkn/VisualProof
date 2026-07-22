@@ -5,6 +5,7 @@ import type { ConversionCertificate } from '../term/certificate'
 import { checkConversion } from '../term/certificate'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
+import { TERM } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt } from './access'
@@ -50,6 +51,7 @@ function replaceNodeTerm(
   for (const [id, w] of Object.entries(d.wires)) {
     wires[id] = {
       scope: w.scope,
+      sig: w.sig,
       endpoints: w.endpoints.filter(
         (ep) => !(ep.node === nodeId && ep.port.kind === 'freeVar'),
       ),
@@ -67,10 +69,10 @@ function replaceNodeTerm(
           && endpoint.port.name === oldName))?.[0]
     if (target !== undefined) {
       const w = wires[target]!
-      wires[target] = { scope: w.scope, endpoints: [...w.endpoints, ep] }
+      wires[target] = { scope: w.scope, sig: w.sig, endpoints: [...w.endpoints, ep] }
     } else {
       const fresh = freshId(new Set(Object.keys(wires)), `${nodeId}_${name}`, reservation?.wires)
-      wires[fresh] = { scope: node.region, endpoints: [ep] }
+      wires[fresh] = { scope: node.region, sig: TERM, endpoints: [ep] }
     }
   }
   const nodes: Record<NodeId, DiagramNode> = {

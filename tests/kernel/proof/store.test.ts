@@ -3,6 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { Theory } from '../../../src/kernel/proof/store'
 import { verifyTheory, theoryToJson, loadTheory } from '../../../src/kernel/proof/store'
@@ -115,7 +116,7 @@ describe('verifyTheory — relation references', () => {
 
   function relationRefBody(defId: string) {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, defId, 1)
+    const node = b.ref(b.root, defId, relSig([TERM]))
     const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
     return mkDiagramWithBoundary(b.build(), [w])
   }
@@ -123,7 +124,7 @@ describe('verifyTheory — relation references', () => {
   /** A theorem whose (identical) sides are a single reference node. */
   function refTheorem(defId: string, arity = 1): Theorem {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, defId, arity)
+    const node = b.ref(b.root, defId, relSig(Array.from({ length: arity }, () => TERM)))
     const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
     const side = mkDiagramWithBoundary(b.build(), [w])
     return { name: 'refThm', lhs: side, rhs: side, actions: [] }
@@ -135,14 +136,13 @@ describe('verifyTheory — relation references', () => {
     expect(ctx.relations.get('R')!.boundary).toHaveLength(1)
   })
 
-  it('accepts a relation body with a top-level bubble (∃S[S(x)]-shaped, closed by construction)', () => {
-    // A bubble directly under the body root is a legitimate ∃-quantifier, not an
-    // "external binder": a stored body is closed, and relUnfold copies the bubble
-    // as fresh content. Verification must accept it, and it round-trips through
-    // theoryToJson/loadTheory unchanged.
+  it('accepts a relation body with a top-level unwitnessed relational wire (∃S[S(x)]-shaped, closed by construction)', () => {
+    // An unwitnessed relational wire at the body root is a legitimate
+    // ∃-quantifier: a stored body is closed, and unfold copies it as fresh
+    // content regardless of whether it is ever witnessed. Verification must
+    // accept it, and it round-trips through theoryToJson/loadTheory unchanged.
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 1)
-    const at = b.atom(bub, bub)
+    const at = b.atom(b.root, relSig([TERM]))
     const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
     const existsBody = mkDiagramWithBoundary(b.build(), [bound])
     expect(() => verifyTheory({ relations: [['R', existsBody]], theorems: [] })).not.toThrow()
@@ -277,9 +277,9 @@ describe('theory files', () => {
               n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))', freePorts: ['y', 'z'] },
             },
             wires: {
-              w0: { scope: 'r0', endpoints: [{ node: 'n0', port: 'out' }] },
-              w1: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:y' }] },
-              w2: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:z' }] },
+              w0: { scope: 'r0', sig: { kind: 'term' }, endpoints: [{ node: 'n0', port: 'out' }] },
+              w1: { scope: 'r0', sig: { kind: 'term' }, endpoints: [{ node: 'n0', port: 'v:y' }] },
+              w2: { scope: 'r0', sig: { kind: 'term' }, endpoints: [{ node: 'n0', port: 'v:z' }] },
             },
           },
           boundary: ['w1', 'w2'],

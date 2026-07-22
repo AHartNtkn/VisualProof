@@ -45,7 +45,7 @@ export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoi
   const moved = w.endpoints.filter((ep) => !has(keep, ep))
   const newId = freshId(new Set(Object.keys(d.wires)), `${wireId}_sever`, reservation?.wires)
   const wires: Record<WireId, Wire> = { ...d.wires }
-  wires[wireId] = { scope: w.scope, endpoints: kept }
-  wires[newId] = { scope: w.scope, endpoints: moved }
+  wires[wireId] = { scope: w.scope, sig: w.sig, endpoints: kept }
+  wires[newId] = { scope: w.scope, sig: w.sig, endpoints: moved }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
 }

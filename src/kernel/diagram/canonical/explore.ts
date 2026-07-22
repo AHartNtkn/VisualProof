@@ -54,7 +54,7 @@ export function exploreForm(d: Diagram, pinnedWires: readonly WireId[] = []): st
 /**
  * Canonical form of a bounded diagram: the diagram pinned by its boundary
  * order. Equal strings iff the two bounded diagrams are isomorphic respecting
- * boundary order — the exactness guarantee relFold, comprehension abstraction,
+ * boundary order — the exactness guarantee fold, comprehension abstraction,
  * and theorem citation rely on. With an empty boundary this equals
  * `exploreForm` of the diagram (a 0-ary relation is a sentence).
  */

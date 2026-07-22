@@ -4,6 +4,7 @@ import type { HeadSpine } from '../term/hnf'
 import { headSpine } from '../term/hnf'
 import type { Diagram, DiagramNode, NodeId, Wire, WireId } from '../diagram/diagram'
 import { mkDiagram } from '../diagram/diagram'
+import { TERM } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
@@ -155,6 +156,7 @@ export function applyHeadStrip(
     if (id === oa) continue
     wires[id] = {
       scope: wire.scope,
+      sig: wire.sig,
       endpoints: wire.endpoints.filter((endpoint) => endpoint.node !== a && endpoint.node !== b),
     }
   }
@@ -164,7 +166,7 @@ export function applyHeadStrip(
   const takenWires = new Set(Object.keys(d.wires))
   const attach = (wid: WireId, node: NodeId, name: string): void => {
     const w = wires[wid]!
-    wires[wid] = { scope: w.scope, endpoints: [...w.endpoints, { node, port: { kind: 'freeVar', name } }] }
+    wires[wid] = { scope: w.scope, sig: w.sig, endpoints: [...w.endpoints, { node, port: { kind: 'freeVar', name } }] }
   }
   for (const { ca, cb } of pairs) {
     const ia = freshId(takenNodes, `${a}_hs`, reservation?.nodes)
@@ -181,6 +183,7 @@ export function applyHeadStrip(
     takenWires.add(wo)
     wires[wo] = {
       scope: region,
+      sig: TERM,
       endpoints: [
         { node: ia, port: { kind: 'output' } },
         { node: ib, port: { kind: 'output' } },

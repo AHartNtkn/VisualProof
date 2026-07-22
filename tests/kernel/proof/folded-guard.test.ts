@@ -3,6 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { termEq } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { DiagramNode } from '../../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
@@ -12,7 +13,7 @@ import type { ProofStep } from '../../../src/kernel/proof/step'
 import { checkTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import { singleStepAction } from '../../../src/kernel/proof/action'
-import { applyRelUnfold } from '../../../src/kernel/rules/reldef'
+import { applyUnfold } from '../../../src/kernel/rules/fold'
 
 /**
  * The exact usage pattern the arithmetic theorems will follow: a theorem whose
@@ -43,7 +44,7 @@ describe('folded-guard integration proof', () => {
 
     // lhs: a single folded reference R(x) with x as the boundary line.
     const lb = new DiagramBuilder()
-    const ref = lb.ref(lb.root, 'R', 1)
+    const ref = lb.ref(lb.root, 'R', relSig([TERM]))
     const x = lb.wire(lb.root, [{ node: ref, port: { kind: 'arg', index: 0 } }])
     const lhs = mkDiagramWithBoundary(lb.build(), [x])
 
@@ -60,7 +61,7 @@ describe('folded-guard integration proof', () => {
 
     // 2. unfold the COPY only (the ref that is not the original)
     const copyId = Object.entries(cur.nodes).find(([id, n]) => n.kind === 'ref' && id !== ref)![0]
-    const s2: ProofStep = { rule: 'relUnfold', node: copyId }
+    const s2: ProofStep = { rule: 'unfold', nodeId: copyId }
     cur = applyStep(cur, s2, ctx); steps.push(s2)
     expect(Object.values(cur.nodes).filter((n) => n.kind === 'ref')).toHaveLength(1) // ambient survives
 
@@ -85,7 +86,7 @@ describe('folded-guard integration proof', () => {
     //     diagram that is NOT isomorphic to the actual (folded) rhs — folded and
     //     unfolded statements are distinct statements.
     const ambientRef = Object.entries(rhs.diagram.nodes).find(([, n]) => n.kind === 'ref')![0]
-    const unfoldEverything = applyRelUnfold(rhs.diagram, ambientRef, relations)
+    const unfoldEverything = applyUnfold(rhs.diagram, ambientRef, (defId) => relations.get(defId))
     expect(boundaryForm(mkDiagramWithBoundary(unfoldEverything, lhs.boundary)))
       .not.toBe(boundaryForm(rhs))
     // and the unfold-everything variant carries NO ref at all

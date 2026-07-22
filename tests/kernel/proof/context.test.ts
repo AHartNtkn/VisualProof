@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
+import { parseTerm } from '../../../src/kernel/term/parse'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 import { applyAction, replayActions } from '../../../src/kernel/proof/action'
 import { composeActions } from '../../../src/kernel/proof/compose'
@@ -11,10 +15,42 @@ import {
   registerTheorem,
   verifyTheory,
 } from '../../../src/kernel/proof/context'
-import type { ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofContext, Theory } from '../../../src/kernel/proof/context'
 import { applyStep, applyStepWithReceipt, replayProof } from '../../../src/kernel/proof/step'
-import { applyTheorem, checkTheorem } from '../../../src/kernel/proof/theorem'
-import { buildFregeTheory } from '../../../src/theories/frege'
+import { applyTheorem, checkTheorem, type Theorem } from '../../../src/kernel/proof/theorem'
+
+const p = (s: string) => parseTerm(s)
+
+/** A small theory whose only theorem's action is a deiteration step: enough
+ * to exercise nested-map hardening (regionMap, occurrence certificates)
+ * without depending on any external theory file. */
+function deiterationTheory(): Theory {
+  const h = new DiagramBuilder()
+  const c1 = h.cut(h.root)
+  const inner = h.cut(c1)
+  h.termNode(inner, p('\\x. x'))
+  const target = h.cut(c1)
+  const d0 = h.build()
+  const sel = mkSelection(d0, { region: c1, regions: [inner], nodes: [], wires: [] })
+  const iterated = applyIteration(d0, sel, target)
+  const copyInner = Object.entries(iterated.regions).find(([id, r]) =>
+    r.kind === 'cut' && r.parent === target && id !== inner)![0]
+  const selCopy = mkSelection(iterated, { region: target, regions: [copyInner], nodes: [], wires: [] })
+  const evidence = findDeiterationEvidence(iterated, selCopy, 100)
+  const afterDeiteration = applyDeiteration(iterated, selCopy, evidence.justifier, evidence.certificate)
+  const action: ProofAction = {
+    label: 'deiterate the copy',
+    placements: [],
+    steps: [{ rule: 'deiteration', sel: selCopy, justifier: evidence.justifier, certificate: evidence.certificate }],
+  }
+  const theorem: Theorem = {
+    name: 'deiterate-copy',
+    lhs: mkDiagramWithBoundary(iterated, []),
+    rhs: mkDiagramWithBoundary(afterDeiteration, []),
+    actions: [action],
+  }
+  return { relations: [], theorems: [theorem] }
+}
 
 function emptyDiagram() {
   return new DiagramBuilder().build()
@@ -44,8 +80,8 @@ describe('verified ProofContext authority', () => {
     const diagram = emptyDiagram()
     const step = {
       rule: 'vacuousIntro',
-      sel: { region: diagram.root, regions: [], nodes: [], wires: [] },
-      arity: 0,
+      scope: diagram.root,
+      sig: TERM,
     } as const
 
     for (const forged of [lookalike, prototype]) {
@@ -126,9 +162,9 @@ describe('verified ProofContext authority', () => {
     }, 'forward')).toEqual(theoremHost)
 
     const relationHostBuilder = new DiagramBuilder()
-    const relationRef = relationHostBuilder.ref(relationHostBuilder.root, 'StableRelation', 0)
+    const relationRef = relationHostBuilder.ref(relationHostBuilder.root, 'StableRelation', relSig([]))
     const relationHost = relationHostBuilder.build()
-    expect(applyStep(relationHost, { rule: 'relUnfold', node: relationRef }, ctx)).toEqual(emptyDiagram())
+    expect(applyStep(relationHost, { rule: 'unfold', nodeId: relationRef }, ctx)).toEqual(emptyDiagram())
   })
 
   it('ignores native Map and WeakSet prototype poisoning after module initialization', () => {
@@ -204,7 +240,7 @@ describe('verified ProofContext authority', () => {
     const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', baseSource]])
 
     const aliasBuilder = new DiagramBuilder()
-    const aliasNode = aliasBuilder.ref(aliasBuilder.root, 'Base', 1)
+    const aliasNode = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([TERM]))
     const aliasWire = aliasBuilder.wire(aliasBuilder.root, [{ node: aliasNode, port: { kind: 'arg', index: 0 } }])
     const second = extendRelations(first, [['Alias', mkDiagramWithBoundary(aliasBuilder.build(), [aliasWire])]])
     expect([...second.relations.keys()]).toEqual(['Base', 'Alias'])
@@ -235,7 +271,7 @@ describe('verified ProofContext authority', () => {
   })
 
   it('hardens nested stored actions and occurrence-certificate maps', () => {
-    const source = buildFregeTheory()
+    const source = deiterationTheory()
     const ctx = verifyTheory(source)
     const theorem = [...ctx.theorems.values()].find((candidate) =>
       candidate.actions.some((action) => action.steps.some((step) => step.rule === 'deiteration')),

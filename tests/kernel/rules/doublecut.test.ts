@@ -3,6 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { relSig } from '../../../src/kernel/diagram/sig'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
 const p = (s: string) => parseTerm(s)
@@ -41,7 +42,8 @@ describe('double cut', () => {
 
   it('elim rejects non-cuts, annulus content, and multiple children, by name', () => {
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 0)
+    // Region has no third kind besides sheet/cut, so the root itself (the
+    // only sheet) is the successor of the old "not a cut" bubble case.
     const cutA = h.cut(h.root)
     h.cut(cutA) // cutA has a child cut...
     h.termNode(cutA, p('\\x. x')) // ...but also a node in the annulus
@@ -54,8 +56,8 @@ describe('double cut', () => {
     const cutD = h.cut(h.root)
     h.cut(cutD) // clean double cut for contrast
     const d = h.build()
-    expect(() => applyDoubleCutElim(d, bub))
-      .toThrowError(new RegExp(`double-cut elimination requires a cut; '${bub}' is a bubble`))
+    expect(() => applyDoubleCutElim(d, d.root))
+      .toThrowError(new RegExp(`double-cut elimination requires a cut; '${d.root}' is a sheet`))
     expect(() => applyDoubleCutElim(d, cutA))
       .toThrowError(new RegExp(`annulus '${cutA}' must contain exactly one child cut and nothing else`))
     expect(() => applyDoubleCutElim(d, cutB))
@@ -110,24 +112,20 @@ describe('double cut', () => {
   })
 
   it('elim_rejects_node_only_in_annulus: arity-0 atom with no wire triggers gate (kills M5)', () => {
-    // A bubble encloses the outer cut; an arity-0 atom in the annulus produces no
-    // auto-wire, so wiresInOuter=false but nodesInOuter=true — the gate must fire.
+    // An arity-0 ref node (unlike atom, which always has a head port) has
+    // zero required ports, so it produces no auto-wire: wiresInOuter=false
+    // but nodesInOuter=true — the gate must still fire.
     const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 0)
-    const outer = h.cut(bub)
+    const outer = h.cut(h.root)
     h.cut(outer)      // lone child cut — otherwise the test would reject for wrong reason
-    h.atom(outer, bub) // arity-0 atom in annulus; no auto-wires created
+    h.ref(outer, 'dummy', relSig([])) // arity-0 ref in annulus; no ports, no auto-wires
     const d = h.build()
     expect(() => applyDoubleCutElim(d, outer))
       .toThrowError(new RegExp(`annulus '${outer}' must contain exactly one child cut and nothing else`))
   })
 
-  it('elim_rejects_lone_bubble_child: bubble child is not a cut (kills M6)', () => {
-    const h = new DiagramBuilder()
-    const outer = h.cut(h.root)
-    h.bubble(outer, 0)  // lone child is a bubble, not a cut
-    const d = h.build()
-    expect(() => applyDoubleCutElim(d, outer))
-      .toThrowError(new RegExp(`annulus '${outer}' must contain exactly one child cut and nothing else`))
-  })
+  // The old "lone child is a bubble, not a cut" mutation-kill (M6) has no
+  // successor: Region has no third kind, so mkDiagram itself now guarantees
+  // every non-root region is a cut — the case this test targeted is
+  // unreachable by construction, not merely untested.
 })

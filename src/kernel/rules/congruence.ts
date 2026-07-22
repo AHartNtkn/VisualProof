@@ -22,8 +22,7 @@ import {
  *
  * The cut-depth gate: each output wire's scope already encloses the nodes'
  * region (mkDiagram invariant), so equal cut depth means no cut lies between
- * scope and region. Bubbles may intervene — they are quantifiers, and ∃
- * commutes with ∃. Without this gate the merge would move a quantifier
+ * scope and region. Without this gate the merge would move a quantifier
  * across a negation that the entailment cannot escape.
  */
 export function applyCongruenceJoin(

@@ -67,7 +67,7 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     case 'relationSpawn':
       return { ...step, region: mapId(iso.regions, step.region, 'region') }
     case 'boundRelationSpawn':
-      return { ...step, region: mapId(iso.regions, step.region, 'region'), binder: mapId(iso.regions, step.binder, 'region') }
+      return { ...step, region: mapId(iso.regions, step.region, 'region'), wire: mapId(iso.wires, step.wire, 'wire') }
     case 'wireJoin':
       return { ...step, a: mapId(iso.wires, step.a, 'wire'), b: mapId(iso.wires, step.b, 'wire') }
     case 'erasure':

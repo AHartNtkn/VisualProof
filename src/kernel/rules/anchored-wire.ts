@@ -90,9 +90,10 @@ export function applyAnchoredWireSplit(
     },
     wires: {
       ...d.wires,
-      [wireId]: { scope: source.scope, endpoints: source.endpoints.filter((endpoint) => !chosen(endpoint)) },
+      [wireId]: { scope: source.scope, sig: source.sig, endpoints: source.endpoints.filter((endpoint) => !chosen(endpoint)) },
       [freshWire]: {
         scope: target,
+        sig: source.sig,
         endpoints: [{ node: duplicate, port: { kind: 'output' } }, ...endpoints],
       },
     },
@@ -134,7 +135,7 @@ export function applyAnchoredWireContract(
   for (const [id, wire] of Object.entries(d.wires)) {
     if (id === dropId) continue
     wires[id] = id === keepId
-      ? { scope: wire.scope, endpoints: [...wire.endpoints, ...moved] }
+      ? { scope: wire.scope, sig: wire.sig, endpoints: [...wire.endpoints, ...moved] }
       : wire
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })

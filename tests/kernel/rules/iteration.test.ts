@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
@@ -168,19 +169,18 @@ describe('applyDeiteration', () => {
     expect(out.nodes[a]).toBeDefined()
   })
 
-  it('refuses removal justified only by an ISOMORPHIC occurrence under a DIFFERENT binder', () => {
-    // Host: ∃x. [∃S. S(x)] ∧ [∃R. ¬R(x)]. The selection is the R-application
-    // under the cut (an OPEN selection: R = rB binds it from outside). The
-    // only structural match of its stub pattern ∃?.?(x) is the rD bubble —
-    // a DIFFERENT relation variable. Binder identity matching makes the decoy
-    // a non-match (open binders map stubs to specific host bubbles), so the
-    // removal fails as unjustified.
+  it('refuses removal justified only by an ISOMORPHIC occurrence under a DIFFERENT relation identity', () => {
+    // Host: atom aJ and atom aT, structurally isomorphic (same arity-1 sig)
+    // and sharing their arg wire, but NOT their head wire — aJ and aT
+    // witness different relational identities. There is no binder
+    // machinery in the sig model: a relation's identity rides entirely on
+    // its head wire, an ordinary attachment, so the exact-attachment match
+    // that justification requires fails on the head wire alone, and the
+    // removal is correctly refused as unjustified.
     const h = new DiagramBuilder()
-    const rD = h.bubble(h.root, 1)
-    const aJ = h.atom(rD, rD)
-    const rB = h.bubble(h.root, 1)
-    const c1 = h.cut(rB)
-    const aT = h.atom(c1, rB)
+    const aJ = h.atom(h.root, relSig([TERM]))
+    const c1 = h.cut(h.root)
+    const aT = h.atom(c1, relSig([TERM]))
     h.wire(h.root, [
       { node: aJ, port: { kind: 'arg', index: 0 } },
       { node: aT, port: { kind: 'arg', index: 0 } },

@@ -12,8 +12,9 @@ import { RuleError } from './error'
 function reparent(n: DiagramNode, region: RegionId): DiagramNode {
   switch (n.kind) {
     case 'term': return { kind: 'term', region, term: n.term, freePorts: n.freePorts }
-    case 'atom': return { kind: 'atom', region, binder: n.binder }
-    case 'ref': return { kind: 'ref', region, defId: n.defId, arity: n.arity }
+    case 'atom': return { kind: 'atom', region, sig: n.sig }
+    case 'ref': return { kind: 'ref', region, defId: n.defId, sig: n.sig }
+    case 'body': return { kind: 'body', region, sig: n.sig, content: n.content }
   }
 }
 
@@ -35,9 +36,7 @@ export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection, reservat
   const selectedRoots = new Set(sel.regions)
   for (const [id, r] of Object.entries(d.regions)) {
     if (r.kind !== 'sheet' && selectedRoots.has(id)) {
-      regions[id] = r.kind === 'cut'
-        ? { kind: 'cut', parent: inner }
-        : { kind: 'bubble', parent: inner, arity: r.arity }
+      regions[id] = { kind: 'cut', parent: inner }
     }
   }
   const selectedNodes = new Set(sel.nodes)
@@ -61,13 +60,15 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   const outer = d.regions[outerId]
   if (outer === undefined) throw new DiagramError(`unknown region '${outerId}'`)
   if (outer.kind !== 'cut') {
-    throw new RuleError(`double-cut elimination requires a cut; '${outerId}' is a ${outer.kind === 'sheet' ? 'sheet' : 'bubble'}`)
+    throw new RuleError(`double-cut elimination requires a cut; '${outerId}' is a sheet`)
   }
   const children = Object.entries(d.regions).filter(([, r]) => r.kind !== 'sheet' && r.parent === outerId)
   const nodesInOuter = Object.values(d.nodes).some((n) => n.region === outerId)
   const wiresInOuter = Object.values(d.wires).some((w) => w.scope === outerId)
+  // Every non-root region is a cut (Region has no third kind), so a lone
+  // child is necessarily a cut; only its presence needs checking.
   const lone = children.length === 1 ? children[0]! : undefined
-  if (lone === undefined || lone[1].kind !== 'cut' || nodesInOuter || wiresInOuter) {
+  if (lone === undefined || nodesInOuter || wiresInOuter) {
     throw new RuleError(`annulus '${outerId}' must contain exactly one child cut and nothing else`)
   }
   const innerId = lone[0]
@@ -76,13 +77,9 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   const regions: Record<RegionId, Region> = {}
   for (const [id, r] of Object.entries(d.regions)) {
     if (id === outerId || id === innerId) continue
-    if (r.kind !== 'sheet' && r.parent === innerId) {
-      regions[id] = r.kind === 'cut'
-        ? { kind: 'cut', parent: target }
-        : { kind: 'bubble', parent: target, arity: r.arity }
-    } else {
-      regions[id] = r
-    }
+    regions[id] = r.kind !== 'sheet' && r.parent === innerId
+      ? { kind: 'cut', parent: target }
+      : r
   }
   const nodes: Record<string, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
@@ -90,7 +87,7 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
-    wires[id] = w.scope === innerId ? { scope: target, endpoints: w.endpoints } : w
+    wires[id] = w.scope === innerId ? { scope: target, sig: w.sig, endpoints: w.endpoints } : w
   }
   return mkDiagram({ root: d.root, regions, nodes, wires })
 }

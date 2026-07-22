@@ -146,23 +146,12 @@ describe('congruence join (functionality of equality)', () => {
     expect(shared!.scope).toBe(cut)
   })
 
-  it('allows a bubble (quantifier, not negation) between the output scope and the region', () => {
-    const h = new DiagramBuilder()
-    const bub = h.bubble(h.root, 1)
-    const n1 = h.termNode(bub, p('c'))
-    const n2 = h.termNode(bub, p('c'))
-    h.wire(bub, [
-      { node: n1, port: { kind: 'freeVar', name: 'c' } },
-      { node: n2, port: { kind: 'freeVar', name: 'c' } },
-    ])
-    // outputs scoped at ROOT: only the bubble boundary lies between scope and region
-    h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
-    h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
-    const out = applyCongruenceJoin(h.build(), n1, n2, empty)
-    const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)
-    expect(shared).toBeDefined()
-    expect(shared!.scope).toBe(h.root)
-  })
+  // The old "bubble (quantifier, not negation) between scope and region"
+  // case has no successor: Region has no third kind, so every non-root
+  // region on a wire's scope-to-node-region path is now a cut. Equal cut
+  // depth (mkDiagram already guarantees scope encloses region) therefore
+  // now implies scope === region — there is no longer a non-cut region to
+  // intervene, so this scenario is unreachable by construction.
 
   it('ignores free names present in only one term (they are quantified out by the certificate)', () => {
     // (λu. y) x ~βη y — x is irrelevant to the value, so it needs no wire agreement

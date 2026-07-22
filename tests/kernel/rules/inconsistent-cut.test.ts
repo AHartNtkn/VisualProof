@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { DiagramError, mkDiagram, type Diagram, type NodeId, type RegionId } from '../../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import type { NormalSeparationCertificate } from '../../../src/kernel/term/certificate'
 import { RuleError } from '../../../src/kernel/rules/error'
@@ -190,7 +191,7 @@ describe('applyInconsistentCutElim', () => {
     const unrelatedRegion = builder.cut(builder.root)
     const first = builder.termNode(cut, I)
     const second = builder.termNode(cut, K)
-    const extra = builder.ref(cut, 'arbitrary', 0)
+    const extra = builder.ref(cut, 'arbitrary', relSig([]))
     const descendantNode = builder.termNode(descendant, I)
     const outside = builder.termNode(builder.root, I)
     const unrelatedNode = builder.termNode(unrelatedRegion, K)
@@ -227,6 +228,7 @@ describe('applyInconsistentCutElim', () => {
     expect(result.wires[cutScopedWire]).toBeUndefined()
     expect(result.wires[shared]).toEqual({
       scope: diagram.root,
+      sig: TERM,
       endpoints: [{ node: outside, port: { kind: 'output' } }],
     })
     expect(result.regions[result.root]).toBe(before.root)
@@ -267,7 +269,7 @@ describe('applyInconsistentCutElim', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const term = builder.termNode(cut, I)
-    const nonTerm = builder.ref(cut, 'not-a-term', 0)
+    const nonTerm = builder.ref(cut, 'not-a-term', relSig([]))
     const diagram = builder.build()
 
     expect(() => applyInconsistentCutElim(

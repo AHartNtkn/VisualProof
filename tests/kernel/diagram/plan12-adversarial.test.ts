@@ -19,10 +19,10 @@ const resolver = (relations: ReadonlyMap<string, DiagramWithBoundary>) =>
 
 // ===========================================================================
 // PART A2 — LABELING COLLISION ATTACKS.
-// The soundness of relFold / comprehension / theorem citation rests entirely on
+// The soundness of fold / comprehension / theorem citation rests entirely on
 // exploreForm being a COMPLETE invariant: two NON-isomorphic diagrams must get
 // DIFFERENT forms. A form collision here is a kernel-gate conflation (CRITICAL):
-// relFold would fold a near-miss occurrence to the reference. Every pair below
+// fold would fold a near-miss occurrence to the reference. Every pair below
 // is non-isomorphic by construction; each asserts the forms differ.
 // ===========================================================================
 
@@ -233,13 +233,13 @@ describe('mode confusion', () => {
 })
 
 // ===========================================================================
-// PART A1 — relFold near-miss refusals (SOUNDNESS-CRITICAL GATE, end-to-end).
+// PART A1 — fold near-miss refusals (SOUNDNESS-CRITICAL GATE, end-to-end).
 // The occurrence is built to be ALMOST the relation body; applyRelFold's
 // boundary-pinned exact form gate must refuse each. A near-miss that folds is a
 // kernel soundness bug.
 // ===========================================================================
 
-describe('relFold near-miss refusals (exact boundary-pinned gate)', () => {
+describe('fold near-miss refusals (exact boundary-pinned gate)', () => {
   // Body of R: node `y` (its v_y is the arg line / boundary) whose output feeds
   // the free var `w` of a tail node. `tail` picks the tail term.
   function bodyR(tail: string): DiagramWithBoundary {

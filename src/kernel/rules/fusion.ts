@@ -4,6 +4,7 @@ import type { PathSeg } from '../term/reduce'
 import { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from '../term/path'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
+import { TERM } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
@@ -92,7 +93,7 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
     const adds = mergedFreePorts
       .filter((carrier) => wireByCarrier.get(carrier) === id)
       .map((carrier): Endpoint => ({ node: consumerId!, port: { kind: 'freeVar', name: carrier } }))
-    wires[id] = { scope: wv.scope, endpoints: [...kept, ...adds] }
+    wires[id] = { scope: wv.scope, sig: wv.sig, endpoints: [...kept, ...adds] }
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 }
@@ -159,10 +160,11 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
     const kept = w.endpoints.filter(
       (ep) => !(ep.node === nodeId && ep.port.kind === 'freeVar'),
     )
-    wires[id] = { scope: w.scope, endpoints: [...kept, ...adds] }
+    wires[id] = { scope: w.scope, sig: w.sig, endpoints: [...kept, ...adds] }
   }
   wires[newWireId] = {
     scope: node.region,
+    sig: TERM,
     endpoints: [
       { node: producerId, port: { kind: 'output' } },
       { node: nodeId, port: { kind: 'freeVar', name: q } },
