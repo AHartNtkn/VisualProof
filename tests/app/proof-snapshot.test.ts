@@ -4,6 +4,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import type { ProofAction } from '../../src/kernel/proof/action'
 import type { ProofTimeline } from '../../src/app/session'
 import { proofSnapshot } from '../../src/app/proof-snapshot'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
 
 function timeline(diagram: ReturnType<typeof mkDiagram>, actions: readonly ProofAction[] = []): ProofTimeline {
   return {
@@ -22,8 +23,8 @@ describe('authoritative proof snapshots', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: node },
       wires: {
-        w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
+        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
       },
     })
     const freeVariable = mkDiagram({
@@ -31,8 +32,8 @@ describe('authoritative proof snapshots', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: node },
       wires: {
-        w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
-        w1: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
+        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
       },
     })
 
@@ -44,7 +45,7 @@ describe('authoritative proof snapshots', () => {
     const diagram = mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
     const action = (arity: number): ProofAction => ({
       label: 'same label',
-      steps: [{ rule: 'vacuousIntro', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, arity }],
+      steps: [{ rule: 'vacuousIntro', scope: 'r0', sig: relSig(Array.from({ length: arity }, () => TERM)) }],
       placements: [],
     })
 

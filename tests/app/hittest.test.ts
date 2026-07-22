@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { mkEngine, recomputeRegions, computeLegs, legPaths, settle, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
 import type { Vec2 } from '../../src/view/index'
@@ -100,7 +103,7 @@ describe('hitTest', () => {
 
   it('lets a wire manipulation start where a dangling wire meets its node rim', () => {
     const h = new DiagramBuilder()
-    const zero = h.ref(h.root, 'zero', 1)
+    const zero = h.ref(h.root, 'zero', R(1))
     const d = h.build()
     const wire = Object.keys(d.wires)[0]!
     const e = mkEngine(d, [])
@@ -169,12 +172,13 @@ describe('hitTest', () => {
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
       nodes: {
-        a: { kind: 'ref', region: 'r0', defId: 'zero', arity: 1 },
-        b: { kind: 'ref', region: 'r0', defId: 'zero', arity: 1 },
+        a: { kind: 'ref', region: 'r0', defId: 'zero', sig: R(1) },
+        b: { kind: 'ref', region: 'r0', defId: 'zero', sig: R(1) },
       },
       wires: {
         [wire]: {
           scope: 'r0',
+          sig: TERM,
           endpoints: [
             { node: 'a', port: { kind: 'arg', index: 0 } },
             { node: 'b', port: { kind: 'arg', index: 0 } },
@@ -207,8 +211,8 @@ describe('hitTest', () => {
       regions: { r0: { kind: 'sheet' } },
       // Deliberately insert `z` first: map traversal must not decide the hit.
       wires: {
-        z: { scope: 'r0', endpoints: [] },
-        a: { scope: 'r0', endpoints: [] },
+        z: { scope: 'r0', sig: TERM, endpoints: [] },
+        a: { scope: 'r0', sig: TERM, endpoints: [] },
       },
     })
     const e = mkEngine(d, [])
