@@ -3,6 +3,9 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyClosedTermIntro } from '../../src/kernel/rules/intro'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
@@ -206,7 +209,7 @@ describe('proof session', () => {
     const aliasBody = mkDiagramWithBoundary(bodyBuilder.build(), [shared, shared])
 
     const host = new DiagramBuilder()
-    const ref = host.ref(host.root, 'Alias', 2)
+    const ref = host.ref(host.root, 'Alias', R(2))
     const c0 = host.termNode(host.root, p('a'))
     const c1 = host.termNode(host.root, p('b'))
     const w0 = host.wire(host.root, [
@@ -221,8 +224,8 @@ describe('proof session', () => {
     const ctx = verifyTheory({ relations: [['Alias', aliasBody]], theorems: [] })
     const session = startSession(side, side, ctx)
 
-    const forward = applyForward(session, { rule: 'relUnfold', node: ref })
-    const backward = applyBackward(session, { rule: 'relUnfold', node: ref })
+    const forward = applyForward(session, { rule: 'unfold', nodeId: ref })
+    const backward = applyBackward(session, { rule: 'unfold', nodeId: ref })
     expect(sideBoundary(forward, 'forward')).toEqual([w1])
     expect(sideBoundary(backward, 'backward')).toEqual([w1])
     expect(currentSide(forward, 'forward').wires[w0]).toBeDefined()
@@ -677,15 +680,18 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
 })
 
 describe('backward erasure of externally-bound atoms (binder stubs)', () => {
-  it('backward erasure rebinds the atom to its bubble (user bug: iterate a bound predicate, delete it)', () => {
+  it('backward erasure removes a bound atom from its relation wire (user bug: iterate a bound predicate, delete it)', () => {
     const c = verifyTheory(buildFregeTheory())
-    // goal: cut > bubble(1) > two bound atoms sharing a line
+    // goal: cut > relation wire holding two bound atoms sharing an arg line
     const r = new DiagramBuilder()
     const cut = r.cut(r.root)
-    const bub = r.bubble(cut, 1)
-    const a1 = r.atom(bub, bub)
-    const a2 = r.atom(bub, bub)
-    const w = r.wire(bub, [
+    const a1 = r.atom(cut, R(1))
+    const a2 = r.atom(cut, R(1))
+    r.wire(cut, [
+      { node: a1, port: { kind: 'head' } },
+      { node: a2, port: { kind: 'head' } },
+    ], R(1))
+    const w = r.wire(cut, [
       { node: a1, port: { kind: 'arg', index: 0 } },
       { node: a2, port: { kind: 'arg', index: 0 } },
     ])
@@ -693,14 +699,14 @@ describe('backward erasure of externally-bound atoms (binder stubs)', () => {
     // lhs: the same shape with a2 gone (the wire keeps a1)
     const l = new DiagramBuilder()
     const lcut = l.cut(l.root)
-    const lbub = l.bubble(lcut, 1)
-    const b1 = l.atom(lbub, lbub)
-    l.wire(lbub, [{ node: b1, port: { kind: 'arg', index: 0 } }])
+    const b1 = l.atom(lcut, R(1))
+    l.wire(lcut, [{ node: b1, port: { kind: 'head' } }], R(1))
+    l.wire(lcut, [{ node: b1, port: { kind: 'arg', index: 0 } }])
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, c)
     void w
-    // the bubble sits inside a cut: NEGATIVE — backward erasure's gate
-    s = applyBackward(s, { rule: 'erasure', sel: { region: bub, regions: [], nodes: [a2], wires: [] } })
+    // the atoms sit inside a cut: NEGATIVE — backward erasure's gate
+    s = applyBackward(s, { rule: 'erasure', sel: { region: cut, regions: [], nodes: [a2], wires: [] } })
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundAtomErased')
@@ -711,27 +717,30 @@ describe('backward erasure of externally-bound atoms (binder stubs)', () => {
 describe('dual-replay redesign: record actions, verify from both ends', () => {
   it("the user's scenario: backward-deiterate a bound predicate copy in a POSITIVE sheet", () => {
     const c = verifyTheory(buildFregeTheory())
-    // goal (positive sheet): bubble with TWO bound atoms on one line — as
-    // after iterating a bound predicate into its own scope
+    // goal (positive sheet): a relation wire with TWO bound atoms on one line —
+    // as after iterating a bound predicate into its own scope
     const r = new DiagramBuilder()
-    const bub = r.bubble(r.root, 1)
-    const a1 = r.atom(bub, bub)
-    const a2 = r.atom(bub, bub)
-    const w = r.wire(bub, [
+    const a1 = r.atom(r.root, R(1))
+    const a2 = r.atom(r.root, R(1))
+    r.wire(r.root, [
+      { node: a1, port: { kind: 'head' } },
+      { node: a2, port: { kind: 'head' } },
+    ], R(1))
+    const w = r.wire(r.root, [
       { node: a1, port: { kind: 'arg', index: 0 } },
       { node: a2, port: { kind: 'arg', index: 0 } },
     ])
     const rhs = mkDiagramWithBoundary(r.build(), [])
     const l = new DiagramBuilder()
-    const lbub = l.bubble(l.root, 1)
-    const b1 = l.atom(lbub, lbub)
-    l.wire(lbub, [{ node: b1, port: { kind: 'arg', index: 0 } }])
+    const b1 = l.atom(l.root, R(1))
+    l.wire(l.root, [{ node: b1, port: { kind: 'head' } }], R(1))
+    l.wire(l.root, [{ node: b1, port: { kind: 'arg', index: 0 } }])
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, c)
     void w
     // erase is gated out (positive+backward needs negative) — deletion here IS
     // deiteration, justified by the surviving copy at the same scope
-    const deSel = { region: bub, regions: [], nodes: [a2], wires: [] }
+    const deSel = { region: r.root, regions: [], nodes: [a2], wires: [] }
     s = applyBackward(s, certifiedDeiterationStep(currentSide(s, 'backward'), deSel, 64))
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
