@@ -1,6 +1,4 @@
-import { DiagramBuilder } from '../../kernel/diagram/builder'
 import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
@@ -30,6 +28,9 @@ import { ConnectionDragController, type ConnectionEnd } from './connection'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import { FissionDragController, type FissionRequest } from './fission'
 import { CopyDragController, copyDestinationPreview } from './copy'
+import { resolveNamedRelationInstantiation } from '../../interaction/named-relation'
+
+export { foldedComprehension } from '../../interaction/named-relation'
 
 export type ProofOrientation = 'forward' | 'backward'
 
@@ -138,20 +139,6 @@ export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel
   if (erase !== undefined) return erasureStep(d, discovery.sel)
   const deiterate = byKind('deiterate')
   return deiterate === undefined ? null : deiterationStep(d, discovery.sel, fuel)
-}
-
-export function foldedComprehension(ctx: ProofContext, name: string): DiagramWithBoundary {
-  assertProofContext(ctx)
-  const relation = ctx.relations.get(name)
-  if (relation === undefined) throw new Error(`unknown relation '${name}'`)
-  const arity = relation.boundary.length
-  const builder = new DiagramBuilder()
-  const ref = builder.ref(builder.root, name, arity)
-  const boundary: WireId[] = []
-  for (let index = 0; index < arity; index++) {
-    boundary.push(builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index } }]))
-  }
-  return mkDiagramWithBoundary(builder.build(), boundary)
 }
 
 const connectionContext = EMPTY_PROOF_CONTEXT
@@ -582,7 +569,9 @@ export class ProofMoveController {
             this.#closeMenu()
             this.#options.openComprehension(bubble, this.#lastPointer)
           })
-          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#context(), choice.name), attachments: [], binders: [] }))
+          else row(choice.label, () => this.#commit(resolveNamedRelationInstantiation(
+            this.#options.diagram(), bubble, this.#context(), choice.name, this.#options.orientation(),
+          )))
         }
         return
       }

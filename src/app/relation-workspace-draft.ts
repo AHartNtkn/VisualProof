@@ -5,7 +5,19 @@ import { spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
+import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import type { ComprehensionBinderPair } from '../kernel/rules/comprehension'
 import type { Term } from '../kernel/term/term'
+import {
+  addComprehensionBoundOccurrence,
+  createComprehensionDependencyState,
+  materializeComprehensionDependencies,
+  mergeSelectedComprehensionDependencies,
+  reconcileComprehensionDependencies,
+  replaceComprehensionDependencyBoundary,
+  validateComprehensionDependencies,
+  type ComprehensionDependencyState,
+} from '../interaction/comprehension-dependencies'
 import { addBubble, addCut } from './edit'
 
 export type RelationPort = {
@@ -18,11 +30,13 @@ export type RelationPort = {
 export type RelationWorkspaceSnapshot = {
   readonly diagram: Diagram
   readonly ports: readonly RelationPort[]
+  readonly comprehension?: ComprehensionDependencyState
 }
 
 export type RelationWorkspaceDraft = {
   readonly host: Diagram
   readonly mode: 'substitute' | 'abstract'
+  readonly instantiationTarget?: RegionId
   readonly history: readonly RelationWorkspaceSnapshot[]
   readonly cursor: number
 }
@@ -30,6 +44,7 @@ export type RelationWorkspaceDraft = {
 export type MaterializedRelationDraft = {
   readonly relation: DiagramWithBoundary
   readonly attachments: WireId[]
+  readonly binders: readonly ComprehensionBinderPair[]
 }
 
 export type RelationExternalReferencePresentation = {
@@ -65,6 +80,15 @@ export type RelationConnectionPlan =
     readonly message: string
   }
 
+export type RelationHostPatternImportPlan = {
+  readonly source: Diagram
+  readonly captured: RelationWorkspaceSnapshot
+  readonly snapshot: RelationWorkspaceSnapshot
+  readonly introduced: readonly NodeId[]
+  readonly at: Readonly<{ x: number; y: number }>
+  readonly binders: readonly ComprehensionBinderPair[]
+}
+
 const HOST_BINDING_UNAVAILABLE = 'host bindings are available only during substitution'
 
 function assertHostBindingAllowed(mode: RelationWorkspaceDraft['mode']): void {
@@ -83,10 +107,14 @@ function substitutionSnapshot(arity: number): RelationWorkspaceSnapshot {
     wires[wire] = { scope: 'r0', endpoints: [] }
     ports.push({ id: `forced${index + 1}`, wire, kind: 'forced' })
   }
-  return {
+  const snapshot = {
     diagram: mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, wires }),
     ports,
   }
+  const comprehension = createComprehensionDependencyState(
+    mkDiagramWithBoundary(snapshot.diagram, ports.map((port) => port.wire)),
+  )
+  return { ...snapshot, comprehension }
 }
 
 export function beginSubstitutionDraft(host: Diagram, bubble: RegionId): RelationWorkspaceDraft {
@@ -95,6 +123,7 @@ export function beginSubstitutionDraft(host: Diagram, bubble: RegionId): Relatio
   return {
     host,
     mode: 'substitute',
+    instantiationTarget: bubble,
     history: [substitutionSnapshot(region.arity)],
     cursor: 0,
   }
@@ -162,11 +191,59 @@ function validateSnapshot(draft: RelationWorkspaceDraft, snapshot: RelationWorks
       }
     }
   }
+
+  if (draft.mode === 'abstract') {
+    if (snapshot.comprehension !== undefined) {
+      throw new Error('abstraction snapshots cannot contain comprehension dependencies')
+    }
+    return
+  }
+  const target = draft.instantiationTarget
+  const comprehension = snapshot.comprehension
+  if (target === undefined || comprehension === undefined) {
+    throw new Error('substitution snapshots must contain comprehension dependency state')
+  }
+  if (comprehension.pattern.diagram !== snapshot.diagram) {
+    throw new Error('substitution snapshot diagram must be owned by its comprehension dependency state')
+  }
+  const expectedBoundary = snapshot.ports.map((port) => port.wire)
+  if (JSON.stringify(comprehension.pattern.boundary) !== JSON.stringify(expectedBoundary)) {
+    throw new Error('substitution snapshot dependency boundary must match its relation ports')
+  }
+  validateComprehensionDependencies(comprehension, draft.host, target)
+}
+
+function reconcileSnapshot(
+  draft: RelationWorkspaceDraft,
+  snapshot: RelationWorkspaceSnapshot,
+): RelationWorkspaceSnapshot {
+  if (draft.mode === 'abstract') return snapshot
+  const target = draft.instantiationTarget
+  const previous = currentRelationDraft(draft).comprehension
+  const proposed = snapshot.comprehension ?? previous
+  if (target === undefined || proposed === undefined) {
+    throw new Error('substitution snapshots must contain comprehension dependency state')
+  }
+  const boundary = snapshot.ports.map((port) => port.wire)
+  const sameDiagram = proposed.pattern.diagram === snapshot.diagram
+  const sameBoundary = JSON.stringify(proposed.pattern.boundary) === JSON.stringify(boundary)
+  const comprehension = sameDiagram
+    ? sameBoundary
+      ? proposed
+      : replaceComprehensionDependencyBoundary(proposed, boundary, draft.host, target)
+    : reconcileComprehensionDependencies(
+        proposed,
+        mkDiagramWithBoundary(snapshot.diagram, boundary),
+        draft.host,
+        target,
+      )
+  return { ...snapshot, diagram: comprehension.pattern.diagram, comprehension }
 }
 
 function appendSnapshot(draft: RelationWorkspaceDraft, snapshot: RelationWorkspaceSnapshot): RelationWorkspaceDraft {
-  validateSnapshot(draft, snapshot)
-  const history = [...draft.history.slice(0, draft.cursor + 1), snapshot]
+  const reconciled = reconcileSnapshot(draft, snapshot)
+  validateSnapshot(draft, reconciled)
+  const history = [...draft.history.slice(0, draft.cursor + 1), reconciled]
   return { ...draft, history, cursor: history.length - 1 }
 }
 
@@ -248,12 +325,14 @@ export function bindOptionalPort(
 export function materializeRelationDraft(draft: RelationWorkspaceDraft): MaterializedRelationDraft {
   const current = currentRelationDraft(draft)
   validateSnapshot(draft, current)
-  return materializeRelationSnapshot(current, draft.mode)
+  return materializeRelationSnapshot(current, draft.mode, draft.host, draft.instantiationTarget)
 }
 
 export function materializeRelationSnapshot(
   snapshot: RelationWorkspaceSnapshot,
   mode: RelationWorkspaceDraft['mode'],
+  host?: Diagram,
+  instantiationTarget?: RegionId,
 ): MaterializedRelationDraft {
   if (mode === 'abstract' && snapshot.ports.some((port) => port.hostWire !== undefined)) {
     assertHostBindingAllowed(mode)
@@ -262,15 +341,106 @@ export function materializeRelationSnapshot(
     const unbound = snapshot.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
     if (unbound !== undefined) throw new Error(`optional substitution port '${unbound.id}' must be bound or removed before finalization`)
   }
+  const relation = mode === 'substitute'
+    ? snapshot.comprehension?.pattern
+    : mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
+  if (relation === undefined) throw new Error('substitution snapshot has no comprehension dependency state')
+  const binders = mode === 'substitute'
+    ? host === undefined || instantiationTarget === undefined
+      ? (() => { throw new Error('substitution materialization requires its host and target') })()
+      : materializeComprehensionDependencies(snapshot.comprehension!, host, instantiationTarget)
+    : Object.freeze([])
   return {
-    relation: mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire)),
+    relation,
     attachments: snapshot.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : []),
+    binders,
   }
 }
 
 export function replaceRelationDiagram(draft: RelationWorkspaceDraft, diagram: Diagram): RelationWorkspaceDraft {
   const current = currentRelationDraft(draft)
   return appendSnapshot(draft, { diagram, ports: current.ports })
+}
+
+export function importRelationHostBinderOccurrence(
+  draft: RelationWorkspaceDraft,
+  hostBinder: RegionId,
+  requestedRegion?: RegionId,
+): RelationWorkspaceDraft {
+  if (draft.mode !== 'substitute' || draft.instantiationTarget === undefined) {
+    throw new Error(HOST_BINDING_UNAVAILABLE)
+  }
+  const current = currentRelationDraft(draft)
+  if (current.comprehension === undefined) {
+    throw new Error('substitution snapshot has no comprehension dependency state')
+  }
+  const selectedRegion = requestedRegion === current.diagram.root ? undefined : requestedRegion
+  const added = addComprehensionBoundOccurrence(
+    current.comprehension,
+    draft.host,
+    draft.instantiationTarget,
+    hostBinder,
+    selectedRegion,
+  )
+  return appendSnapshot(draft, {
+    ...current,
+    diagram: added.state.pattern.diagram,
+    comprehension: added.state,
+  })
+}
+
+export function planRelationHostPatternImport(
+  draft: RelationWorkspaceDraft,
+  source: Diagram,
+  selection: SubgraphSelection,
+  requestedRegion: RegionId,
+  at: Readonly<{ x: number; y: number }>,
+): RelationHostPatternImportPlan {
+  if (draft.mode !== 'substitute' || draft.instantiationTarget === undefined) {
+    throw new Error(HOST_BINDING_UNAVAILABLE)
+  }
+  const captured = currentRelationDraft(draft)
+  if (captured.comprehension === undefined) {
+    throw new Error('substitution snapshot has no comprehension dependency state')
+  }
+  const merged = mergeSelectedComprehensionDependencies(
+    captured.comprehension,
+    draft.host,
+    draft.instantiationTarget,
+    source,
+    selection,
+    requestedRegion,
+  )
+  const snapshot: RelationWorkspaceSnapshot = {
+    ...captured,
+    diagram: merged.state.pattern.diagram,
+    comprehension: merged.state,
+  }
+  validateSnapshot(draft, snapshot)
+  return Object.freeze({
+    source,
+    captured,
+    snapshot,
+    introduced: merged.introduced,
+    at: Object.freeze({ x: at.x, y: at.y }),
+    binders: materializeComprehensionDependencies(
+      merged.state, draft.host, draft.instantiationTarget,
+    ),
+  })
+}
+
+export function applyCapturedRelationHostPatternImport(
+  draft: RelationWorkspaceDraft,
+  plan: RelationHostPatternImportPlan,
+  liveSource: Diagram,
+): RelationWorkspaceDraft {
+  if (liveSource !== plan.source || draft.host !== plan.source) {
+    throw new Error('host pattern import cancelled because the source changed')
+  }
+  if (currentRelationDraft(draft) !== plan.captured) {
+    throw new Error('host pattern import cancelled because the draft changed')
+  }
+  return appendSnapshot(draft, plan.snapshot)
 }
 
 function compareWireIds(a: WireId, b: WireId): number {
@@ -386,6 +556,7 @@ export function planRelationConnection(
         }
       }
     }
+    snapshot = reconcileSnapshot(draft, snapshot)
     validateSnapshot(draft, snapshot)
   } catch (error) {
     if (error instanceof DiagramError || error instanceof Error) {

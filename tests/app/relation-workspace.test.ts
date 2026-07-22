@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkDiagram, type Diagram } from '../../src/kernel/diagram/diagram'
-import type { ProofAction } from '../../src/kernel/proof/action'
+import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import {
   applyCapturedRelationConnection,
@@ -25,6 +25,7 @@ import {
   beginAbstractionDraft,
   beginSubstitutionDraft,
   currentRelationDraft,
+  importRelationHostBinderOccurrence,
   replaceRelationDiagram,
 } from '../../src/app/relation-workspace-draft'
 import { planCopy } from '../../src/app/copy-planner'
@@ -208,5 +209,48 @@ describe('substitution transaction', () => {
     }])
     expect(cancelled).toEqual([])
 
+  })
+
+  it('dry-runs and applies the exact nonempty materialized binder array', () => {
+    const builder = new DiagramBuilder()
+    const hostBinder = builder.bubble(builder.root, 0)
+    const guard = builder.cut(hostBinder)
+    const target = builder.bubble(guard, 0)
+    builder.atom(target, target)
+    const current = builder.build()
+    const actions: ProofAction[] = []
+    const transaction = new SubstituteTransaction({
+      diagram: () => current,
+      boundary: () => [],
+      bubble: target,
+      context,
+      apply: (action) => { actions.push(action) },
+      cancel: () => {},
+    })
+    const draft = importRelationHostBinderOccurrence(transaction.initialDraft(), hostBinder)
+    const pair = currentRelationDraft(draft).comprehension?.dependencies[0]
+    if (pair === undefined) throw new Error('expected imported binder pair')
+
+    expect(transaction.status(currentRelationDraft(draft))).toEqual({
+      kind: 'ready', code: 'ready', message: 'ready to instantiate',
+    })
+    expect(() => transaction.finalize(currentRelationDraft(draft), [])).not.toThrow()
+    expect(actions).toEqual([{
+      label: 'substitute relation',
+      steps: [{
+        rule: 'comprehensionInstantiate',
+        bubble: target,
+        comp: currentRelationDraft(draft).comprehension?.pattern,
+        attachments: [],
+        binders: [pair],
+      }],
+      placements: [],
+    }])
+    const result = applyAction(current, actions[0]!, context())
+    expect(result.regions[target]).toBeUndefined()
+    expect(Object.values(result.nodes).some((node) =>
+      node.kind === 'atom' && node.binder === hostBinder)).toBe(true)
+    expect(Object.values(result.nodes).some((node) =>
+      node.kind === 'atom' && node.binder === target)).toBe(false)
   })
 })

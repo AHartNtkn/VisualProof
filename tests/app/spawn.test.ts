@@ -89,8 +89,8 @@ describe('bound predicate spawn options', () => {
 
     expect(boundPredicateOptions(d, b.root)).toEqual([])
     expect(boundPredicateOptions(d, leaf)).toEqual([
-      { binder: inner, arity: 3, position: 1, total: 2 },
-      { binder: outer, arity: 1, position: 2, total: 2 },
+      { source: 'draft', binder: inner, arity: 3, position: 1, total: 2 },
+      { source: 'draft', binder: outer, arity: 1, position: 2, total: 2 },
     ])
   })
 
