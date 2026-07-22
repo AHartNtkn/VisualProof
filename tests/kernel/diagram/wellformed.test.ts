@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { mkDiagram, DiagramError, type Region, type DiagramNode, type Wire } from '../../../src/kernel/diagram/diagram'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 
 const p = (s: string) => parseTerm(s)
 
@@ -26,19 +28,19 @@ describe('mkDiagram rejections', () => {
     })).toThrowError(/second sheet/)
   })
 
-  it('rejects negative, fractional, and unsafely large bubble arity', () => {
+  it('rejects an atom whose inline signature is not a relation signature', () => {
+    // Successor of the old "bubble arity bounds" concern: the malformed inline
+    // structural datum on a relation node is now its signature, not an arity.
     expect(() => mkDiagram({
-      root: 'r0',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: -1 } },
-    })).toThrowError(/arity must be a non-negative safe integer/)
+      root: 'r0', regions: sheet,
+      // TERM where a RelSig is required (typed as any to bypass the compile guard,
+      // exercising the runtime constructor gate against structural literals)
+      nodes: { n0: { kind: 'atom', region: 'r0', sig: TERM as never } },
+    })).toThrowError(/atom node 'n0' sig must be a relation signature/)
     expect(() => mkDiagram({
-      root: 'r0',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: 1.5 } },
-    })).toThrowError(/arity must be a non-negative safe integer/)
-    expect(() => mkDiagram({
-      root: 'r0',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: 2 ** 53 } },
-    })).toThrowError(/arity must be a non-negative safe integer/)
+      root: 'r0', regions: sheet,
+      nodes: { n0: { kind: 'atom', region: 'r0', sig: { kind: 'rel', args: [{ kind: 'bogus' }] } as never } },
+    })).toThrowError(/atom node 'n0' sig:.*"kind" must be "term" or "rel"/)
   })
 
   it('rejects a missing parent', () => {
@@ -66,25 +68,29 @@ describe('mkDiagram rejections', () => {
     })).toThrowError(/node 'n0' is in missing region 'ghost'/)
   })
 
-  it('rejects an atom whose binder is missing, not a bubble, or not enclosing', () => {
-    const base: Record<string, Region> = {
-      r0: { kind: 'sheet' },
-      r1: { kind: 'bubble', parent: 'r0', arity: 0 },
-      r2: { kind: 'cut', parent: 'r0' },
+  it('rejects a body node whose content is incoherent with its signature', () => {
+    // Successor of the old atom-binder placement concern: a relation node's
+    // structural coherence is now enforced between its sig and its content
+    // (arg-stub count and per-stub sorts), not against an enclosing bubble.
+    const okContent = () => {
+      const inner: Record<string, DiagramNode> = { m0: { kind: 'term', region: 'c0', term: p('\\z. z'), freePorts: [] } }
+      return mkDiagram({
+        root: 'c0', regions: { c0: { kind: 'sheet' } }, nodes: inner,
+        wires: { cw0: { scope: 'c0', sig: TERM, endpoints: [{ node: 'm0', port: { kind: 'output' } }] } },
+      })
     }
+    // sig arity 1 but content exposes zero boundary wires
     expect(() => mkDiagram({
-      root: 'r0', regions: base,
-      nodes: { n0: { kind: 'atom', region: 'r1', binder: 'ghost' } },
-    })).toThrowError(/missing binder 'ghost'/)
+      root: 'r0', regions: sheet,
+      nodes: { n0: { kind: 'body', region: 'r0', sig: relSig([TERM]),
+        content: mkDiagramWithBoundary(okContent(), []) } },
+    })).toThrowError(/body node 'n0' boundary length 0 is shorter than sig arity 1/)
+    // sig arg sort disagrees with the arg-stub sort (rel vs term)
     expect(() => mkDiagram({
-      root: 'r0', regions: base,
-      nodes: { n0: { kind: 'atom', region: 'r2', binder: 'r2' } },
-    })).toThrowError(/must be a bubble/)
-    // binder exists and is a bubble, but the atom sits outside it
-    expect(() => mkDiagram({
-      root: 'r0', regions: base,
-      nodes: { n0: { kind: 'atom', region: 'r2', binder: 'r1' } },
-    })).toThrowError(/must lie inside its binder/)
+      root: 'r0', regions: sheet,
+      nodes: { n0: { kind: 'body', region: 'r0', sig: relSig([relSig([TERM])]),
+        content: mkDiagramWithBoundary(okContent(), ['cw0']) } },
+    })).toThrowError(/body node 'n0' boundary\[0\].*does not match sig arg 0/)
   })
 
   const oneNode = (wires: Record<string, Wire>) => {
@@ -95,25 +101,25 @@ describe('mkDiagram rejections', () => {
   }
 
   it('rejects a wire with a missing scope', () => {
-    expect(() => oneNode({ w0: { scope: 'ghost', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } }))
+    expect(() => oneNode({ w0: { scope: 'ghost', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } }))
       .toThrowError(/missing scope region 'ghost'/)
   })
 
   it('rejects an endpoint on a missing node', () => {
-    expect(() => oneNode({ w0: { scope: 'r0', endpoints: [{ node: 'ghost', port: { kind: 'output' } }] } }))
+    expect(() => oneNode({ w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'ghost', port: { kind: 'output' } }] } }))
       .toThrowError(/missing node 'ghost'/)
   })
 
   it('rejects an endpoint on a non-existent port', () => {
     expect(() => oneNode({
-      w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'zz' } }] },
+      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'zz' } }] },
     })).toThrowError(/non-existent port 'v:zz'/)
   })
 
   it('rejects a port attached to two wires', () => {
     expect(() => oneNode({
-      w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-      w1: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+      w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
     })).toThrowError(/attached to two wires/)
   })
 
@@ -121,6 +127,7 @@ describe('mkDiagram rejections', () => {
     expect(() => oneNode({
       w0: {
         scope: 'r0',
+        sig: TERM,
         endpoints: [
           { node: 'n0', port: { kind: 'output' } },
           { node: 'n0', port: { kind: 'output' } },
@@ -139,7 +146,7 @@ describe('mkDiagram rejections', () => {
       root: 'r0',
       regions: { r0: { kind: 'sheet' }, r1: { kind: 'cut', parent: 'r0' } },
       nodes: { n0: { kind: 'term', region: 'r0', term: p('\\x. x') } },
-      wires: { w0: { scope: 'r1', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+      wires: { w0: { scope: 'r1', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
     })).toThrowError(/does not enclose node 'n0'/)
   })
 
@@ -156,12 +163,12 @@ describe('mkDiagram rejections', () => {
     expect(() => mkDiagram({
       root: 'r0', regions: sheet,
       nodes: { n0: { kind: 'term', region: 'r0', term: { kind: 'bvar', index: 0 } } },
-      wires: { w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+      wires: { w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
     })).toThrowError(/node 'n0' term:.*unbound de Bruijn index/)
     expect(() => mkDiagram({
       root: 'r0', regions: sheet,
       nodes: { n0: { kind: 'term', region: 'r0', term: { kind: 'port', name: '' } } },
-      wires: { w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+      wires: { w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
     })).toThrowError(/node 'n0' term:.*non-empty/)
   })
 })

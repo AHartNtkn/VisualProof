@@ -2,6 +2,7 @@ import type { Term } from '../term/term'
 import type { PathSeg } from '../term/reduce'
 import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/diagram'
+import type { Sig, RelSig } from '../diagram/sig'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
@@ -19,10 +20,9 @@ import { anchorAvailability, applyAnchoredWireSplit, applyAnchoredWireContract }
 import { applyHeadStrip } from '../rules/headstrip'
 import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
-import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../rules/comprehension'
-import type { AbstractionOccurrence, ComprehensionBinderPair } from '../rules/comprehension'
-import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
-import { applyRelUnfold, applyRelFold } from '../rules/reldef'
+import { applyVacuousIntro, applyVacuousElim } from '../rules/vacuous'
+import { applyBodyAttach, applyBodyDetach } from '../rules/body'
+import { applyUnfold, applyFold, type FoldTarget } from '../rules/fold'
 import type { TheoremApplication } from './theorem'
 import { applyTheorem } from './theorem'
 import { ProofError } from './error'
@@ -54,13 +54,19 @@ export type ProofStep =
   | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
-  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: readonly ComprehensionBinderPair[] }
-  | { readonly rule: 'comprehensionAbstract'; readonly wrap: SubgraphSelection; readonly comp: DiagramWithBoundary; readonly occurrences: readonly AbstractionOccurrence[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
-  | { readonly rule: 'vacuousIntro'; readonly sel: SubgraphSelection; readonly arity: number }
-  | { readonly rule: 'vacuousElim'; readonly region: RegionId }
-  | { readonly rule: 'relUnfold'; readonly node: NodeId }
-  | { readonly rule: 'relFold'; readonly sel: SubgraphSelection; readonly defId: string; readonly args: readonly WireId[] }
+  | { readonly rule: 'vacuousIntro'; readonly scope: RegionId; readonly sig: Sig }
+  | { readonly rule: 'vacuousElim'; readonly wireId: WireId }
+  | { readonly rule: 'bodyAttach'; readonly wireId: WireId; readonly content: DiagramWithBoundary; readonly params: readonly WireId[] }
+  | { readonly rule: 'bodyDetach'; readonly bodyNodeId: NodeId }
+  | { readonly rule: 'unfold'; readonly nodeId: NodeId }
+  | { readonly rule: 'fold'; readonly occurrence: SubgraphSelection; readonly args: readonly WireId[]; readonly target: FoldStepTarget }
+
+/** The serializable half of a fold target: the resolver is injected at replay
+ * from the proof's theory context, never persisted. */
+export type FoldStepTarget =
+  | { readonly wireId: WireId }
+  | { readonly defId: string; readonly sig: RelSig }
 
 /** Logical transport of source wire identities through one proof step.
  * Unlike graph provenance, distinct source identities may intentionally
@@ -161,15 +167,20 @@ function applyStepRaw(
     case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term, reservation)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path, reservation)
-    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, step.binders, orientation, reservation)
-    case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences, orientation, reservation)
     case 'theorem': {
       return applyTheorem(d, ctx, step.name, step.at, step.direction, orientation, reservation)
     }
-    case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity, reservation)
-    case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)
-    case 'relUnfold': return applyRelUnfold(d, step.node, ctx.relations, reservation)
-    case 'relFold': return applyRelFold(d, step.sel, step.defId, step.args, ctx.relations, reservation)
+    case 'vacuousIntro': return applyVacuousIntro(d, step.scope, step.sig, reservation)
+    case 'vacuousElim': return applyVacuousElim(d, step.wireId)
+    case 'bodyAttach': return applyBodyAttach(d, step.wireId, step.content, step.params, orientation, reservation)
+    case 'bodyDetach': return applyBodyDetach(d, step.bodyNodeId, orientation)
+    case 'unfold': return applyUnfold(d, step.nodeId, (defId) => ctx.relations.get(defId), reservation)
+    case 'fold': {
+      const target: FoldTarget = 'wireId' in step.target
+        ? { wireId: step.target.wireId }
+        : { defId: step.target.defId, sig: step.target.sig, resolve: (defId) => ctx.relations.get(defId) }
+      return applyFold(d, step.occurrence, step.args, target, reservation)
+    }
   }
 }
 

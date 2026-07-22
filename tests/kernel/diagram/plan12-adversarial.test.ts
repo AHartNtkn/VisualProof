@@ -6,11 +6,16 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { applyRelUnfold, applyRelFold } from '../../../src/kernel/rules/reldef'
+import { applyUnfold, applyFold } from '../../../src/kernel/rules/fold'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Endpoint } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
+
+/** Resolve a closed relation body from a fixture map, as the fold rule expects. */
+const resolver = (relations: ReadonlyMap<string, DiagramWithBoundary>) =>
+  (defId: string): DiagramWithBoundary | undefined => relations.get(defId)
 
 // ===========================================================================
 // PART A2 — LABELING COLLISION ATTACKS.
@@ -113,7 +118,7 @@ describe('exploreForm collision resistance (non-iso pairs must differ)', () => {
           nA: { kind: 'term', region: 'r0', term: p('\\x. x') },
           nB: { kind: 'term', region: 'r0', term: p('\\x. \\y. x') },
         },
-        wires: { w0: { scope: 'r0', endpoints: order === 'AB' ? [A, B] : [B, A] } },
+        wires: { w0: { scope: 'r0', sig: TERM, endpoints: order === 'AB' ? [A, B] : [B, A] } },
       })
     }
     expect(exploreForm(mk('AB'))).toBe(exploreForm(mk('BA')))
@@ -251,7 +256,7 @@ describe('relFold near-miss refusals (exact boundary-pinned gate)', () => {
   // A ref of `defId` (arity 1) with arg-0 wired to a carrier — the fold target.
   function refHost(defId: string) {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, defId, 1)
+    const node = b.ref(b.root, defId, relSig([TERM]))
     const carrier = b.termNode(b.root, p('a'))
     const wArg = b.wire(b.root, [
       { node, port: { kind: 'arg', index: 0 } },
@@ -273,20 +278,21 @@ describe('relFold near-miss refusals (exact boundary-pinned gate)', () => {
   it('CONTROL: the exact body folds successfully (unfold → fold round-trip)', () => {
     const relations = new Map([['R', bodyR('w')]])
     const { d, node, carrier, wArg } = refHost('R')
-    const un = applyRelUnfold(d, node, relations)
+    const un = applyUnfold(d, node, resolver(relations))
     const sel = bodySelection(un, carrier)
-    expect(() => applyRelFold(un, sel, 'R', [wArg], relations)).not.toThrow()
+    expect(() => applyFold(un, sel, [wArg], { defId: 'R', sig: relSig([TERM]), resolve: resolver(relations) })).not.toThrow()
   })
 
   it('REFUSES a beta-eta-equal but structurally different tail (form is exact, not modulo beta-eta)', () => {
     // Unfold RB (tail `(\u. u) w`, which beta-reduces to `w`), then try to fold
-    // as R (tail `w`). The exact gate must refuse: relFold does not fold up to
+    // as R (tail `w`). The exact gate must refuse: fold does not fold up to
     // beta-eta even when the two bodies are convertible.
     const relations = new Map([['R', bodyR('w')], ['RB', bodyR('(\\u. u) w')]])
     const { d, node, carrier, wArg } = refHost('RB')
-    const un = applyRelUnfold(d, node, relations)
+    const un = applyUnfold(d, node, resolver(relations))
     const sel = bodySelection(un, carrier)
-    expect(() => applyRelFold(un, sel, 'R', [wArg], relations)).toThrow(/does not match relation 'R'/)
+    expect(() => applyFold(un, sel, [wArg], { defId: 'R', sig: relSig([TERM]), resolve: resolver(relations) }))
+      .toThrow(/does not match the body/)
   })
 
   // The remaining structural near-misses hit the exact gate function directly

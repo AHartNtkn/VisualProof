@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection, type SubgraphSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
@@ -31,18 +32,19 @@ describe('extract → remove → splice round-trip (fingerprint identity)', () =
     roundTrip(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
   })
 
-  it('holds for a bubble with atoms and a shared argument wire', () => {
+  it('holds for a cut with a relational atom and a shared (diagonal) argument wire', () => {
     const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 2)
-    const t = b.termNode(bub, p('\\x. x'))
-    const a = b.atom(bub, bub)
-    b.wire(bub, [
+    const cut = b.cut(b.root)
+    const t = b.termNode(cut, p('\\x. x'))
+    const a = b.atom(cut, relSig([TERM, TERM]))
+    // one term output feeding both argument positions — a diagonal argument wire
+    b.wire(cut, [
       { node: t, port: { kind: 'output' } },
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: a, port: { kind: 'arg', index: 1 } },
     ])
     const d = b.build()
-    roundTrip(d, { region: d.root, regions: [bub], nodes: [], wires: [] })
+    roundTrip(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
   })
 
   it('holds for a mixed selection: direct node + subtree + explicit top-level wire', () => {

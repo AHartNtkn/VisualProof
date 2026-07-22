@@ -4,7 +4,14 @@ import { findOccurrences } from '../kernel/diagram/subgraph/match'
 import { occurrenceToSelection } from '../kernel/diagram/subgraph/occurrence'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { diagonalize, type AbstractionOccurrence } from '../kernel/rules/comprehension'
+import { diagonalize } from '../kernel/rules/fold'
+
+/** An occurrence selected for abstraction, with the host wire feeding each
+ * boundary position (repeats express a diagonal). */
+export type AbstractionOccurrence = {
+  readonly sel: SubgraphSelection
+  readonly args: readonly WireId[]
+}
 
 export type AbstractionCandidate = {
   readonly key: string

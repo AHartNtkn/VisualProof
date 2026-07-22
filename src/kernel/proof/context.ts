@@ -311,9 +311,10 @@ export function assertRefsResolve(
     if (arity === undefined) {
       throw new ProofError(`${where}: reference node '${id}' names unknown relation '${node.defId}'`)
     }
-    if (arity !== node.arity) {
+    const refArity = node.sig.args.length
+    if (arity !== refArity) {
       throw new ProofError(
-        `${where}: reference node '${id}' to relation '${node.defId}' has arity ${node.arity} but the relation has arity ${arity}`,
+        `${where}: reference node '${id}' to relation '${node.defId}' has arity ${refArity} but the relation has arity ${arity}`,
       )
     }
   }

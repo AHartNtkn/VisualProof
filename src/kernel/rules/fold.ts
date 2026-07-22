@@ -121,7 +121,7 @@ export function applyUnfold(
  * diagonalized relation the occurrence must meet when a fold's argument wires
  * repeat. The identity pattern merges nothing. Pure: `content` is unchanged.
  */
-function diagonalize(content: DiagramWithBoundary, aliasPattern: readonly number[]): DiagramWithBoundary {
+export function diagonalize(content: DiagramWithBoundary, aliasPattern: readonly number[]): DiagramWithBoundary {
   if (aliasPattern.length !== content.boundary.length) {
     throw new DiagramError(
       `alias pattern length ${aliasPattern.length} does not match relation arity ${content.boundary.length}`,

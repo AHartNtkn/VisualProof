@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { applyConversion } from '../../../src/kernel/rules/conversion'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import {
   actionFromJson,
@@ -96,18 +96,13 @@ describe('step round-trips through JSON', () => {
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
     const pat = mkDiagramWithBoundary(b.build(), [bw])
 
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('(\\x. x) y'))
-    const d = h.build()
-    // the node's source free 'y' is canonical s0 after construction
+    // A conversion certificate and correspondence are pure serializable data;
+    // this suite exercises the codecs, so they are built directly rather than
+    // derived by applying the conversion rule.
     const target = p('s0')
-    const correspondence = proposePortCorrespondence(
-      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
-      target,
-      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).freePorts,
-      freePorts(target),
-    )
-    const { certificate } = applyConversion(d, n, target, correspondence, 10)
+    const source = p('(\\x. x) s0')
+    const correspondence = proposePortCorrespondence(source, target, freePorts(source), freePorts(target))
+    const certificate = { leftSteps: [{ kind: 'beta' as const, path: [] }], rightSteps: [] }
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
     const occurrenceCertificate = {
@@ -116,7 +111,6 @@ describe('step round-trips through JSON', () => {
       nodeMap: new Map([['n0', 'n1']]),
       wireMap: new Map([['w0', 'w1']]),
       attachments: ['w1'],
-      binderMap: new Map(),
       termCertificates: new Map([['n0', certificate]]),
     }
     const steps: ProofStep[] = [
@@ -144,14 +138,16 @@ describe('step round-trips through JSON', () => {
       { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: [] },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w3', 'w7'], binders: [] },
-      { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
-      { rule: 'vacuousIntro', sel, arity: 2 },
-      { rule: 'vacuousElim', region: 'r1' },
-      { rule: 'relUnfold', node: 'n0' },
-      { rule: 'relFold', sel, defId: 'nat', args: ['w0'] },
+      { rule: 'vacuousIntro', scope: 'r1', sig: TERM },
+      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([relSig([TERM]), TERM]) },
+      { rule: 'vacuousElim', wireId: 'w0' },
+      { rule: 'bodyAttach', wireId: 'w0', content: pat, params: [] },
+      { rule: 'bodyAttach', wireId: 'w0', content: pat, params: ['w3', 'w7'] },
+      { rule: 'bodyDetach', bodyNodeId: 'n0' },
+      { rule: 'unfold', nodeId: 'n0' },
+      { rule: 'fold', occurrence: sel, args: ['w0'], target: { wireId: 'w0' } },
+      { rule: 'fold', occurrence: sel, args: ['w0'], target: { defId: 'nat', sig: relSig([TERM]) } },
     ]
     for (const s of steps) roundTrip(s)
   })
@@ -175,10 +171,14 @@ describe('step round-trips through JSON', () => {
     })).toThrowError(/unknown field 'node'/)
     expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: 50 }))
       .toThrowError(/unknown field 'fuel'/)
-    expect(() => stepFromJson({ rule: 'relUnfold', node: 'n0', extra: 1 }))
+    expect(() => stepFromJson({ rule: 'unfold', nodeId: 'n0', extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
-    expect(() => stepFromJson({ rule: 'relFold', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, defId: 'nat', args: ['w0'], extra: 1 }))
+    expect(() => stepFromJson({ rule: 'fold', occurrence: { region: 'r0', regions: [], nodes: [], wires: [] }, args: ['w0'], target: { wireId: 'w0' }, extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
+    expect(() => stepFromJson({ rule: 'fold', occurrence: { region: 'r0', regions: [], nodes: [], wires: [] }, args: ['w0'], target: { defId: 'nat', sig: { kind: 'term' } } }))
+      .toThrowError(/sig must be a relation signature/)
+    expect(() => stepFromJson({ rule: 'vacuousIntro', scope: 'r1', sig: { kind: 'bogus' } }))
+      .toThrowError(/"kind" must be "term" or "rel"/)
     expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")' }))
       .toThrowError(/freePorts must be an array/)
     expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")', freePorts: [] }))
@@ -270,17 +270,21 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unknown field 'extra'/)
   })
 
-  it('requires the attachments field on comprehensionInstantiate — no optional-field parsing', () => {
+  it('requires every bodyAttach field — no optional-field parsing', () => {
     const b = new DiagramBuilder()
     const bn = b.termNode(b.root, p('\\x. x'))
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
     const pat = mkDiagramWithBoundary(b.build(), [bw])
     const j = JSON.parse(JSON.stringify(stepToJson(
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: [] },
+      { rule: 'bodyAttach', wireId: 'w0', content: pat, params: [] },
     ))) as Record<string, unknown>
-    delete j['attachments']
-    expect(() => stepFromJson(j)).toThrowError(/attachments must be an array/)
-    expect(() => stepFromJson({ ...j, attachments: [], extra: 1 })).toThrowError(/unknown field 'extra'/)
+    const withoutParams = { ...j }
+    delete withoutParams['params']
+    expect(() => stepFromJson(withoutParams)).toThrowError(/params must be an array/)
+    const withoutContent = { ...j }
+    delete withoutContent['content']
+    expect(() => stepFromJson(withoutContent)).toThrowError(/content must be an object/)
+    expect(() => stepFromJson({ ...j, extra: 1 })).toThrowError(/unknown field 'extra'/)
   })
 
   it('requires every anchored wire split field and rejects unknown fields', () => {
@@ -321,17 +325,10 @@ describe('step round-trips through JSON', () => {
 
 describe('certFromJson rejects invalid reduction-step kinds', () => {
   it('rejects a conversion whose certificate has kind "gamma" instead of beta|eta', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('(\\x. x) y'))
-    const d = h.build()
     const target = p('s0')
-    const correspondence = proposePortCorrespondence(
-      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
-      target,
-      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).freePorts,
-      freePorts(target),
-    )
-    const { certificate } = applyConversion(d, n, target, correspondence, 10)
+    const source = p('(\\x. x) s0')
+    const correspondence = proposePortCorrespondence(source, target, freePorts(source), freePorts(target))
+    const certificate = { leftSteps: [{ kind: 'beta' as const, path: [] }], rightSteps: [] }
     // Build a valid conversion step JSON, then corrupt one reduction-step kind
     const step: ProofStep = { rule: 'conversion', node: 'n0', term: target, certificate, correspondence, attachments: {} }
     const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
@@ -353,6 +350,29 @@ describe('diagram-with-boundary JSON preserves ordered alias incidences', () => 
     const aliased = mkDiagramWithBoundary(b.build(), [w, w])
     const back = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(aliased))))
     expect(back.boundary).toEqual([w, w])
+  })
+
+  it('round-trips and re-enforces the root-scoped-boundary invariant', () => {
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('\\x. x'))
+    b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    // a bare (endpoint-free) root-scoped boundary wire
+    const bare = b.wire(b.root, [], TERM)
+    const dwb = mkDiagramWithBoundary(b.build(), [bare])
+    const back = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(dwb))))
+    expect(back.boundary).toEqual([bare])
+    for (const wire of back.boundary) {
+      expect(back.diagram.wires[wire]!.scope).toBe(back.diagram.root)
+    }
+    // A hand-crafted encoding whose bare boundary wire is scoped inside a cut
+    // must be refused on decode — the invariant is re-established, never trusted.
+    const encoded = JSON.parse(JSON.stringify(dwbToJson(dwb))) as {
+      diagram: { root: string; regions: Record<string, unknown>; wires: Record<string, { scope: string }> }
+      boundary: string[]
+    }
+    encoded.diagram.regions['c'] = { kind: 'cut', parent: encoded.diagram.root }
+    encoded.diagram.wires[encoded.boundary[0]!]!.scope = 'c'
+    expect(() => dwbFromJson(encoded)).toThrowError(/must be scoped at the diagram root/)
   })
 })
 

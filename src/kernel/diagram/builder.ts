@@ -4,6 +4,7 @@ import type { Diagram, Endpoint, NodeId, Region, RegionId, DiagramNode, Wire, Wi
 import { mkDiagram, portKey, portSig, requiredPorts } from './diagram'
 import type { RelSig, Sig } from './sig'
 import { TERM } from './sig'
+import type { DiagramWithBoundary } from './boundary'
 
 /**
  * Ergonomic incremental construction with deterministic ids (r0, r1, …; n0, …;
@@ -43,6 +44,19 @@ export class DiagramBuilder {
   ref(region: RegionId, defId: string, sig: RelSig): NodeId {
     const id = `n${this.nodeCount++}`
     this.nodes[id] = { kind: 'ref', region, defId, sig }
+    return id
+  }
+
+  /**
+   * A body node witnessing a relational wire with a concrete comprehension.
+   * `content` is a self-contained DiagramWithBoundary: `sig.args.length` arg
+   * stubs followed by parameter wires. On build(), the output port and each
+   * parameter freeVar port that no explicit wire attaches receive a fresh
+   * singleton wire of the right sort.
+   */
+  body(region: RegionId, sig: RelSig, content: DiagramWithBoundary): NodeId {
+    const id = `n${this.nodeCount++}`
+    this.nodes[id] = { kind: 'body', region, sig, content }
     return id
   }
 

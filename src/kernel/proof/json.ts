@@ -5,13 +5,10 @@ import type { PathSeg, ReductionStep } from '../term/reduce'
 import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
 import type { Endpoint, WireId } from '../diagram/diagram'
 import { portKey } from '../diagram/diagram'
-import { diagramToJson, diagramFromJson, parsePortKey } from '../diagram/json'
-import type { DiagramWithBoundary } from '../diagram/boundary'
-import { mkDiagramWithBoundary } from '../diagram/boundary'
+import { parsePortKey, dwbToJson, dwbFromJson, sigToJson, sigFromJson, relSigFromJson } from '../diagram/json'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
-import type { AbstractionOccurrence } from '../rules/comprehension'
-import type { ProofStep } from './step'
+import type { FoldStepTarget, ProofStep } from './step'
 import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { Theorem, TheoremApplication } from './theorem'
 import {
@@ -83,19 +80,10 @@ function endpointFromJson(v: unknown, what: string): Endpoint {
   return { node: str(v.node, `${what}.node`), port: parsePortKey(str(v.port, `${what}.port`)) }
 }
 
-export function dwbToJson(dwb: DiagramWithBoundary): unknown {
-  return { diagram: diagramToJson(dwb.diagram), boundary: [...dwb.boundary] }
-}
-
-export function dwbFromJson(v: unknown, what = 'pattern'): DiagramWithBoundary {
-  if (!isRecord(v)) fail(`${what} must be an object`)
-  assertOnlyKeys(v, ['diagram', 'boundary'], what)
-  try {
-    return mkDiagramWithBoundary(diagramFromJson(v.diagram), strArray(v.boundary, `${what}.boundary`))
-  } catch (e) {
-    return fail(`${what}: ${e instanceof Error ? e.message : String(e)}`)
-  }
-}
+// The DiagramWithBoundary codec lives at the diagram layer (boundary.ts is a
+// diagram-layer concept and body-node content recurses through it). Re-exported
+// here for proof-layer consumers.
+export { dwbToJson, dwbFromJson }
 
 function reductionStepsToJson(steps: readonly ReductionStep[]): unknown {
   return steps.map((step) => ({ kind: step.kind, path: [...step.path] }))
@@ -204,7 +192,6 @@ function occurrenceCertificateToJson(certificate: OccurrenceCertificate): unknow
     nodeMap: idMapToJson(certificate.nodeMap),
     wireMap: idMapToJson(certificate.wireMap),
     attachments: [...certificate.attachments],
-    binderMap: idMapToJson(certificate.binderMap),
     termCertificates: [...certificate.termCertificates]
       .map(([node, conversion]) => [node, certToJson(conversion)]),
   }
@@ -213,7 +200,7 @@ function occurrenceCertificateToJson(certificate: OccurrenceCertificate): unknow
 function occurrenceCertificateFromJson(v: unknown, what: string): OccurrenceCertificate {
   if (!isRecord(v)) fail(`${what} must be an object`)
   assertOnlyKeys(v, [
-    'region', 'regionMap', 'nodeMap', 'wireMap', 'attachments', 'binderMap', 'termCertificates',
+    'region', 'regionMap', 'nodeMap', 'wireMap', 'attachments', 'termCertificates',
   ], what)
   if (!Array.isArray(v.termCertificates)) fail(`${what}.termCertificates must be an array`)
   const termCertificates = new Map<string, ConversionCertificate>()
@@ -231,19 +218,22 @@ function occurrenceCertificateFromJson(v: unknown, what: string): OccurrenceCert
     nodeMap: idMapFromJson(v.nodeMap, `${what}.nodeMap`),
     wireMap: idMapFromJson(v.wireMap, `${what}.wireMap`),
     attachments: strArray(v.attachments, `${what}.attachments`),
-    binderMap: idMapFromJson(v.binderMap, `${what}.binderMap`),
     termCertificates,
   }
 }
 
-function occToJson(o: AbstractionOccurrence): unknown {
-  return { sel: selToJson(o.sel), args: [...o.args] }
+function foldTargetToJson(t: FoldStepTarget): unknown {
+  return 'wireId' in t ? { wireId: t.wireId } : { defId: t.defId, sig: sigToJson(t.sig) }
 }
 
-function occFromJson(v: unknown, what: string): AbstractionOccurrence {
+function foldTargetFromJson(v: unknown, what: string): FoldStepTarget {
   if (!isRecord(v)) fail(`${what} must be an object`)
-  assertOnlyKeys(v, ['sel', 'args'], what)
-  return { sel: selFromJson(v.sel, `${what}.sel`), args: strArray(v.args, `${what}.args`) }
+  if ('wireId' in v) {
+    assertOnlyKeys(v, ['wireId'], what)
+    return { wireId: str(v.wireId, `${what}.wireId`) }
+  }
+  assertOnlyKeys(v, ['defId', 'sig'], what)
+  return { defId: str(v.defId, `${what}.defId`), sig: relSigFromJson(v.sig, `${what}.sig`) }
 }
 
 function appToJson(a: TheoremApplication): unknown {
@@ -307,26 +297,20 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, wire: s.wire }
     case 'fission':
       return { rule: s.rule, node: s.node, path: [...s.path] }
-    case 'comprehensionInstantiate':
-      return {
-        rule: s.rule,
-        bubble: s.bubble,
-        comp: dwbToJson(s.comp),
-        attachments: [...s.attachments],
-        binders: s.binders.map(([pattern, host]) => [pattern, host]),
-      }
-    case 'comprehensionAbstract':
-      return { rule: s.rule, wrap: selToJson(s.wrap), comp: dwbToJson(s.comp), occurrences: s.occurrences.map(occToJson) }
     case 'theorem':
       return { rule: s.rule, name: s.name, at: appToJson(s.at), direction: s.direction }
     case 'vacuousIntro':
-      return { rule: s.rule, sel: selToJson(s.sel), arity: s.arity }
+      return { rule: s.rule, scope: s.scope, sig: sigToJson(s.sig) }
     case 'vacuousElim':
-      return { rule: s.rule, region: s.region }
-    case 'relUnfold':
-      return { rule: s.rule, node: s.node }
-    case 'relFold':
-      return { rule: s.rule, sel: selToJson(s.sel), defId: s.defId, args: [...s.args] }
+      return { rule: s.rule, wireId: s.wireId }
+    case 'bodyAttach':
+      return { rule: s.rule, wireId: s.wireId, content: dwbToJson(s.content), params: [...s.params] }
+    case 'bodyDetach':
+      return { rule: s.rule, bodyNodeId: s.bodyNodeId }
+    case 'unfold':
+      return { rule: s.rule, nodeId: s.nodeId }
+    case 'fold':
+      return { rule: s.rule, occurrence: selToJson(s.occurrence), args: [...s.args], target: foldTargetToJson(s.target) }
   }
 }
 
@@ -434,51 +418,30 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'fission':
       assertOnlyKeys(j, ['rule', 'node', 'path'], 'fission step')
       return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path') }
-    case 'comprehensionInstantiate': {
-      assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'attachments', 'binders'], 'comprehensionInstantiate step')
-      if (!Array.isArray(j.binders)) fail('binders must be an array')
-      const binders: Array<readonly [string, string]> = []
-      const patterns = new Set<string>()
-      const targets = new Set<string>()
-      for (const [index, entry] of j.binders.entries()) {
-        if (!Array.isArray(entry) || entry.length !== 2) {
-          fail(`binders[${index}] must be a [pattern, host] pair`)
-        }
-        const pattern = str(entry[0], `binders[${index}][0]`)
-        const host = str(entry[1], `binders[${index}][1]`)
-        if (patterns.has(pattern)) fail(`binders repeats pattern id '${pattern}'`)
-        if (targets.has(host)) fail(`binders repeats host target '${host}'`)
-        patterns.add(pattern)
-        targets.add(host)
-        binders.push([pattern, host])
-      }
-      return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), attachments: strArray(j.attachments, 'attachments'), binders }
-    }
-    case 'comprehensionAbstract': {
-      assertOnlyKeys(j, ['rule', 'wrap', 'comp', 'occurrences'], 'comprehensionAbstract step')
-      if (!Array.isArray(j.occurrences)) fail('occurrences must be an array')
-      return { rule, wrap: selFromJson(j.wrap, 'wrap'), comp: dwbFromJson(j.comp, 'comp'), occurrences: j.occurrences.map((o, i) => occFromJson(o, `occurrences[${i}]`)) }
-    }
     case 'theorem': {
       assertOnlyKeys(j, ['rule', 'name', 'at', 'direction'], 'theorem step')
       const direction = str(j.direction, 'direction')
       if (direction !== 'forward' && direction !== 'reverse') fail("direction must be 'forward'|'reverse'")
       return { rule, name: str(j.name, 'name'), at: appFromJson(j.at, 'at'), direction }
     }
-    case 'vacuousIntro': {
-      assertOnlyKeys(j, ['rule', 'sel', 'arity'], 'vacuousIntro step')
-      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
-      return { rule, sel: selFromJson(j.sel, 'sel'), arity: j.arity }
-    }
+    case 'vacuousIntro':
+      assertOnlyKeys(j, ['rule', 'scope', 'sig'], 'vacuousIntro step')
+      return { rule, scope: str(j.scope, 'scope'), sig: sigFromJson(j.sig, 'sig') }
     case 'vacuousElim':
-      assertOnlyKeys(j, ['rule', 'region'], 'vacuousElim step')
-      return { rule, region: str(j.region, 'region') }
-    case 'relUnfold':
-      assertOnlyKeys(j, ['rule', 'node'], 'relUnfold step')
-      return { rule, node: str(j.node, 'node') }
-    case 'relFold':
-      assertOnlyKeys(j, ['rule', 'sel', 'defId', 'args'], 'relFold step')
-      return { rule, sel: selFromJson(j.sel, 'sel'), defId: str(j.defId, 'defId'), args: strArray(j.args, 'args') }
+      assertOnlyKeys(j, ['rule', 'wireId'], 'vacuousElim step')
+      return { rule, wireId: str(j.wireId, 'wireId') }
+    case 'bodyAttach':
+      assertOnlyKeys(j, ['rule', 'wireId', 'content', 'params'], 'bodyAttach step')
+      return { rule, wireId: str(j.wireId, 'wireId'), content: dwbFromJson(j.content, 'content'), params: strArray(j.params, 'params') }
+    case 'bodyDetach':
+      assertOnlyKeys(j, ['rule', 'bodyNodeId'], 'bodyDetach step')
+      return { rule, bodyNodeId: str(j.bodyNodeId, 'bodyNodeId') }
+    case 'unfold':
+      assertOnlyKeys(j, ['rule', 'nodeId'], 'unfold step')
+      return { rule, nodeId: str(j.nodeId, 'nodeId') }
+    case 'fold':
+      assertOnlyKeys(j, ['rule', 'occurrence', 'args', 'target'], 'fold step')
+      return { rule, occurrence: selFromJson(j.occurrence, 'occurrence'), args: strArray(j.args, 'args'), target: foldTargetFromJson(j.target, 'target') }
     default:
       return fail(`unknown rule '${rule}'`)
   }

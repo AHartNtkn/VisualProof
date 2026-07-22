@@ -3,6 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm, exploreLabeling, exploreIso } from '../../../src/kernel/diagram/canonical/explore'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { TERM } from '../../../src/kernel/diagram/sig'
 import type { Diagram, Region, DiagramNode, Wire } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
@@ -24,20 +25,21 @@ function renamed(d: Diagram): Diagram {
   const r = (id: string) => `X_${id}`
   const regions: Record<string, Region> = {}
   for (const [id, reg] of Object.entries(d.regions)) {
-    regions[r(id)] = reg.kind === 'sheet' ? reg
-      : reg.kind === 'cut' ? { kind: 'cut', parent: r(reg.parent) }
-      : { kind: 'bubble', parent: r(reg.parent), arity: reg.arity }
+    regions[r(id)] = reg.kind === 'sheet' ? reg : { kind: 'cut', parent: r(reg.parent) }
   }
   const nodes: Record<string, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
+    // Only host ids are renamed; sigs are structural and body content is a
+    // self-contained namespace, so both are carried through unchanged.
     nodes[r(id)] =
       n.kind === 'term' ? { kind: 'term', region: r(n.region), term: n.term, freePorts: n.freePorts }
-      : n.kind === 'atom' ? { kind: 'atom', region: r(n.region), binder: r(n.binder) }
-      : { kind: 'ref', region: r(n.region), defId: n.defId, arity: n.arity }
+      : n.kind === 'atom' ? { kind: 'atom', region: r(n.region), sig: n.sig }
+      : n.kind === 'ref' ? { kind: 'ref', region: r(n.region), defId: n.defId, sig: n.sig }
+      : { kind: 'body', region: r(n.region), sig: n.sig, content: n.content }
   }
   const wires: Record<string, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
-    wires[r(id)] = { scope: r(w.scope), endpoints: w.endpoints.map((ep) => ({ node: r(ep.node), port: ep.port })) }
+    wires[r(id)] = { scope: r(w.scope), sig: w.sig, endpoints: w.endpoints.map((ep) => ({ node: r(ep.node), port: ep.port })) }
   }
   return mkDiagram({ root: r(d.root), regions, nodes, wires })
 }
@@ -129,8 +131,8 @@ describe('exploreIso', () => {
         n1: { kind: 'term', region: 'r2', term: lam },  // inner cut, inserted second
       },
       wires: {
-        w0: { scope: 'r1', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r2', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+        w0: { scope: 'r1', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r2', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
     const d2 = mkDiagram({
@@ -141,8 +143,8 @@ describe('exploreIso', () => {
         n1: { kind: 'term', region: 'r1', term: lam },  // outer cut, inserted second
       },
       wires: {
-        w0: { scope: 'r2', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r1', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+        w0: { scope: 'r2', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r1', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
     const iso = exploreIso(d1, d2)

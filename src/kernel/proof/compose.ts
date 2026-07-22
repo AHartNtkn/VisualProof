@@ -2,7 +2,6 @@ import type { Diagram, Endpoint, WireId } from '../diagram/diagram'
 import type { DiagramIso } from '../diagram/canonical/explore'
 import { exploreIso } from '../diagram/canonical/explore'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { ProofStep } from './step'
 import type { ProofContext } from './context'
@@ -40,10 +39,6 @@ function mapEndpoint(iso: DiagramIso, ep: Endpoint): Endpoint {
   return { node: mapId(iso.nodes, ep.node, 'node'), port: ep.port }
 }
 
-function mapOccurrence(iso: DiagramIso, occ: AbstractionOccurrence): AbstractionOccurrence {
-  return { sel: mapSel(iso, occ.sel), args: occ.args.map((w) => mapId(iso.wires, w, 'wire')) }
-}
-
 function mapOccurrenceCertificate(iso: DiagramIso, certificate: OccurrenceCertificate): OccurrenceCertificate {
   return {
     region: mapId(iso.regions, certificate.region, 'region'),
@@ -57,9 +52,6 @@ function mapOccurrenceCertificate(iso: DiagramIso, certificate: OccurrenceCertif
       pattern, mapId(iso.wires, host, 'wire'),
     ])),
     attachments: certificate.attachments.map((wire) => mapId(iso.wires, wire, 'wire')),
-    binderMap: new Map([...certificate.binderMap].map(([stub, host]) => [
-      stub, mapId(iso.regions, host, 'region'),
-    ])),
     termCertificates: certificate.termCertificates,
   }
 }
@@ -131,28 +123,31 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, wire: mapId(iso.wires, step.wire, 'wire') }
     case 'fission':
       return { ...step, node: mapId(iso.nodes, step.node, 'node') }
-    case 'comprehensionInstantiate': {
-      const binders = step.binders.map(([stub, host]) =>
-        [stub, mapId(iso.regions, host, 'region')] as const)
-      return {
-        ...step,
-        bubble: mapId(iso.regions, step.bubble, 'region'),
-        attachments: step.attachments.map((w) => mapId(iso.wires, w, 'wire')),
-        binders,
-      }
-    }
-    case 'comprehensionAbstract':
-      return { ...step, wrap: mapSel(iso, step.wrap), occurrences: step.occurrences.map((o) => mapOccurrence(iso, o)) }
     case 'theorem':
       return { ...step, at: { sel: mapSel(iso, step.at.sel), args: step.at.args.map((w) => mapId(iso.wires, w, 'wire')) } }
     case 'vacuousIntro':
-      return { ...step, sel: mapSel(iso, step.sel) }
+      return { ...step, scope: mapId(iso.regions, step.scope, 'region') }
     case 'vacuousElim':
-      return { ...step, region: mapId(iso.regions, step.region, 'region') }
-    case 'relUnfold':
-      return { ...step, node: mapId(iso.nodes, step.node, 'node') }
-    case 'relFold':
-      return { ...step, sel: mapSel(iso, step.sel), args: step.args.map((w) => mapId(iso.wires, w, 'wire')) }
+      return { ...step, wireId: mapId(iso.wires, step.wireId, 'wire') }
+    case 'bodyAttach':
+      return {
+        ...step,
+        wireId: mapId(iso.wires, step.wireId, 'wire'),
+        params: step.params.map((w) => mapId(iso.wires, w, 'wire')),
+      }
+    case 'bodyDetach':
+      return { ...step, bodyNodeId: mapId(iso.nodes, step.bodyNodeId, 'node') }
+    case 'unfold':
+      return { ...step, nodeId: mapId(iso.nodes, step.nodeId, 'node') }
+    case 'fold':
+      return {
+        ...step,
+        occurrence: mapSel(iso, step.occurrence),
+        args: step.args.map((w) => mapId(iso.wires, w, 'wire')),
+        target: 'wireId' in step.target
+          ? { ...step.target, wireId: mapId(iso.wires, step.target.wireId, 'wire') }
+          : step.target,
+      }
   }
 }
 

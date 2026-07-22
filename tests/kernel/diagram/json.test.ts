@@ -2,20 +2,32 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramToJson, diagramFromJson } from '../../../src/kernel/diagram/json'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 
+/** Content for a nullary-parameter body: one TERM arg stub fed by `\z. z`. */
+function bodyContent() {
+  const cb = new DiagramBuilder()
+  const inner = cb.termNode(cb.root, p('\\z. z'))
+  const argWire = cb.wire(cb.root, [{ node: inner, port: { kind: 'output' } }])
+  return mkDiagramWithBoundary(cb.build(), [argWire])
+}
+
+/** A cut holding a depth-2 atom (sig `((t),(t),t)`), a term node sharing its
+ * TERM argument, and a body node — exercises sig, body content, and recursion. */
 function sample() {
   const b = new DiagramBuilder()
   const cut = b.cut(b.root)
-  const bub = b.bubble(cut, 2)
-  const t = b.termNode(bub, p('\\x. y x'))
-  const a = b.atom(bub, bub)
-  b.wire(bub, [
+  const t = b.termNode(cut, p('\\x. y x'))                        // n0
+  const a = b.atom(cut, relSig([relSig([TERM]), relSig([TERM]), TERM]))  // n1
+  b.wire(cut, [
     { node: t, port: { kind: 'output' } },
-    { node: a, port: { kind: 'arg', index: 0 } },
-    { node: a, port: { kind: 'arg', index: 1 } },
-  ])
+    { node: a, port: { kind: 'arg', index: 2 } },
+  ])                                                              // w0
+  b.body(cut, relSig([TERM]), bodyContent())                     // n2
   return b.build()
 }
 
@@ -47,6 +59,43 @@ describe('diagram JSON', () => {
     const d2 = diagramFromJson(j1)
     const j2 = diagramToJson(d2)
     expect(JSON.stringify(j2)).toBe(JSON.stringify(j1))
+  })
+
+  it('round-trips a depth-2 atom and a body node by deep equality and fingerprint', () => {
+    const d = sample()
+    const decoded = diagramFromJson(JSON.parse(JSON.stringify(diagramToJson(d))))
+    expect(decoded).toEqual(d)
+    expect(exploreForm(decoded)).toBe(exploreForm(d))
+  })
+
+  it('decodes signatures recursively and rejects malformed ones loudly', () => {
+    const d = sample()
+    const good = JSON.parse(JSON.stringify(diagramToJson(d))) as {
+      nodes: Record<string, { sig?: unknown }>
+      wires: Record<string, { sig?: unknown }>
+    }
+    // n1 is the depth-2 atom
+    expect(good.nodes['n1']!.sig).toEqual({
+      kind: 'rel',
+      args: [{ kind: 'rel', args: [{ kind: 'term' }] }, { kind: 'rel', args: [{ kind: 'term' }] }, { kind: 'term' }],
+    })
+    const badKind = JSON.parse(JSON.stringify(good)) as { nodes: Record<string, { sig: { kind: string } }> }
+    badKind.nodes['n1']!.sig.kind = 'bubble'
+    expect(() => diagramFromJson(badKind)).toThrowError(/malformed diagram JSON.*"kind" must be "term" or "rel"/)
+    const extraKey = JSON.parse(JSON.stringify(good)) as { wires: Record<string, { sig: Record<string, unknown> }> }
+    const someWire = Object.keys(extraKey.wires)[0]!
+    extraKey.wires[someWire]!.sig['smuggled'] = 1
+    expect(() => diagramFromJson(extraKey)).toThrowError(/carries extra fields/)
+  })
+
+  it('rejects bubble/binder vocabulary from the old model as unknown', () => {
+    const d = sample()
+    const withBubble = JSON.parse(JSON.stringify(diagramToJson(d))) as { regions: Record<string, unknown> }
+    withBubble.regions['rb'] = { kind: 'bubble', parent: 'r0', arity: 2 }
+    expect(() => diagramFromJson(withBubble)).toThrowError(/region 'rb' has unrecognized shape/)
+    const withBinder = JSON.parse(JSON.stringify(diagramToJson(d))) as { nodes: Record<string, unknown> }
+    withBinder.nodes['n1'] = { kind: 'atom', region: 'r1', binder: 'rb' }
+    expect(() => diagramFromJson(withBinder)).toThrowError(/node 'n1' has unrecognized shape/)
   })
 
   it('serializes terms via the injective term serialization (canonical port names)', () => {
