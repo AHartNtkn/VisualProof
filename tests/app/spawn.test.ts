@@ -157,7 +157,7 @@ describe('spawn invocation lifecycle value', () => {
       spawnTerm: () => {},
       spawnRelation: () => {},
       spawnBoundPredicate: () => {},
-      binderColor: () => 'rgb(1, 2, 3)',
+      headWireColor: () => 'rgb(1, 2, 3)',
     })
 
     expect(cascade.isOpen).toBe(false)

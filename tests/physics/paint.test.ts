@@ -220,7 +220,7 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
 
   it('atom strokes and its head wire both carry the order-ladder hue', () => {
     const { d, e, head } = wireAtom()
-    const hue = relationWireHues(d, LIGHT.bubbleLightness).get(head)!
+    const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
     const shapes = paint(e, LIGHT)
     // the head wire's traced legs carry the hue (no bubble ring exists)
     const wireLegs = shapes.filter((s) => s.kind === 'polyline' && s.stroke === hue)
@@ -240,7 +240,7 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     const a2 = h.atom(h.root, relSig([rel(1)]))
     const w2 = h.wire(h.root, [{ node: a2, port: { kind: 'head' } }], relSig([rel(1)])) // order 2
     const d = h.build()
-    const hues = relationWireHues(d, LIGHT.bubbleLightness)
+    const hues = relationWireHues(d, LIGHT.relationHueLightness)
     // term wire is NOT in the ladder map: it keeps the base wire colour (rung 0)
     expect(hues.get(w0)).toBeUndefined()
     const c0 = hues.get(w0) ?? LIGHT.wire
@@ -252,14 +252,14 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
   it('Dark: the relation wire AND atom anatomy glow in the order hue; Light does not glow', () => {
     const { d, e, head } = wireAtom()
     const darkShapes = paint(e, DARK)
-    const darkHue = relationWireHues(d, DARK.bubbleLightness).get(head)!
+    const darkHue = relationWireHues(d, DARK.relationHueLightness).get(head)!
     const darkWire = darkShapes.find((s) => s.kind === 'polyline' && s.stroke === darkHue)!
     expect(darkWire.kind === 'polyline' && darkWire.glow).toBe(darkHue)
     const darkAtomArc = darkShapes.find((s) => s.kind === 'arc' && s.stroke === darkHue)!
     expect(darkAtomArc.kind === 'arc' && darkAtomArc.glow).toBe(darkHue)
 
     const lightShapes = paint(e, LIGHT)
-    const lightHue = relationWireHues(d, LIGHT.bubbleLightness).get(head)!
+    const lightHue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
     const lightWire = lightShapes.find((s) => s.kind === 'polyline' && s.stroke === lightHue)!
     expect(lightWire.kind === 'polyline' && lightWire.glow).toBeNull()
     const lightAtomArc = lightShapes.find((s) => s.kind === 'arc' && s.stroke === lightHue)!
@@ -308,7 +308,7 @@ describe('hover-group highlight', () => {
 
   it('brightens the shared head wire and every bound atom in the shared (brighter) hue', () => {
     const { d, e, head } = grp()
-    const base = relationWireHues(d, DARK.bubbleLightness).get(head)!
+    const base = relationWireHues(d, DARK.relationHueLightness).get(head)!
     const shapes = highlightGroup(e, DARK, head)
     const wireLegs = shapes.filter((s) => s.kind === 'polyline')
     expect(wireLegs.length).toBeGreaterThan(0) // the shared wire's legs

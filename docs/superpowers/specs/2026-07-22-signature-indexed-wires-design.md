@@ -212,7 +212,10 @@ Sig-indexed — one apparatus for what were two binding systems. The 45k-line
 each of the five primitives follows the proof shape of its existing
 `ι`-counterpart (equation intro/elim, congruence/fold-unfold via the Named*
 modules, join, vacuous). Soundness of the old monolithic rules is inherited
-by macro composition, not re-proven.
+by macro composition, not re-proven. One exception: the bodied-vacuous case
+(introducing/deleting `∃R. R=G` — the comprehension axiom itself, rule 1
+above) is a NEW soundness obligation beyond the `ι`-templates and must be
+proved from scratch, not inherited by analogy.
 
 **Concrete side.** `CRegion` loses `bubble`; `CWire` gains `sig`;
 `CNode.atom` gains a head port and loses `binder`; `checkWellFormed` swaps

@@ -275,9 +275,9 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
   previewShapes(): readonly Shape[] {
     const theme = this.#opts.theme()
     const engine = this.#opts.engine()
-    const bubble = circleForSelection(engine, this.#wrap)
+    const wrapCircle = circleForSelection(engine, this.#wrap)
     const shapes: Shape[] = [{
-      kind: 'circle', center: bubble.center, r: bubble.radius,
+      kind: 'circle', center: wrapCircle.center, r: wrapCircle.radius,
       fill: `${theme.interaction.valid}0f`, stroke: theme.interaction.valid,
       width: 2.5, insetColor: null, glow: null,
     }]

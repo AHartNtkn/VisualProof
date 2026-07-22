@@ -97,9 +97,9 @@ export type SpawnCascadeOptions = {
   /** Return false to keep the cascade open after a refused edit. */
   readonly spawnBoundPredicate: (request: SpawnBoundPredicateRequest) => boolean | void
   /** Presentation color derived from the renderer's authoritative relation-wire hue. */
-  readonly binderColor: (wire: WireId, source: SpawnBoundPredicateOption['source']) => string
+  readonly headWireColor: (wire: WireId, source: SpawnBoundPredicateOption['source']) => string
   /** View-only relation-wire emphasis. Null clears every cascade-owned emphasis. */
-  readonly hoverBinder?: (
+  readonly hoverHeadWire?: (
     wire: WireId | null,
     source: SpawnBoundPredicateOption['source'] | null,
   ) => void
@@ -215,8 +215,8 @@ export class SpawnCascade {
   readonly #spawnTerm: SpawnCascadeOptions['spawnTerm']
   readonly #spawnRelation: SpawnCascadeOptions['spawnRelation']
   readonly #spawnBoundPredicate: SpawnCascadeOptions['spawnBoundPredicate']
-  readonly #binderColor: SpawnCascadeOptions['binderColor']
-  readonly #hoverBinder: SpawnCascadeOptions['hoverBinder']
+  readonly #headWireColor: SpawnCascadeOptions['headWireColor']
+  readonly #hoverHeadWire: SpawnCascadeOptions['hoverHeadWire']
   readonly #openChanged: SpawnCascadeOptions['openChanged']
   readonly #recents: SpawnRecents
   #menu: HTMLDivElement | null = null
@@ -230,8 +230,8 @@ export class SpawnCascade {
     this.#spawnTerm = options.spawnTerm
     this.#spawnRelation = options.spawnRelation
     this.#spawnBoundPredicate = options.spawnBoundPredicate
-    this.#binderColor = options.binderColor
-    this.#hoverBinder = options.hoverBinder
+    this.#headWireColor = options.headWireColor
+    this.#hoverHeadWire = options.hoverHeadWire
     this.#openChanged = options.openChanged
     this.#recents = new SpawnRecents(options.recentsLimit)
   }
@@ -336,13 +336,13 @@ export class SpawnCascade {
       return item
     }
 
-    const binderLabel = (entry: SpawnBoundPredicateOption): string => entry.total === 1
+    const relationLabel = (entry: SpawnBoundPredicateOption): string => entry.total === 1
       ? 'Bound predicate'
       : entry.position === 1
-        ? 'Binder 1 (innermost)'
+        ? 'Relation 1 (innermost)'
         : entry.position === entry.total
-          ? `Binder ${entry.position} (outermost)`
-          : `Binder ${entry.position}`
+          ? `Relation ${entry.position} (outermost)`
+          : `Relation ${entry.position}`
 
     const pickBoundPredicate = (entry: SpawnBoundPredicateOption): void => {
       if (!current()) return
@@ -354,20 +354,20 @@ export class SpawnCascade {
     }
 
     const boundPredicateRow = (entry: SpawnBoundPredicateOption): HTMLElement => {
-      const item = row(binderLabel(entry), `/${entry.arity}`, () => pickBoundPredicate(entry))
+      const item = row(relationLabel(entry), `/${entry.arity}`, () => pickBoundPredicate(entry))
       item.classList.add('vpa-spawn-bound-predicate')
       item.dataset.wire = entry.wire
       item.dataset.source = entry.source
       const swatch = this.#document.createElement('span')
-      swatch.className = 'vpa-spawn-binder-swatch'
+      swatch.className = 'vpa-spawn-relation-swatch'
       swatch.setAttribute('aria-hidden', 'true')
-      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#binderColor(entry.wire, entry.source)};box-shadow:0 0 0 1px #0002`
+      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#headWireColor(entry.wire, entry.source)};box-shadow:0 0 0 1px #0002`
       item.firstElementChild?.prepend(swatch)
       item.addEventListener('pointerenter', () => {
-        if (current()) this.#setHoveredBinder(entry.wire, entry.source)
+        if (current()) this.#setHoveredHeadWire(entry.wire, entry.source)
       })
       item.addEventListener('pointerleave', () => {
-        if (current()) this.#setHoveredBinder(null, null)
+        if (current()) this.#setHoveredHeadWire(null, null)
       })
       return item
     }
@@ -455,15 +455,15 @@ export class SpawnCascade {
     queueMicrotask(() => { if (current()) search.focus() })
   }
 
-  #setHoveredBinder(
+  #setHoveredHeadWire(
     wire: WireId | null,
     source: SpawnBoundPredicateOption['source'] | null,
   ): void {
-    this.#hoverBinder?.(wire, source)
+    this.#hoverHeadWire?.(wire, source)
   }
 
   close(): boolean {
-    this.#setHoveredBinder(null, null)
+    this.#setHoveredHeadWire(null, null)
     if (this.#menu === null) return false
     this.#menu.remove()
     this.#backdrop?.remove()

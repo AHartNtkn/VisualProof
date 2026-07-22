@@ -49,7 +49,7 @@ declare global {
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
       fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]
       interactionOverlays(): string[]
-      spawnBinderHover(): string | null
+      spawnHeadWireHover(): string | null
       regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
       interaction(): { selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]; pins: string[]; userZoom: number }
@@ -167,8 +167,8 @@ test('proof spawning exposes loaded named relations and enclosing colored binder
   })
   await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
   await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('1')
-  await page.getByLabel('Bubble arity').press('Enter')
+  await page.getByLabel('Relation arity').fill('1')
+  await page.getByLabel('Relation arity').press('Enter')
 
   await openMode(page)
   await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
@@ -188,11 +188,11 @@ test('proof spawning exposes loaded named relations and enclosing colored binder
   await expect(cascade.locator('.vpa-spawn-heading', { hasText: 'Namespaces' })).toBeVisible()
   const bound = cascade.locator('.vpa-spawn-bound-predicate')
   await expect(bound).toHaveCount(1)
-  const swatch = bound.locator('.vpa-spawn-binder-swatch')
+  const swatch = bound.locator('.vpa-spawn-relation-swatch')
   await expect(swatch).toHaveCSS('border-radius', '50%')
   expect(await swatch.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
   await bound.hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).not.toBeNull()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).not.toBeNull()
   await bound.click()
   await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
 
@@ -416,8 +416,8 @@ test('both fixed proof fronts share atomic term, named, and colored bound spawn 
   })
   await page.mouse.click(mainCanvas.x + term.x, mainCanvas.y + term.y)
   await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('1')
-  await page.getByLabel('Bubble arity').press('Enter')
+  await page.getByLabel('Relation arity').fill('1')
+  await page.getByLabel('Relation arity').press('Enter')
   await openMode(page)
   await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
@@ -520,7 +520,7 @@ test('both fixed proof fronts share atomic term, named, and colored bound spawn 
   await invokeOnBubble('backward')
   const bound = cascade.locator('.vpa-spawn-bound-predicate')
   await expect(bound).toHaveCount(1)
-  await expect(bound.locator('.vpa-spawn-binder-swatch')).toHaveCSS('border-radius', '50%')
+  await expect(bound.locator('.vpa-spawn-relation-swatch')).toHaveCSS('border-radius', '50%')
   await bound.hover()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.motion.hover)).toBeGreaterThan(0)
   await bound.click()
@@ -908,8 +908,8 @@ test('relation workspace substitution opens from the real proof menu and cancels
   })
   await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
   await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('2')
-  await page.getByLabel('Bubble arity').press('Enter')
+  await page.getByLabel('Relation arity').fill('2')
+  await page.getByLabel('Relation arity').press('Enter')
   const bubblePoint = async () => page.evaluate(() => {
     const view = window.__vpaDebug!.view()
     const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!
@@ -1032,8 +1032,8 @@ test('relation workspace substitution uses the same transaction in backward prov
   })
   await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
   await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('1')
-  await page.getByLabel('Bubble arity').press('Enter')
+  await page.getByLabel('Relation arity').fill('1')
+  await page.getByLabel('Relation arity').press('Enter')
   const bubblePoint = async () => page.evaluate(() => {
     const view = window.__vpaDebug!.view()
     const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!
@@ -1073,8 +1073,8 @@ test('fixed-side relation workspace substitution guards the shared session and a
   })
   await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
   await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('1')
-  await page.getByLabel('Bubble arity').press('Enter')
+  await page.getByLabel('Relation arity').fill('1')
+  await page.getByLabel('Relation arity').press('Enter')
   const bubbleAt = await page.evaluate(() => {
     const view = window.__vpaDebug!.view()
     const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!

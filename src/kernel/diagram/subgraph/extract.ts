@@ -20,7 +20,7 @@ export type Extraction = {
  * carrying the crossing wire's signature; the original host wire ids form the
  * attachment record.
  *
- * There is no binder machinery: an atom whose head wire lies outside the
+ * There is no old-model binder machinery: an atom whose head wire lies outside the
  * selection contributes that head wire as an ordinary attachment (boundary)
  * wire, exactly like an arg wire crossing the boundary. The relational sig
  * rides on the stub, so splice can gate the reattachment by sig equality.

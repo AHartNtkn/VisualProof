@@ -16,8 +16,8 @@ export type ProofSpawnControllerOptions = {
   readonly commit: (step: ProofStep) => Diagram
   readonly place: (node: NodeId, at: Vec2) => void
   readonly refuse: (text: string, pointer: Vec2) => void
-  readonly binderColor: (wire: WireId) => string
-  readonly hoverBinder?: (wire: WireId | null) => void
+  readonly headWireColor: (wire: WireId) => string
+  readonly hoverHeadWire?: (wire: WireId | null) => void
   readonly openChanged?: (open: boolean) => void
 }
 
@@ -48,8 +48,8 @@ export class ProofSpawnController {
       spawnBoundPredicate: ({ wire, invocation }) => this.#attempt(invocation, () => ({
         rule: 'boundRelationSpawn', region: invocation.region, wire,
       })),
-      binderColor: options.binderColor,
-      ...(options.hoverBinder === undefined ? {} : { hoverBinder: options.hoverBinder }),
+      headWireColor: options.headWireColor,
+      ...(options.hoverHeadWire === undefined ? {} : { hoverHeadWire: options.hoverHeadWire }),
       ...(options.openChanged === undefined ? {} : { openChanged: options.openChanged }),
     })
   }

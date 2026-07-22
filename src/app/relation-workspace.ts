@@ -33,7 +33,7 @@ import {
   currentRelationDraft,
   deleteOptionalPort,
   insertOptionalPort,
-  importRelationHostBinderOccurrence,
+  importRelationHostOccurrence,
   materializeRelationSnapshot,
   moveRelationHistory,
   moveOptionalPort,
@@ -143,7 +143,7 @@ export function previewRelationWorkspaceSnapshot(
 
 /**
  * The relational wires enclosing the target wire (its scope or an ancestor
- * scope, excluding the target), innermost first — the outer binders a
+ * scope, excluding the target), innermost first — the outer relation wires a
  * substitution body may reference. Mirrors `boundPredicateOptions` for the host
  * surface, tagged `source: 'host'`.
  */
@@ -187,10 +187,10 @@ export function relationHostSelectionRoute(
   selection: SubgraphSelection,
 ): 'copy' | 'import' | 'refused' {
   const extraction = extractSubgraph(source, selection)
-  const referencesOuterBinder = extraction.pattern.boundary.some(
+  const referencesOuterRelation = extraction.pattern.boundary.some(
     (stub) => extraction.pattern.diagram.wires[stub]!.sig.kind === 'rel',
   )
-  if (!referencesOuterBinder) return 'copy'
+  if (!referencesOuterRelation) return 'copy'
   return draft.mode === 'substitute' ? 'import' : 'refused'
 }
 
@@ -676,13 +676,13 @@ export class RelationWorkspace {
       spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => spawnTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
       spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, relSig(Array.from({ length: arity }, () => TERM))), at.world),
       spawnBoundPredicate: ({ source, wire, invocation: at }) => source === 'host'
-        ? this.#importHostBinder(wire, at.region, at.world)
+        ? this.#importHostRelation(wire, at.region, at.world)
         : this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, wire), at.world),
-      binderColor: (wire, source) => {
+      headWireColor: (wire, source) => {
         const diagram = source === 'host' ? this.#transaction.sourceDiagram() : this.#diagram()
-        return relationWireHues(diagram, host.theme().bubbleLightness).get(wire) ?? host.theme().interaction.hover
+        return relationWireHues(diagram, host.theme().relationHueLightness).get(wire) ?? host.theme().interaction.hover
       },
-      hoverBinder: (wire, source) => {
+      hoverHeadWire: (wire, source) => {
         this.#spawnHover = wire === null || source === null ? null : { wire, source }
         host.changed()
       },
@@ -1054,10 +1054,10 @@ export class RelationWorkspace {
     }
   }
 
-  #importHostBinder(binder: RegionId, region: RegionId, at: Vec2): boolean {
+  #importHostRelation(hostWire: RegionId, region: RegionId, at: Vec2): boolean {
     try {
       const before = new Set(Object.keys(this.#diagram().nodes))
-      this.#draft = importRelationHostBinderOccurrence(this.#draft, binder, region)
+      this.#draft = importRelationHostOccurrence(this.#draft, hostWire, region)
       const node = Object.keys(this.#diagram().nodes).find((candidate) => !before.has(candidate))
       this.#reconcile(node === undefined ? undefined : { node, at })
       return true

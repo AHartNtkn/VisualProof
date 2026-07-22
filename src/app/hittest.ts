@@ -194,7 +194,7 @@ export type DragTarget =
 /**
  * What a press-and-drag grabs: any body disc (junctions included — they are
  * draggable geometry even though a CLICK on one resolves to its wire), else
- * the smallest containing region (a grab of a cut/bubble moves its whole
+ * the smallest containing region (a grab of a cut moves its whole
  * subtree), else nothing. Wires are derived geometry and the sheet is the
  * fixed background — neither is draggable.
  */

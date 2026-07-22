@@ -990,7 +990,7 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
     drag. The body is already inside its OWN region by construction — region circles
     are DERIVED to contain their members, so the region follows the dragged body —
     hence only the "outside non-member circles" half needs projecting. `p` is the
-    unguarded cursor target; every non-ancestor cut/bubble circle pushes the body's
+    unguarded cursor target; every non-ancestor cut circle pushes the body's
     disc fully clear with the sibling gap (the same bound the settling projection
     uses, so releasing the drag adds no jump). Ancestors of the body's region (the
     cuts it IS inside) are exempt, as is a wire-owned dot's disc clearance (the wire
@@ -1375,7 +1375,8 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     if (w.hub === null || w.slots.length > 0) continue
     dofs.push(() => gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06))
   }
-  // hub points (∀ via-body / legacy point hub)
+  // hub points: wire-owned Steiner branch points with no ∀ via-body (a
+  // 'body'-kind hub is driven by its body's own DOF above, not here)
   for (const [wid, w] of e.wires) {
     if (w.hub === null || w.hub.kind !== 'point') continue
     const hub = w.hub

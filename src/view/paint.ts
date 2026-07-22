@@ -38,7 +38,7 @@ export type Theme = {
   readonly font: string
   readonly insetColor: string
   readonly wireGlow: boolean
-  readonly bubbleLightness: number
+  readonly relationHueLightness: number
   readonly interaction: InteractionPalette
 }
 
@@ -89,7 +89,7 @@ export function referenceDisplayLabel(defId: string): string {
 /**
  * The order ladder: every relational wire is coloured by the ORDER (depth) of
  * its signature — the canonical colours-as-sort code (law 6), replacing the old
- * colours-as-names per-bubble hue. Order 1 is binder violet; each further order
+ * colours-as-names per-bubble hue. Order 1 is violet; each further order
  * steps one golden angle. Term wires (order 0) are absent from the map: they
  * keep the theme's base wire colour (ladder rung 0), so the caller reads
  * `hues.get(wid) ?? st.wire`. This is the single ladder authority — the app
@@ -154,7 +154,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
-  const hues = relationWireHues(e.d, st.bubbleLightness)
+  const hues = relationWireHues(e.d, st.relationHueLightness)
   // A wire strokes in its order-ladder rung; a term wire keeps the base wire
   // colour (rung 0). One colour, uniform along the whole wire (law 6).
   const wireStroke = (wid: WireId): string => hues.get(wid) ?? st.wire
@@ -209,7 +209,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
 export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Shape[] = paintWires): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
-  const hues = relationWireHues(e.d, st.bubbleLightness)
+  const hues = relationWireHues(e.d, st.relationHueLightness)
   const headWireOf = atomHeadWires(e.d)
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
   const shapes: Shape[] = []
@@ -218,7 +218,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
   shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerW: FRAME_CORNER_W, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
 
   // regions, outer first: cuts get fill + inset well + ink rim. Regions are only
-  // sheet/cut now — the bubble kind is deleted; relational quantifiers are wires.
+  // sheet/cut; relational quantifiers are wires, never regions.
   const rs = [...e.regions.entries()]
     .filter(([rid]) => e.d.regions[rid]!.kind !== 'sheet')
     .sort((a, b) => b[1].radius - a[1].radius)
@@ -271,7 +271,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     }
     if (node.kind === 'term') {
       // the term output run stays monochrome linework (term-internal anatomy
-      // never carries a binder hue — law 8)
+      // never carries a relation-wire hue — law 8)
       if (g.exitArc !== null) {
         shapes.push({ kind: 'arc', center: b.pos, r: g.exitArc.r * ascale, a0: g.exitArc.a0 + b.theta, a1: g.exitArc.a1 + b.theta, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
       }
@@ -297,7 +297,7 @@ export function nextTheme(t: Theme): Theme {
  * drawn over the base paint; empty when `wireId` is not a relational wire.
  */
 export function highlightGroup(e: Engine, st: Theme, wireId: WireId): Shape[] {
-  const hue = relationWireHues(e.d, Math.min(st.bubbleLightness + HL_BRIGHT, 88)).get(wireId)
+  const hue = relationWireHues(e.d, Math.min(st.relationHueLightness + HL_BRIGHT, 88)).get(wireId)
   if (hue === undefined) return []
   const out: Shape[] = []
   const wireGlow = st.wireGlow ? hue : null
@@ -317,7 +317,7 @@ export const LIGHT: Theme = {
   name: 'Light (Manuscript)', canvas: '#e8e4d8', paper: '#faf7ee', ink: '#2a2118', frame: '#7a7263',
   wire: '#26343a', wireW: 2.2, negFill: 'rgba(90, 78, 58, 0.12)', rimW: 1.3,
   discFill: '#fffdf6', discText: '#2a2118', font: 'Georgia, serif',
-  insetColor: 'rgba(58, 48, 32, 0.13)', wireGlow: false, bubbleLightness: 46,
+  insetColor: 'rgba(58, 48, 32, 0.13)', wireGlow: false, relationHueLightness: 46,
   interaction: {
     selection: '#d97706', hover: '#2563eb', selectedHover: '#92400e', pin: '#dc2626',
     valid: '#16a34a', validWash: '#16a34a10', refusal: '#dc2626',
@@ -328,7 +328,7 @@ export const DARK: Theme = {
   name: 'Dark (Slate)', canvas: '#0e1013', paper: '#1c2026', ink: '#e6e1d6', frame: '#4a5058',
   wire: '#5bd2de', wireW: 2.2, negFill: 'rgba(255, 255, 255, 0.06)', rimW: 1.2,
   discFill: '#262c33', discText: '#eae5da', font: 'Georgia, serif',
-  insetColor: 'rgba(0, 0, 0, 0.32)', wireGlow: true, bubbleLightness: 64,
+  insetColor: 'rgba(0, 0, 0, 0.32)', wireGlow: true, relationHueLightness: 64,
   interaction: {
     selection: '#f59e0b', hover: '#60a5fa', selectedHover: '#fbbf24', pin: '#fb7185',
     valid: '#4ade80', validWash: '#4ade8018', refusal: '#fb7185',

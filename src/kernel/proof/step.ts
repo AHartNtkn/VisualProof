@@ -34,6 +34,8 @@ import { assertProofContext } from './context'
  * the real appliers, each enforcing its own gate. Conversion replays by
  * certificates. Replay is entirely fuel-free and never reruns proof search.
  */
+// Every rule name below requires a corresponding Lean StepTag
+// (VisualProof/Correspondence/StepTags.lean, Plan 2's TS↔Lean pointer).
 export type ProofStep =
   | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term; readonly freePorts: readonly string[] }
   | { readonly rule: 'relationSpawn'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }

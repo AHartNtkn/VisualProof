@@ -13,11 +13,11 @@ type Debug = {
   wireBinds(): { id: string; node: string; x: number; y: number }[]
   interaction(): { selected: readonly Hit[] }
   diagram(): {
-    nodes: { id: string; kind: string; region: string; defId: string | null; binder: string | null }[]
+    nodes: { id: string; kind: string; region: string; defId: string | null; headWire: string | null }[]
     wires: { id: string; scope: string; endpoints: number }[]
     regions: { id: string; kind: string; parent: string | null }[]
   }
-  spawnBinderHover(): string | null
+  spawnHeadWireHover(): string | null
   dispose(): void
 }
 
@@ -211,15 +211,15 @@ test('spawns, identifies, highlights, and undoes a predicate bound to the enclos
   await expect(option).toHaveCount(1)
   await expect(option).toContainText('Bound predicate')
   await expect(option).toContainText('/2')
-  await expect(page.locator('.vpa-spawn-binder-swatch')).toHaveCSS('background-color', /rgb/)
+  await expect(page.locator('.vpa-spawn-relation-swatch')).toHaveCSS('background-color', /rgb/)
   await option.hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBe(bubble.id)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBe(bubble.id)
   await option.click()
 
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.diagram().nodes.filter((node) => node.kind === 'atom'))).toEqual([
-    expect.objectContaining({ kind: 'atom', region: bubble.id, binder: bubble.id }),
+    expect.objectContaining({ kind: 'atom', region: bubble.id, headWire: bubble.id }),
   ])
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBeNull()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBeNull()
   expect((await page.evaluate(() => window.__vpaDebug!.diagram())).wires.filter((wire) =>
     wire.scope === bubble.id && wire.endpoints === 1,
   )).toHaveLength(3)
@@ -265,19 +265,19 @@ test('nested bound-predicate choices identify their bubbles by order, color, and
   await expect(rows.nth(0)).toContainText('/1')
   await expect(rows.nth(1)).toContainText('Binder 2 (outermost)')
   await expect(rows.nth(1)).toContainText('/2')
-  const swatches = page.locator('.vpa-spawn-binder-swatch')
+  const swatches = page.locator('.vpa-spawn-relation-swatch')
   expect(await swatches.nth(0).evaluate((element) => getComputedStyle(element).backgroundColor))
     .not.toBe(await swatches.nth(1).evaluate((element) => getComputedStyle(element).backgroundColor))
 
   await rows.nth(0).hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBe(inner.id)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBe(inner.id)
   await rows.nth(1).hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBe(outer.id)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBe(outer.id)
   await page.getByLabel('Search relations to spawn').hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBeNull()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBeNull()
   await rows.nth(0).hover()
   await page.keyboard.press('Escape')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBeNull()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBeNull()
   await expect(rows).toHaveCount(0)
 })
 

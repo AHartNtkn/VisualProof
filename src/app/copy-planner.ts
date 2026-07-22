@@ -33,7 +33,7 @@ export type CopyRefusalCode =
   | 'invalid-selection'
   | 'invalid-destination'
   | 'invalid-attachment'
-  | 'external-binder'
+  | 'external-relation'
   | 'unsupported-structure'
   | 'proof-unavailable'
   | 'fingerprint-mismatch'
@@ -667,7 +667,7 @@ function compileConstruction(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (/attachment wire/.test(message)) return deny('invalid-attachment', message)
-    if (/double-cut pairing|requires scope|unconstructed binder/.test(message)) {
+    if (/double-cut pairing|requires scope|unconstructed relation/.test(message)) {
       return deny('unsupported-structure', message)
     }
     return deny('proof-unavailable', message)
@@ -950,9 +950,9 @@ export function planCopy(
   } catch (error) {
     return deny('invalid-selection', error instanceof Error ? error.message : String(error))
   }
-  // No external-binder gate: a relational wire crossing the selection is now a
+  // No external-relation gate: a relational wire crossing the selection is now a
   // legitimate higher-order boundary attachment (the copied atom's head rides an
-  // enclosing ∃R line), not a dangling binder projection. The kernel's spawn
+  // enclosing ∃R line), not a dangling head-wire projection. The kernel's spawn
   // scope gates reject an unsound attachment at construction time.
   switch (destination.kind) {
     case 'workspace': return planStructural('workspace', source, selection, extraction, destination)

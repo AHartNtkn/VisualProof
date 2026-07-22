@@ -175,7 +175,7 @@ export class ConstructController {
         this.#options.refuse('select what the cut should go around first')
         return true
       }
-      if (sample.shiftKey) this.#openBubblePrompt(selected)
+      if (sample.shiftKey) this.#openRelationArityPrompt(selected)
       else this.#tryCommit(() => addCut(this.#options.diagram(), buildSelection(this.#options.diagram(), selected)).diagram, 'cut drawn around the selection')
       return true
     }
@@ -313,22 +313,22 @@ export class ConstructController {
     }
   }
 
-  #openBubblePrompt(selected: readonly Hit[]): void {
+  #openRelationArityPrompt(selected: readonly Hit[]): void {
     this.#closePrompt()
     const prompt = this.#options.host.ownerDocument.createElement('div')
-    prompt.className = 'vpa-bubble-prompt'
+    prompt.className = 'vpa-relation-prompt'
     const input = this.#options.host.ownerDocument.createElement('input')
-    input.className = 'vpa-bubble-arity'
+    input.className = 'vpa-relation-arity'
     input.type = 'number'
     input.min = '0'
     input.step = '1'
-    input.placeholder = 'bubble arity'
-    input.setAttribute('aria-label', 'Bubble arity')
+    input.placeholder = 'relation arity'
+    input.setAttribute('aria-label', 'Relation arity')
     const theme = this.#options.theme()
     prompt.style.cssText = 'position:fixed;left:50%;top:56px;z-index:31;transform:translateX(-50%);display:grid;gap:4px'
     input.style.cssText = `width:9rem;padding:5px 8px;border:1.5px solid ${theme.interaction.selection};border-radius:6px;background:${theme.paper};color:${theme.ink}`
     const problem = this.#options.host.ownerDocument.createElement('output')
-    problem.id = 'bubble-arity-problem'
+    problem.id = 'relation-arity-problem'
     problem.className = 'vpa-field-problem'
     problem.style.cssText = `max-width:14rem;color:${theme.interaction.refusal};font:11px system-ui`
     problem.hidden = true
@@ -340,7 +340,7 @@ export class ConstructController {
       const arity = Number(input.value)
       if (!Number.isInteger(arity) || arity < 0) {
         const text = `'${input.value}' is not a valid arity`
-        this.#options.setProblem('bubble-arity', text)
+        this.#options.setProblem('relation-arity', text)
         problem.value = text
         problem.hidden = false
         input.setAttribute('aria-invalid', 'true')
@@ -359,7 +359,7 @@ export class ConstructController {
     input.addEventListener('input', () => {
       const value = Number(input.value)
       if (Number.isInteger(value) && value >= 0) {
-        this.#options.clearProblem('bubble-arity')
+        this.#options.clearProblem('relation-arity')
         problem.hidden = true
         problem.value = ''
         input.removeAttribute('aria-invalid')
@@ -373,7 +373,7 @@ export class ConstructController {
   }
 
   #closePrompt(): void {
-    this.#options.clearProblem('bubble-arity')
+    this.#options.clearProblem('relation-arity')
     this.#prompt?.remove()
     this.#prompt = null
   }

@@ -177,7 +177,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
   let spawnCascade!: SpawnCascade
   let proofSpawn!: ProofSpawnController
-  let spawnHoverBinder: WireId | null = null
+  let spawnHoverHeadWire: WireId | null = null
   const feedback = new FeedbackController()
   let lastPointerClient: Vec2 = { x: window.innerWidth / 2, y: window.innerHeight / 2 }
   let refusalElement: HTMLOutputElement | null = null
@@ -1169,10 +1169,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // ---- rendering ----
-  // Hover-group target: hovering an atom or its bubble highlights the WHOLE
-  // binder group (bubble ring + every atom bound to it) in their shared hue.
-  // Returns the binder region id, or null when the hit is not part of a group.
-  const hoverGroupBinder = (hit: Hit): WireId | null => {
+  // Hover-group target: hovering an atom or its head wire highlights the WHOLE
+  // relation group (the wire's traced legs + every atom bound to it) in their
+  // shared hue. Returns the head wire id, or null when the hit is not part of a group.
+  const hoverGroupHeadWire = (hit: Hit): WireId | null => {
     if (hit.kind === 'node') {
       if (displayed.nodes[hit.id]?.kind !== 'atom') return null
       for (const [wid, w] of Object.entries(displayed.wires)) {
@@ -1310,15 +1310,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (pinPreviewAt !== null) shapes.push({ kind: 'dot', center: pinPreviewAt, rPx: 8, fill: theme.interaction.pin })
     for (const h of interaction.selection) shapes.push(...itemShapes(h, theme.interaction.selection))
     const hoverShapes: Shape[] = []
-    if (spawnHoverBinder !== null) {
-      mainMotion.setHover(`region:${spawnHoverBinder}`, now)
-      hoverShapes.push(...highlightGroup(engine, theme, spawnHoverBinder))
+    if (spawnHoverHeadWire !== null) {
+      mainMotion.setHover(`region:${spawnHoverHeadWire}`, now)
+      hoverShapes.push(...highlightGroup(engine, theme, spawnHoverHeadWire))
     } else {
       const hov = interaction.hover
       mainMotion.setHover(hov === null ? null : `${hov.kind}:${hov.id}`, now)
       if (hov !== null) {
-        const binder = hoverGroupBinder(hov)
-        if (binder !== null) hoverShapes.push(...highlightGroup(engine, theme, binder))
+        const headWire = hoverGroupHeadWire(hov)
+        if (headWire !== null) hoverShapes.push(...highlightGroup(engine, theme, headWire))
         else hoverShapes.push(...itemShapes(hov, isHitSelected(interaction.selection, hov) ? theme.interaction.selectedHover : theme.interaction.hover))
       }
     }
@@ -1539,12 +1539,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return false
       }
     },
-    binderColor: (wire) => {
-      const color = relationWireHues(editDiagram, theme.bubbleLightness).get(wire)
+    headWireColor: (wire) => {
+      const color = relationWireHues(editDiagram, theme.relationHueLightness).get(wire)
       if (color === undefined) throw new Error(`bound-predicate option references missing relation wire '${wire}'`)
       return color
     },
-    hoverBinder: (wire) => { spawnHoverBinder = wire },
+    hoverHeadWire: (wire) => { spawnHoverHeadWire = wire },
   })
   proofSpawn = new ProofSpawnController({
     host: document.body,
@@ -1557,12 +1557,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     place: (node, at) => seedBodyPlacement(engine, node, at),
     refuse,
-    binderColor: (wire) => {
-      const color = relationWireHues(currentDiagram(), theme.bubbleLightness).get(wire)
+    headWireColor: (wire) => {
+      const color = relationWireHues(currentDiagram(), theme.relationHueLightness).get(wire)
       if (color === undefined) throw new Error(`bound-predicate option references missing relation wire '${wire}'`)
       return color
     },
-    hoverBinder: (wire) => { spawnHoverBinder = wire },
+    hoverHeadWire: (wire) => { spawnHoverHeadWire = wire },
   })
   construct = new ConstructController({
     host: document.body,
@@ -1873,8 +1873,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       relationWorkspace() {
         return relationWorkspace?.debugState() ?? null
       },
-      spawnBinderHover(): string | null {
-        return spawnHoverBinder
+      spawnHeadWireHover(): string | null {
+        return spawnHoverHeadWire
       },
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
@@ -1896,7 +1896,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           : [])
       },
       diagram(): {
-        nodes: { id: string; kind: string; region: string; defId: string | null; binder: string | null }[]
+        nodes: { id: string; kind: string; region: string; defId: string | null; headWire: string | null }[]
         wires: { id: string; scope: string; endpoints: number }[]
         regions: { id: string; kind: string; parent: string | null }[]
       } {
@@ -1906,7 +1906,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             kind: node.kind,
             region: node.region,
             defId: node.kind === 'ref' ? node.defId : null,
-            binder: node.kind === 'atom'
+            headWire: node.kind === 'atom'
               ? (Object.entries(displayed.wires).find(([, w]) =>
                   w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'head'))?.[0] ?? null)
               : null,
@@ -1919,7 +1919,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           })),
         }
       },
-      // Derived region circles (the drawn cut/bubble outlines) — the e2e uses these
+      // Derived region circles (the drawn cut outlines) — the e2e uses these
       // to assert HARD SEMANTIC CONTAINMENT (a dragged node never enters a cut
       // circle it is not a member of).
       regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[] {

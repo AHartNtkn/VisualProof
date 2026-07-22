@@ -35,24 +35,24 @@ describe('FeedbackController — error-only authority', () => {
 
   it('owns stable field problems independently of transient refusals', () => {
     const feedback = new FeedbackController()
-    feedback.setProblem('bubble-arity', "'-1' is not a valid arity")
+    feedback.setProblem('relation-arity', "'-1' is not a valid arity")
     feedback.refuse({ text: 'unrelated refusal', pointer: { x: 9, y: 10 } })
 
     expect(feedback.snapshot().problems).toEqual([
-      { id: 'bubble-arity', text: "'-1' is not a valid arity" },
+      { id: 'relation-arity', text: "'-1' is not a valid arity" },
     ])
-    feedback.clearProblem('bubble-arity')
+    feedback.clearProblem('relation-arity')
     expect(feedback.snapshot().problems).toEqual([])
     expect(feedback.snapshot().refusal?.text).toBe('unrelated refusal')
   })
 
   it('replaces a field problem in place without creating an event history', () => {
     const feedback = new FeedbackController()
-    feedback.setProblem('bubble-arity', 'first')
-    feedback.setProblem('bubble-arity', 'corrected detail')
+    feedback.setProblem('relation-arity', 'first')
+    feedback.setProblem('relation-arity', 'corrected detail')
 
     expect(feedback.snapshot().problems).toEqual([
-      { id: 'bubble-arity', text: 'corrected detail' },
+      { id: 'relation-arity', text: 'corrected detail' },
     ])
   })
 })

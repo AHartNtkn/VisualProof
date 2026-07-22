@@ -358,8 +358,8 @@ function checkedTheorem(value: Theorem): Theorem {
   try {
     assertSchemaCarrier(value, 'theorem')
     // The codec is the complete serialized theorem schema validator. Keep the
-    // already-validated witness maps in their original insertion order: their
-    // order carries lexical binder-spine evidence and is not presentation data.
+    // already-validated diagram maps in their original insertion order: their
+    // order carries semantic scope-nesting evidence and is not presentation data.
     theoremFromJson(theoremToJson(value))
     const theorem = immutableClone(value)
     return immutableClone({

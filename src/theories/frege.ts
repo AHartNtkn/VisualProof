@@ -58,8 +58,8 @@ function plusRelation(): DiagramWithBoundary {
 
 /**
  * The general ℕ(x) — inCutNat, restated with Zero/Succ REF nodes (no bare λ in
- * the definition). The base line is scoped at the guard bubble rB (NOT the
- * root): the zero-witness lives strictly inside the cut, so ℕ is non-vacuous.
+ * the definition). The base line is scoped at the guard cut (rB's scope, NOT
+ * the root): the zero-witness lives strictly inside the cut, so ℕ is non-vacuous.
  * The boundary is the x-line, the only wire that leaves the cut.
  */
 export function natRelation(): DiagramWithBoundary {
@@ -704,11 +704,11 @@ function derivePlusComm(ctx: ProofContext): Theorem {
 // ─── guard-producing theorems (closed-evidence anchored sharing) ───
 //
 // natRelation(x) = ¬∃R∃w0[Zero(w0) ∧ R(w0) ∧ Cl(R) ∧ ¬R(x)], the base line w0
-// scoped strictly INSIDE the guard bubble (non-vacuity). Producing a concrete
+// scoped strictly INSIDE the guard cut (non-vacuity). Producing a concrete
 // nat guard requires relating the internal zero witness w0 to the external
 // argument line. Anchored splitting duplicates only the available closed zero
 // witness for the conclusion endpoint, so the base line and quantifier remain
-// in the bubble; contraction then identifies that local duplicate with z.
+// in the guard cut; contraction then identifies that local duplicate with z.
 
 /**
  * zeroIsNat: the closed sentence `⟹ ∃z. Zero(z) ∧ nat(z)` — from the blank
@@ -717,7 +717,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
  * atom on the internal base line (a tautology built by sound moves), then that
  * endpoint receives a local duplicate of the internal zero witness, then that
  * duplicate contracts onto z by their closed-value equality. The original
- * base line remains scoped in the guard bubble throughout. Boundary [].
+ * base line remains scoped in the guard cut throughout. Boundary [].
  */
 function deriveZeroIsNat(ctx: ProofContext): Theorem {
   const lhsD = new DiagramBuilder().build()
@@ -789,8 +789,8 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
  * transport is not used here (the wall of UPDATE 10 only bit the base-creating
  * theorems). Build a fresh nat(s) guard skeleton, iterate nat(n) into its
  * conclusion cut and instantiate its R with the skeleton's R (second-order
- * modus ponens), bridge the two bubble-scoped zero witnesses with wireJoin
- * (both internal — the merge keeps the outer bubble scope, so non-vacuity
+ * modus ponens), bridge the two guard-cut-scoped zero witnesses with wireJoin
+ * (both internal — the merge keeps the outer guard-cut scope, so non-vacuity
  * holds), deiterate the copy's base and closure to leave R(n), then run a
  * guarded modus ponens: R(n) ∧ Cl(R) ∧ Succ(n,s) ⟹ R(s), contradicting the
  * conclusion. Fold to nat(s); the input nat(n) is consumed. Boundary [wn, ws].
@@ -805,7 +805,7 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const lhs = mkDiagramWithBoundary(lhsD, [wn, ws])
   const e = new DerivationCursor(lhsD, ctx)
 
-  // Phase A: fresh nat(s) guard skeleton (¬¬ scaffold, guard bubble, base+closure)
+  // Phase A: fresh nat(s) guard skeleton (¬¬ scaffold, guard cut, base+closure)
   let snap = e.cur
   e.push('dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
   const cO = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === e.cur.root && snap.regions[id] === undefined)![0]

@@ -98,7 +98,7 @@ export { relationWireHues } from '../view/paint'
 
 /** The relational wire a hover targets: the head-carrying wire of a hovered atom,
  * or a hovered relational wire itself. */
-const hoverBinder = (diagram: Diagram, hit: Hit): WireId | null => {
+const hoverHeadWire = (diagram: Diagram, hit: Hit): WireId | null => {
   if (hit.kind === 'node') {
     if (diagram.nodes[hit.id]?.kind !== 'atom') return null
     for (const [wid, w] of Object.entries(diagram.wires)) {
@@ -119,7 +119,7 @@ export class ProofFrontViewport {
   #engine: Engine
   #moves: ProofMoveController
   #spawn: ProofSpawnController
-  #spawnHoverBinder: WireId | null = null
+  #spawnHoverHeadWire: WireId | null = null
   #relationWorkspace: RelationWorkspace | null = null
   #surface: CanvasAdapter
   #model: ProofFrontModel
@@ -150,12 +150,12 @@ export class ProofFrontViewport {
       },
       place: (node, at) => seedBodyPlacement(this.#engine, node, at),
       refuse: model.refuse,
-      binderColor: (wire) => {
-        const color = relationWireHues(model.diagram(), model.theme().bubbleLightness).get(wire)
+      headWireColor: (wire) => {
+        const color = relationWireHues(model.diagram(), model.theme().relationHueLightness).get(wire)
         if (color === undefined) throw new Error(`bound-predicate option references missing relation wire '${wire}'`)
         return color
       },
-      hoverBinder: (wire) => { this.#spawnHoverBinder = wire },
+      hoverHeadWire: (wire) => { this.#spawnHoverHeadWire = wire },
       openChanged: model.changed,
     })
 
@@ -182,7 +182,7 @@ export class ProofFrontViewport {
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
-      openComprehension: (bubble, pointer) => this.#openComprehension(bubble, pointer),
+      openComprehension: (wireId, pointer) => this.#openComprehension(wireId, pointer),
       openAbstraction: (selection, pointer) => this.#openAbstraction(selection, pointer),
       openSpawn: (sample, region) => {
         this.#spawn.open({ screen: sample.client, world: sample.world, region })
@@ -288,13 +288,13 @@ export class ProofFrontViewport {
     for (const hit of this.interaction.selection) shapes.push(...this.#itemShapes(hit, theme.interaction.selection))
     const hover = this.interaction.hover
     const hoverShapes: Shape[] = []
-    if (this.#spawnHoverBinder !== null) {
-      this.motion.setHover(`region:${this.#spawnHoverBinder}`, now)
-      hoverShapes.push(...highlightGroup(this.#engine, theme, this.#spawnHoverBinder))
+    if (this.#spawnHoverHeadWire !== null) {
+      this.motion.setHover(`region:${this.#spawnHoverHeadWire}`, now)
+      hoverShapes.push(...highlightGroup(this.#engine, theme, this.#spawnHoverHeadWire))
     } else if (hover !== null) {
       this.motion.setHover(`${hover.kind}:${hover.id}`, now)
-      const binder = hoverBinder(this.#model.diagram(), hover)
-      if (binder !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, binder))
+      const headWire = hoverHeadWire(this.#model.diagram(), hover)
+      if (headWire !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, headWire))
       else hoverShapes.push(...this.#itemShapes(hover, isHitSelected(this.interaction.selection, hover) ? theme.interaction.selectedHover : theme.interaction.hover))
     } else this.motion.setHover(null, now)
     shapes.push(...this.#moves.overlay())

@@ -50,8 +50,8 @@ export function spawnRelationNode(
  * Spawns a fresh atom bound to an existing relational wire: the atom's sig is
  * read from the wire (`wireId`), its head port becomes a new endpoint on that
  * wire, and fresh arg wires are created from `sig.args`. `wireId` names a line
- * of identity, not a binder region — any relational wire enclosing `region`
- * qualifies (mkDiagram enforces scope-encloses-region on the modified wire).
+ * of identity, not an old-model binder region — any relational wire enclosing
+ * `region` qualifies (mkDiagram enforces scope-encloses-region on the modified wire).
  */
 export function spawnBoundRelationNode(
   d: Diagram,

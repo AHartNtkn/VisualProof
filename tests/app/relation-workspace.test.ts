@@ -26,7 +26,7 @@ import {
   beginAbstractionDraft,
   beginSubstitutionDraft,
   currentRelationDraft,
-  importRelationHostBinderOccurrence,
+  importRelationHostOccurrence,
   replaceRelationDiagram,
 } from '../../src/app/relation-workspace-draft'
 import { planCopy } from '../../src/app/copy-planner'
@@ -215,9 +215,9 @@ describe('substitution transaction', () => {
     expect(result.wires['target']).toBeUndefined()
   })
 
-  it('imports an outer host binder as a macro parameter and instantiates its bound occurrences', () => {
+  it('imports an outer host relation wire as a macro parameter and instantiates its bound occurrences', () => {
     const builder = new DiagramBuilder()
-    const hostBinder = builder.relWire(builder.root, relSig([]))
+    const hostRelation = builder.relWire(builder.root, relSig([]))
     const guard = builder.cut(builder.root)
     const occ = builder.atom(guard, relSig([]))
     const target = builder.wire(guard, [{ node: occ, port: { kind: 'head' } }], relSig([]))
@@ -231,7 +231,7 @@ describe('substitution transaction', () => {
       apply: (action) => { actions.push(action) },
       cancel: () => {},
     })
-    const draft = importRelationHostBinderOccurrence(transaction.initialDraft(), hostBinder)
+    const draft = importRelationHostOccurrence(transaction.initialDraft(), hostRelation)
 
     expect(transaction.status(currentRelationDraft(draft))).toEqual({
       kind: 'ready', code: 'ready', message: 'ready to instantiate',
@@ -239,13 +239,13 @@ describe('substitution transaction', () => {
     expect(() => transaction.finalize(currentRelationDraft(draft), [])).not.toThrow()
     expect(actions).toHaveLength(1)
     expect(actions[0]!.steps.map((step) => step.rule)).toEqual(['bodyAttach', 'unfold', 'vacuousElim'])
-    expect(actions[0]!.steps[0]).toMatchObject({ rule: 'bodyAttach', wireId: target, params: [hostBinder] })
+    expect(actions[0]!.steps[0]).toMatchObject({ rule: 'bodyAttach', wireId: target, params: [hostRelation] })
 
     const result = applyAction(current, actions[0]!, context())
     // The instantiated occurrence is now a bound atom riding the outer host
-    // binder; the ∃R target wire is gone.
+    // relation wire; the ∃R target wire is gone.
     expect(result.wires[target]).toBeUndefined()
-    expect(result.wires[hostBinder]!.endpoints.some((ep) => ep.port.kind === 'head'
+    expect(result.wires[hostRelation]!.endpoints.some((ep) => ep.port.kind === 'head'
       && result.nodes[ep.node]?.kind === 'atom')).toBe(true)
   })
 })

@@ -21,7 +21,7 @@ import { addCut } from './edit'
  * to a host line (an outer term wire, or an outer relational wire the body's
  * bound atoms ride). Materialization feeds every `hostWire` to the comprehension
  * as a macro parameter; `applyBodyAttach`'s at-or-outside scope gate enforces
- * that a relational host line is a genuine enclosing binder.
+ * that a relational host line is a genuine enclosing relation wire.
  */
 export type RelationPort = {
   readonly id: string
@@ -114,10 +114,10 @@ function compareWireIds(a: WireId, b: WireId): number {
 /**
  * The relational wires enclosing `targetWireId` — every relational line at the
  * target wire's scope or an ancestor scope, excluding the target itself,
- * innermost first. These are the host binders a substitution body may reference
+ * innermost first. These are the host relation wires a substitution body may reference
  * as an outer-bound parameter (spec: at-or-outside the target wire's scope).
  */
-function enclosingHostBinders(host: Diagram, targetWireId: WireId): readonly WireId[] {
+function enclosingHostRelations(host: Diagram, targetWireId: WireId): readonly WireId[] {
   const target = host.wires[targetWireId]
   if (target === undefined) throw new Error(`instantiation target wire '${targetWireId}' does not exist`)
   const found: WireId[] = []
@@ -136,12 +136,12 @@ function enclosingHostBinders(host: Diagram, targetWireId: WireId): readonly Wir
   return found
 }
 
-function assertEnclosingHostBinder(host: Diagram, targetWireId: WireId, hostWire: WireId): void {
+function assertEnclosingHostRelation(host: Diagram, targetWireId: WireId, hostWire: WireId): void {
   const w = host.wires[hostWire]
   if (w === undefined) throw new Error(`host wire '${hostWire}' does not exist`)
-  if (w.sig.kind !== 'rel') throw new Error(`host binder '${hostWire}' is not a relational wire`)
-  if (!enclosingHostBinders(host, targetWireId).includes(hostWire)) {
-    throw new Error(`host binder '${hostWire}' must properly enclose the instantiation target '${targetWireId}'`)
+  if (w.sig.kind !== 'rel') throw new Error(`host relation wire '${hostWire}' is not a relational wire`)
+  if (!enclosingHostRelations(host, targetWireId).includes(hostWire)) {
+    throw new Error(`host relation wire '${hostWire}' must properly enclose the instantiation target '${targetWireId}'`)
   }
 }
 
@@ -348,13 +348,13 @@ export function replaceRelationDiagram(draft: RelationWorkspaceDraft, diagram: D
 }
 
 /**
- * Reference an outer host binder from the substitution body: designate a draft
+ * Reference an outer host relation wire from the substitution body: designate a draft
  * param wire bound to `hostWire` (reusing an existing designation for that host
  * line), then spawn one bound-predicate atom on it in `requestedRegion`. The
  * param wire becomes a trailing boundary port; on materialization `hostWire` is
  * a macro parameter and each spawned atom is an occurrence of the outer relation.
  */
-export function importRelationHostBinderOccurrence(
+export function importRelationHostOccurrence(
   draft: RelationWorkspaceDraft,
   hostWire: WireId,
   requestedRegion?: RegionId,
@@ -363,9 +363,9 @@ export function importRelationHostBinderOccurrence(
     throw new Error(HOST_BINDING_UNAVAILABLE)
   }
   const current = currentRelationDraft(draft)
-  const binder = draft.host.wires[hostWire]
-  if (binder === undefined || binder.sig.kind !== 'rel') throw new Error(`host binder '${hostWire}' is not a relational wire`)
-  assertEnclosingHostBinder(draft.host, draft.instantiationTarget, hostWire)
+  const hostRelation = draft.host.wires[hostWire]
+  if (hostRelation === undefined || hostRelation.sig.kind !== 'rel') throw new Error(`host relation wire '${hostWire}' is not a relational wire`)
+  assertEnclosingHostRelation(draft.host, draft.instantiationTarget, hostWire)
 
   const existing = current.ports.find((port) => port.hostWire === hostWire)
   let diagram = current.diagram
@@ -379,7 +379,7 @@ export function importRelationHostBinderOccurrence(
       root: diagram.root,
       regions: { ...diagram.regions },
       nodes: { ...diagram.nodes },
-      wires: { ...diagram.wires, [paramWire]: { scope: diagram.root, sig: binder.sig, endpoints: [] } },
+      wires: { ...diagram.wires, [paramWire]: { scope: diagram.root, sig: hostRelation.sig, endpoints: [] } },
     })
     const id = freshId(new Set(current.ports.map((port) => port.id)), 'port')
     ports = [...current.ports, { id, wire: paramWire, kind: 'optional', hostWire }]
@@ -432,7 +432,7 @@ export function planRelationHostPatternImport(
     const attachment = extraction.attachments[index]!
     const stubSig = extraction.pattern.diagram.wires[stub]!.sig
     if (stubSig.kind === 'rel') {
-      assertEnclosingHostBinder(source, draft.instantiationTarget!, attachment)
+      assertEnclosingHostRelation(source, draft.instantiationTarget!, attachment)
       const reuse = paramByHost.get(attachment)
       if (reuse !== undefined) return reuse
       const wire = freshId(taken, 'param')
