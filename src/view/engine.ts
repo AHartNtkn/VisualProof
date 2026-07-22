@@ -263,7 +263,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     const localAnchor = new Map<string, Vec2>()
     let anatomyR = 3
     const ascale = ascaleOf(n.kind)
-    for (const port of requiredPorts(d, n)) {
+    for (const port of requiredPorts(n)) {
       const a0 = anchorOf(g, { x: 0, y: 0 }, port)
       const a = { x: a0.x * ascale, y: a0.y * ascale }
       localAnchor.set(pkey(port), a)
