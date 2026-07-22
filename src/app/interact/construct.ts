@@ -325,11 +325,10 @@ export class ConstructController {
     input.setAttribute('aria-label', 'Bubble arity')
     const theme = this.#options.theme()
     prompt.style.cssText = 'position:fixed;left:50%;top:56px;z-index:31;transform:translateX(-50%);display:grid;gap:4px'
-    input.style.cssText = `width:9rem;padding:5px 8px;border:1.5px solid ${theme.interaction.selection};border-radius:6px;background:${theme.paper};color:${theme.ink}`
     const problem = this.#options.host.ownerDocument.createElement('output')
     problem.id = 'bubble-arity-problem'
     problem.className = 'vpa-field-problem'
-    problem.style.cssText = `max-width:14rem;color:${theme.interaction.refusal};font:11px system-ui`
+    problem.style.setProperty('--vpa-field-problem', theme.interaction.refusal)
     problem.hidden = true
     prompt.append(input, problem)
     input.addEventListener('keydown', (event) => {
