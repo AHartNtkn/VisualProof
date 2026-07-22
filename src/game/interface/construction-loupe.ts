@@ -1,6 +1,7 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { parseTerm } from '../../kernel/term/parse'
 import type { ProofStep } from '../../kernel/proof/step'
+import type { ComprehensionBinderPair } from '../../kernel/rules/comprehension'
 import type { ProofContext } from '../../kernel/proof/context'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../../view/engine'
 import { bubbleHues, paint, type Shape, type Theme } from '../../view/paint'
@@ -16,14 +17,27 @@ import {
   addTermNode,
 } from './loupe/edit'
 import { wireHitTest, type Hit } from '../../interaction/hittest'
+import { buildSelection } from '../../interaction/hittest'
+import { absorbHits } from '../../interaction/edit'
+import { copyDestinationPreview } from '../../interaction/controllers/copy'
+import { extractSubgraph } from '../../kernel/diagram/subgraph/extract'
+import { selectionContents, type SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
+import { enclosingComprehensionBinders } from '../../interaction/comprehension-dependencies'
 import { ConstructController } from './loupe/interact/construct'
-import { SpawnCascade, boundPredicateOptions } from './loupe/interact/spawn'
+import {
+  SpawnCascade,
+  boundPredicateOptions,
+  type SpawnBoundPredicateOption,
+} from './loupe/interact/spawn'
 import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from '../../interaction/controllers/viewport'
 import {
   applyComprehensionConnection,
+  applyCapturedComprehensionHostPatternImport,
   currentComprehensionDraft,
   materializeComprehensionSnapshot,
   moveComprehensionHistory,
+  importComprehensionHostBinderOccurrence,
+  planComprehensionHostPatternImport,
   planComprehensionConnection,
   replaceComprehensionDiagram,
   beginComprehensionDraft,
@@ -31,6 +45,7 @@ import {
   type ComprehensionConnectionEndpoint,
   type ComprehensionDraft,
   type ExternalWireBinding,
+  type ComprehensionHostPatternImportPlan,
 } from './loupe/draft'
 import {
   beginLoupeResize,
@@ -104,13 +119,78 @@ export function applyLoupeConnection(
 }
 
 export function constructionInstantiationStep(draft: ComprehensionDraft): ProofStep {
-  const materialized = materializeComprehensionSnapshot(currentComprehensionDraft(draft))
+  const materialized = materializeComprehensionSnapshot(
+    currentComprehensionDraft(draft), draft.host, draft.bubble,
+  )
   return {
     rule: 'comprehensionInstantiate', bubble: draft.bubble,
     comp: materialized.relation,
     attachments: materialized.attachments,
-    binders: [],
+    binders: materialized.binders,
   }
+}
+
+export function constructionLoupeBoundPredicateOptions(
+  draft: ComprehensionDraft,
+  region: RegionId,
+): readonly SpawnBoundPredicateOption[] {
+  const local = boundPredicateOptions(currentComprehensionDraft(draft).relation.diagram, region)
+  const binders = enclosingComprehensionBinders(draft.host, draft.bubble)
+  const host = binders.map((binder, index): SpawnBoundPredicateOption => {
+    const value = draft.host.regions[binder]
+    if (value === undefined || value.kind !== 'bubble') {
+      throw new Error(`host bound-predicate option references missing bubble '${binder}'`)
+    }
+    return Object.freeze({
+      source: 'host',
+      binder,
+      arity: value.arity,
+      position: binders.length - index,
+      total: binders.length,
+    })
+  })
+  return Object.freeze([...local, ...host])
+}
+
+export function arbitrateConstructionHostClaim(
+  wire: PointerClaim | null,
+  selectedPattern: PointerClaim | null,
+): PointerClaim | null {
+  return wire ?? selectedPattern
+}
+
+export function captureConstructionHostPatternSelection(
+  draft: ComprehensionDraft,
+  source: Diagram,
+  hits: readonly Hit[],
+  hit: Hit | null,
+): SubgraphSelection | null {
+  if (source !== draft.host || hit === null) return null
+  let selection: SubgraphSelection
+  try {
+    selection = buildSelection(source, absorbHits(source, hits))
+  } catch {
+    return null
+  }
+  const contents = selectionContents(source, selection)
+  const selected = hit.kind === 'node'
+    ? contents.allNodes.has(hit.id)
+    : hit.kind === 'region'
+      ? contents.allRegions.has(hit.id)
+      : contents.internalWires.includes(hit.id)
+  if (!selected || extractSubgraph(source, selection).binderStubs.length === 0) return null
+  try {
+    planComprehensionHostPatternImport(
+      draft,
+      source,
+      selection,
+      currentComprehensionDraft(draft).relation.diagram.root,
+      { x: 0, y: 0 },
+    )
+  } catch {
+    return null
+  }
+  return selection
 }
 
 export type ConstructionLoupeHost = {
@@ -119,6 +199,7 @@ export type ConstructionLoupeHost = {
   diagram(): Diagram
   boundary(): readonly WireId[]
   engine(): Engine
+  selection(): readonly Hit[]
   view(): MutableView
   context(): ProofContext
   orientation(): 'forward' | 'backward'
@@ -137,6 +218,7 @@ export type ConstructionLoupeDebug = {
   readonly formalBoundary: readonly WireId[]
   readonly materializedBoundary: readonly WireId[]
   readonly externalWires: readonly ExternalWireBinding[]
+  readonly binders: readonly ComprehensionBinderPair[]
   readonly geometry: LoupeGeometry
   readonly lastContextMenuMapping: null | {
     readonly client: Vec2
@@ -168,6 +250,16 @@ type ConnectionGesture = {
   readonly start: Vec2
   current: Vec2
   moved: boolean
+}
+type HostPatternImportDrag = {
+  readonly source: Diagram
+  readonly selection: SubgraphSelection
+  readonly captured: ComprehensionDraft['history'][number]
+  readonly start: Vec2
+  plan: ComprehensionHostPatternImportPlan | null
+  destination: { readonly region: RegionId; readonly at: Vec2 } | null
+  moved: boolean
+  current: boolean
 }
 
 const wireShapes = (engine: Engine, wire: WireId, stroke: string, width: number, glow: string | null = null): Shape[] => {
@@ -202,8 +294,10 @@ export class ConstructionLoupe {
   #engine: Engine
   #geometry: LoupeGeometry
   #connection: ConnectionGesture | null = null
+  #hostImportDrag: HostPatternImportDrag | null = null
   #draftHoverWire: WireId | null = null
   #hostHoverWire: WireId | null = null
+  #spawnHover: { readonly source: 'draft' | 'host'; readonly binder: RegionId } | null = null
   #lastContextMenuMapping: ConstructionLoupeDebug['lastContextMenuMapping'] = null
   #geometryVersion = 0
   #disposed = false
@@ -211,7 +305,9 @@ export class ConstructionLoupe {
   constructor(host: ConstructionLoupeHost, bubble: RegionId, invocation: Vec2) {
     this.#host = host
     this.#draft = beginComprehensionDraft(host.diagram(), bubble, host.orientation())
-    const materialized = materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft))
+    const materialized = materializeComprehensionSnapshot(
+      currentComprehensionDraft(this.#draft), this.#draft.host, this.#draft.bubble,
+    )
     this.#engine = mkEngine(materialized.relation.diagram, materialized.relation.boundary)
     seedProject(this.#engine)
     const viewport = host.mount.ownerDocument.defaultView
@@ -274,10 +370,19 @@ export class ConstructionLoupe {
       host: host.mount,
       spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => addTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
       spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => addRefNode(this.#diagram(), at.region, defId, arity), at.world),
-      spawnBoundPredicate: ({ binder, invocation: at }) => this.#editAdd(() => addAtomNode(this.#diagram(), at.region, binder), at.world),
+      spawnBoundPredicate: ({ source, binder, arity, invocation: at }) => source === 'host'
+        ? this.#importHostBinder(binder, arity, at.region, at.world)
+        : this.#editAdd(() => addAtomNode(this.#diagram(), at.region, binder), at.world),
       spawnCut: ({ invocation: at }) => this.#editRegion(() => addEmptyCut(this.#diagram(), at.region), at.world),
       spawnBubble: ({ arity, invocation: at }) => this.#editRegion(() => addEmptyBubble(this.#diagram(), at.region, arity), at.world),
-      binderColor: (binder) => bubbleHues(this.#diagram(), host.theme().bubbleLightness).get(binder) ?? host.theme().interaction.hover,
+      binderColor: (binder, source) => bubbleHues(
+        source === 'host' ? host.diagram() : this.#diagram(),
+        host.theme().bubbleLightness,
+      ).get(binder) ?? host.theme().interaction.hover,
+      hoverBinder: (binder, source) => {
+        this.#spawnHover = binder === null || source === null ? null : { binder, source }
+        host.changed()
+      },
       openChanged: host.changed,
     })
     this.#construct = new ConstructController({
@@ -295,7 +400,7 @@ export class ConstructionLoupe {
       openSpawn: (sample, region) => this.#spawn.open(
         { screen: sample.client, world: sample.world, region },
         host.context().relations,
-        boundPredicateOptions(this.#diagram(), region),
+        constructionLoupeBoundPredicateOptions(this.#draft, region),
       ),
       theme: host.theme,
     })
@@ -313,7 +418,11 @@ export class ConstructionLoupe {
           client: { ...sample.client }, screen: { ...sample.screen }, world: { ...sample.world },
         }
         const region = this.#regionAt(sample.world)
-        this.#spawn.open({ screen: sample.client, world: sample.world, region }, host.context().relations, boundPredicateOptions(this.#diagram(), region))
+        this.#spawn.open(
+          { screen: sample.client, world: sample.world, region },
+          host.context().relations,
+          constructionLoupeBoundPredicateOptions(this.#draft, region),
+        )
       },
       pointerChanged: (client) => this.#pointerChanged('draft', client),
       keyDown: (sample) => this.keyDown(sample, isConstructionTextEntry(document.activeElement)),
@@ -332,11 +441,15 @@ export class ConstructionLoupe {
   }
 
   get active(): boolean { return !this.#disposed }
-  get playingGesture(): boolean { return this.#connection?.moved ?? false }
+  get playingGesture(): boolean {
+    return (this.#connection?.moved ?? false) || (this.#hostImportDrag?.moved ?? false)
+  }
 
   hostClaim(sample: PointerSample): PointerClaim | null {
-    const claim = this.#connectionClaim('host', sample)
-    return claim === null ? null : { ...claim, still: 'claim' }
+    const wire = this.#connectionClaim('host', sample)
+    const prioritized = wire === null ? null : { ...wire, still: 'claim' as const }
+    if (prioritized !== null) return arbitrateConstructionHostClaim(prioritized, null)
+    return arbitrateConstructionHostClaim(null, this.#hostPatternImportClaim(sample))
   }
 
   hostPointerChanged(client: Vec2): void { this.#pointerChanged('host', client) }
@@ -367,7 +480,16 @@ export class ConstructionLoupe {
     return this.#construct.keyDown(sample)
   }
 
-  hostOverlays(): readonly Shape[] { return this.#connectionShapes('host') }
+  hostOverlays(): readonly Shape[] {
+    const spawnHover = this.#spawnHover?.source === 'host'
+      ? itemShapes(
+          this.#host.engine(),
+          { kind: 'region', id: this.#spawnHover.binder },
+          this.#host.theme().interaction.hover,
+        )
+      : []
+    return [...this.#connectionShapes('host'), ...spawnHover]
+  }
 
   frame(_now: number): void {
     if (this.#disposed || !this.#surface.syncSize()) return
@@ -380,7 +502,24 @@ export class ConstructionLoupe {
       const body = this.#engine.bodies.get(id)
       if (body !== undefined) shapes.push({ kind: 'circle', center: body.pos, r: body.discR * this.#engine.scale + 1, fill: null, stroke: theme.interaction.pin, width: 1.5, insetColor: null, glow: null })
     }
-    shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'))
+    if (this.#spawnHover?.source === 'draft') {
+      shapes.push(...itemShapes(
+        this.#engine,
+        { kind: 'region', id: this.#spawnHover.binder },
+        theme.interaction.hover,
+      ))
+    }
+    const importDrag = this.#hostImportDrag
+    shapes.push(
+      ...this.#construct.overlay(),
+      ...this.#connectionShapes('draft'),
+      ...(importDrag?.current === true
+        && importDrag.moved
+        && importDrag.plan !== null
+        && importDrag.destination !== null
+        ? copyDestinationPreview(this.#engine, importDrag.destination.region, theme)
+        : []),
+    )
     const slot = resolvedFrameSlot(this.#engine, 0)
     if (slot !== null) shapes.push({ kind: 'dot', center: slot.point, rPx: 8, fill: theme.interaction.selection })
     this.#surface.render({ layers: [{ shapes }] }, this.#view)
@@ -391,7 +530,9 @@ export class ConstructionLoupe {
 
   debugState(): ConstructionLoupeDebug {
     const current = currentComprehensionDraft(this.#draft)
-    const materialized = materializeComprehensionSnapshot(current)
+    const materialized = materializeComprehensionSnapshot(
+      current, this.#draft.host, this.#draft.bubble,
+    )
     const source = this.#connection?.source ?? this.#hoverSource()
     const targets = source === null ? null : connectionTargets(this.#draft, source)
     return {
@@ -401,6 +542,7 @@ export class ConstructionLoupe {
       formalBoundary: [...current.relation.boundary],
       materializedBoundary: [...materialized.relation.boundary],
       externalWires: [...current.externalWires],
+      binders: [...materialized.binders],
       geometry: { center: { ...this.#geometry.center }, diameter: this.#geometry.diameter },
       lastContextMenuMapping: this.#lastContextMenuMapping === null ? null : {
         client: { ...this.#lastContextMenuMapping.client },
@@ -436,6 +578,7 @@ export class ConstructionLoupe {
     this.#disposed = true
     this.#window.removeEventListener('resize', this.#resizeViewport)
     this.#connection = null
+    this.#cancelHostPatternImport()
     this.#spawn.dispose()
     this.#construct.dispose()
     this.#interaction.dispose()
@@ -467,11 +610,133 @@ export class ConstructionLoupe {
     }
   }
 
+  #workspaceDestination(client: Vec2): { readonly region: RegionId; readonly at: Vec2 } | null {
+    if (this.#host.mount.ownerDocument.elementFromPoint(client.x, client.y) !== this.#canvas) return null
+    const at = this.clientMapping(client).world
+    return { region: this.#regionAt(at), at }
+  }
+
+  #hostPatternImportClaim(sample: PointerSample): PointerClaim | null {
+    if (this.#disposed || sample.button !== 0 || sample.ctrlKey || sample.shiftKey) return null
+    const source = this.#host.diagram()
+    const selection = captureConstructionHostPatternSelection(
+      this.#draft, source, this.#host.selection(), sample.hit,
+    )
+    if (selection === null) return null
+    const drag: HostPatternImportDrag = {
+      source,
+      selection,
+      captured: currentComprehensionDraft(this.#draft),
+      start: sample.client,
+      plan: null,
+      destination: null,
+      moved: false,
+      current: true,
+    }
+    this.#hostImportDrag = drag
+    const cancel = (): void => {
+      drag.current = false
+      if (this.#hostImportDrag === drag) this.#hostImportDrag = null
+      this.#host.changed()
+    }
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: false,
+      move: (next) => {
+        if (!drag.current || this.#hostImportDrag !== drag || this.#disposed) return
+        if (next.ctrlKey) { cancel(); return }
+        drag.moved ||= Math.hypot(
+          next.client.x - drag.start.x,
+          next.client.y - drag.start.y,
+        ) > 3
+        if (!drag.moved || currentComprehensionDraft(this.#draft) !== drag.captured) {
+          drag.destination = null
+          drag.plan = null
+          this.#host.changed()
+          return
+        }
+        const destination = this.#workspaceDestination(next.client)
+        drag.destination = destination
+        if (destination === null) {
+          drag.plan = null
+          this.#host.changed()
+          return
+        }
+        try {
+          drag.plan = planComprehensionHostPatternImport(
+            this.#draft,
+            drag.source,
+            drag.selection,
+            destination.region,
+            destination.at,
+          )
+        } catch {
+          drag.plan = null
+        }
+        this.#host.changed()
+      },
+      release: (next, moved) => {
+        if (next.ctrlKey) { cancel(); return }
+        if (!drag.current || this.#hostImportDrag !== drag) return
+        this.#hostImportDrag = null
+        drag.current = false
+        if (!moved || !drag.moved || drag.plan === null || drag.destination === null) return
+        const liveDestination = this.#workspaceDestination(next.client)
+        if (liveDestination === null
+          || liveDestination.region !== drag.destination.region
+          || liveDestination.at.x !== drag.destination.at.x
+          || liveDestination.at.y !== drag.destination.at.y) return
+        try {
+          this.#draft = applyCapturedComprehensionHostPatternImport(
+            this.#draft,
+            drag.plan,
+            this.#host.diagram(),
+          )
+          const node = drag.plan.introduced[0]
+          this.#reconcile(node === undefined ? undefined : { node, at: drag.plan.at })
+        } catch (error) {
+          this.#host.refuse(error instanceof Error ? error.message : String(error), next.client)
+        }
+      },
+      cancel,
+    }
+  }
+
+  #cancelHostPatternImport(): void {
+    const drag = this.#hostImportDrag
+    if (drag === null) return
+    drag.current = false
+    this.#hostImportDrag = null
+  }
+
   #editAdd(change: () => { diagram: Diagram; node: string }, at: Vec2): boolean {
     try {
       const added = change()
       this.#draft = replaceComprehensionDiagram(this.#draft, added.diagram)
       this.#reconcile({ node: added.node, at })
+      return true
+    } catch (error) {
+      this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+      return false
+    }
+  }
+
+  #importHostBinder(
+    binder: RegionId,
+    arity: number,
+    region: RegionId,
+    at: Vec2,
+  ): boolean {
+    try {
+      if (this.#host.diagram() !== this.#draft.host) {
+        throw new Error('host bound-predicate import cancelled because the source changed')
+      }
+      const before = new Set(Object.keys(this.#diagram().nodes))
+      this.#draft = importComprehensionHostBinderOccurrence(
+        this.#draft, binder, arity, region,
+      )
+      const node = Object.keys(this.#diagram().nodes).find((candidate) => !before.has(candidate))
+      this.#reconcile(node === undefined ? undefined : { node, at })
       return true
     } catch (error) {
       this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
@@ -492,7 +757,9 @@ export class ConstructionLoupe {
   }
 
   #reconcile(placed?: { readonly node: string; readonly at: Vec2 }): void {
-    const current = materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft))
+    const current = materializeComprehensionSnapshot(
+      currentComprehensionDraft(this.#draft), this.#draft.host, this.#draft.bubble,
+    )
     const next = mkEngine(current.relation.diagram, current.relation.boundary)
     carryOver(this.#engine, next)
     if (placed !== undefined) {
@@ -502,6 +769,7 @@ export class ConstructionLoupe {
     seedProject(next)
     this.#engine = next
     this.#connection = null
+    this.#cancelHostPatternImport()
     this.#draftHoverWire = null
     this.#hostHoverWire = null
     this.#interaction.reconcileDiagram()
@@ -591,7 +859,9 @@ export class ConstructionLoupe {
     for (const leg of legPaths(engine)) if (leg.wid === wire) points.push(...leg.pts)
     for (const stub of existentialStubs(engine)) if (stub.wid === wire) points.push(stub.dot, stub.from, stub.to)
     const boundary = surface === 'draft'
-      ? materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft)).relation.boundary
+      ? materializeComprehensionSnapshot(
+          currentComprehensionDraft(this.#draft), this.#draft.host, this.#draft.bubble,
+        ).relation.boundary
       : this.#host.boundary()
     boundary.forEach((id, position) => {
       if (id !== wire) return

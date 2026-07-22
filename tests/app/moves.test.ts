@@ -9,13 +9,14 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import { computeLegs, recomputeRegions } from '../../src/view/index'
 import { LIGHT } from '../../src/view/paint'
+import { resolveNamedRelationInstantiation } from '../../src/interaction/named-relation'
 import {
   contextualDeleteStep,
   discoverProofActions,
   instantiationChoices,
   ProofMoveController,
 } from '../../src/app/interact/moves'
-import { foldedComprehension } from '../../src/interaction/proof-authoring'
+import { foldedComprehension } from '../../src/interaction/named-relation'
 import { proofConnectionStep } from '../../src/interaction/proof-connection'
 import type { ConnectionEnd } from '../../src/interaction/controllers/connection'
 import type { Hit } from '../../src/interaction/hittest'
@@ -494,6 +495,46 @@ describe('proof move parameters', () => {
     expect(comp.boundary.map((wire) => comp.diagram.wires[wire]!.endpoints[0]!.port)).toEqual([
       { kind: 'arg', index: 0 },
       { kind: 'arg', index: 1 },
+    ])
+  })
+
+  it('commits the complete named-relation step resolved against the live bubble', () => {
+    const builder = new DiagramBuilder()
+    const guard = builder.cut(builder.root)
+    const bubble = builder.bubble(guard, 2)
+    const atom = builder.atom(bubble, bubble)
+    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 1 } }])
+    const diagram = builder.build()
+    const menu = menuHost()
+    const steps: ProofStep[] = []
+    const controller = new ProofMoveController({
+      host: menu.host,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      viewScale: () => 1,
+      selection: () => [{ kind: 'region' as const, id: bubble }],
+      setSelection: () => {},
+      context: ctx,
+      orientation: () => 'forward',
+      apply: (action) => { steps.push(...action.steps) },
+      commitFission: () => {},
+      refuse: (text) => { throw new Error(text) },
+      theme: () => LIGHT,
+      fuel: () => 64,
+      openComprehension: () => {},
+      openAbstraction: () => {},
+      openSpawn: () => {},
+    })
+
+    expect(controller.contextMenu(contextPointer({ kind: 'region', id: bubble }))).toBe(true)
+    const namedChoice = menu.appended[0]!.children.filter((element) => element.textContent === 'succ').at(-1)
+    expect(namedChoice).toBeDefined()
+    namedChoice!.click()
+
+    expect(steps).toEqual([
+      resolveNamedRelationInstantiation(diagram, bubble, ctx(), 'succ', 'forward'),
     ])
   })
 })

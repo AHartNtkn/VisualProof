@@ -1,9 +1,5 @@
-import { DiagramBuilder } from '../kernel/diagram/builder'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
-import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, RegionId } from '../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import type { ProofContext } from '../kernel/proof/context'
-import { assertProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import { findInconsistentCutEvidence } from '../kernel/rules/inconsistent-cut'
@@ -61,17 +57,4 @@ export function contextualDeletionStep(
   }
   if (has('erase')) return erasureStep(diagram, selection)
   return has('deiterate') ? deiterationStep(diagram, selection, fuel) : null
-}
-
-export function foldedComprehension(context: ProofContext, name: string): DiagramWithBoundary {
-  assertProofContext(context)
-  const relation = context.relations.get(name)
-  if (relation === undefined) throw new Error(`unknown relation '${name}'`)
-  const builder = new DiagramBuilder()
-  const ref = builder.ref(builder.root, name, relation.boundary.length)
-  const boundary: WireId[] = []
-  for (let index = 0; index < relation.boundary.length; index++) {
-    boundary.push(builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index } }]))
-  }
-  return mkDiagramWithBoundary(builder.build(), boundary)
 }

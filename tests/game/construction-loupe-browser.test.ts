@@ -284,6 +284,22 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
+  it('keeps wire priority and imports only live selected accessible nullary host patterns', async () => {
+    const page = await openFixture()
+    try {
+      expect(await page.evaluate(() => window.__constructionLoupeFixture.probeHostPatternClaims())).toEqual({
+        wireClaimWins: true,
+        nullarySelectedClaimed: true,
+        unselectedClaimed: false,
+        inaccessibleClaimed: false,
+        importedSnapshots: 1,
+        importedExactTarget: true,
+        cancelledSnapshots: 0,
+        staleSnapshots: 0,
+      })
+    } finally { await page.close() }
+  })
+
   it('feeds a real non-center spawn context through that exact mapping authority', async () => {
     const page = await openFixture()
     try {
@@ -385,6 +401,16 @@ declare global {
       }[]
       probeInjectedMapper(): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } } | null
       probeSharedLifecycle(): { readonly cancellations: number; readonly modifiers: readonly boolean[] }
+      probeHostPatternClaims(): {
+        readonly wireClaimWins: boolean
+        readonly nullarySelectedClaimed: boolean
+        readonly unselectedClaimed: boolean
+        readonly inaccessibleClaimed: boolean
+        readonly importedSnapshots: number
+        readonly importedExactTarget: boolean
+        readonly cancelledSnapshots: number
+        readonly staleSnapshots: number
+      }
     }
   }
 }

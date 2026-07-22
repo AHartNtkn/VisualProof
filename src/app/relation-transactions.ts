@@ -150,6 +150,7 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
   }
 
   sourceDiagram = (): Diagram => this.#source
+  liveSourceDiagram = (): Diagram => this.#opts.diagram()
   sourceBoundary = (): readonly WireId[] => this.#boundary
   initialDraft(): RelationWorkspaceDraft { return beginAbstractionDraft(this.#source) }
 

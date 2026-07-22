@@ -238,6 +238,88 @@ describe('rendered game proof surface', () => {
     } finally { await page.close() }
   })
 
+  it('selects and imports an enclosing nullary binder through the live proof viewport', async () => {
+    const page = await openFixture()
+    try {
+      await page.evaluate(() => window.__gameProofSurfaceFixture.freezeLayout())
+      const target = await page.evaluate(() => ({
+        id: window.__gameProofSurfaceFixture.dependentBubble(),
+        point: window.__gameProofSurfaceFixture.dependentBubblePoint(),
+      }))
+      await page.mouse.click(target.point.x, target.point.y)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection()))
+        .toEqual([`region:${target.id}`])
+
+      await page.mouse.click(target.point.x, target.point.y, { button: 'right' })
+      await page.getByRole('button', { name: 'Construct a new relation…' }).click()
+      await page.waitForSelector('.cursebreaker-construction-loupe')
+
+      const host = await page.evaluate(() => ({
+        atom: window.__gameProofSurfaceFixture.hostAtom(),
+        binder: window.__gameProofSurfaceFixture.expectedHostBinder(),
+        point: window.__gameProofSurfaceFixture.hostAtomPoint(),
+        voidPoint: window.__gameProofSurfaceFixture.voidPoint(),
+      }))
+      const proofCanvas = page.locator('.curse-game-proof-canvas')
+      const hostReachable = async (): Promise<boolean> => page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.classList.contains('curse-game-proof-canvas') ?? false,
+        host.point,
+      )
+      if (!await hostReachable()) {
+        const loupe = page.locator('.cursebreaker-construction-loupe')
+        const box = await loupe.boundingBox()
+        if (box === null) throw new Error('construction loupe has no rendered box')
+        const start = { x: box.x + box.width * .995, y: box.y + box.height / 2 }
+        const destination = {
+          x: host.point.x < 800 ? 1320 : 280,
+          y: host.point.y < 450 ? 700 : 200,
+        }
+        await page.mouse.move(start.x, start.y)
+        await page.mouse.down()
+        await page.mouse.move(
+          start.x + destination.x - (box.x + box.width / 2),
+          start.y + destination.y - (box.y + box.height / 2),
+          { steps: 12 },
+        )
+        await page.mouse.up()
+      }
+      expect(await hostReachable()).toBe(true)
+
+      await page.mouse.click(host.voidPoint.x, host.voidPoint.y)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual([])
+      await page.mouse.click(host.point.x, host.point.y)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection()))
+        .toEqual([`node:${host.atom}`])
+
+      const loupeCanvas = page.locator('.cursebreaker-construction-loupe__canvas')
+      const destination = await loupeCanvas.boundingBox()
+      if (destination === null) throw new Error('construction loupe canvas has no rendered box')
+      await page.mouse.move(host.point.x, host.point.y)
+      await page.mouse.down()
+      await page.mouse.move(
+        destination.x + destination.width / 2,
+        destination.y + destination.height / 2,
+        { steps: 12 },
+      )
+      await page.mouse.up()
+
+      const imported = await page.evaluate(() => window.__gameProofSurfaceFixture.construction()!.binders)
+      expect(imported).toHaveLength(1)
+      expect(imported[0]![1]).toBe(host.binder)
+
+      await loupeCanvas.focus()
+      await page.keyboard.press('Enter')
+      await page.waitForSelector('.cursebreaker-construction-loupe', { state: 'detached' })
+      const step = await page.evaluate(() => window.__gameProofSurfaceFixture.lastPreparedStep())
+      expect(step).toMatchObject({
+        rule: 'comprehensionInstantiate',
+        bubble: target.id,
+        binders: [[imported[0]![0], host.binder]],
+      })
+      expect(await proofCanvas.count()).toBe(1)
+    } finally { await page.close() }
+  })
+
   it('keeps rendered timeline centers, pointer mapping, ARIA, and keyboard focus aligned', async () => {
     const page = await openFixture()
     try {

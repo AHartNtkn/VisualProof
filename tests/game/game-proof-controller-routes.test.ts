@@ -13,6 +13,7 @@ import { applyGameAction, currentDiagram, startPuzzle } from '../../src/game/ses
 import { puzzleId } from '../../src/game/types'
 import type { ActionDescriptor } from '../../src/interaction/actions'
 import type { Hit } from '../../src/interaction/hittest'
+import { resolveNamedRelationInstantiation } from '../../src/interaction/named-relation'
 import { FakeDocument, FakeElement } from './interface-fake-dom'
 import {
   discoverGameProofActions,
@@ -662,7 +663,12 @@ describe('actual game proof controller routes', () => {
     const diagram = builder.build()
     const bodyBuilder = new DiagramBuilder()
     bodyBuilder.termNode(bodyBuilder.root, parseTerm('\\x. x'))
-    const relations = new Map([['R', mkDiagramWithBoundary(bodyBuilder.build(), [])]])
+    const parameterizedBuilder = new DiagramBuilder()
+    const parameter = parameterizedBuilder.wire(parameterizedBuilder.root, [])
+    const relations = new Map([
+      ['R', mkDiagramWithBoundary(bodyBuilder.build(), [])],
+      ['P', mkDiagramWithBoundary(parameterizedBuilder.build(), [parameter])],
+    ])
     const applied: ProofAction[] = []
     const opened: string[] = []
     const selected = { value: [] as { kind: 'node' | 'region' | 'wire'; id: string }[] }
@@ -676,10 +682,16 @@ describe('actual game proof controller routes', () => {
     expect(controller.invokeAction(
       { kind: 'instantiate', label: '', needsInput: 'comprehension' }, bubbleSelection, { kind: 'relation', name: 'R' },
     )).toBe(true)
+    expect(() => controller.invokeAction(
+      { kind: 'instantiate', label: '', needsInput: 'comprehension' }, bubbleSelection, { kind: 'relation', name: 'P' },
+    )).toThrow(/arity mismatch.*P.*1.*0/i)
     expect(controller.invokeAction(
       { kind: 'relFold', label: '', needsInput: 'relation' }, bodySelection, { kind: 'relation', name: 'R' },
     )).toBe(true)
     expect(opened).toEqual([bubble])
+    expect(stepsFrom(applied)[0]).toEqual(resolveNamedRelationInstantiation(
+      diagram, bubble, extendRelations(EMPTY_PROOF_CONTEXT, relations), 'R', 'backward',
+    ))
     expect(stepsFrom(applied).map((step) => step.rule)).toEqual(['comprehensionInstantiate', 'relFold'])
     expect(ref).toBeTruthy()
   })

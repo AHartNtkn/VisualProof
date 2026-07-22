@@ -29,6 +29,7 @@ export type SpawnCatalog = {
 }
 
 export type SpawnBoundPredicateOption = {
+  readonly source: 'draft' | 'host'
   readonly binder: RegionId
   readonly arity: number
   readonly position: number
@@ -46,6 +47,7 @@ export function boundPredicateOptions(d: Diagram, region: RegionId): readonly Sp
     current = value.parent
   }
   return Object.freeze(found.map((option, index) => Object.freeze({
+    source: 'draft' as const,
     ...option,
     position: index + 1,
     total: found.length,
@@ -70,7 +72,9 @@ export type SpawnRelationRequest = {
 }
 
 export type SpawnBoundPredicateRequest = {
+  readonly source: SpawnBoundPredicateOption['source']
   readonly binder: RegionId
+  readonly arity: number
   readonly invocation: SpawnInvocation
 }
 
@@ -96,9 +100,12 @@ export type SpawnCascadeOptions = {
   /** Return false to keep the cascade open after a refused edit. */
   readonly spawnBubble: (request: SpawnBubbleRequest) => boolean | void
   /** Presentation color derived from the renderer's authoritative binder hue. */
-  readonly binderColor: (binder: RegionId) => string
+  readonly binderColor: (binder: RegionId, source: SpawnBoundPredicateOption['source']) => string
   /** View-only binder emphasis. Null clears every cascade-owned emphasis. */
-  readonly hoverBinder?: (binder: RegionId | null) => void
+  readonly hoverBinder?: (
+    binder: RegionId | null,
+    source: SpawnBoundPredicateOption['source'] | null,
+  ) => void
   readonly openChanged?: (open: boolean) => void
   readonly recentsLimit?: number
 }
@@ -338,7 +345,12 @@ export class SpawnCascade {
 
     const pickBoundPredicate = (entry: SpawnBoundPredicateOption): void => {
       if (!current()) return
-      const accepted = this.#spawnBoundPredicate({ binder: entry.binder, invocation: snapshot })
+      const accepted = this.#spawnBoundPredicate({
+        source: entry.source,
+        binder: entry.binder,
+        arity: entry.arity,
+        invocation: snapshot,
+      })
       if (accepted === false) return
       if (current()) this.close()
     }
@@ -347,16 +359,17 @@ export class SpawnCascade {
       const item = row(binderLabel(entry), `/${entry.arity}`, () => pickBoundPredicate(entry))
       item.classList.add('vpa-spawn-bound-predicate')
       item.dataset.binder = entry.binder
+      item.dataset.source = entry.source
       const swatch = this.#document.createElement('span')
       swatch.className = 'vpa-spawn-binder-swatch'
       swatch.setAttribute('aria-hidden', 'true')
-      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#binderColor(entry.binder)};box-shadow:0 0 0 1px #0002`
+      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#binderColor(entry.binder, entry.source)};box-shadow:0 0 0 1px #0002`
       item.firstElementChild?.prepend(swatch)
       item.addEventListener('pointerenter', () => {
-        if (current()) this.#setHoveredBinder(entry.binder)
+        if (current()) this.#setHoveredBinder(entry.binder, entry.source)
       })
       item.addEventListener('pointerleave', () => {
-        if (current()) this.#setHoveredBinder(null)
+        if (current()) this.#setHoveredBinder(null, null)
       })
       return item
     }
@@ -476,12 +489,15 @@ export class SpawnCascade {
     queueMicrotask(() => { if (current()) search.focus() })
   }
 
-  #setHoveredBinder(binder: RegionId | null): void {
-    this.#hoverBinder?.(binder)
+  #setHoveredBinder(
+    binder: RegionId | null,
+    source: SpawnBoundPredicateOption['source'] | null,
+  ): void {
+    this.#hoverBinder?.(binder, source)
   }
 
   close(): boolean {
-    this.#setHoveredBinder(null)
+    this.#setHoveredBinder(null, null)
     if (this.#menu === null) return false
     this.#menu.remove()
     this.#backdrop?.remove()

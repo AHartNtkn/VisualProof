@@ -1,6 +1,8 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
+import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
+import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { parseTerm } from '../kernel/term/parse'
 import { applyFission } from '../kernel/rules/fusion'
 import { applyComprehensionInstantiate } from '../kernel/rules/comprehension'
@@ -14,30 +16,37 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { seedProject } from '../view/relax'
 import { existentialStubs, legPaths } from '../view/wires'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
-import { wireHitTest, type Hit } from '../interaction/hittest'
+import { buildSelection, wireHitTest, type Hit } from '../interaction/hittest'
+import { absorbHits } from '../interaction/edit'
 import { ConstructController } from './interact/construct'
 import { CopyDragController, copyDestinationPreview } from '../interaction/controllers/copy'
 import type { CopyDestination, CopyPlan } from '../interaction/copy-planner'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from '../interaction/controllers/viewport'
+import { enclosingComprehensionBinders } from '../interaction/comprehension-dependencies'
 import {
   applyRelationConnection,
+  applyCapturedRelationHostPatternImport,
   beginSubstitutionDraft,
   currentRelationDraft,
   deleteOptionalPort,
   insertOptionalPort,
+  importRelationHostBinderOccurrence,
   materializeRelationSnapshot,
   moveRelationHistory,
   moveOptionalPort,
   planRelationConnection,
+  planRelationHostPatternImport,
   replaceRelationDiagram,
   deriveRelationExternalReferencePresentation,
   type RelationConnectionEndpoint,
   type RelationWorkspaceDraft,
   type RelationWorkspaceSnapshot,
   type RelationPort,
+  type RelationHostPatternImportPlan,
 } from './relation-workspace-draft'
+import type { SpawnBoundPredicateOption } from './interact/spawn'
 
 export type WorkspaceStatus = {
   readonly kind: 'ready' | 'refused'
@@ -77,6 +86,7 @@ export type RelationWorkspaceTransaction = {
   readonly title: string
   readonly finalizeLabel: string
   readonly sourceDiagram: () => Diagram
+  readonly liveSourceDiagram: () => Diagram
   readonly sourceBoundary: () => readonly WireId[]
   previewShapes(): readonly Shape[]
   draftChanged?(snapshot: RelationWorkspaceSnapshot): void
@@ -91,10 +101,73 @@ export type RelationWorkspaceTransaction = {
   cancel(): void
 }
 
+export type RelationHostPatternDropPlanning = {
+  readonly plan: RelationHostPatternImportPlan | null
+  readonly refusal: string | null
+}
+
+export function planRelationHostPatternDrop(
+  draft: RelationWorkspaceDraft,
+  source: Diagram,
+  selection: SubgraphSelection,
+  requestedRegion: RegionId,
+  at: Readonly<Vec2>,
+): RelationHostPatternDropPlanning {
+  try {
+    return {
+      plan: planRelationHostPatternImport(draft, source, selection, requestedRegion, at),
+      refusal: null,
+    }
+  } catch (error) {
+    return {
+      plan: null,
+      refusal: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+export function applyRelationHostPatternDrop(
+  draft: RelationWorkspaceDraft,
+  plan: RelationHostPatternImportPlan,
+  transaction: Pick<RelationWorkspaceTransaction, 'liveSourceDiagram'>,
+): RelationWorkspaceDraft {
+  return applyCapturedRelationHostPatternImport(draft, plan, transaction.liveSourceDiagram())
+}
+
 export function previewRelationWorkspaceSnapshot(
   snapshot: RelationWorkspaceSnapshot,
 ): ReturnType<typeof mkDiagramWithBoundary> {
   return mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
+}
+
+export function relationWorkspaceBoundPredicateOptions(
+  draft: RelationWorkspaceDraft,
+  region: RegionId,
+): readonly SpawnBoundPredicateOption[] {
+  const local = boundPredicateOptions(currentRelationDraft(draft).diagram, region)
+  if (draft.mode !== 'substitute' || draft.instantiationTarget === undefined) return local
+  const binders = enclosingComprehensionBinders(draft.host, draft.instantiationTarget)
+  const host = binders.map((binder, index): SpawnBoundPredicateOption => {
+    const value = draft.host.regions[binder]
+    if (value === undefined || value.kind !== 'bubble') {
+      throw new Error(`host bound-predicate option references missing bubble '${binder}'`)
+    }
+    return Object.freeze({
+      source: 'host', binder, arity: value.arity,
+      position: binders.length - index, total: binders.length,
+    })
+  })
+  return Object.freeze([...local, ...host])
+}
+
+export function relationHostSelectionRoute(
+  draft: RelationWorkspaceDraft,
+  source: Diagram,
+  selection: SubgraphSelection,
+): 'copy' | 'import' | 'refused' {
+  const extraction = extractSubgraph(source, selection)
+  if (extraction.binderStubs.length === 0) return 'copy'
+  return draft.mode === 'substitute' ? 'import' : 'refused'
 }
 
 export function applyPortStripDrop(
@@ -223,6 +296,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
 
   get title(): string { return `SUBSTITUTE · NEW RELATION /${this.#arity}` }
   sourceDiagram = (): Diagram => this.#source
+  liveSourceDiagram = (): Diagram => this.#opts.diagram()
   sourceBoundary = (): readonly WireId[] => this.#boundary
   previewShapes(): readonly Shape[] { return [] }
   initialDraft(): RelationWorkspaceDraft { return beginSubstitutionDraft(this.#source, this.#bubble) }
@@ -231,13 +305,15 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
     try {
       const forced = snapshot.ports.filter((port) => port.kind === 'forced')
       if (forced.length !== this.#arity) throw new Error(`substitution requires ${this.#arity} forced ports`)
-      const materialized = materializeRelationSnapshot(snapshot, this.mode)
+      const materialized = materializeRelationSnapshot(
+        snapshot, this.mode, this.#source, this.#bubble,
+      )
       applyComprehensionInstantiate(
         this.#source,
         this.#bubble,
         materialized.relation,
         materialized.attachments,
-        [],
+        materialized.binders,
         this.#opts.orientation ?? 'forward',
       )
       return { kind: 'ready', code: 'ready', message: 'ready to instantiate' }
@@ -262,7 +338,9 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
     }
     const status = this.status(snapshot)
     if (status.kind !== 'ready') throw new Error(status.message)
-    const materialized = materializeRelationSnapshot(snapshot, this.mode)
+    const materialized = materializeRelationSnapshot(
+      snapshot, this.mode, this.#source, this.#bubble,
+    )
     const action: ProofAction = {
       label: 'substitute relation',
       steps: [{
@@ -270,7 +348,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
         bubble: this.#bubble,
         comp: materialized.relation,
         attachments: materialized.attachments,
-        binders: [],
+        binders: materialized.binders,
       }],
       placements,
     }
@@ -433,6 +511,16 @@ type ConnectionGesture = {
   current: Vec2
   moved: boolean
 }
+type HostPatternImportDrag = {
+  readonly source: Diagram
+  readonly selection: SubgraphSelection
+  plan: RelationHostPatternImportPlan | null
+  refusal: string | null
+  destination: Extract<CopyDestination, { readonly kind: 'workspace' }> | null
+  moved: boolean
+  current: boolean
+  sample: PointerSample
+}
 
 const wireShapes = (engine: Engine, wire: WireId, stroke: string, width: number, glow: string | null = null): Shape[] => {
   const shapes: Shape[] = []
@@ -476,6 +564,8 @@ export class RelationWorkspace {
   #draftHoverWire: WireId | null = null
   #hostHoverWire: WireId | null = null
   #selectedPort: string | null = null
+  #spawnHover: { readonly source: 'draft' | 'host'; readonly binder: RegionId } | null = null
+  #hostImportDrag: HostPatternImportDrag | null = null
   #statusOverride: WorkspaceStatus | null = null
   #disposed = false
 
@@ -551,8 +641,17 @@ export class RelationWorkspace {
       host: host.mount,
       spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => spawnTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
       spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, arity), at.world),
-      spawnBoundPredicate: ({ binder, invocation: at }) => this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, binder), at.world),
-      binderColor: (binder) => bubbleHues(this.#diagram(), host.theme().bubbleLightness).get(binder) ?? host.theme().interaction.hover,
+      spawnBoundPredicate: ({ source, binder, invocation: at }) => source === 'host'
+        ? this.#importHostBinder(binder, at.region, at.world)
+        : this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, binder), at.world),
+      binderColor: (binder, source) => {
+        const diagram = source === 'host' ? this.#transaction.sourceDiagram() : this.#diagram()
+        return bubbleHues(diagram, host.theme().bubbleLightness).get(binder) ?? host.theme().interaction.hover
+      },
+      hoverBinder: (binder, source) => {
+        this.#spawnHover = binder === null || source === null ? null : { binder, source }
+        host.changed()
+      },
       openChanged: host.changed,
     })
     this.#construct = new ConstructController({
@@ -580,7 +679,7 @@ export class RelationWorkspace {
           assertProofContext(context)
           return context.relations
         })(),
-        boundPredicateOptions(this.#diagram(), region),
+        relationWorkspaceBoundPredicateOptions(this.#draft, region),
       ),
       theme: host.theme,
       copy: {
@@ -617,7 +716,7 @@ export class RelationWorkspace {
         const region = this.#regionAt(sample.world)
         const context = host.context()
         assertProofContext(context)
-        this.#spawn.open({ screen: sample.client, world: sample.world, region }, context.relations, boundPredicateOptions(this.#diagram(), region))
+        this.#spawn.open({ screen: sample.client, world: sample.world, region }, context.relations, relationWorkspaceBoundPredicateOptions(this.#draft, region))
       },
       pointerChanged: (client) => this.#pointerChanged('draft', client),
       passiveSample: (sample) => this.#construct.passiveSample(sample),
@@ -660,14 +759,17 @@ export class RelationWorkspace {
       cancel: () => { transaction.cancel(); this.#host.changed() },
     }
     if (transaction !== null && transaction.yieldToCopyOnDrag !== true) return wrapped
-    const copy = this.#hostCopy.claim(sample)
+    const copy = this.#hostPatternImportClaim(sample) ?? this.#hostCopy.claim(sample)
     if (wrapped !== null && copy !== null) return arbitrateRelationHostCopy(wrapped, copy)
     return wrapped ?? copy
   }
 
   hostPointerChanged(client: Vec2): void { this.#pointerChanged('host', client) }
 
-  modifiersChanged(ctrlHeld: boolean): void { this.#hostCopy.modifiersChanged(ctrlHeld) }
+  modifiersChanged(ctrlHeld: boolean): void {
+    this.#hostCopy.modifiersChanged(ctrlHeld)
+    if (ctrlHeld) this.#cancelHostPatternImport()
+  }
 
   keyDown(sample: KeySample): boolean {
     if (this.#disposed || sample.repeat) return false
@@ -692,7 +794,10 @@ export class RelationWorkspace {
   }
 
   hostOverlays(): readonly Shape[] {
-    return [...this.#transaction.previewShapes(), ...this.#connectionShapes('host'), ...this.#hostCopy.sourceOverlay()]
+    const spawnHover = this.#spawnHover?.source === 'host'
+      ? itemShapes(this.#host.engine(), { kind: 'region', id: this.#spawnHover.binder }, this.#host.theme().interaction.hover)
+      : []
+    return [...this.#transaction.previewShapes(), ...this.#connectionShapes('host'), ...this.#hostCopy.sourceOverlay(), ...spawnHover]
   }
 
   frame(_now: number): void {
@@ -706,7 +811,21 @@ export class RelationWorkspace {
       const body = this.#engine.bodies.get(id)
       if (body !== undefined) shapes.push({ kind: 'circle', center: body.pos, r: body.discR * this.#engine.scale + 1, fill: null, stroke: theme.interaction.pin, width: 1.5, insetColor: null, glow: null })
     }
-    shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'), ...this.#hostCopy.destinationOverlay())
+    if (this.#spawnHover?.source === 'draft') {
+      shapes.push(...itemShapes(this.#engine, { kind: 'region', id: this.#spawnHover.binder }, theme.interaction.hover))
+    }
+    const importDestination = this.#hostImportDrag
+    shapes.push(
+      ...this.#construct.overlay(),
+      ...this.#connectionShapes('draft'),
+      ...this.#hostCopy.destinationOverlay(),
+      ...(importDestination?.current === true
+        && importDestination.moved
+        && importDestination.plan !== null
+        && importDestination.destination !== null
+        ? copyDestinationPreview(this.#engine, importDestination.destination.region, theme)
+        : []),
+    )
     this.#surface.render({ layers: [{ shapes }] }, this.#view)
     this.#renderGesture()
   }
@@ -763,6 +882,7 @@ export class RelationWorkspace {
     this.#spawn.dispose()
     this.#construct.dispose()
     this.#hostCopy.dispose()
+    this.#cancelHostPatternImport()
     this.#interaction.dispose()
     this.#root.remove()
     this.#gesture.remove()
@@ -797,7 +917,7 @@ export class RelationWorkspace {
     this.#reconcile(node === undefined ? undefined : { node, at: plan.at })
   }
 
-  #workspaceDestination(client: Vec2): CopyDestination | null {
+  #workspaceDestination(client: Vec2): Extract<CopyDestination, { readonly kind: 'workspace' }> | null {
     if (document.elementFromPoint(client.x, client.y) !== this.#canvas) return null
     const world = relationWorkspaceWorldPoint(
       client, this.#canvas.getBoundingClientRect(), this.#canvas, this.#view,
@@ -807,11 +927,105 @@ export class RelationWorkspace {
     }
   }
 
+  #hostPatternImportClaim(sample: PointerSample): PointerClaim | null {
+    if (this.#disposed || sample.button !== 0 || sample.ctrlKey || sample.shiftKey || sample.hit === null) return null
+    const source = this.#transaction.sourceDiagram()
+    let selection: SubgraphSelection
+    try {
+      selection = buildSelection(source, absorbHits(source, this.#host.selection()))
+    } catch {
+      return null
+    }
+    const contents = selectionContents(source, selection)
+    const onSelectedSurface = sample.hit.kind === 'node'
+      ? contents.allNodes.has(sample.hit.id)
+      : sample.hit.kind === 'region'
+        ? contents.allRegions.has(sample.hit.id)
+        : contents.internalWires.includes(sample.hit.id)
+    if (!onSelectedSurface || relationHostSelectionRoute(this.#draft, source, selection) !== 'import') return null
+
+    const drag: HostPatternImportDrag = {
+      source, selection, plan: null, refusal: null, destination: null,
+      moved: false, current: true, sample,
+    }
+    this.#hostImportDrag = drag
+    const cancel = (): void => {
+      drag.current = false
+      if (this.#hostImportDrag === drag) this.#hostImportDrag = null
+    }
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: false,
+      move: (next) => {
+        if (!drag.current || this.#hostImportDrag !== drag || this.#disposed) return
+        if (next.ctrlKey) { cancel(); return }
+        drag.moved = true
+        drag.sample = next
+        const destination = this.#workspaceDestination(next.client)
+        drag.destination = destination
+        if (destination === null) {
+          drag.plan = null
+          drag.refusal = null
+          return
+        }
+        const planning = planRelationHostPatternDrop(
+          this.#draft, source, selection, destination.region, destination.at,
+        )
+        drag.plan = planning.plan
+        drag.refusal = planning.refusal
+      },
+      release: (next, moved) => {
+        if (next.ctrlKey) { cancel(); return }
+        if (!drag.current || this.#hostImportDrag !== drag) return
+        this.#hostImportDrag = null
+        drag.current = false
+        if (!moved || !drag.moved || drag.destination === null) return
+        if (drag.plan === null) {
+          if (drag.refusal !== null) this.#host.refuse(drag.refusal, next.client)
+          return
+        }
+        const liveDestination = this.#workspaceDestination(next.client)
+        if (liveDestination === null
+          || liveDestination.region !== drag.destination.region
+          || liveDestination.at.x !== drag.destination.at.x
+          || liveDestination.at.y !== drag.destination.at.y) return
+        try {
+          this.#draft = applyRelationHostPatternDrop(this.#draft, drag.plan, this.#transaction)
+          const node = drag.plan.introduced[0]
+          this.#reconcile(node === undefined ? undefined : { node, at: drag.plan.at })
+        } catch (error) {
+          this.#host.refuse(error instanceof Error ? error.message : String(error), next.client)
+        }
+      },
+      cancel,
+    }
+  }
+
+  #cancelHostPatternImport(): void {
+    const drag = this.#hostImportDrag
+    if (drag === null) return
+    drag.current = false
+    this.#hostImportDrag = null
+  }
+
   #editAdd(change: () => { diagram: Diagram; node: string }, at: Vec2): boolean {
     try {
       const added = change()
       this.#draft = replaceRelationDiagram(this.#draft, added.diagram)
       this.#reconcile({ node: added.node, at })
+      return true
+    } catch (error) {
+      this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+      return false
+    }
+  }
+
+  #importHostBinder(binder: RegionId, region: RegionId, at: Vec2): boolean {
+    try {
+      const before = new Set(Object.keys(this.#diagram().nodes))
+      this.#draft = importRelationHostBinderOccurrence(this.#draft, binder, region)
+      const node = Object.keys(this.#diagram().nodes).find((candidate) => !before.has(candidate))
+      this.#reconcile(node === undefined ? undefined : { node, at })
       return true
     } catch (error) {
       this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())

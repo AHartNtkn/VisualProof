@@ -7,10 +7,10 @@ import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { DARK } from '../../src/view/paint'
-import { comprehensionFixture } from '../app/comprehension-fixture'
+import { dependentComprehensionFixture } from '../app/comprehension-fixture'
 import { minimalPuzzle } from './catalog-fixture'
 
-const fixture = comprehensionFixture()
+const fixture = dependentComprehensionFixture()
 let diagram = fixture.diagram
 let prepared = 0
 const preparedSteps: ProofStep[] = []
@@ -34,7 +34,7 @@ const surface = new GameProofViewport({
   boundary: () => [],
   context: () => EMPTY_PROOF_CONTEXT,
   artifactAvailable: () => false,
-  orientation: () => 'forward',
+  orientation: () => 'backward',
   theme: () => DARK,
   fuel: () => 256,
   prepare: (action) => {
@@ -77,9 +77,9 @@ const worldToClient = (point: { readonly x: number; readonly y: number }) => {
   }
 }
 
-const cutBoundaryPoint = () => {
-  const region = surface.engine.regions.get(fixture.guard)
-  if (region === undefined) throw new Error('guard cut has no rendered geometry')
+const regionBoundaryPoint = (id: string) => {
+  const region = surface.engine.regions.get(id)
+  if (region === undefined) throw new Error(`region '${id}' has no rendered geometry`)
   for (const inset of [3, 5, 7, 9]) {
     for (let index = 0; index < 360; index += 1) {
       const angle = index * Math.PI / 180
@@ -101,11 +101,19 @@ const cutBoundaryPoint = () => {
           { scale: surface.view.scale },
           false,
         )
-        return hit?.kind === 'region' && hit.id === fixture.guard
+        return hit?.kind === 'region' && hit.id === id
       })) return worldToClient(point)
     }
   }
-  throw new Error('guard cut has no robust pointer-reachable drag point')
+  throw new Error(`region '${id}' has no robust pointer-reachable boundary point`)
+}
+
+const cutBoundaryPoint = () => regionBoundaryPoint(fixture.guard)
+
+const nodePoint = (id: string) => {
+  const body = surface.engine.bodies.get(id)
+  if (body === undefined) throw new Error(`node '${id}' has no rendered geometry`)
+  return worldToClient(body.pos)
 }
 
 const rootTargetPoint = () => {
@@ -147,6 +155,12 @@ const state = {
     .filter((body) => body.node !== null)
     .slice(0, 2)
     .map((body) => worldToClient(body.pos)),
+  dependentBubblePoint: () => regionBoundaryPoint(fixture.dependentBubble),
+  dependentBubble: () => fixture.dependentBubble,
+  hostAtomPoint: () => nodePoint(fixture.hostAtom),
+  hostAtom: () => fixture.hostAtom,
+  expectedHostBinder: () => fixture.outerBinder,
+  voidPoint: () => rootTargetPoint(),
   cutIterationGesture: () => ({
     cut: fixture.guard,
     root: diagram.root,
@@ -166,8 +180,9 @@ const state = {
   selection: () => surface.debug().selection.map((hit) => `${hit.kind}:${hit.id}`),
   clearSelection: (): void => surface.interaction.setSelection([]),
   selectParameter: (): void => surface.interaction.setSelection([{ kind: 'wire', id: fixture.parameter }]),
-  open: (): boolean => surface.openConstruction(fixture.bubble, { x: 170, y: 170 }),
+  open: (): boolean => surface.openConstruction(fixture.dependentBubble, { x: 170, y: 170 }),
   construction: () => surface.debug().construction,
+  lastPreparedStep: (): ProofStep | null => preparedSteps.at(-1) ?? null,
   editing: (): boolean => surface.editing,
   prepared: (): number => prepared,
   refusals: (): number => refusals,
@@ -196,7 +211,7 @@ const state = {
       canvas: { width: surface.canvas.width, height: surface.canvas.height },
     })
     const before = snapshot()
-    const opened = surface.openConstruction(fixture.bubble, { x: 100, y: 100 })
+    const opened = surface.openConstruction(fixture.dependentBubble, { x: 100, y: 100 })
     const artifact = minimalPuzzle()
     const drop = surface.dropArtifact({ id: artifact.id, diagram: artifact.goal.diagram }, { x: 100, y: 100 })
     surface.reconcileDiagram()

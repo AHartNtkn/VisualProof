@@ -8,6 +8,18 @@ import { mkSelection } from '../../../kernel/diagram/subgraph/selection'
 import type { Term } from '../../../kernel/term/term'
 import { deepestCommonAncestor } from '../../../kernel/diagram/regions'
 import { freshId } from '../../../kernel/diagram/subgraph/freshId'
+import type { SubgraphSelection } from '../../../kernel/diagram/subgraph/selection'
+import type { ComprehensionBinderPair } from '../../../kernel/rules/comprehension'
+import {
+  addComprehensionBoundOccurrence,
+  createComprehensionDependencyState,
+  materializeComprehensionDependencies,
+  mergeSelectedComprehensionDependencies,
+  reconcileComprehensionDependencies,
+  replaceComprehensionDependencyBoundary,
+  validateComprehensionDependencies,
+  type ComprehensionDependencyState,
+} from '../../../interaction/comprehension-dependencies'
 
 export type ExternalWireBinding = {
   readonly draftWire: WireId
@@ -44,11 +56,22 @@ export type ComprehensionSnapshot = {
       effective boundary. */
   readonly relation: DiagramWithBoundary
   readonly externalWires: readonly ExternalWireBinding[]
+  readonly comprehension: ComprehensionDependencyState
 }
 
 export type MaterializedComprehensionSnapshot = {
   readonly relation: DiagramWithBoundary
   readonly attachments: readonly WireId[]
+  readonly binders: readonly ComprehensionBinderPair[]
+}
+
+export type ComprehensionHostPatternImportPlan = {
+  readonly source: Diagram
+  readonly captured: ComprehensionSnapshot
+  readonly snapshot: ComprehensionSnapshot
+  readonly introduced: readonly NodeId[]
+  readonly at: Readonly<{ x: number; y: number }>
+  readonly binders: readonly ComprehensionBinderPair[]
 }
 
 export type ComprehensionConnectionEndpoint =
@@ -103,12 +126,17 @@ export function beginComprehensionDraft(
 ): ComprehensionDraft {
   const region = host.regions[bubble]
   if (region === undefined || region.kind !== 'bubble') throw new Error(`'${bubble}' is not a relation bubble`)
+  const relation = bareRelation(region.arity)
   return {
     host,
     bubble,
     arity: region.arity,
     orientation,
-    history: [{ relation: bareRelation(region.arity), externalWires: [] }],
+    history: [{
+      relation,
+      externalWires: [],
+      comprehension: createComprehensionDependencyState(relation),
+    }],
     cursor: 0,
   }
 }
@@ -118,7 +146,9 @@ export function currentComprehensionDraft(draft: ComprehensionDraft): Comprehens
 }
 
 function appendSnapshot(draft: ComprehensionDraft, snapshot: ComprehensionSnapshot): ComprehensionDraft {
-  const history = [...draft.history.slice(0, draft.cursor + 1), snapshot]
+  const reconciled = reconcileSnapshot(draft, snapshot)
+  validateSnapshot(draft, reconciled)
+  const history = [...draft.history.slice(0, draft.cursor + 1), reconciled]
   return { ...draft, history, cursor: history.length - 1 }
 }
 
@@ -144,15 +174,53 @@ function normalizeExternalWires(bindings: readonly ExternalWireBinding[]): Exter
   return unique.sort((a, b) => compareWireIds(a.draftWire, b.draftWire) || compareWireIds(a.hostWire, b.hostWire))
 }
 
+function effectiveBoundary(snapshot: ComprehensionSnapshot): readonly WireId[] {
+  return Object.freeze([
+    ...snapshot.relation.boundary,
+    ...snapshot.externalWires.map((binding) => binding.draftWire),
+  ])
+}
+
+function reconcileSnapshot(
+  draft: ComprehensionDraft,
+  snapshot: ComprehensionSnapshot,
+): ComprehensionSnapshot {
+  const proposed = snapshot.comprehension
+  const boundary = effectiveBoundary(snapshot)
+  const sameDiagram = proposed.pattern.diagram === snapshot.relation.diagram
+  const sameBoundary = JSON.stringify(proposed.pattern.boundary) === JSON.stringify(boundary)
+  const comprehension = sameDiagram
+    ? sameBoundary
+      ? proposed
+      : replaceComprehensionDependencyBoundary(
+          proposed, boundary, draft.host, draft.bubble,
+        )
+    : reconcileComprehensionDependencies(
+        proposed,
+        mkDiagramWithBoundary(snapshot.relation.diagram, boundary),
+        draft.host,
+        draft.bubble,
+      )
+  return {
+    ...snapshot,
+    relation: mkDiagramWithBoundary(comprehension.pattern.diagram, snapshot.relation.boundary),
+    comprehension,
+  }
+}
+
 /** Derive the effective positional kernel/render interface from the stored
     formal boundary and the normalized external-reference ledger. */
-export function materializeComprehensionSnapshot(snapshot: ComprehensionSnapshot): MaterializedComprehensionSnapshot {
+export function materializeComprehensionSnapshot(
+  snapshot: ComprehensionSnapshot,
+  host: Diagram,
+  instantiationTarget: RegionId,
+): MaterializedComprehensionSnapshot {
   return {
-    relation: mkDiagramWithBoundary(snapshot.relation.diagram, [
-      ...snapshot.relation.boundary,
-      ...snapshot.externalWires.map((binding) => binding.draftWire),
-    ]),
+    relation: snapshot.comprehension.pattern,
     attachments: snapshot.externalWires.map((binding) => binding.hostWire),
+    binders: materializeComprehensionDependencies(
+      snapshot.comprehension, host, instantiationTarget,
+    ),
   }
 }
 
@@ -166,9 +234,87 @@ export function replaceComprehensionDiagram(draft: ComprehensionDraft, diagram: 
     externalWires: normalizeExternalWires(current.externalWires.filter(
       (binding) => diagram.wires[binding.draftWire] !== undefined,
     )),
+    comprehension: current.comprehension,
   }
-  validateSnapshot(draft, snapshot)
   return appendSnapshot(draft, snapshot)
+}
+
+export function importComprehensionHostBinderOccurrence(
+  draft: ComprehensionDraft,
+  hostBinder: RegionId,
+  expectedArity: number,
+  requestedRegion?: RegionId,
+): ComprehensionDraft {
+  const target = draft.host.regions[hostBinder]
+  if (target === undefined || target.kind !== 'bubble') {
+    throw new Error(`host bound-predicate option '${hostBinder}' is no longer a bubble`)
+  }
+  if (target.arity !== expectedArity) {
+    throw new Error(
+      `host bound-predicate option '${hostBinder}' arity changed from ${expectedArity} to ${target.arity}`,
+    )
+  }
+  const current = currentComprehensionDraft(draft)
+  const added = addComprehensionBoundOccurrence(
+    current.comprehension,
+    draft.host,
+    draft.bubble,
+    hostBinder,
+    requestedRegion,
+  )
+  return appendSnapshot(draft, {
+    relation: mkDiagramWithBoundary(added.state.pattern.diagram, current.relation.boundary),
+    externalWires: current.externalWires,
+    comprehension: added.state,
+  })
+}
+
+export function planComprehensionHostPatternImport(
+  draft: ComprehensionDraft,
+  source: Diagram,
+  selection: SubgraphSelection,
+  requestedRegion: RegionId,
+  at: Readonly<{ x: number; y: number }>,
+): ComprehensionHostPatternImportPlan {
+  const captured = currentComprehensionDraft(draft)
+  const merged = mergeSelectedComprehensionDependencies(
+    captured.comprehension,
+    draft.host,
+    draft.bubble,
+    source,
+    selection,
+    requestedRegion,
+  )
+  const snapshot = reconcileSnapshot(draft, {
+    relation: mkDiagramWithBoundary(merged.state.pattern.diagram, captured.relation.boundary),
+    externalWires: captured.externalWires,
+    comprehension: merged.state,
+  })
+  validateSnapshot(draft, snapshot)
+  return Object.freeze({
+    source,
+    captured,
+    snapshot,
+    introduced: merged.introduced,
+    at: Object.freeze({ x: at.x, y: at.y }),
+    binders: materializeComprehensionDependencies(
+      snapshot.comprehension, draft.host, draft.bubble,
+    ),
+  })
+}
+
+export function applyCapturedComprehensionHostPatternImport(
+  draft: ComprehensionDraft,
+  plan: ComprehensionHostPatternImportPlan,
+  liveSource: Diagram,
+): ComprehensionDraft {
+  if (liveSource !== plan.source || draft.host !== plan.source) {
+    throw new Error('host pattern import cancelled because the source changed')
+  }
+  if (currentComprehensionDraft(draft) !== plan.captured) {
+    throw new Error('host pattern import cancelled because the draft changed')
+  }
+  return appendSnapshot(draft, plan.snapshot)
 }
 
 const replaceDiagram = replaceComprehensionDiagram
@@ -197,13 +343,20 @@ function validateSnapshot(draft: ComprehensionDraft, snapshot: ComprehensionSnap
       throw new Error(`external draft wire '${binding.draftWire}' is not root-scoped`)
     }
   })
-  const materialized = materializeComprehensionSnapshot(snapshot)
+  if (snapshot.comprehension.pattern.diagram !== snapshot.relation.diagram) {
+    throw new Error('comprehension snapshot relation must be owned by its dependency state')
+  }
+  if (JSON.stringify(snapshot.comprehension.pattern.boundary) !== JSON.stringify(effectiveBoundary(snapshot))) {
+    throw new Error('comprehension dependency boundary must match the materialized relation interface')
+  }
+  validateComprehensionDependencies(snapshot.comprehension, draft.host, draft.bubble)
+  const materialized = materializeComprehensionSnapshot(snapshot, draft.host, draft.bubble)
   applyComprehensionInstantiate(
     draft.host,
     draft.bubble,
     materialized.relation,
     materialized.attachments,
-    [],
+    materialized.binders,
     draft.orientation,
   )
 }
@@ -238,7 +391,9 @@ export function attachComprehensionSocket(
 
 function planLocalFusion(draft: ComprehensionDraft, first: WireId, second: WireId): ComprehensionSnapshot {
   const current = currentComprehensionDraft(draft)
-  const interfaceWires = new Set(materializeComprehensionSnapshot(current).relation.boundary)
+  const interfaceWires = new Set(
+    materializeComprehensionSnapshot(current, draft.host, draft.bubble).relation.boundary,
+  )
   const formalPosition = new Map<WireId, number>()
   current.relation.boundary.forEach((wire, position) => {
     if (!formalPosition.has(wire)) formalPosition.set(wire, position)
@@ -283,6 +438,7 @@ function planLocalFusion(draft: ComprehensionDraft, first: WireId, second: WireI
       draftWire: binding.draftWire === drop ? keep : binding.draftWire,
       hostWire: binding.hostWire,
     }))),
+    comprehension: current.comprehension,
   }
   return snapshot
 }
@@ -356,11 +512,13 @@ export function planComprehensionConnection(
       snapshot = {
         relation: current.relation,
         externalWires: normalizeExternalWires([...current.externalWires, { draftWire: source, hostWire: target.wire }]),
+        comprehension: current.comprehension,
       }
     }
   }
 
   try {
+    snapshot = reconcileSnapshot(draft, snapshot)
     validateSnapshot(draft, snapshot)
   } catch (error) {
     if (error instanceof RuleError || error instanceof DiagramError) {
@@ -388,8 +546,8 @@ export function ungraftComprehensionWire(draft: ComprehensionDraft, draftWire: W
   const snapshot: ComprehensionSnapshot = {
     relation: current.relation,
     externalWires: normalizeExternalWires(externalWires),
+    comprehension: current.comprehension,
   }
-  validateSnapshot(draft, snapshot)
   return appendSnapshot(draft, snapshot)
 }
 
@@ -416,8 +574,8 @@ export function deleteComprehensionNode(draft: ComprehensionDraft, node: NodeId)
   const snapshot: ComprehensionSnapshot = {
     relation: mkDiagramWithBoundary(diagram, current.relation.boundary),
     externalWires: normalizeExternalWires(current.externalWires.filter((binding) => !droppedExternal.has(binding.draftWire))),
+    comprehension: current.comprehension,
   }
-  validateSnapshot(draft, snapshot)
   return appendSnapshot(draft, snapshot)
 }
 
@@ -476,11 +634,13 @@ export function cancelComprehensionDraft(draft: ComprehensionDraft): Diagram {
 export function commitComprehensionDraft(draft: ComprehensionDraft): Diagram {
   const current = currentComprehensionDraft(draft)
   validateSnapshot(draft, current)
-  const materialized = materializeComprehensionSnapshot(current)
+  const materialized = materializeComprehensionSnapshot(current, draft.host, draft.bubble)
   return applyComprehensionInstantiate(
     draft.host,
     draft.bubble,
     materialized.relation,
     materialized.attachments,
+    materialized.binders,
+    draft.orientation,
   )
 }

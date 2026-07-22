@@ -32,8 +32,8 @@ import {
   contextualDeletionStep,
   deiterationStep,
   erasureStep,
-  foldedComprehension,
 } from '../../interaction/proof-authoring'
+import { resolveNamedRelationInstantiation } from '../../interaction/named-relation'
 import './context-menu.css'
 import './proof-surface.css'
 
@@ -488,10 +488,13 @@ export class GameProofMoveController {
           return true
         }
         if (input?.kind !== 'relation') return false
-        this.#commit({
-          rule: 'comprehensionInstantiate', bubble,
-          comp: foldedComprehension(this.#options.context(), input.name), attachments: [], binders: [],
-        })
+        this.#commit(resolveNamedRelationInstantiation(
+          this.#options.diagram(),
+          bubble,
+          this.#options.context(),
+          input.name,
+          'backward',
+        ))
         return true
       }
       case 'abstractWrap': {

@@ -173,7 +173,7 @@ describe('relation workspace port model', () => {
     }))
     substitution = insertOptionalPort(substitution, 'parameter', 0, 'h1')
     expect(materializeRelationDraft(substitution)).toEqual(
-      materializeRelationSnapshot(currentRelationDraft(substitution), 'substitute'),
+      materializeRelationSnapshot(currentRelationDraft(substitution), 'substitute', substitution.host, 'bubble'),
     )
 
     let abstraction = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['x'])
@@ -239,10 +239,11 @@ describe('relation workspace port model', () => {
     const replaced = replaceRelationDiagram(draft, replacement)
 
     expectOneSnapshot(draft, replaced)
-    expect(currentRelationDraft(replaced)).toEqual({
+    expect(currentRelationDraft(replaced)).toMatchObject({
       diagram: replacement,
       ports: [{ id: 'forced1', wire: 'arg1', kind: 'forced' }],
     })
+    expect(currentRelationDraft(replaced).comprehension?.pattern.diagram).toEqual(replacement)
     expect(currentRelationDraft(draft).diagram.nodes).toEqual({})
   })
 

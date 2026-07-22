@@ -100,7 +100,9 @@ export function editorRuntimeCatalog(): GameCatalog {
   const term = builder.termNode(outer, parseTerm('x'))
   const diagram = builder.build()
   const draft = beginComprehensionDraft(diagram, bubble)
-  const materialized = materializeComprehensionSnapshot(currentComprehensionDraft(draft))
+  const materialized = materializeComprehensionSnapshot(
+    currentComprehensionDraft(draft), draft.host, draft.bubble,
+  )
   const instantiate = {
     rule: 'comprehensionInstantiate' as const,
     bubble,

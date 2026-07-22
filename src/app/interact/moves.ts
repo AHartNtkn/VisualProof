@@ -24,11 +24,11 @@ import type { KeySample, PointerClaim, PointerSample } from '../../interaction/c
 import { FissionDragController, type FissionRequest } from '../../interaction/controllers/fission'
 import { CopyDragController, copyDestinationPreview } from '../../interaction/controllers/copy'
 import { proofConnectionStep } from '../../interaction/proof-connection'
+import { resolveNamedRelationInstantiation } from '../../interaction/named-relation'
 import {
   contextualDeletionStep,
   deiterationStep,
   erasureStep,
-  foldedComprehension,
   inconsistentCutStep,
 } from '../../interaction/proof-authoring'
 
@@ -420,7 +420,13 @@ export class ProofMoveController {
             this.#closeMenu()
             this.#options.openComprehension(bubble, this.#lastPointer)
           })
-          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#context(), choice.name), attachments: [], binders: [] }))
+          else row(choice.label, () => this.#commit(resolveNamedRelationInstantiation(
+            this.#options.diagram(),
+            bubble,
+            this.#context(),
+            choice.name,
+            this.#options.orientation(),
+          )))
         }
         return
       }

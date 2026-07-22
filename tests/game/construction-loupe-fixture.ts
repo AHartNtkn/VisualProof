@@ -2,11 +2,34 @@ import { ConstructionLoupe, type ConstructionLoupeHost } from '../../src/game/in
 import { mkEngine } from '../../src/view/engine'
 import { DARK } from '../../src/view/paint'
 import { seedProject } from '../../src/view/relax'
+import { existentialStubs } from '../../src/view/wires'
 import { InteractiveViewport } from '../../src/interaction/controllers/viewport'
+import type { PointerSample } from '../../src/interaction/controllers/viewport'
+import type { Hit } from '../../src/interaction/hittest'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
-import { comprehensionFixture } from '../app/comprehension-fixture'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { mkDiagram, type Diagram } from '../../src/kernel/diagram/diagram'
 
-const fixture = comprehensionFixture()
+const fixture = (() => {
+  const builder = new DiagramBuilder()
+  const binder = builder.bubble(builder.root, 0)
+  const hostAtom = builder.atom(binder, binder)
+  const guard = builder.cut(binder)
+  const bubble = builder.bubble(guard, 2)
+  for (let copy = 0; copy < 2; copy++) {
+    const atom = builder.atom(bubble, bubble)
+    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 1 } }])
+  }
+  const context = builder.ref(builder.root, 'context', 1)
+  const parameter = builder.wire(builder.root, [{ node: context, port: { kind: 'arg', index: 0 } }])
+  const inaccessible = builder.bubble(builder.root, 0)
+  const inaccessibleAtom = builder.atom(inaccessible, inaccessible)
+  return {
+    diagram: builder.build(), binder, hostAtom, guard, bubble, parameter,
+    inaccessible, inaccessibleAtom,
+  }
+})()
 const mainMount = document.querySelector<HTMLElement>('#host')!
 const mainCanvas = document.querySelector<HTMLCanvasElement>('#proof')!
 let activeMount = mainMount
@@ -14,6 +37,8 @@ let activeCanvas = mainCanvas
 const engine = mkEngine(fixture.diagram, [])
 seedProject(engine)
 let loupe: ConstructionLoupe | null = null
+let liveDiagram: Diagram = fixture.diagram
+let hostSelection: readonly Hit[] = []
 
 const state = {
   closed: 0,
@@ -21,6 +46,8 @@ const state = {
   lastRule: null as string | null,
   reopen: (): void => {
     loupe?.dispose()
+    liveDiagram = fixture.diagram
+    hostSelection = []
     loupe = new ConstructionLoupe(host, fixture.bubble, { x: 360, y: 180 })
   },
   mountInIframe: async (): Promise<void> => {
@@ -128,14 +155,122 @@ const state = {
     probeCanvas.remove()
     return { cancellations, modifiers }
   },
+  probeHostPatternClaims: (): {
+    readonly wireClaimWins: boolean
+    readonly nullarySelectedClaimed: boolean
+    readonly unselectedClaimed: boolean
+    readonly inaccessibleClaimed: boolean
+    readonly importedSnapshots: number
+    readonly importedExactTarget: boolean
+    readonly cancelledSnapshots: number
+    readonly staleSnapshots: number
+  } => {
+    const nodeSample = (node: string): PointerSample => {
+      const world = engine.bodies.get(node)?.pos
+      if (world === undefined) throw new Error(`missing fixture body '${node}'`)
+      return {
+        pointerId: 71,
+        button: 0,
+        client: { x: 40, y: 40 },
+        screen: { x: 40, y: 40 },
+        world: { ...world },
+        hit: { kind: 'node', id: node },
+        shiftKey: false,
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+      }
+    }
+    const destinationSample = (): PointerSample => {
+      const canvas = activeMount.querySelector<HTMLCanvasElement>('.cursebreaker-construction-loupe__canvas')!
+      const rect = canvas.getBoundingClientRect()
+      const client = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      const mapped = loupe!.clientMapping(client)
+      return {
+        pointerId: 71,
+        button: 0,
+        client,
+        screen: mapped.screen,
+        world: mapped.world,
+        hit: null,
+        shiftKey: false,
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+      }
+    }
+
+    state.reopen()
+    hostSelection = [{ kind: 'node', id: fixture.hostAtom }]
+    const selectedSample = nodeSample(fixture.hostAtom)
+    const parameterPoint = existentialStubs(engine).find((stub) => stub.wid === fixture.parameter)?.from
+    if (parameterPoint === undefined) throw new Error('missing fixture parameter marker')
+    const wireClaim = loupe!.hostClaim({ ...selectedSample, world: parameterPoint })
+    const wireClaimWins = wireClaim?.blocksPassiveRelaxation === true
+    wireClaim?.cancel()
+
+    const selectedClaim = loupe!.hostClaim(selectedSample)
+    const nullarySelectedClaimed = selectedClaim?.blocksPassiveRelaxation === false
+    selectedClaim?.cancel()
+
+    hostSelection = []
+    const unselectedClaimed = loupe!.hostClaim(selectedSample) !== null
+    hostSelection = [{ kind: 'node', id: fixture.inaccessibleAtom }]
+    const inaccessibleClaimed = loupe!.hostClaim(nodeSample(fixture.inaccessibleAtom)) !== null
+
+    state.reopen()
+    hostSelection = [{ kind: 'node', id: fixture.hostAtom }]
+    const importedBefore = loupe!.debugState().historyLength
+    const importClaim = loupe!.hostClaim(nodeSample(fixture.hostAtom))
+    const importDestination = destinationSample()
+    importClaim?.move(importDestination)
+    importClaim?.release(importDestination, true)
+    const imported = loupe!.debugState()
+
+    state.reopen()
+    hostSelection = [{ kind: 'node', id: fixture.hostAtom }]
+    const cancelledBefore = loupe!.debugState().historyLength
+    const cancelClaim = loupe!.hostClaim(nodeSample(fixture.hostAtom))
+    cancelClaim?.move(destinationSample())
+    cancelClaim?.cancel()
+    const cancelledAfter = loupe!.debugState().historyLength
+
+    state.reopen()
+    hostSelection = [{ kind: 'node', id: fixture.hostAtom }]
+    const staleBefore = loupe!.debugState().historyLength
+    const staleClaim = loupe!.hostClaim(nodeSample(fixture.hostAtom))
+    const staleDestination = destinationSample()
+    staleClaim?.move(staleDestination)
+    liveDiagram = mkDiagram({
+      root: fixture.diagram.root,
+      regions: { ...fixture.diagram.regions },
+      nodes: { ...fixture.diagram.nodes },
+      wires: { ...fixture.diagram.wires },
+    })
+    staleClaim?.release(staleDestination, true)
+    const staleAfter = loupe!.debugState().historyLength
+    liveDiagram = fixture.diagram
+
+    return {
+      wireClaimWins,
+      nullarySelectedClaimed,
+      unselectedClaimed,
+      inaccessibleClaimed,
+      importedSnapshots: imported.historyLength - importedBefore,
+      importedExactTarget: imported.binders.some(([, target]) => target === fixture.binder),
+      cancelledSnapshots: cancelledAfter - cancelledBefore,
+      staleSnapshots: staleAfter - staleBefore,
+    }
+  },
 }
 
 const host: ConstructionLoupeHost = {
   get mount() { return activeMount },
   get canvas() { return activeCanvas },
-  diagram: () => fixture.diagram,
+  diagram: () => liveDiagram,
   boundary: () => [],
   engine: () => engine,
+  selection: () => hostSelection,
   view: () => ({ scale: 1, offsetX: 0, offsetY: 0 }),
   context: () => EMPTY_PROOF_CONTEXT,
   orientation: () => 'forward',
