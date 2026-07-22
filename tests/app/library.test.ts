@@ -8,7 +8,13 @@ import { buildLambdaTheory } from '../../src/theories/lambda'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
-import { applyRelFold } from '../../src/kernel/rules/reldef'
+import { applyFold } from '../../src/kernel/rules/fold'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relationSig } from '../../src/theories/macros'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const foldR = (d: Parameters<typeof applyFold>[0], sel: Parameters<typeof applyFold>[1], name: string, args: readonly string[], rels: ReadonlyMap<string, DiagramWithBoundary>) =>
+  applyFold(d, sel, args, { defId: name, sig: relationSig(rels.get(name)!), resolve: (id) => rels.get(id) })
 import { emptyDiagram } from '../../src/app/edit'
 import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { defineRelation } from '../../src/app/define'
@@ -46,14 +52,14 @@ function trivRelation(): DiagramWithBoundary {
  *  the ref-resolution lifecycle — a defined relation depending on a loaded one. */
 function relationCitingNat(): DiagramWithBoundary {
   const b = new DiagramBuilder()
-  const r = b.ref(b.root, 'nat', 1)
+  const r = b.ref(b.root, 'nat', R(1))
   const w = b.wire(b.root, [{ node: r, port: { kind: 'arg', index: 0 } }])
   return mkDiagramWithBoundary(b.build(), [w])
 }
 
 function relationCiting(name: string): DiagramWithBoundary {
   const builder = new DiagramBuilder()
-  const ref = builder.ref(builder.root, name, 1)
+  const ref = builder.ref(builder.root, name, R(1))
   const wire = builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index: 0 } }])
   return mkDiagramWithBoundary(builder.build(), [wire])
 }
@@ -337,7 +343,7 @@ describe('session-defined relation round-trips through Save → loadTheory (fres
     // order [wY,wZ] matches the reloaded relation; the reversed order does not —
     // the same order-sensitivity defineRelation established, now through JSON.
     const rels = new Map([['R', R2]])
-    expect(() => applyRelFold(d, sel, 'R', [wY, wZ], rels)).not.toThrow()
-    expect(() => applyRelFold(d, sel, 'R', [wZ, wY], rels)).toThrow(/does not match relation 'R'/)
+    expect(() => foldR(d, sel, 'R', [wY, wZ], rels)).not.toThrow()
+    expect(() => foldR(d, sel, 'R', [wZ, wY], rels)).toThrow(/does not match the body/)
   })
 })
