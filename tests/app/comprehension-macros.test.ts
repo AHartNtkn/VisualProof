@@ -582,6 +582,60 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
 })
 
 /* ========================================================================== */
+/* PARAMETERIZED ABSTRACTION (outer-bound dependency)                          */
+/* ========================================================================== */
+
+describe('macroComprehensionAbstract — parameters (outer-bound dependency)', () => {
+  it('abstracts a parameterized comp to the right ARITY, keeping the parameter outer', () => {
+    // φ(G) where G(v) := "v —o— b": term `q` with output on v, free var q on b.
+    // Abstracting with params=[b] must yield an ARITY-1 relation R(v) — the
+    // parameter b is a free outer line, NOT a second argument.
+    const h = new DiagramBuilder()
+    const qn = h.termNode(h.root, p('q'))
+    const v = h.wire(h.root, [{ node: qn, port: { kind: 'output' } }], TERM)
+    const b = h.wire(h.root, [{ node: qn, port: { kind: 'freeVar', name: 'q' } }], TERM)
+    const d0 = h.build()
+    const occ = { sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [qn], wires: [] }), args: [v] }
+
+    const abs = macroComprehensionAbstract(d0, d0.root, paramComp(), [occ], [b], 'forward')
+    const rels = relWires(abs)
+    expect(rels).toHaveLength(1)
+    const [Wid, W] = rels[0]!
+    // arity 1 (R1) — NOT arity 2. Without the params channel boundarySig would
+    // fold b into the arg list and this would be R2.
+    expect(W.sig).toEqual(R1)
+    const atoms = atomNodes(abs)
+    expect(atoms).toHaveLength(1)
+    expect(atoms[0]!.sig).toEqual(R1)
+    // exactly one atom-arg endpoint lands on v; none on b (b is not an argument)
+    const vArgEps = abs.wires[v]!.endpoints.filter((ep) => ep.port.kind === 'arg')
+    expect(vArgEps).toHaveLength(1)
+    const bArgEps = abs.wires[b]!.endpoints.filter((ep) => ep.port.kind === 'arg')
+    expect(bArgEps).toHaveLength(0)
+
+    // Round-trip: instantiate-inverse with the SAME comp + param restores φ(G).
+    const inst = macroComprehensionInstantiate(abs, Wid, paramComp(), [b], 'backward')
+    expect(exploreForm(inst)).toBe(exploreForm(d0))
+  })
+
+  it('refuses an occurrence anchored where the introduced ∃R wire’s scope cannot reach', () => {
+    // wrapScope = c2 (positive, depth 2). The occurrence lives at ROOT — an
+    // ANCESTOR region from which a wire scoped inside c2 is not visible. Folding
+    // would place an atom at root whose head rides the c2-scoped wire; diagram
+    // well-formedness must refuse. (Visibility replaces the old wrap-containment
+    // check — the refusal must survive.)
+    const h = new DiagramBuilder()
+    const c1 = h.cut(h.root)
+    const c2 = h.cut(c1) // positive
+    const n = h.termNode(h.root, p('\\x. x')) // occurrence at root, outside c2's subtree
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
+    const d = h.build()
+    const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w] }
+    expect(() => macroComprehensionAbstract(d, c2, identityComp(), [occ])).toThrow()
+  })
+})
+
+/* ========================================================================== */
 /* DIAGONAL ABSTRACTION                                                       */
 /* ========================================================================== */
 
@@ -830,7 +884,7 @@ describe('macro round-trip: abstraction and instantiation are mutually inverse',
     ], TERM)
     const d0 = h.build()
     const occ = { sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [n], wires: [] }), args: [x, x] }
-    const abs = macroComprehensionAbstract(d0, d0.root, binaryComp(), [occ], 'forward')
+    const abs = macroComprehensionAbstract(d0, d0.root, binaryComp(), [occ], [], 'forward')
     // ∃R.R(x,x) at the positive root: instantiate backward returns φ(x,x)
     const rels = relWires(abs)
     expect(rels).toHaveLength(1)
@@ -853,7 +907,7 @@ describe('macro round-trip: abstraction and instantiation are mutually inverse',
     const phiNode = termNodes(inst)[0]!
     const phiId = Object.entries(inst.nodes).find(([, m]) => m === phiNode)![0]
     const occ = { sel: mkSelection(inst, { region: cut, regions: [], nodes: [phiId], wires: [] }), args: [x, x] }
-    const abs = macroComprehensionAbstract(inst, cut, binaryComp(), [occ], 'backward')
+    const abs = macroComprehensionAbstract(inst, cut, binaryComp(), [occ], [], 'backward')
     expect(exploreForm(abs)).toBe(exploreForm(d0))
   })
 

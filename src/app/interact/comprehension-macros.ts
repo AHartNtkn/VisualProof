@@ -68,9 +68,20 @@ function atomsOnWire(d: Diagram, wireId: WireId): NodeId[] {
   return out
 }
 
-/** The relation signature carried by a comprehension's boundary (its arg wires' actual sigs). */
-function boundarySig(comp: DiagramWithBoundary): RelSig {
-  const args: Sig[] = comp.boundary.map((wid) => {
+/**
+ * The relation signature carried by a comprehension's ARGUMENT boundary — the
+ * leading `comp.boundary.length - paramCount` wires' actual sigs. The trailing
+ * `paramCount` wires are parameters (host lines the relation draws on) and are
+ * NOT part of the relation's arity, so they are excluded here.
+ */
+function argBoundarySig(comp: DiagramWithBoundary, paramCount: number): RelSig {
+  const argCount = comp.boundary.length - paramCount
+  if (argCount < 0) {
+    throw new DiagramError(
+      `comprehension has ${comp.boundary.length} boundary wires but ${paramCount} parameters were given`,
+    )
+  }
+  const args: Sig[] = comp.boundary.slice(0, argCount).map((wid) => {
     const w = comp.diagram.wires[wid]
     if (w === undefined) throw new DiagramError(`comprehension boundary wire '${wid}' is missing from the comprehension`)
     return w.sig
@@ -124,26 +135,33 @@ export type AbstractionOccurrence = {
  * wire, then detach the witness to reach the pure `∃R. φ(R)` form the old rule
  * produced. No vacuousElim: the wire survives, carrying the folded occurrences.
  *
- * The wire's signature is derived from the comprehension boundary's actual sigs
- * (not assumed TERM). Each fold is exact: an occurrence whose boundary-pinned
- * canonical form (reordered by `args`, diagonalized where `args` repeat) differs
- * from `G` is refused by the fold primitive.
+ * `params` are the host lines feeding `G`'s parameter ports — position-matched
+ * to the comprehension's trailing boundary wires, exactly as in instantiation.
+ * They are shared across every abstracted occurrence and are NOT arguments of
+ * the relation: the wire's arity is derived from the LEADING boundary wires
+ * only, so a parameterized comprehension abstracts to a parameterized relation
+ * (the outer-bound-dependency feature) rather than a silently higher-arity one.
+ * Each fold is exact: an occurrence whose boundary-pinned canonical form
+ * (reordered by `args` over the arg positions, its parameter attachments landing
+ * on `params`, diagonalized where `args` repeat) differs from `G` is refused by
+ * the fold primitive.
  */
 export function macroComprehensionAbstract(
   d: Diagram,
   wrapScope: RegionId,
   comp: DiagramWithBoundary,
   occurrences: readonly AbstractionOccurrence[],
+  params: readonly WireId[] = [],
   orientation: Orientation = 'forward',
   reservation?: IdReservation,
 ): Diagram {
-  const sig = boundarySig(comp)
+  const sig = argBoundarySig(comp, params.length)
   const before = new Set(Object.keys(d.wires))
   const introduced = applyVacuousIntro(d, wrapScope, sig, reservation)
   const wireId = Object.keys(introduced.wires).find((id) => !before.has(id))
   if (wireId === undefined) throw new DiagramError('vacuous introduction minted no wire')
 
-  let cur = applyBodyAttach(introduced, wireId, comp, [], flip(orientation), reservation)
+  let cur = applyBodyAttach(introduced, wireId, comp, params, flip(orientation), reservation)
   for (const occ of occurrences) {
     cur = applyFold(cur, occ.sel, occ.args, { wireId }, reservation)
   }
