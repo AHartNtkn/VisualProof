@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { buildFregeTheory, natRelation } from '../../src/theories/frege'
+import { relSig, TERM } from '../../src/kernel/diagram/sig'
+
+const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import { verifyTheory, theoryToJson, loadTheory } from '../../src/kernel/proof/store'
 import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Diagram, DiagramNode, WireId } from '../../src/kernel/diagram/diagram'
@@ -13,7 +16,7 @@ import { applyStep } from '../../src/kernel/proof/step'
 function refKinds(side: Theorem['lhs']): string[] {
   return Object.values(side.diagram.nodes)
     .filter((n): n is Extract<DiagramNode, { kind: 'ref' }> => n.kind === 'ref')
-    .map((n) => `${n.defId}/${n.arity}`).sort()
+    .map((n) => `${n.defId}/${n.sig.args.length}`).sort()
 }
 
 /** The wire carrying node `id`'s argument at `index`. */
@@ -133,7 +136,9 @@ describe('the bundled Frege theory', () => {
       const originalWire = replayed.wires[step.wire]
       expect(originalWire).toBeDefined()
       const originalScope = originalWire!.scope
-      expect(replayed.regions[originalScope]?.kind).toBe('bubble')
+      // the guard's base line is scoped in the outer guard cut (the second-order
+      // existential is a relational wire in that cut, not a bubble region)
+      expect(replayed.regions[originalScope]?.kind).toBe('cut')
       const baseEndpoint = originalWire!.endpoints.find((endpoint) => {
         const node = replayed.nodes[endpoint.node]
         return node?.kind === 'atom' && node.region === originalScope && endpoint.port.kind === 'arg'
@@ -247,14 +252,14 @@ describe('the bundled Frege theory', () => {
       regions: d.regions,
       nodes: {
         ...d.nodes,
-        [natB]: { kind: 'ref', region: d.root, defId: 'nat', arity: 1 },
-        [plusN]: { kind: 'ref', region: d.root, defId: 'plus', arity: 3 },
+        [natB]: { kind: 'ref', region: d.root, defId: 'nat', sig: R(1) },
+        [plusN]: { kind: 'ref', region: d.root, defId: 'plus', sig: R(3) },
       },
       wires: {
         ...d.wires,
-        [ws]: { scope: d.wires[ws]!.scope, endpoints: [...d.wires[ws]!.endpoints, { node: plusN, port: { kind: 'arg', index: 0 } }] },
-        [wb]: { scope: d.root, endpoints: [{ node: natB, port: { kind: 'arg', index: 0 } }, { node: plusN, port: { kind: 'arg', index: 1 } }] },
-        [wsum]: { scope: d.root, endpoints: [{ node: plusN, port: { kind: 'arg', index: 2 } }] },
+        [ws]: { scope: d.wires[ws]!.scope, sig: d.wires[ws]!.sig, endpoints: [...d.wires[ws]!.endpoints, { node: plusN, port: { kind: 'arg', index: 0 } }] },
+        [wb]: { scope: d.root, sig: TERM, endpoints: [{ node: natB, port: { kind: 'arg', index: 0 } }, { node: plusN, port: { kind: 'arg', index: 1 } }] },
+        [wsum]: { scope: d.root, sig: TERM, endpoints: [{ node: plusN, port: { kind: 'arg', index: 2 } }] },
       },
     })
 

@@ -107,6 +107,23 @@ export class DerivationCursor {
     return this.newNodeIn(region, before, term)
   }
 
+  /**
+   * Instantiate a relational wire's second-order existential `∃R` with a
+   * comprehension: attach the witness body, unfold every atom riding the wire
+   * into an inlined copy, then drop the now-solely-bodied wire by vacuous
+   * elimination. Records the orientation-uniform primitive composite, mirroring
+   * `macroComprehensionInstantiate`. `params` are the host lines (term or
+   * relational) feeding the comprehension's parameter ports.
+   */
+  instantiate(tag: string, wireId: WireId, comp: DiagramWithBoundary, params: readonly WireId[] = []): void {
+    this.push(`${tag} attach`, { rule: 'bodyAttach', wireId, content: comp, params: [...params] })
+    const atomIds = this.cur.wires[wireId]!.endpoints
+      .filter((ep) => ep.port.kind === 'head' && this.cur.nodes[ep.node]?.kind === 'atom')
+      .map((ep) => ep.node)
+    for (const atomId of atomIds) this.push(`${tag} unfold`, { rule: 'unfold', nodeId: atomId })
+    this.push(`${tag} vacuousElim`, { rule: 'vacuousElim', wireId })
+  }
+
   spawnRelation(tag: string, region: RegionId, defId: string): NodeId {
     const relation = this.ctx.relations.get(defId)
     if (relation === undefined) throw new Error(`unknown relation '${defId}'`)

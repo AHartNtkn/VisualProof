@@ -2,7 +2,13 @@ import { app, lam, bvar, freePorts, port, type Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import { relSig, TERM, type RelSig } from '../kernel/diagram/sig'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
+
+// Relation signatures: a first-order relation of the given arity (all TERM args).
+const S1: RelSig = relSig([TERM])
+const S2: RelSig = relSig([TERM, TERM])
+const S3: RelSig = relSig([TERM, TERM, TERM])
 import type { ProofContext } from '../kernel/proof/context'
 import { registerTheorem, verifyTheory } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
@@ -59,30 +65,39 @@ function plusRelation(): DiagramWithBoundary {
 export function natRelation(): DiagramWithBoundary {
   const l = new DiagramBuilder()
   const cut1 = l.cut(l.root)
-  const rB = l.bubble(cut1, 1)
-  const zref = l.ref(rB, 'zero', 1)
-  const a0 = l.atom(rB, rB)
-  // the base zero-line is scoped INSIDE the guard bubble (the non-vacuity fix)
-  l.wire(rB, [
+  // The guard second-order existential ∃R is a relational wire scoped in cut1
+  // (the old guard bubble); its four occurrences ride it by their heads. The
+  // atoms live in cut1 and its nested cuts, all enclosed by the wire's scope.
+  const zref = l.ref(cut1, 'zero', S1)
+  const a0 = l.atom(cut1, S1)
+  // the base zero-line is scoped INSIDE the guard region (the non-vacuity fix)
+  l.wire(cut1, [
     { node: zref, port: { kind: 'arg', index: 0 } },
     { node: a0, port: { kind: 'arg', index: 0 } },
   ])
-  const cut2 = l.cut(rB)
-  const a1 = l.atom(cut2, rB)
-  const sref = l.ref(cut2, 'succ', 2)
+  const cut2 = l.cut(cut1)
+  const a1 = l.atom(cut2, S1)
+  const sref = l.ref(cut2, 'succ', S2)
   l.wire(cut2, [
     { node: a1, port: { kind: 'arg', index: 0 } },
     { node: sref, port: { kind: 'arg', index: 0 } },
   ])
   const cut3 = l.cut(cut2)
-  const a2 = l.atom(cut3, rB)
+  const a2 = l.atom(cut3, S1)
   l.wire(cut2, [
     { node: sref, port: { kind: 'arg', index: 1 } },
     { node: a2, port: { kind: 'arg', index: 0 } },
   ])
-  const cut4 = l.cut(rB)
-  const a3 = l.atom(cut4, rB)
+  const cut4 = l.cut(cut1)
+  const a3 = l.atom(cut4, S1)
   const wx = l.wire(l.root, [{ node: a3, port: { kind: 'arg', index: 0 } }])
+  // the ∃R guard line: every occurrence's head, scoped in cut1
+  l.wire(cut1, [
+    { node: a0, port: { kind: 'head' } },
+    { node: a1, port: { kind: 'head' } },
+    { node: a2, port: { kind: 'head' } },
+    { node: a3, port: { kind: 'head' } },
+  ], S1)
   return mkDiagramWithBoundary(l.build(), [wx])
 }
 
@@ -168,11 +183,7 @@ function refoldPlus(e: DerivationCursor, node: NodeId, args: readonly WireId[]):
   e.push('refold plus: fission head', { rule: 'fission', node, path: ['fn', 'fn'] })
   const prog = e.newNodeIn(region, snap, PLUSp)
   const internal = e.wireOf(prog, 'output')
-  e.push('refold plus: relFold', {
-    rule: 'relFold',
-    sel: mkSelection(e.cur, { region, regions: [], nodes: [prog, node], wires: [internal] }),
-    defId: 'plus', args: [...args],
-  })
+  e.push('refold plus: relFold', { rule: 'fold', occurrence: mkSelection(e.cur, { region, regions: [], nodes: [prog, node], wires: [internal] }), args: [...args], target: { defId: 'plus', sig: S3 } })
 }
 
 /** Fold a fused `SUCC t` node into a succ reference (head-fission then relFold). */
@@ -182,17 +193,15 @@ function refoldSucc(e: DerivationCursor, node: NodeId, args: readonly WireId[]):
   e.push('refold succ: fission head', { rule: 'fission', node, path: ['fn'] })
   const prog = e.newNodeIn(region, snap, SUCCp)
   const internal = e.wireOf(prog, 'output')
-  e.push('refold succ: relFold', {
-    rule: 'relFold',
-    sel: mkSelection(e.cur, { region, regions: [], nodes: [prog, node], wires: [internal] }),
-    defId: 'succ', args: [...args],
-  })
+  e.push('refold succ: relFold', { rule: 'fold', occurrence: mkSelection(e.cur, { region, regions: [], nodes: [prog, node], wires: [internal] }), args: [...args], target: { defId: 'succ', sig: S2 } })
 }
 
-/** Build Zero(x) ∧ R(x) ∧ ¬(R(y) ∧ Succ(y,z) ∧ ¬R(z)) using only atomic moves. */
-function spawnNatGuard(e: DerivationCursor, region: RegionId): { readonly zero: NodeId; readonly base: NodeId } {
+/** Build Zero(x) ∧ R(x) ∧ ¬(R(y) ∧ Succ(y,z) ∧ ¬R(z)) using only atomic moves.
+ *  `region` is where the guard content lives; `guardWire` is the second-order
+ *  existential ∃R line every occurrence rides by its head. */
+function spawnNatGuard(e: DerivationCursor, region: RegionId, guardWire: WireId): { readonly zero: NodeId; readonly base: NodeId } {
   const zero = e.spawnRelation('guard: spawn zero', region, 'zero')
-  const base = e.spawnBoundRelation('guard: spawn base atom', region, region)
+  const base = e.spawnBoundRelation('guard: spawn base atom', region, guardWire)
   const w0 = argWire(e, zero, 0)
   e.push('guard: join base line', { rule: 'wireJoin', a: w0, b: argWire(e, base, 0) })
 
@@ -213,7 +222,7 @@ function spawnNatGuard(e: DerivationCursor, region: RegionId): { readonly zero: 
   const antecedent = Object.entries(e.cur.nodes).find(([id, node]) =>
     node.kind === 'atom' && node.region === outer && snap.nodes[id] === undefined)![0]
 
-  e.push('guard: unfold zero anchor', { rule: 'relUnfold', node: zero })
+  e.push('guard: unfold zero anchor', { rule: 'unfold', nodeId: zero })
   const zeroTerm = e.nodeBy(region, ZEROp)
   snap = e.cur
   e.push('guard: split closure variable', {
@@ -232,14 +241,9 @@ function spawnNatGuard(e: DerivationCursor, region: RegionId): { readonly zero: 
     rule: 'erasure',
     sel: mkSelection(e.cur, { region: outer, regions: [], nodes: [localZero], wires: [] }),
   })
-  const consequent = e.spawnBoundRelation('guard: spawn consequent atom', inner, region)
+  const consequent = e.spawnBoundRelation('guard: spawn consequent atom', inner, guardWire)
   e.push('guard: join consequent line', { rule: 'wireJoin', a: y, b: argWire(e, consequent, 0) })
-  e.push('guard: refold zero', {
-    rule: 'relFold',
-    sel: mkSelection(e.cur, { region, regions: [], nodes: [zeroTerm], wires: [] }),
-    defId: 'zero',
-    args: [w0],
-  })
+  e.push('guard: refold zero', { rule: 'fold', occurrence: mkSelection(e.cur, { region, regions: [], nodes: [zeroTerm], wires: [] }), args: [w0], target: { defId: 'zero', sig: S1 } })
   return { zero: refBy(e, region, 'zero'), base }
 }
 
@@ -248,16 +252,16 @@ function spawnNatGuard(e: DerivationCursor, region: RegionId): { readonly zero: 
 /** plusLeftUnit: Zero(z) ∧ Plus(z,a,o) ⟹ o = a. */
 function derivePlusLeftUnit(ctx: ProofContext): Theorem {
   const l = new DiagramBuilder()
-  const zref = l.ref(l.root, 'zero', 1)
-  const pref = l.ref(l.root, 'plus', 3)
+  const zref = l.ref(l.root, 'zero', S1)
+  const pref = l.ref(l.root, 'plus', S3)
   l.wire(l.root, [{ node: zref, port: { kind: 'arg', index: 0 } }, { node: pref, port: { kind: 'arg', index: 0 } }])
   const wa = l.wire(l.root, [{ node: pref, port: { kind: 'arg', index: 1 } }])
   const wo = l.wire(l.root, [{ node: pref, port: { kind: 'arg', index: 2 } }])
   const lhsD = l.build()
   const lhs = mkDiagramWithBoundary(lhsD, [wa, wo])
   const e = new DerivationCursor(lhsD, ctx)
-  e.push('unfold zero', { rule: 'relUnfold', node: zref })
-  e.push('unfold plus', { rule: 'relUnfold', node: pref })
+  e.push('unfold zero', { rule: 'unfold', nodeId: zref })
+  e.push('unfold plus', { rule: 'unfold', nodeId: pref })
   e.push('fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, PLUSp), 'output') })
   e.push('fuse zero', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, ZEROp), 'output') })
   e.pushConv('reduce 0 + a to a', soleRootTerm(e), port('s0'))
@@ -267,16 +271,16 @@ function derivePlusLeftUnit(ctx: ProofContext): Theorem {
 /** plusRightUnit: Zero(z) ∧ Plus(a,z,o) ⟹ o = a. */
 function derivePlusRightUnit(ctx: ProofContext): Theorem {
   const l = new DiagramBuilder()
-  const zref = l.ref(l.root, 'zero', 1)
-  const pref = l.ref(l.root, 'plus', 3)
+  const zref = l.ref(l.root, 'zero', S1)
+  const pref = l.ref(l.root, 'plus', S3)
   const wa = l.wire(l.root, [{ node: pref, port: { kind: 'arg', index: 0 } }])
   l.wire(l.root, [{ node: zref, port: { kind: 'arg', index: 0 } }, { node: pref, port: { kind: 'arg', index: 1 } }])
   const wo = l.wire(l.root, [{ node: pref, port: { kind: 'arg', index: 2 } }])
   const lhsD = l.build()
   const lhs = mkDiagramWithBoundary(lhsD, [wa, wo])
   const e = new DerivationCursor(lhsD, ctx)
-  e.push('unfold zero', { rule: 'relUnfold', node: zref })
-  e.push('unfold plus', { rule: 'relUnfold', node: pref })
+  e.push('unfold zero', { rule: 'unfold', nodeId: zref })
+  e.push('unfold plus', { rule: 'unfold', nodeId: pref })
   e.push('fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, PLUSp), 'output') })
   e.push('fuse zero', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, ZEROp), 'output') })
   e.pushConv('reduce a + 0 to a', soleRootTerm(e), port('s0'))
@@ -286,8 +290,8 @@ function derivePlusRightUnit(ctx: ProofContext): Theorem {
 /** plusAssoc: Plus(a,b,t) ∧ Plus(t,c,o) ⟹ Plus(b,c,u) ∧ Plus(a,u,o). */
 function derivePlusAssoc(ctx: ProofContext): Theorem {
   const l = new DiagramBuilder()
-  const p1 = l.ref(l.root, 'plus', 3)
-  const p2 = l.ref(l.root, 'plus', 3)
+  const p1 = l.ref(l.root, 'plus', S3)
+  const p2 = l.ref(l.root, 'plus', S3)
   const wa = l.wire(l.root, [{ node: p1, port: { kind: 'arg', index: 0 } }])
   const wb = l.wire(l.root, [{ node: p1, port: { kind: 'arg', index: 1 } }])
   const wt = l.wire(l.root, [{ node: p1, port: { kind: 'arg', index: 2 } }, { node: p2, port: { kind: 'arg', index: 0 } }])
@@ -296,8 +300,8 @@ function derivePlusAssoc(ctx: ProofContext): Theorem {
   const lhsD = l.build()
   const lhs = mkDiagramWithBoundary(lhsD, [wa, wb, wc, wo])
   const e = new DerivationCursor(lhsD, ctx)
-  e.push('unfold p1', { rule: 'relUnfold', node: p1 })
-  e.push('unfold p2', { rule: 'relUnfold', node: p2 })
+  e.push('unfold p1', { rule: 'unfold', nodeId: p1 })
+  e.push('unfold p2', { rule: 'unfold', nodeId: p2 })
   e.push('fuse t', { rule: 'fusion', wire: wt })
   for (const [id] of Object.entries(e.cur.nodes).filter(([, n]) => n.kind === 'term' && J(n.term) === J(PLUSp))) {
     e.push('fuse plus program', { rule: 'fusion', wire: e.wireOf(id, 'output') })
@@ -336,25 +340,25 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('D0a iterate ref', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [ref], wires: [] }), target: e.cur.root })
   const copyRef = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && n.defId === 'nat' && id !== ref && snap.nodes[id] === undefined)![0]
   snap = e.cur
-  e.push('D0b relUnfold copy', { rule: 'relUnfold', node: copyRef })
+  e.push('D0b relUnfold copy', { rule: 'unfold', nodeId: copyRef })
   const cut1c = e.newCutIn(e.cur.root, snap)
-  const rBc = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'bubble' && r.parent === cut1c)![0]
+  const rBc = Object.entries(e.cur.wires).find(([, w]) => w.sig.kind === 'rel' && w.scope === cut1c)![0]
   const cb = new DiagramBuilder()
   const g1 = cb.termNode(cb.root, F1term)
   const g2 = cb.termNode(cb.root, F2term)
   const gbx = cb.wire(cb.root, [{ node: g1, port: { kind: 'freeVar', name: 's0' } }, { node: g2, port: { kind: 'freeVar', name: 's0' } }])
   cb.wire(cb.root, [{ node: g1, port: { kind: 'output' } }, { node: g2, port: { kind: 'output' } }])
-  e.push('D2 instantiate G', { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [gbx]), attachments: [], binders: [] })
+  e.instantiate('D2 instantiate G', rBc, mkDiagramWithBoundary(cb.build(), [gbx]), [])
 
   const zref = refBy(e, cut1c, 'zero')
-  e.push('unfold copy zero', { rule: 'relUnfold', node: zref })
+  e.push('unfold copy zero', { rule: 'unfold', nodeId: zref })
   const nzC = e.nodeBy(cut1c, ZEROp)
   const w0C = e.wireOf(nzC, 'output')
   const cut2c = Object.entries(e.cur.regions).find(
     ([id, r]) => r.kind === 'cut' && r.parent === cut1c && Object.values(e.cur.regions).some((rr) => rr.kind === 'cut' && rr.parent === id))![0]
   const cut3c = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'cut' && r.parent === cut2c)![0]
   const sref = refBy(e, cut2c, 'succ')
-  e.push('unfold copy succ', { rule: 'relUnfold', node: sref })
+  e.push('unfold copy succ', { rule: 'unfold', nodeId: sref })
   e.push('fuse copy succ program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(cut2c, SUCCp), 'output') })
   const F1_0 = e.nodeBy(cut1c, F1term)
   const F2_0 = e.nodeBy(cut1c, F2term)
@@ -464,9 +468,9 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
  */
 function deriveSuccShiftS(ctx: ProofContext): Theorem {
   const l = new DiagramBuilder()
-  const rN = l.ref(l.root, 'nat', 1)
-  const rS = l.ref(l.root, 'succ', 2)
-  const rP = l.ref(l.root, 'plus', 3)
+  const rN = l.ref(l.root, 'nat', S1)
+  const rS = l.ref(l.root, 'succ', S2)
+  const rP = l.ref(l.root, 'plus', S3)
   const wa = l.wire(l.root, [{ node: rN, port: { kind: 'arg', index: 0 } }, { node: rP, port: { kind: 'arg', index: 0 } }])
   const wb = l.wire(l.root, [{ node: rS, port: { kind: 'arg', index: 0 } }])
   const wsb = l.wire(l.root, [{ node: rS, port: { kind: 'arg', index: 1 } }, { node: rP, port: { kind: 'arg', index: 1 } }])
@@ -476,9 +480,9 @@ function deriveSuccShiftS(ctx: ProofContext): Theorem {
   const e = new DerivationCursor(lhsD, ctx)
 
   // bridge: unfold Succ and Plus, fuse to the working o-node `a + (S b)` on wo
-  e.push('br unfold succ', { rule: 'relUnfold', node: rS })
+  e.push('br unfold succ', { rule: 'unfold', nodeId: rS })
   e.push('br fuse succ program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, SUCCp), 'output') })
-  e.push('br unfold plus', { rule: 'relUnfold', node: rP })
+  e.push('br unfold plus', { rule: 'unfold', nodeId: rP })
   e.push('br fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, PLUSp), 'output') })
   e.push('br fuse sb', { rule: 'fusion', wire: wsb })
   const oNode = e.nodeBy(e.cur.root, PL(port('s0'), SC(port('s1'))))
@@ -525,9 +529,9 @@ function buildComp4(): DiagramWithBoundary {
  */
 function derivePlusComm(ctx: ProofContext): Theorem {
   const l = new DiagramBuilder()
-  const refA = l.ref(l.root, 'nat', 1)
-  const refB = l.ref(l.root, 'nat', 1)
-  const refP = l.ref(l.root, 'plus', 3)
+  const refA = l.ref(l.root, 'nat', S1)
+  const refB = l.ref(l.root, 'nat', S1)
+  const refP = l.ref(l.root, 'plus', S3)
   const wa = l.wire(l.root, [{ node: refA, port: { kind: 'arg', index: 0 } }, { node: refP, port: { kind: 'arg', index: 0 } }])
   const wb = l.wire(l.root, [{ node: refB, port: { kind: 'arg', index: 0 } }, { node: refP, port: { kind: 'arg', index: 1 } }])
   const wo = l.wire(l.root, [{ node: refP, port: { kind: 'arg', index: 2 } }])
@@ -536,27 +540,27 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   const e = new DerivationCursor(lhsD, ctx)
 
   // bridge: Plus(a,b,o) → o-node `a + b` on wo
-  e.push('br unfold plus', { rule: 'relUnfold', node: refP })
+  e.push('br unfold plus', { rule: 'unfold', nodeId: refP })
   e.push('br fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, PLUSp), 'output') })
 
   let snap = e.cur
   e.push('D0a iterate refA', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [refA], wires: [] }), target: e.cur.root })
   const copyRefA = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && id !== refA && id !== refB && snap.nodes[id] === undefined)![0]
   snap = e.cur
-  e.push('D0b relUnfold copyA', { rule: 'relUnfold', node: copyRefA })
+  e.push('D0b relUnfold copyA', { rule: 'unfold', nodeId: copyRefA })
   const cut1c = e.newCutIn(e.cur.root, snap)
-  const rBc = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'bubble' && r.parent === cut1c)![0]
-  e.push('D2 instantiate R(x):=x+b -o- b+x', { rule: 'comprehensionInstantiate', bubble: rBc, comp: buildComp4(), attachments: [wb], binders: [] })
+  const rBc = Object.entries(e.cur.wires).find(([, w]) => w.sig.kind === 'rel' && w.scope === cut1c)![0]
+  e.instantiate('D2 instantiate R(x):=x+b -o- b+x', rBc, buildComp4(), [wb])
 
   const zref = refBy(e, cut1c, 'zero')
-  e.push('unfold copy zero', { rule: 'relUnfold', node: zref })
+  e.push('unfold copy zero', { rule: 'unfold', nodeId: zref })
   const nzC = e.nodeBy(cut1c, ZEROp)
   const w0C = e.wireOf(nzC, 'output')
   const cut2c = Object.entries(e.cur.regions).find(
     ([id, r]) => r.kind === 'cut' && r.parent === cut1c && Object.values(e.cur.regions).some((rr) => rr.kind === 'cut' && rr.parent === id))![0]
   const cut3c = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'cut' && r.parent === cut2c)![0]
   const sref = refBy(e, cut2c, 'succ')
-  e.push('unfold copy succ', { rule: 'relUnfold', node: sref })
+  e.push('unfold copy succ', { rule: 'unfold', nodeId: sref })
   e.push('fuse copy succ program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(cut2c, SUCCp), 'output') })
   const P1_0 = nodeOnWire(e, cut1c, PT, 's0', w0C)
   const P2_0 = nodeOnWire(e, cut1c, PT, 's1', w0C)
@@ -657,10 +661,10 @@ function derivePlusComm(ctx: ProofContext): Theorem {
     at: { sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [refBc, succRef, plusRef], wires: [wsy] }), args: [wb, wyF, wP] },
   })
   // unfold the produced Plus(b,y,t) ∧ Succ(t,wP) into A2 = `S(b + y)` on wP
-  e.push('c5u unfold succ', { rule: 'relUnfold', node: refBy(e, cutB, 'succ') })
+  e.push('c5u unfold succ', { rule: 'unfold', nodeId: refBy(e, cutB, 'succ') })
   e.push('c5u fuse succ program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(cutB, SUCCp), 'output') })
   const wt = e.wireOf(e.nodeBy(cutB, SC(port('s0'))), 'freeVar')
-  e.push('c5u unfold plus', { rule: 'relUnfold', node: refBy(e, cutB, 'plus') })
+  e.push('c5u unfold plus', { rule: 'unfold', nodeId: refBy(e, cutB, 'plus') })
   e.push('c5u fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(cutB, PLUSp), 'output') })
   e.push('c5u fuse wt', { rule: 'fusion', wire: wt })
   const A2 = e.nodeBy(cutB, SC(PT))
@@ -730,34 +734,35 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   const cutO = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === e.cur.root && snap.regions[id] === undefined)![0]
   const cutI = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cutO && snap.regions[id] === undefined)![0]
 
-  // wrap the conclusion cut in the guard bubble (absorbs it — no empty sibling)
+  // introduce the guard second-order existential ∃R as a relational wire scoped
+  // in cutO; the conclusion cut cutI stays inside cutO (within the wire's scope).
   snap = e.cur
-  e.push('vbIntro rB', { rule: 'vacuousIntro', sel: mkSelection(e.cur, { region: cutO, regions: [cutI], nodes: [], wires: [] }), arity: 1 })
-  const rB = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'bubble' && r.parent === cutO && snap.regions[id] === undefined)![0]
+  e.push('vbIntro rB', { rule: 'vacuousIntro', scope: cutO, sig: S1 })
+  const rB = Object.entries(e.cur.wires).find(([id, w]) => w.sig.kind === 'rel' && w.scope === cutO && snap.wires[id] === undefined)![0]
 
-  const guard = spawnNatGuard(e, rB)
+  const guard = spawnNatGuard(e, cutO, rB)
   const zrefIn = guard.zero
   const w0 = argWire(e, zrefIn, 0)
   const a0 = guard.base
 
   // iterate the base R(w0) into the conclusion cut → ¬R(w0) (tautological body)
   snap = e.cur
-  e.push('iterate base R into conclusion cut', { rule: 'iteration', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [a0], wires: [] }), target: cutI })
+  e.push('iterate base R into conclusion cut', { rule: 'iteration', sel: mkSelection(e.cur, { region: cutO, regions: [], nodes: [a0], wires: [] }), target: cutI })
   const a3 = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'atom' && n.region === cutI && snap.nodes[id] === undefined)![0]
 
   // unfold the internal zero evidence. Split its conclusion endpoint onto a
   // duplicate available in the guard while retaining w0's base endpoints.
-  e.push('unfold internal zero', { rule: 'relUnfold', node: zrefIn })
-  const z0 = e.nodeBy(rB, ZEROp)
+  e.push('unfold internal zero', { rule: 'unfold', nodeId: zrefIn })
+  const z0 = e.nodeBy(cutO, ZEROp)
   snap = e.cur
   e.push('split conclusion from internal zero', {
     rule: 'anchoredWireSplit',
     wire: w0,
     witness: z0,
     endpoints: [{ node: a3, port: { kind: 'arg', index: 0 } }],
-    target: rB,
+    target: cutO,
   })
-  const localZero = e.newNodeIn(rB, snap, ZEROp)
+  const localZero = e.newNodeIn(cutO, snap, ZEROp)
   e.push('contract conclusion onto external zero', {
     rule: 'anchoredWireContract',
     redundant: localZero,
@@ -766,13 +771,13 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   })
 
   // refold both retained zeros, then fold the completed guard to nat
-  e.push('refold internal zero', { rule: 'relFold', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [z0], wires: [] }), defId: 'zero', args: [w0] })
-  e.push('refold external zero', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), defId: 'zero', args: [wz] })
-  e.push('fold nat', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cutO], nodes: [], wires: [] }), defId: 'nat', args: [wz] })
+  e.push('refold internal zero', { rule: 'fold', occurrence: mkSelection(e.cur, { region: cutO, regions: [], nodes: [z0], wires: [] }), args: [w0], target: { defId: 'zero', sig: S1 } })
+  e.push('refold external zero', { rule: 'fold', occurrence: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), args: [wz], target: { defId: 'zero', sig: S1 } })
+  e.push('fold nat', { rule: 'fold', occurrence: mkSelection(e.cur, { region: e.cur.root, regions: [cutO], nodes: [], wires: [] }), args: [wz], target: { defId: 'nat', sig: S1 } })
 
   const rl = new DiagramBuilder()
-  const rnat = rl.ref(rl.root, 'nat', 1)
-  const rzero = rl.ref(rl.root, 'zero', 1)
+  const rnat = rl.ref(rl.root, 'nat', S1)
+  const rzero = rl.ref(rl.root, 'zero', S1)
   rl.wire(rl.root, [{ node: rnat, port: { kind: 'arg', index: 0 } }, { node: rzero, port: { kind: 'arg', index: 0 } }])
   const rhs = mkDiagramWithBoundary(rl.build(), [])
   return { name: 'zeroIsNat', lhs, rhs, actions: [...e.actions] }
@@ -792,8 +797,8 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
  */
 function deriveSuccNat(ctx: ProofContext): Theorem {
   const l = new DiagramBuilder()
-  const rN = l.ref(l.root, 'nat', 1)
-  const rS = l.ref(l.root, 'succ', 2)
+  const rN = l.ref(l.root, 'nat', S1)
+  const rS = l.ref(l.root, 'succ', S2)
   const wn = l.wire(l.root, [{ node: rN, port: { kind: 'arg', index: 0 } }, { node: rS, port: { kind: 'arg', index: 0 } }])
   const ws = l.wire(l.root, [{ node: rS, port: { kind: 'arg', index: 1 } }])
   const lhsD = l.build()
@@ -806,26 +811,30 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const cO = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === e.cur.root && snap.regions[id] === undefined)![0]
   const cI = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cO && snap.regions[id] === undefined)![0]
   snap = e.cur
-  e.push('vbIntro rB', { rule: 'vacuousIntro', sel: mkSelection(e.cur, { region: cO, regions: [cI], nodes: [], wires: [] }), arity: 1 })
-  const rBp = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'bubble' && r.parent === cO && snap.regions[id] === undefined)![0]
+  e.push('vbIntro rB', { rule: 'vacuousIntro', scope: cO, sig: S1 })
+  const rBp = Object.entries(e.cur.wires).find(([id, w]) => w.sig.kind === 'rel' && w.scope === cO && snap.wires[id] === undefined)![0]
 
-  spawnNatGuard(e, rBp)
+  spawnNatGuard(e, cO, rBp)
 
   // Phase B: iterate nat(n) into cI, instantiate its R with the skeleton's R,
   // bridge the zero witnesses, deiterate base + closure, dcElim → R(n) in cI
   snap = e.cur
   e.push('iterate nat(n) into cI', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [rN], wires: [] }), target: cI })
   const copyRef = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && n.defId === 'nat' && id !== rN && snap.nodes[id] === undefined)![0]
-  e.push('unfold copy', { rule: 'relUnfold', node: copyRef })
+  e.push('unfold copy', { rule: 'unfold', nodeId: copyRef })
   const cut1c = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cI && snap.regions[id] === undefined)![0]
-  const rBc = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'bubble' && r.parent === cut1c)![0]
+  const rBc = Object.entries(e.cur.wires).find(([, w]) => w.sig.kind === 'rel' && w.scope === cut1c)![0]
+  // Instantiate the copy's guard R' with the skeleton's R: the comprehension
+  // R'(x) := R(x) is a RELATIONAL-parameter comprehension — one inner atom whose
+  // arg rides the x stub and whose head rides the parameter (the skeleton R line
+  // rBp). Boundary [arg x, param R]; params = [rBp]. (Second-order modus ponens.)
   const cb = new DiagramBuilder()
-  const cstub = cb.bubble(cb.root, 1)
-  const catom = cb.atom(cstub, cstub)
-  const cbx = cb.wire(cb.root, [{ node: catom, port: { kind: 'arg', index: 0 } }])
-  e.push("instantiate R'=R", { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [cbx]), attachments: [], binders: [[cstub, rBp]] })
+  const catom = cb.atom(cb.root, S1)
+  const cbx = cb.wire(cb.root, [{ node: catom, port: { kind: 'arg', index: 0 } }], TERM)
+  const cparam = cb.wire(cb.root, [{ node: catom, port: { kind: 'head' } }], S1)
+  e.instantiate("instantiate R'=R", rBc, mkDiagramWithBoundary(cb.build(), [cbx, cparam]), [rBp])
 
-  const skZero = refBy(e, rBp, 'zero')
+  const skZero = refBy(e, cO, 'zero')
   const w0s = argWire(e, skZero, 0)
   const cpZero = refBy(e, cut1c, 'zero')
   const cpAtom = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'atom' && n.region === cut1c)![0]
@@ -837,9 +846,9 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const rNn = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'atom' && n.region === cI)![0]
 
   // Phase C: guarded modus ponens — R(n) ∧ Cl(R) ∧ Succ(n,s) ⟹ R(s) in cI
-  const skClosure = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === rBp && id !== cI)![0]
+  const skClosure = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cO && id !== cI)![0]
   snap = e.cur
-  e.push('iterate closure into cI', { rule: 'iteration', sel: mkSelection(e.cur, { region: rBp, regions: [skClosure], nodes: [], wires: [] }), target: cI })
+  e.push('iterate closure into cI', { rule: 'iteration', sel: mkSelection(e.cur, { region: cO, regions: [skClosure], nodes: [], wires: [] }), target: cI })
   const cut2c2 = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cI && snap.regions[id] === undefined)![0]
   const succCopy = refBy(e, cut2c2, 'succ')
   const mLine = argWire(e, succCopy, 0)
@@ -852,12 +861,12 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   e.push('erase R(n)', { rule: 'erasure', sel: mkSelection(e.cur, { region: cI, regions: [], nodes: [rNn], wires: [] }) })
 
   // Phase D: fold the guard to nat(s); consume nat(n)
-  e.push('fold nat(s)', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cO], nodes: [], wires: [] }), defId: 'nat', args: [ws] })
+  e.push('fold nat(s)', { rule: 'fold', occurrence: mkSelection(e.cur, { region: e.cur.root, regions: [cO], nodes: [], wires: [] }), args: [ws], target: { defId: 'nat', sig: S1 } })
   e.push('erase nat(n)', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [rN], wires: [] }) })
 
   const rl = new DiagramBuilder()
-  const rSuc = rl.ref(rl.root, 'succ', 2)
-  const rNat = rl.ref(rl.root, 'nat', 1)
+  const rSuc = rl.ref(rl.root, 'succ', S2)
+  const rNat = rl.ref(rl.root, 'nat', S1)
   const rwn = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 0 } }])
   const rws = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
   const rhs = mkDiagramWithBoundary(rl.build(), [rwn, rws])
@@ -900,9 +909,9 @@ function deriveOneIsNat(ctx: ProofContext): Theorem {
   })
 
   const rl = new DiagramBuilder()
-  const rZero = rl.ref(rl.root, 'zero', 1)
-  const rSuc = rl.ref(rl.root, 'succ', 2)
-  const rNat = rl.ref(rl.root, 'nat', 1)
+  const rZero = rl.ref(rl.root, 'zero', S1)
+  const rSuc = rl.ref(rl.root, 'succ', S2)
+  const rNat = rl.ref(rl.root, 'nat', S1)
   rl.wire(rl.root, [{ node: rZero, port: { kind: 'arg', index: 0 } }, { node: rSuc, port: { kind: 'arg', index: 0 } }])
   rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
   const rhs = mkDiagramWithBoundary(rl.build(), [])
