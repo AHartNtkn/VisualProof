@@ -1,5 +1,6 @@
 export { RuleError } from './error'
 export { applyWireJoin } from './wire-join'
+export { applyBodyAttach, applyBodyDetach } from './body'
 export { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from './spawn'
 export { applyErasure, applyWireSever } from './erasure'
 export type { DeiterationEvidence } from './iteration'
