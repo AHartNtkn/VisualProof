@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { TERM, relSig } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
@@ -42,39 +45,30 @@ describe('exploreForm', () => {
     expect(exploreForm(mk('y z'))).toBe(exploreForm(mk('a b')))
   })
 
-  it('distinguishes wiring differences', () => {
-    // X(t, t) with both args on one wire vs X(t, s) on two wires
+  it('distinguishes wiring differences (atom X(t,t) shared vs X(t,·) separate)', () => {
+    // X(t, t) with both args on one wire vs X(t, ·) on two wires
+    const sig = relSig([TERM, TERM])
     const mk = (shared: boolean) => {
       const b = new DiagramBuilder()
-      const bub = b.bubble(b.root, 2)
-      const t = b.termNode(bub, p('\\x. x'))
-      const a = b.atom(bub, bub)
+      const t = b.termNode(b.root, p('\\x. x'))
+      const a = b.atom(b.root, sig)
+      b.wire(b.root, [{ node: a, port: { kind: 'head' } }], sig)
       if (shared) {
-        b.wire(bub, [
+        b.wire(b.root, [
           { node: t, port: { kind: 'output' } },
           { node: a, port: { kind: 'arg', index: 0 } },
           { node: a, port: { kind: 'arg', index: 1 } },
         ])
       } else {
-        b.wire(bub, [
+        b.wire(b.root, [
           { node: t, port: { kind: 'output' } },
           { node: a, port: { kind: 'arg', index: 0 } },
         ])
+        // arg 1 is auto-wired to its own singleton by build()
       }
       return b.build()
     }
     expect(exploreForm(mk(true))).not.toBe(exploreForm(mk(false)))
-  })
-
-  it('distinguishes cut from bubble and arity from arity', () => {
-    const mk = (kind: 'cut' | 'bubble', arity?: number) => {
-      const b = new DiagramBuilder()
-      if (kind === 'cut') b.cut(b.root)
-      else b.bubble(b.root, arity!)
-      return b.build()
-    }
-    expect(exploreForm(mk('cut'))).not.toBe(exploreForm(mk('bubble', 0)))
-    expect(exploreForm(mk('bubble', 0))).not.toBe(exploreForm(mk('bubble', 1)))
   })
 
   it('handles symmetric diagrams via individualization (two identical disconnected cuts)', () => {
@@ -92,7 +86,7 @@ describe('exploreForm', () => {
     expect(exploreForm(mk(false))).toBe(exploreForm(mk(true)))
   })
 
-  it('distinguishes wire scope (same endpoints, different quantifier location)', () => {
+  it('distinguishes wire scope (same endpoints, different existential location)', () => {
     const mk = (scopeAtRoot: boolean) => {
       const b = new DiagramBuilder()
       const cut = b.cut(b.root)
@@ -131,5 +125,75 @@ describe('exploreForm', () => {
     const d = b.build()
     expect(exploreForm(d, [w, w, u])).not.toBe(exploreForm(d, [w, u, w]))
     expect(exploreForm(d, [w, w, u])).not.toBe(exploreForm(d, [w, u, u]))
+  })
+})
+
+describe('exploreForm — signature-indexed wires (Task 4 scenarios)', () => {
+  it('(a) two same-scope relational wires are order-independent (wire insertion order is not canonical)', () => {
+    // Two relational wires at the root scope, each carrying one atom head, of
+    // DISTINGUISHABLE sort (arity 1 vs arity 0). Building the wires record in
+    // opposite insertion orders must yield the identical canonical form: the
+    // labeling orders wires by refined color, never by insertion. If it sorted
+    // by insertion order, the arity-1 and arity-0 wire lines would appear
+    // swapped and the two forms would differ.
+    const sigA = relSig([TERM]) // atom nA: head + a0
+    const sigB = relSig([]) // atom nB: head only
+    const nodes = {
+      nA: { kind: 'atom', region: 'r0', sig: sigA },
+      nB: { kind: 'atom', region: 'r0', sig: sigB },
+    } as const
+    const hA = { scope: 'r0', sig: sigA, endpoints: [{ node: 'nA', port: { kind: 'head' } }] } as const
+    const hB = { scope: 'r0', sig: sigB, endpoints: [{ node: 'nB', port: { kind: 'head' } }] } as const
+    const aA0 = { scope: 'r0', sig: TERM, endpoints: [{ node: 'nA', port: { kind: 'arg', index: 0 } }] } as const
+
+    const forward = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { ...nodes },
+      wires: { hA, hB, aA0 }, // relational wires inserted A then B
+    })
+    const reversed = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { ...nodes },
+      wires: { hB, hA, aA0 }, // relational wires inserted B then A
+    })
+    expect(exploreForm(forward)).toBe(exploreForm(reversed))
+  })
+
+  it('(b) wires of different sort at the same scope yield different forms (sigKey enters the wire color)', () => {
+    // Two diagrams that are structurally identical except for the sort of a
+    // single endpoint-free relational wire at the root. They must differ: the
+    // wire's signature is intrinsic content and enters the canonical form.
+    const mk = (args: readonly (typeof TERM)[]) => {
+      const b = new DiagramBuilder()
+      b.relWire(b.root, relSig(args))
+      return b.build()
+    }
+    expect(exploreForm(mk([]))).not.toBe(exploreForm(mk([TERM])))
+    expect(exploreForm(mk([TERM]))).not.toBe(exploreForm(mk([TERM, TERM])))
+    // …and the SAME sort at the same scope stays equal
+    expect(exploreForm(mk([TERM]))).toBe(exploreForm(mk([TERM])))
+  })
+
+  it('(c) body nodes agree iff their content has an equal canonical fingerprint', () => {
+    // A body node fingerprints its payload by the boundary-anchored canonical
+    // form of its content diagram. Contents isomorphic up to free-port names
+    // share a fingerprint; a different content shape does not.
+    const bodyDiagram = (contentTerm: string) => {
+      const cb = new DiagramBuilder()
+      cb.termNode(cb.root, p(contentTerm))
+      const content = mkDiagramWithBoundary(cb.build(), [])
+      return mkDiagram({
+        root: 'r0',
+        regions: { r0: { kind: 'sheet' } },
+        nodes: { nb: { kind: 'body', region: 'r0', sig: relSig([]), content } },
+        wires: { wo: { scope: 'r0', sig: relSig([]), endpoints: [{ node: 'nb', port: { kind: 'output' } }] } },
+      })
+    }
+    // 'y' and 'z' are the same term up to the (non-semantic) free-port name
+    expect(exploreForm(bodyDiagram('y'))).toBe(exploreForm(bodyDiagram('z')))
+    // a genuinely different content shape must not collide
+    expect(exploreForm(bodyDiagram('y'))).not.toBe(exploreForm(bodyDiagram('\\x. x')))
   })
 })

@@ -1,17 +1,23 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { TERM, relSig } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 
 describe('exploreForm adversarial battery', () => {
-  it('distinguishes atom binder depth (inner vs outer bubble of equal arity)', () => {
-    const mk = (inner: boolean) => {
+  it("distinguishes the scope of an atom's relational (head) wire (inner vs outer cut)", () => {
+    // The atom sits in the inner cut; its head line of identity is scoped at
+    // the inner cut vs the enclosing outer cut. Same atom, same arity, but a
+    // different existential location for its relation — the forms must differ.
+    const sig = relSig([])
+    const mk = (headAtOuter: boolean) => {
       const b = new DiagramBuilder()
-      const outer = b.bubble(b.root, 1)
-      const innerB = b.bubble(outer, 1)
-      b.atom(innerB, inner ? innerB : outer)
+      const outer = b.cut(b.root)
+      const inner = b.cut(outer)
+      const a = b.atom(inner, sig)
+      b.wire(headAtOuter ? outer : inner, [{ node: a, port: { kind: 'head' } }], sig)
       return b.build()
     }
     expect(exploreForm(mk(true))).not.toBe(exploreForm(mk(false)))
@@ -64,17 +70,18 @@ describe('exploreForm adversarial battery', () => {
   })
 
   it('distinguishes arg-position wiring on an atom (X(s,t) vs X(t,s))', () => {
+    const sig = relSig([TERM, TERM])
     const mk = (swapped: boolean) => {
       const b = new DiagramBuilder()
-      const bub = b.bubble(b.root, 2)
-      const s = b.termNode(bub, p('\\x. x'))
-      const t = b.termNode(bub, p('\\x. \\y. x'))
-      const a = b.atom(bub, bub)
-      b.wire(bub, [
+      const s = b.termNode(b.root, p('\\x. x'))
+      const t = b.termNode(b.root, p('\\x. \\y. x'))
+      const a = b.atom(b.root, sig)
+      b.wire(b.root, [{ node: a, port: { kind: 'head' } }], sig)
+      b.wire(b.root, [
         { node: s, port: { kind: 'output' } },
         { node: a, port: { kind: 'arg', index: swapped ? 1 : 0 } },
       ])
-      b.wire(bub, [
+      b.wire(b.root, [
         { node: t, port: { kind: 'output' } },
         { node: a, port: { kind: 'arg', index: swapped ? 0 : 1 } },
       ])

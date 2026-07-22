@@ -1,6 +1,7 @@
 import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
+import { sigKey } from '../sig'
 import { termShapeKey, positionalPortKey } from './shape'
 
 /**
@@ -115,16 +116,22 @@ export type ExploreIndex = {
   readonly wiresScoped: ReadonlyMap<RegionId, readonly WireId[]>
   readonly nodeContentKey: ReadonlyMap<NodeId, string>
   readonly nodeRegion: ReadonlyMap<NodeId, RegionId>
-  readonly nodeBinder: ReadonlyMap<NodeId, RegionId | null>
   readonly nodePortOrder: ReadonlyMap<NodeId, readonly string[]>
   readonly nodePortWire: ReadonlyMap<NodeId, ReadonlyMap<string, WireId>>
   readonly wireScope: ReadonlyMap<WireId, RegionId>
+  /** Canonical injective key of each wire's sort (intrinsic wire content). */
+  readonly wireSigKey: ReadonlyMap<WireId, string>
   readonly wireEndpoints: ReadonlyMap<WireId, readonly { node: NodeId; pkey: string }[]>
   /** Every ordered boundary position exposing this wire. */
   readonly pinOf: ReadonlyMap<WireId, readonly number[]>
 }
 
-/** Positional port key of a wire endpoint (name-blind). */
+/**
+ * Positional port key of a wire endpoint (name-blind). The key vocabulary is
+ * shared with each node kind's `portOrder` so `nodePortWire` lookups line up:
+ * 'out' output, 'v{i}' term free port i, 'hd' atom head, 'a{i}' arg i,
+ * 'p{j}' body parameter j (already positional by construction).
+ */
 function endpointKey(d: Diagram, node: NodeId, port: Port): string {
   const n = d.nodes[node]!
   // Return-typed switch (no default): a new node kind must decide its key here.
@@ -132,11 +139,16 @@ function endpointKey(d: Diagram, node: NodeId, port: Port): string {
     case 'term':
       return positionalPortKey(n.term, port, n.freePorts)
     case 'atom':
+      if (port.kind === 'head') return 'hd'
       if (port.kind === 'arg') return `a${port.index}`
       throw new DiagramError(`atom '${node}' cannot carry port '${port.kind}'`)
     case 'ref':
       if (port.kind === 'arg') return `a${port.index}`
       throw new DiagramError(`ref '${node}' cannot carry port '${port.kind}'`)
+    case 'body':
+      if (port.kind === 'output') return 'out'
+      if (port.kind === 'freeVar') return port.name
+      throw new DiagramError(`body '${node}' cannot carry port '${port.kind}'`)
   }
 }
 
@@ -157,7 +169,7 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
   }
   for (const id of regionIds) {
     const r = d.regions[id]!
-    regionKindKey.set(id, r.kind === 'bubble' ? `bubble/${r.arity}` : r.kind)
+    regionKindKey.set(id, r.kind)
     if (r.kind === 'sheet') {
       parentOf.set(id, null)
     } else {
@@ -168,36 +180,37 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
 
   const nodeContentKey = new Map<NodeId, string>()
   const nodeRegion = new Map<NodeId, RegionId>()
-  const nodeBinder = new Map<NodeId, RegionId | null>()
   const nodePortOrder = new Map<NodeId, string[]>()
   const nodePortWire = new Map<NodeId, Map<string, WireId>>()
   // Return-typed switch (no default): a new node kind forces its canonical
-  // content key, binder, and port order to be decided here.
-  const nodeCanon = (id: NodeId, n: DiagramNode): { contentKey: string; binder: RegionId | null; portOrder: string[] } => {
+  // content key and port order to be decided here. The content key is the
+  // node's isomorphism-invariant intrinsic identity: for atom/ref/body it
+  // carries `sigKey(n.sig)`; body additionally pins its payload by the
+  // boundary-anchored canonical form of its content (`boundaryForm`).
+  const nodeCanon = (_id: NodeId, n: DiagramNode): { contentKey: string; portOrder: string[] } => {
     switch (n.kind) {
       case 'term':
         return {
           contentKey: `term:${termShapeKey(n.term, n.freePorts)}`,
-          binder: null,
           portOrder: ['out', ...n.freePorts.map((_, i) => `v${i}`)],
         }
-      case 'atom': {
-        const binder = d.regions[n.binder]!
-        if (binder.kind !== 'bubble') {
-          throw new DiagramError(`atom '${id}' binder '${n.binder}' is not a bubble`)
-        }
+      case 'atom':
         return {
-          contentKey: 'atom',
-          binder: n.binder,
-          portOrder: Array.from({ length: binder.arity }, (_, i) => `a${i}`),
+          contentKey: `atom|${sigKey(n.sig)}`,
+          portOrder: ['hd', ...n.sig.args.map((_, i) => `a${i}`)],
         }
-      }
       case 'ref':
         return {
-          contentKey: `ref:${n.defId}:${n.arity}`,
-          binder: null,
-          portOrder: Array.from({ length: n.arity }, (_, i) => `a${i}`),
+          contentKey: `ref:${n.defId}:${sigKey(n.sig)}`,
+          portOrder: n.sig.args.map((_, i) => `a${i}`),
         }
+      case 'body': {
+        const paramCount = n.content.boundary.length - n.sig.args.length
+        return {
+          contentKey: `body|${sigKey(n.sig)}|${boundaryForm(n.content)}`,
+          portOrder: ['out', ...Array.from({ length: paramCount }, (_, j) => `p${j}`)],
+        }
+      }
     }
   }
   for (const id of nodeIds) {
@@ -207,15 +220,16 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
     nodePortWire.set(id, new Map())
     const canon = nodeCanon(id, n)
     nodeContentKey.set(id, canon.contentKey)
-    nodeBinder.set(id, canon.binder)
     nodePortOrder.set(id, canon.portOrder)
   }
 
   const wireScope = new Map<WireId, RegionId>()
+  const wireSigKey = new Map<WireId, string>()
   const wireEndpoints = new Map<WireId, { node: NodeId; pkey: string }[]>()
   for (const id of wireIds) {
     const w = d.wires[id]!
     wireScope.set(id, w.scope)
+    wireSigKey.set(id, sigKey(w.sig))
     wiresScoped.get(w.scope)!.push(id)
     const eps = w.endpoints.map((ep) => {
       const pkey = endpointKey(d, ep.node, ep.port)
@@ -234,8 +248,8 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
 
   return {
     regionIds, nodeIds, wireIds, regionKindKey, parentOf, childrenOf, nodesIn,
-    wiresScoped, nodeContentKey, nodeRegion, nodeBinder, nodePortOrder,
-    nodePortWire, wireScope, wireEndpoints, pinOf,
+    wiresScoped, nodeContentKey, nodeRegion, nodePortOrder,
+    nodePortWire, wireScope, wireSigKey, wireEndpoints, pinOf,
   }
 }
 
@@ -285,19 +299,18 @@ function refineOnce(idx: ExploreIndex, c: Colors): Colors {
       `R|${c.region.get(id)!}|p:${parentColor}|c:${children.join(',')}|n:${nodes.join(',')}|w:${wires.join(',')}`])
   }
   for (const id of idx.nodeIds) {
-    const binder = idx.nodeBinder.get(id)
     const ports = idx.nodePortOrder.get(id)!.map((pk) => {
       const wireId = idx.nodePortWire.get(id)!.get(pk)
       if (wireId === undefined) throw new DiagramError(`port '${pk}' missing wire for node '${id}'`)
       return `${pk}=${c.wire.get(wireId)!}`
     })
     entries.push([`N${id}`,
-      `N|${c.node.get(id)!}|r:${c.region.get(idx.nodeRegion.get(id)!)!}|b:${binder == null ? '-' : c.region.get(binder)!}|${ports.join(',')}`])
+      `N|${c.node.get(id)!}|r:${c.region.get(idx.nodeRegion.get(id)!)!}|${ports.join(',')}`])
   }
   for (const id of idx.wireIds) {
     const eps = idx.wireEndpoints.get(id)!.map((ep) => `${c.node.get(ep.node)!}.${ep.pkey}`).sort()
     entries.push([`W${id}`,
-      `W|${c.wire.get(id)!}|s:${c.region.get(idx.wireScope.get(id)!)!}|e:${eps.join(',')}`])
+      `W|${c.wire.get(id)!}|s:${c.region.get(idx.wireScope.get(id)!)!}|sig:${idx.wireSigKey.get(id)!}|e:${eps.join(',')}`])
   }
   const ranked = rankSignatures(entries)
   return {
@@ -382,15 +395,13 @@ function serializeWith(idx: ExploreIndex, c: Colors): string {
     lines.push(`r${regionOrd.get(id)!}:${idx.regionKindKey.get(id)!}:p=${parentStr}`)
   }
   for (const id of sortByOrd(idx.nodeIds, nodeOrd)) {
-    const binder = idx.nodeBinder.get(id)
-    const binderStr = binder == null ? '' : `:b=r${regionOrd.get(binder)!}`
-    lines.push(`n${nodeOrd.get(id)!}:${idx.nodeContentKey.get(id)!}:r=r${regionOrd.get(idx.nodeRegion.get(id)!)!}${binderStr}`)
+    lines.push(`n${nodeOrd.get(id)!}:${idx.nodeContentKey.get(id)!}:r=r${regionOrd.get(idx.nodeRegion.get(id)!)!}`)
   }
   for (const id of sortByOrd(idx.wireIds, wireOrd)) {
     const pins = idx.pinOf.get(id)
     const eps = idx.wireEndpoints.get(id)!.map((ep) => `n${nodeOrd.get(ep.node)!}.${ep.pkey}`).sort()
     const pinStr = pins === undefined ? '' : `pins${JSON.stringify(pins)}:`
-    lines.push(`w${wireOrd.get(id)!}:${pinStr}s=r${regionOrd.get(idx.wireScope.get(id)!)!}:e=${eps.join(',')}`)
+    lines.push(`w${wireOrd.get(id)!}:${pinStr}s=r${regionOrd.get(idx.wireScope.get(id)!)!}:sig=${idx.wireSigKey.get(id)!}:e=${eps.join(',')}`)
   }
   return lines.join('\n')
 }

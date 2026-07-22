@@ -45,6 +45,7 @@ export function positionalPortKey(
   switch (p.kind) {
     case 'output': return 'out'
     case 'arg': return `a${p.index}`
+    case 'head': throw new DiagramError('positional port key requested for a head port')
     case 'freeVar': {
       const i = declaredFreePorts.indexOf(p.name)
       if (i < 0) throw new DiagramError(`'${p.name}' is not a declared free port of the term node`)
