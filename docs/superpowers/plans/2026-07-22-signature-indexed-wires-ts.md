@@ -69,7 +69,7 @@
 - [ ] **Step 4: Compile the package** — `npx tsc --noEmit` will fail across dependents; that is expected and drives Tasks 3–10. Run only this test file: PASS.
 - [ ] **Step 5: Commit** — `feat: signature-indexed wires in core diagram types` (commit even with downstream compile errors; the branch is the atomic unit, and each subsequent task shrinks the error set — full-suite green is the Task 10 exit gate, applied to every task only from Task 10 on).
 
-Amendment to Global Constraints: Tasks 2–9 gate on their own test files passing plus a shrinking `npx tsc --noEmit` error inventory (record the count in each commit message); Tasks 10–12 gate on the full suite.
+Amendment to Global Constraints: Tasks 2–9 gate on (a) their own test files passing and (b) zero `npx tsc --noEmit` errors in files owned by any completed task (owned = created or modified by Tasks 1..N per their Files blocks). The total error count is recorded in each commit body (`tsc-errors: N`) for tracking only — it may rise when a task deletes a public surface whose not-yet-migrated callers belong to later tasks. Tasks 10–12 gate on the full suite and zero errors package-wide.
 
 ### Task 3: Regions, boundary, builder, spawn
 
