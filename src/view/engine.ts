@@ -448,28 +448,28 @@ export function carryOver(prev: Engine, next: Engine): void {
     nb.pos = denorm(pb.pos, prev.scale)
     nb.theta = pb.theta
   }
-  // wires glide too: a surviving wire with the same bind signature keeps its
-  // hub/exit position and per-leg arrival angles instead of re-seeding.
-  // The legs' geometry is memoryless (recomputed), so only the DOF carry.
+  // A surviving wire carries its complete junction state (T, b, τ). The signature
+  // matches wire IDENTITY — the terminal set (binds + hub kind + tip + slots) — NOT
+  // the branch count: the topology T is a coordinate the survivor carries, so the
+  // count and adjacency come from the survivor, never from `next`'s fresh seed.
   const sig = (v: WireView): string =>
-    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', `slots:${v.slots.join(',')}`, `br${v.branches.length}`].join('|')
+    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', `slots:${v.slots.join(',')}`].join('|')
   for (const [wid, nv] of next.wires) {
     const pv = prev.wires.get(wid)
     if (pv === undefined || sig(pv) !== sig(nv)) continue
     if (nv.hub !== null && nv.hub.kind === 'point' && pv.hub !== null && pv.hub.kind === 'point') {
       nv.hub.pos = denorm(pv.hub.pos, prev.scale)
     }
-    // carry the Steiner branch points (same branch COUNT when the bind signature
-    // matches — a construction seed, index-parallel; a later topology move may
-    // restructure either side, and re-settles from here)
-    for (let k = 0; k < nv.branches.length && k < pv.branches.length; k++) {
-      nv.branches[k] = denorm(pv.branches[k]!, prev.scale)
-    }
-    // carry each leg's free end-tangent DOFs (junction/hub tangents)
-    for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
-      nv.legs[k]!.angA = pv.legs[k]!.angA
-      nv.legs[k]!.angB = pv.legs[k]!.angB
-    }
+    // Carry the junction state (T, b, τ) VERBATIM from the survivor: T is the leg
+    // end-structure (which terminals/branches each edge connects), b the branch
+    // positions, τ the per-leg tangents. T is CARRIED, never re-derived from the
+    // fresh soap-tree seed — so an achieved restructuring survives every rewrite
+    // (kills diagnosed cause (a) structurally). Leg geometry stays memoryless: the
+    // carried legs get a fresh cache and re-solve from their live boundary data.
+    nv.branches.length = 0
+    for (const p of pv.branches) nv.branches.push(denorm(p, prev.scale))
+    nv.legs.length = 0
+    for (const l of pv.legs) nv.legs.push({ a: l.a, b: l.b, angA: l.angA, angB: l.angB, cache: mkLegCache() })
   }
 }
 
