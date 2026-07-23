@@ -77,15 +77,21 @@ export type WireLegEnd =
   | { readonly kind: 'branch'; readonly i: number }
   | { readonly kind: 'slot'; readonly i: number }
 
-/** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
-    exiting along its normal) to terminal `b` (hub / another bind / ∃ tip /
-    boundary exit). `hubAngle` is the arrival DIRECTION at a hub end (a wire
-    DOF descended by the gated step); `cache` memoizes the solve on the exact
+/** One leg of a wire: the massless θ-quadratic from terminal `a` to terminal `b`.
+    A junction leg's tangents at the branch points it touches are ORDINARY free
+    DOFs (no trunk slaving): `angA` is the LEAVING travel direction at end `a`
+    (honored exactly as θ(0)) and `angB` the ARRIVAL travel direction at end `b`
+    (pulled to by the WELL_S arrival well). `angA` is live only when `a` is a
+    Steiner BRANCH point (an internal tree edge); a bind/slot end fixes θ(0) to its
+    port/slot normal, so `angA` is inert there. `angB` is live when `b` is a hub
+    (the ∀ via-body junction) or a branch point. Both are descended by the same
+    gated angle step as every other DOF; `cache` memoizes the solve on the exact
     boundary tuple. */
 export type WireLeg = {
   readonly a: WireLegEnd
   readonly b: WireLegEnd
-  hubAngle: number
+  angA: number
+  angB: number
   readonly cache: LegCache
 }
 
@@ -112,14 +118,12 @@ export type WireView = {
   /** A k-ary junction is a soap-film Steiner TREE: these are its wire-owned branch
       points (DOFs), the terminals are the port binds / slots, and the tree edges are
       the ordinary elastica `legs` (`branch`/`bind`/`slot` ends). Empty for a plain
-      2-point wire, a ∃ tip, or the ∀ via-body (which branches at its scope body). */
+      2-point wire, a ∃ tip, or the ∀ via-body (which branches at its scope body).
+      The tree TOPOLOGY (branch count + which terminals pair through which branch) is
+      itself a gated discrete DOF (relax.ts nearest-neighbour interchange), so
+      `branches` and `legs` are restructured by strict energy descent, not frozen at
+      construction. */
   readonly branches: Vec2[]
-  /** Per-branch-point TRUNK AXIS (radians): the orientation along which the two
-      most-opposite legs at that branch flow through as one continuous trunk while
-      the rest merge tangentially (the tributary look). One entry per `branches`. */
-  branchPhi: number[]
-  /** The ∀ via-body branch axis (the body-homed junction case); 0 otherwise. */
-  phi: number
 }
 
 /** A region's drawn circle. `support` lists the direct items (member body or
@@ -228,37 +232,6 @@ export function subtreeCarriers(e: Engine, rid: RegionId): string[] {
   return out
 }
 
-/** The nematic director of a set of directions: the axis (mod π) best aligned
-    with them, `½·atan2(Σ sin2θ, Σ cos2θ)`. Degenerate (returns 0) only for a
-    perfectly isotropic set, where every axis is equally good. Used to seed and
-    anchor a hub's trunk axis to its leg chord directions. */
-export function nematicDir(dirs: readonly number[]): number {
-  let sc = 0, ss = 0
-  for (const a of dirs) { sc += Math.cos(2 * a); ss += Math.sin(2 * a) }
-  return 0.5 * Math.atan2(ss, sc)
-}
-
-/** Wrap an angle to (−π, π]. */
-export function wrapAngle(a: number): number {
-  let x = a
-  while (x > Math.PI) x -= 2 * Math.PI
-  while (x <= -Math.PI) x += 2 * Math.PI
-  return x
-}
-
-/** The trunk-tributary ARRIVAL travel direction of a branch leg (round-8-D rule):
-    given the leg's chord direction `dir` (branch → its far end) and the branch's
-    trunk axis `phi`, the leg is pulled from its own radial direction toward the
-    nearer axis end (`phi` or `phi+π`) by weight |cos(dir−phi)| — 1 for a leg along
-    the axis (it becomes the trunk, flowing through), 0 perpendicular (stays radial),
-    so the merge is continuous. Returns travel INTO the branch. */
-export function trunkTarget(dir: number, phi: number): number {
-  const axisSide = Math.abs(wrapAngle(phi - dir)) <= Math.PI / 2 ? phi : phi + Math.PI
-  const wgt = Math.abs(Math.cos(dir - phi))
-  const outward = dir + wrapAngle(axisSide - dir) * wgt
-  return wrapAngle(outward + Math.PI)
-}
-
 export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   const bodies = new Map<string, Body>()
   let i = 0
@@ -355,8 +328,10 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     membersOf.get(region)!.push(id)
     return b
   }
+  // seed BOTH end-tangent DOFs to the leg's chord direction (a straight leg): the
+  // representable seed, and the rest value for an unobstructed junction leg.
   const mkLeg = (a: WireLegEnd, b: WireLegEnd, angle: number): WireLeg =>
-    ({ a, b, hubAngle: angle, cache: mkLegCache() })
+    ({ a, b, angA: angle, angB: angle, cache: mkLegCache() })
   const seedAngle = (p: Vec2, h: Vec2): number => Math.atan2(h.y - p.y, h.x - p.x)
 
   for (const [wid, w] of Object.entries(d.wires)) {
@@ -395,7 +370,11 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       const nT = terms.length
       const end = (node: number): WireLegEnd =>
         node < nT ? terminalEnd(node) : { kind: 'branch', i: node - nT }
-      return built.edges.map(([a, b]) => mkLeg(end(a), end(b), 0))
+      const posOf = (node: number): Vec2 => node < nT ? terms[node]! : branches[node - nT]!
+      return built.edges.map(([a, b]) => {
+        const pa = posOf(a), pb = posOf(b)
+        return mkLeg(end(a), end(b), Math.atan2(pb.y - pa.y, pb.x - pa.x))
+      })
     }
     if (isBoundary) {
       const c = centroid()
@@ -428,14 +407,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       // a pure k≥3 interior junction: a Steiner tree over the ports
       legs = treeLegs(anchorPos)
     }
-    // ∀ via-body single trunk axis; tree branches seed their axis at 0 (relaxed).
-    let phi = 0
-    if (hub !== null && hub.kind === 'body' && !isBoundary) {
-      const hp = bodies.get(hub.bodyId)!.pos
-      phi = nematicDir(anchorPos.map((p) => Math.atan2(p.y - hp.y, p.x - hp.x)))
-    }
-    const branchPhi = branches.map(() => 0)
-    wires.set(wid, { binds, hub, tipBodyId, slots, legs, branches, branchPhi, phi })
+    wires.set(wid, { binds, hub, tipBodyId, slots, legs, branches })
   }
 
   return engine
@@ -487,18 +459,17 @@ export function carryOver(prev: Engine, next: Engine): void {
     if (nv.hub !== null && nv.hub.kind === 'point' && pv.hub !== null && pv.hub.kind === 'point') {
       nv.hub.pos = denorm(pv.hub.pos, prev.scale)
     }
-    // carry the Steiner branch points + their trunk axes (same topology when the
-    // bind signature matches, so index-parallel)
+    // carry the Steiner branch points (same branch COUNT when the bind signature
+    // matches — a construction seed, index-parallel; a later topology move may
+    // restructure either side, and re-settles from here)
     for (let k = 0; k < nv.branches.length && k < pv.branches.length; k++) {
       nv.branches[k] = denorm(pv.branches[k]!, prev.scale)
     }
-    for (let k = 0; k < nv.branchPhi.length && k < pv.branchPhi.length; k++) {
-      nv.branchPhi[k] = pv.branchPhi[k]!
-    }
+    // carry each leg's free end-tangent DOFs (junction/hub tangents)
     for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
-      nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
+      nv.legs[k]!.angA = pv.legs[k]!.angA
+      nv.legs[k]!.angB = pv.legs[k]!.angB
     }
-    nv.phi = pv.phi
   }
 }
 
@@ -678,20 +649,22 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
   const A = posOf(leg.a), B = posOf(leg.b)
   const p0 = A.p, p1 = B.p, ownA = A.own, ownB = B.own
   // LEAVING tangent at terminal a (θ(0)): a port leaves along its rim normal; a
-  // slot leaves inward; a branch leaves toward b along its trunk-tributary tangent.
+  // slot leaves inward; a Steiner BRANCH leaves along its own free tangent DOF
+  // (`angA`) — an ordinary descended angle, no trunk slaving.
   let th0: number
   if (leg.a.kind === 'slot') { const s = slotAt(leg.a); th0 = (s !== null ? s.normal : 0) + Math.PI }
   else if (leg.a.kind === 'bind') { const bd = w.binds[leg.a.i]!; const b0 = e.bodies.get(bd.body)!; const la = b0.localAnchor.get(bd.key)!; th0 = Math.atan2(la.y, la.x) + b0.theta }
-  else if (leg.a.kind === 'branch') { th0 = wrapAngle(trunkTarget(Math.atan2(p1.y - p0.y, p1.x - p0.x), w.branchPhi[leg.a.i]!) + Math.PI) }
+  else if (leg.a.kind === 'branch') { th0 = leg.angA }
   else { th0 = Math.atan2(p1.y - p0.y, p1.x - p0.x) }
-  // ARRIVAL tangent at terminal b (travel INTO b): hub arrival angle, a welled
-  // port/slot normal, a branch trunk tangent, or a free ∃ tip.
+  // ARRIVAL tangent at terminal b (travel INTO b): a hub or branch arrival is the
+  // leg's own free tangent DOF (`angB`), pulled to by the WELL_S well; a welled
+  // port/slot normal; or a free ∃ tip.
   let th1: number, freeEnd = false
   switch (leg.b.kind) {
-    case 'hub': th1 = leg.hubAngle; break
+    case 'hub': th1 = leg.angB; break
     case 'tip': th1 = 0; freeEnd = true; break
     case 'slot': { const s = slotAt(leg.b); th1 = s !== null ? s.normal : th0 + Math.PI; break }
-    case 'branch': th1 = trunkTarget(Math.atan2(p0.y - p1.y, p0.x - p1.x), w.branchPhi[leg.b.i]!); break
+    case 'branch': th1 = leg.angB; break
     case 'bind': { const bd = w.binds[leg.b.i]!; const b = e.bodies.get(bd.body)!; const la = b.localAnchor.get(bd.key)!; th1 = Math.atan2(la.y, la.x) + b.theta + Math.PI; break }
   }
   let sol: Sol

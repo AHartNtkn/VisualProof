@@ -288,9 +288,9 @@ describe('the leg-solve memo is output-neutral (plan 24 — exact cross-eval sol
     const out: number[] = [e.slotShift]
     for (const b of e.bodies.values()) out.push(b.pos.x, b.pos.y, b.theta)
     for (const [, w] of e.wires) {
-      out.push(w.phi)
       if (w.hub !== null && w.hub.kind === 'point') out.push(w.hub.pos.x, w.hub.pos.y)
-      for (const leg of w.legs) out.push(leg.hubAngle)
+      for (const leg of w.legs) out.push(leg.angA, leg.angB)
+      for (const b of w.branches) out.push(b.x, b.y)
     }
     return out
   }
