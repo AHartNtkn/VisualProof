@@ -22,28 +22,54 @@
 **Files:** `src/view/engine.ts` (wire structure: explicit topology T — adjacency as stored data; branch positions; per-half-edge tangent angles; `mkEngine` seeds via soaptree, birth-only), `src/view/wires.ts`, carryOver (`engine.ts:456-473` era): carry T explicitly for surviving wires (keyed on wire identity, not branch count — kills diagnosed cause (a) structurally). Tests: engine/wires suites adapt; a new carry test: rebuild after a rewrite preserves T (the revised repro (a) from `junction-app-path.test.ts` goes green here or in Task 4).
 - [ ] TDD per house rules; file-local green; commit `feat: junction state as (T,b,tau)`.
 
-### Task 2: step on X — the boundary and the crossing
+### Task 2 (REVISED after preservation-bias correction): spec-literal state-model replacement
 
-**Files:** `src/view/relax.ts` — per the φ doc's pseudocode: branch-DOF proposals respect ℓ_e ≥ 0 as feasible projection; a proposal driving through zero maps via φ (identity on intrinsic face data; re-expansion along the re-paired edge) and is evaluated under the same gate; deterministic DOF order resolves deep-face ties; fixed-point stop unchanged (a crossing is an ordinary accepted move).
-- [ ] Unit tests: a hand-built two-topology fixture crosses when E decreases and refuses when it doesn't; drawing at the crossing sweep identical before/after at the crossing wire (Lemma 2's testable form); determinism (same trajectory bit-identical, cache on/off).
-- [ ] Commit `feat: gated descent across strata via canonical phi`.
+**The cut:** `Wire` state becomes exactly (T, b, τ) per the formal spec §1.5.
+DELETED AS CONCEPTS (not renamed, not wrapped): the `'junction'` BodyKind and
+all hub entities (engine.ts:323 era, hub kinds, tip/slot junction structures
+EXCEPT ∃-tip bodies which are corpus law); `branches` as a model object;
+`tryTopologyMove`/`checkedSet`/edge-trigger/deferral (relax.ts:1233-1586 era);
+any crossing-as-event, detection radius, or per-sweep cap. Junction geometry
+(where legs meet) is computed at render/solve time from (T, b, τ), stateless,
+downstream. KEPT because law mandates them: leg solver + caches (curve law),
+barrier/clearance energies (plan-22 measurements), ∃-tip bodies (dangling-end
+law), term/atom/anchor bodies. Proposals that drive an internal edge through
+ℓ_e = 0 map through canonical φ as ORDINARY coordinate moves under the
+ordinary gate — nothing detects, nothing fires. Task 1's carryOver carries
+(T, b, τ) unchanged in spirit; its "junction state" vocabulary is renamed.
+The untracked `tests/physics/junction-crossing.test.ts` (salvage from the
+reverted attempt) is evaluated: adopt, adapt, or delete with reasons.
 
-### Task 3: Deletions
+- [ ] TDD; physics suite green via FOREGROUND per-file runs; tsc 0; commit(s)
+  with honest headlines. CONTROLLER VERIFIES THE TREE DIFF PERSONALLY before
+  any deletion claim is relayed; the reviewer independently confirms the
+  deletion list against the tree.
 
-**Files:** remove NNI machinery (`tryTopologyMove`, `nniAlternatives`, edge-trigger, `deferMoved`, `refaceCandidateNodes`), `reseedUnrepresentableBranches` (subsumed per φ doc — VERIFY by keeping `relax.test.ts` "no leg wraps" green on the frege fixtures; if it goes red, STOP and report: the subsumption claim fails empirically and the seeding question returns to the user), stored-adjacency rebuild paths. Grep gates: no trunk/NNI/trigger residue.
-- [ ] Full suite green from here (physics included). Commit `refactor: delete discrete topology machinery`.
+### Task 3 (REVISED): face-reachability re-measurement on the clean model
 
-### Task 4: Acceptance tests re-derived (problem statement §6)
+The reverted attempt reported crossings unreachable (ℓ_e floors ~0.15 wu;
+elastica prefers separated Y-Y). That measurement is SUSPECT: it was taken on
+the grafted substrate where junction BODIES carried their own physics
+(barriers/clearance) that may have been exactly what floored the gap. Re-run
+the reachability probes on the clean model: does ℓ_e reach 0 under drags/
+squeezes now? Report distributions. If reachable: the corridor design works
+as specced — proceed. If still floored: STOP; present the three user options
+(visibility-scale ε with derived constant / sticky-topology-as-correct /
+energy-balance question) with the clean numbers — the user rules.
 
-**Files:** rewrite `tests/physics/junction-app-path.test.ts`: (1) trajectory continuity — scripted drags incl. teleport, per-frame drawn displacement ≤ accepted DOF motion bound; crossing frames' drawings equal at the crossing wire up to solver resolution; (2) interactive restructuring — the rectangle drag crosses through ℓ_e = 0 and ends re-paired (asserting the passage, not optimality); (3) carry (Task 1's); (4) within-basin freedom — the bar tangent reaches its conditional optimum (0.419-rad target from the diagnosis); drop the cross-basin warm-vs-fresh repro. `junctions.test.ts` energy-law assertions adapt to the new state; all existing law tests stay green.
-- [ ] Commit `test: stratified-junction acceptance per accepted semantics`.
+### Task 4: acceptance tests per problem-statement §6 (unchanged content)
 
-### Task 5: Front-loaded empirical verification (the two named risks)
+Trajectory continuity; interactive crossing-through-zero (contingent on Task
+3's verdict); carry; within-basin bar-tangent freedom; law suite green.
 
-- [ ] **Timescale:** instrument (scratch, reverted) drag scenarios at app cadence; measure sweeps-to-crossing from boundary contact on rect4/bar5; report numbers.
-- [ ] **Mid-transition looks:** render drag sequences (the gallery mechanism) spanning a full merge-pass-re-expand on rect4 and bar5 — deliver frames for the USER's visual ruling. No aesthetic test is written (ruled 2026-07-23); the frames are the deliverable.
-- [ ] Full gates; whole-branch SDD review; ledger updated. STOP for the user's visual ruling before any polish.
+### Task 5: front-loaded empirical verification for the user (unchanged)
+
+Timescale numbers + mid-transition drag renders delivered to the USER; STOP
+for the visual ruling. Whole-branch SDD review with mechanism-count audit
+(zero auxiliary) and an independent tree-verified deletion audit.
 
 ## Verification
 
-`npm run test:all` + tsc 0 + physics suite green; the four §6 acceptance tests green; mechanism-count audit at review = zero; the user's mid-transition ruling is the final gate.
+Full suites + tsc 0; §6 acceptance; mechanism count zero; deletion list
+verified against the tree by controller AND reviewer independently; the
+user's visual ruling is the final gate.
