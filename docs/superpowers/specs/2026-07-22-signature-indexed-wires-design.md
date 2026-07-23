@@ -1,7 +1,9 @@
 # Signature-Indexed Wires Design
 
 **Date:** 2026-07-22
-**Status:** Approved design, not implemented
+**Status:** TS implementation complete on this branch; Lean pending (Plan 2).
+Definition mechanism superseded in place by
+`2026-07-23-drawn-definitions-design.md` (drawn definitions, no carrier).
 
 ## Outcome
 
@@ -95,18 +97,18 @@ subsumes `diagonalize` as a rule). Terminology: these are *atoms*
 throughout — "application node" is banned as it collides with λ-term
 application, which is untouched by this design.
 
-**Bodies.** Bodies attach to wires and pin them, gated by polarity, uniformly:
-
-- At `ι`: a λ-term body (`x = t`) — the existing equation machinery, unchanged.
-- At `rel(σ₁…σₙ)`: a comprehension body — a subgraph with a
-  signature-declared boundary (n stubs of sorts σ₁…σₙ, plus parameter
-  attachments to outer wires of any sort).
-
-A body's boundary may attach to any wire whose scope is at-or-outside the
-target wire's scope. That single gate is the impredicative comprehension
-schema at every signature, and it replaces the separate SO dependency gate:
-same-region parameters are admitted, justified by same-polarity quantifier
-commutation (∃x∃R ≡ ∃R∃x).
+**Content and definitions (corrected law — see
+`2026-07-23-drawn-definitions-design.md`).** The original "Bodies" section
+here stated a cross-sort pinning role; that was a type error (no ι-sorted
+head exists, and the λ-node applies its graph relation, not a singleton).
+The governing law is functional determinacy: a content node applies its
+content-relation to its port wires by presence, and fresh spawn is free
+exactly when the content determines one coordinate totally (β-totality at
+ι; comprehension at relational sorts). Relational definitions are DRAWN
+structure — the constraint K(R,G) = ∀x⃗(R(x⃗) ↔ G(x⃗)) — not a node kind.
+Parameters are ordinary outer wires crossing into K's cuts; the mkDiagram
+scope invariant is the entire dependency gate (same-region parameters
+admitted, justified by same-polarity quantifier commutation).
 
 **Named refs.** `ref` nodes are unchanged in kind and extend to higher
 signatures (a named def may have sort `((ι),(ι),ι)` etc.). Named definitions
@@ -151,16 +153,17 @@ are untouched.
    (Implementation discovery: without the bodied case, the instantiate
    composite needs a mid-sequence orientation flip that cannot replay
    under a proof's single orientation.)
-2. **Body attach/detach.** Polarity-gated exactly as the existing equation
-   gates at `ι`; the same gates govern comprehension bodies at relational
-   sorts. Attaching a body is the actual quantifier instantiation — the
-   analogue of pinning an `ι` wire with a term node.
-3. **Fold/unfold at one occurrence.** An atom whose head wire carries a body
-   may be replaced by a copy of the body with argument wires spliced onto the
-   boundary stubs, and inversely. This is the *existing* named-relation
-   fold/unfold move (plan 11e) generalized from `ref` nodes to atoms on
-   bodied wires. It is definitional rewriting — never called β; β/η are
-   reserved strictly for the term language, which this rule never touches.
+2. **Comprehension intro/elim** (supersedes body attach/detach AND the
+   bodied-vacuous case): introduce a fresh relational wire together with
+   freshly drawn K(R,G) at ANY polarity (the comprehension axiom); eliminate
+   wire+K in the tautological state. Constraint attach/detach on wires with
+   occurrences need no rules of their own — they are insertion and erasure,
+   whose gates the old bodyAttach/Detach unknowingly duplicated.
+3. **Derived occurrence swaps** (supersede fold/unfold as primitives):
+   R(a⃗) ⇄ G(a⃗) at an occurrence is the iterate–join–deiterate–double-cut
+   sequence transporting K's content along the wire; amortized in practice
+   by the Eq_σ⃗ library lemmas cited per occurrence — never by kernel
+   convenience rules. Still never called β; β/η remain term-language only.
 4. **Wire join.** Two same-signature wires merge; scope = deepest common
    ancestor; gated like the existing congruence join. At relational sorts
    this asserts extensional equality. Leibniz equality at every signature is
@@ -248,11 +251,11 @@ Channels carry one thing each; every channel is uniform along the entire wire
    thickness (relative judgment, no absolute reading). **Held in reserve**:
    multi-stranding (k parallel strands for order k) as a monochrome/
    accessibility backup — not built now.
-4. **Bodies render as single sealed nodes on the wire** — exactly as λ-term
-   bodies are nodes at `ι` and named defs are only ever their own nodes.
-   Internal diagrams are authored/inspected in the existing relation
-   workspace; body content is never inlined into the host diagram; no
-   bubble-like enclosure returns.
+4. **Definitions render as the drawn K they are** — host-diagram content
+   through the ordinary pipeline (the former sealed-node law is void; there
+   is nothing sealed). Named (assertion-form) defs keep their own-node
+   rendering. OPEN user rulings: a view-level collapse affordance for
+   recognized K shapes, and K-shape drift diagnostics.
 5. **Scope law transfers verbatim**: a wire's outermost extent reaches into
    its scope region; loose ends are their own homed bodies. Relational wires
    join the wire-physics system as additional wire species.
