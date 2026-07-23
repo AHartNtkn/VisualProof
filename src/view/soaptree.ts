@@ -102,3 +102,33 @@ export function buildJunctionTree(terms: readonly Vec2[]): { branchPts: Vec2[]; 
   }
   return { branchPts, edges }
 }
+
+/** Position the branch points of a Steiner tree with a FIXED topology by tension
+    relaxation — the SAME soap-film tension step buildJunctionTree runs, but with
+    `reshape` (split/merge) omitted so the adjacency is HELD. Used to SEED a topology
+    CANDIDATE proposed by a nearest-neighbour-interchange move (relax.ts), whose
+    adjacency is imposed, not re-derived. `terms` are the fixed terminal positions
+    (tree nodes 0..nT-1), `edges` the tree edges over tree-node indices, `nBranch`
+    the branch-point count (nodes nT..nT+nBranch-1). Each branch seeds at the mean of
+    its adjacent terminals (overall centroid if it touches none), which breaks the
+    all-coincident degeneracy, then runs the construction 80-round budget — with no
+    reshape a pure fixed-adjacency descent that converges well inside it. Returns the
+    relaxed branch positions in tree-index order. */
+export function relaxFixedTree(terms: readonly Vec2[], edges: readonly (readonly [number, number])[], nBranch: number): Vec2[] {
+  const nT = terms.length
+  const c = { x: terms.reduce((s, p) => s + p.x, 0) / nT, y: terms.reduce((s, p) => s + p.y, 0) / nT }
+  const adj: number[][] = Array.from({ length: nT + nBranch }, () => [])
+  for (const [a, b] of edges) { adj[a]!.push(b); adj[b]!.push(a) }
+  const seed = (v: number): Vec2 => {
+    const termNbrs = adj[v]!.filter((n) => n < nT)
+    if (termNbrs.length === 0) return { ...c }
+    return {
+      x: termNbrs.reduce((s, n) => s + terms[n]!.x, 0) / termNbrs.length,
+      y: termNbrs.reduce((s, n) => s + terms[n]!.y, 0) / termNbrs.length,
+    }
+  }
+  const pts: Vec2[] = [...terms.map((p) => ({ ...p })), ...Array.from({ length: nBranch }, (_, k) => seed(nT + k))]
+  const t: Tree = { pts, adj, nT }
+  for (let r = 0; r < 80; r++) relax(t)
+  return pts.slice(nT).map((p) => ({ ...p }))
+}

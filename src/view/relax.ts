@@ -1,10 +1,10 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, LegShape, WireLeg, WireView, StoredFrame } from './engine'
+import type { Body, Engine, LegShape, WireLeg, WireLegEnd, WireView, StoredFrame } from './engine'
 import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, frameSlots, resolvedFrameSlot, FRAME_MARGIN } from './engine'
 import { ELASTICA, QN, mkLegCache, thetaRange, RANGE_B } from './elastica'
 import type { LegCache } from './elastica'
-import { buildJunctionTree } from './soaptree'
+import { buildJunctionTree, relaxFixedTree } from './soaptree'
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
     round-10 demo's `P`). The leg's own tension/bend live in ELASTICA (the
@@ -23,15 +23,6 @@ export const WIREP = {
   sepSlope: 1.4,
   /** wire↔wire separation radius */
   sepR: 5,
-  /** junction TRUNK-alignment weight: pulls each hub leg's arrival direction to
-      its trunk-tangent target (the two most-opposite legs flow through the hub
-      as one continuous trunk, side legs merge tangentially — the tributary look,
-      USER LAW). Finite height so the elastica bend can shade the merge angle. */
-  junctionTrunk: 10,
-  /** trunk-axis nematic weight: how strongly a hub's trunk axis `phi` aligns to
-      its leg chord directions (the anchor that keeps `phi` tracking the geometry
-      rather than drifting; its travel cap gives the no-flip inertia). */
-  trunkAxis: 8,
   /** ∃-tip standoff radius (the dot never sinks into its own wire) */
   standoffR: 8,
   /** wire↔FRAME containment stiffness: an UNCAPPED quadratic penalty on any wire
@@ -695,73 +686,6 @@ function sepPair(sa: readonly Vec2[], sb: readonly Vec2[], sc: number): number {
   return E
 }
 
-/** Shortest signed angle to `x` (radians, in (−π, π]). */
-function wrapAngle(x: number): number { return Math.atan2(Math.sin(x), Math.cos(x)) }
-
-/** The TRUNK-TANGENT target for a hub leg (USER LAW — the round-8-D tributary
-    rule): given the leg's chord direction `dir` (hub → its port) and the hub's
-    trunk axis `phi`, the leg's arrival TRAVEL direction at the hub. Each leg is
-    pulled from its own radial direction toward the nearer end of the trunk axis
-    (`phi` or `phi+π`) by weight |cos(dir−phi)| — which is 1 for a leg lying along
-    the axis (it becomes the trunk, arriving antiparallel to the leg on the far
-    side) and 0 for a leg perpendicular to it (it stays radial). The weight
-    vanishing exactly at the perpendicular is what makes the merge CONTINUOUS: no
-    side leg can jump between axis ends. The returned value is the travel
-    direction INTO the hub (port→hub→beyond), i.e. the outgoing tangent + π. */
-export function trunkTarget(dir: number, phi: number): number {
-  const axisSide = Math.abs(wrapAngle(phi - dir)) <= Math.PI / 2 ? phi : phi + Math.PI
-  const wgt = Math.abs(Math.cos(dir - phi))
-  const outward = dir + wrapAngle(axisSide - dir) * wgt // tangent leaving the hub toward the port
-  return wrapAngle(outward + Math.PI)
-}
-
-/** The world hub point of a wire with a hub. */
-function hubPoint(e: Engine, w: WireView): Vec2 {
-  const h = w.hub!
-  return h.kind === 'point' ? h.pos : e.bodies.get(h.bodyId)!.pos
-}
-
-/** Chord direction (hub → port) of one hub leg. */
-function legChordDir(e: Engine, w: WireView, leg: WireLeg, hp: Vec2): number {
-  const bd = w.binds[leg.a.kind === 'bind' ? leg.a.i : 0]!
-  const p = worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key)
-  return Math.atan2(p.y - hp.y, p.x - hp.x)
-}
-
-/** Junction TRUNK alignment (replaces the symmetric 120° spread): each hub leg's
-    arrival direction `hubAngle` is pulled to its `trunkTarget`, so the two
-    most-opposite legs arrive antiparallel (one continuous trunk through the hub)
-    and the rest merge tangentially. Interior hubs only — a boundary exit leg is a
-    free end (its arrival tangent is solved, not a DOF), so it takes no trunk term. */
-function trunkAlignE(e: Engine, w: WireView): number {
-  if (w.hub === null || w.slots.length > 0) return 0
-  const hp = hubPoint(e, w)
-  let E = 0
-  for (const leg of w.legs) {
-    if (leg.b.kind !== 'hub') continue
-    const target = trunkTarget(legChordDir(e, w, leg, hp), w.phi)
-    E += (WIREP.junctionTrunk * (1 - Math.cos(leg.hubAngle - target))) / 2
-  }
-  return E
-}
-
-/** Trunk-AXIS nematic alignment: the hub axis `phi` is pulled to the nematic
-    director of its leg chord directions. This is the ONLY term `phi` appears in
-    besides `trunkAlignE`, and it is what anchors `phi` to the geometry (so it
-    tracks the layout instead of drifting); its gated travel cap gives the
-    no-flip inertia. Interior hubs only. */
-function trunkAxisE(e: Engine, w: WireView): number {
-  if (w.hub === null || w.slots.length > 0) return 0
-  const hp = hubPoint(e, w)
-  let E = 0
-  for (const leg of w.legs) {
-    if (leg.b.kind !== 'hub') continue
-    const dir = legChordDir(e, w, leg, hp)
-    E += (WIREP.trunkAxis * (1 - Math.cos(2 * (dir - w.phi)))) / 2
-  }
-  return E
-}
-
 /** The homed-body position of a leg terminal, or null (a bind has no body of
     its own; a hub POINT is wire-owned, not a body). */
 function tipStandoffE(e: Engine, w: WireView): number {
@@ -775,12 +699,13 @@ function tipStandoffE(e: Engine, w: WireView): number {
   return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y), e.scale)
 }
 
-/** Total WIRE energy of the engine (leg intrinsic + clearance, junction trunk
-    alignment, ∃-tip standoff, wire↔wire separation) — one half of `totalEnergy`;
-    `contentEnergy` is the other. A boundary leg reaches its FIXED frame slot as an
-    ordinary leg endpoint (the slot is a fixed point, resolved inside resolveLeg),
-    so there is no separate exit→slot attraction term. Uses the full memoryless
-    grid solve for every leg (a near-tie scene needs the branch flip it finds). */
+/** Total WIRE energy of the engine (leg intrinsic + clearance, ∃-tip standoff,
+    wire↔wire separation) — one half of `totalEnergy`; `contentEnergy` is the other.
+    Junction geometry carries no separate term: a branch/hub leg's tangents are free
+    per-leg DOFs already scored inside its intrinsic energy (tension + bend + arrival
+    well). A boundary leg reaches its FIXED frame slot as an ordinary leg endpoint (the
+    slot is a fixed point, resolved inside resolveLeg), so there is no separate
+    exit→slot attraction term. Uses the full memoryless grid solve for every leg. */
 export function wireEnergy(e: Engine): number {
   const sc = e.scale
   const discs: DiscRec[] = [...e.bodies.values()]
@@ -798,8 +723,6 @@ export function wireEnergy(e: Engine): number {
       E += legIntrinsicE(shape, samples, near, sc) + legFrameE(samples, e.frame)
       legSamples.push({ wid, samples })
     }
-    // junction trunk alignment + trunk-axis anchoring over this wire's hub
-    E += trunkAlignE(e, w) + trunkAxisE(e, w)
     E += tipStandoffE(e, w)
   }
   // wire↔wire separation (different wires only)
@@ -1142,6 +1065,234 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
   return acc > 0
 }
 
+// ---- junction TOPOLOGY: a discrete gated move (nearest-neighbour interchange) ----
+// A k-terminal junction is a soap-film Steiner TREE; which terminals pair through
+// which branch point is a DISCRETE degree of freedom. buildJunctionTree fixes it from
+// the mkEngine SPIRAL seed — geometry unrelated to where the nodes finally rest — so a
+// wide or asymmetric junction can freeze in a strictly-worse pairing (diagnosis §2:
+// a wide 4-way settles to 3x the optimal). This makes the topology a GATED move on the
+// SAME total energy as every continuous DOF: per internal tree edge, propose the two
+// alternative NNI re-pairings, take each candidate at its soap-film (relaxFixedTree)
+// geometry, and accept only on a strict TOTAL-energy decrease. Deterministic; a reject
+// restores the wire
+// bit-identically, so it composes with the exact fixed-point stop.
+
+type TreeEdge = readonly [number, number]
+
+/** Tree-node index of a branch-wire leg end: binds 0..nBind-1, slots nBind..nT-1,
+    branch points nT.. (the buildJunctionTree convention). */
+function endNodeIndex(end: WireLegEnd, nBind: number, nT: number): number {
+  switch (end.kind) {
+    case 'bind': return end.i
+    case 'slot': return nBind + end.i
+    case 'branch': return nT + end.i
+    default: throw new Error(`a branch wire has a ${end.kind} leg end`)
+  }
+}
+function nodeEnd(node: number, nBind: number, nT: number): WireLegEnd {
+  if (node < nBind) return { kind: 'bind', i: node }
+  if (node < nT) return { kind: 'slot', i: node - nBind }
+  return { kind: 'branch', i: node - nT }
+}
+
+/** The current tree edges of a branch wire (all its legs are tree edges), in tree
+    indices; and the world terminal positions (binds then slots) in tree order. */
+function wireEdges(w: WireView, nBind: number, nT: number): TreeEdge[] {
+  return w.legs.map((l) => [endNodeIndex(l.a, nBind, nT), endNodeIndex(l.b, nBind, nT)] as TreeEdge)
+}
+function wireTerminals(e: Engine, w: WireView): Vec2[] {
+  const pos: Vec2[] = w.binds.map((bd) => worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key))
+  for (const si of w.slots) { const s = resolvedFrameSlot(e, si); pos.push(s !== null ? s.point : { x: 0, y: 0 }) }
+  return pos
+}
+
+/** The two NNI re-pairings across an internal (branch–branch) edge — or [] unless
+    both endpoints are degree-3 (the "two alternative pairings" case; a converged
+    soap-film branch point is degree 3). Edges are UNORDERED; legsFromEdges orients. */
+function nniAlternatives(edges: readonly TreeEdge[], nT: number, ei: number): TreeEdge[][] {
+  const [bi, bj] = edges[ei]!
+  if (bi < nT || bj < nT) return []
+  const nbrs = (v: number): number[] => edges.flatMap(([a, b]) => (a === v ? [b] : b === v ? [a] : []))
+  const biOthers = nbrs(bi).filter((x) => x !== bj)
+  const bjOthers = nbrs(bj).filter((x) => x !== bi)
+  if (biOthers.length !== 2 || bjOthers.length !== 2) return []
+  const Q = biOthers[1]!, R = bjOthers[0]!, S = bjOthers[1]!
+  // the NNI swap: move one bi-neighbour (Q) to bj and one bj-neighbour to bi, giving
+  // the two pairings distinct from the current one (with bi-others {P,Q}, bj-others
+  // {R,S}: {P,R}|{Q,S} and {P,S}|{Q,R}).
+  const swap = (fromBi: number, fromBj: number): TreeEdge[] => edges.map(([a, b]) => {
+    const is = (x: number, y: number): boolean => (a === x && b === y) || (a === y && b === x)
+    if (is(bi, fromBi)) return [bj, fromBi] as TreeEdge
+    if (is(bj, fromBj)) return [bi, fromBj] as TreeEdge
+    return [a, b] as TreeEdge
+  })
+  return [swap(Q, R), swap(Q, S)]
+}
+
+/** Rebuild a wire's legs from a candidate edge set, each oriented a=smaller tree
+    index (terminals < branches — matching engine.ts treeLegs) and both end-tangents
+    seeded to the leg's chord direction (a straight leg). */
+function legsFromEdges(edges: readonly TreeEdge[], nBind: number, nT: number, positions: readonly Vec2[]): WireLeg[] {
+  return edges.map(([u0, v0]) => {
+    const [u, v] = u0 < v0 ? [u0, v0] : [v0, u0]
+    const chord = Math.atan2(positions[v]!.y - positions[u]!.y, positions[v]!.x - positions[u]!.x)
+    return { a: nodeEnd(u, nBind, nT), b: nodeEnd(v, nBind, nT), angA: chord, angB: chord, cache: mkLegCache() }
+  })
+}
+
+/** A wire's own leg energy (intrinsic + node clearance + frame containment) over a
+    chosen subset of its legs — the wire-local functional the topology refinement and
+    prune share (no cross-wire term; the topology accept judges the true total). */
+function wireLegsE(e: Engine, w: WireView, legs: readonly WireLeg[], discs: readonly DiscRec[]): number {
+  const sc = e.scale
+  let E = 0
+  for (const leg of legs) {
+    const sh = resolveLeg(e, w, leg, leg.cache)
+    const samp: Vec2[] = []
+    traceLeg(sh, samp, QN)
+    const near = discs.filter((D) => bboxNear(samp, D.body.pos, D.r + WIREP.clearMargin * sc))
+    E += legIntrinsicE(sh, samp, near, sc) + legFrameE(samp, e.frame)
+  }
+  return E
+}
+function nodeDiscs(e: Engine): DiscRec[] {
+  const sc = e.scale
+  return [...e.bodies.values()]
+    .filter((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')
+    .map((b) => ({ id: b.id, body: b, r: b.discR * sc }))
+}
+
+/** Make a freshly NNI-seeded topology candidate immediately VIABLE for a strict
+    total-energy comparison, cheaply (no descent loop). Under strict descent a flip is
+    accepted only if it lowers total E AT ONCE, but the candidate's terminal legs stay
+    unrepresentable (a diagram-wrapping blind-cone arc, enormous energy) until each
+    terminal node rotates to FACE its new branch — the very re-facing the ordinary base
+    descent would perform over many ticks after the flip. So the compound move seeds
+    that re-facing as part of the proposal: each terminal-bind node's rotation is set so
+    its wired port points straight at the branch it now feeds (one atan2, exact), making
+    the candidate's legs straight and representable. Node angle is FREE (USER law), so
+    this is a legal seed of a free DOF; the base descent fine-tunes it after acceptance,
+    and a reject restores the saved thetas AND tips. Returns the prior thetas of the
+    re-faced nodes and the prior positions of any ∃ tips it re-homed. Slot terminals are
+    fixed frame points (no node to face). Re-facing a node also swings its OTHER ports,
+    so any dangling ∃ tip on a re-faced node is re-homed to sit in front of its (now
+    rotated) port — else that tip falls into the blind cone behind its port (an enormous
+    diagram-wrapping fallback arc) and sinks an otherwise-winning flip. */
+function refaceCandidateNodes(e: Engine, w: WireView): { thetas: Map<string, number>; tips: Map<string, Vec2> } {
+  const thetas = new Map<string, number>()
+  const refaced = new Set<string>()
+  for (const leg of w.legs) {
+    if (leg.a.kind !== 'bind' || leg.b.kind !== 'branch') continue
+    const bd = w.binds[leg.a.i]!
+    const body = e.bodies.get(bd.body)!
+    if (!thetas.has(body.id)) thetas.set(body.id, body.theta)
+    const la = body.localAnchor.get(bd.key)!
+    const branch = w.branches[leg.b.i]!
+    const toward = Math.atan2(branch.y - body.pos.y, branch.x - body.pos.x)
+    body.theta = toward - Math.atan2(la.y, la.x) // port normal now points straight at the branch
+    leg.angB = toward // arrival tangent = the straight-leg direction (the moved anchor's chord; the legsFromEdges seed used the pre-reface anchor)
+    refaced.add(body.id)
+  }
+  // re-home every ∃ tip whose node was re-faced, so it follows its port out of the cone
+  const tips = new Map<string, Vec2>()
+  for (const [, ow] of e.wires) {
+    if (ow.tipBodyId === null) continue
+    const bd = ow.binds[0]
+    if (bd === undefined || !refaced.has(bd.body)) continue
+    const body = e.bodies.get(bd.body)!
+    const tip = e.bodies.get(ow.tipBodyId)!
+    if (!tips.has(tip.id)) tips.set(tip.id, { ...tip.pos })
+    const anchor = worldBindAnchor(e, body, bd.key)
+    const la = body.localAnchor.get(bd.key)!
+    const nrm = Math.atan2(la.y, la.x) + body.theta
+    const d = WIREP.standoffR * e.scale // just past the standoff rest — safely representable
+    tip.pos = { x: anchor.x + Math.cos(nrm) * d, y: anchor.y + Math.sin(nrm) * d }
+  }
+  return { thetas, tips }
+}
+
+/** The junction-topology gated move for one wire (≥ 2 branch points): try each NNI
+    re-pairing across each internal edge, in deterministic order, and accept the FIRST
+    that strictly lowers the TOTAL energy. On any reject the wire's legs + branches are
+    restored bit-identically (the ORIGINAL leg objects — hence their caches — are put
+    back), so a no-flip call leaves the state unchanged and a sweep of no accepts is a
+    proven fixed point. Content energy is invariant under a branch-topology change
+    (branch points are wire-owned, not region members), so comparing the true
+    totalEnergy is exactly comparing the wire energy — no double counting. */
+// EDGE-TRIGGER memory for the topology gate (per engine, transient — never
+// serialized, keyed weakly so it dies with the engine). A wire is evaluated for a
+// re-pairing ONLY when it FIRST reaches its wire-local continuous rest, not on every
+// resting sweep: without this, once a wire settles it would re-run the (expensive)
+// candidate refinement every single tick while distant bodies still micro-descend —
+// the large theorem scenes never reach a GLOBAL rest, so that is a per-tick blow-up.
+// A wire is `checked` after a no-flip evaluation and is RE-ARMED (removed) the moment
+// any of its own branch/tangent DOFs accepts a move again, so a geometry change always
+// gets re-evaluated; an accepted flip leaves it un-checked so the new topology is
+// re-evaluated once it re-settles.
+const topoChecked = new WeakMap<Engine, Set<string>>()
+function checkedSet(e: Engine): Set<string> {
+  let s = topoChecked.get(e)
+  if (s === undefined) { s = new Set(); topoChecked.set(e, s) }
+  return s
+}
+
+function tryTopologyMove(e: Engine, w: WireView): boolean {
+  const nBind = w.binds.length
+  const nT = nBind + w.slots.length
+  const E0 = totalEnergy(e)
+  // a numerical-noise floor: an O(legs·QN) energy sum carries ~machine-eps × its
+  // magnitude of float error, so a "decrease" below this is noise, not a real flip —
+  // requiring more than it forbids the degenerate-symmetric flip/flop that would
+  // otherwise break the fixed-point stop. NOT a physics threshold: real junction
+  // re-pairings differ by whole energy units (diagnosis: 3×).
+  const EPS = 1e-9 * (Math.abs(E0) + 1)
+  const termPos = wireTerminals(e, w)
+  const edges = wireEdges(w, nBind, nT)
+  const savedLegs = [...w.legs]
+  const savedBranches = w.branches.map((p) => ({ ...p }))
+  let seed: { thetas: Map<string, number>; tips: Map<string, Vec2> } | null = null
+  const restore = (): void => {
+    w.legs.length = 0; for (const l of savedLegs) w.legs.push(l)
+    w.branches.length = 0; for (const p of savedBranches) w.branches.push(p)
+    if (seed !== null) {
+      for (const [id, th] of seed.thetas) e.bodies.get(id)!.theta = th
+      for (const [id, p] of seed.tips) e.bodies.get(id)!.pos = p
+      seed = null
+    }
+  }
+  // ADMISSIBLE PRUNE (also what keeps a settled junction's per-sweep topology gate
+  // cheap, so `settle` still terminates): tension·L is the lower-bound part of each
+  // leg's energy, so a candidate whose straight-line Steiner tension already meets the
+  // current wire's FULL leg energy cannot beat it (its legs only cost MORE once bend +
+  // clearance are added). Skip such candidates without evaluating the full total. The
+  // final total-energy accept keeps every TAKEN flip sound regardless.
+  const discs = nodeDiscs(e)
+  const curWireE = wireLegsE(e, w, savedLegs, discs)
+  const seedLen = (alt: readonly TreeEdge[], seed: readonly Vec2[]): number => {
+    const pos = [...termPos, ...seed]
+    let L = 0
+    for (const [u, v] of alt) L += Math.hypot(pos[v]!.x - pos[u]!.x, pos[v]!.y - pos[u]!.y)
+    return L
+  }
+  for (let ei = 0; ei < edges.length; ei++) {
+    for (const alt of nniAlternatives(edges, nT, ei)) {
+      // the candidate GEOMETRY is buildJunctionTree's own tension relaxation held to the
+      // imposed adjacency (relaxFixedTree, 80 rounds) with straight (chord) leg tangents;
+      // the compound move then re-faces each terminal node toward its new branch so the
+      // candidate's legs are representable for a fair strict comparison.
+      const branchSeed = relaxFixedTree(termPos, alt, w.branches.length)
+      if (ELASTICA.tension * seedLen(alt, branchSeed) >= curWireE) continue // pruned: cannot win
+      const positions = [...termPos, ...branchSeed]
+      w.branches.length = 0; for (const p of branchSeed) w.branches.push(p)
+      w.legs.length = 0; for (const l of legsFromEdges(alt, nBind, nT, positions)) w.legs.push(l)
+      seed = refaceCandidateNodes(e, w)
+      if (totalEnergy(e) < E0 - EPS) return true // accept: strictly lower true total
+      restore()
+    }
+  }
+  return false
+}
+
 /**
  * The PLAN-23 strict-descent pass, as a WORKLIST: one thunk per DOF — node
  * translation and rotation, ∃-tip / ∀-hub / boundary-exit-hub translation, wire
@@ -1167,6 +1318,19 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
 function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => boolean)[] {
   const dofs: (() => boolean)[] = []
   const sc = e.scale
+  // Per-wire "its own continuous branch/tangent DOFs accepted a move THIS sweep" flag,
+  // set by the branch-position + end-tangent gates below and read by the topology gate
+  // (pushed last, so it runs after them). A topology move compares SETTLED junction
+  // geometries, so it is evaluated ONLY when the wire's own DOFs are wire-locally at
+  // rest this sweep — not globally: the large theorem scenes never reach a GLOBAL
+  // fixed point within budget (a perpetual sub-0.0075-wu/tick node micro-descent), so
+  // a global-rest trigger would starve topology on exactly the biggest scenes, whereas
+  // a wire's OWN branch/tangent DOFs do reach zero-accept while distant nodes still
+  // micro-drift (verified by observation — see junction-implementation.md). This is a
+  // state-based data dependency (topology follows the wire's continuous fixed point),
+  // not a tick/time schedule.
+  const wireMoved = new Map<string, boolean>()
+  const checked = checkedSet(e) // edge-trigger memory (see topoChecked)
   const discs: DiscRec[] = []
   for (const b of e.bodies.values()) if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') discs.push({ id: b.id, body: b, r: b.discR * sc })
 
@@ -1234,12 +1398,14 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     r.samples.length = 0
     traceLeg(shape, r.samples, QN)
   }
-  // The localized WIRE energy of a set of touched legs (leg intrinsic +
-  // clearance, cross-wire separation, optional junction trunk alignment + ∃-tip
-  // standoff).
+  // The localized WIRE energy of a set of touched legs (leg intrinsic + clearance,
+  // cross-wire separation, ∃-tip standoff). Junction geometry has NO trunk term —
+  // branch/hub tangents are ordinary per-leg DOFs, already in each leg's intrinsic
+  // energy (tension + bend + arrival well), so a mover that shifts a port anchor
+  // sees the full junction energy through the touched legs alone.
   // Content (sibling + scope-ring) and the boundary exit→slot terms are added by
-  // the translation gates via contentEnergy + boundaryExitE, never here.
-  const localE = (touched: readonly LegRec[], farBody: Body | null, hubWire: WireView | null, warm = false): number => {
+  // the translation gates via contentEnergy, never here.
+  const localE = (touched: readonly LegRec[], farBody: Body | null, warm = false): number => {
     let E = 0
     const touchedSet = new Set(touched.map((r) => r.gi))
     const probeSamples = new Map<number, Vec2[]>()
@@ -1262,24 +1428,6 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
       for (const r of discNearLegs.get(farBody.id)!) {
         if (touchedSet.has(r.gi)) continue
         E += legClearance(r.samples, r.shape.sol.L, r.shape.ownA, r.shape.ownB, near1, sc)
-      }
-    }
-    // TRUNK terms for every DISTINCT hub wire a touched leg belongs to. Moving a
-    // node (translate OR rotate) or a hub changes the touched hub leg's port
-    // anchor, which feeds trunkAlignE/trunkAxisE (weights 10/8) via legChordDir —
-    // so a gate that omits them can lower the leg's own tension/bend while raising
-    // the hub alignment, RAISING the true total (a strict-descent violation of the
-    // same class as warm/grid; MEASURED: a pinned-drag rotation rose total E
-    // 0.0014/tick until this was added). The dedicated phi gate optimises phi
-    // against these same terms; here we score them so the port-anchor movers see
-    // the full wire energy the global does. Deduped per wire.
-    if (hubWire !== null) { E += trunkAlignE(e, hubWire) + trunkAxisE(e, hubWire) }
-    else {
-      const seen = new Set<string>()
-      for (const r of touched) {
-        if (r.leg.b.kind !== 'hub' || seen.has(r.wid)) continue
-        seen.add(r.wid)
-        E += trunkAlignE(e, r.w) + trunkAxisE(e, r.w)
       }
     }
     // ∃-tip standoff for EVERY touched tip leg: a node with several dangling ∃
@@ -1314,8 +1462,8 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     // they pass no farBody; their only energy is the sibling term via contentFrame
     const far = b.kind === 'anchor' ? null : b
     const dirty = new Set<RegionId>([b.region])
-    const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null, true) + contentFrame() }
-    const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null) + contentFrame() }
+    const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, true) + contentFrame() }
+    const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far) + contentFrame() }
     dofs.push(() => {
       let moved = false
       if (!posPinned) moved = gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc) || moved
@@ -1329,7 +1477,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
         // bounded only at π (an angle wraps, so a larger cap is meaningless). Strict
         // E-gating still forbids any move that does not lower energy, so it settles.
         const rW = b.discR * sc // world radius: the rotation probe/mobility scale with the drawn node
-        moved = gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / rW, (4 * MU) / (rW * rW), Math.PI) || moved
+        moved = gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null), HX / rW, (4 * MU) / (rW * rW), Math.PI) || moved
       }
       for (const r of touched) refresh(r)
       return moved
@@ -1358,22 +1506,12 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     // gradient too: their legs are free-end (arrival tangent is a scanned dummy),
     // where the fixed-turn warm gradient points wrong and fights the grid accept
     // into a small limit cycle (measured: an ∃ tip cycling E ±0.4 forever).
-    const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, null, null) + contentFrame() }
+    const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, null) + contentFrame() }
     dofs.push(() => {
       const moved = gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, (light ? 0.55 : 0.28) * sc)
       for (const r of touched) refresh(r)
       return moved
     })
-  }
-  // trunk-AXIS DOF (interior hubs): the hub orientation `phi` is a stiff/slow
-  // gated angle (cap 0.06 = the no-flip inertia) over the ONLY terms it enters —
-  // trunk-axis nematic anchoring + trunk alignment. Cheap: no leg re-solve, since
-  // `phi` shapes no leg directly (it only moves each leg's arrival TARGET, which
-  // the per-leg angle DOF then chases).
-  for (const [wid, w] of e.wires) {
-    void wid
-    if (w.hub === null || w.slots.length > 0) continue
-    dofs.push(() => gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06))
   }
   // hub points: wire-owned Steiner branch points with no ∀ via-body (a
   // 'body'-kind hub is driven by its body's own DOF above, not here)
@@ -1382,17 +1520,16 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     const hub = w.hub
     const touched = legsOfWire.get(wid)!.filter((r) => r.leg.b.kind === 'hub')
     dofs.push(() => {
-      const moved = gatedPoint(hub, () => localE(touched, null, null), MU, 0.28 * sc)
+      const moved = gatedPoint(hub, () => localE(touched, null), MU, 0.28 * sc)
       for (const r of touched) refresh(r)
       return moved
     })
   }
   // junction BRANCH points: the soap-film Steiner TREE is the physics. Each branch
-  // point relaxes to the Plateau (120°) minimum of its incident legs' tension, and
-  // its trunk axis so the two most-opposite legs flow through and the rest merge
-  // tangentially (the tributary look, emergent from the physics — no separate
-  // renderer). The edges ARE elastica legs, so they bend around nodes via the leg
-  // clearance already in localE.
+  // POSITION relaxes to the minimum of its incident legs' energy — with the leg
+  // tangents free (below) this is the Plateau meeting the leg tension/bend want,
+  // emergent from the physics, no separate renderer and no trunk clamp. The edges
+  // ARE elastica legs, so they bend around nodes via the leg clearance in localE.
   for (const [wid, w] of e.wires) {
     if (w.branches.length === 0) continue
     const recs = legsOfWire.get(wid)!
@@ -1400,29 +1537,56 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
       const touched = recs.filter((r) => (r.leg.a.kind === 'branch' && r.leg.a.i === bi) || (r.leg.b.kind === 'branch' && r.leg.b.i === bi))
       const holder = { get pos(): Vec2 { return w.branches[bi]! }, set pos(p: Vec2) { w.branches[bi] = p } }
       dofs.push(() => {
-        const moved = gatedPoint(holder, () => localE(touched, null, null), MU, 0.28 * sc)
+        const moved = gatedPoint(holder, () => localE(touched, null), MU, 0.28 * sc)
         for (const r of touched) refresh(r)
-        return moved
-      })
-      dofs.push(() => {
-        const moved = gatedStep(() => w.branchPhi[bi]!, (v) => { w.branchPhi[bi] = v }, () => localE(touched, null, null), HX / 8, MU / 64, 0.06)
-        for (const r of touched) refresh(r)
+        if (moved) { wireMoved.set(wid, true); checked.delete(wid) }
         return moved
       })
     }
   }
-  // per-leg arrival angles (stiff/slow: MU/64, cap 0.06)
-  for (const [wid, w] of e.wires) {
-    if (w.hub === null) continue
+  // per-leg free END-TANGENT DOFs (stiff/slow: MU/64, cap 0.06 — a wire SHAPE DOF,
+  // slow for the no-snap smoothness law). Every leg end incident to a hub or a
+  // Steiner branch is an ORDINARY descended angle over the leg's own energy: `angB`
+  // (arrival at b, welled) when b is a hub/branch, `angA` (leaving at a, exact θ(0))
+  // when a is a branch. A bind/slot end fixes its tangent by construction, so only
+  // free ends get a gate.
+  for (const [wid] of e.wires) {
     for (const rec of legsOfWire.get(wid)!) {
-      if (rec.leg.b.kind !== 'hub') continue
       const leg = rec.leg
-      dofs.push(() => {
-        const moved = gatedStep(() => leg.hubAngle, (v) => { leg.hubAngle = v }, () => localE([rec], null, w), HX / 8, MU / 64, 0.06)
-        refresh(rec)
-        return moved
-      })
+      if (leg.b.kind === 'hub' || leg.b.kind === 'branch') {
+        dofs.push(() => {
+          const moved = gatedStep(() => leg.angB, (v) => { leg.angB = v }, () => localE([rec], null), HX / 8, MU / 64, 0.06)
+          refresh(rec)
+          if (moved) { wireMoved.set(wid, true); checked.delete(wid) }
+          return moved
+        })
+      }
+      if (leg.a.kind === 'branch') {
+        dofs.push(() => {
+          const moved = gatedStep(() => leg.angA, (v) => { leg.angA = v }, () => localE([rec], null), HX / 8, MU / 64, 0.06)
+          refresh(rec)
+          if (moved) { wireMoved.set(wid, true); checked.delete(wid) }
+          return moved
+        })
+      }
     }
+  }
+  // junction TOPOLOGY as a discrete gated DOF (nearest-neighbour interchange): one per
+  // wire with >= 2 branch points, gated on that wire being wire-locally at rest this
+  // sweep (see `wireMoved`). See `tryTopologyMove` — it proposes each NNI re-pairing at
+  // its refined soap-film geometry, and accepts only on a strict TOTAL-energy decrease
+  // (the same gate law as every continuous DOF). On reject it restores the wire
+  // bit-identically, so a no-flip topology gate is a proven no-op and it composes with
+  // the exact fixed-point stop.
+  for (const [wid, w] of e.wires) {
+    if (w.branches.length < 2) continue
+    dofs.push(() => {
+      if (wireMoved.get(wid) === true) return false // wire still settling this sweep — defer
+      if (checked.has(wid)) return false // already evaluated at this rest — wait for a geometry change
+      if (tryTopologyMove(e, w)) return true // flipped: leave un-checked so the new topology is re-evaluated once it re-settles
+      checked.add(wid) // no beneficial flip at this geometry — don't re-evaluate until the wire moves again
+      return false
+    })
   }
   return dofs
 }
@@ -1433,13 +1597,20 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     smoothness comes from small frequent steps on ALL DOF every frame, not from
     slicing one region of the worklist per frame, which read as hard clicking).
 
-    Returns whether ANY DOF changed state. Because the mover is deterministic,
-    strictly value-gated (a move is committed only at a strictly lower energy), and
-    the worklist is a pure function of current engine state (rebuilt each sweep from
+    Returns whether ANY DOF changed state. Because every mover is deterministic and
+    strictly value-gated (committed only at a strictly lower TOTAL energy), and the
+    worklist is a pure function of current engine state (rebuilt each sweep from
     positions — no tick index, no stored per-DOF scale, no randomness), a sweep that
     changes nothing leaves the state bit-identical; the next sweep rebuilds the same
     worklist over the same state and again changes nothing. So a single all-`false`
-    sweep is a PROVEN fixed point — the layout is settled forever. */
+    sweep is a PROVEN fixed point — the layout is settled forever. The discrete
+    junction-topology DOF preserves this: its candidates are a deterministic function
+    of the current state, it commits a re-pairing only on a strict total-E decrease,
+    and on reject it restores the wire bit-identically (returning `false`), so a
+    no-flip topology gate is as much a proven no-op as any continuous gate. Since a
+    flip strictly lowers a total energy bounded below and there are finitely many
+    topologies, only finitely many flips can occur, so the sweep still terminates at a
+    fixed point. */
 function descentSweep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   let moved = false
   for (const dof of descentDofs(e, pinned)) moved = dof() || moved
