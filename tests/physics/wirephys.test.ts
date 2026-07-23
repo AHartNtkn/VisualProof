@@ -6,7 +6,7 @@ const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
-import { settle, settleStep, wireEnergy, WIREP, trunkTarget, recomputeRegions } from '../../src/view/relax'
+import { settle, settleStep, wireEnergy, WIREP, totalEnergy, recomputeRegions } from '../../src/view/relax'
 import { thetaRange, RANGE_B, QN, ELASTICA, mkLegCache } from '../../src/view/elastica'
 import { computeLegs, existentialStubs } from '../../src/view/wires'
 
@@ -142,7 +142,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     // snapshot the exact rest state
     const rest = new Map([...e.bodies].map(([id, b]) => [id, { pos: { ...b.pos }, theta: b.theta }]))
     const hubs = [...e.wires].map(([wid, w]) => [wid, w.hub !== null && w.hub.kind === 'point' ? { ...w.hub.pos } : null] as const)
-    const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => l.hubAngle)] as const)
+    const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => [l.angA, l.angB] as const)] as const)
     // fresh solve of every leg at rest (a fresh cache forces a real re-solve)
     const restSol = [...e.wires].flatMap(([, w]) => w.legs.map((leg) => {
       const s = resolveLeg(e, w, leg, mkLegCache())
@@ -159,7 +159,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     // restore the EXACT rest state
     for (const [id, b] of e.bodies) { const r = rest.get(id)!; b.pos = { ...r.pos }; b.theta = r.theta }
     for (const [wid, h] of hubs) { const w = e.wires.get(wid)!; if (h !== null && w.hub !== null && w.hub.kind === 'point') w.hub.pos = { ...h } }
-    for (const [wid, as] of angles) { const w = e.wires.get(wid)!; w.legs.forEach((l, i) => { l.hubAngle = as[i]! }) }
+    for (const [wid, as] of angles) { const w = e.wires.get(wid)!; w.legs.forEach((l, i) => { l.angA = as[i]![0]; l.angB = as[i]![1] }) }
     // re-solve through each leg's OWN (orbit-polluted) cache: a sound memoryless
     // memo must re-solve on the input mismatch and land bit-identical to the
     // fresh rest solve — history must leave NO trace
@@ -333,59 +333,39 @@ describe('wire physics — equilibria', () => {
     expect(Math.abs(gapAfter - gapBefore), `rest length must restore (${gapAfter.toFixed(2)} vs ${gapBefore.toFixed(2)})`).toBeLessThanOrEqual(gapBefore * 0.2)
   })
 
-  it('the trunk-tangent rule (round-8-D): two most-opposite legs flow through as one trunk, side legs merge tangentially', () => {
-    // The USER LAW ruled 2026-07-06: a k-way junction must NOT read as a
-    // 120°-symmetric star ("everything just going to a single point"). Each hub
-    // leg's arrival direction is pulled to its trunkTarget along the hub's trunk
-    // axis phi. Directly on the pure rule (no settling): two collinear legs
-    // (chord dirs 0 and π) on axis phi=0 must arrive ANTIPARALLEL — one
-    // continuous trunk straight through the hub.
-    const deg = (r: number) => (r * 180) / Math.PI
-    const between = (a: number, b: number): number => { let d = Math.abs(deg(a) - deg(b)) % 360; if (d > 180) d = 360 - d; return d }
-    const tTrunkA = trunkTarget(0, 0)
-    const tTrunkB = trunkTarget(Math.PI, 0)
-    expect(between(tTrunkA, tTrunkB), 'two on-axis legs arrive antiparallel (a continuous trunk)').toBeGreaterThanOrEqual(179)
-    // a leg perpendicular to the axis takes NO pull (weight |cos|=0) — its
-    // outgoing tangent (target+π) stays exactly radial, so a side branch crossing
-    // the axis can never jump between ends (the merge is continuous)
-    const outPerp = trunkTarget(Math.PI / 2, 0) + Math.PI
-    expect(between(Math.atan2(Math.sin(outPerp), Math.cos(outPerp)), Math.PI / 2), 'a perpendicular leg is not pulled (continuity at the flip)').toBeLessThan(1)
-    // an OFF-axis side leg (60° off) is pulled TOWARD the axis but not all the way
-    // (partial weight) — the tributary merge. Its outgoing tangent (target+π) sits
-    // between its radial chord and the axis.
-    const dirSide = (60 * Math.PI) / 180
-    const outSide = trunkTarget(dirSide, 0) + Math.PI // outgoing tangent from hub toward port
-    expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg merges tangentially (pulled toward the 0 axis, not left radial)').toBeLessThan(60)
-    expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg is not pulled all the way to the axis').toBeGreaterThan(0)
-  })
-
-  it('a settled branch junction pulls two legs past the 120° star toward a trunk', () => {
-    // Wired into the physics (not just the pure rule): the symmetric threeWay has
-    // no geometrically-preferred trunk, yet the branch-tree physics still pulls
-    // its two nearest-axis legs BEYOND the 120° a Plateau star would rest at —
-    // the most-opposite arrival pair exceeds 120°, so the junction no longer
-    // reads as a symmetric point-star. (Asymmetric junctions form a far stronger
-    // trunk; see the pure-rule test and the app screenshots.)
+  it('a settled branch junction sits at a strict energy minimum over its branch point + tangents', () => {
+    // WAS: "a settled branch junction pulls two legs past the 120° star toward a
+    // trunk" (asserted the most-opposite pair > 128°). That codified the trunk-
+    // tributary AESTHETIC via the removed `trunkTarget` clamp — a look the user has
+    // since said was NEVER law ("I never made a trunk tributary model law"). The
+    // SCENE is preserved as a fixture; the assertion is rewritten to the energy LAW
+    // the freed-tangent junction actually obeys: the settled branch point and its
+    // free leg tangents are a strict local minimum of the total energy (no probe
+    // lowers it). The specific meeting ANGLE is deferred to the user's visual ruling
+    // (see .superpowers/sdd/junction-gallery), so no angle is asserted here.
     const e = sharedSettled(threeWay)
     const w = [...e.wires.values()].find((x) => x.branches.length > 0)!
     expect(w.branches, 'the three-way interior junction is a branch tree').toHaveLength(1)
-    const dirs: number[] = []
-    for (const leg of w.legs) {
-      const branchAtB = leg.b.kind === 'branch' && leg.b.i === 0
-      const branchAtA = leg.a.kind === 'branch' && leg.a.i === 0
-      if (!branchAtA && !branchAtB) continue
-      const s = resolveLeg(e, w, leg)
-      const pts: { x: number; y: number }[] = []
-      traceLeg(s, pts, QN)
-      const a = branchAtB ? pts[pts.length - 1]! : pts[0]!
-      const prev = branchAtB ? pts[pts.length - 2]! : pts[1]!
-      dirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
+    const E0 = totalEnergy(e)
+    const NOISE = 1e-4 * (Math.abs(E0) + 1)
+    const sc = e.scale
+    const b0 = { ...w.branches[0]! }
+    let minPos = 0
+    for (let ix = -3; ix <= 3; ix++) for (let iy = -3; iy <= 3; iy++) {
+      if (ix === 0 && iy === 0) continue
+      w.branches[0] = { x: b0.x + ix * sc, y: b0.y + iy * sc }
+      minPos = Math.min(minPos, totalEnergy(e) - E0)
     }
-    expect(dirs).toHaveLength(3)
-    const between = (a: number, b: number): number => { let d = Math.abs((a - b) * 180 / Math.PI) % 360; if (d > 180) d = 360 - d; return d }
-    let mostOpp = 0
-    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) mostOpp = Math.max(mostOpp, between(dirs[i]!, dirs[j]!))
-    expect(mostOpp, `most-opposite pair ${mostOpp.toFixed(0)}° must exceed the 120° star`).toBeGreaterThan(128)
+    w.branches[0] = b0
+    expect(minPos, `a branch-position perturbation lowered E by ${(-minPos).toFixed(4)} — not a strict minimum`).toBeGreaterThanOrEqual(-NOISE)
+    let minTan = 0
+    for (const leg of w.legs) {
+      if (leg.b.kind !== 'branch') continue
+      const a0 = leg.angB
+      for (const d of [-0.3, -0.15, -0.05, 0.05, 0.15, 0.3]) { leg.angB = a0 + d; minTan = Math.min(minTan, totalEnergy(e) - E0) }
+      leg.angB = a0
+    }
+    expect(minTan, `a leg-tangent perturbation lowered E by ${(-minTan).toFixed(4)} — not a strict minimum`).toBeGreaterThanOrEqual(-NOISE)
   })
 })
 

@@ -4,7 +4,7 @@ import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { mkEngine, resolveLeg, traceLeg, type WireView, type WireLeg, type WireLegEnd } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy } from '../../src/view/relax'
-import { QN, mkLegCache } from '../../src/view/elastica'
+import { QN, mkLegCache, thetaRange } from '../../src/view/elastica'
 
 /**
  * JUNCTION EQUILIBRATION + RESTRUCTURING REPRODUCTIONS (both FAIL now, by design).
@@ -71,66 +71,114 @@ function fourWay(): { d: Diagram; b: WireId[] } {
 
 /** Force a 4-terminal wire into pairing (i,j)|(k,l): two branch points B0,B1 with
     edges i->B0, j->B0, k->B1, l->B1, B0->B1 (terminals are binds 0..3). Seeds each
-    branch at the midpoint of its pair. This is the hand-built alternative topology
-    the frozen system can never reach on its own. */
+    branch at the midpoint of its pair and every leg tangent to its chord direction
+    (a straight leg). This is the hand-built alternative topology the frozen system
+    could never reach on its own — the ENERGY yardstick the restructuring move must
+    match. */
 function setPairing(w: WireView, i: number, j: number, k: number, l: number, c: readonly { x: number; y: number }[]): void {
   const bind = (n: number): WireLegEnd => ({ kind: 'bind', i: n })
   const br = (n: number): WireLegEnd => ({ kind: 'branch', i: n })
-  const mk = (a: WireLegEnd, b: WireLegEnd): WireLeg => ({ a, b, hubAngle: 0, cache: mkLegCache() })
+  const B0 = { x: (c[i]!.x + c[j]!.x) / 2, y: (c[i]!.y + c[j]!.y) / 2 }
+  const B1 = { x: (c[k]!.x + c[l]!.x) / 2, y: (c[k]!.y + c[l]!.y) / 2 }
+  const chord = (from: { x: number; y: number }, to: { x: number; y: number }): number => Math.atan2(to.y - from.y, to.x - from.x)
+  const mk = (a: WireLegEnd, b: WireLegEnd, from: { x: number; y: number }, to: { x: number; y: number }): WireLeg =>
+    ({ a, b, angA: chord(from, to), angB: chord(from, to), cache: mkLegCache() })
+  w.branches.length = 0; w.branches.push(B0, B1)
   w.legs.length = 0
-  for (const lg of [mk(bind(i), br(0)), mk(bind(j), br(0)), mk(bind(k), br(1)), mk(bind(l), br(1)), mk(br(0), br(1))]) w.legs.push(lg)
-  w.branches.length = 0; w.branches.push({ x: (c[i]!.x + c[j]!.x) / 2, y: (c[i]!.y + c[j]!.y) / 2 }, { x: (c[k]!.x + c[l]!.x) / 2, y: (c[k]!.y + c[l]!.y) / 2 })
-  w.branchPhi.length = 0; w.branchPhi.push(0, 0)
+  for (const lg of [
+    mk(bind(i), br(0), c[i]!, B0), mk(bind(j), br(0), c[j]!, B0),
+    mk(bind(k), br(1), c[k]!, B1), mk(bind(l), br(1), c[l]!, B1),
+    mk(br(0), br(1), B0, B1),
+  ]) w.legs.push(lg)
 }
 
-/** Settle a fixed-point layout with a hard tick cap (the repo settle idiom). */
-const settled4way = (): ReturnType<typeof mkEngine> => {
-  const { d, b } = fourWay()
-  const e = mkEngine(d, b)
-  settle(e, 8000)
-  return e
+/** The direction of a branch leg's drawn curve AT the branch point — what the eye
+    reads as the meeting angle (used only for the smoothness/representability law,
+    never to assert a specific angle, which the user has not ruled). */
+function branchLegDirs(e: ReturnType<typeof mkEngine>, w: WireView, bi: number): number[] {
+  const dirs: number[] = []
+  for (const leg of w.legs) {
+    const atB = leg.b.kind === 'branch' && leg.b.i === bi
+    const atA = leg.a.kind === 'branch' && leg.a.i === bi
+    if (!atA && !atB) continue
+    const s = resolveLeg(e, w, leg)
+    const pts: { x: number; y: number }[] = []
+    traceLeg(s, pts, QN)
+    const a = atB ? pts[pts.length - 1]! : pts[0]!, prev = atB ? pts[pts.length - 2]! : pts[1]!
+    dirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
+  }
+  return dirs
 }
 
-describe('junction equilibration — a symmetric triple junction must meet at 120° (soap-film Plateau)', () => {
-  it('all three pairwise leg meeting angles are within tolerance of 2π/3', () => {
+/**
+ * The energy-law replacements for the DELETED 120°-asserting test. The user has NOT
+ * ruled that a symmetric junction must meet at 120° (the corpus explicitly leaves the
+ * junction LOOK to a visual ruling — see the gallery). So we assert only what IS law:
+ *  (i)  the settled junction is a STRICT LOCAL MINIMUM of the total energy over its
+ *       branch position AND its free leg tangents — the physics, not an aesthetic;
+ *  (ii) every leg at the junction is REPRESENTABLE (tangent range < π), i.e. kinks are
+ *       unrepresentable AT the branch, the founding smoothness law.
+ */
+describe('junction equilibration — a settled symmetric triple is a strict energy minimum with smooth legs', () => {
+  it('no branch-position or tangent perturbation lowers the total energy (strict local minimum)', () => {
     const { d, b } = symTriple()
     const e = mkEngine(d, b)
     settle(e, 8000) // fixed-point settle, hard cap (repo idiom; converges in <300 ticks)
     const w = [...e.wires.values()].find((x) => x.branches.length > 0)!
     expect(w.branches, 'the symmetric triple is a one-branch Steiner tree').toHaveLength(1)
+    const E0 = totalEnergy(e)
+    // float-noise floor on a strict-minimum probe: the descent rests where no gated
+    // step improves at resolution HX=0.02, so a genuine minimum shows deltaE ≥ 0 up to
+    // that residual. A trunk-clamped saddle (the old defect) would show a probe well
+    // below E0; this discriminates cleanly.
+    const NOISE = 1e-4 * (Math.abs(E0) + 1)
+    const sc = e.scale
 
-    // outgoing tangent direction of each branch leg AT the branch point (the drawn
-    // curve direction leaving the junction — what the eye reads as the meeting angle)
-    const tdirs: number[] = []
+    // (i-a) branch POSITION grid probe (the diagnosis pattern): every neighbour on a
+    // ±3·scale grid must be no lower than the settled point.
+    const b0 = { ...w.branches[0]! }
+    let minPos = 0
+    for (let ix = -3; ix <= 3; ix++) for (let iy = -3; iy <= 3; iy++) {
+      if (ix === 0 && iy === 0) continue
+      w.branches[0] = { x: b0.x + ix * sc, y: b0.y + iy * sc }
+      minPos = Math.min(minPos, totalEnergy(e) - E0)
+    }
+    w.branches[0] = b0
+    expect(minPos, `a branch-position perturbation lowered E by ${(-minPos).toFixed(4)} — not a local min`).toBeGreaterThanOrEqual(-NOISE)
+
+    // (i-b) TANGENT probe: perturbing any branch-incident leg's arrival tangent (angB)
+    // must not lower the energy either.
+    let minTan = 0
     for (const leg of w.legs) {
-      const atB = leg.b.kind === 'branch', atA = leg.a.kind === 'branch'
-      if (!atA && !atB) continue
-      const s = resolveLeg(e, w, leg)
-      const pts: { x: number; y: number }[] = []
-      traceLeg(s, pts, QN)
-      const a = atB ? pts[pts.length - 1]! : pts[0]!, prev = atB ? pts[pts.length - 2]! : pts[1]!
-      tdirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
+      if (leg.b.kind !== 'branch') continue
+      const a0 = leg.angB
+      for (const d2 of [-0.3, -0.15, -0.05, 0.05, 0.15, 0.3]) {
+        leg.angB = a0 + d2
+        minTan = Math.min(minTan, totalEnergy(e) - E0)
+      }
+      leg.angB = a0
     }
-    expect(tdirs).toHaveLength(3)
+    expect(minTan, `a leg-tangent perturbation lowered E by ${(-minTan).toFixed(4)} — not a local min`).toBeGreaterThanOrEqual(-NOISE)
+  })
 
-    // PRINCIPLED TOLERANCE (not a magic number): the fixture is symmetric, so a
-    // soap-film / Plateau energy model rests with every meeting angle EXACTLY 2π/3;
-    // the only residual is the tangent-MEASUREMENT resolution of the QN-segment trace.
-    // A leg's total turning is bounded by RANGE_B = π (loops unrepresentable), so its
-    // QN=24 polyline turns at most π/QN ≈ 7.5° per segment and the final-segment chord
-    // direction lags the true endpoint tangent by at most half that. A pairwise angle
-    // sums the resolution of two legs, giving ≤ π/QN ≈ 7.5°. TOL = 2·(π/QN) = π/12 rad
-    // (15°) allows that measurement floor plus the HX=0.02 finite-difference descent
-    // resolution — while the trunk-tributary geometry the current model imposes deviates
-    // by ~41° (measured 99.4°/99.4°/161.1°), failing this by nearly 3×.
-    const TOL = (2 * Math.PI) / QN // = π/12 rad = 15°
-    const target = (2 * Math.PI) / 3
-    const P: [number, number][] = [[0, 1], [0, 2], [1, 2]]
-    for (const [i, j] of P) {
-      const ang = (between(tdirs[i]!, tdirs[j]!) * Math.PI) / 180
-      expect(Math.abs(ang - target), `pair (${i},${j}) meets at ${((ang * 180) / Math.PI).toFixed(1)}°, not 120°`)
-        .toBeLessThan(TOL)
+  it('every leg at the junction is representable (tangent range < π): kinks are unrepresentable at the branch', () => {
+    const { d, b } = symTriple()
+    const e = mkEngine(d, b)
+    settle(e, 8000)
+    const w = [...e.wires.values()].find((x) => x.branches.length > 0)!
+    for (const leg of w.legs) {
+      const s = resolveLeg(e, w, leg)
+      const rng = Math.abs(thetaRange(s.sol.c1, s.sol.c2))
+      expect(rng, `a junction leg has tangent range ${(rng / Math.PI).toFixed(2)}π ≥ π (a kink/wrap)`).toBeLessThan(Math.PI)
     }
+    // and the three meeting directions are genuinely distinct (a real Y-junction, not
+    // all three legs collapsed onto one line — the "everything to a single point" the
+    // user rejected). No specific angle is asserted.
+    const dirs = branchLegDirs(e, w, 0)
+    expect(dirs).toHaveLength(3)
+    let minSep = 360
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) minSep = Math.min(minSep, between(dirs[i]!, dirs[j]!))
+    expect(minSep, `two legs meet at only ${minSep.toFixed(0)}° — the junction collapsed toward a single line`).toBeGreaterThan(20)
   })
 })
 
