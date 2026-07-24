@@ -17,7 +17,7 @@ import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, routeObstacles, routeBounds, wireTerminalPoints } from '../view/engine'
 import { mkFreeSpace, route } from '../view/route/freespace'
-import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
+import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, enableLayoutOptimization } from '../view/relax'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
@@ -120,6 +120,7 @@ type Pending =
   | { readonly kind: 'foldChoose'; readonly sel: SubgraphSelection }
 
 export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
+  enableLayoutOptimization(true)
   const { canvas, chrome } = opts
   const themeCycle = opts.themes ?? THEMES
   if (themeCycle.length === 0) throw new Error('mountShell requires at least one theme')

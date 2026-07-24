@@ -4,6 +4,7 @@ import type { Body, Engine, WireView, StoredFrame } from './engine'
 import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
 import { mkFreeSpace } from './route/freespace'
 import { advanceNetwork } from './route/network'
+import { LayoutOptimizer, layoutScore } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
 export const PHYSICS_REV = 'routed-network@2026-07-24'
@@ -984,9 +985,71 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     if (terms.length < 2) continue
     routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale }) || routed
   }
+  // ── WHOLE-LAYOUT GLOBAL OPTIMIZATION (USER ruling 2026-07-24): a budgeted
+  // asynchronous searcher explores perturbed layouts on a scratch engine and
+  // stores only the best found; the visible layout APPROACHES the best known
+  // by bounded per-frame steps (topology adoption may snap — sanctioned).
+  // Enabled by the app shell; the search never touches the visible state
+  // directly and never moves pinned bodies. ──
+  let pulled = false
+  let searching = false
+  if (LAYOUT_OPT !== null && !inOptimizerTick) {
+    inOptimizerTick = true
+    try {
+      LAYOUT_OPT.sync(e, pinned)
+      LAYOUT_OPT.tick(pinned, OPT_BUDGET_MS)
+      searching = !LAYOUT_OPT.exhausted
+      const best = LAYOUT_OPT.best()
+      if (best !== null) {
+        const live = layoutScore(e)
+        if (best.score < live - 1e-6 * (Math.abs(live) + 1)) {
+          const bound = WIREP.travelCap * e.scale
+          for (const [id, b] of e.bodies) {
+            if (pinned !== null && pinned.has(id)) continue
+            const t = best.poses.get(id)
+            if (t === undefined) continue
+            const dx = t.pos.x - b.pos.x, dy = t.pos.y - b.pos.y
+            const d = Math.hypot(dx, dy)
+            if (d > 1e-9) {
+              const st = Math.min(d, bound)
+              b.pos = { x: b.pos.x + (dx / d) * st, y: b.pos.y + (dy / d) * st }
+              pulled = true
+            }
+            const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
+            const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
+            if (Math.abs(dth) > 1e-9) {
+              b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
+              pulled = true
+            }
+          }
+          for (const [wid, w] of e.wires) {
+            const n = best.nets.get(wid)
+            if (n === undefined) continue
+            const same = JSON.stringify(w.net.edges) === JSON.stringify(n.edges)
+            if (!same) {
+              w.net.edges = n.edges.map(([u, v]) => [u, v])
+              w.net.junctions = n.junctions.map((pt) => ({ ...pt }))
+              pulled = true
+            }
+          }
+        }
+      }
+    } finally {
+      inOptimizerTick = false
+    }
+  }
   recomputeRegions(e)
   e.tick++
-  return moved || routed
+  return moved || routed || pulled || searching
+}
+
+/** The app-level layout optimizer (null = disabled; tests and raw settles run
+    the local solvers alone). The shell enables it. */
+let LAYOUT_OPT: LayoutOptimizer | null = null
+let inOptimizerTick = false
+const OPT_BUDGET_MS = 4
+export function enableLayoutOptimization(on: boolean): void {
+  LAYOUT_OPT = on ? new LayoutOptimizer() : null
 }
 
 /** Run a tick budget of strict descent, bracketed by the DISCRETE construction-
