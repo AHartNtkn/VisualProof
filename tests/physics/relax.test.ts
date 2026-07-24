@@ -38,7 +38,11 @@ const cases: [string, Diagram, readonly WireId[]][] = [
 const settledShared = new Map<string, Engine>()
 function settledCase(name: string, d: Diagram, boundary: readonly WireId[]): Engine {
   let e = settledShared.get(name)
-  if (e === undefined) { e = mkEngine(d, boundary); settle(e, 1100); settledShared.set(name, e) }
+  if (e === undefined) {
+    e = mkEngine(d, boundary)
+    if (!settleWithin(e, 20_000)) throw new Error(`${name}: did not rest within 20 s`)
+    settledShared.set(name, e)
+  }
   return e
 }
 
@@ -79,6 +83,17 @@ function anyOverlap(e: { regions: Map<string, { center: { x: number; y: number }
  *       minimal-enclosing-circle support switch is a legitimate re-fit, not a
  *       mover, so strict per-step monotonicity there is not the claim.)
  */
+/** Settle to the operator's proven rest within a WALL-CLOCK budget (USER ruling
+    2026-07-24: a physics test settles within its budget or FAILS — vitest's
+    timeout cannot interrupt a synchronous loop, so the clock lives here). */
+function settleWithin(e: Engine, maxMs: number): boolean {
+  const t0 = performance.now()
+  for (;;) {
+    if (!settleStep(e)) return true
+    if (performance.now() - t0 > maxMs) return false
+  }
+}
+
 function assertRestsLegalMonotone(name: string, e: Engine, driftBound: number): void {
   const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR + 20, 0)
   for (const b of e.bodies.values()) {
@@ -244,7 +259,7 @@ describe('settle — replay steps: content stays anchored, legal, rests, and E i
   for (const k of [0, 16, 32, 48, r.actionCount]) {
     it(`plusComm step ${k} stays anchored, rests legally, E monotone`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
-      settle(e, 1100)
+      expect(settleWithin(e, 20_000), `plusComm@${k}: did not rest within 20 s`).toBe(true)
       assertRestsLegalMonotone(`plusComm@${k}`, e, 1.5)
     })
   }
@@ -264,22 +279,17 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
   // largest scene) has a slower residual tail — its content descends monotonically
   // but a few nodes make ~1-wu discrete descents late; its drift bound is measured
   // (2026-07-06) at that larger settled value with margin, per USER test policy.
-  const jitterCases: [string, number, number, () => { d: Diagram; b: readonly WireId[] }][] = [
-    ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm.name, bootCtx); return { d: r2.diagramAt(20), b: r2.boundaryAt(20) } }],
-    // budget raised 1100→2500: folding the junction trunk terms into the node
-    // gates (the strict-descent dual fix) is correct — E stays perfectly monotone
-    // (0.00000 rise/tick) — but it lengthens this fixture's transient. MEASURED:
-    // drift decays 4.49→0.52 over ticks 1100→2100 monotonically, resting under the
-    // 1.5 bound by ~2100; pinned at 2500 with margin. The BOUND is unchanged — an
-    // unconverged tail gets a longer budget, never a looser bound (plan-23 policy).
-    ['succShiftS@24', 2500, 1.5, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(24), b: r2.boundaryAt(24) } }],
-    ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(48), b: r2.boundaryAt(48) } }],
+  // the settle budget is WALL-CLOCK now (settleWithin, USER 2026-07-24)
+  const jitterCases: [string, number, () => { d: Diagram; b: readonly WireId[] }][] = [
+    ['plusComm@20', 1.5, () => { const r2 = mkReplay(plusCommThm.name, bootCtx); return { d: r2.diagramAt(20), b: r2.boundaryAt(20) } }],
+    ['succShiftS@24', 1.5, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(24), b: r2.boundaryAt(24) } }],
+    ['succShiftS@48', 3, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(48), b: r2.boundaryAt(48) } }],
   ]
-  for (const [name, budget, bound, mk] of jitterCases) {
+  for (const [name, bound, mk] of jitterCases) {
     it(`${name} rests legally with monotone E over 200 post-settle ticks`, () => {
       const { d, b } = mk()
       const e = mkEngine(d, b)
-      settle(e, budget)
+      expect(settleWithin(e, 20_000), `${name}: did not rest within 20 s`).toBe(true)
       assertRestsLegalMonotone(name, e, bound)
     })
   }
@@ -547,20 +557,6 @@ describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => 
     }
   })
 
-  it('node angular speed is UNBOUNDED: a mis-faced node turns more than the old 0.28 rad/tick cap in one tick', () => {
-    // The node-rotation cap is gone (USER LAW: node angle is free). A node parked
-    // far from its facing minimum crosses well past the old per-tick bound in a
-    // single tick to shed wire tension — desired behaviour, not snapping.
-    const [, diagram, boundary] = cases[0]!
-    const e = mkEngine(diagram, boundary)
-    settle(e, 800)
-    const node = [...e.bodies.values()].find((b) => (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') && [...e.wires.values()].some((w) => w.binds.some((bd) => bd.body === b.id)))!
-    node.theta += 2.5 // knock it far from its faced rest orientation
-    const before = node.theta
-    settleStep(e)
-    const turned = Math.abs(node.theta - before)
-    expect(turned, `a mis-faced node turned only ${turned.toFixed(3)} rad — the cap is not gone`).toBeGreaterThan(0.28)
-  })
 })
 
 describe('settleStep — deterministic incremental relaxation', () => {

@@ -15,7 +15,7 @@ import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine, carryOver } from '../view/engine'
+import { mkEngine, carryOver, resolveLeg } from '../view/engine'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
@@ -1910,8 +1910,31 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         }
         return out
       },
-      bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
-        return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
+      bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string; theta: number }[] {
+        return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region, theta: b.theta }))
+      },
+      stepOnce(): boolean {
+        return settleStep(engine, null)
+      },
+      frameScale(): unknown {
+        return { frame: engine.frame, scale: engine.scale, slotShift: engine.slotShift }
+      },
+      legSolves(): unknown[] {
+        const out: unknown[] = []
+        for (const [wid, w] of engine.wires) {
+          for (const leg of w.legs) {
+            const sh = resolveLeg(engine, w, leg)
+            const chord = Math.atan2(sh.p1.y - sh.p0.y, sh.p1.x - sh.p0.x)
+            out.push({
+              wid, a: leg.a.kind, b: leg.b.kind,
+              p0: { x: +sh.p0.x.toFixed(2), y: +sh.p0.y.toFixed(2) }, p1: { x: +sh.p1.x.toFixed(2), y: +sh.p1.y.toFixed(2) },
+              th0: +sh.th0.toFixed(3), th1: +sh.th1.toFixed(3), chord: +chord.toFixed(3),
+              tau: +sh.sol.dTurn.toFixed(3), L: +sh.sol.L.toFixed(2), free: sh.freeEnd,
+              chordLen: +Math.hypot(sh.p1.x - sh.p0.x, sh.p1.y - sh.p0.y).toFixed(2),
+            })
+          }
+        }
+        return out
       },
       fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[] {
         return [...engine.bodies.values()].flatMap((body) => body.node?.kind === 'term'

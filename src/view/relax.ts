@@ -976,6 +976,7 @@ const HX = 0.02
     rest (deterministic operator + unchanged state ⇒ every later frame rejects
     identically). */
 const DELTA_HALVINGS = 8
+const WIRE_SPEED = 20
 
 type TreeEdge = readonly [number, number]
 
@@ -1321,19 +1322,19 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
       }
       return best
     }
-    coords.push({ get: () => param.root.x, set: (v) => { param.root.x = v; param.reconstruct() }, m: 1, localE: wireLocalE })
-    coords.push({ get: () => param.root.y, set: (v) => { param.root.y = v; param.reconstruct() }, m: 1, localE: wireLocalE })
+    coords.push({ get: () => param.root.x, set: (v) => { param.root.x = v; param.reconstruct() }, m: 1 / WIRE_SPEED, localE: wireLocalE })
+    coords.push({ get: () => param.root.y, set: (v) => { param.root.y = v; param.reconstruct() }, m: 1 / WIRE_SPEED, localE: wireLocalE })
     for (const ed of param.edges) {
-      coords.push({ get: () => ed.l, set: (v) => { ed.l = v; param.reconstruct() }, m: 1, localE: wireLocalE })
+      coords.push({ get: () => ed.l, set: (v) => { ed.l = v; param.reconstruct() }, m: 1 / WIRE_SPEED, localE: wireLocalE })
       // the edge ANGLE is quotiented at the face (Fact 0.3): below the drawing
       // resolution it moves nothing and is omitted, exactly the quotient.
       if (Math.abs(ed.l) > 0.01) {
-        coords.push({ get: () => ed.th, set: (v) => { ed.th = v; param.reconstruct() }, m: Math.abs(ed.l), localE: wireLocalE })
+        coords.push({ get: () => ed.th, set: (v) => { ed.th = v; param.reconstruct() }, m: Math.abs(ed.l) / WIRE_SPEED, localE: wireLocalE })
       }
     }
     for (const rec of wLegs) {
       const leg = rec.leg
-      const mTan = Math.max(rec.shape.sol.L, 1e-6)
+      const mTan = Math.max(rec.shape.sol.L, 1e-6) / WIRE_SPEED
       if (leg.a.kind === 'branch') coords.push({ get: () => leg.angA, set: (v) => { leg.angA = v }, m: mTan, localE: () => localE([rec], null) })
       if (leg.b.kind === 'branch') coords.push({ get: () => leg.angB, set: (v) => { leg.angB = v }, m: mTan, localE: () => localE([rec], null) })
     }
@@ -1373,8 +1374,13 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   }
   recomputeRegions(e)
   let gnorm2 = 0
-  for (let i = 0; i < coords.length; i++) { const s = g[i]! / coords[i]!.m; gnorm2 += s * s }
-  const gnorm = Math.sqrt(gnorm2)
+  let gsup = 0
+  for (let i = 0; i < coords.length; i++) {
+    const s = g[i]! / coords[i]!.m
+    gnorm2 += s * s
+    const drawn = Math.abs(g[i]!) / (coords[i]!.m * coords[i]!.m) * coords[i]!.m // |u_i|·m_i pre-normalization
+    if (drawn > gsup) gsup = drawn
+  }
   // ── snapshot for restore-on-reject ──
   const bodySnap = new Map<string, { pos: Vec2; theta: number }>()
   for (const b of e.bodies.values()) bodySnap.set(b.id, { pos: { ...b.pos }, theta: b.theta })
@@ -1401,48 +1407,26 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   const E0 = totalEnergy(e)
   const EPS = 1e-9 * (Math.abs(E0) + 1)
   const deltaMax = WIREP.travelCap * sc
-  for (let k = 0; k <= DELTA_HALVINGS; k++) {
-    const delta = deltaMax / (1 << k)
-    // gate-resolution floor: below this Δ even the full linear descent −Δ·‖g‖
-    // is smaller than the strict gate's EPS, so no trial can measurably pass —
-    // the ladder's own resolution, not a tuning.
-    if (delta * gnorm < EPS) break
-    // one simultaneous trial: steepest descent in the M-metric, ‖trial‖_M = delta
-    for (let i = 0; i < coords.length; i++) {
-      const c = coords[i]!
-      c.set(c.get() - delta * (g[i]! / (c.m * c.m)) / gnorm)
-    }
-    // a trial that drove an internal edge through its face is expressed in the
-    // steepest incident chart (tangent-cone descent) — part of the same trial
-    for (const param of params) {
-      const crossed = param.edges.filter((ed) => ed.l < 0)
-      if (crossed.length > 0) resolveCharts(e, param.w, param.nBind, param.nT, crossed)
-    }
-    // legality projection, then the one accept test on the true total E
-    for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
-    recomputeRegions(e)
-    const E1 = totalEnergy(e)
-    if (E1 < E0 - EPS) return true
-    restore()
-    recomputeRegions(e)
-  }
-  // ── FACE-CROSSING TRIALS: for every internal edge short enough that passing
-  // through its face fits the drawn-displacement budget (ℓ ≤ Δmax), propose
-  // the φ-image directly: re-expand at the SAME amplitude in each NNI chart
-  // along its canonical split (each branch toward the centroid of its non-edge
-  // neighbours — φ-doc §4). These are ordinary bounded members of the proposal
-  // set under the same strict gate — the passage a chart-local coordinate
-  // cannot express (the tangent cone at the face fans into the incident
-  // charts; a state resting in its own chart's flat bottom beside the face
-  // needs exactly this proposal and no other mechanism). Deterministic order;
-  // measured repro: a collapsed 4-star in the wrong pairing at ℓ=0.04 with the
-  // orthogonal chart strictly lower (−0.023 at the same amplitude). ──
+
+  // ── CHART RE-PAIRING TRIALS (run FIRST, every frame): for every internal
+  // edge, propose each NNI re-pairing at the CURRENT amplitude along its
+  // canonical split (each branch toward the centroid of its non-edge
+  // neighbours — φ-doc §4), under the same strict gate as every proposal. At
+  // the face this is the tangent-cone passage no chart-local coordinate can
+  // express; away from the face it is the ONLY exit from a wrong-chart trap —
+  // a crossed pairing's energy can DECREASE with edge length (measured: wireE
+  // 42k at sep 15 vs 75k at sep 0.02; the face is up a 30k mountain), so
+  // descent never reaches ℓ=0, and a post-ladder stage is never reached
+  // either (a wrong chart keeps accepting micro-improvements forever). The
+  // re-pairing is a discrete proposal at the unchanged midpoint — not an
+  // optimum-seek — and the strict gate means it fires exactly when the
+  // current tree is strictly worse than its NNI neighbour (USER 2026-07-24:
+  // restructuring may snap; continuity is a consequence, never a mechanism).
   for (const param of params) {
     const w2 = param.w
     const nBind = param.nBind, nT = param.nT
     for (const ed of param.edges) {
       const amp = Math.abs(ed.l)
-      if (amp > deltaMax) continue
       const edges0 = wireEdges(w2, nBind, nT)
       const ei = edges0.findIndex(([a2, b2]) =>
         (a2 === nT + ed.child && b2 === nT + ed.parent) || (a2 === nT + ed.parent && b2 === nT + ed.child))
@@ -1464,7 +1448,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
         const d = Math.hypot(dx, dy)
         return d < 1e-9 ? { x: 1, y: 0 } : { x: dx / d, y: dy / d }
       }
-      for (const alt of nniAlternatives(edges0, nT, ei)) {
+      for (const alt of [edges0, ...nniAlternatives(edges0, nT, ei)]) {
         const ui = splitDir(alt, bi, bj), uj = splitDir(alt, bj, bi)
         const half = Math.max(amp, 0.01) / 2
         w2.branches[ed.parent] = { x: m0.x + ui.x * half, y: m0.y + ui.y * half }
@@ -1478,6 +1462,35 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
         recomputeRegions(e)
       }
     }
+  }
+
+  for (let k = 0; gsup > 0 && k <= DELTA_HALVINGS; k++) {
+    const delta = deltaMax / (1 << k)
+    // gate-resolution floor: below this Δ even the full linear descent
+    // −Δ·(‖g‖²/gsup) is smaller than the strict gate's EPS, so no trial can
+    // measurably pass — the ladder's own resolution, not a tuning.
+    if (delta * (gnorm2 / gsup) < EPS) break
+    // one simultaneous trial: the M-metric steepest-descent DIRECTION, scaled so
+    // the LARGEST drawn coordinate displacement is delta (the design's visual
+    // budget — "no point of the picture moves more than Δ per frame"). The
+    // former L2 scaling divided one budget across the whole scene.
+    for (let i = 0; i < coords.length; i++) {
+      const c = coords[i]!
+      c.set(c.get() - delta * (g[i]! / (c.m * c.m)) / gsup)
+    }
+    // a trial that drove an internal edge through its face is expressed in the
+    // steepest incident chart (tangent-cone descent) — part of the same trial
+    for (const param of params) {
+      const crossed = param.edges.filter((ed) => ed.l < 0)
+      if (crossed.length > 0) resolveCharts(e, param.w, param.nBind, param.nT, crossed)
+    }
+    // legality projection, then the one accept test on the true total E
+    for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
+    recomputeRegions(e)
+    const E1 = totalEnergy(e)
+    if (E1 < E0 - EPS) return true
+    restore()
+    recomputeRegions(e)
   }
   // ── COORDINATE FALLBACK: the single joint direction can be blocked by a
   // crease arising from coordinate INTERACTIONS while individual coordinates
