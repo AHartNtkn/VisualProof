@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { escapePoint, routeObstacles, routeBounds, wireTerminalPoints } from './engine'
+import { escapePoint, routeObstacles, routeBounds, slotEscape, wireTerminalPoints } from './engine'
 import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
 
 /**
@@ -82,9 +82,17 @@ export function computeLegs(e: Engine): LegGeom[] {
     for (const [u, v] of w.net.edges) {
       const rt = route(fs, pos(u), pos(v))
       let pts: Vec2[] = [...rt.pts]
-      // prepend/append the fixed port stubs (rim anchor → escape point)
-      if (u < w.binds.length) pts = [escapePoint(e, w.binds[u]!).anchor, ...pts]
-      if (v < w.binds.length) pts = [...pts, escapePoint(e, w.binds[v]!).anchor]
+      // prepend/append the fixed stubs: port rim anchors and frame-slot points
+      // (perpendicular exits/arrivals BY CONSTRUCTION)
+      const nB = w.binds.length
+      const stubEnd = (vv: number): Vec2 | null => {
+        if (vv < nB) return escapePoint(e, w.binds[vv]!).anchor
+        if (vv < nB + w.slots.length) return slotEscape(e, w.slots[vv - nB]!)?.point ?? null
+        return null
+      }
+      const su = stubEnd(u), sv = stubEnd(v)
+      if (su !== null) pts = [su, ...pts]
+      if (sv !== null) pts = [...pts, sv]
       out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: filletPolyline(pts, r) })
     }
   }

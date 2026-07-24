@@ -546,13 +546,26 @@ export function escapePoint(e: Engine, bd: WireBind): { anchor: Vec2; escape: Ve
   return { anchor, escape: { x: anchor.x + nx * Math.max(t, 0), y: anchor.y + ny * Math.max(t, 0) } }
 }
 
+/** A boundary slot's fixed INWARD stub: the drawn stroke meets the frame
+    perpendicular by construction (the network attaches at the stub's inner
+    end; the renderer appends the frame point). */
+export function slotEscape(e: Engine, position: number): { point: Vec2; inner: Vec2 } | null {
+  const s = resolvedFrameSlot(e, position)
+  if (s === null) return null
+  const t = 2 * ROUTE_CLEAR * e.scale
+  return {
+    point: s.point,
+    inner: { x: s.point.x - Math.cos(s.normal) * t, y: s.point.y - Math.sin(s.normal) * t },
+  }
+}
+
 /** The wire's terminal POINTS in network vertex order (binds, slots, end).
     Pure read of the live geometry; the router treats these as fixed. */
 export function wireTerminalPoints(e: Engine, w: WireView): Vec2[] {
   const pts: Vec2[] = w.binds.map((bd) => escapePoint(e, bd).escape)
   for (const position of w.slots) {
-    const s = resolvedFrameSlot(e, position)
-    if (s !== null) pts.push(s.point)
+    const s = slotEscape(e, position)
+    if (s !== null) pts.push(s.inner)
     else {
       const c: Vec2 = pts.length === 0
         ? { x: 0, y: 0 }

@@ -588,9 +588,59 @@ function tipStandoffE(e: Engine, w: WireView): number {
   return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y), e.scale)
 }
 
+/** Inter-wire separation over straight segments (the plan-22 term and its
+    measured constants, on the network's coarse segments): co-running pairs
+    pay heavily, transverse crossings pay a little — the objective can now SEE
+    crossings and pointless co-routing, which pure per-wire shortest length
+    cannot (two wires crossing or not score identically under length alone). */
+export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[], sc: number): number {
+  const R = WIREP.sepR * sc
+  const N = 8
+  let E = 0
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const A = segs[i]!, B = segs[j]!
+      if (A.wid === B.wid) continue
+      // coarse bbox cull
+      if (Math.min(A.a.x, A.b.x) - R > Math.max(B.a.x, B.b.x) || Math.min(B.a.x, B.b.x) - R > Math.max(A.a.x, A.b.x)) continue
+      if (Math.min(A.a.y, A.b.y) - R > Math.max(B.a.y, B.b.y) || Math.min(B.a.y, B.b.y) - R > Math.max(A.a.y, A.b.y)) continue
+      for (let ki = 0; ki <= N; ki++) {
+        const ta = ki / N
+        const pa = { x: A.a.x + (A.b.x - A.a.x) * ta, y: A.a.y + (A.b.y - A.a.y) * ta }
+        for (let kj = 0; kj <= N; kj++) {
+          const tb = kj / N
+          const pb = { x: B.a.x + (B.b.x - B.a.x) * tb, y: B.a.y + (B.b.y - B.a.y) * tb }
+          const d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
+          if (d < R) E += (WIREP.sepSlope * (R - d) * (R - d)) / R / (N * N)
+        }
+      }
+    }
+  }
+  return E
+}
+
+/** Every wire's coarse straight segments (terminal/junction chords). */
+export function coarseSegments(e: Engine): { wid: string; a: Vec2; b: Vec2 }[] {
+  const out: { wid: string; a: Vec2; b: Vec2 }[] = []
+  for (const [wid, w] of e.wires) {
+    const terms = wireTerminalPoints(e, w)
+    const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
+    for (const [u, v] of w.net.edges) out.push({ wid, a: pos(u), b: pos(v) })
+  }
+  return out
+}
+
+/** The ∃-tip standoff total (exported for the global layout score). */
+export function standoffEnergy(e: Engine): number {
+  let E = 0
+  for (const [, w] of e.wires) E += tipStandoffE(e, w)
+  return E
+}
+
 /** COARSE wire pressure: Euclidean network length over live terminal points
-    and current junction positions, plus the ∃-tip standoffs. This is the only
-    wire term the node solver's one energy contains. */
+    and current junction positions, inter-wire separation, and the ∃-tip
+    standoffs. This is the only wire term the node solver's one energy
+    contains. */
 export function wireEnergy(e: Engine): number {
   let E = 0
   for (const [, w] of e.wires) {
@@ -602,7 +652,7 @@ export function wireEnergy(e: Engine): number {
     }
     E += tipStandoffE(e, w)
   }
-  return E
+  return E + segSeparationE(coarseSegments(e), e.scale)
 }
 
 /** Scope containment (soft): a finite-depth ring barrier keeping a wire-owned
@@ -950,48 +1000,19 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   return false
 }
 
-/** One relaxation tick — STRICT TOTAL-ENERGY DESCENT (plan 23), the USER's
-    ruling made structural: the system changes only when the change lowers the
-    one total energy. Every DOF is a strictly E-gated candidate step; there is no
-    velocity integration, no independent overlap mover, no zero-mode quotient, and
-    (plan 24) no global-rotation operator — port-to-slot facing happens through
-    each node's OWN rotation DOF responding to its OWN boundary leg's tension
-    (local, wire-mediated), never a rigid whole-scene spin about a computed
-    centroid (action at a distance, banned). Total E is monotone non-increasing
-    across the whole tick. Deterministic: no randomness, seed from mkEngine's
-    spiral. `pinned` bodies are held by the caller and skipped by every gate; the
-    layout relaxes around them. The app frame loop calls this once per frame (a
-    full sweep every frame — plan 24 motion policy). Returns whether the sweep
-    changed any DOF; `false` means the layout reached a proven fixed point (see
-    descentSweep) and further ticks are no-ops. */
 export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): boolean {
   recomputeRegions(e)
-  // establish the fixed frame once, on first display (a raw settleStep loop with
-  // no construction projection); the app/settle paths establish it from the LEGAL
-  // seed beforehand (seedProject / settle's leading projection), so this is a
-  // no-op there. Never re-established during settling — the frame is constant.
   if (e.frame === null) establishFrame(e)
-  const moved = operatorStep(e, pinned)
-  // ── THE WIRE ROUTER (separate solver, USER ruling 2026-07-24): observes the
-  // bodies as boundary geometry — node discs inflated as HARD obstacles — and
-  // owns each wire's network: fixed-topology target solve, bounded
-  // presentation continuation, contraction of zero edges, derivative splits.
-  // It never moves a node. Substeps set wire responsiveness (~20× the node
-  // step cadence) without touching the per-substep movement law. ──
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
-  let routed = false
-  for (const [, w] of e.wires) {
-    const terms = wireTerminalPoints(e, w)
-    if (terms.length < 2) continue
-    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale }) || routed
-  }
+
   // ── WHOLE-LAYOUT GLOBAL OPTIMIZATION (USER ruling 2026-07-24): a budgeted
   // asynchronous searcher explores perturbed layouts on a scratch engine and
-  // stores only the best found; the visible layout APPROACHES the best known
-  // by bounded per-frame steps (topology adoption may snap — sanctioned).
-  // Enabled by the app shell; the search never touches the visible state
-  // directly and never moves pinned bodies. ──
-  let pulled = false
+  // stores only the best found. When a strictly better layout is known, the
+  // frame's motion is the bounded APPROACH toward it — the local solvers stand
+  // down (running both fights forever: the pull crosses terrain local descent
+  // undoes, measured as a permanent tug-of-war). Local descent + routing own
+  // the frame when the layout is at/near the best; a live layout that descends
+  // below the stored best BECOMES the best (monotone store). ──
+  let approaching = false
   let searching = false
   if (LAYOUT_OPT !== null && !inOptimizerTick) {
     inOptimizerTick = true
@@ -1002,7 +1023,11 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       const best = LAYOUT_OPT.best()
       if (best !== null) {
         const live = layoutScore(e)
-        if (best.score < live - 1e-6 * (Math.abs(live) + 1)) {
+        const EPS = 1e-6 * (Math.abs(live) + 1)
+        if (live < best.score - EPS) {
+          LAYOUT_OPT.adoptLive(e, live)
+        } else if (best.score < live - EPS) {
+          approaching = true
           const bound = WIREP.travelCap * e.scale
           for (const [id, b] of e.bodies) {
             if (pinned !== null && pinned.has(id)) continue
@@ -1013,23 +1038,17 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
             if (d > 1e-9) {
               const st = Math.min(d, bound)
               b.pos = { x: b.pos.x + (dx / d) * st, y: b.pos.y + (dy / d) * st }
-              pulled = true
             }
             const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
             const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
-            if (Math.abs(dth) > 1e-9) {
-              b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
-              pulled = true
-            }
+            if (Math.abs(dth) > 1e-9) b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
           }
           for (const [wid, w] of e.wires) {
             const n = best.nets.get(wid)
             if (n === undefined) continue
-            const same = JSON.stringify(w.net.edges) === JSON.stringify(n.edges)
-            if (!same) {
+            if (JSON.stringify(w.net.edges) !== JSON.stringify(n.edges)) {
               w.net.edges = n.edges.map(([u, v]) => [u, v])
               w.net.junctions = n.junctions.map((pt) => ({ ...pt }))
-              pulled = true
             }
           }
         }
@@ -1038,9 +1057,21 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       inOptimizerTick = false
     }
   }
+
+  let moved = false
+  let routed = false
+  if (!approaching) {
+    moved = operatorStep(e, pinned)
+    const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+    for (const [, w] of e.wires) {
+      const terms = wireTerminalPoints(e, w)
+      if (terms.length < 2) continue
+      routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale }) || routed
+    }
+  }
   recomputeRegions(e)
   e.tick++
-  return moved || routed || pulled || searching
+  return moved || routed || approaching || searching
 }
 
 /** The app-level layout optimizer (null = disabled; tests and raw settles run

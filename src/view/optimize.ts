@@ -1,8 +1,8 @@
 import type { Engine } from './engine'
 import { mkEngine, routeObstacles, routeBounds, wireTerminalPoints } from './engine'
-import { settleStep, contentEnergy, wireEnergy, recomputeRegions, resolveOverlaps } from './relax'
+import { settleStep, contentEnergy, standoffEnergy, segSeparationE, recomputeRegions, resolveOverlaps } from './relax'
 import { mkFreeSpace } from './route/freespace'
-import { netLength, type WireNet } from './route/network'
+import { netLength, netPaths, type WireNet } from './route/network'
 import type { Vec2 } from './vec'
 
 /**
@@ -31,21 +31,17 @@ export function layoutScore(e: Engine): number {
     if (terms.length < 2) continue
     L += netLength(w.net, terms, fs)
   }
-  // wireEnergy = coarse Euclidean + standoffs; replace its Euclidean part with
-  // the routed length by adding the routed/removing nothing — the coarse term
-  // is a lower bound of the routed one, so score = routed + (standoffs) +
-  // content. Standoffs are inside wireEnergy; subtract the coarse length by
-  // computing it directly:
-  let coarse = 0
-  for (const [, w] of e.wires) {
+  // routed inter-wire separation: crossings and co-routes are part of the
+  // GLOBAL score, so the searcher prefers uncrossed layouts of equal length
+  const routedSegs: { wid: string; a: Vec2; b: Vec2 }[] = []
+  for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
-    const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
-    for (const [u, v] of w.net.edges) {
-      const a = pos(u), b = pos(v)
-      coarse += Math.hypot(a.x - b.x, a.y - b.y)
+    if (terms.length < 2) continue
+    for (const { pts } of netPaths(w.net, terms, fs)) {
+      for (let i = 0; i + 1 < pts.length; i++) routedSegs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
   }
-  return L + (wireEnergy(e) - coarse) + contentEnergy(e)
+  return L + standoffEnergy(e) + segSeparationE(routedSegs, e.scale) + contentEnergy(e)
 }
 
 export type LayoutBest = {
@@ -123,6 +119,14 @@ export class LayoutOptimizer {
   }
 
   best(): LayoutBest | null { return this.#best }
+
+  /** The live layout descended below the stored best: it IS the new best. */
+  adoptLive(e: Engine, score: number): void {
+    this.#best = snapshot(e, score)
+    this.#cursor = 0
+    this.#trialStep = -1
+    this.#exhausted = false
+  }
   get exhausted(): boolean { return this.#exhausted }
 
   /** One budgeted slice of asynchronous search. Deterministic; returns whether
@@ -134,22 +138,37 @@ export class LayoutOptimizer {
     const t0 = performance.now()
     let improved = false
     const bodies = [...scratch.bodies.keys()]
-    const trials = bodies.length * DIRS * RADII.length
+    const singles = bodies.length * DIRS * RADII.length
+    const pairs: [number, number][] = []
+    for (let i = 0; i < bodies.length; i++) for (let j = i + 1; j < bodies.length; j++) pairs.push([i, j])
+    const trials = singles + pairs.length
     while (performance.now() - t0 < budgetMs) {
       if (this.#trialStep === -1) {
         if (this.#cursor >= trials) { this.#exhausted = true; break }
-        // set up the next trial: best + one enumerated perturbation
-        const bi = Math.floor(this.#cursor / (DIRS * RADII.length))
-        const rest = this.#cursor % (DIRS * RADII.length)
-        const di = Math.floor(rest / RADII.length)
-        const ri = rest % RADII.length
-        const id = bodies[bi]!
         applySnapshot(scratch, best)
-        const b = scratch.bodies.get(id)!
-        if (pinned !== null && pinned.has(id)) { this.#cursor++; continue }
-        const r = RADII[ri]! * (b.discR + 2) * scratch.scale
-        const a = (2 * Math.PI * di) / DIRS
-        b.pos = { x: b.pos.x + r * Math.cos(a), y: b.pos.y + r * Math.sin(a) }
+        if (this.#cursor < singles) {
+          // single-body hop: best + one enumerated displacement
+          const bi = Math.floor(this.#cursor / (DIRS * RADII.length))
+          const rest = this.#cursor % (DIRS * RADII.length)
+          const di = Math.floor(rest / RADII.length)
+          const ri = rest % RADII.length
+          const id = bodies[bi]!
+          const b = scratch.bodies.get(id)!
+          if (pinned !== null && pinned.has(id)) { this.#cursor++; continue }
+          const r = RADII[ri]! * (b.discR + 2) * scratch.scale
+          const a = (2 * Math.PI * di) / DIRS
+          b.pos = { x: b.pos.x + r * Math.cos(a), y: b.pos.y + r * Math.sin(a) }
+        } else {
+          // PAIR SWAP: exchange two bodies' poses (the coordinated move that
+          // uncrosses wires — unreachable by any single-body hop or local step)
+          const [i, j] = pairs[this.#cursor - singles]!
+          const idA = bodies[i]!, idB = bodies[j]!
+          if (pinned !== null && (pinned.has(idA) || pinned.has(idB))) { this.#cursor++; continue }
+          const A = scratch.bodies.get(idA)!, B = scratch.bodies.get(idB)!
+          const t = { pos: A.pos, theta: A.theta }
+          A.pos = B.pos; A.theta = B.theta
+          B.pos = t.pos; B.theta = t.theta
+        }
         recomputeRegions(scratch)
         resolveOverlaps(scratch)
         this.#trialStep = 0
