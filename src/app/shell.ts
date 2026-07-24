@@ -1880,6 +1880,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       spawnHeadWireHover(): string | null {
         return spawnHoverHeadWire
       },
+      wirePhysics(): { binds: string[]; branches: { x: number; y: number }[]; legs: { a: string; b: string }[] }[] {
+        const out: { binds: string[]; branches: { x: number; y: number }[]; legs: { a: string; b: string }[] }[] = []
+        for (const [, w] of engine.wires) {
+          out.push({
+            binds: w.binds.map((bd) => `${bd.body}:${bd.key}`),
+            branches: w.branches.map((p) => ({ x: p.x, y: p.y })),
+            legs: w.legs.map((l) => ({ a: `${l.a.kind}${'index' in l.a ? ':' + String((l.a as { index: number }).index) : ''}`, b: `${l.b.kind}${'index' in l.b ? ':' + String((l.b as { index: number }).index) : ''}` })),
+          })
+        }
+        return out
+      },
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
       },
