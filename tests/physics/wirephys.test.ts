@@ -141,7 +141,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     const e = settled(threeWay, 3000)
     // snapshot the exact rest state
     const rest = new Map([...e.bodies].map(([id, b]) => [id, { pos: { ...b.pos }, theta: b.theta }]))
-    const hubs = [...e.wires].map(([wid, w]) => [wid, w.hub !== null && w.hub.kind === 'point' ? { ...w.hub.pos } : null] as const)
+    const branches = [...e.wires].map(([wid, w]) => [wid, w.branches.map((p) => ({ ...p }))] as const)
     const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => [l.angA, l.angB] as const)] as const)
     // fresh solve of every leg at rest (a fresh cache forces a real re-solve)
     const restSol = [...e.wires].flatMap(([, w]) => w.legs.map((leg) => {
@@ -158,7 +158,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     }
     // restore the EXACT rest state
     for (const [id, b] of e.bodies) { const r = rest.get(id)!; b.pos = { ...r.pos }; b.theta = r.theta }
-    for (const [wid, h] of hubs) { const w = e.wires.get(wid)!; if (h !== null && w.hub !== null && w.hub.kind === 'point') w.hub.pos = { ...h } }
+    for (const [wid, bs] of branches) { const w = e.wires.get(wid)!; w.branches.forEach((_, i) => { w.branches[i] = { ...bs[i]! } }) }
     for (const [wid, as] of angles) { const w = e.wires.get(wid)!; w.legs.forEach((l, i) => { l.angA = as[i]![0]; l.angB = as[i]![1] }) }
     // re-solve through each leg's OWN (orbit-polluted) cache: a sound memoryless
     // memo must re-solve on the input mismatch and land bit-identical to the
@@ -283,7 +283,7 @@ describe('wire physics — equilibria', () => {
     const { wid } = dangling()
     const e = sharedSettled(dangling)
     const w = e.wires.get(wid)!
-    const tip = e.bodies.get(w.tipBodyId!)!
+    const tip = e.bodies.get(w.endBodyId!)!
     const bd = w.binds[0]!
     const anchor = worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key)
     const dist = Math.hypot(tip.pos.x - anchor.x, tip.pos.y - anchor.y)
@@ -304,7 +304,7 @@ describe('wire physics — equilibria', () => {
     const e = mkEngine(d, b)
     settle(e, 2600)
     const body = e.bodies.get(node)!
-    const tip = e.bodies.get(e.wires.get(wid)!.tipBodyId!)!
+    const tip = e.bodies.get(e.wires.get(wid)!.endBodyId!)!
     const gapBefore = Math.hypot(tip.pos.x - body.pos.x, tip.pos.y - body.pos.y)
     const tipStart = { ...tip.pos }
     // move the node a MODEST, in-regime amount and PIN it there — the real drag
@@ -377,7 +377,7 @@ describe('wire physics — bodyless boundary attachment (plan 24, the reset ruli
     const e = sharedSettled(boundaryOne)
     const w = e.wires.get(wid)!
     expect(w.slots, 'the boundary wire owns its fixed frame incidence').toEqual([0])
-    expect(w.hub, 'a 1-port boundary wire has NO hub').toBeNull()
+    expect(w.endBodyId, 'a 1-port boundary wire has NO end body').toBeNull()
     // NO exit body (the reset's "there's an edge node for some reason") — e:<wid>
     // exit hubs are abolished; the boundary attaches to a fixed slot, not a body
     expect([...e.bodies.keys()].some((id) => id.startsWith('e:')), 'no exit body exists').toBe(false)
@@ -405,7 +405,7 @@ describe('wire physics — bodyless boundary attachment (plan 24, the reset ruli
       [{ x: 18, y: 5 }, { x: 20, y: -3 }, { x: 16, y: 9 }],
       [{ x: -5, y: -18 }, { x: 3, y: -20 }, { x: -1, y: -16 }],
     ]
-    const nodeIds = [...e.bodies.keys()].filter((id) => { const k = e.bodies.get(id)!.kind; return k !== 'junction' && k !== 'anchor' })
+    const nodeIds = [...e.bodies.keys()].filter((id) => { const k = e.bodies.get(id)!.kind; return k !== 'end' && k !== 'anchor' })
     for (const layout of layouts) {
       nodeIds.forEach((id, k) => { if (layout[k]) e.bodies.get(id)!.pos = layout[k]! })
       recomputeRegions(e)

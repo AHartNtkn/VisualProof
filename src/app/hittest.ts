@@ -82,7 +82,7 @@ function boundaryOrDotCandidates(e: Engine, point: Vec2): WireCandidate[] {
   // ∃ dots first: they are drawn ON TOP of node discs and may rest within
   // a disc's margin ring (paint/hit parity — the topmost target wins)
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'junction') continue
+    if (b.kind !== 'end') continue
     const wid = b.id.startsWith('j:') || b.id.startsWith('x:') ? b.id.slice(2) : null
     if (wid !== null && e.d.wires[wid] !== undefined) out.push({ id: wid, distance: length(sub(point, b.pos)) })
   }
@@ -153,7 +153,7 @@ export function hitTest(e: Engine, point: Vec2, viewport: HitViewport): Hit | nu
   const topWire = nearestWire(boundaryOrDotCandidates(e, point), radius)
   if (topWire !== null) return topWire
   for (const b of e.bodies.values()) {
-    if (b.kind === 'junction' || b.kind === 'anchor') continue
+    if (b.kind === 'end' || b.kind === 'anchor') continue
     // the drawn disc is scaled by e.scale (paint) — the hit radius must match, or
     // a content-scaled node is clicked at a different size than it is drawn
     if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'node', id: b.id }
@@ -203,7 +203,7 @@ export function dragTarget(e: Engine, point: Vec2, viewport: HitViewport): DragT
   // ∃ dots first (paint/hit parity, same as hitTest): a dot resting inside
   // a disc's margin ring must stay independently grabbable (loose-ends law)
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'junction') continue
+    if (b.kind !== 'end') continue
     if (length(sub(point, b.pos)) <= radius) return { kind: 'body', id: b.id }
   }
   for (const b of e.bodies.values()) {

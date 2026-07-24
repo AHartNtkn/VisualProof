@@ -2,36 +2,26 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, TERM } from '../../src/kernel/diagram/sig'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
-import { mkEngine, resolveLeg, traceLeg, type WireView, type WireLeg, type WireLegEnd } from '../../src/view/engine'
-import { settle, settleStep, totalEnergy } from '../../src/view/relax'
-import { QN, mkLegCache, thetaRange } from '../../src/view/elastica'
+import { mkEngine, resolveLeg, traceLeg, type WireView } from '../../src/view/engine'
+import { settle, totalEnergy } from '../../src/view/relax'
+import { QN, thetaRange } from '../../src/view/elastica'
 
 /**
- * JUNCTION EQUILIBRATION + RESTRUCTURING REPRODUCTIONS (both FAIL now, by design).
+ * JUNCTION EQUILIBRATION (law test).
  *
- * These reproduce two user-reported defects in the FROZEN energy-minimization
- * junction paradigm. Both are known-failing: the repo carries no active `it.fails`
- * convention (the only mentions in relax.test.ts are historical comments noting the
- * old `it.fails` were REMOVED once the drift they marked was fixed), so these are
- * committed plainly failing. They must PASS once the junction energy model is
- * corrected to (a) equilibrate a symmetric triple junction to the soap-film 120°
- * and (b) permit discrete branch-tree restructuring toward the lower-energy topology.
+ * A settled symmetric triple junction must be a STRICT LOCAL MINIMUM of the total
+ * energy over its branch position and its free leg tangents, with every leg
+ * REPRESENTABLE (tangent range < π — kinks unrepresentable at the branch). This is
+ * the physics law, not an aesthetic: no specific meeting angle is asserted (the
+ * junction LOOK is left to the gallery ruling).
  *
- * MECHANICAL ROOT (diagnosed, see .superpowers/sdd/junction-diagnosis.md):
- *  - Branch-leg tangents AT a branch point are hard-slaved to the trunk-tributary
- *    `trunkTarget(chordDir, branchPhi)` rule (engine.ts resolveLeg, th0 @ leg.a.kind
- *    === 'branch' and th1 @ leg.b.kind === 'branch'), with a stiff WELL_S=25 arrival
- *    well. The branch POSITION + branchPhi DOFs descend leg tension/bend UNDER those
- *    clamped tangents, so the settled minimum is a straight-trunk-plus-tangential-
- *    merge geometry, never the Plateau 120° star. (Measured: the branch point sits at
- *    a STRICT energy minimum — a 13x13 grid probe finds no lower neighbour — yet the
- *    meeting angles are ~99/99/161, so this is an ENERGY-MODEL defect, not a descent
- *    failure.)
- *  - The junction TOPOLOGY (which terminals pair through which branch) is chosen ONCE
- *    by buildJunctionTree on the mkEngine spiral seed and then FROZEN: descentDofs
- *    exposes only continuous branch-position/angle DOFs, and the sole post-construction
- *    branch rewrite (reseedUnrepresentableBranches) copies branch POSITIONS only, never
- *    leg adjacency. No mover can swap partners, so a suboptimal seed topology is permanent.
+ * Junction RESTRUCTURING is NOT tested here: whether static descent from a pinned
+ * seed REACHES a lower-energy topology is a reachability-of-faces claim, which the
+ * accepted semantics disavow (2026-07-23: "resting in a local minimum is legitimate;
+ * restructuring is something the user's manipulation drives through continuous
+ * passages, not something the system seeks") and which is Task 3's measurement. The
+ * face-crossing MECHANISM (φ carries T across ℓ_e = 0 under the strict gate) is
+ * exercised in junction-crossing.test.ts.
  */
 
 const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
@@ -51,45 +41,6 @@ function symTriple(): { d: Diagram; b: WireId[] } {
     { node: r3, port: { kind: 'arg', index: 0 } },
   ])
   return { d: b.build(), b: [] }
-}
-
-/** Four refs sharing one 4-way line: a Steiner tree of two branch points. */
-function fourWay(): { d: Diagram; b: WireId[] } {
-  const b = new DiagramBuilder()
-  const r1 = b.ref(b.root, 'a', rel(3))
-  const r2 = b.ref(b.root, 'bb', rel(3))
-  const r3 = b.ref(b.root, 'cc', rel(3))
-  const r4 = b.ref(b.root, 'dd', rel(3))
-  b.wire(b.root, [
-    { node: r1, port: { kind: 'arg', index: 0 } },
-    { node: r2, port: { kind: 'arg', index: 0 } },
-    { node: r3, port: { kind: 'arg', index: 0 } },
-    { node: r4, port: { kind: 'arg', index: 0 } },
-  ])
-  return { d: b.build(), b: [] }
-}
-
-/** Force a 4-terminal wire into pairing (i,j)|(k,l): two branch points B0,B1 with
-    edges i->B0, j->B0, k->B1, l->B1, B0->B1 (terminals are binds 0..3). Seeds each
-    branch at the midpoint of its pair and every leg tangent to its chord direction
-    (a straight leg). This is the hand-built alternative topology the frozen system
-    could never reach on its own — the ENERGY yardstick the restructuring move must
-    match. */
-function setPairing(w: WireView, i: number, j: number, k: number, l: number, c: readonly { x: number; y: number }[]): void {
-  const bind = (n: number): WireLegEnd => ({ kind: 'bind', i: n })
-  const br = (n: number): WireLegEnd => ({ kind: 'branch', i: n })
-  const B0 = { x: (c[i]!.x + c[j]!.x) / 2, y: (c[i]!.y + c[j]!.y) / 2 }
-  const B1 = { x: (c[k]!.x + c[l]!.x) / 2, y: (c[k]!.y + c[l]!.y) / 2 }
-  const chord = (from: { x: number; y: number }, to: { x: number; y: number }): number => Math.atan2(to.y - from.y, to.x - from.x)
-  const mk = (a: WireLegEnd, b: WireLegEnd, from: { x: number; y: number }, to: { x: number; y: number }): WireLeg =>
-    ({ a, b, angA: chord(from, to), angB: chord(from, to), cache: mkLegCache() })
-  w.branches.length = 0; w.branches.push(B0, B1)
-  w.legs.length = 0
-  for (const lg of [
-    mk(bind(i), br(0), c[i]!, B0), mk(bind(j), br(0), c[j]!, B0),
-    mk(bind(k), br(1), c[k]!, B1), mk(bind(l), br(1), c[l]!, B1),
-    mk(br(0), br(1), B0, B1),
-  ]) w.legs.push(lg)
 }
 
 /** The direction of a branch leg's drawn curve AT the branch point — what the eye
@@ -179,43 +130,5 @@ describe('junction equilibration — a settled symmetric triple is a strict ener
     let minSep = 360
     for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) minSep = Math.min(minSep, between(dirs[i]!, dirs[j]!))
     expect(minSep, `two legs meet at only ${minSep.toFixed(0)}° — the junction collapsed toward a single line`).toBeGreaterThan(20)
-  })
-})
-
-describe('junction restructuring — a settled 4-way junction must reach the lower-energy Steiner topology', () => {
-  it('settled total energy is no worse than the hand-built optimal pairing', () => {
-    // Terminals pinned at the corners of a WIDE rectangle (0,1 = left pair; 2,3 =
-    // right pair) so the optimal Steiner topology is unambiguous: pair the two LEFT
-    // and the two RIGHT corners, (0,1)|(2,3), giving two branch points strung along
-    // the long axis. The spiral seed makes buildJunctionTree choose (0,2)|(1,3)
-    // instead (the top/bottom split), and no mover can restructure it.
-    const corners = [{ x: -40, y: -12 }, { x: -40, y: 12 }, { x: 40, y: -12 }, { x: 40, y: 12 }]
-    const pinAndSettle = (over: ((w: WireView) => void) | null): number => {
-      const { d, b } = fourWay()
-      const e = mkEngine(d, b)
-      settle(e, 1) // establish scale + wire structure
-      const ids = [...e.bodies.values()].filter((x) => x.kind === 'ref').map((x) => x.id)
-      ids.forEach((id, n) => { const bod = e.bodies.get(id)!; bod.pos = { ...corners[n]! }; bod.theta = 0 })
-      const w = [...e.wires.values()].find((x) => x.binds.length === 4)!
-      if (over !== null) over(w)
-      e.frame = null // re-establish a frame that FITS the pinned rectangle
-      const pinned = new Set(ids)
-      for (let t = 0; t < 4000; t++) { if (!settleStep(e, pinned)) break } // fixed-point settle, hard cap
-      return totalEnergy(e)
-    }
-
-    // the frozen system: seeded (0,2)|(1,3) topology, terminals pinned at the rectangle
-    const eSeeded = pinAndSettle(null)
-    // the hand-built optimal topology on the SAME pinned geometry
-    const eOptimal = pinAndSettle((w) => setPairing(w, 0, 1, 2, 3, corners))
-
-    // A junction paradigm that minimizes energy over topology as well as position must
-    // not rest at a topology strictly worse than a reachable alternative. FLOAT_NOISE is
-    // the fixed-point settle's own residual (a few tenths of an energy unit); the gap
-    // here is ~3× (measured seeded ≈ 496 vs optimal ≈ 165), so any small noise bound
-    // fails the same way. Passes only once restructuring lets the seed flip to (0,1)|(2,3).
-    const FLOAT_NOISE = 1.0
-    expect(eSeeded, `seeded topology settled to E=${eSeeded.toFixed(1)}, optimal E=${eOptimal.toFixed(1)} — the frozen tree never restructures`)
-      .toBeLessThanOrEqual(eOptimal + FLOAT_NOISE)
   })
 })

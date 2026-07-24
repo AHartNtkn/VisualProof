@@ -20,16 +20,15 @@ const PAINT_N = 30
 export type LegGeom = { leg: Leg; pts: Vec2[] }
 export type ExStub = { wid: WireId; from: Vec2; to: Vec2; dot: Vec2 }
 
-/** The rendering identity of a leg terminal: real (body, key) at a port bind
-    and the ∀ via-body hub; a wire-local id for a pure hub point, a boundary
-    slot, or the ∃ tip body. Endpoint-level gestures (drag-join) read these. */
+/** The rendering identity of a leg terminal: real (body, key) at a port bind and
+    the wire-owned END body (∃ tip / ∀ via); a wire-local id for a boundary slot or
+    a Steiner branch vertex. Endpoint-level gestures (drag-join) read these. */
 function endId(wid: WireId, w: WireView, end: WireLegEnd): LegEnd {
   switch (end.kind) {
     case 'bind': return { body: w.binds[end.i]!.body, key: w.binds[end.i]!.key }
-    case 'tip': return { body: w.tipBodyId!, key: null }
+    case 'end': return { body: w.endBodyId!, key: null }
     case 'slot': return { body: `w:${wid}:slot:${w.slots[end.i]!}`, key: null }
     case 'branch': return { body: `w:${wid}:b${end.i}`, key: null }
-    case 'hub': { const h = w.hub!; return h.kind === 'body' ? { body: h.bodyId, key: null } : { body: `w:${wid}:hub`, key: null } }
   }
 }
 
@@ -56,20 +55,16 @@ export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts }))
 }
 
-/** Existential dots: a dangling wire end is its own body (USER LAW — the loose
-    end IS the first-order ∃, homed at the wire's scope); the ∀ via-body hub is
-    the outermost point of that line of identity; a bare wire (no endpoints) is
-    a dot alone. The dot is never invisible (a degenerate stub carrying the
-    body position). */
+/** Quantifier dots: a dangling wire end is its own body (USER LAW — the loose
+    end IS the first-order ∃, homed at the wire's scope); the ∀ via body is the
+    outermost point of that line of identity; a bare wire (no endpoints) is a dot
+    alone. Every wire-owned END body is dotted at its position (a degenerate stub
+    carrying the body position). */
 export function existentialStubs(e: Engine): ExStub[] {
   const out: ExStub[] = []
   for (const [wid, w] of e.wires) {
-    let dotId: string | null = null
-    if (w.tipBodyId !== null) dotId = w.tipBodyId
-    // a ∀ via-body hub (a first-class scope-homed body) is an ∃ dot
-    else if (w.hub !== null && w.hub.kind === 'body') dotId = w.hub.bodyId
-    if (dotId === null) continue
-    const b = e.bodies.get(dotId)!
+    if (w.endBodyId === null) continue
+    const b = e.bodies.get(w.endBodyId)!
     out.push({ wid, from: b.pos, to: b.pos, dot: b.pos })
   }
   // bare (0-endpoint) wires carry no leg — just a scope-homed body (its dot IS

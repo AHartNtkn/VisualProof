@@ -108,7 +108,7 @@ describe('hitTest', () => {
     const wire = Object.keys(d.wires)[0]!
     const e = mkEngine(d, [])
     e.bodies.get(zero)!.pos = vec(0, 0)
-    e.bodies.get(e.wires.get(wire)!.tipBodyId!)!.pos = vec(80, 0)
+    e.bodies.get(e.wires.get(wire)!.endBodyId!)!.pos = vec(80, 0)
     recomputeRegions(e)
     const bindPoint = legPaths(e).find((leg) => leg.wid === wire)!.pts[0]!
 
@@ -318,7 +318,7 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     const d = h.build()
     const e = mkEngine(d, [])
     e.bodies.get(n)!.pos = vec(0, 0)
-    const loose = [...e.bodies.values()].find((b) => b.kind === 'junction')!
+    const loose = [...e.bodies.values()].find((b) => b.kind === 'end')!
     loose.pos = vec(30, 0) // the ∃ dot is its own body — place it clear of the node disc
     recomputeRegions(e)
     const stub = existentialStubs(e)[0]!

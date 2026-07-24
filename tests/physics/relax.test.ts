@@ -194,8 +194,7 @@ describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-own
       // exit hub), and a bare (0-endpoint) wire's lone dot
       const owned = new Set<string>()
       for (const w of e.wires.values()) {
-        if (w.tipBodyId !== null) owned.add(w.tipBodyId)
-        if (w.hub !== null && w.hub.kind === 'body') owned.add(w.hub.bodyId)
+        if (w.endBodyId !== null) owned.add(w.endBodyId)
       }
       const boundaryWires = new Set(boundary)
       for (const [wid, w] of Object.entries(d.wires)) {
@@ -203,7 +202,7 @@ describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-own
         // endpointless INTERNAL wire owns a bare existential-dot body.
         if (w.endpoints.length === 0 && !boundaryWires.has(wid)) owned.add(`j:${wid}`)
       }
-      const junctions = [...e.bodies.values()].filter((b) => b.kind === 'junction')
+      const junctions = [...e.bodies.values()].filter((b) => b.kind === 'end')
       expect(new Set(junctions.map((b) => b.id))).toEqual(owned)
     })
 
@@ -288,7 +287,6 @@ describe('the leg-solve memo is output-neutral (plan 24 — exact cross-eval sol
     const out: number[] = [e.slotShift]
     for (const b of e.bodies.values()) out.push(b.pos.x, b.pos.y, b.theta)
     for (const [, w] of e.wires) {
-      if (w.hub !== null && w.hub.kind === 'point') out.push(w.hub.pos.x, w.hub.pos.y)
       for (const leg of w.legs) out.push(leg.angA, leg.angB)
       for (const b of w.branches) out.push(b.x, b.y)
     }

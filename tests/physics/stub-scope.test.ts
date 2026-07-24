@@ -48,11 +48,12 @@ describe('existential stubs honor wire scope after settling', () => {
     expect(x!.region).toBe(c1)
     const wv = e.wires.get(w)!
     expect(wv.binds).toHaveLength(2)
-    const hub = wv.hub!
-    expect(hub, 'the wire has a branch hub').not.toBeUndefined()
-    expect(hub.kind).toBe('body')
-    expect(hub.kind === 'body' ? hub.bodyId : null).toBe(`x:${w}`)
-    expect(wv.legs.every((l) => l.b.kind === 'hub'), 'every leg arrives at the hub').toBe(true)
+    expect(wv.endBodyId, 'the ∀ via is the wire-owned end body').toBe(`x:${w}`)
+    // ruling A: the via is an ordinary free-end LEAF terminal of the Steiner tree over
+    // {bind0, bind1, via} — a triple junction with the via as one tributary, not a star
+    // hub. Two binds + one via = three terminals → exactly one branch vertex.
+    expect(wv.branches, 'a 2-bind ∀ + via is a 3-terminal Steiner tree (one branch vertex)').toHaveLength(1)
+    expect(wv.legs.filter((l) => l.b.kind === 'end'), 'exactly one leg is the via free leaf').toHaveLength(1)
     settle(e, 2600)
     recomputeRegions(e)
     const g2 = e.regions.get(c2)!

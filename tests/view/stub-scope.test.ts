@@ -31,7 +31,7 @@ describe('existential stubs honor wire scope', () => {
     expect(loose!.region).toBe(d.root)
     const wv = e.wires.get(w)!
     expect(wv, 'the wire draws as a leg from the port out to the loose end').toBeDefined()
-    expect(wv.tipBodyId, 'the ∃ tip is the root-homed loose body').toBe(`j:${w}`)
+    expect(wv.endBodyId, 'the ∃ tip is the root-homed loose body').toBe(`j:${w}`)
     expect(wv.binds).toHaveLength(1)
   })
 
@@ -49,8 +49,7 @@ describe('existential stubs honor wire scope', () => {
     expect(e.bodies.get(`j:${w}`)).toBeUndefined()
     const wv = e.wires.get(w)!
     expect(wv.binds).toHaveLength(2)
-    expect(wv.hub, 'a same-scope 2-ender is a direct port→port leg, no hub').toBeNull()
-    expect(wv.tipBodyId).toBeNull()
+    expect(wv.endBodyId, 'a same-scope 2-ender is a direct port→port leg, no via body').toBeNull()
     expect(wv.legs).toHaveLength(1)
   })
 
@@ -64,7 +63,7 @@ describe('existential stubs honor wire scope', () => {
     expect(loose).toBeDefined()
     expect(loose!.region).toBe(d.root)
     const wv = e.wires.get(w)!
-    expect(wv.tipBodyId).toBe(`j:${w}`)
+    expect(wv.endBodyId).toBe(`j:${w}`)
   })
 })
 

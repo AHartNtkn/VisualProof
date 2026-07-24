@@ -191,15 +191,13 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     const origin = resolvedFrameSlot(e, 0)
     if (origin !== null) shapes.push({ kind: 'dot', center: origin.point, rPx: FRAME_ORIGIN_R, fill: st.ink })
   }
-  // SEMANTIC junction-body dots only: a genuine degree-1 loose end of a line of
-  // identity — an ∃ tip or a bare wire (the existential dot is semantic, USER LAW).
-  // A ∀ via-body (a body that IS a branch hub) carries branching arms, so it is not
-  // dotted — the branch legs are the only visual. Wire-owned Steiner branch points
-  // are not bodies and are never dotted.
-  const hubBodies = new Set<string>()
-  for (const w of e.wires.values()) if (w.hub !== null && w.hub.kind === 'body') hubBodies.add(w.hub.bodyId)
+  // Wire-owned END-body dots: the outermost quantifier point of a line of identity —
+  // an ∃ tip, a ∀ via (ruling A: now a leaf terminal, dotted like an ∃ tip pending the
+  // Task 5 gallery ruling on the ∀ glyph), or a bare wire. Wire-owned Steiner branch
+  // vertices are not bodies and are never dotted (USER 2026-07-07: branch points are
+  // unmarked; where legs meet is downstream of the tree).
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'junction' || hubBodies.has(b.id)) continue
+    if (b.kind !== 'end') continue
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
   }
@@ -250,7 +248,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
   // node bodies: anatomy (shared linework / order-ladder atoms) + named discs +
   // sealed comprehension bodies
   for (const b of e.bodies.values()) {
-    if (b.kind === 'junction' || b.kind === 'anchor') continue
+    if (b.kind === 'end' || b.kind === 'anchor') continue
     const node = b.node!
     if (node.kind === 'ref') {
       const discR = DISC_R * e.scale

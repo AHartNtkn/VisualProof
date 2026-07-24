@@ -24,7 +24,7 @@ describe('mkEngine', () => {
     h.ref(h.root, 'Nat', rel(1))
     const d = h.build()
     const e = mkEngine(d, [])
-    const nodeBodies = [...e.bodies.values()].filter((b) => b.kind !== 'junction')
+    const nodeBodies = [...e.bodies.values()].filter((b) => b.kind !== 'end')
     expect(nodeBodies).toHaveLength(2)
     expect(new Set(nodeBodies.map((b) => b.id))).toEqual(new Set(Object.keys(d.nodes)))
   })
@@ -62,7 +62,7 @@ describe('mkEngine', () => {
     const e = mkEngine(h.build(), [external])
 
     expect(e.bodies.has(`j:${external}`), 'a formal port must not float as an existential body').toBe(false)
-    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], legs: [], tipBodyId: null, hub: null })
+    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], legs: [], endBodyId: null })
     expect(e.bodies.has(`j:${internal}`), 'an internal bare wire remains a semantic existential body').toBe(true)
     expect(e.wires.has(internal)).toBe(false)
   })
