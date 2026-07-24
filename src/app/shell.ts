@@ -1295,9 +1295,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // Plan 24 motion policy: a FULL strict-descent sweep over every DOF each
     // frame (no time-slicing) — the whole diagram eases toward rest together.
     // InteractiveViewport supplies the exact persistent and active pin set.
+    const __fp: Record<string, number> = ((window as unknown as { __frameProfile?: Record<string, number> }).__frameProfile ??= {})
+    let __t = performance.now()
+    const __lap = (k: string): void => { const n = performance.now(); __fp[k] = +(n - __t).toFixed(1); __t = n }
     mainMotion.frame(now)
+    __lap('mainMotion')
     if (!mainMotion.playing) interaction.advance(relationWorkspace === null)
+    __lap('interactionAdvance')
     const shapes: Shape[] = paint(engine, theme)
+    __lap('paint')
     for (const id of interaction.pins) {
       const b = engine.bodies.get(id)
       if (b === undefined) continue
@@ -1333,8 +1339,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         { shapes: mainMotion.overlays(now) },
       ],
     }, view)
+    __lap('renderRest')
     relationWorkspace?.frame(now)
+    __lap('relationWorkspace')
     renderCompanion(comp, companionVisible)
+    __lap('companion')
     raf = requestAnimationFrame(frame)
   }
 
