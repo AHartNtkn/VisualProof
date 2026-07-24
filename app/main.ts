@@ -1,4 +1,6 @@
 import { mountShell } from '../src/app/index'
+import { PHYSICS_REV } from '../src/view/relax'
+document.title = `VPA · ${PHYSICS_REV}`
 
 const canvas = document.getElementById('c')
 const chrome = document.getElementById('chrome')

@@ -5,6 +5,10 @@ import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, frame
 import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
+/** Live-build marker for serving-path verification (2026-07-23). */
+export const PHYSICS_REV = 'stratified-Tb\u03c4@2a7638c'
+console.info('[physics] rev', PHYSICS_REV)
+
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
     round-10 demo's `P`). The leg's own tension/bend live in ELASTICA (the
     solver reads them); these are the terms beyond the leg — node clearance,
