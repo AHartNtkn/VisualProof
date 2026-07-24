@@ -1,10 +1,9 @@
 # The Step Operator — Simultaneous Trust-Bounded Descent on Q
 
 **Date:** 2026-07-24
-**Status:** DRAFT — awaiting literature corroboration (research pass in
-flight) and user review. Companion to
-`2026-07-24-wire-manifold-problem.md`; implements its §3 axioms and §6
-obligations. No implementation before ratification.
+**Status:** DRAFT for user review — literature corroboration folded in
+(§8). Companion to `2026-07-24-wire-manifold-problem.md`; implements its
+§3 axioms and §6 obligations. No implementation before ratification.
 
 ## 1. State, restated concretely
 
@@ -126,7 +125,85 @@ Kept: energy terms + constants, leg solver + caches, legality projection,
 frame/scale/slot discrete events, soap-tree as birth seed, law tests per
 problem-statement §5.
 
-## 7. Open questions for ratification
+## 7. Why simultaneity, precisely (amended after research)
+
+The coordinate-descent literature refines the diagnosis: sequential
+one-at-a-time descent (Gauss–Seidel) is itself convergent in theory; the
+provably DANGEROUS scheme is per-coordinate EXACT minimization — "'One-
+at-a-time' update scheme is critical, and 'all-at-once' scheme does not
+necessarily converge" (Tibshirani, convex-opt lecture notes,
+stat.cmu.edu/~ryantibs/convexopt-F18/lectures/coord-desc.pdf; sourced by
+the research pass). The old system's gates were per-DOF line searches
+with expanding search — i.e., each coordinate *approximately exact-
+minimizing its own axis* — which is both the documented divergent shape
+AND precisely what the user independently banned as "instantaneously
+moving to seek a minimum." The uniform-locality axiom and the literature
+converge on the same rule: one shared, bounded, line-searched step on the
+JOINT descent direction. Simultaneity is additionally chosen (over a
+capped Gauss–Seidel) because it closes the staleness channel — the
+measured source of every conveyor in this codebase was a gate evaluating
+a landscape its neighbours had changed — and because one coherent motion
+per frame is the visual requirement.
+
+The termination lever is likewise corroborated: interactive layout's
+documented limit cycles (Kamada–Kawai "may cycle without converging,
+while the energy is oscillating") are cured exactly by a strictly
+monotone accept rule ("iterations monotonically decrease the stress …
+oscillations and non-convergence are impossible" — Gansner–Koren–North,
+graphviz.org/documentation/GKN04.pdf; sourced by the research pass). The
+guarantee lives in the accept rule, not in the cleverness of the
+direction.
+
+## 8. Corroboration and amendments (research pass, 2026-07-24)
+
+Quotes below were extracted by the research subagent from the cited
+primary sources; spot-attribution, not independently re-fetched.
+
+1. **The operator is IPC's, structurally.** Incremental Potential Contact
+   (Li et al., SIGGRAPH 2020, ipc-sim.github.io) time-steps by exactly
+   this shape: one simultaneous descent direction over all DOFs, a
+   step-size upper bound from the model, then "do x ← x_prev + αp; …
+   α ← α/2 while B(x) > E_prev" — backtracking that accepts only on
+   energy decrease. Battle-tested at scale against extremely stiff
+   barriers; explosions are absent there for the same structural reason
+   claimed in §2. (IPC's Newton direction with an SPD-projected Hessian
+   is the natural second-order upgrade of our gradient direction if the
+   first-order operator proves slow; same guarantees, higher per-step
+   cost.)
+2. **Barrier tunneling — why we do NOT need IPC's CCD filter.** IPC warns
+   that "standard line search … can find an energy decrease in
+   configurations that have passed through intersection," and cures it
+   with a continuous-collision-detection step bound, because its
+   non-penetration is enforced ONLY by the barrier. Our situation
+   differs by ruling: wire↔node clearance is a FINITE soft barrier and
+   passing through to disentangle is sanctioned ("collision is not
+   semantic; passing through is GOOD" — corpus), so tunneling a soft
+   barrier is legitimate behavior, not a soundness hole. The HARD
+   constraints (region non-intersection, containment, semantic
+   membership) are enforced by the projection P, not by barriers, so no
+   CCD analogue is needed. If a future hard constraint is ever moved
+   into a barrier, this decision must be revisited (this sentence is the
+   guard).
+3. **Chart crossing is structurally sound.** BHV tree space is a CAT(0)
+   cubical complex (Bačák, arXiv 1807.01355): geodesics are unique and
+   cross orthant boundaries continuously — the transition is a
+   coordinate change, not an event, corroborating §4. Proximal-point
+   descent provably converges on such spaces for convex energies (Bačák,
+   arXiv 1206.7074). Our energy is non-convex and our charts carry
+   embedding decorations, so these theorems are structural corroboration
+   only, not imported guarantees — our termination argument (§2) stands
+   on strict decrease alone.
+4. **Determinism note.** Bit-reproducibility requires a fixed
+   floating-point reduction order in gradient/energy assembly (sub-ULP
+   differences can flip a strict accept). The implementation must
+   evaluate terms in a deterministic order (they already do —
+   Map-insertion order); no parallel reduction without a fixed tree.
+5. **Evaluated and rejected: XPBD** (Macklin et al.) — stiffness-
+   independent real-time constraint projection, but it is not strict
+   energy descent and cannot give the accept-iff-E-drops / bit-stable
+   rest guarantees; it would violate the frozen paradigm.
+
+## 9. Open questions for ratification
 
 1. Δmax's value: proposed = the current travelCap-equivalent drawn speed
    (so overall motion speed is unchanged from what already felt right,
