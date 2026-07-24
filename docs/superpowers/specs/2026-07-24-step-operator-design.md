@@ -212,4 +212,17 @@ primary sources; spot-attribution, not independently re-fetched.
    "light" tips) — under one M this becomes a metric entry; default
    proposal: no special entry (uniformity) unless the fixtures look
    sluggish, in which case the entry is presented for ruling.
-3. Perf numbers (obligation 5) — to be attached before ratification.
+3. Perf (obligation 5) — MEASURED 2026-07-24 on the current evaluator
+   (scratchpad/fulle-timing.ts): one full `totalEnergy` after a global
+   perturbation (every leg cache missing — the operator's accept-test
+   case, since a simultaneous step moves everything) costs ≈ 4.5–6.0 ms
+   on the heaviest fixtures (plusComm@20: 5.96 ms / 14 bodies;
+   succShiftS@48: 4.49 ms / 21 bodies; warm ≈ 1.3–1.4 ms). So the
+   common case (first or second trial accepts) is ≈ 5–12 ms per frame —
+   inside or near the 16 ms budget — while the worst backtracking case
+   (≈10 trials, only near barrier walls) is ≈ 45–60 ms, i.e. a
+   momentary sub-60fps frame exactly when the layout is pressed against
+   a wall. Verdict: the OPERATOR fits; the lever if the transient dip
+   matters is the term evaluator's cost (leg-solve grid + O(pairs)
+   separation sampling), not the operator's structure. Optimization of
+   the evaluator is ordinary follow-up work, not a design question.
