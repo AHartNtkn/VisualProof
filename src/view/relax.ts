@@ -1,7 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, WireView, StoredFrame } from './engine'
-import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, routeObstacles, frameSlots, FRAME_MARGIN } from './engine'
+import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
 import { mkFreeSpace } from './route/freespace'
 import { advanceNetwork } from './route/network'
 
@@ -977,7 +977,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   // presentation continuation, contraction of zero edges, derivative splits.
   // It never moves a node. Substeps set wire responsiveness (~20× the node
   // step cadence) without touching the per-substep movement law. ──
-  const fs = mkFreeSpace(routeObstacles(e))
+  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
   let routed = false
   for (const [, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)

@@ -15,7 +15,7 @@ import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine, carryOver, routeObstacles, wireTerminalPoints } from '../view/engine'
+import { mkEngine, carryOver, routeObstacles, routeBounds, wireTerminalPoints } from '../view/engine'
 import { mkFreeSpace, route } from '../view/route/freespace'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
@@ -1922,7 +1922,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       legSolves(): unknown[] {
         const out: unknown[] = []
-        const fs = mkFreeSpace(routeObstacles(engine))
+        const fs = mkFreeSpace(routeObstacles(engine), routeBounds(engine))
         for (const [wid, w] of engine.wires) {
           const terms = wireTerminalPoints(engine, w)
           const pos = (v: number): { x: number; y: number } => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)

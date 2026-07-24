@@ -108,7 +108,7 @@ export function solveTarget(net: WireNet, terms: readonly Vec2[], fs: FreeSpace,
       if (anchors.length === 0) continue
       let wx = 0, wy = 0, ws = 0
       for (const a of anchors) { wx += a.p.x / a.d; wy += a.p.y / a.d; ws += 1 / a.d }
-      const target = projectFeasible({ x: wx / ws, y: wy / ws }, fs.discs)
+      const target = projectFeasible({ x: wx / ws, y: wy / ws }, fs.discs, fs.bounds)
       maxMove = Math.max(maxMove, Math.hypot(target.x - here.x, target.y - here.y))
       net.junctions[j] = target
     }
@@ -201,8 +201,8 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace): b
     const L0 = netLength(net, terms, fs)
     const snapshot: WireNet = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
     const jb = net.junctions.length
-    net.junctions[j] = projectFeasible({ x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }, fs.discs)
-    net.junctions.push(projectFeasible({ x: here.x - (d.x * SPLIT_EPS) / 2, y: here.y - (d.y * SPLIT_EPS) / 2 }, fs.discs))
+    net.junctions[j] = projectFeasible({ x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }, fs.discs, fs.bounds)
+    net.junctions.push(projectFeasible({ x: here.x - (d.x * SPLIT_EPS) / 2, y: here.y - (d.y * SPLIT_EPS) / 2 }, fs.discs, fs.bounds))
     // re-point B-side edges at the new junction
     let bi = 0
     net.edges = net.edges.map(([u, v], ei) => {
@@ -272,7 +272,7 @@ export function advanceNetwork(
         const d = Math.hypot(dx, dy)
         if (d < 1e-12) return p
         const step = Math.min(d, opts.bound)
-        return projectFeasible({ x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }, fs.discs)
+        return projectFeasible({ x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }, fs.discs, fs.bounds)
       })
       const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
       if (anyProposed) {

@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { escapePoint, routeObstacles, wireTerminalPoints } from './engine'
+import { escapePoint, routeObstacles, routeBounds, wireTerminalPoints } from './engine'
 import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
 
 /**
@@ -73,7 +73,7 @@ function endId(wid: WireId, w: WireView, v: number): LegEnd {
     is prefixed with its fixed escape stub so the drawn stroke starts ON the
     rim heading along the port normal. */
 export function computeLegs(e: Engine): LegGeom[] {
-  const fs: FreeSpace = mkFreeSpace(routeObstacles(e))
+  const fs: FreeSpace = mkFreeSpace(routeObstacles(e), routeBounds(e))
   const out: LegGeom[] = []
   const r = FILLET_R * e.scale
   for (const [wid, w] of e.wires) {

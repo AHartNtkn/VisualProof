@@ -22,8 +22,13 @@ export const POLY_K = 16
 
 type Corner = { p: Vec2; disc: number }
 
+/** Optional rectangular containment (the fixed proof frame): junctions and
+    route corners stay inside — nothing is drawn outside the border. */
+export type Bounds = { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number }
+
 export type FreeSpace = {
   readonly discs: readonly Disc[]
+  readonly bounds: Bounds | null
   /** polygon corners, disc-major, skipping corners buried inside other discs */
   readonly corners: readonly Corner[]
   /** corner↔corner visibility adjacency, built LAZILY on the first blocked
@@ -63,8 +68,12 @@ export function insideAnyDisc(p: Vec2, discs: readonly Disc[]): number {
 /** Push a point out of every disc interior (feasibility projection for
     junction coordinates). Deterministic; at most one pass per disc in index
     order, repeated until clear (bounded by disc count). */
-export function projectFeasible(p: Vec2, discs: readonly Disc[]): Vec2 {
+export function projectFeasible(p: Vec2, discs: readonly Disc[], bounds: Bounds | null = null): Vec2 {
   let x = p.x, y = p.y
+  if (bounds !== null) {
+    x = Math.max(bounds.minX, Math.min(bounds.maxX, x))
+    y = Math.max(bounds.minY, Math.min(bounds.maxY, y))
+  }
   for (let pass = 0; pass < discs.length + 1; pass++) {
     const i = insideAnyDisc({ x, y }, discs)
     if (i < 0) break
@@ -79,7 +88,7 @@ export function projectFeasible(p: Vec2, discs: readonly Disc[]): Vec2 {
 }
 
 /** Build the static visibility structure over the inflated discs. */
-export function mkFreeSpace(discs: readonly Disc[]): FreeSpace {
+export function mkFreeSpace(discs: readonly Disc[], bounds: Bounds | null = null): FreeSpace {
   const corners: Corner[] = []
   for (let di = 0; di < discs.length; di++) {
     const D = discs[di]!
@@ -88,10 +97,11 @@ export function mkFreeSpace(discs: readonly Disc[]): FreeSpace {
       const a = (2 * Math.PI * k) / POLY_K
       const p = { x: D.c.x + R * Math.cos(a), y: D.c.y + R * Math.sin(a) }
       if (insideAnyDisc(p, discs) >= 0) continue
+      if (bounds !== null && (p.x < bounds.minX || p.x > bounds.maxX || p.y < bounds.minY || p.y > bounds.maxY)) continue
       corners.push({ p, disc: di })
     }
   }
-  return { discs, corners, adj: null, memo: new Map() }
+  return { discs, bounds, corners, adj: null, memo: new Map() }
 }
 
 function cornerAdjacency(fs: FreeSpace): { j: number; d: number }[][] {
@@ -117,8 +127,8 @@ export type Route = { readonly length: number; readonly pts: readonly Vec2[] }
     disc are projected to its boundary first (feasibility is the caller's
     invariant; the projection makes the router total). */
 export function route(fs: FreeSpace, p0: Vec2, q0: Vec2): Route {
-  const p = projectFeasible(p0, fs.discs)
-  const q = projectFeasible(q0, fs.discs)
+  const p = projectFeasible(p0, fs.discs, fs.bounds)
+  const q = projectFeasible(q0, fs.discs, fs.bounds)
   if (segmentClear(p, q, fs.discs)) {
     return { length: Math.hypot(q.x - p.x, q.y - p.y), pts: [p, q] }
   }

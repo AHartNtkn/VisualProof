@@ -509,6 +509,13 @@ export function resolvedFrameSlot(e: Engine, boundaryPosition: number): FrameSlo
     disc inflated by this as a HARD obstacle. */
 export const ROUTE_CLEAR = 1.5
 
+/** Routing bounds: the fixed frame's inner box (nothing routed outside). */
+export function routeBounds(e: Engine): { minX: number; maxX: number; minY: number; maxY: number } | null {
+  const fb = frameBounds(e)
+  if (fb === null) return null
+  return { minX: fb.minX, maxX: fb.maxX, minY: fb.minY, maxY: fb.maxY }
+}
+
 /** The inflated hard-obstacle discs for wire routing (ref/term/atom bodies). */
 export function routeObstacles(e: Engine): Disc[] {
   const out: Disc[] = []
