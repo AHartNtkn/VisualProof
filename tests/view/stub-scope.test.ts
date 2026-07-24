@@ -50,7 +50,7 @@ describe('existential stubs honor wire scope', () => {
     const wv = e.wires.get(w)!
     expect(wv.binds).toHaveLength(2)
     expect(wv.endBodyId, 'a same-scope 2-ender is a direct port→port leg, no via body').toBeNull()
-    expect(wv.legs).toHaveLength(1)
+    expect(wv.net.edges).toHaveLength(1)
   })
 
   it('a same-region singleton ALSO carries its loose end as its own body (USER LAW: dangling ends are nodes)', () => {

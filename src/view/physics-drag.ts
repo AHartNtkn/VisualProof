@@ -44,8 +44,8 @@ function stateSnap(e: Engine): number[] {
   const out: number[] = []
   for (const b of e.bodies.values()) out.push(b.pos.x, b.pos.y, b.theta)
   for (const w of e.wires.values()) {
-    for (const p of w.branches) out.push(p.x, p.y)
-    for (const l of w.legs) out.push(l.angA, l.angB)
+    for (const p of w.net.junctions) out.push(p.x, p.y)
+    for (const [u, v] of w.net.edges) out.push(u, v)
   }
   return out
 }

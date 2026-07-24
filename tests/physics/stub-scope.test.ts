@@ -52,8 +52,9 @@ describe('existential stubs honor wire scope after settling', () => {
     // ruling A: the via is an ordinary free-end LEAF terminal of the Steiner tree over
     // {bind0, bind1, via} — a triple junction with the via as one tributary, not a star
     // hub. Two binds + one via = three terminals → exactly one branch vertex.
-    expect(wv.branches, 'a 2-bind ∀ + via is a 3-terminal Steiner tree (one branch vertex)').toHaveLength(1)
-    expect(wv.legs.filter((l) => l.b.kind === 'end'), 'exactly one leg is the via free leaf').toHaveLength(1)
+    expect(wv.net.junctions, 'a 2-bind ∀ + via starts as a 3-terminal star (one junction)').toHaveLength(1)
+    const viaIdx = 2 // terminals: bind0, bind1, end
+    expect(wv.net.edges.some(([u, v2]) => u === viaIdx || v2 === viaIdx), 'the via terminal is in the network').toBe(true)
     settle(e, 2600)
     recomputeRegions(e)
     const g2 = e.regions.get(c2)!

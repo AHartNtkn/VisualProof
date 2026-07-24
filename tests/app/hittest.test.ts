@@ -191,9 +191,15 @@ describe('hitTest', () => {
     e.bodies.get('b')!.pos = vec(80, 0)
     recomputeRegions(e)
     const pts = legPaths(e).find((leg) => leg.wid === wire)!.pts
-    const i = Math.floor(pts.length / 2)
-    const mid = pts[i]!
-    const tangent = vec(pts[i + 1]!.x - pts[i - 1]!.x, pts[i + 1]!.y - pts[i - 1]!.y)
+    // probe from the midpoint of the LONGEST segment (clear of stub corners and
+    // fillets), offset along that segment's own normal
+    let li = 0, lbest = 0
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const d = Math.hypot(pts[k + 1]!.x - pts[k]!.x, pts[k + 1]!.y - pts[k]!.y)
+      if (d > lbest) { lbest = d; li = k }
+    }
+    const mid = vec((pts[li]!.x + pts[li + 1]!.x) / 2, (pts[li]!.y + pts[li + 1]!.y) / 2)
+    const tangent = vec(pts[li + 1]!.x - pts[li]!.x, pts[li + 1]!.y - pts[li]!.y)
     const tangentLength = Math.hypot(tangent.x, tangent.y)
     const normal = vec(-tangent.y / tangentLength, tangent.x / tangentLength)
 

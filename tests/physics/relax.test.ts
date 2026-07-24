@@ -4,10 +4,9 @@ import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { carryOver, mkEngine, resolveLeg } from '../../src/view/engine'
+import { carryOver, mkEngine, wireTerminalPoints } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame, recomputeRegions, resolveOverlaps, establishFrame } from '../../src/view/relax'
-import { thetaRange, legCache } from '../../src/view/elastica'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
@@ -87,11 +86,20 @@ function anyOverlap(e: { regions: Map<string, { center: { x: number; y: number }
     2026-07-24: a physics test settles within its budget or FAILS — vitest's
     timeout cannot interrupt a synchronous loop, so the clock lives here). */
 function settleWithin(e: Engine, maxMs: number): boolean {
+  // the same bracketing as `settle`: leading legality projection + frame
+  // establishment, wall-clock-bounded descent, trailing projection
+  recomputeRegions(e)
+  resolveOverlaps(e)
+  establishFrame(e)
   const t0 = performance.now()
+  let rested = false
   for (;;) {
-    if (!settleStep(e)) return true
-    if (performance.now() - t0 > maxMs) return false
+    if (!settleStep(e)) { rested = true; break }
+    if (performance.now() - t0 > maxMs) break
   }
+  recomputeRegions(e)
+  resolveOverlaps(e)
+  return rested
 }
 
 function assertRestsLegalMonotone(name: string, e: Engine, driftBound: number): void {
@@ -295,40 +303,6 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
   }
 })
 
-describe('the leg-solve memo is output-neutral (plan 24 — exact cross-eval solve reuse)', () => {
-  // The leg solve is a pure function of its boundary tuple; the sweep memoizes it in
-  // a ring keyed on that exact tuple so a gate returning to its base after a rejected
-  // trial reuses the base solve instead of recomputing it. Because a hit returns a
-  // solution whose stored key EXACTLY equals the query, it equals a fresh solve, so
-  // the memo cannot change any energy value, any accept/reject, or the settled layout.
-  // Proof: settle the same fixture with the memo ON and OFF (legCache.enabled) and
-  // require the two settled layouts to be BIT-IDENTICAL. Anything but 0 means the
-  // reuse read a stale shape — the failure the explicit exact-key match forbids.
-  function layoutSnapshot(e: Engine): number[] {
-    const out: number[] = [e.slotShift]
-    for (const b of e.bodies.values()) out.push(b.pos.x, b.pos.y, b.theta)
-    for (const [, w] of e.wires) {
-      for (const leg of w.legs) out.push(leg.angA, leg.angB)
-      for (const b of w.branches) out.push(b.x, b.y)
-    }
-    return out
-  }
-  it('plusComm@20 settles BIT-IDENTICALLY with the leg-solve cache on vs off', () => {
-    const build = (): Engine => { const r = mkReplay(plusCommThm.name, bootCtx); return mkEngine(r.diagramAt(20), r.boundaryAt(20)) }
-    let on: number[], off: number[]
-    try {
-      legCache.enabled = true
-      const eOn = build(); settle(eOn, 400); on = layoutSnapshot(eOn)
-      legCache.enabled = false
-      const eOff = build(); settle(eOff, 400); off = layoutSnapshot(eOff)
-    } finally { legCache.enabled = true }
-    expect(off.length).toBe(on.length)
-    let maxDiff = 0
-    for (let i = 0; i < on.length; i++) maxDiff = Math.max(maxDiff, Math.abs(on[i]! - off[i]!))
-    expect(maxDiff, `the cache changed the settled layout by ${maxDiff} (must be exactly 0 — a pure memo)`).toBe(0)
-  })
-})
-
 describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => {
   // The frame is ABSOLUTE state set once at establishment and CONSTANT between
   // rewrites — it never grows/shrinks/shifts from motion. A HARD edge the content
@@ -470,13 +444,13 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
     const diagram = h.build()
     const first = mkEngine(diagram, [])
     seedProject(first)
-    const firstBranch = { ...first.wires.get(wire)!.branches[0]! }
-    expect(first.wires.get(wire)!.branches).toHaveLength(1)
+    const firstBranch = { ...first.wires.get(wire)!.net.junctions[0]! }
+    expect(first.wires.get(wire)!.net.junctions).toHaveLength(1)
 
     const rebuilt = mkEngine(diagram, [])
     carryOver(first, rebuilt)
     seedProject(rebuilt)
-    const rebuiltBranch = rebuilt.wires.get(wire)!.branches[0]!
+    const rebuiltBranch = rebuilt.wires.get(wire)!.net.junctions[0]!
 
     expect(rebuilt.scale).toBeCloseTo(first.scale, 10)
     expect(rebuiltBranch.x).toBeCloseTo(firstBranch.x, 8)
@@ -511,29 +485,23 @@ describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => 
     // rotation failure, so this law is scoped to single-port nodes.)
     for (const [name, diagram, boundary] of cases) {
       const e = settledCase(name, diagram, boundary)
-      for (const [, w] of e.wires) for (const leg of w.legs) {
-        if (leg.a.kind !== 'bind') continue
-        const b = e.bodies.get(w.binds[leg.a.i]!.body)!
-        if (b.localAnchor.size > 1) continue // multi-port node: geometric compromise
-        const sh = resolveLeg(e, w, leg)
-        const toTarget = Math.atan2(sh.p1.y - sh.p0.y, sh.p1.x - sh.p0.x)
-        const err = Math.abs(wrapAng(sh.th0 - toTarget)) * 180 / Math.PI
-        expect(err, `${name}: single-port node ${b.id} faces ${err.toFixed(0)}° off its wire`).toBeLessThan(90)
-      }
-    }
-  })
-
-  it('no leg wraps the diagram: every settled leg has tangent range < π (blind cone unoccupied)', () => {
-    // Free rotation keeps every port within a representable turn of its target, so
-    // no leg falls into the >π blind cone that would draw a diagram-wrapping arc.
-    for (const [name, diagram, boundary] of cases) {
-      const e = settledCase(name, diagram, boundary)
-      for (const [, w] of e.wires) for (const leg of w.legs) {
-        const sh = resolveLeg(e, w, leg)
-        // the elastica enforces range ≤ π by construction; assert the resting
-        // solution stays inside it (no >π blind-cone coil drawn at rest)
-        const rng = Math.abs(thetaRange(sh.sol.c1, sh.sol.c2))
-        expect(rng, `${name}: a settled leg tangent range ${(rng / Math.PI).toFixed(2)}π ≥ π (wrap)`).toBeLessThan(Math.PI)
+      for (const [, w] of e.wires) {
+        const terms = wireTerminalPoints(e, w)
+        const pos = (v: number) => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
+        for (const [u, v] of w.net.edges) {
+          for (const [me, other] of [[u, v], [v, u]] as const) {
+            if (me >= w.binds.length) continue
+            const b = e.bodies.get(w.binds[me]!.body)!
+            if (b.localAnchor.size > 1) continue // multi-port node: geometric compromise
+            const la = b.localAnchor.get(w.binds[me]!.key)!
+            const normal = Math.atan2(la.y, la.x) + b.theta
+            const o = pos(other)
+            const t = terms[me]!
+            const toTarget = Math.atan2(o.y - t.y, o.x - t.x)
+            const err = Math.abs(wrapAng(normal - toTarget)) * 180 / Math.PI
+            expect(err, `${name}: single-port node ${b.id} faces ${err.toFixed(0)}° off its wire`).toBeLessThan(90)
+          }
+        }
       }
     }
   })

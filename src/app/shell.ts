@@ -15,7 +15,8 @@ import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine, carryOver, resolveLeg } from '../view/engine'
+import { mkEngine, carryOver, routeObstacles, wireTerminalPoints } from '../view/engine'
+import { mkFreeSpace, route } from '../view/route/freespace'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
@@ -1197,7 +1198,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return g === undefined ? [] : [{ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke, width: 2, insetColor: null, glow: null }]
     }
     const out: Shape[] = []
-    // Every wire (junctions included) is its elastica legs — trace the SAME legs
+    // Every wire (junctions included) is its routed strokes — trace the SAME strokes
     // paint draws, so the hover outline matches exactly.
     for (const l of legPaths(engine)) {
       if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
@@ -1899,13 +1900,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const t3 = performance.now()
         return { sweepMs: +(t1 - t0).toFixed(1), paintMs: +(t2 - t1).toFixed(1), sweeps10Ms: +(t3 - t2).toFixed(1) }
       },
-      wirePhysics(): { binds: string[]; branches: { x: number; y: number }[]; legs: { a: string; b: string }[] }[] {
-        const out: { binds: string[]; branches: { x: number; y: number }[]; legs: { a: string; b: string }[] }[] = []
+      wirePhysics(): { binds: string[]; junctions: { x: number; y: number }[]; edges: [number, number][] }[] {
+        const out: { binds: string[]; junctions: { x: number; y: number }[]; edges: [number, number][] }[] = []
         for (const [, w] of engine.wires) {
           out.push({
             binds: w.binds.map((bd) => `${bd.body}:${bd.key}`),
-            branches: w.branches.map((p) => ({ x: p.x, y: p.y })),
-            legs: w.legs.map((l) => ({ a: `${l.a.kind}${'index' in l.a ? ':' + String((l.a as { index: number }).index) : ''}`, b: `${l.b.kind}${'index' in l.b ? ':' + String((l.b as { index: number }).index) : ''}` })),
+            junctions: w.net.junctions.map((p) => ({ x: p.x, y: p.y })),
+            edges: w.net.edges.map(([u, v]) => [u, v]),
           })
         }
         return out
@@ -1921,17 +1922,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       legSolves(): unknown[] {
         const out: unknown[] = []
+        const fs = mkFreeSpace(routeObstacles(engine))
         for (const [wid, w] of engine.wires) {
-          for (const leg of w.legs) {
-            const sh = resolveLeg(engine, w, leg)
-            const chord = Math.atan2(sh.p1.y - sh.p0.y, sh.p1.x - sh.p0.x)
-            out.push({
-              wid, a: leg.a.kind, b: leg.b.kind,
-              p0: { x: +sh.p0.x.toFixed(2), y: +sh.p0.y.toFixed(2) }, p1: { x: +sh.p1.x.toFixed(2), y: +sh.p1.y.toFixed(2) },
-              th0: +sh.th0.toFixed(3), th1: +sh.th1.toFixed(3), chord: +chord.toFixed(3),
-              tau: +sh.sol.dTurn.toFixed(3), L: +sh.sol.L.toFixed(2), free: sh.freeEnd,
-              chordLen: +Math.hypot(sh.p1.x - sh.p0.x, sh.p1.y - sh.p0.y).toFixed(2),
-            })
+          const terms = wireTerminalPoints(engine, w)
+          const pos = (v: number): { x: number; y: number } => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
+          for (const [u, v] of w.net.edges) {
+            const r = route(fs, pos(u), pos(v))
+            out.push({ wid, u, v, length: +r.length.toFixed(3), pts: r.pts.length })
           }
         }
         return out

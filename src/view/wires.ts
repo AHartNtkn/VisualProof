@@ -1,57 +1,97 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Engine, Leg, LegEnd, WireLegEnd, WireView } from './engine'
-import { resolveLeg, traceLeg } from './engine'
+import type { Engine, Leg, LegEnd, WireView } from './engine'
+import { escapePoint, routeObstacles, wireTerminalPoints } from './engine'
+import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
 
 /**
- * Wire geometry over the PLAN-22 massless elastica, pure — returns traced
- * polylines, paints nothing. Each leg IS the minimum-energy θ-quadratic
- * interpolant of its live boundary data (elastica.ts); rendering simply traces
- * it at paint resolution (n=30). Loops and kinks are unrepresentable, so the
- * traced line is always a smooth non-self-crossing curve leaving each port
- * perpendicular by construction. A boundary wire's leg reaches its FIXED frame
- * slot as an ordinary leg endpoint (plan 24 — no exterior connector, no exit
- * body). ∃/∀ ends and bare wires become existential dots.
+ * Wire geometry over the ROUTED NETWORK (USER ruling 2026-07-24), pure —
+ * returns traced polylines, paints nothing. Each drawn stroke is a routed
+ * shortest path through free space (node discs are hard obstacles), FILLETED
+ * at its interior corners as a RENDERER operation: the rounding selects no
+ * winding basins and stores no state — it is a local corner treatment of the
+ * already-clear route corridor. A port stroke begins with the fixed escape
+ * stub (rim anchor → escape point), so exits are perpendicular by
+ * construction.
  */
 
-/** Trace resolution for painted legs (segments per leg). */
-const PAINT_N = 30
+/** Fillet radius (world units, scaled by content fill) and samples/corner. */
+const FILLET_R = 2.0
+const FILLET_N = 6
 
 export type LegGeom = { leg: Leg; pts: Vec2[] }
 export type ExStub = { wid: WireId; from: Vec2; to: Vec2; dot: Vec2 }
 
-/** The rendering identity of a leg terminal: real (body, key) at a port bind and
-    the wire-owned END body (∃ tip / ∀ via); a wire-local id for a boundary slot or
-    a Steiner branch vertex. Endpoint-level gestures (drag-join) read these. */
-function endId(wid: WireId, w: WireView, end: WireLegEnd): LegEnd {
-  switch (end.kind) {
-    case 'bind': return { body: w.binds[end.i]!.body, key: w.binds[end.i]!.key }
-    case 'end': return { body: w.endBodyId!, key: null }
-    case 'slot': return { body: `w:${wid}:slot:${w.slots[end.i]!}`, key: null }
-    case 'branch': return { body: `w:${wid}:b${end.i}`, key: null }
+/** Round the interior corners of a polyline with quadratic fillets clipped to
+    the shorter adjacent half-segment. Endpoints are preserved exactly. */
+export function filletPolyline(pts0: readonly Vec2[], r: number): Vec2[] {
+  // drop degenerate consecutive duplicates first (stub joins, collinear routes)
+  const pts: Vec2[] = []
+  for (const p of pts0) {
+    const last = pts[pts.length - 1]
+    if (last !== undefined && Math.hypot(p.x - last.x, p.y - last.y) < 1e-9) continue
+    pts.push(p)
   }
+  if (pts.length <= 2) return pts
+  const out: Vec2[] = [pts[0]!]
+  for (let i = 1; i + 1 < pts.length; i++) {
+    const a = pts[i - 1]!, b = pts[i]!, c = pts[i + 1]!
+    const d1 = Math.hypot(b.x - a.x, b.y - a.y), d2 = Math.hypot(c.x - b.x, c.y - b.y)
+    const t = Math.min(r, d1 / 2, d2 / 2)
+    if (t < 1e-9) { out.push(b); continue }
+    const p = { x: b.x + ((a.x - b.x) / d1) * t, y: b.y + ((a.y - b.y) / d1) * t }
+    const q = { x: b.x + ((c.x - b.x) / d2) * t, y: b.y + ((c.y - b.y) / d2) * t }
+    for (let k = 0; k <= FILLET_N; k++) {
+      const u = k / FILLET_N
+      const v = 1 - u
+      const np = {
+        x: v * v * p.x + 2 * v * u * b.x + u * u * q.x,
+        y: v * v * p.y + 2 * v * u * b.y + u * u * q.y,
+      }
+      const last = out[out.length - 1]!
+      if (Math.hypot(np.x - last.x, np.y - last.y) < 1e-9) continue
+      out.push(np)
+    }
+  }
+  out.push(pts[pts.length - 1]!)
+  return out
 }
 
-/** Every drawable leg as a traced polyline. The traced curve is the wire — it
-    starts ON the rim heading along the port normal and closes on its far end
-    (another port, a Steiner branch vertex, a fixed boundary slot, or the
-    wire's own END body — the ∃ tip / ∀ via), tangent range <= pi so it
-    never loops. */
+/** The rendering identity of a network vertex: real (body, key) at a port
+    bind and the wire-owned END body; a wire-local id for a boundary slot or a
+    junction vertex. Endpoint-level gestures (drag-join) read these. */
+function endId(wid: WireId, w: WireView, v: number): LegEnd {
+  const nB = w.binds.length
+  const nS = w.slots.length
+  if (v < nB) return { body: w.binds[v]!.body, key: w.binds[v]!.key }
+  if (v < nB + nS) return { body: `w:${wid}:slot:${w.slots[v - nB]!}`, key: null }
+  if (w.endBodyId !== null && v === nB + nS) return { body: w.endBodyId, key: null }
+  return { body: `w:${wid}:j${v - nB - nS - (w.endBodyId !== null ? 1 : 0)}`, key: null }
+}
+
+/** Every drawable stroke as a filleted routed polyline. A port-incident edge
+    is prefixed with its fixed escape stub so the drawn stroke starts ON the
+    rim heading along the port normal. */
 export function computeLegs(e: Engine): LegGeom[] {
+  const fs: FreeSpace = mkFreeSpace(routeObstacles(e))
   const out: LegGeom[] = []
+  const r = FILLET_R * e.scale
   for (const [wid, w] of e.wires) {
-    for (const leg of w.legs) {
-      const s = resolveLeg(e, w, leg)
-      const pts: Vec2[] = []
-      traceLeg(s, pts, PAINT_N)
-      out.push({ leg: { wid, from: endId(wid, w, leg.a), to: endId(wid, w, leg.b) }, pts })
+    const terms = wireTerminalPoints(e, w)
+    const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
+    for (const [u, v] of w.net.edges) {
+      const rt = route(fs, pos(u), pos(v))
+      let pts: Vec2[] = [...rt.pts]
+      // prepend/append the fixed port stubs (rim anchor → escape point)
+      if (u < w.binds.length) pts = [escapePoint(e, w.binds[u]!).anchor, ...pts]
+      if (v < w.binds.length) pts = [...pts, escapePoint(e, w.binds[v]!).anchor]
+      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: filletPolyline(pts, r) })
     }
   }
   return out
 }
 
-/** Traced polyline for every leg (boundary legs included — a boundary leg reaches
-    its fixed frame slot directly, plan 24). */
+/** Traced polyline for every stroke (boundary edges included). */
 export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts }))
 }
@@ -59,8 +99,7 @@ export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
 /** Quantifier dots: a dangling wire end is its own body (USER LAW — the loose
     end IS the first-order ∃, homed at the wire's scope); the ∀ via body is the
     outermost point of that line of identity; a bare wire (no endpoints) is a dot
-    alone. Every wire-owned END body is dotted at its position (a degenerate stub
-    carrying the body position). */
+    alone. Every wire-owned END body is dotted at its position. */
 export function existentialStubs(e: Engine): ExStub[] {
   const out: ExStub[] = []
   for (const [wid, w] of e.wires) {
@@ -68,8 +107,8 @@ export function existentialStubs(e: Engine): ExStub[] {
     const b = e.bodies.get(w.endBodyId)!
     out.push({ wid, from: b.pos, to: b.pos, dot: b.pos })
   }
-  // bare (0-endpoint) wires carry no leg — just a scope-homed body (its dot IS
-  // the whole rendering)
+  // bare (0-endpoint) wires carry no edges — just a scope-homed body (its dot
+  // IS the whole rendering)
   for (const [wid, w] of Object.entries(e.d.wires)) {
     if (w.endpoints.length !== 0) continue
     const b = e.bodies.get(`j:${wid}`)

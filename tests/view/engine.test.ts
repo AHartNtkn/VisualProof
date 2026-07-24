@@ -62,7 +62,8 @@ describe('mkEngine', () => {
     const e = mkEngine(h.build(), [external])
 
     expect(e.bodies.has(`j:${external}`), 'a formal port must not float as an existential body').toBe(false)
-    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], legs: [], endBodyId: null })
+    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], endBodyId: null })
+    expect(e.wires.get(external)!.net.edges).toEqual([])
     expect(e.bodies.has(`j:${internal}`), 'an internal bare wire remains a semantic existential body').toBe(true)
     expect(e.wires.has(internal)).toBe(false)
   })
@@ -76,13 +77,9 @@ describe('mkEngine', () => {
 
     expect(w.slots).toEqual([0, 2])
     expect(w.binds).toEqual([])
-    expect(w.legs).toHaveLength(1)
-    expect([w.legs[0]!.a, w.legs[0]!.b]).toEqual([
-      { kind: 'slot', i: 0 },
-      { kind: 'slot', i: 1 },
-    ])
+    expect(w.net.edges, 'two slot terminals joined by one edge').toEqual([[0, 1]])
     expect(e.bodies.has(`j:${shared}`), 'a multi-slot boundary identity must not gain an existential body').toBe(false)
-    expect(e.wires.get(other)).toMatchObject({ slots: [1], legs: [] })
+    expect(e.wires.get(other)!.net.edges).toEqual([])
   })
 
   it('builds one junction topology over an attached port and every repeated boundary incidence', () => {
@@ -91,13 +88,12 @@ describe('mkEngine', () => {
     const shared = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
     const e = mkEngine(h.build(), [shared, shared])
     const w = e.wires.get(shared)!
-    const ends = w.legs.flatMap((leg) => [leg.a, leg.b])
-
     expect(w.slots).toEqual([0, 1])
     expect(w.binds).toHaveLength(1)
-    expect(new Set(ends.filter((end) => end.kind === 'slot').map((end) => end.i))).toEqual(new Set([0, 1]))
-    expect(ends.some((end) => end.kind === 'bind' && end.i === 0)).toBe(true)
-    expect(w.branches.length).toBeGreaterThan(0)
+    // 3 terminals (1 bind + 2 slots) → a star on one junction; every terminal reached
+    const touched = new Set(w.net.edges.flatMap(([u, v]) => [u, v]))
+    expect(touched.has(0) && touched.has(1) && touched.has(2), 'every terminal is in the network').toBe(true)
+    expect(w.net.junctions.length).toBeGreaterThan(0)
   })
 
   it('worldAnchor rotates the local anchor about the body centre by theta', () => {

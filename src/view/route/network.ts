@@ -85,13 +85,15 @@ function junctionTangents(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, j
  * the ACTUAL objective does not increase (strict gate with backtracking).
  * Deterministic: junction index order, fixed iteration count on convergence.
  */
-export function solveTarget(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, maxIters = 60): void {
+export function solveTarget(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, maxIters = 12): void {
   const nT = terms.length
   for (let it = 0; it < maxIters; it++) {
-    let moved = false
+    let maxMove = 0
     for (let j = 0; j < net.junctions.length; j++) {
       const here = net.junctions[j]!
-      // incident routes' first waypoints (the IRLS anchors)
+      // incident routes' first waypoints (the IRLS anchors). The target solve
+      // is OFF-SCREEN and gate-free (Weiszfeld majorization descends on its
+      // own); the WALK's strict routed gate protects every visible state.
       const anchors: { p: Vec2; d: number }[] = []
       for (const [a, b] of net.edges) {
         let other: number
@@ -106,47 +108,27 @@ export function solveTarget(net: WireNet, terms: readonly Vec2[], fs: FreeSpace,
       if (anchors.length === 0) continue
       let wx = 0, wy = 0, ws = 0
       for (const a of anchors) { wx += a.p.x / a.d; wy += a.p.y / a.d; ws += 1 / a.d }
-      let target = projectFeasible({ x: wx / ws, y: wy / ws }, fs.discs)
-      // strict objective gate with backtracking toward the current position
-      const L0 = localJunctionL(net, terms, fs, j, here)
-      for (let bt = 0; bt < 6; bt++) {
-        const L1 = localJunctionL(net, terms, fs, j, target)
-        if (L1 < L0 - 1e-12) {
-          net.junctions[j] = target
-          moved = true
-          break
-        }
-        target = projectFeasible({ x: (target.x + here.x) / 2, y: (target.y + here.y) / 2 }, fs.discs)
-        if (Math.hypot(target.x - here.x, target.y - here.y) < 1e-9) break
-      }
+      const target = projectFeasible({ x: wx / ws, y: wy / ws }, fs.discs)
+      maxMove = Math.max(maxMove, Math.hypot(target.x - here.x, target.y - here.y))
+      net.junctions[j] = target
     }
-    if (!moved) break
+    if (maxMove < 1e-4) break
   }
-}
-
-/** Localized objective: the routed length of the edges incident to junction j
-    with the junction at `at` (the untouched remainder cancels in comparisons). */
-function localJunctionL(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, j: number, at: Vec2): number {
-  const nT = terms.length
-  let L = 0
-  for (const [a, b] of net.edges) {
-    if (a === nT + j) L += route(fs, at, posOf(net, terms, b)).length
-    else if (b === nT + j) L += route(fs, posOf(net, terms, a), at).length
-  }
-  return L
 }
 
 /** Contract every internal junction–junction edge of routed length below the
     tolerance: DELETE the edge, identify the endpoints. The stored result is
     one higher-degree vertex — no residual edge, tangent, or chart state. */
-export function contract(net: WireNet, terms: readonly Vec2[], fs: FreeSpace): boolean {
+export function contract(net: WireNet, terms: readonly Vec2[], _fs: FreeSpace): boolean {
   const nT = terms.length
   for (let ei = 0; ei < net.edges.length; ei++) {
     const [a, b] = net.edges[ei]!
     if (a < nT || b < nT) continue
     const ja = a - nT, jb = b - nT
-    const r = route(fs, net.junctions[ja]!, net.junctions[jb]!)
-    if (r.length >= CONTRACT_TOL) continue
+    const pa0 = net.junctions[ja]!, pb0 = net.junctions[jb]!
+    // coincidence is Euclidean by definition (a route between coincident
+    // points has zero length) — no route call needed
+    if (Math.hypot(pa0.x - pb0.x, pa0.y - pb0.y) >= CONTRACT_TOL) continue
     // identify jb into ja: midpoint position, re-point edges, drop the edge and jb
     const keep = Math.min(ja, jb), drop = Math.max(ja, jb)
     const pa = net.junctions[keep]!, pb = net.junctions[drop]!
@@ -264,35 +246,54 @@ export function advanceNetwork(
   opts: { substeps: number; bound: number },
 ): boolean {
   let changed = false
-  for (let s = 0; s < opts.substeps; s++) {
+  // the off-screen fixed-topology TARGET is solved ONCE per advance (and again
+  // only after a topology change) — the substeps walk toward it under the
+  // per-substep bound and the strict gate
+  let target: WireNet | null = null
+  let curL: number | null = null
+  const resolveTargetIfNeeded = (): void => {
+    if (target !== null && target.junctions.length === net.junctions.length) return
+    target = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
+    solveTarget(target, terms, fs)
+  }
+  for (let s2 = 0; s2 < opts.substeps; s2++) {
     let stepMoved = false
-    // topology first: contraction is exact identification; splits are gated
-    while (contract(net, terms, fs)) { changed = true; stepMoved = true }
-    if (trySplit(net, terms, fs)) { changed = true; stepMoved = true }
+    // contraction first (Euclidean coincidence — cheap, exact); the SPLIT
+    // check is routed and runs once per advance, after the walk
+    let topo = false
+    while (contract(net, terms, fs)) { topo = true }
+    if (topo) { changed = true; stepMoved = true; target = null; curL = null }
     if (net.junctions.length > 0) {
-      // off-screen fixed-topology target from the CURRENT state
-      const target: WireNet = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
-      solveTarget(target, terms, fs)
-      const L0 = netLength(net, terms, fs)
+      resolveTargetIfNeeded()
+      const tgt = target!
       const proposal = net.junctions.map((p, j) => {
-        const t = target.junctions[j]!
+        const t = tgt.junctions[j]!
         const dx = t.x - p.x, dy = t.y - p.y
         const d = Math.hypot(dx, dy)
         if (d < 1e-12) return p
         const step = Math.min(d, opts.bound)
         return projectFeasible({ x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }, fs.discs)
       })
-      const before = net.junctions
-      net.junctions = proposal
-      const L1 = netLength(net, terms, fs)
-      if (L1 < L0 - 1e-12) {
-        stepMoved = stepMoved || proposal.some((p, j) => p.x !== before[j]!.x || p.y !== before[j]!.y)
-        changed = changed || stepMoved
-      } else {
-        net.junctions = before
+      const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
+      if (anyProposed) {
+        if (curL === null) curL = netLength(net, terms, fs)
+        const before = net.junctions
+        net.junctions = proposal
+        const L1 = netLength(net, terms, fs)
+        if (L1 < curL - 1e-12) {
+          curL = L1
+          stepMoved = true
+          changed = true
+        } else {
+          net.junctions = before
+        }
       }
     }
     if (!stepMoved) break
   }
+  // one routed split check per advance, only when something changed (splits
+  // are rare; when one fires the next advance's walk grows it under the gates;
+  // at rest nothing scans — the state is already a gated fixed point)
+  if (changed) trySplit(net, terms, fs)
   return changed
 }

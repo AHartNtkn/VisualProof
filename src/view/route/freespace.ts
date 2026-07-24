@@ -26,8 +26,11 @@ export type FreeSpace = {
   readonly discs: readonly Disc[]
   /** polygon corners, disc-major, skipping corners buried inside other discs */
   readonly corners: readonly Corner[]
-  /** corner↔corner visibility adjacency: adj[i] = list of {j, d} with j > i mirrored */
-  readonly adj: ReadonlyArray<ReadonlyArray<{ j: number; d: number }>>
+  /** corner↔corner visibility adjacency, built LAZILY on the first blocked
+      route (unblocked scenes never pay for it) */
+  adj: { j: number; d: number }[][] | null
+  /** pure per-frame route memo (exact endpoint tuple) — acceleration only */
+  readonly memo: Map<string, Route>
 }
 
 const EPS_BLOCK = 1e-9
@@ -88,17 +91,24 @@ export function mkFreeSpace(discs: readonly Disc[]): FreeSpace {
       corners.push({ p, disc: di })
     }
   }
+  return { discs, corners, adj: null, memo: new Map() }
+}
+
+function cornerAdjacency(fs: FreeSpace): { j: number; d: number }[][] {
+  if (fs.adj !== null) return fs.adj
+  const corners = fs.corners
   const adj: { j: number; d: number }[][] = corners.map(() => [])
   for (let i = 0; i < corners.length; i++) {
     for (let j = i + 1; j < corners.length; j++) {
       const a = corners[i]!.p, b = corners[j]!.p
-      if (!segmentClear(a, b, discs)) continue
+      if (!segmentClear(a, b, fs.discs)) continue
       const d = Math.hypot(a.x - b.x, a.y - b.y)
       adj[i]!.push({ j, d })
       adj[j]!.push({ j: i, d })
     }
   }
-  return { discs, corners, adj }
+  fs.adj = adj
+  return adj
 }
 
 export type Route = { readonly length: number; readonly pts: readonly Vec2[] }
@@ -112,7 +122,11 @@ export function route(fs: FreeSpace, p0: Vec2, q0: Vec2): Route {
   if (segmentClear(p, q, fs.discs)) {
     return { length: Math.hypot(q.x - p.x, q.y - p.y), pts: [p, q] }
   }
+  const key = `${p.x},${p.y},${q.x},${q.y}`
+  const hit = fs.memo.get(key)
+  if (hit !== undefined) return hit
   // Dijkstra over corners + {p, q}
+  const adjacency = cornerAdjacency(fs)
   const n = fs.corners.length
   const P = n, Q = n + 1
   const dist = new Array<number>(n + 2).fill(Infinity)
@@ -133,7 +147,7 @@ export function route(fs: FreeSpace, p0: Vec2, q0: Vec2): Route {
     if (u < 0) break
     done[u] = true
     if (u === Q) break
-    const edges = u === P ? pcon : fs.adj[u]!
+    const edges = u === P ? pcon : adjacency[u]!
     for (const { j, d } of edges) {
       if (dist[u]! + d < dist[j]!) { dist[j] = dist[u]! + d; prev[j] = u }
     }
@@ -155,5 +169,7 @@ export function route(fs: FreeSpace, p0: Vec2, q0: Vec2): Route {
   for (let u = prev[Q]!; u !== -1 && u !== P; u = prev[u]!) rev.push(fs.corners[u]!.p)
   rev.push(p)
   rev.reverse()
-  return { length: dist[Q]!, pts: rev }
+  const out: Route = { length: dist[Q]!, pts: rev }
+  fs.memo.set(key, out)
+  return out
 }

@@ -91,7 +91,7 @@ function boundaryOrDotCandidates(e: Engine, point: Vec2): WireCandidate[] {
 
 function wireStrokeCandidates(e: Engine, point: Vec2): WireCandidate[] {
   const out: WireCandidate[] = []
-  // Every wire — junctions included — is DRAWN as its elastica legs (the junction
+  // Every wire — junctions included — is DRAWN as its routed strokes (the junction
   // is a tree of legs), so hit-test those same legs (paint and this share legPaths).
   for (const { wid, pts } of legPaths(e)) {
     out.push({ id: wid, distance: polylineDistance(point, pts) })
