@@ -1741,8 +1741,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           if (body !== undefined) points.push(body.pos)
         }
         for (const id of transition.focus.wires) {
-          const hub = previewEngine.bodies.get(`j:${id}`)
-          if (hub !== undefined) points.push(hub.pos)
+          // A wire's scope-homed body is keyed `j:<id>` for an ∃ tip (bare internal ∃
+          // or dangling END) or `x:<id>` for a ∀ via-body — check both.
+          const existentialTip = previewEngine.bodies.get(`j:${id}`)
+          if (existentialTip !== undefined) points.push(existentialTip.pos)
+          const universalVia = previewEngine.bodies.get(`x:${id}`)
+          if (universalVia !== undefined) points.push(universalVia.pos)
           for (const endpoint of transition.after.wires[id]?.endpoints ?? []) {
             const body = previewEngine.bodies.get(endpoint.node)
             if (body !== undefined) points.push(body.pos)

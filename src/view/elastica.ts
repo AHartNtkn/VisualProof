@@ -168,15 +168,15 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
   }
   // UNIFORM scan over the WHOLE feasible turn interval [−π, π] for EVERY leg,
   // then refinement. The arrival condition is soft or absent for the two leg
-  // kinds that need this: a hub leg's arrival angle is a RELAXING DOF (finite
-  // spread energy), and a free-end leg's th1 is a dummy — so a D0 = wrapA(th1 −
-  // th0)-centered scan can EXCLUDE the tau ≈ ±π solution a port facing away from
-  // its target needs, and coordinate descent cannot walk the soft angle and tau
-  // jointly past the gap. A port→port leg's well merely makes distant-tau
-  // candidates expensive, which the energy selection already discards — so one
-  // policy, the whole family always in view. The tau = +π/−π tie for a
-  // directly-behind target is broken by scan order (−π first): the memoryless
-  // law depends on this determinism.
+  // kinds that need this: a branch-incident leg's arrival angle is a RELAXING
+  // DOF (finite spread energy), and a free-end leg's th1 is a dummy — so a
+  // D0 = wrapA(th1 − th0)-centered scan can EXCLUDE the tau ≈ ±π solution a
+  // port facing away from its target needs, and coordinate descent cannot walk
+  // the soft angle and tau jointly past the gap. A port→port leg's well merely
+  // makes distant-tau candidates expensive, which the energy selection already
+  // discards — so one policy, the whole family always in view. The tau =
+  // +π/−π tie for a directly-behind target is broken by scan order (−π
+  // first): the memoryless law depends on this determinism.
   for (let k2 = -4; k2 <= 4; k2++) tryTau((k2 * Math.PI) / 4)
   if (best !== null) {
     let w = 0.55
@@ -193,8 +193,9 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
     // the exact arc, but regularize ONLY the tau → 2pi singularity so the length
     // stays finite yet STEEPLY, MONOTONICALLY increasing with blind-cone depth:
     // the leg must remain energetically REPULSIVE in proportion to how deep its
-    // target sits, or a movable hub/tip has no gradient to migrate OUT of the
-    // cone (and the node no torque to rotate to face it). Capping the LENGTH
+    // target sits, or a movable branch point / wire-owned END body (tip) has no
+    // gradient to migrate OUT of the cone (and the node no torque to rotate to
+    // face it). Capping the LENGTH
     // instead flattens that gradient and lets the leg REST in the cone — the
     // dead-zone-from-clamping failure. Only the last sliver (delta within
     // DELTA_EPS of π) is bounded, where the length is already enormous.

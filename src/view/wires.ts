@@ -34,7 +34,8 @@ function endId(wid: WireId, w: WireView, end: WireLegEnd): LegEnd {
 
 /** Every drawable leg as a traced polyline. The traced curve is the wire — it
     starts ON the rim heading along the port normal and closes on its far end
-    (another port, the branch/exit hub, or the ∃ tip), tangent range <= pi so it
+    (another port, a Steiner branch vertex, a fixed boundary slot, or the
+    wire's own END body — the ∃ tip / ∀ via), tangent range <= pi so it
     never loops. */
 export function computeLegs(e: Engine): LegGeom[] {
   const out: LegGeom[] = []

@@ -141,13 +141,13 @@ export type Engine = {
   readonly d: Diagram
   readonly bodies: Map<string, Body>
   readonly childrenOf: Map<RegionId, RegionId[]>
-  /** node/junction body ids per region. */
+  /** node / wire-owned END-body / anchor ids per region. */
   readonly membersOf: Map<RegionId, string[]>
   /** PLAN 22: every boundary wire and each >= 1-endpoint internal wire is a
-      massless-elastica view (binds + optional hub/tip + derived legs) — see
-      elastica.ts + relax.ts for the energy model. A bare boundary wire is a
-      bodyless, zero-leg view at its fixed slot; only a bare internal wire is a
-      homed body with no entry. */
+      massless-elastica view (binds + optional wire-owned END body [∃ tip / ∀
+      via] + derived legs) — see elastica.ts + relax.ts for the energy model.
+      A bare boundary wire is a bodyless, zero-leg view at its fixed slot;
+      only a bare internal wire is a homed body with no entry. */
   readonly wires: Map<WireId, WireView>
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
@@ -424,8 +424,9 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
 /**
  * Transplant the layout state of every body shared between two engines. When a
  * new engine is built for the next diagram in a replay, bodies whose id survives
- * (nodes keyed by NodeId, junctions by `j:<wireId>`) keep their pos/theta so
- * the layout glides from where it was rather than re-seeding from the spiral.
+ * (nodes keyed by NodeId, wire-owned END bodies by `j:<wireId>` for an ∃ tip or
+ * `x:<wireId>` for a ∀ via) keep their pos/theta so the layout glides from
+ * where it was rather than re-seeding from the spiral.
  * Bodies present only in `next` keep their deterministic mkEngine seeds. Vec2 is
  * treated as an immutable value here, matching relax.ts's replace-not-mutate
  * discipline, so copying the reference cannot alias `prev` into `next`'s motion.

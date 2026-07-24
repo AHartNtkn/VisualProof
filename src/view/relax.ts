@@ -1204,8 +1204,9 @@ function tryFaceCross(e: Engine, w: WireView, ei: number): boolean {
 
 /**
  * The PLAN-23 strict-descent pass, as a WORKLIST: one thunk per DOF — node
- * translation and rotation, ∃-tip / ∀-hub / boundary-exit-hub translation, wire
- * hub points, per-leg arrival angles — each a strictly E-GATED coordinate step
+ * translation and rotation, wire-owned END-body (∃ tip / ∀ via) translation,
+ * wire branch-vertex positions, per-leg free-end tangent angles — each a
+ * strictly E-GATED coordinate step
  * (backtracking + expanding search; a move is taken only when it strictly lowers
  * the localized total) over the ONE total energy (wires + content). There is no
  * velocity, no force accumulator, no independent overlap mover: cycles are
@@ -1454,11 +1455,13 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     }
   }
   // per-leg free END-TANGENT DOFs (stiff/slow: MU/64, cap 0.06 — a wire SHAPE DOF,
-  // slow for the no-snap smoothness law). Every leg end incident to a hub or a
-  // Steiner branch is an ORDINARY descended angle over the leg's own energy: `angB`
-  // (arrival at b, welled) when b is a hub/branch, `angA` (leaving at a, exact θ(0))
-  // when a is a branch. A bind/slot end fixes its tangent by construction, so only
-  // free ends get a gate. A wire that crossed this sweep defers (its legs are stale).
+  // slow for the no-snap smoothness law). Every leg end incident to a Steiner BRANCH
+  // point is an ORDINARY descended angle over the leg's own energy: `angB` (arrival
+  // at b, welled) when b is a branch, `angA` (leaving at a, exact θ(0)) when a is a
+  // branch. A bind/slot end fixes its tangent by construction and a wire-owned END
+  // body (∃ tip / ∀ via) is a free leaf that solveLeg scans internally (`freeEnd`,
+  // engine.ts), so only branch-incident ends get a gate here. A wire that crossed
+  // this sweep defers (its legs are stale).
   for (const [wid] of e.wires) {
     for (const rec of legsOfWire.get(wid)!) {
       const leg = rec.leg

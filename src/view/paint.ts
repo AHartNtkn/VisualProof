@@ -159,10 +159,11 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // colour (rung 0). One colour, uniform along the whole wire (law 6).
   const wireStroke = (wid: WireId): string => hues.get(wid) ?? st.wire
   const shapes: Shape[] = []
-  // ≥3-leg interior junctions are drawn as a soap-film Steiner tree with tangential
-  // tributary merging (round-8 · D, the user-approved look), NOT as a star of legs
-  // meeting at one hub point — so those wires' star legs are skipped here and the
-  // hub-point branch dot is NOT drawn (USER 2026-07-07: branch points are unmarked).
+  // ≥3-leg interior junctions draw as a soap-film Steiner tree with tangential
+  // tributary merging (round-8 · D, the user-approved look): `legPaths` already
+  // traces every tree edge (leg), branch vertices included, so there is nothing
+  // extra to draw at a branch — no dot is painted there (USER 2026-07-07: branch
+  // points are unmarked).
   // wires (traced elastica legs) — the ACTUAL physics wire, junctions included
   for (const { wid, pts } of legPaths(e)) {
     const stroke = wireStroke(wid)

@@ -184,7 +184,13 @@ describe('face crossing — the drawing is φ-identical across the face (Lemma 2
     const after = drawingCloud(b.e, b.w)
 
     const d = Math.max(hausdorff(before, after), hausdorff(after, before))
-    expect(d, `two charts at the face drew pictures ${d.toFixed(3)} wu apart (Lemma 2 violated)`).toBeLessThan(1.0)
+    // Lemma 2 (phi-construction §1.3) holds "up to solver resolution": the four surviving
+    // arcs are identical by Fact 0.3, and the collapsed edge's stub is <=0.01-diameter
+    // (Fact 0.1, elastica.ts's L>=0.01 floor) — invisible at that scale, which is exactly
+    // MERGE_EPS (relax.ts), the drawing-resolution window this whole face mechanism is
+    // built on (§4.2: "MERGE_EPS = the drawing resolution (0.01, Fact 0.1)"). The bound is
+    // that resolution itself, not an arbitrary tolerance.
+    expect(d, `two charts at the face drew pictures ${d.toFixed(3)} wu apart (Lemma 2 violated)`).toBeLessThan(MERGE_EPS)
   })
 })
 
