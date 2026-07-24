@@ -187,6 +187,34 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
       tryTau(t0 + w)
     }
   }
+  if (best !== null) {
+    // POLISH the winner to the CONTINUOUS optimum of its basin (golden section
+    // in tau to sub-milliradian resolution, warm-started closures). Without
+    // this the returned tau is quantized at the refinement grid (~3e-2 rad):
+    // the energy seen through the solve is then a STAIRCASE at exactly the
+    // scale fine gradient probes measure — phantom creases at every rest — and
+    // near-tied basins flip winners under sub-quantum input changes, flashing
+    // the drawn configuration frame to frame. Deterministic, memoryless.
+    const bb = best as { c1: number; L: number; tau: number; E: number }
+    const evalTau = (tau: number): { c1: number; L: number; tau: number; E: number } | null => {
+      const r = closeAt(p0, th0, p1, tau, bb.c1, bb.L)
+      if (!r.ok) return null
+      if (thetaRange(r.c1, tau - r.c1) > RANGE_B) return null
+      return { c1: r.c1, L: r.L, tau, E: legInnerE(r, tau, freeEnd ? 0 : th0 + tau - th1) }
+    }
+    const PHI = 0.6180339887498949
+    let a = bb.tau - 0.55 / 16, d = bb.tau + 0.55 / 16
+    let bpt = d - PHI * (d - a), cpt = a + PHI * (d - a)
+    let fb = evalTau(bpt), fc = evalTau(cpt)
+    for (let it = 0; it < 16; it++) {
+      if ((fb === null ? Infinity : fb.E) <= (fc === null ? Infinity : fc.E)) {
+        d = cpt; cpt = bpt; fc = fb; bpt = d - PHI * (d - a); fb = evalTau(bpt)
+      } else {
+        a = bpt; bpt = cpt; fb = fc; cpt = a + PHI * (d - a); fc = evalTau(cpt)
+      }
+    }
+    for (const cand of [fb, fc]) if (cand !== null && cand.E < (best as { E: number }).E) best = cand
+  }
   if (best === null) {
     // NO representable candidate: the target is in the blind cone behind the
     // port (a > pi turn is needed — no range ≤ π θ-quadratic closes it). Take

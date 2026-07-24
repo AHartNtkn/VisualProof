@@ -6,7 +6,7 @@ import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
-export const PHYSICS_REV = 'step-operator@2026-07-24'
+export const PHYSICS_REV = 'step-operator@2026-07-24b'
 console.info('[physics] rev', PHYSICS_REV)
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
@@ -1095,31 +1095,24 @@ function mkWireParam(w: WireView): WireParam | null {
   return param
 }
 
-/** Express a trial whose internal edge ℓ went NEGATIVE in the charts incident to
-    the crossed face, and keep the steepest: candidates are the current chart as
-    reconstructed (positions already reflect the passage — the reparametrization
-    ℓ<0 ≡ (|ℓ|, θ+π)) and the two NNI re-pairings at the SAME branch positions,
-    with terminal-leg tangents carried unchanged (φ is the identity on intrinsic
-    data; the collapsed stub's angle is quotiented — internal edges re-emerge
-    with chord tangents). Deterministic candidate order; strict improvement to
-    switch. Part of ONE trial evaluation — the ordinary gate accepts or rejects
-    whatever this resolves to. */
-function resolveCharts(e: Engine, w: WireView, nBind: number, nT: number): void {
-  const edges = wireEdges(w, nBind, nT)
+/** Build the leg set of a candidate adjacency at the CURRENT positions: terminal
+    legs carry their tangents unchanged (φ is the identity on intrinsic data);
+    internal edges re-emerge with chord tangents (the collapsed stub's angle is
+    quotiented). `srcLegs` supplies the carried terminal tangents. */
+function buildChartLegs(e: Engine, w: WireView, nBind: number, nT: number, cand: readonly TreeEdge[], srcLegs: readonly WireLeg[]): WireLeg[] {
   const termPos = wireTerminals(e, w)
   const posOf = (node: number): Vec2 => {
     if (node >= nT) return w.branches[node - nT]!
     if (node < termPos.length) return termPos[node]!
     return e.bodies.get(w.endBodyId!)!.pos // END terminal (tree order: binds, slots, end)
   }
-  // carried terminal tangents (identity on intrinsic data)
   const termTan = new Map<number, { angA: number; angB: number }>()
-  for (const leg of w.legs) {
+  for (const leg of srcLegs) {
     const t = leg.a.kind !== 'branch' ? endNodeIndex(leg.a, nBind, nT)
       : leg.b.kind !== 'branch' ? endNodeIndex(leg.b, nBind, nT) : -1
     if (t >= 0) termTan.set(t, { angA: leg.angA, angB: leg.angB })
   }
-  const buildLegs = (cand: readonly TreeEdge[]): WireLeg[] => cand.map(([u0, v0]) => {
+  return cand.map(([u0, v0]) => {
     const [u, v] = u0 < v0 ? [u0, v0] : [v0, u0]
     const endU = nodeEnd(u, nBind, nT), endV = nodeEnd(v, nBind, nT)
     if (u < nT) {
@@ -1129,24 +1122,46 @@ function resolveCharts(e: Engine, w: WireView, nBind: number, nT: number): void 
     const chord = Math.atan2(posOf(v).y - posOf(u).y, posOf(v).x - posOf(u).x)
     return { a: endU, b: endV, angA: chord, angB: chord, cache: mkLegCache() }
   })
-  for (let ei = 0; ei < edges.length; ei++) {
-    const alts = nniAlternatives(edges, nT, ei)
-    if (alts.length === 0) continue
-    const [bi, bj] = edges[ei]!
-    const d = Math.hypot(w.branches[bi - nT]!.x - w.branches[bj - nT]!.x, w.branches[bi - nT]!.y - w.branches[bj - nT]!.y)
-    if (d > HX) continue // edge nowhere near its face this trial
-    const savedLegs = [...w.legs]
-    let bestE = totalEnergy(e)
-    let bestLegs: WireLeg[] | null = null
-    for (const alt of alts) {
-      const legs = buildLegs(alt)
-      w.legs.length = 0; for (const l of legs) w.legs.push(l)
-      const E = totalEnergy(e)
-      if (E < bestE) { bestE = E; bestLegs = legs }
-      w.legs.length = 0; for (const l of savedLegs) w.legs.push(l)
-    }
-    if (bestLegs !== null) { w.legs.length = 0; for (const l of bestLegs) w.legs.push(l) }
+}
+
+/** The candidate adjacencies incident to the face(s) a trial crossed: the
+    current adjacency (the re-parametrized chart) plus, per crossed internal
+    edge (child, parent branch indices), its two NNI re-pairings. On the glued
+    manifold the crossed point lies in ALL of these charts — its energy is
+    their minimum, and a committed trial takes the steepest. */
+function crossedAlternatives(w: WireView, nBind: number, nT: number, crossed: readonly { child: number; parent: number }[]): TreeEdge[][] {
+  const edges = wireEdges(w, nBind, nT)
+  const out: TreeEdge[][] = []
+  for (const c of crossed) {
+    const ei = edges.findIndex(([a, b]) =>
+      (a === nT + c.child && b === nT + c.parent) || (a === nT + c.parent && b === nT + c.child))
+    if (ei < 0) continue
+    out.push(...nniAlternatives(edges, nT, ei))
   }
+  return out
+}
+
+/** Express a trial whose internal edge coordinate went NEGATIVE in the charts
+    incident to the crossed face and keep the steepest: candidates are the
+    current chart as re-parametrized (positions already reflect the passage —
+    ℓ<0 ≡ (|ℓ|, θ+π)) and the NNI re-pairings at the SAME branch positions.
+    Deterministic candidate order; strict improvement to switch. Part of ONE
+    trial evaluation — the ordinary gate accepts or rejects whatever this
+    resolves to. */
+function resolveCharts(e: Engine, w: WireView, nBind: number, nT: number, crossed: readonly { child: number; parent: number }[]): void {
+  const alts = crossedAlternatives(w, nBind, nT, crossed)
+  if (alts.length === 0) return
+  const savedLegs = [...w.legs]
+  let bestE = totalEnergy(e)
+  let bestLegs: WireLeg[] | null = null
+  for (const alt of alts) {
+    const legs = buildChartLegs(e, w, nBind, nT, alt, savedLegs)
+    w.legs.length = 0; for (const l of legs) w.legs.push(l)
+    const E = totalEnergy(e)
+    if (E < bestE) { bestE = E; bestLegs = legs }
+    w.legs.length = 0; for (const l of savedLegs) w.legs.push(l)
+  }
+  if (bestLegs !== null) { w.legs.length = 0; for (const l of bestLegs) w.legs.push(l) }
 }
 
 /**
@@ -1271,7 +1286,41 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     if (param === null) continue
     params.push(param)
     const wLegs = legsOfWire.get(wid)!
-    const wireLocalE = (): number => localE(wLegs, null)
+    // The wire's probe energy on the GLUED manifold: while every chart
+    // coordinate is interior (ℓ ≥ 0) this is the ordinary localized energy; a
+    // probe that crosses a face (some ℓ < 0) lies in every chart incident to
+    // that face, so its energy is the MINIMUM over their expressions. Without
+    // this the ℓ-probe sees only the current chart's crossed-leg energy, the
+    // one-sided slope at the face points uphill, and descent can never pass —
+    // the observed impassable boundary at ℓ = 0 (squeezed wire never re-pairs).
+    const chartLegsE = (legs: readonly WireLeg[]): number => {
+      let E = 0
+      const sampled: Vec2[][] = []
+      for (const leg of legs) {
+        const shape = resolveLeg(e, w, leg, leg.cache)
+        const samples: Vec2[] = []
+        traceLeg(shape, samples, QN)
+        const near = discs.filter((D) => bboxNear(samples, D.body.pos, D.r + cullR))
+        E += legIntrinsicE(shape, samples, near, sc) + legFrameE(samples, e.frame)
+        sampled.push(samples)
+      }
+      for (const samp of sampled) {
+        for (const o of legRecs) {
+          if (o.wid === wid) continue
+          if (bboxOverlap(samp, o.samples, sepCull)) E += sepPair(samp, o.samples, sc)
+        }
+      }
+      return E + tipStandoffE(e, w)
+    }
+    const wireLocalE = (): number => {
+      const crossed = param.edges.filter((ed) => ed.l < 0)
+      if (crossed.length === 0) return localE(wLegs, null)
+      let best = chartLegsE(w.legs)
+      for (const alt of crossedAlternatives(w, param.nBind, param.nT, crossed)) {
+        best = Math.min(best, chartLegsE(buildChartLegs(e, w, param.nBind, param.nT, alt, w.legs)))
+      }
+      return best
+    }
     coords.push({ get: () => param.root.x, set: (v) => { param.root.x = v; param.reconstruct() }, m: 1, localE: wireLocalE })
     coords.push({ get: () => param.root.y, set: (v) => { param.root.y = v; param.reconstruct() }, m: 1, localE: wireLocalE })
     for (const ed of param.edges) {
@@ -1326,8 +1375,6 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   let gnorm2 = 0
   for (let i = 0; i < coords.length; i++) { const s = g[i]! / coords[i]!.m; gnorm2 += s * s }
   const gnorm = Math.sqrt(gnorm2)
-  if (gnorm === 0) return false
-
   // ── snapshot for restore-on-reject ──
   const bodySnap = new Map<string, { pos: Vec2; theta: number }>()
   for (const b of e.bodies.values()) bodySnap.set(b.id, { pos: { ...b.pos }, theta: b.theta })
@@ -1368,7 +1415,8 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     // a trial that drove an internal edge through its face is expressed in the
     // steepest incident chart (tangent-cone descent) — part of the same trial
     for (const param of params) {
-      if (param.edges.some((ed) => ed.l < 0)) resolveCharts(e, param.w, param.nBind, param.nT)
+      const crossed = param.edges.filter((ed) => ed.l < 0)
+      if (crossed.length > 0) resolveCharts(e, param.w, param.nBind, param.nT, crossed)
     }
     // legality projection, then the one accept test on the true total E
     for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
@@ -1377,6 +1425,90 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     if (E1 < E0 - EPS) return true
     restore()
     recomputeRegions(e)
+  }
+  // ── FACE-CROSSING TRIALS: for every internal edge short enough that passing
+  // through its face fits the drawn-displacement budget (ℓ ≤ Δmax), propose
+  // the φ-image directly: re-expand at the SAME amplitude in each NNI chart
+  // along its canonical split (each branch toward the centroid of its non-edge
+  // neighbours — φ-doc §4). These are ordinary bounded members of the proposal
+  // set under the same strict gate — the passage a chart-local coordinate
+  // cannot express (the tangent cone at the face fans into the incident
+  // charts; a state resting in its own chart's flat bottom beside the face
+  // needs exactly this proposal and no other mechanism). Deterministic order;
+  // measured repro: a collapsed 4-star in the wrong pairing at ℓ=0.04 with the
+  // orthogonal chart strictly lower (−0.023 at the same amplitude). ──
+  for (const param of params) {
+    const w2 = param.w
+    const nBind = param.nBind, nT = param.nT
+    for (const ed of param.edges) {
+      const amp = Math.abs(ed.l)
+      if (amp > deltaMax) continue
+      const edges0 = wireEdges(w2, nBind, nT)
+      const ei = edges0.findIndex(([a2, b2]) =>
+        (a2 === nT + ed.child && b2 === nT + ed.parent) || (a2 === nT + ed.parent && b2 === nT + ed.child))
+      if (ei < 0) continue
+      const bi = nT + ed.parent, bj = nT + ed.child
+      const pb = { ...w2.branches[ed.parent]! }, cb = { ...w2.branches[ed.child]! }
+      const m0 = { x: (pb.x + cb.x) / 2, y: (pb.y + cb.y) / 2 }
+      const termPos0 = wireTerminals(e, w2)
+      const posOf0 = (node: number): Vec2 => {
+        if (node >= nT) return node === bi ? pb : node === bj ? cb : w2.branches[node - nT]!
+        if (node < termPos0.length) return termPos0[node]!
+        return e.bodies.get(w2.endBodyId!)!.pos
+      }
+      const splitDir = (adj: readonly TreeEdge[], v: number, other: number): Vec2 => {
+        const ns = adj.flatMap(([a2, b2]) => (a2 === v ? [b2] : b2 === v ? [a2] : [])).filter((x) => x !== other)
+        let cx = 0, cy = 0
+        for (const n of ns) { const p2 = posOf0(n); cx += p2.x; cy += p2.y }
+        const dx = cx / Math.max(1, ns.length) - m0.x, dy = cy / Math.max(1, ns.length) - m0.y
+        const d = Math.hypot(dx, dy)
+        return d < 1e-9 ? { x: 1, y: 0 } : { x: dx / d, y: dy / d }
+      }
+      for (const alt of nniAlternatives(edges0, nT, ei)) {
+        const ui = splitDir(alt, bi, bj), uj = splitDir(alt, bj, bi)
+        const half = Math.max(amp, 0.01) / 2
+        w2.branches[ed.parent] = { x: m0.x + ui.x * half, y: m0.y + ui.y * half }
+        w2.branches[ed.child] = { x: m0.x + uj.x * half, y: m0.y + uj.y * half }
+        const legs = buildChartLegs(e, w2, nBind, nT, alt, w2.legs)
+        w2.legs.length = 0; for (const l of legs) w2.legs.push(l)
+        recomputeRegions(e)
+        const E1 = totalEnergy(e)
+        if (E1 < E0 - EPS) return true
+        restore()
+        recomputeRegions(e)
+      }
+    }
+  }
+  // ── COORDINATE FALLBACK: the single joint direction can be blocked by a
+  // crease arising from coordinate INTERACTIONS while individual coordinates
+  // still strictly descend (measured: a collapsed 4-star resting at ℓ=0.036
+  // with pure-ℓ descent available; branch/tangent descents visible only along
+  // single axes). When the joint ladder rejects everything, try single
+  // coordinates in steepest order under the SAME strict gate and drawn-
+  // displacement budget — no line search to an optimum, just the other
+  // one-sided-descending directions the gradient already found. Deterministic
+  // (stable sort by index on ties). A frame that rejects ALL of these is the
+  // proven rest. ──
+  const order = coords.map((_, i) => i).filter((i) => g[i] !== 0)
+  order.sort((a, d) => Math.abs(g[d]! / coords[d]!.m) - Math.abs(g[a]! / coords[a]!.m) || a - d)
+  for (const i of order) {
+    const c = coords[i]!
+    const dir = -Math.sign(g[i]!)
+    for (let k = 0; k <= DELTA_HALVINGS; k++) {
+      const delta = deltaMax / (1 << k)
+      if ((delta * Math.abs(g[i]!)) / c.m < EPS) break
+      c.set(c.get() + (dir * delta) / c.m)
+      for (const param of params) {
+        const crossed = param.edges.filter((ed) => ed.l < 0)
+        if (crossed.length > 0) resolveCharts(e, param.w, param.nBind, param.nT, crossed)
+      }
+      for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
+      recomputeRegions(e)
+      const E1 = totalEnergy(e)
+      if (E1 < E0 - EPS) return true
+      restore()
+      recomputeRegions(e)
+    }
   }
   return false
 }
