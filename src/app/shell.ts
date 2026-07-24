@@ -1880,6 +1880,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       spawnHeadWireHover(): string | null {
         return spawnHoverHeadWire
       },
+      perf(): { sweepMs: number; paintMs: number; sweeps10Ms: number } {
+        const t0 = performance.now()
+        settleStep(engine, null)
+        const t1 = performance.now()
+        paint(engine, theme)
+        const t2 = performance.now()
+        for (let i = 0; i < 10; i++) settleStep(engine, null)
+        const t3 = performance.now()
+        return { sweepMs: +(t1 - t0).toFixed(1), paintMs: +(t2 - t1).toFixed(1), sweeps10Ms: +(t3 - t2).toFixed(1) }
+      },
       wirePhysics(): { binds: string[]; branches: { x: number; y: number }[]; legs: { a: string; b: string }[] }[] {
         const out: { binds: string[]; branches: { x: number; y: number }[]; legs: { a: string; b: string }[] }[] = []
         for (const [, w] of engine.wires) {
