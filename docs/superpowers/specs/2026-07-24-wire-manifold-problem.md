@@ -34,8 +34,14 @@ document and the step-operator design that follows it survive review.
 4. **No global minima anywhere.** The system computes continuous
    transformations of the current state; resting in local minima is
    legitimate; restructuring is driven by manipulation, not pursued.
-5. **Snapping is acceptable.** Drawing continuity across restructuring is
-   NOT a requirement; do not spend mechanism on it.
+5. **Drawing continuity is a consequence, never a mechanism.** The standing
+   law stands: junctions transition smoothly, never jumping between
+   configurations. Under this model that comes for free — at a glued face
+   both charts draw the identical picture, and locally-bounded steps keep
+   each frame's drawing close to the last — so the design must not contain
+   any continuity-specific machinery (detection windows, draw-identity
+   checks, continuity probes). If a design needs such machinery to look
+   continuous, the model is wrong (the 2026-07-23 process law).
 6. **Rest is real rest.** A settled layout stays bit-identical until
    disturbed. No jiggle, no orbits, no conveyors, no sustained rotation
    modes. Transients are proportionate to the disturbance — no explosions.
