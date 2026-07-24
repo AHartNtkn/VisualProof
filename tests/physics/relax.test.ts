@@ -86,14 +86,25 @@ function assertRestsLegalMonotone(name: string, e: Engine, driftBound: number): 
     expect(dist, `${name}: body ${b.id} at ${dist.toFixed(0)} — content flew away (packing bound ${discSum.toFixed(0)})`).toBeLessThanOrEqual(discSum)
   }
   expect(anyOverlap(e), `${name}: region circles partially overlap at rest`).toBe(false)
+  // The step operator is deterministic and MEMORYLESS, so ONE all-reject frame
+  // proves a bit-stable rest forever — the old 200-tick empirical loop bought
+  // nothing past that proof and cost ~200 rejected ladders per fixture. A short
+  // loop still runs to verify the theorem's premises on real frames (monotone E,
+  // bounded drift), then the all-reject frame is required.
   const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
-  let prevE = totalEnergy(e), maxRise = 0
-  for (let i = 0; i < 200; i++) { settleStep(e); const cur = totalEnergy(e); maxRise = Math.max(maxRise, cur - prevE); prevE = cur }
+  let prevE = totalEnergy(e), maxRise = 0, rested = false
+  for (let i = 0; i < 8; i++) {
+    const moved = settleStep(e)
+    const cur = totalEnergy(e)
+    maxRise = Math.max(maxRise, cur - prevE); prevE = cur
+    if (!moved) { rested = true; break }
+  }
+  expect(rested, `${name}: still accepting moves 8 frames past its settle budget — not at rest`).toBe(true)
   for (const [id, b] of e.bodies) {
     const moved = Math.hypot(b.pos.x - before.get(id)!.x, b.pos.y - before.get(id)!.y)
-    expect(moved, `${name}: body ${id} moved ${moved.toFixed(2)} over 200 post-settle ticks`).toBeLessThanOrEqual(driftBound)
+    expect(moved, `${name}: body ${id} moved ${moved.toFixed(2)} after settle`).toBeLessThanOrEqual(driftBound)
   }
-  expect(maxRise, `${name}: total E rose ${maxRise.toFixed(4)} in a post-settle tick (un-gated mover?)`).toBeLessThanOrEqual(1e-3)
+  expect(maxRise, `${name}: total E rose ${maxRise.toFixed(4)} in a post-settle frame (un-gated mover?)`).toBeLessThanOrEqual(1e-3)
 }
 
 describe('settle stops at a proven fixed point (plan-24 perf — no wasted budget)', () => {

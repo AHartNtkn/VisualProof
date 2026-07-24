@@ -15,8 +15,10 @@ describe('Vitest suite ownership', () => {
     expect(suiteTestConfig('physics')).toEqual({
       include: ['tests/physics/**/*.test.ts'],
       exclude: [],
-      testTimeout: 1_800_000,
-      hookTimeout: 1_800_000,
+      // USER ruling 2026-07-24: a physics test settles and asserts within 30 s
+      // or it fails — waiting longer can only hide a defect.
+      testTimeout: 30_000,
+      hookTimeout: 60_000,
     })
   })
 
@@ -24,8 +26,8 @@ describe('Vitest suite ownership', () => {
     expect(suiteTestConfig('all')).toEqual({
       include: ['tests/**/*.test.ts'],
       exclude: [],
-      testTimeout: 1_800_000,
-      hookTimeout: 1_800_000,
+      testTimeout: 30_000,
+      hookTimeout: 60_000,
     })
   })
 })

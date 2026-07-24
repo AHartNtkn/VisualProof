@@ -17,14 +17,19 @@ export function suiteTestConfig(
     return {
       include: ['tests/physics/**/*.test.ts'],
       exclude: [],
-      testTimeout: 1_800_000,
-      hookTimeout: 1_800_000,
+      // A physics test either reaches its proven fixed point and asserts within
+      // 30 s or it FAILS (USER ruling 2026-07-24): past that, waiting longer can
+      // only hide a defect — a layout that doesn't rest, or a per-frame cost
+      // that is itself unacceptable. Never raise this to accommodate a slow
+      // test; make the test (or the physics) fast.
+      testTimeout: 30_000,
+      hookTimeout: 60_000,
     }
   }
   return {
     include: ['tests/**/*.test.ts'],
     exclude: [],
-    testTimeout: 1_800_000,
-    hookTimeout: 1_800_000,
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   }
 }

@@ -38,11 +38,34 @@ export function cancelPhysicsDrag(e: Engine, drag: PhysicsDrag): void {
   commitBodyPositions(e, drag.origins)
 }
 
+/** Exact configuration snapshot (body poses + wire manifold points): the rest
+    certificate's validity check. Cheap (a few hundred floats). */
+function stateSnap(e: Engine): number[] {
+  const out: number[] = []
+  for (const b of e.bodies.values()) out.push(b.pos.x, b.pos.y, b.theta)
+  for (const w of e.wires.values()) {
+    for (const p of w.branches) out.push(p.x, p.y)
+    for (const l of w.legs) out.push(l.angA, l.angB)
+  }
+  return out
+}
+const sameSnap = (a: readonly number[], b: readonly number[]): boolean =>
+  a.length === b.length && a.every((v, i) => v === b[i])
+
+/** Proven-rest certificates per engine: a frame in which the step operator
+    accepted nothing is a bit-stable fixed point FOR THAT state and pin set
+    (deterministic + memoryless), so physics is skipped until either changes.
+    Exact-snapshot comparison makes this self-healing: any mutation from any
+    path (rewrites, gestures, direct edits) changes the snapshot and physics
+    resumes — no invalidation hooks to forget. */
+const restCert = new WeakMap<Engine, { pinsKey: string; snap: number[] }>()
+
 /**
  * Advance one interactive physics frame. An active drag always advances the
  * solver, even when passive relaxation is paused for a stable connection
  * gesture. Grabbed carriers and persistent pins are the only excluded DOFs;
- * every other body, rotation, junction, and wire carrier remains live.
+ * every other body, rotation, and wire coordinate remains live. A proven rest
+ * (see `restCert`) costs nothing per frame until the state or pins change.
  */
 export function advanceInteractivePhysics(
   e: Engine,
@@ -54,5 +77,10 @@ export function advanceInteractivePhysics(
 
   const pinned = new Set(persistentPins)
   if (active !== null) for (const id of active.drag.bodies.keys()) pinned.add(id)
-  settleStep(e, pinned.size === 0 ? null : pinned)
+  const pinsKey = [...pinned].sort().join('|')
+  const cert = restCert.get(e)
+  if (cert !== undefined && cert.pinsKey === pinsKey && sameSnap(cert.snap, stateSnap(e))) return
+  const moved = settleStep(e, pinned.size === 0 ? null : pinned)
+  if (moved) restCert.delete(e)
+  else restCert.set(e, { pinsKey, snap: stateSnap(e) })
 }

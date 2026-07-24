@@ -6,7 +6,7 @@ import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
-export const PHYSICS_REV = 'stratified-Tb\u03c4@2a7638c'
+export const PHYSICS_REV = 'step-operator@2026-07-24'
 console.info('[physics] rev', PHYSICS_REV)
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
@@ -943,111 +943,39 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
   return { x, y }
 }
 
-/** One resolved leg at its base (warm-cache) state, plus what it needs for the
-    localized gradient: its samples, the discs near it, and its wire. */
-type LegRec = { readonly wid: string; readonly w: WireView; readonly leg: WireLeg; readonly gi: number; readonly shape: LegShape; readonly samples: Vec2[]; readonly near: DiscRec[] }
-
-/** Finite-difference step and base descent mobility (the demo's dimensional
-    values); every DOF descends by the strictly E-gated coordinate step below. */
+/** Finite-difference probe scale (drawn units): each coordinate is probed at
+    h = HX / m so the DRAWN perturbation is uniform across unlike coordinates. */
 const HX = 0.02
-const MU = 0.1
-/** Descent step of the demo (backtracking line search + long-shot ladder +
-    expanding search): capped, strictly E-gated per visit, so every move lowers
-    the DOF's local energy — the guarantee pure momentum lacked (it conveyored
-    and converged slowly at theorem scale). */
-function gatedStep(get: () => number, set: (v: number) => void, energy: () => number, h: number, mob: number, cap: number): boolean {
-  const v0 = get()
-  set(v0 + h); const ep = energy()
-  set(v0 - h); const em = energy()
-  set(v0); let Ecur = energy()
-  const g = (ep - em) / (2 * h)
-  if (g === 0) { set(v0); return false }
-  let mv = Math.max(-cap, Math.min(cap, -g * mob))
-  let acc = 0
-  for (let k = 0; k < 3; k++) { set(v0 + mv); const E1 = energy(); if (E1 < Ecur) { Ecur = E1; acc = mv; break } set(v0); mv /= 4 }
-  if (acc === 0) {
-    // smooth step rejected: long-shot ladder from the cap down (crosses a
-    // local hill narrower than the cap, e.g. a branch-switch ridge)
-    const dir = g > 0 ? -1 : 1
-    for (const frac of [1, 1 / 3, 1 / 9]) { set(v0 + dir * cap * frac); const E1 = energy(); if (E1 < Ecur) { Ecur = E1; acc = dir * cap * frac; break } set(v0) }
-  }
-  // expanding search: a DOF far from rest covers distance in one visit
-  while (acc !== 0 && Math.abs(acc) < cap) {
-    const next = Math.max(-cap, Math.min(cap, acc * 3))
-    set(v0 + next); const E2 = energy()
-    if (E2 < Ecur) { Ecur = E2; acc = next } else break
-  }
-  set(v0 + acc)
-  // acc !== 0 ⟺ the committed value differs from v0 at a STRICTLY lower energy (a
-  // trial evaluated at set(v0+acc) accepted E1<Ecur), so this exactly reports
-  // whether the DOF changed state. A whole sweep of `false` means every gate left
-  // its base value → the sweep was a bit-identical no-op → a proven fixed point.
-  return acc !== 0
-}
-/** Gated descent of a wire-owned POINT (x then y — coordinate descent). Returns
-    whether either coordinate step changed the point. */
-function gatedPoint(pt: { pos: Vec2 }, energy: () => number, mob: number, cap: number): boolean {
-  const mx = gatedStep(() => pt.pos.x, (v) => { pt.pos = { x: v, y: pt.pos.y } }, energy, HX, mob, cap)
-  const my = gatedStep(() => pt.pos.y, (v) => { pt.pos = { x: pt.pos.x, y: v } }, energy, HX, mob, cap)
-  return mx || my
-}
-/** Gated 2D descent of a BODY position with the legality projection folded into
-    candidate evaluation (plan 23): the ±HX gradient probes (tiny, always feasible)
-    give the descent direction via `gradEnergy` (the envelope-theorem warm fast
-    path — correct to first order at the base); each trial along −∇E is PROJECTED
-    onto the feasible set (`project`) and measured with the true grid `energy`,
-    accepted only if strictly lower — so every accepted state is feasible AND lower
-    in the true total (strict descent inside the feasible set). */
-function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) => Vec2, gradEnergy: () => number, energy: () => number, mob: number, cap: number): boolean {
-  const p0 = get()
-  set({ x: p0.x + HX, y: p0.y }); const exP = gradEnergy()
-  set({ x: p0.x - HX, y: p0.y }); const exM = gradEnergy()
-  set({ x: p0.x, y: p0.y + HX }); const eyP = gradEnergy()
-  set({ x: p0.x, y: p0.y - HX }); const eyM = gradEnergy()
-  set(p0); let Ecur = energy()
-  const gx = (exP - exM) / (2 * HX), gy = (eyP - eyM) / (2 * HX)
-  const gm = Math.hypot(gx, gy)
-  if (gm === 0) { set(p0); return false }
-  const ux = -gx / gm, uy = -gy / gm
-  const step = Math.min(cap, gm * mob)
-  let acc = 0, accP = p0
-  // backtracking line search along −∇E
-  for (const frac of [1, 1 / 4, 1 / 16]) {
-    const mv = step * frac
-    const trial = project({ x: p0.x + ux * mv, y: p0.y + uy * mv })
-    set(trial); const E1 = energy()
-    if (E1 < Ecur) { Ecur = E1; acc = mv; accP = trial; break }
-    set(p0)
-  }
-  // expanding search: a body far from rest covers distance in one visit
-  while (acc > 0 && acc < cap) {
-    const next = Math.min(cap, acc * 3)
-    const trial = project({ x: p0.x + ux * next, y: p0.y + uy * next })
-    set(trial); const E2 = energy()
-    if (E2 < Ecur) { Ecur = E2; acc = next; accP = trial } else break
-  }
-  // leave the state AND the derived geometry at the accepted position: a
-  // rejected trial's energy() left the region circles recomputed at that trial,
-  // so re-evaluate at accP to re-sync them for the next body in the sweep.
-  set(accP); energy()
-  // acc > 0 ⟺ accP is a strictly-lower-energy trial distinct from p0, so this
-  // exactly reports whether the body moved (the fixed-point signal, see gatedStep).
-  return acc > 0
-}
 
-// ---- junction FACE CROSSING: the branch-position DOF through ℓ_e = 0 (φ) ----
-// The wire's state is (T, b, τ): the tree TOPOLOGY T (leg end-structure), the branch
-// POSITIONS b (w.branches), the per-half-edge TANGENTS τ (per-leg angA/angB). T is a
-// genuine coordinate (carried, never re-derived from geometry). A configuration whose
-// internal edge e=(bi,bj) has length 0 (its two branch points coincident) draws an
-// invisible ≤MERGE_EPS stub — a point on the face F_{T,e} of the stratified tree space
-// X_n. Exactly two NNI re-pairings (nniAlternatives) draw the identical picture there.
-// The canonical transition φ carries the four surviving legs' tangents UNCHANGED
-// (identity on the intrinsic data — Fact 0.3) and re-expands e straight; it makes no
-// choice (the collapsed edge's angle is quotiented away, invisible). A branch-position
-// proposal that reaches the face crosses via φ under the SAME strict-E gate as every
-// coordinate move — no trigger, no throttle, no repair move, no detection radius beyond
-// ℓ = MERGE_EPS itself. See docs/superpowers/specs/2026-07-23-phi-construction.md §1,§4.
+// ═══════════ THE STEP OPERATOR — simultaneous trust-bounded descent ═══════════
+// docs/superpowers/specs/2026-07-24-step-operator-design.md (ratified). One
+// deterministic, MEMORYLESS step per frame: the M-metric gradient of the ONE
+// total energy over ALL coordinates at once, a single simultaneous trial along
+// −∇E with drawn-displacement norm Δ, legality projection, accepted iff the
+// TRUE total E strictly drops; on rejection Δ halves; when nothing is accepted
+// at the smallest Δ the frame is a proven, bit-stable rest.
+//  · UNIFORM LOCALITY (user law 2026-07-24): every coordinate — node rotation
+//    included — moves under the same Δ budget, measured as drawn displacement
+//    (the metric M). No coordinate line-searches to its own optimum; the
+//    per-DOF expanding-search gates this replaces were per-coordinate
+//    approximate exact-minimization, the provably dangerous scheme.
+//  · Stiff barriers shorten steps automatically: a wall ahead makes the full-Δ
+//    trial RAISE E → rejected → Δ halves. Proportionate transients are an
+//    operator property, not a tuning (IPC's structure).
+//  · The accept test evaluates the full true E at the one trial state — there
+//    is no localized stale proxy to conveyor against, structurally.
+//  · Chart crossing is arithmetic (design §4): wire coordinates are chart-local
+//    (root branch absolute, internal edges as (ℓ, θ), branch tangents); a trial
+//    driving ℓ through 0 is EXPRESSED in the charts incident to that face (the
+//    reparametrized current chart and its two NNI re-pairings, tangents carried,
+//    the collapsed stub's angle quotiented) and the trial takes the steepest —
+//    tangent-cone descent on the glued space, inside the one gate. No detection
+//    window, no crossing event, no crossing-specific accept path.
+
+/** Δ ladder depth: Δmin = Δmax / 2^8. A frame rejected at Δmin is a proven
+    rest (deterministic operator + unchanged state ⇒ every later frame rejects
+    identically). */
+const DELTA_HALVINGS = 8
 
 type TreeEdge = readonly [number, number]
 
@@ -1080,7 +1008,7 @@ function wireTerminals(e: Engine, w: WireView): Vec2[] {
 
 /** The two NNI re-pairings across an internal (branch–branch) edge — or [] unless
     both endpoints are degree-3 (the "two alternative pairings" case; a converged
-    soap-film branch point is degree 3). Edges are UNORDERED; applyChart orients. */
+    soap-film branch point is degree 3). Edges are UNORDERED. */
 function nniAlternatives(edges: readonly TreeEdge[], nT: number, ei: number): TreeEdge[][] {
   const [bi, bj] = edges[ei]!
   if (bi < nT || bj < nT) return []
@@ -1089,9 +1017,6 @@ function nniAlternatives(edges: readonly TreeEdge[], nT: number, ei: number): Tr
   const bjOthers = nbrs(bj).filter((x) => x !== bi)
   if (biOthers.length !== 2 || bjOthers.length !== 2) return []
   const Q = biOthers[1]!, R = bjOthers[0]!, S = bjOthers[1]!
-  // the NNI swap: move one bi-neighbour (Q) to bj and one bj-neighbour to bi, giving
-  // the two pairings distinct from the current one (with bi-others {P,Q}, bj-others
-  // {R,S}: {P,R}|{Q,S} and {P,S}|{Q,R}).
   const swap = (fromBi: number, fromBj: number): TreeEdge[] => edges.map(([a, b]) => {
     const is = (x: number, y: number): boolean => (a === x && b === y) || (a === y && b === x)
     if (is(bi, fromBi)) return [bj, fromBi] as TreeEdge
@@ -1101,150 +1026,151 @@ function nniAlternatives(edges: readonly TreeEdge[], nT: number, ei: number): Tr
   return [swap(Q, R), swap(Q, S)]
 }
 
-/** Drawing-resolution merge window (Fact 0.1: elastica clamps every leg to L ≥ 0.01,
-    so a zero-length internal edge draws a ≤0.01-diameter stub — a point up to solver
-    resolution). Two branch points within MERGE_EPS ARE at the face ℓ_e = 0 up to that
-    resolution; a branch proposal reaching it maps across via φ. This is the ONLY
-    threshold in the crossing — the drawing resolution itself, not a tuned trigger. */
-const MERGE_EPS = 0.01
+/** One coordinate of Q, as the operator sees it: accessors into the live state
+    plus its metric weight m (drawn displacement per unit coordinate — positions
+    1, body rotation its drawn radius, an edge angle its length, a leg tangent
+    its leg's length). Wire edge coordinates write through a reconstruction that
+    keeps `w.branches` consistent. */
+type Coord = {
+  get(): number
+  set(v: number): void
+  readonly m: number
+  /** localized energy for the gradient probe (the terms this coordinate touches;
+      the untouched remainder cancels in the difference). Exact solves, always. */
+  localE(): number
+}
 
-/** Canonical face crossing φ (phi-construction §1.2, §4.2). The wire's internal edge at
-    leg index `ei` (both ends branch points bi, bj) is at the face — |b_bi − b_bj| <
-    MERGE_EPS, so its stub is invisible and the current chart plus its two NNI re-pairings
-    (nniAlternatives) draw the identical picture there (D∘φ = D, Lemma 2). Compare the
-    three charts by the SAME canonical φ re-expansion — carry every surviving terminal
-    leg's tangents UNCHANGED (φ makes no choice; the collapsed edge's angle is quotiented
-    away, Fact 0.3) and re-expand the internal edge STRAIGHT to ℓ = MERGE_EPS along each
-    chart's own split (each branch toward the centroid of its non-e neighbours). The
-    reference is the CURRENT chart's own re-expansion, NOT the degenerate coincident state
-    (whose internal-edge stub carries unbounded bend energy, Fact 0.2 — comparing against
-    it would make every re-expansion look "lower"). CROSS to a re-paired chart only when
-    it is strictly below the current chart's re-expansion (the same strict-E gate and EPS
-    as every coordinate move); otherwise RESTORE bit-identically (original leg objects,
-    hence caches) and let the ordinary branch descent re-expand the current chart. Content
-    energy is invariant under a branch-topology change (branch points are wire-owned, not
-    region members), so the true totalEnergy compares exactly the wire's own leg energy.
-    A crossing is drawing-continuous (Lemma 2: both charts' pictures are φ-identical at
-    the face). Returns whether it crossed. */
-function tryFaceCross(e: Engine, w: WireView, ei: number): boolean {
+/** Chart-local parametrization of one wire's manifold point, built fresh each
+    frame from the stored (T, b, τ): root branch absolute, each further branch
+    reached by an internal edge's (ℓ, θ) in BFS order. `reconstruct` writes the
+    implied branch positions back to `w.branches`; a trial that drives some
+    ℓ < 0 has passed the face F_{T,e} and is resolved by `resolveCharts`. */
+type WireParam = {
+  readonly w: WireView
+  readonly nBind: number
+  readonly nT: number
+  root: { x: number; y: number }
+  /** BFS-oriented internal edges: child branch index (into w.branches), parent
+      branch index, and the chart-local coordinates. */
+  readonly edges: { child: number; parent: number; l: number; th: number }[]
+  reconstruct(): void
+}
+
+function mkWireParam(w: WireView): WireParam | null {
+  if (w.branches.length === 0) return null
   const nBind = w.binds.length
-  const nT = nBind + w.slots.length
+  const nT = nBind + w.slots.length + (w.endBodyId !== null ? 1 : 0)
+  // branch-adjacency from the internal (branch–branch) legs
+  const adj = new Map<number, number[]>()
+  for (const leg of w.legs) {
+    if (leg.a.kind !== 'branch' || leg.b.kind !== 'branch') continue
+    const a = leg.a.i, b = leg.b.i
+    ;(adj.get(a) ?? adj.set(a, []).get(a)!).push(b)
+    ;(adj.get(b) ?? adj.set(b, []).get(b)!).push(a)
+  }
+  const edges: WireParam['edges'] = []
+  const seen = new Set<number>([0])
+  const queue = [0]
+  while (queue.length > 0) {
+    const parent = queue.shift()!
+    for (const child of adj.get(parent) ?? []) {
+      if (seen.has(child)) continue
+      seen.add(child); queue.push(child)
+      const pp = w.branches[parent]!, cp = w.branches[child]!
+      edges.push({ child, parent, l: Math.hypot(cp.x - pp.x, cp.y - pp.y), th: Math.atan2(cp.y - pp.y, cp.x - pp.x) })
+    }
+  }
+  const param: WireParam = {
+    w, nBind, nT,
+    root: { ...w.branches[0]! },
+    edges,
+    reconstruct(): void {
+      w.branches[0] = { ...param.root }
+      for (const ed of param.edges) {
+        const pp = w.branches[ed.parent]!
+        w.branches[ed.child] = { x: pp.x + ed.l * Math.cos(ed.th), y: pp.y + ed.l * Math.sin(ed.th) }
+      }
+    },
+  }
+  return param
+}
+
+/** Express a trial whose internal edge ℓ went NEGATIVE in the charts incident to
+    the crossed face, and keep the steepest: candidates are the current chart as
+    reconstructed (positions already reflect the passage — the reparametrization
+    ℓ<0 ≡ (|ℓ|, θ+π)) and the two NNI re-pairings at the SAME branch positions,
+    with terminal-leg tangents carried unchanged (φ is the identity on intrinsic
+    data; the collapsed stub's angle is quotiented — internal edges re-emerge
+    with chord tangents). Deterministic candidate order; strict improvement to
+    switch. Part of ONE trial evaluation — the ordinary gate accepts or rejects
+    whatever this resolves to. */
+function resolveCharts(e: Engine, w: WireView, nBind: number, nT: number): void {
   const edges = wireEdges(w, nBind, nT)
-  const [bi, bj] = edges[ei]!
-  if (bi < nT || bj < nT) return false // not an internal (branch–branch) edge
   const termPos = wireTerminals(e, w)
-  const savedLegs = [...w.legs]
-  const savedBranches = w.branches.map((p) => ({ ...p }))
-  const pbi = savedBranches[bi - nT]!, pbj = savedBranches[bj - nT]!
-  const m = { x: (pbi.x + pbj.x) / 2, y: (pbi.y + pbj.y) / 2 }
-  // the tangent τ to carry across for each terminal: its incident leg's angles. Under
-  // the IDENTITY on intrinsic data the terminal's tangent at m is preserved regardless
-  // of which branch it re-pairs through (both branches are ≈ m at the face).
+  const posOf = (node: number): Vec2 => {
+    if (node >= nT) return w.branches[node - nT]!
+    if (node < termPos.length) return termPos[node]!
+    return e.bodies.get(w.endBodyId!)!.pos // END terminal (tree order: binds, slots, end)
+  }
+  // carried terminal tangents (identity on intrinsic data)
   const termTan = new Map<number, { angA: number; angB: number }>()
-  for (const leg of savedLegs) {
-    const t = leg.a.kind === 'bind' || leg.a.kind === 'slot' ? endNodeIndex(leg.a, nBind, nT)
-      : leg.b.kind === 'bind' || leg.b.kind === 'slot' ? endNodeIndex(leg.b, nBind, nT) : -1
+  for (const leg of w.legs) {
+    const t = leg.a.kind !== 'branch' ? endNodeIndex(leg.a, nBind, nT)
+      : leg.b.kind !== 'branch' ? endNodeIndex(leg.b, nBind, nT) : -1
     if (t >= 0) termTan.set(t, { angA: leg.angA, angB: leg.angB })
   }
-  const savedPosOf = (node: number): Vec2 => node < nT ? termPos[node]! : savedBranches[node - nT]!
-  const restore = (): void => {
-    w.legs.length = 0; for (const l of savedLegs) w.legs.push(l)
-    w.branches.length = 0; for (const p of savedBranches) w.branches.push(p)
-  }
-  // Apply a candidate adjacency, re-expanded straight to ℓ = MERGE_EPS via φ, from the
-  // SAVED (near-face) state. Each collapsed branch moves toward the centroid of its non-e
-  // neighbours in this chart (that chart's downhill split). Directions are computed from
-  // the saved positions so re-expansion is deterministic per candidate.
-  const applyChart = (cand: readonly TreeEdge[]): void => {
-    const dirToward = (v: number, other: number): Vec2 => {
-      const ns = cand.flatMap(([a, b]) => (a === v ? [b] : b === v ? [a] : [])).filter((x) => x !== other)
-      if (ns.length === 0) return { x: 0, y: 0 }
-      let cx = 0, cy = 0
-      for (const n of ns) { const p = savedPosOf(n); cx += p.x; cy += p.y }
-      const dx = cx / ns.length - m.x, dy = cy / ns.length - m.y
-      const d = Math.hypot(dx, dy)
-      return d < 1e-9 ? { x: 0, y: 0 } : { x: dx / d, y: dy / d }
+  const buildLegs = (cand: readonly TreeEdge[]): WireLeg[] => cand.map(([u0, v0]) => {
+    const [u, v] = u0 < v0 ? [u0, v0] : [v0, u0]
+    const endU = nodeEnd(u, nBind, nT), endV = nodeEnd(v, nBind, nT)
+    if (u < nT) {
+      const t = termTan.get(u) ?? { angA: 0, angB: 0 }
+      return { a: endU, b: endV, angA: t.angA, angB: t.angB, cache: mkLegCache() }
     }
-    const ui = dirToward(bi, bj), uj = dirToward(bj, bi)
-    const h = MERGE_EPS / 2
-    w.branches.length = 0; for (const p of savedBranches) w.branches.push({ ...p })
-    w.branches[bi - nT] = { x: m.x + ui.x * h, y: m.y + ui.y * h }
-    w.branches[bj - nT] = { x: m.x + uj.x * h, y: m.y + uj.y * h }
-    const pos2 = (node: number): Vec2 => node < nT ? termPos[node]! : w.branches[node - nT]!
-    w.legs.length = 0
-    for (const [u0, v0] of cand) {
-      const [u, v] = u0 < v0 ? [u0, v0] : [v0, u0]
-      if (u < nT) {
-        // terminal→branch: carry the terminal's tangents unchanged (identity on ι)
-        const t = termTan.get(u) ?? { angA: 0, angB: 0 }
-        w.legs.push({ a: nodeEnd(u, nBind, nT), b: nodeEnd(v, nBind, nT), angA: t.angA, angB: t.angB, cache: mkLegCache() })
-      } else {
-        // internal branch→branch: the re-expanded edge is straight (its stub angle is
-        // quotiented — φ sets it to the chord, τ = 0)
-        const chord = Math.atan2(pos2(v).y - pos2(u).y, pos2(v).x - pos2(u).x)
-        w.legs.push({ a: nodeEnd(u, nBind, nT), b: nodeEnd(v, nBind, nT), angA: chord, angB: chord, cache: mkLegCache() })
-      }
+    const chord = Math.atan2(posOf(v).y - posOf(u).y, posOf(v).x - posOf(u).x)
+    return { a: endU, b: endV, angA: chord, angB: chord, cache: mkLegCache() }
+  })
+  for (let ei = 0; ei < edges.length; ei++) {
+    const alts = nniAlternatives(edges, nT, ei)
+    if (alts.length === 0) continue
+    const [bi, bj] = edges[ei]!
+    const d = Math.hypot(w.branches[bi - nT]!.x - w.branches[bj - nT]!.x, w.branches[bi - nT]!.y - w.branches[bj - nT]!.y)
+    if (d > HX) continue // edge nowhere near its face this trial
+    const savedLegs = [...w.legs]
+    let bestE = totalEnergy(e)
+    let bestLegs: WireLeg[] | null = null
+    for (const alt of alts) {
+      const legs = buildLegs(alt)
+      w.legs.length = 0; for (const l of legs) w.legs.push(l)
+      const E = totalEnergy(e)
+      if (E < bestE) { bestE = E; bestLegs = legs }
+      w.legs.length = 0; for (const l of savedLegs) w.legs.push(l)
     }
+    if (bestLegs !== null) { w.legs.length = 0; for (const l of bestLegs) w.legs.push(l) }
   }
-  // reference: the ACTUAL current state (the branch DOF's pre-move energy). A crossing is
-  // committed only when a re-paired chart is strictly below THIS — the same strict-descent
-  // gate as every coordinate move, so a crossing can never RAISE the total energy (the
-  // ratified paradigm's law). Comparing instead against the current chart's own
-  // re-expansion would admit an alt that is below the re-expansion yet above the real
-  // state — an E-raising move (measured: +112) that breaks strict descent.
-  const E0 = totalEnergy(e)
-  const EPS = 1e-9 * (Math.abs(E0) + 1)
-  let bestE = E0, bestSnap: { legs: WireLeg[]; branches: Vec2[] } | null = null
-  for (const alt of nniAlternatives(edges, nT, ei)) {
-    applyChart(alt)
-    const E = totalEnergy(e)
-    if (E < bestE - EPS) { bestE = E; bestSnap = { legs: [...w.legs], branches: w.branches.map((p) => ({ ...p })) } }
-  }
-  if (bestSnap === null) { restore(); return false } // no re-pairing strictly lower — stay
-  w.legs.length = 0; for (const l of bestSnap.legs) w.legs.push(l)
-  w.branches.length = 0; for (const p of bestSnap.branches) w.branches.push(p)
-  return true
 }
 
 /**
- * The PLAN-23 strict-descent pass, as a WORKLIST: one thunk per DOF — node
- * translation and rotation, wire-owned END-body (∃ tip / ∀ via) translation,
- * wire branch-vertex positions, per-leg free-end tangent angles — each a
- * strictly E-GATED coordinate step
- * (backtracking + expanding search; a move is taken only when it strictly lowers
- * the localized total) over the ONE total energy (wires + content). There is no
- * velocity, no force accumulator, no independent overlap mover: cycles are
- * impossible by theorem, wander impossible by theorem — the USER's ruling as a
- * structural property. TRANSLATION gates fold in the legality projection (propose
- * → project the moved body onto the feasible set → evaluate → accept only if
- * lower) and the full content + frame-coupling energy the per-leg localization
- * omits. `pinned` bodies are hard CONSTRAINTS: all their DOF are skipped (the
- * caller holds them at the cursor), and everything relaxes around them.
- *
- * Returning the DOFs as a worklist (rather than running them inline) lets the app
- * frame loop TIME-SLICE one sweep across frames (the anytime budget): the snapshot
- * this builds is cheap (~5 ms at 28 bodies) versus the gate loop (~230 ms), and
- * each thunk's move is applied in place, so resuming a sliced sweep against a
- * freshly rebuilt snapshot is equivalent to one continuous sweep. The DOF order is
- * deterministic (Map insertion order over bodies/wires) and stable across frames
- * for a fixed diagram, so a persistent integer cursor resumes correctly.
+ * THE per-frame step (design §2): gradient → one simultaneous bounded trial →
+ * project → accept iff the true total E strictly drops, halving Δ on rejection.
+ * Returns whether the frame changed state; `false` is a PROVEN bit-stable rest
+ * (memoryless + deterministic: the next frame recomputes identically and
+ * rejects identically). `pinned` bodies' positions are constraints (rotation
+ * stays free — USER 2026-07-07).
  */
-function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => boolean)[] {
-  const dofs: (() => boolean)[] = []
+function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   const sc = e.scale
-  // A wire that CROSSES a face this sweep (its branch DOF fired φ, replacing its leg
-  // objects) freezes its remaining same-sweep DOFs: the shared leg-record snapshot below
-  // was built at sweep start and now points at the pre-cross legs, so a later gate on the
-  // same wire would descend orphaned objects. The next sweep rebuilds the snapshot over
-  // the new chart and resumes. This is per-sweep snapshot coherence (reset every sweep,
-  // like `refresh`), NOT a cross-sweep trigger/throttle.
-  const crossed = new Set<string>()
+  recomputeRegions(e)
   const discs: DiscRec[] = []
   for (const b of e.bodies.values()) if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') discs.push({ id: b.id, body: b, r: b.discR * sc })
 
+  // ── frame snapshot of every leg (shapes, samples, neighbourhoods) for the
+  // LOCALIZED gradient probes (only the probed coordinate's terms re-solve;
+  // everything else reads its frame-start samples — exact for a single-
+  // coordinate perturbation, since untouched terms cancel in the difference).
+  type LegRec = { readonly wid: string; readonly w: WireView; readonly leg: WireLeg; readonly gi: number; readonly shape: LegShape; readonly samples: Vec2[]; readonly near: DiscRec[] }
+  const cullR = (WIREP.clearMargin + WIREP.travelCap) * sc
   const legRecs: LegRec[] = []
   const legsOfWire = new Map<string, LegRec[]>()
-  const cullR = (WIREP.clearMargin + WIREP.travelCap) * sc
   for (const [wid, w] of e.wires) {
     const arr: LegRec[] = []
     for (const leg of w.legs) {
@@ -1257,68 +1183,46 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
     }
     legsOfWire.set(wid, arr)
   }
-
   const bindLegs = new Map<string, LegRec[]>()
   for (const r of legRecs) for (const own of [r.shape.ownA, r.shape.ownB]) {
     if (own === null) continue
     const a = bindLegs.get(own); if (a === undefined) bindLegs.set(own, [r]); else a.push(r)
   }
+  for (const [wid, w] of e.wires) {
+    if (w.endBodyId === null) continue
+    const tips = (legsOfWire.get(wid) ?? []).filter((r) => r.leg.b.kind === 'end')
+    const a = bindLegs.get(w.endBodyId); if (a === undefined) bindLegs.set(w.endBodyId, tips); else a.push(...tips)
+  }
   const discNearLegs = new Map<string, LegRec[]>()
   for (const D of discs) discNearLegs.set(D.id, legRecs.filter((r) => bboxNear(r.samples, D.body.pos, D.r + cullR)))
-  // separation neighbourhood, widened by the per-tick travel of BOTH legs' ends
-  // (2·travelCap) so a leg that swings INTO range mid-sweep is already listed —
-  // otherwise its rising sep term is invisible to the gate and pumps a limit
-  // cycle (the same reason clearance uses cullR).
   const sepCull = (WIREP.sepR + 2 * WIREP.travelCap) * sc
   const crossNear = new Map<number, LegRec[]>()
   for (const r of legRecs) crossNear.set(r.gi, legRecs.filter((o) => o.wid !== r.wid && bboxOverlap(r.samples, o.samples, sepCull)))
 
   const scratchSamples: Vec2[][] = []
-  // Per-leg MEMORYLESS probe cache (keyed on the exact boundary tuple, separate
-  // from the committed leg.cache so probing never clobbers it): plan 23 gates
-  // ACCEPT a move on the energy VALUE, so the probe MUST evaluate the true
-  // memoryless grid solve. The warm fixed-turn energy (plan 22, envelope theorem)
-  // has the same first-order gradient but a different value: warm can UNDERCUT
-  // the grid min (the grid scan is not a guaranteed global optimizer, and a
-  // far-moved warm closeAt need not close), so a warm-lowering move can raise the
-  // true grid total (measured: pc0 drift 0→37, pc16 monotonicity spike →243).
   const probeCache = new Map<number, LegCache>()
   const cacheOf = (gi: number): LegCache => { let c = probeCache.get(gi); if (c === undefined) { c = mkLegCache(); probeCache.set(gi, c) } return c }
-  // A touched leg's shape under a probe. `warm` = the envelope-theorem fast path
-  // (fixed-turn Newton from the tick base, plan 22): CORRECT for the FIRST-ORDER
-  // gradient at the base, so it is used ONLY for the ±HX central-difference
-  // gradient probes (a 0.02 move always closes). It is NOT valid for the accept
-  // test — warm can undercut the grid min (the scan is not a guaranteed global
-  // optimizer; a far-moved warm closeAt need not close), so a warm-lowering ACCEPT
-  // can raise the true grid total (measured: pc0 drift 0→37). Every accept/reject
-  // uses the true memoryless GRID solve, keeping the grid total monotone.
-  const solveTouched = (r: LegRec, warm: boolean): LegShape =>
-    warm ? resolveLeg(e, r.w, r.leg, r.leg.cache, r.shape.sol) : resolveLeg(e, r.w, r.leg, cacheOf(r.gi))
-  // Refresh a moved body's touched-leg SAMPLES in the shared snapshot: coordinate
-  // descent moves bodies one at a time, so a leg another body's gate reads for the
-  // wire↔wire separation / clearance terms must reflect this tick's earlier moves,
-  // not the tick-start trace. Skipping this leaves those terms STALE and a gate
-  // lowers a wrong local proxy while the true total rises — a small limit cycle
-  // that net-drifts wire-owned dots (measured: threeWay's clustered ∃ tips
-  // conveyor 24 wu at oscillating E; refreshing makes them rest, E monotone).
-  const refresh = (r: LegRec): void => {
-    const shape = resolveLeg(e, r.w, r.leg, cacheOf(r.gi))
-    r.samples.length = 0
-    traceLeg(shape, r.samples, QN)
-  }
-  // The localized WIRE energy of a set of touched legs (leg intrinsic + clearance,
-  // cross-wire separation, ∃-tip standoff). Junction geometry has NO trunk term —
-  // branch/hub tangents are ordinary per-leg DOFs, already in each leg's intrinsic
-  // energy (tension + bend + arrival well), so a mover that shifts a port anchor
-  // sees the full junction energy through the touched legs alone.
-  // Content (sibling + scope-ring) and the boundary exit→slot terms are added by
-  // the translation gates via contentEnergy, never here.
-  const localE = (touched: readonly LegRec[], farBody: Body | null, warm = false): number => {
+  // A touched leg's shape under a gradient probe. `warm` = the envelope-theorem
+  // fixed-turn fast path (plan 22): CORRECT for the first-order gradient at the
+  // base and ~15x cheaper than the grid scan — used for gradient probes only,
+  // never for accepts (plan-23 measured warm accepts breaking monotonicity).
+  // Free-end legs stay exact even in probes (the fixed-turn warm gradient points
+  // wrong there — measured, an ∃ tip cycling E ±0.4 forever).
+  // Probes are EXACT (the memoryless grid solve): the warm fixed-turn fast path
+  // smooths away the grid-switch creases the one-sided gradient selection needs
+  // — probing warm re-creates the phantom-gradient stall in disguise (measured:
+  // rest at ≤50 ticks vs 754 with real descent remaining).
+  const solveTouched = (r: LegRec): LegShape => resolveLeg(e, r.w, r.leg, cacheOf(r.gi))
+  // localized energy of a touched-leg set (leg intrinsic incl. clearance + frame
+  // containment + cross-wire separation + ∃-tip standoff + optionally the moved
+  // disc's clearance against far legs). Gradient probes only — the ACCEPT test
+  // never uses this (it evaluates the full true E).
+  const localE = (touched: readonly LegRec[], farBody: Body | null): number => {
     let E = 0
     const touchedSet = new Set(touched.map((r) => r.gi))
     const probeSamples = new Map<number, Vec2[]>()
     touched.forEach((r, idx) => {
-      const shape = solveTouched(r, warm)
+      const shape = solveTouched(r)
       const samp = scratchSamples[idx] ?? (scratchSamples[idx] = [])
       traceLeg(shape, samp, QN)
       probeSamples.set(r.gi, samp)
@@ -1338,182 +1242,143 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => bool
         E += legClearance(r.samples, r.shape.sol.L, r.shape.ownA, r.shape.ownB, near1, sc)
       }
     }
-    // ∃-tip standoff for EVERY touched tip leg: a node with several dangling ∃
-    // ports moves ALL their port anchors at once, so its gate must see all their
-    // standoffs — accounting for only one lowers a wrong proxy and orbits the
-    // omitted tips (measured: threeWay's multi-dangle refs conveyor an ∃ dot).
     for (const r of touched) if (r.leg.b.kind === 'end') E += tipStandoffE(e, r.w)
     return E
   }
 
-  // The full content energy a TRANSLATION gate must add to its local wire energy:
-  // moving any body changes the derived region circles (its sibling gaps), so the
-  // whole content functional is re-evaluated per probe. The frame is FIXED (plan
-  // 24) and its slots do not move with content, so there is no frame-coupling term
-  // — a boundary leg's slot dependence is already in its own leg energy (localE).
-  const contentFrame = (): number => contentEnergy(e)
-
-  // ---- NODE-body DOF (nodes + empty-region anchors): TRANSLATION by the
-  // strict gated candidate step (with legality projection + content/frame
-  // energy); ROTATION by the same gated step over the wire legs alone (the
-  // centre is fixed, so content and frame are rotation-invariant). ----
+  // ── the coordinate list ──
+  const coords: Coord[] = []
+  const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'term' && b.kind !== 'atom' && b.kind !== 'anchor') continue
-    // A dragged (pinned) node pins its POSITION only — the caller holds b.pos at
-    // the cursor. Its ROTATION stays a FREE DOF (USER 2026-07-07: a dragged node
-    // must keep rotating to relieve its wires, or edges go wild as it moves and
-    // can't turn to compensate). So a pinned body skips the translation gate but
-    // still runs the rotation gate below.
-    const posPinned = pinned !== null && pinned.has(b.id)
     const touched = bindLegs.get(b.id) ?? []
-    // anchors carry no disc in the clearance integral (invisible carriers), so
-    // they pass no farBody; their only energy is the sibling term via contentFrame
-    const far = b.kind === 'anchor' ? null : b
+    const far = b.kind === 'anchor' || b.kind === 'end' ? null : b
     const dirty = new Set<RegionId>([b.region])
-    const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, true) + contentFrame() }
-    const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far) + contentFrame() }
-    dofs.push(() => {
-      let moved = false
-      if (!posPinned) moved = gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc) || moved
-      if (touched.length > 0) {
-        // Node angle is FREE and UNLIMITED (USER RULING 2026-07-06: "Node angle is
-        // ARBITRARY. It encodes NO information and is FREE in the physics"). The
-        // no-snapping law governs WIRE SHAPES, never node angles — a node may whip
-        // around most of a turn in one step to shed wire tension, which is DESIRED.
-        // So the rotation DOF has NO rate cap: the gated step (long-shot ladder +
-        // expanding search) descends its wire energy by the full step every tick,
-        // bounded only at π (an angle wraps, so a larger cap is meaningless). Strict
-        // E-gating still forbids any move that does not lower energy, so it settles.
-        const rW = b.discR * sc // world radius: the rotation probe/mobility scale with the drawn node
-        moved = gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null), HX / rW, (4 * MU) / (rW * rW), Math.PI) || moved
-      }
-      for (const r of touched) refresh(r)
-      return moved
-    })
+    const bodyLocalE = (): number => { recomputeRegions(e, dirty); return localE(touched, far) + contentEnergy(e) }
+    if (pinned === null || !pinned.has(b.id)) {
+      movedBodies.push(b)
+      coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, localE: bodyLocalE })
+      coords.push({ get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } }, m: 1, localE: bodyLocalE })
+    }
+    // rotation: an ordinary coordinate under the same budget (2026-07-24 law —
+    // the unlimited-spin ruling is superseded). Content is rotation-invariant.
+    if (touched.length > 0 && b.localAnchor.size > 0) {
+      coords.push({ get: () => b.theta, set: (v) => { b.theta = v }, m: Math.max(b.discR * sc, 1e-6), localE: () => localE(touched, null) })
+    }
   }
-  // ---- wire-owned END-body TRANSLATION DOF: ∃ tips and ∀ vias (boundary slots are
-  // fixed frame terminals, not bodies — plan 24). Both are free-end LEAF terminals of
-  // their tree (`{ kind: 'end' }` legs). Same strict gated candidate step; an ∃ tip
-  // (single bind) is light and mobile (floats to a scope standoff), a ∀ via (k ≥ 2
-  // binds) is heavier/slower. ----
-  for (const b of e.bodies.values()) {
-    if (b.kind !== 'end') continue
-    if (pinned !== null && pinned.has(b.id)) continue
-    const w = e.wires.get(b.id.slice(2))
-    if (w === undefined || w.endBodyId !== b.id) continue // a bare ∃ dot — no legs
-    const wLegs = legsOfWire.get(b.id.slice(2))!
-    const touched = wLegs.filter((r) => r.leg.b.kind === 'end')
-    const light = w.binds.length === 1 // an ∃ tip is light; a ∀ via is heavy
-    const dirty = new Set<RegionId>([b.region])
-    // END bodies are FEW, so their gate uses the exact grid solve for the gradient too:
-    // their legs are free-end (arrival tangent is a scanned dummy), where the fixed-turn
-    // warm gradient points wrong and fights the grid accept into a small limit cycle
-    // (measured: an ∃ tip cycling E ±0.4 forever).
-    const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, null) + contentFrame() }
-    dofs.push(() => {
-      const moved = gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, (light ? 0.55 : 0.28) * sc)
-      for (const r of touched) refresh(r)
-      return moved
-    })
-  }
-  // junction BRANCH points: the soap-film Steiner TREE is the physics. Each branch
-  // POSITION relaxes to the minimum of its incident legs' energy — with the leg
-  // tangents free (below) this is the Plateau meeting the leg tension/bend want,
-  // emergent from the physics, no separate renderer and no trunk clamp. The edges
-  // ARE elastica legs, so they bend around nodes via the leg clearance in localE.
-  //
-  // FACE CROSSING is folded IN: the branch's feasible set has ℓ_e ≥ 0 boundaries (one
-  // per internal edge to a neighbour branch). After the ordinary continuous move, any
-  // internal edge that reached the face (|b_bi − b_bj| < MERGE_EPS) is crossed via the
-  // canonical φ (tryFaceCross) under the SAME strict-E gate — no trigger, no throttle,
-  // no separate topology mover. Deduplicated per edge (only the lower-index branch bi
-  // crosses each edge (bi, bj); bi < bj), and a wire that crosses freezes its remaining
-  // same-sweep DOFs (the shared leg snapshot is now stale — see `crossed`).
+  const params: WireParam[] = []
   for (const [wid, w] of e.wires) {
-    if (w.branches.length === 0) continue
-    const recs = legsOfWire.get(wid)!
-    for (let bi = 0; bi < w.branches.length; bi++) {
-      const touched = recs.filter((r) => (r.leg.a.kind === 'branch' && r.leg.a.i === bi) || (r.leg.b.kind === 'branch' && r.leg.b.i === bi))
-      const holder = { get pos(): Vec2 { return w.branches[bi]! }, set pos(p: Vec2) { w.branches[bi] = p } }
-      dofs.push(() => {
-        if (crossed.has(wid)) return false // wire crossed earlier this sweep — resume next sweep
-        // FACE CHECK FIRST: an incident internal edge already at the face (within
-        // MERGE_EPS) crosses via φ before the continuous move can escape the window (the
-        // branch step cap is far wider than the drawing-resolution window). A crossing
-        // rebuilds this wire's legs, so freeze its remaining same-sweep DOFs (`crossed`).
-        for (let li = 0; li < w.legs.length; li++) {
-          const leg = w.legs[li]!
-          if (leg.a.kind !== 'branch' || leg.b.kind !== 'branch') continue
-          const bj = leg.a.i === bi ? leg.b.i : leg.b.i === bi ? leg.a.i : -1
-          if (bj <= bi) continue // not incident to bi, or the higher branch owns this edge
-          const dx = w.branches[bi]!.x - w.branches[bj]!.x, dy = w.branches[bi]!.y - w.branches[bj]!.y
-          if (Math.hypot(dx, dy) >= MERGE_EPS) continue
-          if (tryFaceCross(e, w, li)) { crossed.add(wid); return true } // else restored in place
-        }
-        // ordinary continuous move (re-expands a current chart resting near the face, so a
-        // no-cross face check does not trap the branch at ℓ = MERGE_EPS)
-        const moved = gatedPoint(holder, () => localE(touched, null), MU, 0.28 * sc)
-        for (const r of touched) refresh(r)
-        return moved
-      })
+    const param = mkWireParam(w)
+    if (param === null) continue
+    params.push(param)
+    const wLegs = legsOfWire.get(wid)!
+    const wireLocalE = (): number => localE(wLegs, null)
+    coords.push({ get: () => param.root.x, set: (v) => { param.root.x = v; param.reconstruct() }, m: 1, localE: wireLocalE })
+    coords.push({ get: () => param.root.y, set: (v) => { param.root.y = v; param.reconstruct() }, m: 1, localE: wireLocalE })
+    for (const ed of param.edges) {
+      coords.push({ get: () => ed.l, set: (v) => { ed.l = v; param.reconstruct() }, m: 1, localE: wireLocalE })
+      // the edge ANGLE is quotiented at the face (Fact 0.3): below the drawing
+      // resolution it moves nothing and is omitted, exactly the quotient.
+      if (Math.abs(ed.l) > 0.01) {
+        coords.push({ get: () => ed.th, set: (v) => { ed.th = v; param.reconstruct() }, m: Math.abs(ed.l), localE: wireLocalE })
+      }
     }
-  }
-  // per-leg free END-TANGENT DOFs (stiff/slow: MU/64, cap 0.06 — a wire SHAPE DOF,
-  // slow for the no-snap smoothness law). Every leg end incident to a Steiner BRANCH
-  // point is an ORDINARY descended angle over the leg's own energy: `angB` (arrival
-  // at b, welled) when b is a branch, `angA` (leaving at a, exact θ(0)) when a is a
-  // branch. A bind/slot end fixes its tangent by construction and a wire-owned END
-  // body (∃ tip / ∀ via) is a free leaf that solveLeg scans internally (`freeEnd`,
-  // engine.ts), so only branch-incident ends get a gate here. A wire that crossed
-  // this sweep defers (its legs are stale).
-  for (const [wid] of e.wires) {
-    for (const rec of legsOfWire.get(wid)!) {
+    for (const rec of wLegs) {
       const leg = rec.leg
-      if (leg.b.kind === 'branch') {
-        dofs.push(() => {
-          if (crossed.has(wid)) return false
-          const moved = gatedStep(() => leg.angB, (v) => { leg.angB = v }, () => localE([rec], null), HX / 8, MU / 64, 0.06)
-          refresh(rec)
-          return moved
-        })
-      }
-      if (leg.a.kind === 'branch') {
-        dofs.push(() => {
-          if (crossed.has(wid)) return false
-          const moved = gatedStep(() => leg.angA, (v) => { leg.angA = v }, () => localE([rec], null), HX / 8, MU / 64, 0.06)
-          refresh(rec)
-          return moved
-        })
-      }
+      const mTan = Math.max(rec.shape.sol.L, 1e-6)
+      if (leg.a.kind === 'branch') coords.push({ get: () => leg.angA, set: (v) => { leg.angA = v }, m: mTan, localE: () => localE([rec], null) })
+      if (leg.b.kind === 'branch') coords.push({ get: () => leg.angB, set: (v) => { leg.angB = v }, m: mTan, localE: () => localE([rec], null) })
     }
   }
-  return dofs
-}
 
-/** Advance one strict-descent SWEEP over the DOF worklist: run every DOF's gated
-    candidate step once, in the deterministic worklist order. There is no
-    time-slicing and no resume cursor — a sweep is always run whole (plan 24:
-    smoothness comes from small frequent steps on ALL DOF every frame, not from
-    slicing one region of the worklist per frame, which read as hard clicking).
+  // ── gradient at drawn-uniform probes h = HX/m, with ONE-SIDED derivative
+  // selection: the energy is PIECEWISE-smooth (the leg solver's grid-scan argmin
+  // switches candidates at creases), and rests sit ON kinks — a central
+  // difference straddling a kink minimum reports a large phantom gradient whose
+  // trial then ASCENDS the one-sided slope (measured: theta components alone
+  // raised every trial +6.9·Δ at a rest whose central "gradient" was 9.8). Per
+  // coordinate: keep the steeper strictly-descending side; a kink minimum (both
+  // sides ascend) contributes ZERO — that coordinate genuinely rests. At smooth
+  // points both slopes agree and this IS the central estimate. ──
+  const g: number[] = new Array(coords.length).fill(0)
+  // base values shared per localE closure: coordinates of one family (a body's
+  // x and y, a wire's root pair) see the identical base energy, so it is
+  // evaluated once per family, not once per coordinate.
+  const baseMemo = new Map<Coord['localE'], number>()
+  const baseOf = (c: Coord): number => {
+    let v = baseMemo.get(c.localE)
+    if (v === undefined) { v = c.localE(); baseMemo.set(c.localE, v) }
+    return v
+  }
+  for (let i = 0; i < coords.length; i++) {
+    const c = coords[i]!
+    const v0 = c.get()
+    const h = HX / c.m
+    const e0 = baseOf(c)
+    c.set(v0 + h); const ep = c.localE()
+    c.set(v0 - h); const em = c.localE()
+    c.set(v0)
+    const slopeP = (ep - e0) / h // right one-sided derivative
+    const slopeM = (e0 - em) / h // left one-sided derivative
+    const descP = slopeP < 0, descM = slopeM > 0
+    g[i] = descP && (!descM || -slopeP >= slopeM) ? slopeP : descM ? slopeM : 0
+  }
+  recomputeRegions(e)
+  let gnorm2 = 0
+  for (let i = 0; i < coords.length; i++) { const s = g[i]! / coords[i]!.m; gnorm2 += s * s }
+  const gnorm = Math.sqrt(gnorm2)
+  if (gnorm === 0) return false
 
-    Returns whether ANY DOF changed state. Because every mover is deterministic and
-    strictly value-gated (committed only at a strictly lower TOTAL energy), and the
-    worklist is a pure function of current engine state (rebuilt each sweep from
-    positions — no tick index, no stored per-DOF scale, no randomness), a sweep that
-    changes nothing leaves the state bit-identical; the next sweep rebuilds the same
-    worklist over the same state and again changes nothing. So a single all-`false`
-    sweep is a PROVEN fixed point — the layout is settled forever. The discrete
-    junction-topology DOF preserves this: its candidates are a deterministic function
-    of the current state, it commits a re-pairing only on a strict total-E decrease,
-    and on reject it restores the wire bit-identically (returning `false`), so a
-    no-flip topology gate is as much a proven no-op as any continuous gate. Since a
-    flip strictly lowers a total energy bounded below and there are finitely many
-    topologies, only finitely many flips can occur, so the sweep still terminates at a
-    fixed point. */
-function descentSweep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
-  let moved = false
-  for (const dof of descentDofs(e, pinned)) moved = dof() || moved
-  return moved
+  // ── snapshot for restore-on-reject ──
+  const bodySnap = new Map<string, { pos: Vec2; theta: number }>()
+  for (const b of e.bodies.values()) bodySnap.set(b.id, { pos: { ...b.pos }, theta: b.theta })
+  const wireSnap = [...e.wires.values()].map((w) => ({
+    w,
+    branches: w.branches.map((p) => ({ ...p })),
+    legs: [...w.legs],
+    tans: w.legs.map((l) => ({ angA: l.angA, angB: l.angB })),
+  }))
+  const paramSnap = params.map((p) => ({ root: { ...p.root }, edges: p.edges.map((ed) => ({ ...ed })) }))
+  const restore = (): void => {
+    for (const b of e.bodies.values()) { const s = bodySnap.get(b.id)!; b.pos = { ...s.pos }; b.theta = s.theta }
+    for (const ws of wireSnap) {
+      ws.w.branches.length = 0; for (const p of ws.branches) ws.w.branches.push({ ...p })
+      ws.w.legs.length = 0; for (const l of ws.legs) ws.w.legs.push(l)
+      ws.legs.forEach((l, i) => { l.angA = ws.tans[i]!.angA; l.angB = ws.tans[i]!.angB })
+    }
+    params.forEach((p, i) => {
+      p.root = { ...paramSnap[i]!.root }
+      p.edges.forEach((ed, j) => { ed.l = paramSnap[i]!.edges[j]!.l; ed.th = paramSnap[i]!.edges[j]!.th })
+    })
+  }
+
+  const E0 = totalEnergy(e)
+  const EPS = 1e-9 * (Math.abs(E0) + 1)
+  const deltaMax = WIREP.travelCap * sc
+  for (let k = 0; k <= DELTA_HALVINGS; k++) {
+    const delta = deltaMax / (1 << k)
+    // gate-resolution floor: below this Δ even the full linear descent −Δ·‖g‖
+    // is smaller than the strict gate's EPS, so no trial can measurably pass —
+    // the ladder's own resolution, not a tuning.
+    if (delta * gnorm < EPS) break
+    // one simultaneous trial: steepest descent in the M-metric, ‖trial‖_M = delta
+    for (let i = 0; i < coords.length; i++) {
+      const c = coords[i]!
+      c.set(c.get() - delta * (g[i]! / (c.m * c.m)) / gnorm)
+    }
+    // a trial that drove an internal edge through its face is expressed in the
+    // steepest incident chart (tangent-cone descent) — part of the same trial
+    for (const param of params) {
+      if (param.edges.some((ed) => ed.l < 0)) resolveCharts(e, param.w, param.nBind, param.nT)
+    }
+    // legality projection, then the one accept test on the true total E
+    for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
+    recomputeRegions(e)
+    const E1 = totalEnergy(e)
+    if (E1 < E0 - EPS) return true
+    restore()
+    recomputeRegions(e)
+  }
+  return false
 }
 
 /** One relaxation tick — STRICT TOTAL-ENERGY DESCENT (plan 23), the USER's
@@ -1537,7 +1402,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   // seed beforehand (seedProject / settle's leading projection), so this is a
   // no-op there. Never re-established during settling — the frame is constant.
   if (e.frame === null) establishFrame(e)
-  const moved = descentSweep(e, pinned)
+  const moved = operatorStep(e, pinned)
   recomputeRegions(e)
   e.tick++
   return moved
