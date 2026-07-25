@@ -559,6 +559,18 @@ export function slotEscape(e: Engine, position: number): { point: Vec2; inner: V
   }
 }
 
+/** The fixed stub anchor BEHIND each terminal, in network vertex order (null
+    where the terminal has no stub — a free ∃/∀ end dot). The drawn stroke of a
+    terminal-incident edge is stub + route; the energy charges the turning of
+    the WHOLE drawn stroke, so the router needs these to see the bend where the
+    fixed stub meets the routed path (the port hairpin). */
+export function wireTerminalStubs(e: Engine, w: WireView): (Vec2 | null)[] {
+  const out: (Vec2 | null)[] = w.binds.map((bd) => escapePoint(e, bd).anchor as Vec2 | null)
+  for (const position of w.slots) out.push(slotEscape(e, position)?.point ?? null)
+  if (w.endBodyId !== null) out.push(null)
+  return out
+}
+
 /** The wire's terminal POINTS in network vertex order (binds, slots, end).
     Pure read of the live geometry; the router treats these as fixed. */
 export function wireTerminalPoints(e: Engine, w: WireView): Vec2[] {

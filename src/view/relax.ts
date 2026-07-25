@@ -1,7 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame } from './engine'
-import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
+import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalStubs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
 import { mkFreeSpace, route } from './route/freespace'
 import { advanceNetwork, netLength } from './route/network'
 import { LayoutOptimizer, layoutScore } from './optimize'
@@ -608,7 +608,7 @@ export function wireEnergy(e: Engine): number {
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
-    E += netLength(w.net, terms, fs)
+    E += netLength(w.net, terms, fs, wireTerminalStubs(e, w))
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const r = route(fs, pos(u), pos(v))
@@ -849,10 +849,9 @@ const DELTA_HALVINGS = 8
 /**
  * THE per-frame NODE step (routed-network model): bodies are the only
  * dynamical coordinates — positions, rotations of port-bearing bodies, and
- * wire-owned ∃/∀ end dots. The one energy is coarse wire pressure (Euclidean
- * network length) + content; wire ROUTING never appears here (the router is a
- * separate solver that observes nodes and never moves them — a route basin
- * change cannot kick a node, USER ruling 2026-07-24). One-sided gradient
+ * wire-owned ∃/∀ end dots. Every probe evaluates THE one energy (routed
+ * wireEnergy + content); node rotation descends the same functional, so port
+ * angles are calculated along with the curves. One-sided gradient
  * selection (piecewise-smooth content terms), one simultaneous sup-norm-
  * bounded trial per Δ halving with legality projection and a strict gate,
  * then single-coordinate fallback. Memoryless and deterministic.
@@ -1031,7 +1030,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     for (const [, w] of e.wires) {
       const terms = wireTerminalPoints(e, w)
       if (terms.length < 2) continue
-      routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale }) || routed
+      routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, stubs: wireTerminalStubs(e, w) }) || routed
     }
   }
   recomputeRegions(e)
