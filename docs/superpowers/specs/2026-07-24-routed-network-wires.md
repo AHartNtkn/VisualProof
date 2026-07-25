@@ -13,6 +13,19 @@ special-casing of dangling wires; the plan-22 tip standoff force is deleted
 (it manufactured dangle length). (4) The node solver optimizes THE routed
 energy itself — the coarse Euclidean proxy is deleted (it saw through
 obstacles, stranding tips across discs as half-circle wraps).
+(5) THE ENERGY CHARGES THE DRAWN STROKE: turning includes the bends where
+the fixed port/slot stubs meet the routed path — the stub-blind energy let
+a route double straight back over the stub for free (the resting needle/
+loop at ports observed 2026-07-24); with the bend charged, node rotation
+descends the same functional, so port angles are calculated along with the
+curves. (6) LAYOUT MINIMIZATION IS ASYNCHRONOUS (USER: "the user should
+not perceive anything from a heavy search"): the LayoutOptimizer runs in a
+Web Worker (descend-first, then the trial schedule), publishing strictly
+better layouts; a frame on a searched engine does only sync + one bounded
+approach step + the wire walk — the full energy is evaluated at decision
+events, never per frame. Gradient probes in the node solver use the
+envelope-theorem frozen-path evaluator (equal derivative where the optimal
+path is unique); every acceptance gate evaluates the exact routed energy.
 **Status:** RATIFIED — delivered whole by the user as diagnosis + replacement
 design after the elastica-state model's failures at 755f36b. Supersedes the
 wire portions of `2026-07-24-wire-manifold-problem.md` and

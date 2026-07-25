@@ -1,61 +1,22 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { escapePoint, routeObstacles, routeBounds, slotEscape, wireTerminalPoints } from './engine'
+import { routeObstacles, routeBounds, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
+import { edgeCurvePts } from './route/curve'
+import { rodBeta } from './relax'
 
 /**
  * Wire geometry over the ROUTED NETWORK (USER ruling 2026-07-24), pure —
- * returns traced polylines, paints nothing. Each drawn stroke is a routed
- * shortest path through free space (node discs are hard obstacles), FILLETED
- * at its interior corners as a RENDERER operation: the rounding selects no
- * winding basins and stores no state — it is a local corner treatment of the
- * already-clear route corridor. A port stroke begins with the fixed escape
- * stub (rim anchor → escape point), so exits are perpendicular by
- * construction.
+ * returns traced polylines, paints nothing. Each drawn stroke IS the
+ * rod-energy curve: the deterministic Hermite curve through the edge's route
+ * waypoints with the terminal boundary conditions (clamped port/slot normals,
+ * natural junction/dot ends — see route/curve.ts). The renderer draws exactly
+ * what the energy charges; there is no separate rounding pass.
  */
-
-/** Fillet radius (world units, scaled by content fill) and samples/corner. */
-const FILLET_R = 2.0
-const FILLET_N = 6
 
 export type LegGeom = { leg: Leg; pts: Vec2[] }
 export type ExStub = { wid: WireId; from: Vec2; to: Vec2; dot: Vec2 }
-
-/** Round the interior corners of a polyline with quadratic fillets clipped to
-    the shorter adjacent half-segment. Endpoints are preserved exactly. */
-export function filletPolyline(pts0: readonly Vec2[], r: number): Vec2[] {
-  // drop degenerate consecutive duplicates first (stub joins, collinear routes)
-  const pts: Vec2[] = []
-  for (const p of pts0) {
-    const last = pts[pts.length - 1]
-    if (last !== undefined && Math.hypot(p.x - last.x, p.y - last.y) < 1e-9) continue
-    pts.push(p)
-  }
-  if (pts.length <= 2) return pts
-  const out: Vec2[] = [pts[0]!]
-  for (let i = 1; i + 1 < pts.length; i++) {
-    const a = pts[i - 1]!, b = pts[i]!, c = pts[i + 1]!
-    const d1 = Math.hypot(b.x - a.x, b.y - a.y), d2 = Math.hypot(c.x - b.x, c.y - b.y)
-    const t = Math.min(r, d1 / 2, d2 / 2)
-    if (t < 1e-9) { out.push(b); continue }
-    const p = { x: b.x + ((a.x - b.x) / d1) * t, y: b.y + ((a.y - b.y) / d1) * t }
-    const q = { x: b.x + ((c.x - b.x) / d2) * t, y: b.y + ((c.y - b.y) / d2) * t }
-    for (let k = 0; k <= FILLET_N; k++) {
-      const u = k / FILLET_N
-      const v = 1 - u
-      const np = {
-        x: v * v * p.x + 2 * v * u * b.x + u * u * q.x,
-        y: v * v * p.y + 2 * v * u * b.y + u * u * q.y,
-      }
-      const last = out[out.length - 1]!
-      if (Math.hypot(np.x - last.x, np.y - last.y) < 1e-9) continue
-      out.push(np)
-    }
-  }
-  out.push(pts[pts.length - 1]!)
-  return out
-}
 
 /** The rendering identity of a network vertex: real (body, key) at a port
     bind and the wire-owned END body; a wire-local id for a boundary slot or a
@@ -86,10 +47,9 @@ function legsKey(e: Engine): string {
 
 const legsCache = new WeakMap<Engine, { key: string; legs: LegGeom[] }>()
 
-/** Every drawable stroke as a filleted routed polyline. A port-incident edge
-    is prefixed with its fixed escape stub so the drawn stroke starts ON the
-    rim heading along the port normal. The result is CACHED against the exact
-    rendering state — callers must treat it as immutable. */
+/** Every drawable stroke as its rod-energy curve samples. The result is
+    CACHED against the exact rendering state — callers must treat it as
+    immutable. */
 export function computeLegs(e: Engine): LegGeom[] {
   const key = legsKey(e)
   const hit = legsCache.get(e)
@@ -102,25 +62,14 @@ export function computeLegs(e: Engine): LegGeom[] {
 function computeLegsUncached(e: Engine): LegGeom[] {
   const fs: FreeSpace = mkFreeSpace(routeObstacles(e), routeBounds(e))
   const out: LegGeom[] = []
-  const r = FILLET_R * e.scale
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
+    const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const rt = route(fs, pos(u), pos(v))
-      let pts: Vec2[] = [...rt.pts]
-      // prepend/append the fixed stubs: port rim anchors and frame-slot points
-      // (perpendicular exits/arrivals BY CONSTRUCTION)
-      const nB = w.binds.length
-      const stubEnd = (vv: number): Vec2 | null => {
-        if (vv < nB) return escapePoint(e, w.binds[vv]!).anchor
-        if (vv < nB + w.slots.length) return slotEscape(e, w.slots[vv - nB]!)?.point ?? null
-        return null
-      }
-      const su = stubEnd(u), sv = stubEnd(v)
-      if (su !== null) pts = [su, ...pts]
-      if (sv !== null) pts = [...pts, sv]
-      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: filletPolyline(pts, r) })
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, rt.pts, fs, rodBeta(e))
+      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts })
     }
   }
   return out

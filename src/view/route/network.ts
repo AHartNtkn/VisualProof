@@ -1,6 +1,8 @@
 import type { Vec2 } from '../vec'
 import type { FreeSpace } from './freespace'
-import { route, polylineTurning } from './freespace'
+import { route } from './freespace'
+import type { CurveBC } from './curve'
+import { edgeCurvePts, rodCost } from './curve'
 
 /**
  * THE WIRE NETWORK (routed-network wires, USER ruling 2026-07-24).
@@ -39,37 +41,26 @@ export const SPLIT_MARGIN = 1e-3
 const posOf = (net: WireNet, terms: readonly Vec2[], v: number): Vec2 =>
   v < terms.length ? terms[v]! : net.junctions[v - terms.length]!
 
-/** Bending weight: cost per radian of TURNING in a drawn stroke. Calibration:
-    a 180° hairpin (π rad) costs ≈ 25 length units ≈ several node diameters —
-    among the costliest configurations a wire can be in (USER ruling
-    2026-07-24), so wraps and doubling-back are crushed while gentle detours
-    stay cheap. */
-export const BEND_COST = 8
-
-/** THE network energy: soft routed cost (length + through-disc + out-of-frame
-    surcharges) plus BEND_COST × total turning of each DRAWN stroke. A
-    terminal-incident stroke is drawn stub + route (+ stub), so the turning
-    includes the bend where the fixed stub meets the routed path — the port
-    hairpin is charged, not free (USER ruling 2026-07-24: a 180° hairpin is
-    among the costliest configurations; the energy charges what is drawn).
-    `stubs[t]` is the fixed anchor behind terminal t, null where the terminal
-    has none (a free end dot). This is the one wire objective — the router,
-    the topology gates, and the global layout score all use exactly it. */
+/** THE network energy: the ROD energy of every edge's DRAWN curve (USER
+    ruling 2026-07-24: minimal energy curves are gentle — see route/curve.ts).
+    Per edge: route the waypoint skeleton through free space, build the
+    deterministic Hermite curve with the terminal boundary conditions
+    (`bcs[t]` = clamped anchor+direction, null = natural end), and charge
+    ∫(α + β·κ²)ds plus the soft obstacle/frame surcharges along the samples.
+    This is the one wire objective — the router, the topology gates, and the
+    global layout score all use exactly it. */
 export function netLength(
   net: WireNet,
   terms: readonly Vec2[],
   fs: FreeSpace,
-  stubs: readonly (Vec2 | null)[] = [],
+  bcs: readonly CurveBC[] = [],
+  beta = 0,
 ): number {
   let L = 0
   for (const [u, v] of net.edges) {
     const r = route(fs, posOf(net, terms, u), posOf(net, terms, v))
-    const su = u < stubs.length ? stubs[u]! : null
-    const sv = v < stubs.length ? stubs[v]! : null
-    const turn = su === null && sv === null
-      ? polylineTurning(r.pts)
-      : polylineTurning([...(su !== null ? [su] : []), ...r.pts, ...(sv !== null ? [sv] : [])])
-    L += r.cost + BEND_COST * turn
+    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, fs, beta)
+    L += rodCost(pts, fs, beta)
   }
   return L
 }
@@ -190,7 +181,7 @@ export function contract(net: WireNet, terms: readonly Vec2[], _fs: FreeSpace): 
  * ≥ 3), take the largest positive first-order gain, open by SPLIT_EPS, and
  * keep it only if the ACTUAL routed length decreased (strict gate).
  */
-export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, stubs: readonly (Vec2 | null)[] = []): boolean {
+export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0): boolean {
   const nT = terms.length
   for (let j = 0; j < net.junctions.length; j++) {
     const inc = junctionTangents(net, terms, fs, j)
@@ -224,7 +215,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, st
     const dn = Math.hypot(sx, sy)
     const d = { x: sx / dn, y: sy / dn }
     const here = net.junctions[j]!
-    const L0 = netLength(net, terms, fs, stubs)
+    const L0 = netLength(net, terms, fs, bcs, beta)
     const snapshot: WireNet = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
     const jb = net.junctions.length
     net.junctions[j] = { x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }
@@ -243,7 +234,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, st
     })
     void bi
     net.edges.push([nT + j, nT + jb])
-    const L1 = netLength(net, terms, fs, stubs)
+    const L1 = netLength(net, terms, fs, bcs, beta)
     if (L1 < L0 - 1e-12) return true
     net.junctions = snapshot.junctions
     net.edges = snapshot.edges
@@ -269,9 +260,10 @@ export function advanceNetwork(
   net: WireNet,
   terms: readonly Vec2[],
   fs: FreeSpace,
-  opts: { substeps: number; bound: number; stubs?: readonly (Vec2 | null)[] },
+  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number },
 ): boolean {
-  const stubs = opts.stubs ?? []
+  const bcs = opts.bcs ?? []
+  const beta = opts.beta ?? 0
   let changed = false
   // the off-screen fixed-topology TARGET is solved ONCE per advance (and again
   // only after a topology change) — the substeps walk toward it under the
@@ -303,10 +295,10 @@ export function advanceNetwork(
       })
       const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
       if (anyProposed) {
-        if (curL === null) curL = netLength(net, terms, fs, stubs)
+        if (curL === null) curL = netLength(net, terms, fs, bcs, beta)
         const before = net.junctions
         net.junctions = proposal
-        const L1 = netLength(net, terms, fs, stubs)
+        const L1 = netLength(net, terms, fs, bcs, beta)
         if (L1 < curL - 1e-12) {
           curL = L1
           stepMoved = true
@@ -321,6 +313,6 @@ export function advanceNetwork(
   // one routed split check per advance, only when something changed (splits
   // are rare; when one fires the next advance's walk grows it under the gates;
   // at rest nothing scans — the state is already a gated fixed point)
-  if (changed) trySplit(net, terms, fs, stubs)
+  if (changed) trySplit(net, terms, fs, bcs, beta)
   return changed
 }

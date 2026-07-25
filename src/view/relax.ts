@@ -1,14 +1,16 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame } from './engine'
-import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalStubs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace, route, polylineTurning, segSoftCost } from './route/freespace'
-import { advanceNetwork, BEND_COST } from './route/network'
+import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
+import { mkFreeSpace, route } from './route/freespace'
+import { advanceNetwork } from './route/network'
+import type { CurveBC } from './route/curve'
+import { edgeCurvePts, rodCost } from './route/curve'
 import { layoutScore } from './optimize'
 import type { LayoutBest } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
-export const PHYSICS_REV = 'async-search@2026-07-24'
+export const PHYSICS_REV = 'rod-curves@2026-07-24'
 console.info('[physics] rev', PHYSICS_REV)
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
@@ -590,14 +592,18 @@ export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[
   return E
 }
 
-/** THE wire energy: soft routed cost of every network (length + through-disc
-    + out-of-frame surcharges + BEND_COST × turning, see route/network.ts) plus
-    routed inter-wire separation. There is exactly ONE wire objective — this
-    one — used identically by the node solver, the router's gates, and the
-    global layout score. No standoff forces, no Euclidean proxies (deleted as
-    hacks, USER ruling 2026-07-24: the proxy saw straight through obstacles,
-    which is why tips rested across discs and drew half-circle wraps; the
-    standoff FORCED dangles long). */
+/** THE wire energy: the ROD energy (tension + bending, USER ruling
+    2026-07-24 — see route/curve.ts) of every drawn curve, plus the soft
+    obstacle/frame surcharges along the samples and the routed inter-wire
+    separation. There is exactly ONE wire objective — this one — used
+    identically by the node solver, the router's gates, and the global layout
+    score. */
+
+/** Bending stiffness: r* = the node-disc scale (bends happen at the scale of
+    the objects they route around); beta = r*² × unit tension. Derived, not
+    tuned. */
+export const rodBeta = (e: Engine): number => (DISC_R * e.scale) ** 2
+
 export function wireEnergy(e: Engine): number {
   return wireEnergyCapture(e).E
 }
@@ -609,27 +615,24 @@ export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v:
 /** Exact wire energy PLUS the frozen-path capture the probe evaluator needs. */
 export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[] } {
   const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const beta = rodBeta(e)
   let E = 0
   const edges: FrozenEdge[] = []
-  const routedSegs: { wid: string; a: Vec2; b: Vec2 }[] = []
+  const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
-    const stubs = wireTerminalStubs(e, w)
+    const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const r = route(fs, pos(u), pos(v))
-      const su = u < stubs.length ? stubs[u]! : null
-      const sv = v < stubs.length ? stubs[v]! : null
-      const drawn = su === null && sv === null
-        ? r.pts
-        : [...(su !== null ? [su] : []), ...r.pts, ...(sv !== null ? [sv] : [])]
-      E += r.cost + BEND_COST * polylineTurning(drawn)
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, fs, beta)
+      E += rodCost(pts, fs, beta)
       edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
-      for (let i = 0; i + 1 < r.pts.length; i++) routedSegs.push({ wid, a: r.pts[i]!, b: r.pts[i + 1]! })
+      for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
   }
-  return { E: E + segSeparationE(routedSegs, e.scale), edges }
+  return { E: E + segSeparationE(segs, e.scale), edges }
 }
 
 /**
@@ -637,38 +640,32 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[] }
  * so at the captured optimum the frozen-path cost has the same derivative as
  * the true cost wherever the optimal path is unique (envelope theorem); the
  * one-sided slope selection brackets the exceptional kinks. Gradient probes
- * therefore re-measure the CAPTURED polylines — endpoints tracking the
- * probed body's live terminals, soft cost against the LIVE discs — with no
- * routing solve (the routing solve's visibility precompute dominated the
- * probe cost ~19×, measured 2026-07-24). Every ACCEPTANCE gate still
- * evaluates the exact routed energy: strict descent is exact; only probe
- * DIRECTIONS use the equal-derivative majorizer.
+ * therefore rebuild the drawn curve from the CAPTURED route waypoints — the
+ * curve construction is deterministic and cheap; only the routing solve (the
+ * visibility precompute dominated probe cost ~19×, measured 2026-07-24) is
+ * frozen. Every ACCEPTANCE gate still evaluates the exact routed energy:
+ * strict descent is exact; only probe DIRECTIONS use the equal-derivative
+ * majorizer.
  */
 export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): number {
   const space = { discs: routeObstacles(e), bounds: routeBounds(e) }
+  const beta = rodBeta(e)
   let E = 0
   const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
-  const perWire = new Map<string, { terms: Vec2[]; stubs: (Vec2 | null)[]; junctions: Vec2[] }>()
+  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[] }>()
   for (const fe of edges) {
     let c = perWire.get(fe.wid)
     if (c === undefined) {
       const w = e.wires.get(fe.wid)!
-      c = { terms: wireTerminalPoints(e, w), stubs: wireTerminalStubs(e, w), junctions: w.net.junctions }
+      c = { terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions }
       perWire.set(fe.wid, c)
     }
     const cc = c
     const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
-    const pts: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
-    for (let i = 0; i + 1 < pts.length; i++) {
-      E += segSoftCost(pts[i]!, pts[i + 1]!, space)
-      segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
-    }
-    const su = fe.u < cc.stubs.length ? cc.stubs[fe.u]! : null
-    const sv = fe.v < cc.stubs.length ? cc.stubs[fe.v]! : null
-    const drawn = su === null && sv === null
-      ? pts
-      : [...(su !== null ? [su] : []), ...pts, ...(sv !== null ? [sv] : [])]
-    E += BEND_COST * polylineTurning(drawn)
+    const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
+    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, way, space, beta)
+    E += rodCost(pts, space, beta)
+    for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
   return E + segSeparationE(segs, e.scale)
 }
@@ -1132,7 +1129,7 @@ function walkWires(e: Engine): boolean {
   for (const [, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
-    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, stubs: wireTerminalStubs(e, w) }) || routed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, bcs: wireTerminalBCs(e, w), beta: rodBeta(e) }) || routed
   }
   return routed
 }

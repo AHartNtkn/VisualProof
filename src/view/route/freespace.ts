@@ -178,6 +178,7 @@ function cornerAdjacency(fs: FreeSpace): { j: number; d: number }[][] {
 
 export type Route = { readonly length: number; readonly cost: number; readonly pts: readonly Vec2[] }
 
+
 /** Deterministic cheapest path p → q under the SOFT metric: the direct
     segment at its soft cost vs the best clear detour over the disc-polygon
     graph. No configuration is banned — a through-disc stroke simply pays. */
