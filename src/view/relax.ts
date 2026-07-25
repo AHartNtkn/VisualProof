@@ -1,9 +1,11 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, StoredFrame } from './engine'
+import type { Body, Engine, StoredFrame, WireView } from './engine'
 import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace, route } from './route/freespace'
-import { advanceNetwork } from './route/network'
+import { mkFreeSpace, route, segSoftCost } from './route/freespace'
+import type { Disc as RouteDisc, Bounds } from './route/freespace'
+import { advanceNetwork, netEval } from './route/network'
+import type { WireNet } from './route/network'
 import type { CurveBC } from './route/curve'
 import { edgeCurvePts, rodCost } from './route/curve'
 import { layoutScore } from './optimize'
@@ -577,17 +579,105 @@ function segPairSepE(A: { a: Vec2; b: Vec2 }, B: { a: Vec2; b: Vec2 }, R: number
 
 /** Inter-wire separation over straight segments (plan-22 constants):
     co-running pairs pay heavily, transverse crossings pay a little — the
-    objective SEES crossings and pointless co-routing. */
-export function segSeparationE(segs: readonly WireSeg[], sc: number): number {
-  const R = WIREP.sepR * sc
-  let E = 0
+    objective SEES crossings and pointless co-routing.
+
+    EXACT SPATIAL HASH. Two segments contribute 0 unless within R (segPairSepE
+    bbox-rejects beyond R), so only pairs whose bboxes are ≤ R apart matter. On a
+    uniform grid at cell size R, such a pair's bbox cells are the SAME or ADJACENT
+    (a gap < R = one cell), so scanning the 3×3 neighborhood of each segment's
+    bbox cells enumerates EXACTLY the contributing superset — no near pair is
+    missed, and every far pair (which the all-pairs loop would only bbox-reject to
+    0) is skipped. Summed over the near pairs in (i,j) order, this is the SAME sum
+    as the all-pairs loop: the nonzero terms are identical and in the same order,
+    and the far pairs it drops each added exactly 0. */
+/** Pack a grid cell (cx,cy) into one integer key; the +2^25 offset keeps
+    negatives non-negative and the 2^26 stride keeps the product a safe integer
+    for any scene. */
+const SEP_CELL_OFF = 33554432, SEP_CELL_STRIDE = 67108864
+const sepCellKey = (cx: number, cy: number): number => (cx + SEP_CELL_OFF) * SEP_CELL_STRIDE + (cy + SEP_CELL_OFF)
+type Seg2 = { readonly a: Vec2; readonly b: Vec2 }
+/** The [cx0,cx1,cy0,cy1] grid-cell span of a segment's bbox at inverse cell size `inv`. */
+const segCellSpan = (s: Seg2, inv: number): [number, number, number, number] => [
+  Math.floor(Math.min(s.a.x, s.b.x) * inv), Math.floor(Math.max(s.a.x, s.b.x) * inv),
+  Math.floor(Math.min(s.a.y, s.b.y) * inv), Math.floor(Math.max(s.a.y, s.b.y) * inv),
+]
+
+/** A drawn-curve sample step is a small fraction of the layout, so its bbox spans
+    only a handful of grid cells. A segment whose bbox spans MORE than this many
+    cells has a non-physical (huge or non-finite) endpoint — a transient a
+    basin-hopping perturbation can produce before the relaxation pulls it back. Such
+    a segment is NOT bucketed (bucketing it would allocate cells proportional to its
+    area, exhausting the Map); its exact separation is charged via the all-pairs
+    fallback instead, keeping the grid's total cell count O(segments). */
+const GRID_MAX_CELLS = 1024
+
+/** A uniform spatial hash of segments at cell size R: each ordinary segment's
+    indices bucketed into every cell its bbox overlaps (two segments interact only
+    within R = one cell, so the 3×3 neighborhood of a segment's cells is the exact
+    near-pair superset). Degenerate huge/non-finite segments go to `large` and are
+    handled by all-pairs (see GRID_MAX_CELLS). */
+type SepGrid = { readonly grid: Map<number, number[]>; readonly large: number[] }
+function buildSepGrid(segs: readonly Seg2[], R: number): SepGrid {
+  const inv = 1 / R
+  const grid = new Map<number, number[]>()
+  const large: number[] = []
   for (let i = 0; i < segs.length; i++) {
-    for (let j = i + 1; j < segs.length; j++) {
-      const A = segs[i]!, B = segs[j]!
-      if (A.wid === B.wid) continue
-      E += segPairSepE(A, B, R)
+    const [cx0, cx1, cy0, cy1] = segCellSpan(segs[i]!, inv)
+    const cells = (cx1 - cx0 + 1) * (cy1 - cy0 + 1)
+    if (!(cells >= 1 && cells <= GRID_MAX_CELLS)) { large.push(i); continue } // huge or non-finite
+    for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
+      const b = grid.get(sepCellKey(cx, cy))
+      if (b !== undefined) b.push(i); else grid.set(sepCellKey(cx, cy), [i])
     }
   }
+  return { grid, large }
+}
+
+/** Enumerate every cross-wire near pair (i<j) EXACTLY ONCE, in (i,j) order, over a
+    prebuilt grid: candidates come from the 3×3 neighborhood of each segment's cells
+    (a pair sharing several cells is emitted several times; the sort+dedup collapses
+    it). The (i,j) order makes the summation match the all-pairs loop bit-for-bit —
+    the far pairs it never visits each contributed exactly 0. */
+function eachNearPair(segs: readonly WireSeg[], sg: SepGrid, R: number, cb: (i: number, j: number) => void): void {
+  const n = segs.length, inv = 1 / R
+  const isLarge = new Uint8Array(n)
+  for (const li of sg.large) isLarge[li] = 1
+  const cand: number[] = []
+  // ordinary × ordinary: grid neighborhood (a large segment's cell span is huge, so
+  // it is never QUERIED here — it is enumerated below).
+  for (let i = 0; i < n; i++) {
+    if (isLarge[i] === 1) continue
+    const A = segs[i]!
+    const [cx0, cx1, cy0, cy1] = segCellSpan(A, inv)
+    for (let cx = cx0 - 1; cx <= cx1 + 1; cx++) for (let cy = cy0 - 1; cy <= cy1 + 1; cy++) {
+      const b = sg.grid.get(sepCellKey(cx, cy))
+      if (b === undefined) continue
+      for (const j of b) if (j > i && segs[j]!.wid !== A.wid) cand.push(i * n + j)
+    }
+  }
+  // every pair with a large endpoint: all-pairs (large segments are rare — a
+  // degenerate transient). large–large counted once (skip j<li when both large).
+  for (const li of sg.large) {
+    const w = segs[li]!.wid
+    for (let j = 0; j < n; j++) {
+      if (j === li || (isLarge[j] === 1 && j < li) || segs[j]!.wid === w) continue
+      cand.push(Math.min(li, j) * n + Math.max(li, j))
+    }
+  }
+  cand.sort((a, b) => a - b)
+  let prev = -1
+  for (const pk of cand) {
+    if (pk === prev) continue
+    prev = pk
+    cb(Math.floor(pk / n), pk % n)
+  }
+}
+
+export function segSeparationE(segs: readonly WireSeg[], sc: number): number {
+  const R = WIREP.sepR * sc
+  if (segs.length < 2 || !(R > 0)) return 0
+  let E = 0
+  eachNearPair(segs, buildSepGrid(segs, R), R, (i, j) => { E += segPairSepE(segs[i]!, segs[j]!, R) })
   return E
 }
 
@@ -611,13 +701,14 @@ export function wireEnergy(e: Engine): number {
     optimum (endpoints re-derived live at probe time). */
 export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly interior: readonly Vec2[] }
 
-/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs. */
-export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[] } {
+/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs and
+    the drawn curve segments (the same ones `segSeparationE` sums over). */
+export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[] } {
   const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
   const beta = rodBeta(e)
   let E = 0
   const edges: FrozenEdge[] = []
-  const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
+  const segs: WireSeg[] = []
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
@@ -631,7 +722,7 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[] }
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
   }
-  return { E: E + segSeparationE(segs, e.scale), edges }
+  return { E: E + segSeparationE(segs, e.scale), edges, segs }
 }
 
 /**
@@ -667,6 +758,219 @@ export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): numbe
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
   return E + segSeparationE(segs, e.scale)
+}
+
+// ---- FROZEN-PROBE LOCALITY DELTA (plan Task 8b) ----
+// A gradient probe displaces ONE coordinate of ONE body; within the FROZEN model
+// (route corridors fixed) that changes frozenWireEnergy in exactly four ways —
+// (1) the curves of wires with a terminal on the probed body, (2) every OTHER
+// wire's obstacle surcharge, and only through the probed body's ONE moved disc,
+// (3) the separation pairs the rebuilt segments touch, (4) content (the caller
+// keeps that a full recompute). NO ROUTING is involved — this is arithmetic on
+// cached geometry — so it is exact AND ~O(one body's neighborhood), replacing the
+// ~114×-per-step full frozenWireEnergy rebuild.
+
+/** One wire's frozen capture: its edges (to rebuild the curve), the [start,end)
+    range of its segments in the flat base array, and its base rodCost. */
+type FrozenWireCap = { readonly wid: WireId; readonly edges: FrozenEdge[]; readonly segStart: number; readonly segEnd: number; readonly rod: number }
+
+export type FrozenState = {
+  readonly segs: WireSeg[]
+  readonly segWire: Int32Array
+  readonly wires: FrozenWireCap[]
+  readonly termWires: Map<string, number[]>
+  readonly obstacle: Map<string, RouteDisc>
+  readonly grid: SepGrid
+  readonly R: number
+  readonly beta: number
+  readonly sc: number
+  readonly bounds: Bounds | null
+  readonly frozenTotal: number
+  /** Per-wire base separation contribution (each cross-wire near pair added to BOTH
+      its wires); the probe reads it to skip re-scanning a wire's OLD near pairs. */
+  readonly wireSep: Float64Array
+  readonly seen: Int32Array
+  stamp: number
+}
+
+/** Build the frozen state ONCE per operatorStep from a base capture. It IS a full
+    exact eval (the routing solve), so it replaces the step's wireEnergyCapture. */
+export function mkFrozenState(e: Engine): FrozenState {
+  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const bounds = routeBounds(e)
+  const beta = rodBeta(e)
+  const sc = e.scale
+  const R = WIREP.sepR * sc
+  const segs: WireSeg[] = []
+  const segWire: number[] = []
+  const wires: FrozenWireCap[] = []
+  const termWires = new Map<string, number[]>()
+  const push = (m: Map<string, number[]>, k: string, v: number): void => { const l = m.get(k); if (l !== undefined) l.push(v); else m.set(k, [v]) }
+  let rodTotal = 0
+  for (const [wid, w] of e.wires) {
+    const terms = wireTerminalPoints(e, w)
+    if (terms.length < 2) continue
+    const bcs = wireTerminalBCs(e, w)
+    const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
+    const wi = wires.length
+    const start = segs.length
+    const edges: FrozenEdge[] = []
+    let rod = 0
+    for (const [u, v] of w.net.edges) {
+      const r = route(fs, pos(u), pos(v))
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * sc)
+      rod += rodCost(pts, fs, beta)
+      edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
+      for (let i = 0; i + 1 < pts.length; i++) { segs.push({ wid, a: pts[i]!, b: pts[i + 1]! }); segWire.push(wi) }
+    }
+    wires.push({ wid, edges, segStart: start, segEnd: segs.length, rod })
+    rodTotal += rod
+    for (const bd of w.binds) push(termWires, bd.body, wi)
+    if (w.endBodyId !== null) push(termWires, w.endBodyId, wi)
+  }
+  const obstacle = new Map<string, RouteDisc>()
+  for (const b of e.bodies.values()) {
+    if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') obstacle.set(b.id, { c: { x: b.pos.x, y: b.pos.y }, r: (b.discR + ROUTE_CLEAR) * sc })
+  }
+  const grid = buildSepGrid(segs, R)
+  // one near-pair pass yields both the total and each wire's contribution.
+  const wireSep = new Float64Array(wires.length)
+  let sepTotal = 0
+  eachNearPair(segs, grid, R, (i, j) => {
+    const ePair = segPairSepE(segs[i]!, segs[j]!, R)
+    sepTotal += ePair
+    wireSep[segWire[i]!]! += ePair
+    wireSep[segWire[j]!]! += ePair
+  })
+  return {
+    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle, grid, R, beta, sc, bounds,
+    frozenTotal: rodTotal + sepTotal, wireSep, seen: new Int32Array(segs.length), stamp: 0,
+  }
+}
+
+/** The base segments of the affected wires (their cached curves). */
+function affectedBaseSegs(fst: FrozenState, affSet: ReadonlySet<number>): WireSeg[] {
+  const out: WireSeg[] = []
+  for (const wi of affSet) { const cap = fst.wires[wi]!; for (let s = cap.segStart; s < cap.segEnd; s++) out.push(fst.segs[s]!) }
+  return out
+}
+
+/** Σ separation of each `source` segment against the NON-affected base segments it
+    is near (grid-enumerated, per-source dedup, cross-wire only). Used for both the
+    OLD (source = affected base segs) and NEW (source = rebuilt segs) contributions. */
+function affectedCrossSep(fst: FrozenState, affSet: ReadonlySet<number>, source: readonly WireSeg[]): number {
+  const inv = 1 / fst.R, R = fst.R
+  let E = 0
+  const consider = (s: WireSeg, t: number, st: number): void => {
+    if (fst.seen[t] === st) return
+    fst.seen[t] = st
+    if (affSet.has(fst.segWire[t]!)) return // affected base seg → the internal term handles it
+    const bs = fst.segs[t]!
+    if (bs.wid === s.wid) return
+    E += segPairSepE(s, bs, R)
+  }
+  for (const s of source) {
+    const st = ++fst.stamp
+    const [cx0, cx1, cy0, cy1] = segCellSpan(s, inv)
+    const cells = (cx1 - cx0 + 1) * (cy1 - cy0 + 1)
+    if (!(cells >= 1 && cells <= GRID_MAX_CELLS)) {
+      // a degenerate (huge/non-finite) source segment cannot query the grid.
+      for (let t = 0; t < fst.segs.length; t++) consider(s, t, st)
+      continue
+    }
+    for (let cx = cx0 - 1; cx <= cx1 + 1; cx++) for (let cy = cy0 - 1; cy <= cy1 + 1; cy++) {
+      const b = fst.grid.grid.get(sepCellKey(cx, cy))
+      if (b === undefined) continue
+      for (const t of b) consider(s, t, st)
+    }
+    for (const t of fst.grid.large) consider(s, t, st) // large (non-bucketed) base segs
+  }
+  return E
+}
+
+/** Σ separation over cross-wire pairs WITHIN one segment list (the affected wires'
+    internal contribution — small, so all-pairs). */
+function internalCrossSep(arr: readonly WireSeg[], R: number): number {
+  let E = 0
+  for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
+    if (arr[i]!.wid === arr[j]!.wid) continue
+    E += segPairSepE(arr[i]!, arr[j]!, R)
+  }
+  return E
+}
+
+/** The exact change in frozenWireEnergy when body `bodyId` is displaced to its
+    CURRENT pose on `e`, relative to the base captured in `fst`. */
+export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number {
+  const affWires = fst.termWires.get(bodyId)
+  const affSet = affWires !== undefined ? new Set(affWires) : null
+  let dRod = 0
+  const newSegs: WireSeg[] = []
+
+  // (1) rebuild the curves of wires terminating on bodyId; full rodCost delta.
+  if (affSet !== null) {
+    const space = { discs: routeObstacles(e), bounds: fst.bounds }
+    for (const wi of affSet) {
+      const cap = fst.wires[wi]!
+      const w = e.wires.get(cap.wid)!
+      const terms = wireTerminalPoints(e, w)
+      const bcs = wireTerminalBCs(e, w)
+      const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
+      let newRod = 0
+      for (const fe of cap.edges) {
+        const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
+        const pts = edgeCurvePts(fe.u < bcs.length ? bcs[fe.u]! : null, fe.v < bcs.length ? bcs[fe.v]! : null, way, ROUTE_CLEAR * fst.sc)
+        newRod += rodCost(pts, space, fst.beta)
+        for (let i = 0; i + 1 < pts.length; i++) newSegs.push({ wid: cap.wid, a: pts[i]!, b: pts[i + 1]! })
+      }
+      dRod += newRod - cap.rod
+    }
+  }
+
+  // (2) obstacle-surcharge patch: if bodyId is an obstacle whose disc MOVED, every
+  // NON-affected wire's surcharge changes only through that one disc (length,
+  // bending, frame, and every other disc are identical). Single-disc segSoftCost is
+  // |seg| + that disc's surcharge, and the |seg| cancels in the new−old difference.
+  const baseDisc = fst.obstacle.get(bodyId)
+  if (baseDisc !== undefined) {
+    const b = e.bodies.get(bodyId)!
+    if (b.pos.x !== baseDisc.c.x || b.pos.y !== baseDisc.c.y) {
+      const r = baseDisc.r, o = baseDisc.c, p = b.pos
+      const oldSpace = { discs: [baseDisc], bounds: null }
+      const newSpace = { discs: [{ c: p, r }], bounds: null }
+      // A segment's surcharge is nonzero only where it enters the disc, so a
+      // segment whose bbox is farther than r from BOTH the old and new centre
+      // contributes exactly 0 to the difference — skip it (bbox-to-point clamp).
+      const r2 = r * r
+      const farFrom = (seg: WireSeg, c: Vec2): boolean => {
+        const x0 = Math.min(seg.a.x, seg.b.x), x1 = Math.max(seg.a.x, seg.b.x)
+        const y0 = Math.min(seg.a.y, seg.b.y), y1 = Math.max(seg.a.y, seg.b.y)
+        const dx = c.x - Math.max(x0, Math.min(c.x, x1)), dy = c.y - Math.max(y0, Math.min(c.y, y1))
+        return dx * dx + dy * dy > r2
+      }
+      for (let s = 0; s < fst.segs.length; s++) {
+        if (affSet !== null && affSet.has(fst.segWire[s]!)) continue
+        const seg = fst.segs[s]!
+        if (farFrom(seg, o) && farFrom(seg, p)) continue
+        dRod += segSoftCost(seg.a, seg.b, newSpace) - segSoftCost(seg.a, seg.b, oldSpace)
+      }
+    }
+  }
+
+  // (3) separation delta: only pairs touching a rebuilt (affected) segment change.
+  //   touchedOld = Σ wireSep[w] − internalCrossSep(oldAff)  [cached; each affected
+  //     wire's near pairs summed once, minus the affected–affected pairs the wireSep
+  //     sum double-counted], touchedNew = affectedCrossSep(new) + internalCrossSep(new).
+  //   Caching the OLD side avoids re-scanning every affected wire's near pairs.
+  let dSep = 0
+  if (affSet !== null) {
+    const oldAff = affectedBaseSegs(fst, affSet)
+    for (const wi of affSet) dSep -= fst.wireSep[wi]!
+    dSep += internalCrossSep(oldAff, fst.R)         // undo the double-counted affected–affected old pairs
+    dSep += affectedCrossSep(fst, affSet, newSegs)  // affectedNEW × non-affected
+    dSep += internalCrossSep(newSegs, fst.R)        // affectedNEW internal (cross-wire)
+  }
+  return dRod + dSep
 }
 
 /** Scope containment (soft): a finite-depth ring barrier keeping a wire-owned
@@ -916,16 +1220,18 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     if (w.endBodyId !== null) wiredBodies.add(w.endBodyId)
   }
 
-  // ONE exact routed eval captures the frozen paths; every gradient probe
-  // below re-measures them via the envelope evaluator (no routing solves)
-  const base = wireEnergyCapture(e)
+  // ONE exact routed eval captures the frozen state (paths + per-wire/segment
+  // caches). Every gradient probe below re-measures it via the frozen-probe
+  // LOCALITY DELTA (score change from displacing this one body), not a full
+  // frozenWireEnergy rebuild — no routing solves, and no whole-scene re-eval.
+  const fst = mkFrozenState(e)
 
   type Coord = { get(): number; set(v: number): void; readonly m: number; localE(): number }
   const coords: Coord[] = []
   const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
     const dirty = new Set<RegionId>([b.region])
-    const localE = (): number => { recomputeRegions(e, dirty); return frozenWireEnergy(e, base.edges) + contentEnergy(e) }
+    const localE = (): number => { recomputeRegions(e, dirty); return fst.frozenTotal + frozenProbe(fst, e, b.id) + contentEnergy(e) }
     if (pinned === null || !pinned.has(b.id)) {
       movedBodies.push(b)
       coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, localE })
@@ -976,7 +1282,9 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     for (const b of e.bodies.values()) { const sn = bodySnap.get(b.id)!; b.pos = { ...sn.pos }; b.theta = sn.theta }
   }
 
-  const E0 = base.E + contentEnergy(e)
+  // fst.frozenTotal == the exact routed wireEnergy at base (frozen curves equal the
+  // routed curves at the captured optimum), so this is the old `base.E + content`.
+  const E0 = fst.frozenTotal + contentEnergy(e)
   const EPS = 1e-9 * (Math.abs(E0) + 1)
   const deltaMax = WIREP.travelCap * sc
 
@@ -1120,15 +1428,66 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
   }
 }
 
-/** The wire presentation walk: bounded continuation toward each wire's own
-    routed target. Returns whether anything moved. */
+/** The wire presentation walk: bounded continuation toward each wire's own routed
+    target. Returns whether anything moved.
+
+    STRICT-DESCENT GATE (plan Task 8, USER limit-cycle repro): the walk moves ONE
+    wire's junctions at a time, so the only terms of the total energy that change
+    are that wire's rod cost AND the separation pairs between its segments and the
+    OTHER wires' (fixed) segments — everything else (other wires' rod, other-vs-other
+    separation, content) is constant. Gating each wire's substep and split on
+    `rod(w) + separation(w vs others)` therefore gates ΔE_total exactly, so the walk
+    strictly descends the whole objective. Gating on rod alone (the old behavior)
+    let the walk trade rod down while pushing separation up without bound — a limit
+    cycle that never rested. The Δsep term is charged via the spatial grid of the
+    other wires' segments (they do not move while this wire walks). */
 function walkWires(e: Engine): boolean {
-  let routed = false
   const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
-  for (const [, w] of e.wires) {
+  const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc, bound = WIREP.travelCap * sc
+  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[] }[] = []
+  const segsByWid = new Map<WireId, Seg2[]>()
+  for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
-    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, bcs: wireTerminalBCs(e, w), beta: rodBeta(e), simplifyTol: ROUTE_CLEAR * e.scale }) || routed
+    const bcs = wireTerminalBCs(e, w)
+    walkers.push({ wid, w, terms, bcs })
+    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
+  }
+  let routed = false
+  for (const { wid, w, terms, bcs } of walkers) {
+    // grid of every OTHER wire's current segments (fixed while this wire walks).
+    const others: Seg2[] = []
+    for (const [owid, segs] of segsByWid) if (owid !== wid) for (const s of segs) others.push(s)
+    const sg = buildSepGrid(others, R)
+    const seen = new Int32Array(others.length)
+    let stamp = 0
+    const inv = 1 / R
+    const gate = (n: WireNet): number => {
+      const { L, segs } = netEval(n, terms, fs, bcs, beta, tol)
+      let sep = 0
+      for (const s of segs) {
+        stamp++
+        const [cx0, cx1, cy0, cy1] = segCellSpan(s, inv)
+        const cells = (cx1 - cx0 + 1) * (cy1 - cy0 + 1)
+        if (!(cells >= 1 && cells <= GRID_MAX_CELLS)) {
+          // a degenerate (huge/non-finite) segment cannot query the grid — its
+          // neighborhood would be unbounded — so charge it against every other.
+          for (let t = 0; t < others.length; t++) sep += segPairSepE(s, others[t]!, R)
+          continue
+        }
+        for (let cx = cx0 - 1; cx <= cx1 + 1; cx++) for (let cy = cy0 - 1; cy <= cy1 + 1; cy++) {
+          const b = sg.grid.get(sepCellKey(cx, cy))
+          if (b === undefined) continue
+          for (const t of b) { if (seen[t] === stamp) continue; seen[t] = stamp; sep += segPairSepE(s, others[t]!, R) }
+        }
+        // plus the large (non-bucketed) other segments.
+        for (const t of sg.large) { if (seen[t] === stamp) continue; seen[t] = stamp; sep += segPairSepE(s, others[t]!, R) }
+      }
+      return L + sep
+    }
+    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
+    // this wire moved → refresh its segments so later wires see the new positions.
+    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
   }
   return routed
 }

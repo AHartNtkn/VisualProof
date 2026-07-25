@@ -49,6 +49,18 @@ const posOf = (net: WireNet, terms: readonly Vec2[], v: number): Vec2 =>
     ∫(α + β·κ²)ds plus the soft obstacle/frame surcharges along the samples.
     This is the one wire objective — the router, the topology gates, and the
     global layout score all use exactly it. */
+/** Route + build the drawn curve of every edge, handing each edge's samples to
+    `cb` (shared by netLength and netEval). */
+function forEachEdgeCurve(
+  net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[], simplifyTol: number,
+  cb: (pts: readonly Vec2[]) => void,
+): void {
+  for (const [u, v] of net.edges) {
+    const r = route(fs, posOf(net, terms, u), posOf(net, terms, v))
+    cb(edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, simplifyTol))
+  }
+}
+
 export function netLength(
   net: WireNet,
   terms: readonly Vec2[],
@@ -58,12 +70,23 @@ export function netLength(
   simplifyTol = 0,
 ): number {
   let L = 0
-  for (const [u, v] of net.edges) {
-    const r = route(fs, posOf(net, terms, u), posOf(net, terms, v))
-    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, simplifyTol)
-    L += rodCost(pts, fs, beta)
-  }
+  forEachEdgeCurve(net, terms, fs, bcs, simplifyTol, (pts) => { L += rodCost(pts, fs, beta) })
   return L
+}
+
+/** netLength PLUS the drawn curve segments — the walk's separation-aware gate
+    needs both (the rod length of the wire and its segments, to charge separation
+    against the OTHER wires). */
+export function netEval(
+  net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, simplifyTol = 0,
+): { L: number; segs: { a: Vec2; b: Vec2 }[] } {
+  let L = 0
+  const segs: { a: Vec2; b: Vec2 }[] = []
+  forEachEdgeCurve(net, terms, fs, bcs, simplifyTol, (pts) => {
+    L += rodCost(pts, fs, beta)
+    for (let i = 0; i + 1 < pts.length; i++) segs.push({ a: pts[i]!, b: pts[i + 1]! })
+  })
+  return { L, segs }
 }
 
 /** Routed polyline per edge (for rendering/hit-testing). */
@@ -182,8 +205,11 @@ export function contract(net: WireNet, terms: readonly Vec2[], _fs: FreeSpace): 
  * ≥ 3), take the largest positive first-order gain, open by SPLIT_EPS, and
  * keep it only if the ACTUAL routed length decreased (strict gate).
  */
-export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, simplifyTol = 0): boolean {
+export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, simplifyTol = 0, gate?: (net: WireNet) => number): boolean {
   const nT = terms.length
+  // the acceptance gate: the caller may supply the TRUE energy restricted to this
+  // wire (rod + separation vs the other wires); default is rod length alone.
+  const evalE = gate ?? ((n: WireNet): number => netLength(n, terms, fs, bcs, beta, simplifyTol))
   for (let j = 0; j < net.junctions.length; j++) {
     const inc = junctionTangents(net, terms, fs, j)
     const k = inc.length
@@ -216,7 +242,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bc
     const dn = Math.hypot(sx, sy)
     const d = { x: sx / dn, y: sy / dn }
     const here = net.junctions[j]!
-    const L0 = netLength(net, terms, fs, bcs, beta, simplifyTol)
+    const L0 = evalE(net)
     const snapshot: WireNet = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
     const jb = net.junctions.length
     net.junctions[j] = { x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }
@@ -235,7 +261,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bc
     })
     void bi
     net.edges.push([nT + j, nT + jb])
-    const L1 = netLength(net, terms, fs, bcs, beta, simplifyTol)
+    const L1 = evalE(net)
     if (L1 < L0 - 1e-12) return true
     net.junctions = snapshot.junctions
     net.edges = snapshot.edges
@@ -261,11 +287,17 @@ export function advanceNetwork(
   net: WireNet,
   terms: readonly Vec2[],
   fs: FreeSpace,
-  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number; simplifyTol?: number },
+  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number; simplifyTol?: number; gate?: (net: WireNet) => number },
 ): boolean {
   const bcs = opts.bcs ?? []
   const beta = opts.beta ?? 0
   const simplifyTol = opts.simplifyTol ?? 0
+  // The acceptance gate: the TRUE energy restricted to this wire's junction
+  // coordinates. The default is the wire's rod length; the walk supplies rod +
+  // separation-vs-other-wires, which — because the other wires are fixed while
+  // this wire walks — equals ΔE_total exactly, so the strict gate makes the walk a
+  // strict descent of the whole objective (no rod-vs-separation limit cycle).
+  const evalE = opts.gate ?? ((n: WireNet): number => netLength(n, terms, fs, bcs, beta, simplifyTol))
   let changed = false
   // the off-screen fixed-topology TARGET is solved ONCE per advance (and again
   // only after a topology change) — the substeps walk toward it under the
@@ -297,10 +329,10 @@ export function advanceNetwork(
       })
       const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
       if (anyProposed) {
-        if (curL === null) curL = netLength(net, terms, fs, bcs, beta, simplifyTol)
+        if (curL === null) curL = evalE(net)
         const before = net.junctions
         net.junctions = proposal
-        const L1 = netLength(net, terms, fs, bcs, beta, simplifyTol)
+        const L1 = evalE(net)
         if (L1 < curL - 1e-12) {
           curL = L1
           stepMoved = true
@@ -315,6 +347,6 @@ export function advanceNetwork(
   // one routed split check per advance, only when something changed (splits
   // are rare; when one fires the next advance's walk grows it under the gates;
   // at rest nothing scans — the state is already a gated fixed point)
-  if (changed) trySplit(net, terms, fs, bcs, beta, simplifyTol)
+  if (changed) trySplit(net, terms, fs, bcs, beta, simplifyTol, opts.gate)
   return changed
 }
