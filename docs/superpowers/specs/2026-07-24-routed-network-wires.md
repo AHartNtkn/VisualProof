@@ -1,6 +1,18 @@
 # Routed-Network Wires — The Replacement Model (USER RULING)
 
 **Date:** 2026-07-24
+**AMENDED same day (USER rulings, supersede the hard-obstacle language
+below):** (1) THERE ARE NO EXPLICIT BANS ON ANY CONFIGURATION — everything
+is on the energy function. Node discs are NOT impassable: a stroke through a
+disc is representable and pays OBSTACLE_COST per unit inside; the frame is a
+steep per-unit-outside cost, not a clamp; junctions are nowhere projected.
+(2) A 180° hairpin is AMONG THE COSTLIEST configurations: the wire energy
+charges BEND_COST per radian of drawn turning. (3) ∃/∀ dots are ORDINARY
+nodes for layout — same disc+gap overlap energy as every body, no
+special-casing of dangling wires; the plan-22 tip standoff force is deleted
+(it manufactured dangle length). (4) The node solver optimizes THE routed
+energy itself — the coarse Euclidean proxy is deleted (it saw through
+obstacles, stranding tips across discs as half-circle wraps).
 **Status:** RATIFIED — delivered whole by the user as diagnosis + replacement
 design after the elastica-state model's failures at 755f36b. Supersedes the
 wire portions of `2026-07-24-wire-manifold-problem.md` and

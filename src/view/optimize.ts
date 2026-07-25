@@ -1,8 +1,7 @@
 import type { Engine } from './engine'
-import { mkEngine, routeObstacles, routeBounds, wireTerminalPoints } from './engine'
-import { settleStep, contentEnergy, standoffEnergy, segSeparationE, recomputeRegions, resolveOverlaps } from './relax'
-import { mkFreeSpace } from './route/freespace'
-import { netLength, netPaths, type WireNet } from './route/network'
+import { mkEngine } from './engine'
+import { settleStep, contentEnergy, wireEnergy, recomputeRegions, resolveOverlaps } from './relax'
+import type { WireNet } from './route/network'
 import type { Vec2 } from './vec'
 
 /**
@@ -21,27 +20,10 @@ import type { Vec2 } from './vec'
  * the boundary changes (diagram identity, pin poses).
  */
 
-/** The one full-layout score: ROUTED wire length + content + standoffs
-    (`wireEnergy` is the coarse Euclidean pressure; the score routes). */
+/** The one full-layout score: THE wire energy (soft routed cost + turning +
+    separation — relax.wireEnergy) plus content. Nothing else exists. */
 export function layoutScore(e: Engine): number {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
-  let L = 0
-  for (const [, w] of e.wires) {
-    const terms = wireTerminalPoints(e, w)
-    if (terms.length < 2) continue
-    L += netLength(w.net, terms, fs)
-  }
-  // routed inter-wire separation: crossings and co-routes are part of the
-  // GLOBAL score, so the searcher prefers uncrossed layouts of equal length
-  const routedSegs: { wid: string; a: Vec2; b: Vec2 }[] = []
-  for (const [wid, w] of e.wires) {
-    const terms = wireTerminalPoints(e, w)
-    if (terms.length < 2) continue
-    for (const { pts } of netPaths(w.net, terms, fs)) {
-      for (let i = 0; i + 1 < pts.length; i++) routedSegs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
-    }
-  }
-  return L + standoffEnergy(e) + segSeparationE(routedSegs, e.scale) + contentEnergy(e)
+  return wireEnergy(e) + contentEnergy(e)
 }
 
 export type LayoutBest = {

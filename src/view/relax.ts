@@ -1,9 +1,9 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, WireView, StoredFrame } from './engine'
+import type { Body, Engine, StoredFrame } from './engine'
 import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace } from './route/freespace'
-import { advanceNetwork } from './route/network'
+import { mkFreeSpace, route } from './route/freespace'
+import { advanceNetwork, netLength } from './route/network'
 import { LayoutOptimizer, layoutScore } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
@@ -565,34 +565,9 @@ export function resolveOverlaps(e: Engine): boolean {
 /** Wire tension (the coarse pressure's scale). */
 export const TENSION = 1.0
 
-/** ∃-tip standoff potential (C1, radius standoffR, slope 2·tension — dominates
-    the single-tension pull on an endpoint so the dot never sinks into its own
-    wire; an energy term, never a position clamp). */
-function standoffU(d: number, sc: number): number {
-  const R = WIREP.standoffR * sc
-  if (d >= R) return 0
-  const h = R / 2, slope = 2 * TENSION
-  if (d >= h) { const t = (R - d) / h; return (slope * h * t * t) / 2 }
-  return (slope * h) / 2 + slope * (h - d)
-}
-
-/** The ∃-tip standoff energy: the loose end floats to a scope standoff from its
-    single port. Applies ONLY to a dangling ∃ (exactly one bind + its END body); a
-    ∀ via (binds ≥ 2) is positioned by its network + scope homing, no standoff. */
-function tipStandoffE(e: Engine, w: WireView): number {
-  if (w.endBodyId === null || w.binds.length !== 1) return 0
-  const tip = e.bodies.get(w.endBodyId)!
-  const bd = w.binds[0]
-  if (bd === undefined) return 0
-  const a = worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key)
-  return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y), e.scale)
-}
-
-/** Inter-wire separation over straight segments (the plan-22 term and its
-    measured constants, on the network's coarse segments): co-running pairs
-    pay heavily, transverse crossings pay a little — the objective can now SEE
-    crossings and pointless co-routing, which pure per-wire shortest length
-    cannot (two wires crossing or not score identically under length alone). */
+/** Inter-wire separation over straight segments (plan-22 constants):
+    co-running pairs pay heavily, transverse crossings pay a little — the
+    objective SEES crossings and pointless co-routing. */
 export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[], sc: number): number {
   const R = WIREP.sepR * sc
   const N = 8
@@ -601,7 +576,6 @@ export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[
     for (let j = i + 1; j < segs.length; j++) {
       const A = segs[i]!, B = segs[j]!
       if (A.wid === B.wid) continue
-      // coarse bbox cull
       if (Math.min(A.a.x, A.b.x) - R > Math.max(B.a.x, B.b.x) || Math.min(B.a.x, B.b.x) - R > Math.max(A.a.x, A.b.x)) continue
       if (Math.min(A.a.y, A.b.y) - R > Math.max(B.a.y, B.b.y) || Math.min(B.a.y, B.b.y) - R > Math.max(A.a.y, A.b.y)) continue
       for (let ki = 0; ki <= N; ki++) {
@@ -619,40 +593,29 @@ export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[
   return E
 }
 
-/** Every wire's coarse straight segments (terminal/junction chords). */
-export function coarseSegments(e: Engine): { wid: string; a: Vec2; b: Vec2 }[] {
-  const out: { wid: string; a: Vec2; b: Vec2 }[] = []
+/** THE wire energy: soft routed cost of every network (length + through-disc
+    + out-of-frame surcharges + BEND_COST × turning, see route/network.ts) plus
+    routed inter-wire separation. There is exactly ONE wire objective — this
+    one — used identically by the node solver, the router's gates, and the
+    global layout score. No standoff forces, no Euclidean proxies (deleted as
+    hacks, USER ruling 2026-07-24: the proxy saw straight through obstacles,
+    which is why tips rested across discs and drew half-circle wraps; the
+    standoff FORCED dangles long). */
+export function wireEnergy(e: Engine): number {
+  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  let E = 0
+  const routedSegs: { wid: string; a: Vec2; b: Vec2 }[] = []
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
-    const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
-    for (const [u, v] of w.net.edges) out.push({ wid, a: pos(u), b: pos(v) })
-  }
-  return out
-}
-
-/** The ∃-tip standoff total (exported for the global layout score). */
-export function standoffEnergy(e: Engine): number {
-  let E = 0
-  for (const [, w] of e.wires) E += tipStandoffE(e, w)
-  return E
-}
-
-/** COARSE wire pressure: Euclidean network length over live terminal points
-    and current junction positions, inter-wire separation, and the ∃-tip
-    standoffs. This is the only wire term the node solver's one energy
-    contains. */
-export function wireEnergy(e: Engine): number {
-  let E = 0
-  for (const [, w] of e.wires) {
-    const terms = wireTerminalPoints(e, w)
+    if (terms.length < 2) continue
+    E += netLength(w.net, terms, fs)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
-      const a = pos(u), b = pos(v)
-      E += TENSION * Math.hypot(a.x - b.x, a.y - b.y)
+      const r = route(fs, pos(u), pos(v))
+      for (let i = 0; i + 1 < r.pts.length; i++) routedSegs.push({ wid, a: r.pts[i]!, b: r.pts[i + 1]! })
     }
-    E += tipStandoffE(e, w)
   }
-  return E + segSeparationE(coarseSegments(e), e.scale)
+  return E + segSeparationE(routedSegs, e.scale)
 }
 
 /** Scope containment (soft): a finite-depth ring barrier keeping a wire-owned
@@ -751,7 +714,9 @@ export function contentEnergy(e: Engine): number {
     const items: { r: number; c: Vec2 }[] = []
     for (const mid of e.membersOf.get(rid)!) {
       const b = e.bodies.get(mid)!
-      if (b.kind === 'end') continue
+      // ∃/∀ dots are ORDINARY nodes for layout (USER ruling 2026-07-24: nothing
+      // is special about dangling wires — a dot is just a smaller node), so
+      // they participate in the same disc+gap overlap energy as every body.
       items.push({ r: b.discR * sc, c: b.pos })
     }
     for (const cId of e.childrenOf.get(rid)!) { const g = e.regions.get(cId)!; items.push({ r: g.radius, c: g.center }) }
@@ -793,7 +758,7 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
   for (const mid of e.membersOf.get(b.region)!) {
     if (mid === b.id) continue
     const o = e.bodies.get(mid)!
-    if (owned || o.kind === 'end') continue // disc-vs-dot pairs: wire barrier's job
+    // dots are ordinary nodes (USER 2026-07-24): the same disc+gap projection
     push(o.pos.x, o.pos.y, (b.discR + o.discR) * sc + PACE.sibGap * sc)
   }
   for (const cId of e.childrenOf.get(b.region)!) {

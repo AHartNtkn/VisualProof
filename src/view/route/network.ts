@@ -1,6 +1,6 @@
 import type { Vec2 } from '../vec'
 import type { FreeSpace } from './freespace'
-import { route, projectFeasible } from './freespace'
+import { route, polylineTurning } from './freespace'
 
 /**
  * THE WIRE NETWORK (routed-network wires, USER ruling 2026-07-24).
@@ -39,11 +39,22 @@ export const SPLIT_MARGIN = 1e-3
 const posOf = (net: WireNet, terms: readonly Vec2[], v: number): Vec2 =>
   v < terms.length ? terms[v]! : net.junctions[v - terms.length]!
 
-/** Total routed length of the network (the objective). */
+/** Bending weight: cost per radian of TURNING in a drawn stroke. Calibration:
+    a 180° hairpin (π rad) costs ≈ 25 length units ≈ several node diameters —
+    among the costliest configurations a wire can be in (USER ruling
+    2026-07-24), so wraps and doubling-back are crushed while gentle detours
+    stay cheap. */
+export const BEND_COST = 8
+
+/** THE network energy: soft routed cost (length + through-disc + out-of-frame
+    surcharges) plus BEND_COST × total turning of each stroke. This is the one
+    wire objective — the router, the topology gates, and the global layout
+    score all use exactly it. */
 export function netLength(net: WireNet, terms: readonly Vec2[], fs: FreeSpace): number {
   let L = 0
   for (const [u, v] of net.edges) {
-    L += route(fs, posOf(net, terms, u), posOf(net, terms, v)).length
+    const r = route(fs, posOf(net, terms, u), posOf(net, terms, v))
+    L += r.cost + BEND_COST * polylineTurning(r.pts)
   }
   return L
 }
@@ -108,7 +119,7 @@ export function solveTarget(net: WireNet, terms: readonly Vec2[], fs: FreeSpace,
       if (anchors.length === 0) continue
       let wx = 0, wy = 0, ws = 0
       for (const a of anchors) { wx += a.p.x / a.d; wy += a.p.y / a.d; ws += 1 / a.d }
-      const target = projectFeasible({ x: wx / ws, y: wy / ws }, fs.discs, fs.bounds)
+      const target = { x: wx / ws, y: wy / ws }
       maxMove = Math.max(maxMove, Math.hypot(target.x - here.x, target.y - here.y))
       net.junctions[j] = target
     }
@@ -201,8 +212,8 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace): b
     const L0 = netLength(net, terms, fs)
     const snapshot: WireNet = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
     const jb = net.junctions.length
-    net.junctions[j] = projectFeasible({ x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }, fs.discs, fs.bounds)
-    net.junctions.push(projectFeasible({ x: here.x - (d.x * SPLIT_EPS) / 2, y: here.y - (d.y * SPLIT_EPS) / 2 }, fs.discs, fs.bounds))
+    net.junctions[j] = { x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }
+    net.junctions.push({ x: here.x - (d.x * SPLIT_EPS) / 2, y: here.y - (d.y * SPLIT_EPS) / 2 })
     // re-point B-side edges at the new junction
     let bi = 0
     net.edges = net.edges.map(([u, v], ei) => {
@@ -272,7 +283,7 @@ export function advanceNetwork(
         const d = Math.hypot(dx, dy)
         if (d < 1e-12) return p
         const step = Math.min(d, opts.bound)
-        return projectFeasible({ x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }, fs.discs, fs.bounds)
+        return { x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }
       })
       const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
       if (anyProposed) {
