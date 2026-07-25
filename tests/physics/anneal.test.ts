@@ -205,3 +205,51 @@ describe('the seed relaxation streams incrementally (plan Task 6 Phase 0)', () =
     expect(seq[seq.length - 1]!, 'the stream reaches a deeply relaxed layout').toBeLessThan(rawScore * 0.5)
   })
 })
+
+describe('the published best-store is monotone (USER law: only the best yet found is stored)', () => {
+  /** A raw, legal walk-heavy scene (four cyclically-wired refs). */
+  function rawCycle(): Engine {
+    const b = new DiagramBuilder()
+    const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([TERM, TERM])))
+    for (let i = 0; i < 4; i++) {
+      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], TERM)
+    }
+    const e = mkEngine(b.build(), [])
+    let i = 0
+    for (const [, x] of e.bodies) { x.pos = { x: Math.cos(i * 1.7) * 18, y: Math.sin(i * 1.7) * 18 }; i++ }
+    recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
+    return e
+  }
+
+  it('no published best ever rises across the whole run (descend + calibrate + hop)', () => {
+    const opt = new LayoutOptimizer(0xace4)
+    opt.sync(rawCycle(), null)
+    let last = opt.best()!.score
+    for (let k = 0; k < 60; k++) {
+      opt.tick(null, 0)
+      const s = opt.best()!.score
+      expect(s, `published best rose ${last} → ${s} at unit ${k}`).toBeLessThanOrEqual(last + 1e-9)
+      last = s
+    }
+  })
+
+  it('adoptLive of a WORSE layout is ignored — a stale/racy adopt never raises the best', () => {
+    const e = rawCycle()
+    const opt = new LayoutOptimizer(0xace4)
+    opt.sync(e, null)
+    for (let k = 0; k < 25; k++) opt.tick(null, 0) // descend + calibrate + hop to a good best
+    const before = opt.best()!.score
+
+    // the worker's best and the client's mirrored best diverge asynchronously, so
+    // adoptLive can be handed a score above the worker's true best — it must not
+    // raise the monotone best-store.
+    const worse = mkEngine(e.d, [])
+    for (const [id, b] of worse.bodies) { const src = e.bodies.get(id)!; b.pos = { x: src.pos.x * 3, y: src.pos.y * 3 + 10 }; b.theta = src.theta + 1 }
+    worse.frame = e.frame; worse.scale = e.scale
+    recomputeRegions(worse)
+    opt.adoptLive(worse, layoutScore(worse))
+
+    expect(opt.best()!.score, 'adoptLive of a worse layout must not raise the best-store')
+      .toBeLessThanOrEqual(before)
+  })
+})

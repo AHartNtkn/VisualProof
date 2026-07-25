@@ -388,10 +388,15 @@ export class LayoutOptimizer {
   /** Current annealing temperature (for the status debug seam). */
   get temperature(): number { return this.#T }
 
-  /** The live layout is strictly better than the stored best — adopt it as the
-      new incumbent and relax it incrementally (Phase 0), then re-calibrate and
-      resume hopping from its basin. */
+  /** The live layout is offered as a possibly-better incumbent. MONOTONE
+      best-store (USER law: only the best yet found is stored): the worker's best
+      and the client's mirrored best diverge asynchronously, so this can be handed
+      a score ABOVE the worker's true best (a stale/racy adopt) — ignore it then,
+      the worker's best is already better and the frame approaches IT. Only a
+      genuinely better live layout becomes the new incumbent (adopted, relaxed
+      incrementally via Phase 0, re-calibrated). */
   adoptLive(e: Engine, score: number): void {
+    if (this.#best !== null && score >= this.#best.score - eps(this.#best.score)) return
     const scratch = this.#scratch
     if (scratch === null) { this.#best = layoutSnapshot(e, score); return }
     applyLayoutSnapshot(scratch, layoutSnapshot(e, 0))
@@ -423,6 +428,19 @@ export class LayoutOptimizer {
 
   // -- internals --
 
+  /** THE ONLY publish gate — the monotone best-store invariant lives here (USER
+      law: only the best yet found is stored). Snapshots the scratch as the new
+      best iff its full `layoutScore` is strictly below the stored best; every
+      publish path (descent quanta, accepted hops) goes through it, so a settle
+      wobble (walkWires optimizes rod cost, not the separation term, so a step can
+      raise the full score) can never publish an uphill state. Returns whether
+      the best improved. */
+  #publishIfBetter(score: number): boolean {
+    if (this.#best !== null && score >= this.#best.score - eps(this.#best.score)) return false
+    this.#best = layoutSnapshot(this.#scratch!, score)
+    return true
+  }
+
   /** One atomic unit of work, dispatched by phase. Returns whether best improved. */
   #stepUnit(): boolean {
     switch (this.#phase) {
@@ -451,11 +469,7 @@ export class LayoutOptimizer {
     }
     recomputeRegions(scratch)
     const score = layoutScore(scratch)
-    let improved = false
-    if (score < this.#best!.score - eps(this.#best!.score)) {
-      this.#best = layoutSnapshot(scratch, score)
-      improved = true
-    }
+    const improved = this.#publishIfBetter(score)
     if (atRest) { this.#basinE = score; this.#phase = 'calibrate'; this.#calibMags = [] }
     return improved
   }
@@ -564,13 +578,8 @@ export class LayoutOptimizer {
     const accept = dE < 0 || (T > 0 && rng() < Math.exp(-dE / T))
     if (accept) {
       this.#basinE = newE
-      let improved = false
-      if (newE < this.#best!.score - eps(this.#best!.score)) {
-        this.#best = layoutSnapshot(scratch, newE)
-        improved = true
-        this.#reheatsSinceImprove = 0
-        this.#lowDuty = false
-      }
+      const improved = this.#publishIfBetter(newE)
+      if (improved) { this.#reheatsSinceImprove = 0; this.#lowDuty = false }
       return { accepted: true, improved }
     }
     applyLayoutSnapshot(scratch, saved)
