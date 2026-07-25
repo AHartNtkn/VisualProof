@@ -164,6 +164,22 @@ export function drawShapes(
         ctx.shadowBlur = 0
         break
       }
+      case 'bezierPath': {
+        if (s.cubics.length === 0) break
+        setGlow(s.glow)
+        ctx.beginPath()
+        const a0 = P(s.cubics[0]!.a)
+        ctx.moveTo(a0.x, a0.y)
+        for (const c of s.cubics) {
+          const c1 = P(c.c1), c2 = P(c.c2), b = P(c.b)
+          ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+        }
+        ctx.strokeStyle = s.stroke
+        ctx.lineWidth = s.width
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        break
+      }
       case 'stub': {
         setGlow(s.glow)
         const a = P(s.from), b = P(s.to)

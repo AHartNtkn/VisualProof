@@ -60,6 +60,7 @@ export type Shape =
   /** A traced wire stroke: the Hobby-chain samples at paint
       resolution (plan 22 — the polyline IS the wire, not a spline fit). */
   | { readonly kind: 'polyline'; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
+  | { readonly kind: 'bezierPath'; readonly cubics: readonly { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }[]; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
       constant size under zoom, unlike world-scaled circles. */
@@ -165,9 +166,9 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // extra to draw at a branch — no dot is painted there (USER 2026-07-07: branch
   // points are unmarked).
   // wires (Hobby-chain strokes) — the ACTUAL wire network, junctions included
-  for (const { wid, pts } of legPaths(e)) {
+  for (const { wid, pts, cubics } of legPaths(e)) {
     const stroke = wireStroke(wid)
-    shapes.push({ kind: 'polyline', pts, stroke, width: st.wireW, glow: glow(stroke) })
+    shapes.push({ kind: 'bezierPath', cubics, pts, stroke, width: st.wireW, glow: glow(stroke) })
   }
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
@@ -300,8 +301,8 @@ export function highlightGroup(e: Engine, st: Theme, wireId: WireId): Shape[] {
   if (hue === undefined) return []
   const out: Shape[] = []
   const wireGlow = st.wireGlow ? hue : null
-  for (const { wid, pts } of legPaths(e)) {
-    if (wid === wireId) out.push({ kind: 'polyline', pts, stroke: hue, width: st.wireW + HL_WIDTH, glow: wireGlow })
+  for (const { wid, pts, cubics } of legPaths(e)) {
+    if (wid === wireId) out.push({ kind: 'bezierPath', cubics, pts, stroke: hue, width: st.wireW + HL_WIDTH, glow: wireGlow })
   }
   const w = e.d.wires[wireId]
   const atomIds = new Set(w === undefined ? [] : w.endpoints.filter((ep) => ep.port.kind === 'head').map((ep) => ep.node))

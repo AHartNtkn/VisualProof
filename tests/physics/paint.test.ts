@@ -111,7 +111,7 @@ describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, i
     })
     // NOTHING is drawn outside the frame: every painted point stays within the box
     for (const s of paint(e, LIGHT)) {
-      const pts = s.kind === 'polyline' ? s.pts : s.kind === 'stub' ? [s.from, s.to] : []
+      const pts = s.kind === 'polyline' || s.kind === 'bezierPath' ? s.pts : s.kind === 'stub' ? [s.from, s.to] : []
       for (const pt of pts) {
         expect(pt.x, 'no painted wire point past the frame').toBeGreaterThanOrEqual(fb.minX - 1)
         expect(pt.x).toBeLessThanOrEqual(fb.maxX + 1)
@@ -186,10 +186,10 @@ describe('law 5 — linework coherence: wires and lambda-anatomy share stroke an
     settle(e, 600)
     const shapes = paint(e, LIGHT)
     // a wire leg IS its traced Hobby-chain samples
-    const wires = shapes.filter((s) => s.kind === 'polyline')
+    const wires = shapes.filter((s) => s.kind === 'bezierPath')
     expect(wires.length).toBeGreaterThan(0)
     for (const s of wires) {
-      if (s.kind !== 'polyline') continue
+      if (s.kind !== 'bezierPath') continue
       expect(s.stroke).toBe(LIGHT.wire)
       expect(s.width).toBe(LIGHT.wireW)
     }
@@ -223,7 +223,7 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
     const shapes = paint(e, LIGHT)
     // the head wire's traced legs carry the hue (no bubble ring exists)
-    const wireLegs = shapes.filter((s) => s.kind === 'polyline' && s.stroke === hue)
+    const wireLegs = shapes.filter((s) => s.kind === 'bezierPath' && s.stroke === hue)
     expect(wireLegs.length).toBeGreaterThan(0)
     const atomArcs = shapes.filter((s) => s.kind === 'arc' && s.stroke === hue)
     expect(atomArcs.length).toBeGreaterThan(0)
@@ -253,15 +253,15 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     const { d, e, head } = wireAtom()
     const darkShapes = paint(e, DARK)
     const darkHue = relationWireHues(d, DARK.relationHueLightness).get(head)!
-    const darkWire = darkShapes.find((s) => s.kind === 'polyline' && s.stroke === darkHue)!
-    expect(darkWire.kind === 'polyline' && darkWire.glow).toBe(darkHue)
+    const darkWire = darkShapes.find((s) => s.kind === 'bezierPath' && s.stroke === darkHue)!
+    expect(darkWire.kind === 'bezierPath' && darkWire.glow).toBe(darkHue)
     const darkAtomArc = darkShapes.find((s) => s.kind === 'arc' && s.stroke === darkHue)!
     expect(darkAtomArc.kind === 'arc' && darkAtomArc.glow).toBe(darkHue)
 
     const lightShapes = paint(e, LIGHT)
     const lightHue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
-    const lightWire = lightShapes.find((s) => s.kind === 'polyline' && s.stroke === lightHue)!
-    expect(lightWire.kind === 'polyline' && lightWire.glow).toBeNull()
+    const lightWire = lightShapes.find((s) => s.kind === 'bezierPath' && s.stroke === lightHue)!
+    expect(lightWire.kind === 'bezierPath' && lightWire.glow).toBeNull()
     const lightAtomArc = lightShapes.find((s) => s.kind === 'arc' && s.stroke === lightHue)!
     expect(lightAtomArc.kind === 'arc' && lightAtomArc.glow).toBeNull()
   })
@@ -279,13 +279,13 @@ describe('theme toggle', () => {
     ])
     const e = mkEngine(h.build(), [])
     settle(e, 400)
-    const lightWire = paint(e, LIGHT).find((s) => s.kind === 'polyline')!
-    const darkWire = paint(e, DARK).find((s) => s.kind === 'polyline')!
+    const lightWire = paint(e, LIGHT).find((s) => s.kind === 'bezierPath')!
+    const darkWire = paint(e, DARK).find((s) => s.kind === 'bezierPath')!
     expect(LIGHT.wire).not.toBe(DARK.wire)
-    expect(lightWire.kind === 'polyline' && lightWire.stroke).toBe(LIGHT.wire)
-    expect(darkWire.kind === 'polyline' && darkWire.stroke).toBe(DARK.wire)
-    expect(lightWire.kind === 'polyline' && lightWire.glow).toBeNull()
-    expect(darkWire.kind === 'polyline' && darkWire.glow).toBe(DARK.wire)
+    expect(lightWire.kind === 'bezierPath' && lightWire.stroke).toBe(LIGHT.wire)
+    expect(darkWire.kind === 'bezierPath' && darkWire.stroke).toBe(DARK.wire)
+    expect(lightWire.kind === 'bezierPath' && lightWire.glow).toBeNull()
+    expect(darkWire.kind === 'bezierPath' && darkWire.glow).toBe(DARK.wire)
   })
 })
 
@@ -310,10 +310,10 @@ describe('hover-group highlight', () => {
     const { d, e, head } = grp()
     const base = relationWireHues(d, DARK.relationHueLightness).get(head)!
     const shapes = highlightGroup(e, DARK, head)
-    const wireLegs = shapes.filter((s) => s.kind === 'polyline')
+    const wireLegs = shapes.filter((s) => s.kind === 'bezierPath')
     expect(wireLegs.length).toBeGreaterThan(0) // the shared wire's legs
     const leg = wireLegs[0]!
-    if (leg.kind !== 'polyline') throw new Error('unreachable')
+    if (leg.kind !== 'bezierPath') throw new Error('unreachable')
     expect(leg.stroke).not.toBe(base) // same hue family, brighter — not the base
     expect(leg.stroke.startsWith('hsl')).toBe(true)
     const arcs = shapes.filter((s) => s.kind === 'arc')
@@ -323,10 +323,10 @@ describe('hover-group highlight', () => {
 
   it('glows in Dark, not in Light; empty for a non-relational wire key', () => {
     const { e, head } = grp()
-    const dark = highlightGroup(e, DARK, head).find((s) => s.kind === 'polyline')!
-    const light = highlightGroup(e, LIGHT, head).find((s) => s.kind === 'polyline')!
-    expect(dark.kind === 'polyline' && dark.glow).not.toBeNull()
-    expect(light.kind === 'polyline' && light.glow).toBeNull()
+    const dark = highlightGroup(e, DARK, head).find((s) => s.kind === 'bezierPath')!
+    const light = highlightGroup(e, LIGHT, head).find((s) => s.kind === 'bezierPath')!
+    expect(dark.kind === 'bezierPath' && dark.glow).not.toBeNull()
+    expect(light.kind === 'bezierPath' && light.glow).toBeNull()
     expect(highlightGroup(e, DARK, e.d.root)).toEqual([]) // a non-relational key highlights nothing
   })
 })

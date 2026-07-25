@@ -3,7 +3,8 @@ import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
 import { ROUTE_CLEAR, routeObstacles, routeBounds, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
-import { edgeCurvePts } from './route/curve'
+import { edgeCurveCubics, sampleCubics } from './route/curve'
+import type { Cubic } from './route/curve'
 
 /**
  * Wire geometry over the ROUTED NETWORK (USER ruling 2026-07-24), pure —
@@ -14,7 +15,7 @@ import { edgeCurvePts } from './route/curve'
  * what the energy charges; there is no separate rounding pass.
  */
 
-export type LegGeom = { leg: Leg; pts: Vec2[] }
+export type LegGeom = { leg: Leg; pts: Vec2[]; cubics: Cubic[] }
 export type ExStub = { wid: WireId; from: Vec2; to: Vec2; dot: Vec2 }
 
 /** The rendering identity of a network vertex: real (body, key) at a port
@@ -67,16 +68,18 @@ function computeLegsUncached(e: Engine): LegGeom[] {
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const rt = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, rt.pts, ROUTE_CLEAR * e.scale)
-      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts })
+      const cubics = edgeCurveCubics(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, rt.pts, ROUTE_CLEAR * e.scale)
+      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: sampleCubics(cubics), cubics })
     }
   }
   return out
 }
 
-/** Traced polyline for every stroke (boundary edges included). */
-export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
-  return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts }))
+/** Traced polyline + true cubic chain for every stroke (boundary edges
+    included). `pts` are the shared samples (energy, hit-testing); `cubics`
+    are what the renderer strokes as real Bézier segments. */
+export function legPaths(e: Engine): { wid: WireId; pts: Vec2[]; cubics: Cubic[] }[] {
+  return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts, cubics: g.cubics }))
 }
 
 /** Quantifier dots: a dangling wire end is its own body (USER LAW — the loose

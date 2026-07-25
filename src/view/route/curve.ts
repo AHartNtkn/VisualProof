@@ -56,7 +56,7 @@ function hobbyRho(t: number, f: number): number {
     (1 + (1 - c) * Math.cos(t) + c * Math.cos(f))
 }
 
-type Cubic = { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }
+export type Cubic = { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }
 
 /** One Hobby segment: pa → pb with OUTWARD tangent angles at both ends
     (start: forward travel; end: forward + π, or the far rim's port normal). */
@@ -77,7 +77,7 @@ function hobbySeg(pa: Vec2, ta: number, pb: Vec2, tb: number): Cubic {
 /** Samples per cubic (the lab's SUB): painting and energy share them. */
 const SUB = 7
 
-function sampleCubics(cubics: readonly Cubic[]): Vec2[] {
+export function sampleCubics(cubics: readonly Cubic[]): Vec2[] {
   const out: Vec2[] = []
   for (const c of cubics) {
     const from = out.length === 0 ? 0 : 1
@@ -144,6 +144,18 @@ export function edgeCurvePts(
   routePts: readonly Vec2[],
   simplifyTol = 0,
 ): Vec2[] {
+  return sampleCubics(edgeCurveCubics(u, v, routePts, simplifyTol))
+}
+
+/** The edge's Hobby cubic chain itself — the renderer draws THESE as true
+    Bézier path segments (sampled polylines are for energy and hit-testing;
+    drawing them as line segments is visibly faceted). */
+export function edgeCurveCubics(
+  u: CurveBC,
+  v: CurveBC,
+  routePts: readonly Vec2[],
+  simplifyTol = 0,
+): Cubic[] {
   // A clamped end REPLACES the corridor's escape endpoint with its anchor:
   // the escape point is the anchor displaced along the clamp normal — the
   // same boundary datum the clamped tangent already encodes — so keeping
@@ -162,7 +174,7 @@ export function edgeCurvePts(
     if (last !== undefined && Math.hypot(p.x - last.x, p.y - last.y) < 1e-9) continue
     Q.push(p)
   }
-  if (Q.length < 2) return Q
+  if (Q.length < 2) return []
   const m = Q.length - 1
   const catmull = (i: number): number => {
     const a = Q[Math.max(0, i - 1)]!, b = Q[Math.min(m, i + 1)]!
@@ -177,7 +189,7 @@ export function edgeCurvePts(
     const tb = i + 1 === m ? vAng : fwd[i + 1]! + Math.PI
     cubics.push(hobbySeg(Q[i]!, ta, Q[i + 1]!, tb))
   }
-  return sampleCubics(cubics)
+  return cubics
 }
 
 /**

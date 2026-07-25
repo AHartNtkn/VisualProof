@@ -41,6 +41,12 @@ function shapeToSvg(s: Shape): string {
     case 'arc': return poly(arcPts(s.center.x, s.center.y, s.r, s.a0, s.a1), s.stroke, s.width)
     case 'segment': return poly([s.from, s.to], s.stroke, s.width)
     case 'polyline': return poly(s.pts, s.stroke, s.width)
+    case 'bezierPath': {
+      if (s.cubics.length === 0) return ''
+      const d = [`M ${f(s.cubics[0]!.a.x)} ${f(s.cubics[0]!.a.y)}`,
+        ...s.cubics.map((c) => `C ${f(c.c1.x)} ${f(c.c1.y)} ${f(c.c2.x)} ${f(c.c2.y)} ${f(c.b.x)} ${f(c.b.y)}`)].join(' ')
+      return `<path d="${d}" fill="none" stroke="${s.stroke}" stroke-width="${f(s.width)}" stroke-linejoin="round" stroke-linecap="round"/>`
+    }
     case 'stub': return poly([s.from, s.to], s.stroke, s.width) + `<circle cx="${f(s.dot.x)}" cy="${f(s.dot.y)}" r="${f(s.dotRpx * 0.5)}" fill="${s.stroke}"/>`
     case 'dot': return `<circle cx="${f(s.center.x)}" cy="${f(s.center.y)}" r="${f(s.rPx * 0.5)}" fill="${s.fill}"/>`
     case 'label': return `<text x="${f(s.center.x)}" y="${f(s.center.y)}" font-family="${s.font}" font-size="${f(Math.max(3, s.r * 0.5))}" font-weight="600" fill="${s.color}" text-anchor="middle" dominant-baseline="central">${s.text.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]!))}</text>`
