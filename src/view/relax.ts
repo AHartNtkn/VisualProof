@@ -10,36 +10,21 @@ import { layoutScore } from './optimize'
 import type { LayoutBest } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
-export const PHYSICS_REV = 'rod-curves@2026-07-24'
+export const PHYSICS_REV = 'hobby-anneal@2026-07-25'
 console.info('[physics] rev', PHYSICS_REV)
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
     round-10 demo's `P`). The leg's own tension/bend live in ELASTICA (the
     solver reads them); these are the terms beyond the leg — node clearance,
     wire↔wire separation, junction spread, ∃-tip standoff — plus the trust
-    region. Defaults are the demo's first-pass values (re-derivable on the tune
-    board). Wire↔node collision has NO semantic meaning (USER): the barrier is
-    SOFT (finite depth), so stressed geometry passes through; only at-rest
-    overlap is forbidden. */
+    region. Wire↔node collision has NO semantic meaning (USER): through-disc
+    travel is a soft surcharge in the routed metric, never a ban. */
 export const WIREP = {
-  /** node clearance line-integral slope (pushes wires off discs they cross) */
-  clearSlope: 3.2,
-  /** clearance reach beyond a disc's radius */
-  clearMargin: 5,
   /** wire↔wire separation slope (transverse crossings cheap, co-running dear) */
   sepSlope: 1.4,
   /** wire↔wire separation radius */
   sepR: 5,
-  /** ∃-tip standoff radius (the dot never sinks into its own wire) */
-  standoffR: 8,
-  /** wire↔FRAME containment stiffness: an UNCAPPED quadratic penalty on any wire
-      sample OUTSIDE the border (USER STANDING LAW — nothing is ever drawn outside
-      the frame). Uncapped so under gated descent it dominates a leg's tension·L,
-      including a blind-cone fallback arc: a wire that would arc outside is instead
-      pulled in — the escape is the NODE rotating / the hub migrating so the leg
-      stays a short curve inside (Task-3/4 dynamics), never a diagram-wrapping arc. */
-  frameContain: 30,
-  /** trust region: max per-tick motion of any wire DOF (continuity law) */
+  /** trust region: max per-tick motion of any DOF (continuity law) */
   travelCap: 0.55,
 }
 

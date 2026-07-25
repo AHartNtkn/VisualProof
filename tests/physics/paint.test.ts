@@ -185,7 +185,7 @@ describe('law 5 — linework coherence: wires and lambda-anatomy share stroke an
     const e = mkEngine(d, [])
     settle(e, 600)
     const shapes = paint(e, LIGHT)
-    // plan 22: a wire leg IS its traced θ-quadratic polyline (no spline fit)
+    // a wire leg IS its traced Hobby-chain samples
     const wires = shapes.filter((s) => s.kind === 'polyline')
     expect(wires.length).toBeGreaterThan(0)
     for (const s of wires) {

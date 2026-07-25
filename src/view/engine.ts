@@ -24,9 +24,9 @@ import type { WireNet } from './route/network'
  * only — no tangents, no curvature basins, no per-edge physical identity.
  * Routing is deterministic shortest paths through free space with every node
  * disc inflated as a HARD obstacle (src/view/route/). A port terminal is a
- * fixed rim point plus a fixed outward escape stub; the optimized network
- * begins at the escape point. Rendering fillets the routed polylines; no
- * curve state exists anywhere. ∃/∀ quantifier points stay first-class END
+ * fixed rim point plus an outward clamp normal; the drawn stroke is the
+ * Hobby cubic chain over the routed corridor (route/curve.ts); no curve
+ * state exists anywhere. ∃/∀ quantifier points stay first-class END
  * bodies serving as terminals.
  */
 

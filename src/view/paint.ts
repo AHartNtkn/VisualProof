@@ -57,7 +57,7 @@ export type Shape =
   | { readonly kind: 'circle'; readonly center: Vec2; readonly r: number; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly insetColor: string | null; readonly glow: string | null }
   | { readonly kind: 'arc'; readonly center: Vec2; readonly r: number; readonly a0: number; readonly a1: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'segment'; readonly from: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  /** A traced wire stroke: the filleted routed polyline sampled at paint
+  /** A traced wire stroke: the Hobby-chain samples at paint
       resolution (plan 22 — the polyline IS the wire, not a spline fit). */
   | { readonly kind: 'polyline'; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
@@ -164,7 +164,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // traces every tree edge (leg), branch vertices included, so there is nothing
   // extra to draw at a branch — no dot is painted there (USER 2026-07-07: branch
   // points are unmarked).
-  // wires (filleted routed strokes) — the ACTUAL wire network, junctions included
+  // wires (Hobby-chain strokes) — the ACTUAL wire network, junctions included
   for (const { wid, pts } of legPaths(e)) {
     const stroke = wireStroke(wid)
     shapes.push({ kind: 'polyline', pts, stroke, width: st.wireW, glow: glow(stroke) })
