@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { termEq } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { DiagramNode } from '../../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
@@ -44,7 +44,7 @@ describe('folded-guard integration proof', () => {
 
     // lhs: a single folded reference R(x) with x as the boundary line.
     const lb = new DiagramBuilder()
-    const ref = lb.ref(lb.root, 'R', relSig([TERM]))
+    const ref = lb.ref(lb.root, 'R', relSig([IOTA]))
     const x = lb.wire(lb.root, [{ node: ref, port: { kind: 'arg', index: 0 } }])
     const lhs = mkDiagramWithBoundary(lb.build(), [x])
 

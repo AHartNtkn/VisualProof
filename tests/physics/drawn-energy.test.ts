@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { DISC_R, ROUTE_CLEAR, mkEngine, escapePoint, routeObstacles, routeBounds, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { wireEnergy, settleStep, recomputeRegions, resolveOverlaps, segSeparationE } from '../../src/view/relax'
@@ -63,7 +63,7 @@ function minRadius(pts: readonly { x: number; y: number }[]): number {
 describe('wire energy is the rod energy of the DRAWN curve', () => {
   it('needle at a port: energy identity holds with the dot on the stub', () => {
     const b = new DiagramBuilder()
-    const n = b.ref(b.root, 'A', relSig([TERM]))
+    const n = b.ref(b.root, 'A', relSig([IOTA]))
     b.wire(b.root, [{ node: n, port: { kind: 'arg' as const, index: 0 } }])
     const e = mkEngine(b.build(), [])
     const A = [...e.bodies.values()].find((x) => x.kind === 'ref')!
@@ -83,8 +83,8 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
 
   it('facing-away port: energy identity holds through the forced turn', () => {
     const b = new DiagramBuilder()
-    const n0 = b.ref(b.root, 'A', relSig([TERM]))
-    const n1 = b.ref(b.root, 'B', relSig([TERM]))
+    const n0 = b.ref(b.root, 'A', relSig([IOTA]))
+    const n1 = b.ref(b.root, 'B', relSig([IOTA]))
     b.wire(b.root, [
       { node: n0, port: { kind: 'arg' as const, index: 0 } },
       { node: n1, port: { kind: 'arg' as const, index: 0 } },
@@ -112,7 +112,7 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     // this fixture (1.62 wu) with 20% slack — the family law defines gentle,
     // not a rod-physics derivation. Kink bound: no adjacent-sample turn > π/4.
     const b = new DiagramBuilder()
-    const n = b.ref(b.root, 'A', relSig([TERM, TERM]))
+    const n = b.ref(b.root, 'A', relSig([IOTA, IOTA]))
     b.wire(b.root, [
       { node: n, port: { kind: 'arg' as const, index: 0 } },
       { node: n, port: { kind: 'arg' as const, index: 1 } },
@@ -199,8 +199,8 @@ describe('family conformance (coverage artifact): the drawn legs ARE Hobby cubic
 
   it('every drawn span of a settled scene is exactly one cubic; clamped exits align with the port normal', () => {
     const b = new DiagramBuilder()
-    const n0 = b.ref(b.root, 'A', relSig([TERM]))
-    const n1 = b.ref(b.root, 'B', relSig([TERM]))
+    const n0 = b.ref(b.root, 'A', relSig([IOTA]))
+    const n1 = b.ref(b.root, 'B', relSig([IOTA]))
     b.wire(b.root, [
       { node: n0, port: { kind: 'arg' as const, index: 0 } },
       { node: n1, port: { kind: 'arg' as const, index: 0 } },

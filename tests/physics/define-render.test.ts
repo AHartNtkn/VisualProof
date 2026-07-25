@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { applyFold } from '../../src/kernel/rules/fold'
 import { defineRelation } from '../../src/app/define'
 import { mkEngine, settle, paint, LIGHT, DISC_R } from '../../src/view/index'
 import { sheetBody, emptyCtx } from '../app/relationFixture'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
   const found = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref')

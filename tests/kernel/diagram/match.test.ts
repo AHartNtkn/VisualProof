@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import { TERM, relSig } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
 
@@ -98,13 +98,13 @@ describe('findOccurrences basics', () => {
     // pattern: a lone unary-relation atom (sig rel([ι])), head + arg auto-wired
     const mkPattern = () => {
       const b = new DiagramBuilder()
-      b.atom(b.root, relSig([TERM]))
+      b.atom(b.root, relSig([IOTA]))
       return mkDiagramWithBoundary(b.build(), [])
     }
     // host holds one unary-relation atom and one nullary-relation atom; only
     // the equal-sig atom is a compatible image
     const h = new DiagramBuilder()
-    const unary = h.atom(h.root, relSig([TERM]))
+    const unary = h.atom(h.root, relSig([IOTA]))
     h.atom(h.root, relSig([]))
     const host = h.build()
     const r = findOccurrences(host, mkPattern(), { fuel: 100 })
@@ -230,8 +230,8 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
         'a b': { kind: 'term', region: 'r0', term: p('\\x. x x') },
       },
       wires: {
-        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a b', port: { kind: 'output' } }] },
+        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a b', port: { kind: 'output' } }] },
       },
     })
     const pattern = mkDiagramWithBoundary(pd, [])
@@ -245,8 +245,8 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
         'c': { kind: 'term', region: 'r0', term: p('\\x. x') },
       },
       wires: {
-        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'b c', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b c', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
       },
     })
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(0)
@@ -266,10 +266,10 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
       regions: { r0: { kind: 'sheet' } },
       nodes: { 'a': mkNode(), 'b,c': mkNode(), 'a,b': mkNode(), 'c': mkNode() },
       wires: {
-        'wa': { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
-        'wb,wc': { scope: 'r0', sig: TERM, endpoints: [{ node: 'b,c', port: { kind: 'output' } }] },
-        'wa,wb': { scope: 'r0', sig: TERM, endpoints: [{ node: 'a,b', port: { kind: 'output' } }] },
-        'wc': { scope: 'r0', sig: TERM, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+        'wa': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
+        'wb,wc': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b,c', port: { kind: 'output' } }] },
+        'wa,wb': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a,b', port: { kind: 'output' } }] },
+        'wc': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
       },
     })
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(6)

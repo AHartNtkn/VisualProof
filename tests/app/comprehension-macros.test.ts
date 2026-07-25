@@ -3,7 +3,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, RegionId, WireId } from '../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { relSig, TERM, type RelSig } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA, type RelSig } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../src/kernel/rules/error'
@@ -28,8 +28,8 @@ import {
  */
 
 const p = (s: string) => parseTerm(s)
-const R1: RelSig = relSig([TERM])
-const R2: RelSig = relSig([TERM, TERM])
+const R1: RelSig = relSig([IOTA])
+const R2: RelSig = relSig([IOTA, IOTA])
 
 /* -------------------------------------------------------------------------- */
 /* Comprehension bodies (args-then-params boundary order).                     */
@@ -39,7 +39,7 @@ const R2: RelSig = relSig([TERM, TERM])
 function identityComp(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const n = b.termNode(b.root, p('\\x. x'))
-  const w0 = b.wire(b.root, [{ node: n, port: { kind: 'output' } }], TERM)
+  const w0 = b.wire(b.root, [{ node: n, port: { kind: 'output' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [w0])
 }
 
@@ -47,17 +47,17 @@ function identityComp(): DiagramWithBoundary {
 function arity2IdentComp(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const n = b.termNode(b.root, p('\\x. x'))
-  const w0 = b.wire(b.root, [{ node: n, port: { kind: 'output' } }], TERM)
-  const w1 = b.wire(b.root, [], TERM)
+  const w0 = b.wire(b.root, [{ node: n, port: { kind: 'output' } }], IOTA)
+  const w1 = b.wire(b.root, [], IOTA)
   return mkDiagramWithBoundary(b.build(), [w0, w1])
 }
 
-/** Arity 1, one TERM param: R(x) := "x —o— q", q on the parameter stub. Boundary [stub x, param q]. */
+/** Arity 1, one IOTA param: R(x) := "x —o— q", q on the parameter stub. Boundary [stub x, param q]. */
 function paramComp(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const n = b.termNode(b.root, p('q'))
-  const wx = b.wire(b.root, [{ node: n, port: { kind: 'output' } }], TERM)
-  const wq = b.wire(b.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }], TERM)
+  const wx = b.wire(b.root, [{ node: n, port: { kind: 'output' } }], IOTA)
+  const wq = b.wire(b.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [wx, wq])
 }
 
@@ -65,7 +65,7 @@ function paramComp(): DiagramWithBoundary {
 function relParamComp(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const inner = b.atom(b.root, R1)
-  const arg = b.wire(b.root, [{ node: inner, port: { kind: 'arg', index: 0 } }], TERM)
+  const arg = b.wire(b.root, [{ node: inner, port: { kind: 'arg', index: 0 } }], IOTA)
   const param = b.wire(b.root, [{ node: inner, port: { kind: 'head' } }], R1)
   return mkDiagramWithBoundary(b.build(), [arg, param])
 }
@@ -74,8 +74,8 @@ function relParamComp(): DiagramWithBoundary {
 function binaryComp(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const bn = b.termNode(b.root, p('y'))
-  const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }], TERM)
-  const b1 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'y' } }], TERM)
+  const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }], IOTA)
+  const b1 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'y' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [b0, b1])
 }
 
@@ -83,9 +83,9 @@ function binaryComp(): DiagramWithBoundary {
 function ternaryComp(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const bn = b.termNode(b.root, p('f g'))
-  const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }], TERM)
-  const b1 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'f' } }], TERM)
-  const b2 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'g' } }], TERM)
+  const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }], IOTA)
+  const b1 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'f' } }], IOTA)
+  const b2 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'g' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [b0, b1, b2])
 }
 
@@ -115,7 +115,7 @@ describe('macroComprehensionInstantiate — core (replay of applyComprehensionIn
     const cut = h.cut(h.root)
     const atom = h.atom(cut, R1)
     const W = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R1)
-    const wArg = h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], TERM)
+    const wArg = h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], IOTA)
     void wArg
     const d = h.build()
     const out = macroComprehensionInstantiate(d, W, identityComp(), [])
@@ -123,7 +123,7 @@ describe('macroComprehensionInstantiate — core (replay of applyComprehensionIn
     const e = new DiagramBuilder()
     const ecut = e.cut(e.root)
     const en = e.termNode(ecut, p('\\x. x'))
-    e.wire(ecut, [{ node: en, port: { kind: 'output' } }], TERM)
+    e.wire(ecut, [{ node: en, port: { kind: 'output' } }], IOTA)
     expect(exploreForm(out)).toBe(exploreForm(e.build()))
   })
 
@@ -139,7 +139,7 @@ describe('macroComprehensionInstantiate — core (replay of applyComprehensionIn
     const w = h.wire(cut, [
       { node: a1, port: { kind: 'arg', index: 0 } },
       { node: a2, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const out = macroComprehensionInstantiate(d, W, identityComp(), [])
     expect(termNodes(out)).toHaveLength(2)
@@ -168,10 +168,10 @@ describe('macroComprehensionInstantiate — core (replay of applyComprehensionIn
       .toThrowError(/requires a negative/)
     expect(() => macroComprehensionInstantiate(hp.build(), Wp, identityComp(), [])).toThrow(RuleError)
 
-    // non-relational (TERM) wire: only relational wires carry bodies
+    // non-relational (IOTA) wire: only relational wires carry bodies
     const ht = new DiagramBuilder()
     const cut = ht.cut(ht.root)
-    const Wt = ht.wire(cut, [], TERM)
+    const Wt = ht.wire(cut, [], IOTA)
     expect(() => macroComprehensionInstantiate(ht.build(), Wt, identityComp(), []))
       .toThrowError(/not a relation signature/)
 
@@ -191,7 +191,7 @@ describe('macroComprehensionInstantiate — core (replay of applyComprehensionIn
     h.wire(cut, [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const out = macroComprehensionInstantiate(d, W, arity2IdentComp(), [])
     expect(termNodes(out)).toHaveLength(1)
@@ -217,7 +217,7 @@ describe('macroComprehensionInstantiate — core (replay of applyComprehensionIn
     const inner = h.cut(c1) // the atom sits deeper
     const atom = h.atom(inner, R1)
     const W = h.wire(c1, [{ node: atom, port: { kind: 'head' } }], R1)
-    h.wire(inner, [{ node: atom, port: { kind: 'arg', index: 0 } }], TERM)
+    h.wire(inner, [{ node: atom, port: { kind: 'arg', index: 0 } }], IOTA)
     const d = h.build()
     const out = macroComprehensionInstantiate(d, W, identityComp(), [])
     const terms = termNodes(out)
@@ -233,8 +233,8 @@ describe('macroComprehensionInstantiate — parameters', () => {
     const cut = h.cut(h.root)
     const atom = h.atom(cut, R1)
     const W = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R1)
-    const wArg = h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], TERM)
-    const wParam = h.wire(paramScope === 'root' ? h.root : cut, [], TERM)
+    const wArg = h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], IOTA)
+    const wParam = h.wire(paramScope === 'root' ? h.root : cut, [], IOTA)
     return { d: h.build(), cut, W, wArg, wParam }
   }
 
@@ -265,9 +265,9 @@ describe('macroComprehensionInstantiate — parameters', () => {
     const cut = h.cut(h.root)
     const atom = h.atom(cut, R1)
     const W = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R1)
-    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], TERM)
+    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], IOTA)
     const inner = h.cut(cut)
-    const captured = h.wire(inner, [], TERM)
+    const captured = h.wire(inner, [], IOTA)
     const d = h.build()
     expect(() => macroComprehensionInstantiate(d, W, paramComp(), [captured]))
       .toThrowError(/at or outside the target wire's scope/)
@@ -282,9 +282,9 @@ describe('macroComprehensionInstantiate — parameters', () => {
       { node: a1, port: { kind: 'head' } },
       { node: a2, port: { kind: 'head' } },
     ], R1)
-    h.wire(cut, [{ node: a1, port: { kind: 'arg', index: 0 } }], TERM)
-    h.wire(cut, [{ node: a2, port: { kind: 'arg', index: 0 } }], TERM)
-    const wParam = h.wire(h.root, [], TERM)
+    h.wire(cut, [{ node: a1, port: { kind: 'arg', index: 0 } }], IOTA)
+    h.wire(cut, [{ node: a2, port: { kind: 'arg', index: 0 } }], IOTA)
+    const wParam = h.wire(h.root, [], IOTA)
     const d = h.build()
     const out = macroComprehensionInstantiate(d, W, paramComp(), [wParam])
     const eps = out.wires[wParam]!.endpoints
@@ -320,7 +320,7 @@ describe('macroComprehensionInstantiate — parameters', () => {
     const cut = h.cut(h.root)
     const atom = h.atom(cut, R1)
     const W = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R1)
-    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], TERM)
+    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }], IOTA)
     const sLine = h.relWire(h.root, R1) // outer relation parameter
     const d = h.build()
     const out = macroComprehensionInstantiate(d, W, relParamComp(), [sLine])
@@ -343,15 +343,15 @@ describe('macroComprehensionInstantiate — flat plusComm parameterized comprehe
     const wx = b.wire(b.root, [
       { node: P1, port: { kind: 'freeVar', name: 'q' } },
       { node: P2, port: { kind: 'freeVar', name: 'q' } },
-    ], TERM)
+    ], IOTA)
     const wq = b.wire(b.root, [
       { node: P1, port: { kind: 'freeVar', name: 'q_0' } },
       { node: P2, port: { kind: 'freeVar', name: 'q_0' } },
-    ], TERM)
+    ], IOTA)
     b.wire(b.root, [
       { node: P1, port: { kind: 'output' } },
       { node: P2, port: { kind: 'output' } },
-    ], TERM)
+    ], IOTA)
     const comp = mkDiagramWithBoundary(b.build(), [wx, wq])
 
     // Host: a negative wire W bound by four atoms across the ℕ(a)-induction shape.
@@ -363,24 +363,24 @@ describe('macroComprehensionInstantiate — flat plusComm parameterized comprehe
     const w0 = h.wire(h.root, [
       { node: nz, port: { kind: 'output' } },
       { node: a0, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const cut2 = h.cut(cut1)
     const a1 = h.atom(cut2, R1)
     const ny = h.termNode(cut2, p('SUCC y'))
     h.wire(cut2, [
       { node: a1, port: { kind: 'arg', index: 0 } },
       { node: ny, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const cut3 = h.cut(cut2)
     const a2 = h.atom(cut3, R1)
     h.wire(cut2, [
       { node: ny, port: { kind: 'output' } },
       { node: a2, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const cut4 = h.cut(cut1)
     const a3 = h.atom(cut4, R1)
-    const wa = h.wire(h.root, [{ node: a3, port: { kind: 'arg', index: 0 } }], TERM)
-    const wb = h.wire(h.root, [], TERM)
+    const wa = h.wire(h.root, [{ node: a3, port: { kind: 'arg', index: 0 } }], IOTA)
+    const wb = h.wire(h.root, [], IOTA)
     // wire all four atom heads onto the single W (rebuild W with every head)
     void W
     const d0 = h.build()
@@ -442,7 +442,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     const w = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: hub, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w] }
     const out = macroComprehensionAbstract(d, d.root, identityComp(), [occ])
@@ -454,7 +454,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     e.wire(e.root, [
       { node: ehub, port: { kind: 'freeVar', name: 'y' } },
       { node: eatom, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     expect(exploreForm(out)).toBe(exploreForm(e.build()))
   })
 
@@ -462,8 +462,8 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x'))
     const n2 = h.termNode(h.root, p('\\x. x'))
-    const w1 = h.wire(h.root, [{ node: n1, port: { kind: 'output' } }], TERM)
-    const w2 = h.wire(h.root, [{ node: n2, port: { kind: 'output' } }], TERM)
+    const w1 = h.wire(h.root, [{ node: n1, port: { kind: 'output' } }], IOTA)
+    const w2 = h.wire(h.root, [{ node: n2, port: { kind: 'output' } }], IOTA)
     const d = h.build()
     const out = macroComprehensionAbstract(d, d.root, identityComp(), [
       { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n1], wires: [] }), args: [w1] },
@@ -476,7 +476,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
   it('rejects an occurrence that does not match the comprehension (fingerprint)', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('\\x. \\y. x'))
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w] }
     expect(() => macroComprehensionAbstract(d, d.root, identityComp(), [occ]))
@@ -486,8 +486,8 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
   it('rejects argument-order mismatches: swapped args change the pinned fingerprint', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('y'))
-    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
-    const w1 = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], TERM)
+    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
+    const w1 = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], IOTA)
     const d = h.build()
     const mk = (args: readonly WireId[]) => ({
       sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }),
@@ -501,8 +501,8 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
   it('rejects diagonal args that leave a distinct attachment wire unused', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('y'))
-    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
-    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], TERM)
+    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w0, w0] }
     expect(() => macroComprehensionAbstract(d, d.root, binaryComp(), [occ]))
@@ -514,7 +514,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     const hn = new DiagramBuilder()
     const cut = hn.cut(hn.root)
     const n = hn.termNode(cut, p('\\x. x'))
-    const wN = hn.wire(cut, [{ node: n, port: { kind: 'output' } }], TERM)
+    const wN = hn.wire(cut, [{ node: n, port: { kind: 'output' } }], IOTA)
     const dn = hn.build()
     const negOcc = { sel: mkSelection(dn, { region: cut, regions: [], nodes: [n], wires: [] }), args: [wN] }
     expect(() => macroComprehensionAbstract(dn, cut, identityComp(), [negOcc]))
@@ -523,7 +523,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     // overlapping: the same occurrence folded twice — the second sees removed nodes
     const ho = new DiagramBuilder()
     const m = ho.termNode(ho.root, p('\\x. x'))
-    const wm = ho.wire(ho.root, [{ node: m, port: { kind: 'output' } }], TERM)
+    const wm = ho.wire(ho.root, [{ node: m, port: { kind: 'output' } }], IOTA)
     const dO = ho.build()
     const occ = { sel: mkSelection(dO, { region: dO.root, regions: [], nodes: [m], wires: [] }), args: [wm] }
     expect(() => macroComprehensionAbstract(dO, dO.root, identityComp(), [occ, occ])).toThrow()
@@ -549,7 +549,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     const c1 = h.cut(h.root)
     const c2 = h.cut(c1)
     const n = h.termNode(c2, p('\\x. x'))
-    const w = h.wire(c2, [{ node: n, port: { kind: 'output' } }], TERM)
+    const w = h.wire(c2, [{ node: n, port: { kind: 'output' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: c2, regions: [], nodes: [n], wires: [] }), args: [w] }
     const out = macroComprehensionAbstract(d, c2, identityComp(), [occ])
@@ -562,7 +562,7 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
     const h = new DiagramBuilder()
     const c1 = h.cut(h.root)
     const n = h.termNode(c1, p('\\x. x'))
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: c1, regions: [], nodes: [n], wires: [] }), args: [w] }
     const out = macroComprehensionAbstract(d, d.root, identityComp(), [occ])
@@ -574,8 +574,8 @@ describe('macroComprehensionAbstract — core (replay of applyComprehensionAbstr
   it('attaches the atom arg-i endpoint to args[i], in order', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('y'))
-    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
-    const w1 = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], TERM)
+    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
+    const w1 = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w0, w1] }
     const out = macroComprehensionAbstract(d, d.root, binaryComp(), [occ])
@@ -595,8 +595,8 @@ describe('macroComprehensionAbstract — parameters (outer-bound dependency)', (
     // parameter b is a free outer line, NOT a second argument.
     const h = new DiagramBuilder()
     const qn = h.termNode(h.root, p('q'))
-    const v = h.wire(h.root, [{ node: qn, port: { kind: 'output' } }], TERM)
-    const b = h.wire(h.root, [{ node: qn, port: { kind: 'freeVar', name: 'q' } }], TERM)
+    const v = h.wire(h.root, [{ node: qn, port: { kind: 'output' } }], IOTA)
+    const b = h.wire(h.root, [{ node: qn, port: { kind: 'freeVar', name: 'q' } }], IOTA)
     const d0 = h.build()
     const occ = { sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [qn], wires: [] }), args: [v] }
 
@@ -631,7 +631,7 @@ describe('macroComprehensionAbstract — parameters (outer-bound dependency)', (
     const c1 = h.cut(h.root)
     const c2 = h.cut(c1) // positive
     const n = h.termNode(h.root, p('\\x. x')) // occurrence at root, outside c2's subtree
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w] }
     expect(() => macroComprehensionAbstract(d, c2, identityComp(), [occ])).toThrow()
@@ -649,7 +649,7 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x, x] }
     const out = macroComprehensionAbstract(d, d.root, binaryComp(), [occ])
@@ -670,7 +670,7 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'f' } },
       { node: n, port: { kind: 'freeVar', name: 'g' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x, x, x] }
     const out = macroComprehensionAbstract(d, d.root, ternaryComp(), [occ])
@@ -687,8 +687,8 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'f' } },
-    ], TERM)
-    const y = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'g' } }], TERM)
+    ], IOTA)
+    const y = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'g' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x, x, y] }
     const out = macroComprehensionAbstract(d, d.root, ternaryComp(), [occ])
@@ -709,7 +709,7 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x, x] }
     expect(() => macroComprehensionAbstract(d, d.root, binaryComp(), [occ]))
@@ -719,8 +719,8 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
   it('an occurrence matching the UNdiagonalized comp is refused under a diagonal call', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('y'))
-    const x = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
-    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], TERM)
+    const x = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x, x] }
     expect(() => macroComprehensionAbstract(d, d.root, binaryComp(), [occ]))
@@ -733,8 +733,8 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
-    const z = h.wire(h.root, [], TERM)
+    ], IOTA)
+    const z = h.wire(h.root, [], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x, z] }
     expect(() => macroComprehensionAbstract(d, d.root, binaryComp(), [occ]))
@@ -748,7 +748,7 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
     const x = h.wire(cut, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: cut, regions: [], nodes: [n], wires: [] }), args: [x, x] }
     expect(() => macroComprehensionAbstract(d, cut, binaryComp(), [occ]))
@@ -761,7 +761,7 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x] }
     expect(() => macroComprehensionAbstract(d, d.root, binaryComp(), [occ]))
@@ -771,11 +771,11 @@ describe('macroComprehensionAbstract — diagonal occurrences', () => {
   it('rejects aliasing confusion: an honest (1,2)-merge verifies, a (0,1)-merge call refuses', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('f g'))
-    const pp = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], TERM)
+    const pp = h.wire(h.root, [{ node: n, port: { kind: 'output' } }], IOTA)
     const q = h.wire(h.root, [
       { node: n, port: { kind: 'freeVar', name: 'f' } },
       { node: n, port: { kind: 'freeVar', name: 'g' } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     const mk = (args: readonly WireId[]) => ({
       sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }),
@@ -799,8 +799,8 @@ describe('Plan 16 adversarial — diagonalized-form confusion', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'f' } },
-    ], TERM)
-    const y = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'g' } }], TERM)
+    ], IOTA)
+    const y = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'g' } }], IOTA)
     const d = h.build()
     const sel = () => mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     return { d, x, y, sel }
@@ -837,8 +837,8 @@ describe('Plan 16 adversarial — diagonalized-form confusion', () => {
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'f' } },
       { node: n, port: { kind: 'freeVar', name: 'g' } },
-    ], TERM)
-    const z = h.wire(h.root, [], TERM)
+    ], IOTA)
+    const z = h.wire(h.root, [], IOTA)
     const d = h.build()
     const sel = () => mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     expect(() => macroComprehensionAbstract(d, d.root, ternaryComp(), [{ sel: sel(), args: [x, x, z] }]))
@@ -851,8 +851,8 @@ describe('Plan 16 adversarial — diagonalized-form confusion', () => {
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'f' } },
-    ], TERM)
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'g' } }], TERM)
+    ], IOTA)
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'g' } }], IOTA)
     const d = h.build()
     const sel = () => mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     expect(() => macroComprehensionAbstract(d, d.root, binaryComp(), [{ sel: sel(), args: [x, x] }]))
@@ -866,7 +866,7 @@ describe('Plan 16 adversarial — diagonalized-form confusion', () => {
     h.wire(h.root, [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
-    ], TERM)
+    ], IOTA)
     const d = h.build()
     expect(() => macroComprehensionInstantiate(d, W, binaryComp(), []))
       .toThrowError(/requires a negative/)
@@ -884,7 +884,7 @@ describe('macro round-trip: abstraction and instantiation are mutually inverse',
     const x = h.wire(h.root, [
       { node: n, port: { kind: 'output' } },
       { node: n, port: { kind: 'freeVar', name: 'y' } },
-    ], TERM)
+    ], IOTA)
     const d0 = h.build()
     const occ = { sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [n], wires: [] }), args: [x, x] }
     const abs = macroComprehensionAbstract(d0, d0.root, binaryComp(), [occ], [], 'forward')
@@ -903,7 +903,7 @@ describe('macro round-trip: abstraction and instantiation are mutually inverse',
     const x = h.wire(cut, [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
-    ], TERM)
+    ], IOTA)
     const d0 = h.build()
     const inst = macroComprehensionInstantiate(d0, W, binaryComp(), [], 'forward')
     // φ(x,x) at the negative cut: abstract backward returns ∃R.R(x,x)
@@ -925,8 +925,8 @@ describe('macro round-trip: abstraction and instantiation are mutually inverse',
     const x = h.wire(inner, [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
-    ], TERM)
-    const zId = h.wire(inner, [], TERM) // real, independent decoy wire
+    ], IOTA)
+    const zId = h.wire(inner, [], IOTA) // real, independent decoy wire
     const inst = macroComprehensionInstantiate(h.build(), W, binaryComp(), [], 'forward')
     const phiId = Object.entries(inst.nodes).find(([, m]) => m.kind === 'term')![0]
     const region = inst.nodes[phiId]!.region
@@ -959,9 +959,9 @@ describe('instantiate composite replays under ONE orientation (Task 10 blocker r
       { node: a1, port: { kind: 'head' } },
       { node: a2, port: { kind: 'head' } },
     ], R1)
-    h.wire(scope, [{ node: a1, port: { kind: 'arg', index: 0 } }], TERM)
-    h.wire(scope, [{ node: a2, port: { kind: 'arg', index: 0 } }], TERM)
-    const wParam = h.wire(h.root, [], TERM)
+    h.wire(scope, [{ node: a1, port: { kind: 'arg', index: 0 } }], IOTA)
+    h.wire(scope, [{ node: a2, port: { kind: 'arg', index: 0 } }], IOTA)
+    const wParam = h.wire(h.root, [], IOTA)
     return { d: h.build(), W, a1, a2, wParam }
   }
 
@@ -1009,7 +1009,7 @@ describe('comprehension gate parity across depths 0..3', () => {
       const ha = new DiagramBuilder()
       const region = nest(ha, depth)
       const n = ha.termNode(region, p('\\x. x'))
-      const w = ha.wire(region, [{ node: n, port: { kind: 'output' } }], TERM)
+      const w = ha.wire(region, [{ node: n, port: { kind: 'output' } }], IOTA)
       const da = ha.build()
       const occ = { sel: mkSelection(da, { region, regions: [], nodes: [n], wires: [] }), args: [w] }
 
@@ -1048,8 +1048,8 @@ describe('new power: instantiation can leave an occurrence folded', () => {
         { node: a1, port: { kind: 'head' } },
         { node: a2, port: { kind: 'head' } },
       ], R1)
-      const w1 = h.wire(cut, [{ node: a1, port: { kind: 'arg', index: 0 } }], TERM)
-      const w2 = h.wire(cut, [{ node: a2, port: { kind: 'arg', index: 0 } }], TERM)
+      const w1 = h.wire(cut, [{ node: a1, port: { kind: 'arg', index: 0 } }], IOTA)
+      const w2 = h.wire(cut, [{ node: a2, port: { kind: 'arg', index: 0 } }], IOTA)
       return { d: h.build(), cut, a1, a2, W, w1, w2 }
     }
 

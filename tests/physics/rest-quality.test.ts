@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkEngine } from '../../src/view/engine'
 import { recomputeRegions, resolveOverlaps, establishFrame, settleStep, wireEnergy, contentEnergy } from '../../src/view/relax'
 import { bootFixture } from '../app/boot-fixture'
@@ -30,9 +30,9 @@ const bootCtx = (await bootFixture()).ctx
     Positions are pinned so only the rotations descend. */
 function facingAwayPair(): { e: ReturnType<typeof mkEngine>; a: string; b: string } {
   const db = new DiagramBuilder()
-  const a = db.ref(db.root, 'A', relSig([TERM]))
-  const b = db.ref(db.root, 'B', relSig([TERM]))
-  db.wire(db.root, [{ node: a, port: { kind: 'arg', index: 0 } }, { node: b, port: { kind: 'arg', index: 0 } }], TERM)
+  const a = db.ref(db.root, 'A', relSig([IOTA]))
+  const b = db.ref(db.root, 'B', relSig([IOTA]))
+  db.wire(db.root, [{ node: a, port: { kind: 'arg', index: 0 } }, { node: b, port: { kind: 'arg', index: 0 } }], IOTA)
   const e = mkEngine(db.build(), [])
   e.bodies.get(a)!.pos = { x: -12, y: 0 }
   e.bodies.get(b)!.pos = { x: 12, y: 0 }

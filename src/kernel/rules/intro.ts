@@ -2,7 +2,7 @@ import type { Term } from '../term/term'
 import { freePorts } from '../term/term'
 import type { Diagram, RegionId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { TERM } from '../diagram/sig'
+import { IOTA } from '../diagram/sig'
 import { freshId } from '../diagram/subgraph/freshId'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
@@ -42,7 +42,7 @@ export function applyClosedTermIntro(d: Diagram, region: RegionId, term: Term, r
     nodes: { ...d.nodes, [nodeId]: { kind: 'term', region, term, freePorts: [] } },
     wires: {
       ...d.wires,
-      [wireId]: { scope: region, sig: TERM, endpoints: [{ node: nodeId, port: { kind: 'output' } }] },
+      [wireId]: { scope: region, sig: IOTA, endpoints: [{ node: nodeId, port: { kind: 'output' } }] },
     },
   })
 }

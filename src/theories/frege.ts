@@ -2,13 +2,13 @@ import { app, lam, bvar, freePorts, port, type Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import { relSig, TERM, type RelSig } from '../kernel/diagram/sig'
+import { relSig, IOTA, type RelSig } from '../kernel/diagram/sig'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 
-// Relation signatures: a first-order relation of the given arity (all TERM args).
-const S1: RelSig = relSig([TERM])
-const S2: RelSig = relSig([TERM, TERM])
-const S3: RelSig = relSig([TERM, TERM, TERM])
+// Relation signatures: a first-order relation of the given arity (all IOTA args).
+const S1: RelSig = relSig([IOTA])
+const S2: RelSig = relSig([IOTA, IOTA])
+const S3: RelSig = relSig([IOTA, IOTA, IOTA])
 import type { ProofContext } from '../kernel/proof/context'
 import { registerTheorem, verifyTheory } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
@@ -830,7 +830,7 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   // rBp). Boundary [arg x, param R]; params = [rBp]. (Second-order modus ponens.)
   const cb = new DiagramBuilder()
   const catom = cb.atom(cb.root, S1)
-  const cbx = cb.wire(cb.root, [{ node: catom, port: { kind: 'arg', index: 0 } }], TERM)
+  const cbx = cb.wire(cb.root, [{ node: catom, port: { kind: 'arg', index: 0 } }], IOTA)
   const cparam = cb.wire(cb.root, [{ node: catom, port: { kind: 'head' } }], S1)
   e.instantiate("instantiate R'=R", rBc, mkDiagramWithBoundary(cb.build(), [cbx, cparam]), [rBp])
 

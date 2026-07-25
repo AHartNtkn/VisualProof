@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkDiagram, type Diagram } from '../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import {
@@ -40,9 +40,9 @@ function hostWithRelWire(arity = 2): Diagram {
     root: 'r0',
     regions: { r0: { kind: 'sheet' } },
     wires: {
-      target: { scope: 'r0', sig: relSig(Array.from({ length: arity }, () => TERM)), endpoints: [] },
-      h1: { scope: 'r0', sig: TERM, endpoints: [] },
-      h2: { scope: 'r0', sig: TERM, endpoints: [] },
+      target: { scope: 'r0', sig: relSig(Array.from({ length: arity }, () => IOTA)), endpoints: [] },
+      h1: { scope: 'r0', sig: IOTA, endpoints: [] },
+      h2: { scope: 'r0', sig: IOTA, endpoints: [] },
     },
   })
 }
@@ -132,7 +132,7 @@ describe('shared relation workspace mechanics', () => {
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: initial.diagram.root,
       regions: { ...initial.diagram.regions },
-      wires: { ...initial.diagram.wires, w1: { scope: 'r0', sig: TERM, endpoints: [] }, w2: { scope: 'r0', sig: TERM, endpoints: [] } },
+      wires: { ...initial.diagram.wires, w1: { scope: 'r0', sig: IOTA, endpoints: [] }, w2: { scope: 'r0', sig: IOTA, endpoints: [] } },
     }))
     draft = applyPortStripDrop(draft, 'w1', 0)
     expect(previewRelationWorkspaceSnapshot(currentRelationDraft(draft)).boundary).toEqual(['arg1', 'w1'])
@@ -153,7 +153,7 @@ describe('shared relation workspace mechanics', () => {
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: initial.diagram.root,
       regions: { ...initial.diagram.regions },
-      wires: { w1: { scope: 'r0', sig: TERM, endpoints: [] }, w2: { scope: 'r0', sig: TERM, endpoints: [] } },
+      wires: { w1: { scope: 'r0', sig: IOTA, endpoints: [] }, w2: { scope: 'r0', sig: IOTA, endpoints: [] } },
     }))
     const captured = currentRelationDraft(draft)
     expect([...relationConnectionTargets(draft, { kind: 'host', wire: 'h1' }).draft]).toEqual(['w1', 'w2'])
@@ -191,7 +191,7 @@ describe('substitution transaction', () => {
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: snapshot.diagram.root,
       regions: { ...snapshot.diagram.regions },
-      wires: { ...snapshot.diagram.wires, extra: { scope: 'r0', sig: TERM, endpoints: [] } },
+      wires: { ...snapshot.diagram.wires, extra: { scope: 'r0', sig: IOTA, endpoints: [] } },
     }))
     const unbound = applyPortStripDrop(draft, 'extra', 0)
     expect(relationWorkspaceCanFinalize(transaction, currentRelationDraft(unbound))).toBe(false)

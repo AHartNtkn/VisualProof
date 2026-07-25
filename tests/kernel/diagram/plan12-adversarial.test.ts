@@ -7,7 +7,7 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyUnfold, applyFold } from '../../../src/kernel/rules/fold'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Endpoint } from '../../../src/kernel/diagram/diagram'
 
@@ -118,7 +118,7 @@ describe('exploreForm collision resistance (non-iso pairs must differ)', () => {
           nA: { kind: 'term', region: 'r0', term: p('\\x. x') },
           nB: { kind: 'term', region: 'r0', term: p('\\x. \\y. x') },
         },
-        wires: { w0: { scope: 'r0', sig: TERM, endpoints: order === 'AB' ? [A, B] : [B, A] } },
+        wires: { w0: { scope: 'r0', sig: IOTA, endpoints: order === 'AB' ? [A, B] : [B, A] } },
       })
     }
     expect(exploreForm(mk('AB'))).toBe(exploreForm(mk('BA')))
@@ -256,7 +256,7 @@ describe('fold near-miss refusals (exact boundary-pinned gate)', () => {
   // A ref of `defId` (arity 1) with arg-0 wired to a carrier — the fold target.
   function refHost(defId: string) {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, defId, relSig([TERM]))
+    const node = b.ref(b.root, defId, relSig([IOTA]))
     const carrier = b.termNode(b.root, p('a'))
     const wArg = b.wire(b.root, [
       { node, port: { kind: 'arg', index: 0 } },
@@ -280,7 +280,7 @@ describe('fold near-miss refusals (exact boundary-pinned gate)', () => {
     const { d, node, carrier, wArg } = refHost('R')
     const un = applyUnfold(d, node, resolver(relations))
     const sel = bodySelection(un, carrier)
-    expect(() => applyFold(un, sel, [wArg], { defId: 'R', sig: relSig([TERM]), resolve: resolver(relations) })).not.toThrow()
+    expect(() => applyFold(un, sel, [wArg], { defId: 'R', sig: relSig([IOTA]), resolve: resolver(relations) })).not.toThrow()
   })
 
   it('REFUSES a beta-eta-equal but structurally different tail (form is exact, not modulo beta-eta)', () => {
@@ -291,7 +291,7 @@ describe('fold near-miss refusals (exact boundary-pinned gate)', () => {
     const { d, node, carrier, wArg } = refHost('RB')
     const un = applyUnfold(d, node, resolver(relations))
     const sel = bodySelection(un, carrier)
-    expect(() => applyFold(un, sel, [wArg], { defId: 'R', sig: relSig([TERM]), resolve: resolver(relations) }))
+    expect(() => applyFold(un, sel, [wArg], { defId: 'R', sig: relSig([IOTA]), resolve: resolver(relations) }))
       .toThrow(/does not match the body/)
   })
 

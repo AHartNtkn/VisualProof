@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { TERM, relSig } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
@@ -70,7 +70,7 @@ describe('exploreForm adversarial battery', () => {
   })
 
   it('distinguishes arg-position wiring on an atom (X(s,t) vs X(t,s))', () => {
-    const sig = relSig([TERM, TERM])
+    const sig = relSig([IOTA, IOTA])
     const mk = (swapped: boolean) => {
       const b = new DiagramBuilder()
       const s = b.termNode(b.root, p('\\x. x'))

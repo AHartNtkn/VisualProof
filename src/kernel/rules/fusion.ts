@@ -4,7 +4,7 @@ import type { PathSeg } from '../term/reduce'
 import { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from '../term/path'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { TERM } from '../diagram/sig'
+import { IOTA } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
@@ -164,7 +164,7 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
   }
   wires[newWireId] = {
     scope: node.region,
-    sig: TERM,
+    sig: IOTA,
     endpoints: [
       { node: producerId, port: { kind: 'output' } },
       { node: nodeId, port: { kind: 'freeVar', name: q } },

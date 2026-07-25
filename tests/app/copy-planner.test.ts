@@ -4,7 +4,7 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { boundaryForm, exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { mkDiagram, type Diagram, type NodeId, type WireId } from '../../src/kernel/diagram/diagram'
 import { spawnTermNode, spawnBoundRelationNode } from '../../src/kernel/diagram/spawn'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyAction } from '../../src/kernel/proof/action'
@@ -20,7 +20,7 @@ import {
 } from '../../src/app/copy-planner'
 
 const p = (source: string) => parseTerm(source)
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 function refusal(value: CopyPlan | CopyRefusal): CopyRefusal {
@@ -147,7 +147,7 @@ describe('CopyPlanner proof destinations', () => {
       root: 'sroot',
       regions: { sroot: { kind: 'sheet' }, scut: { kind: 'cut', parent: 'sroot' } },
       nodes: { r0_intro: { kind: 'term', region: 'scut', term: p('\\x. x') } },
-      wires: { sw: { scope: 'scut', sig: TERM, endpoints: [{ node: 'r0_intro', port: { kind: 'output' } }] } },
+      wires: { sw: { scope: 'scut', sig: IOTA, endpoints: [{ node: 'r0_intro', port: { kind: 'output' } }] } },
     })
     const selection = mkSelection(source, {
       region: 'scut', regions: [], nodes: ['r0_intro'], wires: ['sw'],
@@ -173,7 +173,7 @@ describe('CopyPlanner proof destinations', () => {
       root: 'sroot',
       regions: { sroot: { kind: 'sheet' }, scut: { kind: 'cut', parent: 'sroot' } },
       nodes: { sourceNode: { kind: 'term', region: 'scut', term: p('\\x. x') } },
-      wires: { r0_intro: { scope: 'scut', sig: TERM, endpoints: [{ node: 'sourceNode', port: { kind: 'output' } }] } },
+      wires: { r0_intro: { scope: 'scut', sig: IOTA, endpoints: [{ node: 'sourceNode', port: { kind: 'output' } }] } },
     })
     const selection = mkSelection(source, {
       region: 'scut', regions: [], nodes: ['sourceNode'], wires: ['r0_intro'],
@@ -199,7 +199,7 @@ describe('CopyPlanner proof destinations', () => {
         dc_0: { kind: 'cut', parent: 'dc' },
       },
       nodes: { dc_2_intro: { kind: 'term', region: 'dc_0', term: p('\\x. x') } },
-      wires: { dc_2_intro: { scope: 'dc_0', sig: TERM, endpoints: [{ node: 'dc_2_intro', port: { kind: 'output' } }] } },
+      wires: { dc_2_intro: { scope: 'dc_0', sig: IOTA, endpoints: [{ node: 'dc_2_intro', port: { kind: 'output' } }] } },
     })
     const selection = mkSelection(source, {
       region: 'scut', regions: ['dc'], nodes: [], wires: [],

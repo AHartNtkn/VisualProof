@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { boundaryArity, mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { parseTerm } from '../../../src/kernel/term/parse'
-import { TERM, relSig } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 const p = (source: string) => parseTerm(source)
 
@@ -36,7 +36,7 @@ describe('mkDiagramWithBoundary', () => {
 
   it('accepts a boundary wire of relational sig — the boundary is sort-agnostic', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([TERM, TERM])
+    const sig = relSig([IOTA, IOTA])
     const a = b.atom(b.root, sig)
     const head = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], sig)
     const relation = mkDiagramWithBoundary(b.build(), [head])

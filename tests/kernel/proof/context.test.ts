@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { parseTerm } from '../../../src/kernel/term/parse'
@@ -81,7 +81,7 @@ describe('verified ProofContext authority', () => {
     const step = {
       rule: 'vacuousIntro',
       scope: diagram.root,
-      sig: TERM,
+      sig: IOTA,
     } as const
 
     for (const forged of [lookalike, prototype]) {
@@ -240,7 +240,7 @@ describe('verified ProofContext authority', () => {
     const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', baseSource]])
 
     const aliasBuilder = new DiagramBuilder()
-    const aliasNode = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([TERM]))
+    const aliasNode = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([IOTA]))
     const aliasWire = aliasBuilder.wire(aliasBuilder.root, [{ node: aliasNode, port: { kind: 'arg', index: 0 } }])
     const second = extendRelations(first, [['Alias', mkDiagramWithBoundary(aliasBuilder.build(), [aliasWire])]])
     expect([...second.relations.keys()]).toEqual(['Base', 'Alias'])

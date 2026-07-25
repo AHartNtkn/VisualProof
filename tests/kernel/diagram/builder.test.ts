@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { portKey } from '../../../src/kernel/diagram/diagram'
-import { TERM, relSig, sigKey } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigKey } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
@@ -11,7 +11,7 @@ describe('DiagramBuilder', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const t = b.termNode(cut, p('\\x. x'))
-    const a = b.atom(cut, relSig([TERM]))
+    const a = b.atom(cut, relSig([IOTA]))
     const arg = b.wire(cut, [
       { node: t, port: { kind: 'output' } },
       { node: a, port: { kind: 'arg', index: 0 } },
@@ -23,7 +23,7 @@ describe('DiagramBuilder', () => {
     // w0 is the manual arg wire; w1 is the auto-attached head wire.
     expect(Object.keys(d.wires)).toEqual([arg, 'w1'])
     expect(d.regions['r1']).toEqual({ kind: 'cut', parent: 'r0' })
-    expect(d.nodes['n1']).toMatchObject({ kind: 'atom', sig: relSig([TERM]) })
+    expect(d.nodes['n1']).toMatchObject({ kind: 'atom', sig: relSig([IOTA]) })
   })
 
   it('auto-attaches a fresh singleton wire to every unattached port, scoped at the node region', () => {
@@ -37,7 +37,7 @@ describe('DiagramBuilder', () => {
     for (const w of wires) {
       expect(w.scope).toBe(b.root)
       expect(w.endpoints).toHaveLength(1)
-      expect(sigKey(w.sig)).toBe(sigKey(TERM))
+      expect(sigKey(w.sig)).toBe(sigKey(IOTA))
     }
   })
 
@@ -70,7 +70,7 @@ describe('DiagramBuilder', () => {
 
   it('auto-wires an atom head plus arg ports, each with the sig the port actually accepts', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([TERM, TERM])
+    const sig = relSig([IOTA, IOTA])
     const a = b.atom(b.root, sig)
     const d = b.build()
     const wires = Object.values(d.wires)
@@ -78,26 +78,26 @@ describe('DiagramBuilder', () => {
     const byPort = new Map(wires.flatMap((w) => w.endpoints.map((ep) => [portKey(ep.port), w] as const)))
     expect(new Set(byPort.keys())).toEqual(new Set(['hd', 'a:0', 'a:1']))
     expect(sigKey(byPort.get('hd')!.sig)).toBe(sigKey(sig))
-    expect(sigKey(byPort.get('a:0')!.sig)).toBe(sigKey(TERM))
-    expect(sigKey(byPort.get('a:1')!.sig)).toBe(sigKey(TERM))
+    expect(sigKey(byPort.get('a:0')!.sig)).toBe(sigKey(IOTA))
+    expect(sigKey(byPort.get('a:1')!.sig)).toBe(sigKey(IOTA))
     expect(a).toBe('n0')
     for (const w of wires) expect(w.scope).toBe(b.root)
   })
 
   it('auto-wires ref arg ports with sig-correct types (refs have no head)', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([relSig([TERM])])
+    const sig = relSig([relSig([IOTA])])
     const r = b.ref(b.root, 'Nat', sig)
     const d = b.build()
     const wires = Object.values(d.wires)
     expect(wires).toHaveLength(1)
     expect(wires[0]!.endpoints).toEqual([{ node: r, port: { kind: 'arg', index: 0 } }])
-    expect(sigKey(wires[0]!.sig)).toBe(sigKey(relSig([TERM])))
+    expect(sigKey(wires[0]!.sig)).toBe(sigKey(relSig([IOTA])))
   })
 
   it('relWire creates an endpoint-free relational wire that round-trips through mkDiagram', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([TERM, TERM])
+    const sig = relSig([IOTA, IOTA])
     const w = b.relWire(b.root, sig)
     const d = b.build()
     expect(d.wires[w]).toEqual({ scope: b.root, sig, endpoints: [] })
@@ -105,7 +105,7 @@ describe('DiagramBuilder', () => {
 
   it('wires an atom head explicitly to a rel-sig wire, completing an atom+relWire round-trip through mkDiagram', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([TERM])
+    const sig = relSig([IOTA])
     const a = b.atom(b.root, sig)
     const head = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], sig)
     const d = b.build()
@@ -115,11 +115,11 @@ describe('DiagramBuilder', () => {
     expect(Object.keys(d.wires)).toHaveLength(2)
   })
 
-  it('wiring an atom head without an explicit rel sig defaults to TERM, which mkDiagram rejects as a mismatch', () => {
+  it('wiring an atom head without an explicit rel sig defaults to IOTA, which mkDiagram rejects as a mismatch', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([TERM])
+    const sig = relSig([IOTA])
     const a = b.atom(b.root, sig)
-    b.wire(b.root, [{ node: a, port: { kind: 'head' } }]) // sig defaults to TERM — wrong for a head port
+    b.wire(b.root, [{ node: a, port: { kind: 'head' } }]) // sig defaults to IOTA — wrong for a head port
     expect(() => b.build()).toThrowError(/does not match port 'hd'/)
   })
 })

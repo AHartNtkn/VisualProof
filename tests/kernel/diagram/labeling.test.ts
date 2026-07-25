@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm, exploreLabeling, exploreIso } from '../../../src/kernel/diagram/canonical/explore'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import { TERM } from '../../../src/kernel/diagram/sig'
+import { IOTA } from '../../../src/kernel/diagram/sig'
 import type { Diagram, Region, DiagramNode, Wire } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
@@ -131,8 +131,8 @@ describe('exploreIso', () => {
         n1: { kind: 'term', region: 'r2', term: lam },  // inner cut, inserted second
       },
       wires: {
-        w0: { scope: 'r1', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r2', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+        w0: { scope: 'r1', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r2', sig: IOTA, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
     const d2 = mkDiagram({
@@ -143,8 +143,8 @@ describe('exploreIso', () => {
         n1: { kind: 'term', region: 'r1', term: lam },  // outer cut, inserted second
       },
       wires: {
-        w0: { scope: 'r2', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r1', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+        w0: { scope: 'r2', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r1', sig: IOTA, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
     const iso = exploreIso(d1, d2)

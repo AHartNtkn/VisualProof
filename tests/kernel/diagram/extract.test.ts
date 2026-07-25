@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { boundaryArity } from '../../../src/kernel/diagram/boundary'
-import { TERM, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
@@ -76,7 +76,7 @@ describe('extractSubgraph relational-atom boundary', () => {
   it('an atom whose head wire is internal produces no boundary stub', () => {
     // ∃R inside the cut, with R(t): the head wire is scoped in the selection, so
     // the relation line travels with the pattern and crosses no boundary.
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const a = b.atom(cut, S)
@@ -93,7 +93,7 @@ describe('extractSubgraph relational-atom boundary', () => {
     // ∃R OUTSIDE the cut; inside the cut sits R(t). Selecting the cut leaves R's
     // line of identity crossing the boundary — it becomes a root-scoped
     // relational stub carrying the atom's signature, uniformly with an arg wire.
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const a = b.atom(cut, S)

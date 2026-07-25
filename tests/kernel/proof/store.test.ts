@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { Theory } from '../../../src/kernel/proof/store'
 import { verifyTheory, theoryToJson, loadTheory } from '../../../src/kernel/proof/store'
@@ -116,7 +116,7 @@ describe('verifyTheory — relation references', () => {
 
   function relationRefBody(defId: string) {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, defId, relSig([TERM]))
+    const node = b.ref(b.root, defId, relSig([IOTA]))
     const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
     return mkDiagramWithBoundary(b.build(), [w])
   }
@@ -124,7 +124,7 @@ describe('verifyTheory — relation references', () => {
   /** A theorem whose (identical) sides are a single reference node. */
   function refTheorem(defId: string, arity = 1): Theorem {
     const b = new DiagramBuilder()
-    const node = b.ref(b.root, defId, relSig(Array.from({ length: arity }, () => TERM)))
+    const node = b.ref(b.root, defId, relSig(Array.from({ length: arity }, () => IOTA)))
     const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
     const side = mkDiagramWithBoundary(b.build(), [w])
     return { name: 'refThm', lhs: side, rhs: side, actions: [] }
@@ -142,7 +142,7 @@ describe('verifyTheory — relation references', () => {
     // content regardless of whether it is ever witnessed. Verification must
     // accept it, and it round-trips through theoryToJson/loadTheory unchanged.
     const b = new DiagramBuilder()
-    const at = b.atom(b.root, relSig([TERM]))
+    const at = b.atom(b.root, relSig([IOTA]))
     const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
     const existsBody = mkDiagramWithBoundary(b.build(), [bound])
     expect(() => verifyTheory({ relations: [['R', existsBody]], theorems: [] })).not.toThrow()
@@ -277,9 +277,9 @@ describe('theory files', () => {
               n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))', freePorts: ['y', 'z'] },
             },
             wires: {
-              w0: { scope: 'r0', sig: { kind: 'term' }, endpoints: [{ node: 'n0', port: 'out' }] },
-              w1: { scope: 'r0', sig: { kind: 'term' }, endpoints: [{ node: 'n0', port: 'v:y' }] },
-              w2: { scope: 'r0', sig: { kind: 'term' }, endpoints: [{ node: 'n0', port: 'v:z' }] },
+              w0: { scope: 'r0', sig: { kind: 'iota' }, endpoints: [{ node: 'n0', port: 'out' }] },
+              w1: { scope: 'r0', sig: { kind: 'iota' }, endpoints: [{ node: 'n0', port: 'v:y' }] },
+              w2: { scope: 'r0', sig: { kind: 'iota' }, endpoints: [{ node: 'n0', port: 'v:z' }] },
             },
           },
           boundary: ['w1', 'w2'],

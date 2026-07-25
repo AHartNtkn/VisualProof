@@ -4,7 +4,7 @@ import type { HeadSpine } from '../term/hnf'
 import { headSpine } from '../term/hnf'
 import type { Diagram, DiagramNode, NodeId, Wire, WireId } from '../diagram/diagram'
 import { mkDiagram } from '../diagram/diagram'
-import { TERM } from '../diagram/sig'
+import { IOTA } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
@@ -183,7 +183,7 @@ export function applyHeadStrip(
     takenWires.add(wo)
     wires[wo] = {
       scope: region,
-      sig: TERM,
+      sig: IOTA,
       endpoints: [
         { node: ia, port: { kind: 'output' } },
         { node: ib, port: { kind: 'output' } },

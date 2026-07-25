@@ -9,10 +9,10 @@ import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyFold } from '../../src/kernel/rules/fold'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { relationSig } from '../../src/theories/macros'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 const foldR = (d: Parameters<typeof applyFold>[0], sel: Parameters<typeof applyFold>[1], name: string, args: readonly string[], rels: ReadonlyMap<string, DiagramWithBoundary>) =>
   applyFold(d, sel, args, { defId: name, sig: relationSig(rels.get(name)!), resolve: (id) => rels.get(id) })
 import { emptyDiagram } from '../../src/app/edit'

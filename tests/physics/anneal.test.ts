@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import type { Engine } from '../../src/view/engine'
 import { mkEngine } from '../../src/view/engine'
@@ -38,11 +38,11 @@ function buildTrap(k: number): { d: Diagram; cut: string; n0: string; n1: string
   const b = new DiagramBuilder()
   const cut = b.cut(b.root)
   const inner: string[] = []
-  for (let i = 0; i < k; i++) inner.push(b.ref(cut, `C${i}`, relSig([TERM])))
-  if (k >= 2) b.wire(cut, inner.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })), TERM)
-  const n0 = b.ref(b.root, 'R', relSig([TERM]))
-  const n1 = b.ref(b.root, 'S', relSig([TERM]))
-  b.wire(b.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], TERM)
+  for (let i = 0; i < k; i++) inner.push(b.ref(cut, `C${i}`, relSig([IOTA])))
+  if (k >= 2) b.wire(cut, inner.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })), IOTA)
+  const n0 = b.ref(b.root, 'R', relSig([IOTA]))
+  const n1 = b.ref(b.root, 'S', relSig([IOTA]))
+  b.wire(b.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
   return { d: b.build(), cut, n0, n1 }
 }
 
@@ -127,9 +127,9 @@ describe('the basin-hopping search is deterministic in its seed (plan Task 6)', 
     // sequence a pure function of the seed, robust to how ticks slice wall-time.
     const rawTwoRef = (): Engine => {
       const b0 = new DiagramBuilder()
-      const n0 = b0.ref(b0.root, 'R', relSig([TERM]))
-      const n1 = b0.ref(b0.root, 'S', relSig([TERM]))
-      b0.wire(b0.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], TERM)
+      const n0 = b0.ref(b0.root, 'R', relSig([IOTA]))
+      const n1 = b0.ref(b0.root, 'S', relSig([IOTA]))
+      b0.wire(b0.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
       const e = mkEngine(b0.build(), [])
       e.bodies.get(n0)!.pos = { x: -20, y: 5 }
       e.bodies.get(n1)!.pos = { x: 20, y: -5 }
@@ -152,15 +152,15 @@ describe('every movable unit has a covering move (plan Task 6 coverage)', () => 
     // is a junction) — every unit taxon is present, junctions included.
     const b = new DiagramBuilder()
     const inner = b.cut(b.root)
-    b.atom(inner, relSig([TERM]))
-    const r0 = b.ref(b.root, 'R', relSig([TERM]))
-    const r1 = b.ref(b.root, 'S', relSig([TERM]))
-    const r2 = b.ref(b.root, 'T', relSig([TERM]))
+    b.atom(inner, relSig([IOTA]))
+    const r0 = b.ref(b.root, 'R', relSig([IOTA]))
+    const r1 = b.ref(b.root, 'S', relSig([IOTA]))
+    const r2 = b.ref(b.root, 'T', relSig([IOTA]))
     b.wire(b.root, [
       { node: r0, port: { kind: 'arg', index: 0 } },
       { node: r1, port: { kind: 'arg', index: 0 } },
       { node: r2, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const e = mkEngine(b.build(), [])
     recomputeRegions(e)
 
@@ -185,9 +185,9 @@ describe('the seed relaxation streams incrementally (plan Task 6 Phase 0)', () =
     // energy. In app mode the frame runs no node descent, so without Phase 0 this
     // sits raw-kinked until the first published best.
     const b = new DiagramBuilder()
-    const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([TERM, TERM])))
+    const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
     for (let i = 0; i < 4; i++) {
-      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], TERM)
+      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
     recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
@@ -219,9 +219,9 @@ describe('the published best-store is monotone (USER law: only the best yet foun
   /** A raw, legal walk-heavy scene (four cyclically-wired refs). */
   function rawCycle(): Engine {
     const b = new DiagramBuilder()
-    const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([TERM, TERM])))
+    const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
     for (let i = 0; i < 4; i++) {
-      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], TERM)
+      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
     let i = 0

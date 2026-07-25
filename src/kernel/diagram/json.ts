@@ -2,7 +2,7 @@ import { deserializeTerm, serializeTerm } from '../term/serialize'
 import type { Diagram, Port, Region, DiagramNode, Wire } from './diagram'
 import { mkDiagram, portKey } from './diagram'
 import type { Sig, RelSig } from './sig'
-import { TERM, relSig, assertWellFormedSig } from './sig'
+import { IOTA, relSig, assertWellFormedSig } from './sig'
 import type { DiagramWithBoundary } from './boundary'
 import { mkDiagramWithBoundary } from './boundary'
 
@@ -55,15 +55,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-/** Canonical recursive JSON of a signature: `{kind:'term'}` or `{kind:'rel',args}`. */
+/** Canonical recursive JSON of a signature: `{kind:'iota'}` or `{kind:'rel',args}`. */
 export function sigToJson(s: Sig): unknown {
-  return s.kind === 'term' ? { kind: 'term' } : { kind: 'rel', args: s.args.map(sigToJson) }
+  return s.kind === 'iota' ? { kind: 'iota' } : { kind: 'rel', args: s.args.map(sigToJson) }
 }
 
 /**
  * Decode an untrusted signature. Structural validity is enforced loudly by
  * `assertWellFormedSig`; strict key membership (no smuggled extra data) and
- * canonicalization into shared frozen values (`TERM`, `relSig`) are enforced on
+ * canonicalization into shared frozen values (`IOTA`, `relSig`) are enforced on
  * the way back out.
  */
 export function sigFromJson(v: unknown, what: string): Sig {
@@ -76,9 +76,9 @@ export function sigFromJson(v: unknown, what: string): Sig {
 }
 
 function rebuildSig(s: Sig, what: string): Sig {
-  if (s.kind === 'term') {
-    if (Object.keys(s).length !== 1) fail(`${what} sig: term signature carries extra fields`)
-    return TERM
+  if (s.kind === 'iota') {
+    if (Object.keys(s).length !== 1) fail(`${what} sig: iota signature carries extra fields`)
+    return IOTA
   }
   if (Object.keys(s).length !== 2) fail(`${what} sig: relation signature carries extra fields`)
   return relSig(s.args.map((a, i) => rebuildSig(a, `${what} sig arg ${i}`)))

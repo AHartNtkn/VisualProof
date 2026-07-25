@@ -5,9 +5,9 @@ import type { ProofContext } from '../../src/kernel/proof/context'
 import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { citationCandidates, citationDirection, citationStep } from '../../src/app/interact/cite'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 function unaryPattern(defId: string) {
   const b = new DiagramBuilder()

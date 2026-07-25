@@ -18,7 +18,7 @@ import {
   reparentNode,
   severEndpoint,
 } from '../edit'
-import { relSig, TERM } from '../../kernel/diagram/sig'
+import { relSig, IOTA } from '../../kernel/diagram/sig'
 import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { FissionDragController, type FissionRequest } from './fission'
@@ -351,7 +351,7 @@ export class ConstructController {
         () => addRelationWire(
           this.#options.diagram(),
           buildSelection(this.#options.diagram(), selected).region,
-          relSig(Array.from({ length: arity }, () => TERM)),
+          relSig(Array.from({ length: arity }, () => IOTA)),
         ).diagram,
         'added a relation wire',
       )) this.#closePrompt()

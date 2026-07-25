@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayProof } from '../../../src/kernel/proof/step'
 import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
@@ -11,7 +11,7 @@ import { replayActions, singleStepAction } from '../../../src/kernel/proof/actio
 
 const p = (s: string) => parseTerm(s)
 const ctx: ProofContext = EMPTY_PROOF_CONTEXT
-const arity1 = relSig([TERM])
+const arity1 = relSig([IOTA])
 
 // JSON round-trip and malformed-field coverage for these step shapes lives
 // in tests/kernel/proof/json.test.ts (comprehensive over every step kind).
@@ -64,14 +64,14 @@ describe('open and vacuous proof steps', () => {
 
   it('composeActions maps bound-spawn wire ids through a NON-IDENTITY iso', () => {
     // Isomorphic hosts with DIFFERENT ids for the relational wire: in da the
-    // wire is w1 (an unrelated empty TERM wire is w0); in db the relational
-    // wire is w0 (the unrelated TERM wire is w1). An unmapped wire VALUE
-    // ('w0') would point at da's TERM wire — splice must see the iso image
+    // wire is w1 (an unrelated empty IOTA wire is w0); in db the relational
+    // wire is w0 (the unrelated IOTA wire is w1). An unmapped wire VALUE
+    // ('w0') would point at da's IOTA wire — splice must see the iso image
     // (da's relational wire), or composition is wrong.
     const mkA = () => {
       const h = new DiagramBuilder()
       const c = h.cut(h.root) // r1
-      h.wire(h.root, []) // w0: unrelated empty TERM wire, shifts numbering
+      h.wire(h.root, []) // w0: unrelated empty IOTA wire, shifts numbering
       const rel = h.relWire(c, arity1) // w1
       return { d: h.build(), rel, region: c }
     }
@@ -79,7 +79,7 @@ describe('open and vacuous proof steps', () => {
       const h = new DiagramBuilder()
       const c = h.cut(h.root) // r1
       const rel = h.relWire(c, arity1) // w0
-      h.wire(h.root, []) // w1: unrelated empty TERM wire
+      h.wire(h.root, []) // w1: unrelated empty IOTA wire
       return { d: h.build(), rel, region: c }
     }
     const { d: da, rel: aRel } = mkA()

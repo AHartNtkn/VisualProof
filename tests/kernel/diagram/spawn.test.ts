@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { portKey } from '../../../src/kernel/diagram/diagram'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../../../src/kernel/diagram/spawn'
-import { TERM, relSig, sigKey } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigKey } from '../../../src/kernel/diagram/sig'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import type { IdReservation } from '../../../src/kernel/diagram/subgraph/freshId'
 
 const p = (s: string) => parseTerm(s)
 
 describe('spawnTermNode', () => {
-  it('adds a term node with a fresh id and TERM-sig wires for output plus each declared free port', () => {
+  it('adds a term node with a fresh id and IOTA-sig wires for output plus each declared free port', () => {
     const d = new DiagramBuilder().build()
     const { diagram, node } = spawnTermNode(d, d.root, p('\\x. y x'))
     expect(node).toBe('n') // freshId's own counter, independent of the builder's n0, n1, … scheme
@@ -18,7 +18,7 @@ describe('spawnTermNode', () => {
     const wires = Object.values(diagram.wires)
     expect(wires).toHaveLength(2) // out, v:y (x is bound, not free)
     for (const w of wires) {
-      expect(sigKey(w.sig)).toBe(sigKey(TERM))
+      expect(sigKey(w.sig)).toBe(sigKey(IOTA))
       expect(w.scope).toBe(d.root)
     }
   })
@@ -34,14 +34,14 @@ describe('spawnTermNode', () => {
 describe('spawnRelationNode', () => {
   it('adds a ref node with arg ports 0..arity-1 sig-typed from the given sig (no head, no output)', () => {
     const d = new DiagramBuilder().build()
-    const sig = relSig([TERM, relSig([TERM])])
+    const sig = relSig([IOTA, relSig([IOTA])])
     const { diagram, node } = spawnRelationNode(d, d.root, 'Nat', sig)
     expect(diagram.nodes[node]).toMatchObject({ kind: 'ref', defId: 'Nat', sig })
     const wires = Object.values(diagram.wires)
     expect(wires).toHaveLength(2)
     const byPort = new Map(wires.flatMap((w) => w.endpoints.map((ep) => [portKey(ep.port), w] as const)))
-    expect(sigKey(byPort.get('a:0')!.sig)).toBe(sigKey(TERM))
-    expect(sigKey(byPort.get('a:1')!.sig)).toBe(sigKey(relSig([TERM])))
+    expect(sigKey(byPort.get('a:0')!.sig)).toBe(sigKey(IOTA))
+    expect(sigKey(byPort.get('a:1')!.sig)).toBe(sigKey(relSig([IOTA])))
   })
 
   it('arity-0 ref spawns with no arg wires at all', () => {
@@ -55,27 +55,27 @@ describe('spawnRelationNode', () => {
 describe('spawnBoundRelationNode', () => {
   it('binds a fresh atom to the designated relational wire: head joins it, fresh arg wires are sig-typed from sig.args', () => {
     const b = new DiagramBuilder()
-    const target = b.relWire(b.root, relSig([TERM, relSig([TERM])]))
+    const target = b.relWire(b.root, relSig([IOTA, relSig([IOTA])]))
     const d = b.build()
     expect(d.wires[target]!.endpoints).toEqual([])
 
     const { diagram, node } = spawnBoundRelationNode(d, b.root, target)
 
-    expect(diagram.nodes[node]).toMatchObject({ kind: 'atom', region: b.root, sig: relSig([TERM, relSig([TERM])]) })
+    expect(diagram.nodes[node]).toMatchObject({ kind: 'atom', region: b.root, sig: relSig([IOTA, relSig([IOTA])]) })
     expect(diagram.wires[target]!.endpoints).toEqual([{ node, port: { kind: 'head' } }])
-    expect(diagram.wires[target]!.sig).toEqual(relSig([TERM, relSig([TERM])]))
+    expect(diagram.wires[target]!.sig).toEqual(relSig([IOTA, relSig([IOTA])]))
 
     const argWires = Object.entries(diagram.wires).filter(([id]) => id !== target)
     expect(argWires).toHaveLength(2)
     const byPort = new Map(argWires.flatMap(([, w]) => w.endpoints.map((ep) => [portKey(ep.port), w] as const)))
-    expect(sigKey(byPort.get('a:0')!.sig)).toBe(sigKey(TERM))
-    expect(sigKey(byPort.get('a:1')!.sig)).toBe(sigKey(relSig([TERM])))
+    expect(sigKey(byPort.get('a:0')!.sig)).toBe(sigKey(IOTA))
+    expect(sigKey(byPort.get('a:1')!.sig)).toBe(sigKey(relSig([IOTA])))
     for (const [, w] of argWires) expect(w.scope).toBe(b.root)
   })
 
   it('joins an existing endpoint set — a wire already carrying one atom head can bind a second', () => {
     const b = new DiagramBuilder()
-    const sig = relSig([TERM])
+    const sig = relSig([IOTA])
     const first = b.atom(b.root, sig)
     const target = b.wire(b.root, [{ node: first, port: { kind: 'head' } }], sig)
     const d = b.build()
@@ -125,13 +125,13 @@ describe('spawnBoundRelationNode', () => {
       .toThrowError(/spawnBoundRelationNode: wire 'ghost' does not exist/)
   })
 
-  it('throws DiagramError when the designated wire carries a TERM sig, not a relation', () => {
+  it('throws DiagramError when the designated wire carries a IOTA sig, not a relation', () => {
     const b = new DiagramBuilder()
     const term = b.termNode(b.root, p('x'))
     const output = b.wire(b.root, [{ node: term, port: { kind: 'output' } }])
     const d = b.build()
     expect(() => spawnBoundRelationNode(d, b.root, output))
-      .toThrowError(/spawnBoundRelationNode: wire '.*' has sig 'term', expected a relation signature/)
+      .toThrowError(/spawnBoundRelationNode: wire '.*' has sig 'iota', expected a relation signature/)
   })
 
   it('picks a fresh node id avoiding both taken and reserved ids', () => {

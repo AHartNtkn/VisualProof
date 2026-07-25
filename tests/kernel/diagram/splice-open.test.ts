@@ -4,7 +4,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
-import { TERM, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
 
 const head = { kind: 'head' as const }
 
@@ -15,7 +15,7 @@ const head = { kind: 'head' as const }
  */
 describe('splice signature gate', () => {
   it('lands a relational boundary stub onto an equal-sig host line', () => {
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const pb = new DiagramBuilder()
     const a = pb.atom(pb.root, S)
     const stub = pb.wire(pb.root, [{ node: a, port: head }], S)
@@ -32,7 +32,7 @@ describe('splice signature gate', () => {
   })
 
   it('refuses to land a relational stub on a host line of a different sig, naming both sigs', () => {
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const T = relSig([])
     const pb = new DiagramBuilder()
     const a = pb.atom(pb.root, S)
@@ -51,7 +51,7 @@ describe('splice signature gate', () => {
       throw new Error('expected the sig gate to reject')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      expect(msg).toContain('(t)') // sig of T = rel([]) → sigKey '()' ; sig of S = rel([t]) → '(t)'
+      expect(msg).toContain('(i)') // sig of T = rel([]) → sigKey '()' ; sig of S = rel([i]) → '(i)'
       expect(msg).toContain('()')
     }
   })
@@ -59,7 +59,7 @@ describe('splice signature gate', () => {
   it('extract → splice round-trips a relational stub onto its equal-sig source line', () => {
     // ∃R at the root; R(...) inside a cut. Extract the cut and splice a second
     // copy back at the root onto the SAME relation line — equal sig, accepted.
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const a = b.atom(cut, S)

@@ -64,7 +64,7 @@ export function spawnBoundRelationNode(
     throw new DiagramError(`spawnBoundRelationNode: wire '${wireId}' does not exist`)
   }
   if (target.sig.kind !== 'rel') {
-    throw new DiagramError(`spawnBoundRelationNode: wire '${wireId}' has sig 'term', expected a relation signature`)
+    throw new DiagramError(`spawnBoundRelationNode: wire '${wireId}' has sig 'iota', expected a relation signature`)
   }
   const sig = target.sig
   const node = freshId(new Set(Object.keys(d.nodes)), 'n', reservation?.nodes)

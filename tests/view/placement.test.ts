@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import { mkEngine } from '../../src/view/engine'
 import {
   beginBodyPlacement,

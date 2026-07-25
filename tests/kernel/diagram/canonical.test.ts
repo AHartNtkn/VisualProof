@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { TERM, relSig } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
@@ -47,7 +47,7 @@ describe('exploreForm', () => {
 
   it('distinguishes wiring differences (atom X(t,t) shared vs X(t,·) separate)', () => {
     // X(t, t) with both args on one wire vs X(t, ·) on two wires
-    const sig = relSig([TERM, TERM])
+    const sig = relSig([IOTA, IOTA])
     const mk = (shared: boolean) => {
       const b = new DiagramBuilder()
       const t = b.termNode(b.root, p('\\x. x'))
@@ -136,7 +136,7 @@ describe('exploreForm — signature-indexed wires (Task 4 scenarios)', () => {
     // labeling orders wires by refined color, never by insertion. If it sorted
     // by insertion order, the arity-1 and arity-0 wire lines would appear
     // swapped and the two forms would differ.
-    const sigA = relSig([TERM]) // atom nA: head + a0
+    const sigA = relSig([IOTA]) // atom nA: head + a0
     const sigB = relSig([]) // atom nB: head only
     const nodes = {
       nA: { kind: 'atom', region: 'r0', sig: sigA },
@@ -144,7 +144,7 @@ describe('exploreForm — signature-indexed wires (Task 4 scenarios)', () => {
     } as const
     const hA = { scope: 'r0', sig: sigA, endpoints: [{ node: 'nA', port: { kind: 'head' } }] } as const
     const hB = { scope: 'r0', sig: sigB, endpoints: [{ node: 'nB', port: { kind: 'head' } }] } as const
-    const aA0 = { scope: 'r0', sig: TERM, endpoints: [{ node: 'nA', port: { kind: 'arg', index: 0 } }] } as const
+    const aA0 = { scope: 'r0', sig: IOTA, endpoints: [{ node: 'nA', port: { kind: 'arg', index: 0 } }] } as const
 
     const forward = mkDiagram({
       root: 'r0',
@@ -165,15 +165,15 @@ describe('exploreForm — signature-indexed wires (Task 4 scenarios)', () => {
     // Two diagrams that are structurally identical except for the sort of a
     // single endpoint-free relational wire at the root. They must differ: the
     // wire's signature is intrinsic content and enters the canonical form.
-    const mk = (args: readonly (typeof TERM)[]) => {
+    const mk = (args: readonly (typeof IOTA)[]) => {
       const b = new DiagramBuilder()
       b.relWire(b.root, relSig(args))
       return b.build()
     }
-    expect(exploreForm(mk([]))).not.toBe(exploreForm(mk([TERM])))
-    expect(exploreForm(mk([TERM]))).not.toBe(exploreForm(mk([TERM, TERM])))
+    expect(exploreForm(mk([]))).not.toBe(exploreForm(mk([IOTA])))
+    expect(exploreForm(mk([IOTA]))).not.toBe(exploreForm(mk([IOTA, IOTA])))
     // …and the SAME sort at the same scope stays equal
-    expect(exploreForm(mk([TERM]))).toBe(exploreForm(mk([TERM])))
+    expect(exploreForm(mk([IOTA]))).toBe(exploreForm(mk([IOTA])))
   })
 
   it('(c) body nodes agree iff their content has an equal canonical fingerprint', () => {

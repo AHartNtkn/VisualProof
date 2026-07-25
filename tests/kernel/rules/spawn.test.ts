@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import {
   applyBoundRelationSpawn,
@@ -10,7 +10,7 @@ import {
 } from '../../../src/kernel/rules/spawn'
 
 const p = (source: string) => parseTerm(source)
-const arity2 = relSig([TERM, TERM])
+const arity2 = relSig([IOTA, IOTA])
 
 function host() {
   const builder = new DiagramBuilder()
@@ -89,7 +89,7 @@ describe('atomic proof spawning', () => {
     expect(Object.values(out.nodes)).toEqual([
       expect.objectContaining({ kind: 'ref', region: h.cut, defId: 'logic/R', sig: arity2 }),
     ])
-    expect(() => applyRelationSpawn(h.diagram, h.cut, 'logic/R', relSig([TERM]), context, 'forward')).toThrow(/changed.*arity|arity.*changed/)
+    expect(() => applyRelationSpawn(h.diagram, h.cut, 'logic/R', relSig([IOTA]), context, 'forward')).toThrow(/changed.*arity|arity.*changed/)
     expect(() => applyRelationSpawn(h.diagram, h.cut, 'missing', arity2, context, 'forward')).toThrow(/no longer loaded/)
   })
 

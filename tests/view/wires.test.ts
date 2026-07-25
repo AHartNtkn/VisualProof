@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { buildFregeTheory } from '../../src/theories/frege'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import { mkEngine, DISC_R, worldBindAnchor, carryOver, frameSlots } from '../../src/view/engine'
 import { recomputeRegions, resolveOverlaps, establishProofFrame, establishProofSlotShift } from '../../src/view/relax'
 

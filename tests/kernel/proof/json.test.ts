@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { dwbToJson, dwbFromJson } from '../../../src/kernel/diagram/json'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import {
@@ -114,7 +114,7 @@ describe('step round-trips through JSON', () => {
     }
     const steps: ProofStep[] = [
       { rule: 'openTermSpawn', region: 'r1', term: p('x'), freePorts: ['x', 'unused'] },
-      { rule: 'relationSpawn', region: 'r1', defId: 'nat', sig: relSig([TERM]) },
+      { rule: 'relationSpawn', region: 'r1', defId: 'nat', sig: relSig([IOTA]) },
       { rule: 'boundRelationSpawn', region: 'r1', wire: 'w2' },
       { rule: 'wireJoin', a: 'w0', b: 'w1' },
       { rule: 'erasure', sel },
@@ -138,17 +138,17 @@ describe('step round-trips through JSON', () => {
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
-      { rule: 'vacuousIntro', scope: 'r1', sig: TERM },
-      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([relSig([TERM]), TERM]) },
-      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([TERM]), body: { content: pat, params: [] } },
-      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([TERM]), body: { content: pat, params: ['w3', 'w7'] } },
+      { rule: 'vacuousIntro', scope: 'r1', sig: IOTA },
+      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([relSig([IOTA]), IOTA]) },
+      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([IOTA]), body: { content: pat, params: [] } },
+      { rule: 'vacuousIntro', scope: 'r1', sig: relSig([IOTA]), body: { content: pat, params: ['w3', 'w7'] } },
       { rule: 'vacuousElim', wireId: 'w0' },
       { rule: 'bodyAttach', wireId: 'w0', content: pat, params: [] },
       { rule: 'bodyAttach', wireId: 'w0', content: pat, params: ['w3', 'w7'] },
       { rule: 'bodyDetach', bodyNodeId: 'n0' },
       { rule: 'unfold', nodeId: 'n0' },
       { rule: 'fold', occurrence: sel, args: ['w0'], target: { wireId: 'w0' } },
-      { rule: 'fold', occurrence: sel, args: ['w0'], target: { defId: 'nat', sig: relSig([TERM]) } },
+      { rule: 'fold', occurrence: sel, args: ['w0'], target: { defId: 'nat', sig: relSig([IOTA]) } },
     ]
     for (const s of steps) roundTrip(s)
   })
@@ -176,10 +176,10 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'fold', occurrence: { region: 'r0', regions: [], nodes: [], wires: [] }, args: ['w0'], target: { wireId: 'w0' }, extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
-    expect(() => stepFromJson({ rule: 'fold', occurrence: { region: 'r0', regions: [], nodes: [], wires: [] }, args: ['w0'], target: { defId: 'nat', sig: { kind: 'term' } } }))
+    expect(() => stepFromJson({ rule: 'fold', occurrence: { region: 'r0', regions: [], nodes: [], wires: [] }, args: ['w0'], target: { defId: 'nat', sig: { kind: 'iota' } } }))
       .toThrowError(/sig must be a relation signature/)
     expect(() => stepFromJson({ rule: 'vacuousIntro', scope: 'r1', sig: { kind: 'bogus' } }))
-      .toThrowError(/"kind" must be "term" or "rel"/)
+      .toThrowError(/"kind" must be "iota" or "rel"/)
     expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")' }))
       .toThrowError(/freePorts must be an array/)
     expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")', freePorts: [] }))
@@ -358,7 +358,7 @@ describe('diagram-with-boundary JSON preserves ordered alias incidences', () => 
     const n = b.termNode(b.root, p('\\x. x'))
     b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
     // a bare (endpoint-free) root-scoped boundary wire
-    const bare = b.wire(b.root, [], TERM)
+    const bare = b.wire(b.root, [], IOTA)
     const dwb = mkDiagramWithBoundary(b.build(), [bare])
     const back = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(dwb))))
     expect(back.boundary).toEqual([bare])

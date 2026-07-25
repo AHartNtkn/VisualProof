@@ -7,7 +7,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { DiagramBuilder } from '../src/kernel/diagram/builder'
-import { relSig, TERM } from '../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../src/kernel/diagram/sig'
 import type { Diagram, WireId } from '../src/kernel/diagram/diagram'
 import { mkEngine, frameBounds } from '../src/view/engine'
 import type { Engine } from '../src/view/engine'
@@ -17,7 +17,7 @@ import type { Vec2 } from '../src/view/vec'
 import { mkReplay } from '../src/app/replay'
 import { bootFixture } from '../tests/app/boot-fixture'
 
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 const OUT = '.superpowers/sdd/junction-gallery'
 
 // ---- SVG serialization of the painted Shape[] (world coordinates) ----

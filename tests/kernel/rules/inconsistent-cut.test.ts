@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { DiagramError, mkDiagram, type Diagram, type NodeId, type RegionId } from '../../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import type { NormalSeparationCertificate } from '../../../src/kernel/term/certificate'
 import { RuleError } from '../../../src/kernel/rules/error'
@@ -228,7 +228,7 @@ describe('applyInconsistentCutElim', () => {
     expect(result.wires[cutScopedWire]).toBeUndefined()
     expect(result.wires[shared]).toEqual({
       scope: diagram.root,
-      sig: TERM,
+      sig: IOTA,
       endpoints: [{ node: outside, port: { kind: 'output' } }],
     })
     expect(result.regions[result.root]).toBe(before.root)

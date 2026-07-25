@@ -2,11 +2,11 @@
  * Signature grammar for wires (replaces second-order quantifier "bubbles").
  *
  * A Sig is a recursive structure representing the shape of a wire's type:
- * - TERM (ι): a simple individual
+ * - IOTA (ι): a simple individual
  * - REL: a relation with a fixed arity, structurally defined by its argument signatures
  */
 
-export type Sig = { readonly kind: 'term' } | { readonly kind: 'rel'; readonly args: readonly Sig[] }
+export type Sig = { readonly kind: 'iota' } | { readonly kind: 'rel'; readonly args: readonly Sig[] }
 
 export type RelSig = Extract<Sig, { kind: 'rel' }>
 
@@ -18,9 +18,9 @@ export class SigError extends Error {
 }
 
 /**
- * Shared immutable value for the term signature (ι).
+ * Shared immutable value for the iota signature (ι).
  */
-export const TERM: Sig = Object.freeze({ kind: 'term' })
+export const IOTA: Sig = Object.freeze({ kind: 'iota' })
 
 /**
  * Construct a relation signature with the given argument signatures.
@@ -41,7 +41,7 @@ export function relSig(args: readonly Sig[]): RelSig {
 export function sigEquals(a: Sig, b: Sig): boolean {
   if (a.kind !== b.kind) return false
 
-  if (a.kind === 'term') {
+  if (a.kind === 'iota') {
     return true
   }
 
@@ -62,7 +62,7 @@ export function sigEquals(a: Sig, b: Sig): boolean {
 
 /**
  * Canonical injective string representation of a signature.
- * - TERM maps to 't'
+ * - IOTA maps to 'i'
  * - REL maps to '(' + args.map(sigKey).join(',') + ')'
  *
  * This representation is injective: different signatures produce different strings.
@@ -70,8 +70,8 @@ export function sigEquals(a: Sig, b: Sig): boolean {
  * @returns canonical string key
  */
 export function sigKey(s: Sig): string {
-  if (s.kind === 'term') {
-    return 't'
+  if (s.kind === 'iota') {
+    return 'i'
   }
 
   // s.kind === 'rel'
@@ -82,7 +82,7 @@ export function sigKey(s: Sig): string {
 
 /**
  * Order (depth) of a signature.
- * - TERM has order 0
+ * - IOTA has order 0
  * - REL has order 1 + max(0, ...args.map(sigOrder))
  *
  * This represents the nesting depth of relation constructors.
@@ -90,7 +90,7 @@ export function sigKey(s: Sig): string {
  * @returns order (depth) as a non-negative integer
  */
 export function sigOrder(s: Sig): number {
-  if (s.kind === 'term') {
+  if (s.kind === 'iota') {
     return 0
   }
 
@@ -133,14 +133,14 @@ export function assertWellFormedSig(s: unknown): asserts s is Sig {
 
   const kind = obj.kind
 
-  if (kind !== 'term' && kind !== 'rel') {
+  if (kind !== 'iota' && kind !== 'rel') {
     throw new SigError(
-      `Invalid signature: "kind" must be "term" or "rel", got "${String(kind)}"`,
+      `Invalid signature: "kind" must be "iota" or "rel", got "${String(kind)}"`,
     )
   }
 
-  if (kind === 'term') {
-    // Term signatures are valid if they have kind: 'term'
+  if (kind === 'iota') {
+    // Iota signatures are valid if they have kind: 'iota'
     return
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { EMPTY_PROOF_CONTEXT, extendRelations } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { buildFregeTheory } from '../../src/theories/frege'
@@ -9,7 +9,7 @@ import { verifyTheory } from '../../src/kernel/proof/store'
 import { resolveNamedRelationInstantiation } from '../../src/interaction/named-relation'
 
 const context = () => verifyTheory(buildFregeTheory())
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 /** A relational wire of the given arity at a NEGATIVE scope (a cut), carrying one
  *  atom occurrence by its head — the wire-model image of a bound-predicate bubble. */

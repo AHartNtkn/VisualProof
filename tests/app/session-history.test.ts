@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
@@ -32,7 +32,7 @@ import {
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { singleStepAction } from '../../src/kernel/proof/action'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 const ctx = verifyTheory(buildFregeTheory())
 const gesture = (step: ProofStep) => singleStepAction(step.rule, step)

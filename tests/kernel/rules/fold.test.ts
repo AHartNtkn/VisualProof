@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { Diagram, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM, type RelSig } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA, type RelSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyBodyAttach } from '../../../src/kernel/rules/body'
@@ -11,8 +11,8 @@ import { applyUnfold, applyFold } from '../../../src/kernel/rules/fold'
 import { RuleError } from '../../../src/kernel/rules/error'
 
 const pc = (s: string) => parseTerm(s)
-const R1: RelSig = relSig([TERM])
-const R2: RelSig = relSig([TERM, TERM])
+const R1: RelSig = relSig([IOTA])
+const R2: RelSig = relSig([IOTA, IOTA])
 
 // `resolve` for atom-flavor calls is never consulted: a body node supplies the content.
 const noResolve = (_defId: string): DiagramWithBoundary | undefined => undefined
@@ -29,17 +29,17 @@ function noParamBody(tail = 'C w'): DiagramWithBoundary {
   b.wire(b.root, [
     { node: tA, port: { kind: 'output' } },
     { node: tB, port: { kind: 'freeVar', name: 'w' } },
-  ], TERM)
-  const arg = b.wire(b.root, [{ node: tA, port: { kind: 'freeVar', name: 'y' } }], TERM)
+  ], IOTA)
+  const arg = b.wire(b.root, [{ node: tA, port: { kind: 'freeVar', name: 'y' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [arg])
 }
 
-/** Arity 1, one TERM param: term node `(y w)`, arg line `y`, param line `w`. */
+/** Arity 1, one IOTA param: term node `(y w)`, arg line `y`, param line `w`. */
 function termParamBody(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const t = b.termNode(b.root, pc('y w'))
-  const arg = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }], TERM)
-  const param = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'w' } }], TERM)
+  const arg = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }], IOTA)
+  const param = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'w' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [arg, param])
 }
 
@@ -47,8 +47,8 @@ function termParamBody(): DiagramWithBoundary {
 function binaryBody(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const t = b.termNode(b.root, pc('E x y'))
-  const x = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'x' } }], TERM)
-  const y = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }], TERM)
+  const x = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'x' } }], IOTA)
+  const y = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }], IOTA)
   return mkDiagramWithBoundary(b.build(), [x, y])
 }
 
@@ -56,7 +56,7 @@ function binaryBody(): DiagramWithBoundary {
 function relParamBody(): DiagramWithBoundary {
   const b = new DiagramBuilder()
   const inner = b.atom(b.root, R1)
-  const arg = b.wire(b.root, [{ node: inner, port: { kind: 'arg', index: 0 } }], TERM)
+  const arg = b.wire(b.root, [{ node: inner, port: { kind: 'arg', index: 0 } }], IOTA)
   const param = b.wire(b.root, [{ node: inner, port: { kind: 'head' } }], R1)
   return mkDiagramWithBoundary(b.build(), [arg, param])
 }
@@ -99,7 +99,7 @@ function bodiedAtom(opts: {
       { node: atomId, port: { kind: 'arg', index: 0 } },
       { node: atomId, port: { kind: 'arg', index: 1 } },
       { node: carrier, port: { kind: 'freeVar', name: 'a' } },
-    ], TERM)
+    ], IOTA)
     argWires.push(shared, shared)
   } else {
     for (let i = 0; i < argCount; i++) {
@@ -107,7 +107,7 @@ function bodiedAtom(opts: {
       const aw = b.wire(region, [
         { node: atomId, port: { kind: 'arg', index: i } },
         { node: carrier, port: { kind: 'freeVar', name: `a${i}` } },
-      ], TERM)
+      ], IOTA)
       argWires.push(aw)
     }
   }
@@ -117,7 +117,7 @@ function bodiedAtom(opts: {
   specs.forEach((kind, j) => {
     if (kind === 'term') {
       const pc0 = b.termNode(b.root, pc(`p${j}`))
-      paramWires.push(b.wire(b.root, [{ node: pc0, port: { kind: 'freeVar', name: `p${j}` } }], TERM))
+      paramWires.push(b.wire(b.root, [{ node: pc0, port: { kind: 'freeVar', name: `p${j}` } }], IOTA))
     } else {
       paramWires.push(b.relWire(b.root, R1))
     }
@@ -138,7 +138,7 @@ function refHost(defId: string, sig: RelSig, inCut = false) {
     argWires.push(b.wire(region, [
       { node, port: { kind: 'arg', index: i } },
       { node: carrier, port: { kind: 'freeVar', name: `a${i}` } },
-    ], TERM))
+    ], IOTA))
   })
   return { d: b.build(), node, argWires, region }
 }
@@ -220,7 +220,7 @@ describe('unfold: refuses an atom whose head wire carries no body', () => {
     b.wire(b.root, [
       { node: atomId, port: { kind: 'arg', index: 0 } },
       { node: carrier, port: { kind: 'freeVar', name: 'a' } },
-    ], TERM)
+    ], IOTA)
     const d = b.build()
     expect(() => applyUnfold(d, atomId, noResolve)).toThrow(RuleError)
     expect(() => applyUnfold(d, atomId, noResolve)).toThrow(/head wire carries no body to unfold/)
@@ -394,8 +394,8 @@ describe('fold: named ref target round-trips', () => {
       const b = new DiagramBuilder()
       const tx = b.termNode(b.root, pc('x'))
       const ty = b.termNode(b.root, pc('y'))
-      const bx = b.wire(b.root, [{ node: tx, port: { kind: 'freeVar', name: 'x' } }], TERM)
-      const by = b.wire(b.root, [{ node: ty, port: { kind: 'freeVar', name: 'y' } }], TERM)
+      const bx = b.wire(b.root, [{ node: tx, port: { kind: 'freeVar', name: 'x' } }], IOTA)
+      const by = b.wire(b.root, [{ node: ty, port: { kind: 'freeVar', name: 'y' } }], IOTA)
       return mkDiagramWithBoundary(b.build(), [bx, by])
     }
     const resolve = (id: string) => (id === 'S' ? bodyS() : undefined)

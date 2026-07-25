@@ -3,7 +3,7 @@ import { freePorts } from '../term/term'
 import type { Diagram, Endpoint, NodeId, Region, RegionId, DiagramNode, Wire, WireId } from './diagram'
 import { mkDiagram, portKey, portSig, requiredPorts } from './diagram'
 import type { RelSig, Sig } from './sig'
-import { TERM } from './sig'
+import { IOTA } from './sig'
 import type { DiagramWithBoundary } from './boundary'
 
 /**
@@ -61,12 +61,12 @@ export class DiagramBuilder {
   }
 
   /**
-   * Generic wire constructor. `sig` defaults to TERM since most manually
-   * wired ports (term output/freeVar, atom/ref arg) accept TERM; a wire
+   * Generic wire constructor. `sig` defaults to IOTA since most manually
+   * wired ports (term output/freeVar, atom/ref arg) accept IOTA; a wire
    * touching an atom's head or a ref's arg on a relational sig must pass its
    * sig explicitly — mkDiagram enforces the match at every endpoint.
    */
-  wire(scope: RegionId, endpoints: Endpoint[], sig: Sig = TERM): WireId {
+  wire(scope: RegionId, endpoints: Endpoint[], sig: Sig = IOTA): WireId {
     const id = `w${this.wireCount++}`
     this.wires[id] = { scope, sig, endpoints }
     return id

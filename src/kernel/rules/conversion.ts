@@ -5,7 +5,7 @@ import type { ConversionCertificate } from '../term/certificate'
 import { checkConversion } from '../term/certificate'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { TERM } from '../diagram/sig'
+import { IOTA } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt } from './access'
@@ -72,7 +72,7 @@ function replaceNodeTerm(
       wires[target] = { scope: w.scope, sig: w.sig, endpoints: [...w.endpoints, ep] }
     } else {
       const fresh = freshId(new Set(Object.keys(wires)), `${nodeId}_${name}`, reservation?.wires)
-      wires[fresh] = { scope: node.region, sig: TERM, endpoints: [ep] }
+      wires[fresh] = { scope: node.region, sig: IOTA, endpoints: [ep] }
     }
   }
   const nodes: Record<NodeId, DiagramNode> = {

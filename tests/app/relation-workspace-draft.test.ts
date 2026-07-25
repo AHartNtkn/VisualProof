@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { mkDiagram, type Diagram, type Endpoint, type Wire } from '../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { bvar, lam } from '../../src/kernel/term/term'
 import {
   addRelationRef,
@@ -35,17 +35,17 @@ function hostWithRelWire(arity = 2): Diagram {
     root: 'r0',
     regions: { r0: { kind: 'sheet' } },
     wires: {
-      target: { scope: 'r0', sig: relSig(Array.from({ length: arity }, () => TERM)), endpoints: [] },
-      h1: { scope: 'r0', sig: TERM, endpoints: [] },
-      h2: { scope: 'r0', sig: TERM, endpoints: [] },
-      h3: { scope: 'r0', sig: TERM, endpoints: [] },
+      target: { scope: 'r0', sig: relSig(Array.from({ length: arity }, () => IOTA)), endpoints: [] },
+      h1: { scope: 'r0', sig: IOTA, endpoints: [] },
+      h2: { scope: 'r0', sig: IOTA, endpoints: [] },
+      h3: { scope: 'r0', sig: IOTA, endpoints: [] },
     },
   })
 }
 
 function withLooseDraftWires(draft: ReturnType<typeof beginAbstractionDraft>, ids: readonly string[]) {
   const wires: Record<string, Wire> = Object.fromEntries(
-    ids.map((id) => [id, { scope: 'r0', sig: TERM, endpoints: [] }]),
+    ids.map((id) => [id, { scope: 'r0', sig: IOTA, endpoints: [] }]),
   )
   return replaceRelationDiagram(draft, mkDiagram({
     root: 'r0',
@@ -64,10 +64,10 @@ function twoTermDiagram(joined = false): Diagram {
       n2: { kind: 'term', region: 'r0', term: lam(bvar(0)) },
     },
     wires: joined
-      ? { w1: { scope: 'r0', sig: TERM, endpoints: [output('n1'), output('n2')] } }
+      ? { w1: { scope: 'r0', sig: IOTA, endpoints: [output('n1'), output('n2')] } }
       : {
-          w1: { scope: 'r0', sig: TERM, endpoints: [output('n1')] },
-          w2: { scope: 'r0', sig: TERM, endpoints: [output('n2')] },
+          w1: { scope: 'r0', sig: IOTA, endpoints: [output('n1')] },
+          w2: { scope: 'r0', sig: IOTA, endpoints: [output('n2')] },
         },
   })
 }
@@ -138,7 +138,7 @@ describe('relation workspace port model', () => {
       root: current.diagram.root,
       regions: { ...current.diagram.regions },
       nodes: { ...current.diagram.nodes },
-      wires: { ...current.diagram.wires, extra: { scope: 'r0', sig: TERM, endpoints: [] } },
+      wires: { ...current.diagram.wires, extra: { scope: 'r0', sig: IOTA, endpoints: [] } },
     })
     draft = replaceRelationDiagram(draft, diagram)
     draft = insertOptionalPort(draft, 'extra', 0)
@@ -170,7 +170,7 @@ describe('relation workspace port model', () => {
     substitution = replaceRelationDiagram(substitution, mkDiagram({
       root: subCurrent.diagram.root,
       regions: { ...subCurrent.diagram.regions },
-      wires: { ...subCurrent.diagram.wires, parameter: { scope: 'r0', sig: TERM, endpoints: [] } },
+      wires: { ...subCurrent.diagram.wires, parameter: { scope: 'r0', sig: IOTA, endpoints: [] } },
     }))
     substitution = insertOptionalPort(substitution, 'parameter', 0, 'h1')
     expect(materializeRelationDraft(substitution)).toEqual(
@@ -232,8 +232,8 @@ describe('relation workspace port model', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n1: { kind: 'term', region: 'r0', term: lam(bvar(0)) } },
       wires: {
-        arg1: { scope: 'r0', sig: TERM, endpoints: [] },
-        result: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+        arg1: { scope: 'r0', sig: IOTA, endpoints: [] },
+        result: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
 
@@ -338,7 +338,7 @@ describe('relation workspace port model', () => {
       { kind: 'term', region: 'r0', term: lam(bvar(0)), freePorts: [] },
     ])
     expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
-      { scope: 'r0', sig: TERM, endpoints: [{ node: 'n', port: { kind: 'output' } }] },
+      { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n', port: { kind: 'output' } }] },
     ])
     expect(currentRelationDraft(spawned).ports).toEqual([])
   })
@@ -346,15 +346,15 @@ describe('relation workspace port model', () => {
   test('spawning a named relation commits its arity and argument wiring in one snapshot', () => {
     const draft = beginAbstractionDraft(hostWithRelWire())
 
-    const spawned = addRelationRef(draft, 'named-relation', relSig([TERM, TERM]))
+    const spawned = addRelationRef(draft, 'named-relation', relSig([IOTA, IOTA]))
 
     expectOneSnapshot(draft, spawned)
     expect(Object.values(currentRelationDraft(spawned).diagram.nodes)).toEqual([
-      { kind: 'ref', region: 'r0', defId: 'named-relation', sig: relSig([TERM, TERM]) },
+      { kind: 'ref', region: 'r0', defId: 'named-relation', sig: relSig([IOTA, IOTA]) },
     ])
     expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
-      { scope: 'r0', sig: TERM, endpoints: [{ node: 'n', port: { kind: 'arg', index: 0 } }] },
-      { scope: 'r0', sig: TERM, endpoints: [{ node: 'n', port: { kind: 'arg', index: 1 } }] },
+      { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n', port: { kind: 'arg', index: 0 } }] },
+      { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n', port: { kind: 'arg', index: 1 } }] },
     ])
     expect(currentRelationDraft(spawned).ports).toEqual([])
   })
@@ -399,7 +399,7 @@ describe('relation workspace port model', () => {
     expectOneSnapshot(draft, deleted)
     expect(currentRelationDraft(deleted).diagram.nodes).toEqual({ n2: before.diagram.nodes.n2 })
     expect(currentRelationDraft(deleted).diagram.wires).toEqual({
-      w1: { scope: 'r0', sig: TERM, endpoints: [] },
+      w1: { scope: 'r0', sig: IOTA, endpoints: [] },
       w2: before.diagram.wires.w2,
     })
     expect(currentRelationDraft(deleted).ports).toEqual(before.ports)
@@ -443,8 +443,8 @@ describe('relation workspace port model', () => {
 
     expectOneSnapshot(draft, severed)
     expect(currentRelationDraft(severed).diagram.wires).toEqual({
-      w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n2', port: { kind: 'output' } }] },
-      w: { scope: 'r0', sig: TERM, endpoints: [endpoint] },
+      w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n2', port: { kind: 'output' } }] },
+      w: { scope: 'r0', sig: IOTA, endpoints: [endpoint] },
     })
     expect(currentRelationDraft(severed).ports).toEqual([])
   })

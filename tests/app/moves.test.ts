@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { applyAction } from '../../src/kernel/proof/action'
 import { parseTerm } from '../../src/kernel/term/parse'
@@ -510,8 +510,8 @@ describe('proof move parameters', () => {
   it('commits the complete named-relation step resolved against the live relation wire', () => {
     const builder = new DiagramBuilder()
     const guard = builder.cut(builder.root)
-    const atom = builder.atom(guard, relSig([TERM, TERM]))
-    const wire = builder.wire(guard, [{ node: atom, port: { kind: 'head' } }], relSig([TERM, TERM]))
+    const atom = builder.atom(guard, relSig([IOTA, IOTA]))
+    const wire = builder.wire(guard, [{ node: atom, port: { kind: 'head' } }], relSig([IOTA, IOTA]))
     builder.wire(guard, [{ node: atom, port: { kind: 'arg', index: 0 } }])
     builder.wire(guard, [{ node: atom, port: { kind: 'arg', index: 1 } }])
     const diagram = builder.build()

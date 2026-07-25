@@ -32,7 +32,7 @@ import { termShapeKey, positionalPortKey } from './shape'
  * explored, so the minimum is invariant — this is what makes the labeling a
  * COMPLETE invariant (equal forms iff isomorphic) rather than a heuristic.
  *
- * TERM COMPARISON IS EXACT (USER RULING): free ports name-blind by positional
+ * IOTA COMPARISON IS EXACT (USER RULING): free ports name-blind by positional
  * role, but bodies compared by structural de Bruijn identity — never modulo
  * beta-eta. The labeling is therefore total, deterministic, and fuel-free.
  * Beta-eta looseness lives only in the matcher's node-compatibility, never in

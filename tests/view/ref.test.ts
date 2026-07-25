@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 import { referenceDisplayLabel } from '../../src/view/paint'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 describe('reference-node rendering', () => {
   it('renders the defId as a disc label (the named-node vocabulary, never text on anatomy)', () => {

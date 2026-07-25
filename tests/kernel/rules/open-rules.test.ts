@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
@@ -15,7 +15,7 @@ function host() {
   const h = new DiagramBuilder()
   const outer = h.cut(h.root)
   const n = h.termNode(outer, p('\\x. x'))
-  const a = h.atom(outer, relSig([TERM]))
+  const a = h.atom(outer, relSig([IOTA]))
   const w = h.wire(outer, [
     { node: n, port: { kind: 'output' } },
     { node: a, port: { kind: 'arg', index: 0 } },
@@ -54,7 +54,7 @@ describe('open iteration / deiteration', () => {
   it('deiteration justification requires a matching occurrence: a lone application does not justify', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x'))
-    const a1 = h.atom(h.root, relSig([TERM]))
+    const a1 = h.atom(h.root, relSig([IOTA]))
     h.wire(h.root, [
       { node: n1, port: { kind: 'output' } },
       { node: a1, port: { kind: 'arg', index: 0 } },

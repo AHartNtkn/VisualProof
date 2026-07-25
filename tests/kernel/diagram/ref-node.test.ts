@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram, requiredPorts } from '../../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import type { RelSig } from '../../../src/kernel/diagram/sig'
 import { diagramToJson, diagramFromJson } from '../../../src/kernel/diagram/json'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
@@ -15,9 +15,9 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 
 const p = (s: string) => parseTerm(s)
 
-/** An N-ary relation signature of all-TERM arguments, the sig-model successor
+/** An N-ary relation signature of all-IOTA arguments, the sig-model successor
  *  of a bare arity number. */
-const arity = (n: number): RelSig => relSig(Array.from({ length: n }, () => TERM))
+const arity = (n: number): RelSig => relSig(Array.from({ length: n }, () => IOTA))
 
 /** A single ℕ(a)-shaped reference: one ref node of the given arity, its arg
  *  wires auto-attached as singleton bare wires. */
@@ -49,7 +49,7 @@ describe('ref node — mkDiagram validation', () => {
     expect(() => mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
-      nodes: { n0: { kind: 'ref', region: 'r0', defId: 'Nat', sig: TERM as never } },
+      nodes: { n0: { kind: 'ref', region: 'r0', defId: 'Nat', sig: IOTA as never } },
       wires: {},
     })).toThrowError(/ref node 'n0' sig must be a relation signature/)
   })
@@ -60,7 +60,7 @@ describe('ref node — mkDiagram validation', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'ref', region: 'r0', defId: 'Nat', sig: { kind: 'rel', args: [{ kind: 'bogus' }] } as never } },
       wires: {},
-    })).toThrowError(/ref node 'n0' sig:.*"kind" must be "term" or "rel"/)
+    })).toThrowError(/ref node 'n0' sig:.*"kind" must be "iota" or "rel"/)
   })
 
   it('rejects an endpoint on an arg index >= arity', () => {
@@ -69,8 +69,8 @@ describe('ref node — mkDiagram validation', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'ref', region: 'r0', defId: 'Nat', sig: arity(1) } },
       wires: {
-        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }] },
-        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'arg', index: 1 } }] },
+        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }] },
+        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'arg', index: 1 } }] },
       },
     })).toThrow(/non-existent port 'a:1'/)
   })
@@ -80,7 +80,7 @@ describe('ref node — mkDiagram validation', () => {
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'ref', region: 'r0', defId: 'Nat', sig: arity(0) } },
-      wires: { w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+      wires: { w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
     })).toThrow(/non-existent port 'out'/)
   })
 })

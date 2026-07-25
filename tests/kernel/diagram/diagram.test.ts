@@ -5,7 +5,7 @@ import {
   type Region, type DiagramNode, type DiagramNodeInput, type Wire,
 } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { TERM, relSig, sigKey } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigKey } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
@@ -27,12 +27,12 @@ describe('requiredPorts', () => {
   })
 
   it('gives head plus arg ports 0..arity-1 for atoms, read from the inline sig', () => {
-    const node: DiagramNode = { kind: 'atom', region: 'r0', sig: relSig([TERM, TERM]) }
+    const node: DiagramNode = { kind: 'atom', region: 'r0', sig: relSig([IOTA, IOTA]) }
     expect(requiredPorts(node).map(portKey)).toEqual(['hd', 'a:0', 'a:1'])
   })
 
   it('gives arg ports 0..arity-1 for refs, read from the inline sig (no head, no output)', () => {
-    const node: DiagramNode = { kind: 'ref', region: 'r0', defId: 'R', sig: relSig([TERM, TERM, TERM]) }
+    const node: DiagramNode = { kind: 'ref', region: 'r0', defId: 'R', sig: relSig([IOTA, IOTA, IOTA]) }
     expect(requiredPorts(node).map(portKey)).toEqual(['a:0', 'a:1', 'a:2'])
   })
 
@@ -43,25 +43,25 @@ describe('requiredPorts', () => {
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
         wires: {
-          aw: { scope: 'c0', sig: TERM, endpoints: [] },
-          pw0: { scope: 'c0', sig: TERM, endpoints: [] },
-          pw1: { scope: 'c0', sig: relSig([TERM]), endpoints: [] },
+          aw: { scope: 'c0', sig: IOTA, endpoints: [] },
+          pw0: { scope: 'c0', sig: IOTA, endpoints: [] },
+          pw1: { scope: 'c0', sig: relSig([IOTA]), endpoints: [] },
         },
       }),
       ['aw', 'pw0', 'pw1'],
     )
-    const node: DiagramNode = { kind: 'body', region: 'r0', sig: relSig([TERM]), content }
+    const node: DiagramNode = { kind: 'body', region: 'r0', sig: relSig([IOTA]), content }
     expect(requiredPorts(node).map(portKey)).toEqual(['out', 'v:p0', 'v:p1'])
   })
 })
 
 describe('portSig', () => {
-  it('returns TERM for every port of a term node', () => {
+  it('returns IOTA for every port of a term node', () => {
     const node: DiagramNode = {
       kind: 'term', region: 'r0', term: p('\\x. y x'), freePorts: ['y'],
     }
-    expect(portSig(node, { kind: 'output' })).toBe(TERM)
-    expect(portSig(node, { kind: 'freeVar', name: 'y' })).toBe(TERM)
+    expect(portSig(node, { kind: 'output' })).toBe(IOTA)
+    expect(portSig(node, { kind: 'freeVar', name: 'y' })).toBe(IOTA)
   })
 
   it('throws for a freeVar port the term node does not have', () => {
@@ -72,16 +72,16 @@ describe('portSig', () => {
   })
 
   it('returns the whole sig for an atom head and the arg sig for each arg', () => {
-    const sig = relSig([relSig([TERM]), TERM])
+    const sig = relSig([relSig([IOTA]), IOTA])
     const node: DiagramNode = { kind: 'atom', region: 'r0', sig }
-    expect(sigKey(portSig(node, { kind: 'head' }))).toBe('((t),t)')
-    expect(sigKey(portSig(node, { kind: 'arg', index: 0 }))).toBe('(t)')
-    expect(sigKey(portSig(node, { kind: 'arg', index: 1 }))).toBe('t')
+    expect(sigKey(portSig(node, { kind: 'head' }))).toBe('((i),i)')
+    expect(sigKey(portSig(node, { kind: 'arg', index: 0 }))).toBe('(i)')
+    expect(sigKey(portSig(node, { kind: 'arg', index: 1 }))).toBe('i')
   })
 
   it('returns the arg sig for a ref arg port (refs have no head)', () => {
-    const node: DiagramNode = { kind: 'ref', region: 'r0', defId: 'R', sig: relSig([relSig([TERM])]) }
-    expect(sigKey(portSig(node, { kind: 'arg', index: 0 }))).toBe('(t)')
+    const node: DiagramNode = { kind: 'ref', region: 'r0', defId: 'R', sig: relSig([relSig([IOTA])]) }
+    expect(sigKey(portSig(node, { kind: 'arg', index: 0 }))).toBe('(i)')
     expect(() => portSig(node, { kind: 'head' })).toThrowError(DiagramError)
   })
 
@@ -91,69 +91,69 @@ describe('portSig', () => {
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
         wires: {
-          aw: { scope: 'c0', sig: TERM, endpoints: [] },
-          pw0: { scope: 'c0', sig: relSig([TERM]), endpoints: [] },
+          aw: { scope: 'c0', sig: IOTA, endpoints: [] },
+          pw0: { scope: 'c0', sig: relSig([IOTA]), endpoints: [] },
         },
       }),
       ['aw', 'pw0'],
     )
-    const node: DiagramNode = { kind: 'body', region: 'r0', sig: relSig([TERM]), content }
-    expect(sigKey(portSig(node, { kind: 'output' }))).toBe('(t)')
-    expect(sigKey(portSig(node, { kind: 'freeVar', name: 'p0' }))).toBe('(t)')
+    const node: DiagramNode = { kind: 'body', region: 'r0', sig: relSig([IOTA]), content }
+    expect(sigKey(portSig(node, { kind: 'output' }))).toBe('(i)')
+    expect(sigKey(portSig(node, { kind: 'freeVar', name: 'p0' }))).toBe('(i)')
   })
 })
 
 describe('mkDiagram (happy path)', () => {
-  it('constructs a valid diagram: atom X(t,t) with a term node feeding an arg', () => {
+  it('constructs a valid diagram: atom X(i,i) with a term node feeding an arg', () => {
     const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
     const nodes: Record<string, DiagramNodeInput> = {
       n0: { kind: 'term', region: 'r0', term: p('\\x. x') },
-      n1: { kind: 'atom', region: 'r0', sig: relSig([TERM, TERM]) },
+      n1: { kind: 'atom', region: 'r0', sig: relSig([IOTA, IOTA]) },
     }
     const wires: Record<string, Wire> = {
-      wh: { scope: 'r0', sig: relSig([TERM, TERM]), endpoints: [{ node: 'n1', port: { kind: 'head' } }] },
+      wh: { scope: 'r0', sig: relSig([IOTA, IOTA]), endpoints: [{ node: 'n1', port: { kind: 'head' } }] },
       w0: {
-        scope: 'r0', sig: TERM,
+        scope: 'r0', sig: IOTA,
         endpoints: [
           { node: 'n0', port: { kind: 'output' } },
           { node: 'n1', port: { kind: 'arg', index: 0 } },
         ],
       },
-      w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n1', port: { kind: 'arg', index: 1 } }] },
+      w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n1', port: { kind: 'arg', index: 1 } }] },
     }
     const d = mkDiagram({ root: 'r0', regions, nodes, wires })
     expect(d.root).toBe('r0')
     expect(Object.isFrozen(d)).toBe(true)
     expect(Object.isFrozen(d.nodes)).toBe(true)
-    expect(d.wires['wh']?.sig && sigKey(d.wires['wh'].sig)).toBe('(t,t)')
+    expect(d.wires['wh']?.sig && sigKey(d.wires['wh'].sig)).toBe('(i,i)')
   })
 
   it('accepts a depth-2 atom: Arrow-sort head wire, two order-1 arg wires, one term arg wire', () => {
-    // sig ((t),(t),t): order 2. head carries the whole sig; args carry (t),(t),t.
-    const atomSig = relSig([relSig([TERM]), relSig([TERM]), TERM])
+    // sig ((i),(i),i): order 2. head carries the whole sig; args carry (i),(i),i.
+    const atomSig = relSig([relSig([IOTA]), relSig([IOTA]), IOTA])
     const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
     const nodes: Record<string, DiagramNodeInput> = {
       a: { kind: 'atom', region: 'r0', sig: atomSig },
     }
     const wires: Record<string, Wire> = {
       wh: { scope: 'r0', sig: atomSig, endpoints: [{ node: 'a', port: { kind: 'head' } }] },
-      w0: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
-      w1: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'a', port: { kind: 'arg', index: 1 } }] },
-      w2: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 2 } }] },
+      w0: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
+      w1: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'a', port: { kind: 'arg', index: 1 } }] },
+      w2: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 2 } }] },
     }
     const d = mkDiagram({ root: 'r0', regions, nodes, wires })
-    expect(sigKey(d.wires['wh']!.sig)).toBe('((t),(t),t)')
+    expect(sigKey(d.wires['wh']!.sig)).toBe('((i),(i),i)')
   })
 
   it('constructs a valid diagram with a ref node (higher-sort arg)', () => {
-    const refSig = relSig([relSig([TERM])])
+    const refSig = relSig([relSig([IOTA])])
     const d = mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
       nodes: { r: { kind: 'ref', region: 'r0', defId: 'R', sig: refSig } },
-      wires: { w0: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'r', port: { kind: 'arg', index: 0 } }] } },
+      wires: { w0: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'r', port: { kind: 'arg', index: 0 } }] } },
     })
-    expect(sigKey((d.nodes['r'] as { sig: typeof refSig }).sig)).toBe('((t))')
+    expect(sigKey((d.nodes['r'] as { sig: typeof refSig }).sig)).toBe('((i))')
   })
 
   it('constructs a valid diagram with a body node exposing a param as a freeVar port', () => {
@@ -162,20 +162,20 @@ describe('mkDiagram (happy path)', () => {
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
         wires: {
-          aw: { scope: 'c0', sig: TERM, endpoints: [] },
-          pw: { scope: 'c0', sig: TERM, endpoints: [] },
+          aw: { scope: 'c0', sig: IOTA, endpoints: [] },
+          pw: { scope: 'c0', sig: IOTA, endpoints: [] },
         },
       }),
       ['aw', 'pw'],
     )
-    const bodySig = relSig([TERM])
+    const bodySig = relSig([IOTA])
     const d = mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
       nodes: { b: { kind: 'body', region: 'r0', sig: bodySig, content } },
       wires: {
         wout: { scope: 'r0', sig: bodySig, endpoints: [{ node: 'b', port: { kind: 'output' } }] },
-        wp0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'b', port: { kind: 'freeVar', name: 'p0' } }] },
+        wp0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b', port: { kind: 'freeVar', name: 'p0' } }] },
       },
     })
     expect(d.nodes['b']?.kind).toBe('body')
@@ -185,7 +185,7 @@ describe('mkDiagram (happy path)', () => {
     const d = mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
-      wires: { w0: { scope: 'r0', sig: TERM, endpoints: [] } },
+      wires: { w0: { scope: 'r0', sig: IOTA, endpoints: [] } },
     })
     expect(d.wires['w0']?.endpoints).toHaveLength(0)
   })
@@ -197,9 +197,9 @@ describe('mkDiagram (happy path)', () => {
       'n0 v:x': { kind: 'term', region: 'r0', term: p('\\x. x') },
     }
     const wires: Record<string, Wire> = {
-      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-      w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x out' } }] },
-      w2: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0 v:x', port: { kind: 'output' } }] },
+      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+      w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x out' } }] },
+      w2: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0 v:x', port: { kind: 'output' } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions, nodes, wires })).not.toThrow()
   })
@@ -215,7 +215,7 @@ describe('mkDiagram (happy path)', () => {
     }
     const wires: Record<string, Wire> = {
       w0: {
-        scope: 'r0', sig: TERM,
+        scope: 'r0', sig: IOTA,
         endpoints: [
           { node: 'n0', port: { kind: 'output' } },
           { node: 'n1', port: { kind: 'output' } },
@@ -231,9 +231,9 @@ describe('mkDiagram (happy path)', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'term', region: 'r0', term: p('y x'), freePorts: ['y', 'x'] } },
       wires: {
-        wo: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'y' } }] },
-        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
+        wo: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'y' } }] },
+        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
       },
     })
     const node = d.nodes['n0'] as Extract<DiagramNode, { kind: 'term' }>
@@ -244,40 +244,40 @@ describe('mkDiagram (happy path)', () => {
 describe('mkDiagram (sort checking)', () => {
   it('rejects a wire whose sig does not match the atom head port sort', () => {
     const nodes: Record<string, DiagramNodeInput> = {
-      a: { kind: 'atom', region: 'r0', sig: relSig([TERM, TERM]) },
+      a: { kind: 'atom', region: 'r0', sig: relSig([IOTA, IOTA]) },
     }
     const wires: Record<string, Wire> = {
-      wh: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
-      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
-      w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 1 } }] },
+      wh: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
+      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
+      w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 1 } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
-      .toThrowError(/wire 'wh' sig '\(t\)' does not match port 'hd' of node 'a' expecting '\(t,t\)'/)
+      .toThrowError(/wire 'wh' sig '\(i\)' does not match port 'hd' of node 'a' expecting '\(i,i\)'/)
   })
 
-  it('rejects a plain term wire (t) plugged into an order-1 arg port (t)', () => {
-    // atom sig ((t)): its single arg port accepts an order-1 relation, not an individual.
-    const atomSig = relSig([relSig([TERM])])
+  it('rejects a plain iota wire (i) plugged into an order-1 arg port (i)', () => {
+    // atom sig ((i)): its single arg port accepts an order-1 relation, not an individual.
+    const atomSig = relSig([relSig([IOTA])])
     const nodes: Record<string, DiagramNodeInput> = {
       a: { kind: 'atom', region: 'r0', sig: atomSig },
     }
     const wires: Record<string, Wire> = {
       wh: { scope: 'r0', sig: atomSig, endpoints: [{ node: 'a', port: { kind: 'head' } }] },
-      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
+      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
-      .toThrowError(/wire 'w0' sig 't' does not match port 'a:0' of node 'a' expecting '\(t\)'/)
+      .toThrowError(/wire 'w0' sig 'i' does not match port 'a:0' of node 'a' expecting '\(i\)'/)
   })
 
   it('rejects a wire whose sig does not match a ref arg port sort', () => {
     const nodes: Record<string, DiagramNodeInput> = {
-      r: { kind: 'ref', region: 'r0', defId: 'R', sig: relSig([relSig([TERM])]) },
+      r: { kind: 'ref', region: 'r0', defId: 'R', sig: relSig([relSig([IOTA])]) },
     }
     const wires: Record<string, Wire> = {
-      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'r', port: { kind: 'arg', index: 0 } }] },
+      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'r', port: { kind: 'arg', index: 0 } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
-      .toThrowError(/wire 'w0' sig 't' does not match port 'a:0' of node 'r' expecting '\(t\)'/)
+      .toThrowError(/wire 'w0' sig 'i' does not match port 'a:0' of node 'r' expecting '\(i\)'/)
   })
 
   it('rejects a wire whose sig does not match a body param (freeVar) port sort', () => {
@@ -286,23 +286,23 @@ describe('mkDiagram (sort checking)', () => {
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
         wires: {
-          aw: { scope: 'c0', sig: TERM, endpoints: [] },
-          pw: { scope: 'c0', sig: relSig([TERM]), endpoints: [] },
+          aw: { scope: 'c0', sig: IOTA, endpoints: [] },
+          pw: { scope: 'c0', sig: relSig([IOTA]), endpoints: [] },
         },
       }),
       ['aw', 'pw'],
     )
-    const bodySig = relSig([TERM])
+    const bodySig = relSig([IOTA])
     const nodes: Record<string, DiagramNodeInput> = {
       b: { kind: 'body', region: 'r0', sig: bodySig, content },
     }
     const wires: Record<string, Wire> = {
       wout: { scope: 'r0', sig: bodySig, endpoints: [{ node: 'b', port: { kind: 'output' } }] },
-      // p0 param wire in content is (t); feeding a plain t here is a sort error.
-      wp0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'b', port: { kind: 'freeVar', name: 'p0' } }] },
+      // p0 param wire in content is (i); feeding a plain i here is a sort error.
+      wp0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b', port: { kind: 'freeVar', name: 'p0' } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
-      .toThrowError(/wire 'wp0' sig 't' does not match port 'v:p0' of node 'b' expecting '\(t\)'/)
+      .toThrowError(/wire 'wp0' sig 'i' does not match port 'v:p0' of node 'b' expecting '\(i\)'/)
   })
 
   it('rejects a wire whose sig does not match a body output port sort', () => {
@@ -310,19 +310,19 @@ describe('mkDiagram (sort checking)', () => {
       mkDiagram({
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
-        wires: { aw: { scope: 'c0', sig: TERM, endpoints: [] } },
+        wires: { aw: { scope: 'c0', sig: IOTA, endpoints: [] } },
       }),
       ['aw'],
     )
-    const bodySig = relSig([TERM])
+    const bodySig = relSig([IOTA])
     const nodes: Record<string, DiagramNodeInput> = {
       b: { kind: 'body', region: 'r0', sig: bodySig, content },
     }
     const wires: Record<string, Wire> = {
-      wout: { scope: 'r0', sig: TERM, endpoints: [{ node: 'b', port: { kind: 'output' } }] },
+      wout: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b', port: { kind: 'output' } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
-      .toThrowError(/wire 'wout' sig 't' does not match port 'out' of node 'b' expecting '\(t\)'/)
+      .toThrowError(/wire 'wout' sig 'i' does not match port 'out' of node 'b' expecting '\(i\)'/)
   })
 })
 
@@ -332,13 +332,13 @@ describe('mkDiagram (body content coherence)', () => {
       mkDiagram({
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
-        wires: { aw: { scope: 'c0', sig: TERM, endpoints: [] } },
+        wires: { aw: { scope: 'c0', sig: IOTA, endpoints: [] } },
       }),
       ['aw'],
     )
     // sig arity 2 but boundary length 1
     const nodes: Record<string, DiagramNodeInput> = {
-      b: { kind: 'body', region: 'r0', sig: relSig([TERM, TERM]), content },
+      b: { kind: 'body', region: 'r0', sig: relSig([IOTA, IOTA]), content },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes }))
       .toThrowError(/body node 'b' boundary length 1 is shorter than sig arity 2/)
@@ -349,16 +349,16 @@ describe('mkDiagram (body content coherence)', () => {
       mkDiagram({
         root: 'c0',
         regions: { c0: { kind: 'sheet' } },
-        wires: { aw: { scope: 'c0', sig: TERM, endpoints: [] } },
+        wires: { aw: { scope: 'c0', sig: IOTA, endpoints: [] } },
       }),
       ['aw'],
     )
-    // boundary[0] is (t) in content? no — it is t; sig arg 0 declares (t): mismatch.
+    // boundary[0] is (i) in content? no — it is i; sig arg 0 declares (i): mismatch.
     const nodes: Record<string, DiagramNodeInput> = {
-      b: { kind: 'body', region: 'r0', sig: relSig([relSig([TERM])]), content },
+      b: { kind: 'body', region: 'r0', sig: relSig([relSig([IOTA])]), content },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes }))
-      .toThrowError(/body node 'b' boundary\[0\] wire 'aw' sig 't' does not match sig arg 0 '\(t\)'/)
+      .toThrowError(/body node 'b' boundary\[0\] wire 'aw' sig 'i' does not match sig arg 0 '\(i\)'/)
   })
 })
 
@@ -383,10 +383,10 @@ describe('mkDiagram (structural rejections)', () => {
 
   it('rejects a required port not attached to any wire', () => {
     const nodes: Record<string, DiagramNodeInput> = {
-      a: { kind: 'atom', region: 'r0', sig: relSig([TERM]) },
+      a: { kind: 'atom', region: 'r0', sig: relSig([IOTA]) },
     }
     const wires: Record<string, Wire> = {
-      wh: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
+      wh: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
       // arg 0 left unattached
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
@@ -395,12 +395,12 @@ describe('mkDiagram (structural rejections)', () => {
 
   it('rejects the same port attached to two wires', () => {
     const nodes: Record<string, DiagramNodeInput> = {
-      a: { kind: 'atom', region: 'r0', sig: relSig([TERM]) },
+      a: { kind: 'atom', region: 'r0', sig: relSig([IOTA]) },
     }
     const wires: Record<string, Wire> = {
-      wh: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
-      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
-      w0b: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
+      wh: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
+      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
+      w0b: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
       .toThrowError(/port 'a:0' of node 'a' is attached to two wires/)
@@ -408,12 +408,12 @@ describe('mkDiagram (structural rejections)', () => {
 
   it('rejects an endpoint referencing a non-existent port', () => {
     const nodes: Record<string, DiagramNodeInput> = {
-      a: { kind: 'atom', region: 'r0', sig: relSig([TERM]) },
+      a: { kind: 'atom', region: 'r0', sig: relSig([IOTA]) },
     }
     const wires: Record<string, Wire> = {
-      wh: { scope: 'r0', sig: relSig([TERM]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
-      w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
-      wbad: { scope: 'r0', sig: TERM, endpoints: [{ node: 'a', port: { kind: 'arg', index: 5 } }] },
+      wh: { scope: 'r0', sig: relSig([IOTA]), endpoints: [{ node: 'a', port: { kind: 'head' } }] },
+      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 0 } }] },
+      wbad: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'arg', index: 5 } }] },
     }
     expect(() => mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes, wires }))
       .toThrowError(/non-existent port 'a:5' of node 'a'/)

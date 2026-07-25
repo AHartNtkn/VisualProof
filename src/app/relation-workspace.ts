@@ -4,7 +4,7 @@ import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { parseTerm } from '../kernel/term/parse'
-import { relSig, TERM } from '../kernel/diagram/sig'
+import { relSig, IOTA } from '../kernel/diagram/sig'
 import { applyFission } from '../kernel/rules/fusion'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
@@ -674,7 +674,7 @@ export class RelationWorkspace {
     this.#spawn = new SpawnCascade({
       host: host.mount,
       spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => spawnTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
-      spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, relSig(Array.from({ length: arity }, () => TERM))), at.world),
+      spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, relSig(Array.from({ length: arity }, () => IOTA))), at.world),
       spawnBoundPredicate: ({ source, wire, invocation: at }) => source === 'host'
         ? this.#importHostRelation(wire, at.region, at.world)
         : this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, wire), at.world),

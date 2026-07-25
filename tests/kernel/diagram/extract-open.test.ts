@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import { TERM, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
 
 const p = (s: string) => parseTerm(s)
 
@@ -19,7 +19,7 @@ describe('extraction with externally-scoped relation lines', () => {
     // ∃R at the root; inside a cut, R(t). Select the cut: R's line crosses the
     // boundary. (Counterpart of "builds a stub-bubble layer for an externally
     // bound atom" — the stub is now the head wire, carrying the relational sig.)
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const t = b.termNode(cut, p('\\x. x'))
@@ -27,7 +27,7 @@ describe('extraction with externally-scoped relation lines', () => {
     b.wire(cut, [
       { node: t, port: { kind: 'output' } },
       { node: a, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const headWire = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], S)
     const d = b.build()
     const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
@@ -52,7 +52,7 @@ describe('extraction with externally-scoped relation lines', () => {
   it('keeps fully-internal extractions with no boundary stubs', () => {
     // Counterpart of "keeps closed extractions exactly as before (no stubs)":
     // every wire of the selected atom is scoped inside the selection.
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const a = b.atom(cut, S)
@@ -67,7 +67,7 @@ describe('extraction with externally-scoped relation lines', () => {
   it('orders multiple relational stubs deterministically by host wire id', () => {
     // Counterpart of "orders multiple external binders outermost-first": with no
     // binder chain, multiple crossing relation lines order by host wire id.
-    const S1 = relSig([TERM])
+    const S1 = relSig([IOTA])
     const S2 = relSig([])
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
@@ -90,7 +90,7 @@ describe('extraction with externally-scoped relation lines', () => {
   it('an arg wire crossing the boundary is a boundary stub exactly like a head wire', () => {
     // Counterpart of "boundary wires stay root-scoped with endpoints inside the
     // stub": arg and head wires are treated uniformly.
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const b = new DiagramBuilder()
     const t = b.termNode(b.root, p('\\x. x'))
     const cut = b.cut(b.root)
@@ -100,7 +100,7 @@ describe('extraction with externally-scoped relation lines', () => {
     b.wire(b.root, [
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: t, port: { kind: 'output' } },
-    ], TERM)
+    ], IOTA)
     const d = b.build()
     const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
     const ex = extractSubgraph(d, sel)
@@ -108,7 +108,7 @@ describe('extraction with externally-scoped relation lines', () => {
     const pd = ex.pattern.diagram
     for (const bw of ex.pattern.boundary) {
       expect(pd.wires[bw]!.scope).toBe(pd.root)
-      expect(sigEquals(pd.wires[bw]!.sig, TERM)).toBe(true) // an arg line is a TERM line
+      expect(sigEquals(pd.wires[bw]!.sig, IOTA)).toBe(true) // an arg line is a IOTA line
     }
   })
 })

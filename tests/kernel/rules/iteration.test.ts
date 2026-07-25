@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
@@ -178,9 +178,9 @@ describe('applyDeiteration', () => {
     // that justification requires fails on the head wire alone, and the
     // removal is correctly refused as unjustified.
     const h = new DiagramBuilder()
-    const aJ = h.atom(h.root, relSig([TERM]))
+    const aJ = h.atom(h.root, relSig([IOTA]))
     const c1 = h.cut(h.root)
-    const aT = h.atom(c1, relSig([TERM]))
+    const aT = h.atom(c1, relSig([IOTA]))
     h.wire(h.root, [
       { node: aJ, port: { kind: 'arg', index: 0 } },
       { node: aT, port: { kind: 'arg', index: 0 } },

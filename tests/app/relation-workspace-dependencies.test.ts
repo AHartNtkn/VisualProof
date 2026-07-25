@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagram, type Diagram, type WireId } from '../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { planCopy } from '../../src/app/copy-planner'
 import {
@@ -45,9 +45,9 @@ function nestedHost(): {
   readonly target: WireId
 } {
   const builder = new DiagramBuilder()
-  const outer = builder.relWire(builder.root, relSig([TERM]))
+  const outer = builder.relWire(builder.root, relSig([IOTA]))
   const cut = builder.cut(builder.root)
-  const inner = builder.relWire(cut, relSig([TERM, TERM]))
+  const inner = builder.relWire(cut, relSig([IOTA, IOTA]))
   const target = builder.relWire(cut, relSig([]))
   return { diagram: builder.build(), outer, inner, target }
 }
@@ -155,13 +155,13 @@ describe('relation workspace outer-bound dependencies', () => {
   it('turns a relational crossing into a deduped param port while keeping a term crossing loose', () => {
     const builder = new DiagramBuilder()
     const guard = builder.cut(builder.root)
-    const atom = builder.atom(guard, relSig([TERM]))
-    const hostRelation = builder.wire(builder.root, [{ node: atom, port: { kind: 'head' } }], relSig([TERM]))
-    const outside = builder.ref(guard, 'outside', relSig([TERM]))
+    const atom = builder.atom(guard, relSig([IOTA]))
+    const hostRelation = builder.wire(builder.root, [{ node: atom, port: { kind: 'head' } }], relSig([IOTA]))
+    const outside = builder.ref(guard, 'outside', relSig([IOTA]))
     const crossing = builder.wire(guard, [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: outside, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const target = builder.relWire(guard, relSig([]))
     const host = builder.build()
     const selection = mkSelection(host, { region: guard, regions: [], nodes: [atom], wires: [] })
@@ -174,7 +174,7 @@ describe('relation workspace outer-bound dependencies', () => {
     const snapshot = currentRelationDraft(imported)
     const introduced = planned.introduced[0]!
     const looseTermWire = Object.values(snapshot.diagram.wires).find((wire) =>
-      wire.sig.kind === 'term' && wire.endpoints.length === 1 && wire.endpoints.some((ep) => ep.node === introduced))
+      wire.sig.kind === 'iota' && wire.endpoints.length === 1 && wire.endpoints.some((ep) => ep.node === introduced))
 
     expect(crossing).toBeTruthy()
     // The head crossing became a param port; the term arg crossing stayed a loose

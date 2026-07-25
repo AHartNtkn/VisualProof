@@ -6,7 +6,7 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyFold, applyUnfold } from '../../src/kernel/rules/fold'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { relationSig } from '../../src/theories/macros'
 import { spawnBoundRelationNode } from '../../src/kernel/diagram/spawn'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
@@ -22,7 +22,7 @@ const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
   return found[0]
 }
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 type Rels = ReadonlyMap<string, DiagramWithBoundary>
 const foldR = (d: Parameters<typeof applyFold>[0], sel: Parameters<typeof applyFold>[1], name: string, args: readonly string[], relations: Rels) =>
   applyFold(d, sel, args, { defId: name, sig: relationSig(relations.get(name)!), resolve: (id) => relations.get(id) })
@@ -126,9 +126,9 @@ describe('defineRelation — refusals (each message observed)', () => {
     const sel = mkSelection(diagram, { region: diagram.root, regions: [], nodes: [at], wires: [] as WireId[] })
     const { relation } = defineRelation(diagram, sel, [wArg, W], 'R', emptyCtx)
     expect(relation.boundary).toHaveLength(2)
-    // one boundary wire is the higher-order (relational) argument, one is term
+    // one boundary wire is the higher-order (relational) argument, one is iota
     expect(relation.boundary.map((wid) => relation.diagram.wires[wid]!.sig.kind).sort())
-      .toEqual(['rel', 'term'])
+      .toEqual(['iota', 'rel'])
   })
 })
 

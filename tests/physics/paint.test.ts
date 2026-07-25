@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { buildLambdaTheory } from '../../src/theories/lambda'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
@@ -12,7 +12,7 @@ import { computeLegs } from '../../src/view/wires'
 
 const p = (s: string) => parseTerm(s)
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
   it('emits exactly one label per ref, at the ref disc, and none over term anatomy', () => {

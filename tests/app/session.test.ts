@@ -3,9 +3,9 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyClosedTermIntro } from '../../src/kernel/rules/intro'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Diagram, WireId } from '../../../src/kernel/diagram/diagram'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../../src/kernel/term/parse'
@@ -12,7 +12,7 @@ import { applyStep, applyStepWithReceipt, transportBoundary } from '../../../src
 import { findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyBodyAttach } from '../../../src/kernel/rules/body'
 
-const arity2 = relSig([TERM, TERM])
+const arity2 = relSig([IOTA, IOTA])
 
 const closedIdentity = parseTerm('\\x. x')
 const reflexive = { leftSteps: [], rightSteps: [] } as const

@@ -4,7 +4,7 @@ import type { Term } from '../../../src/kernel/term/term'
 import { freePorts, termEq } from '../../../src/kernel/term/term'
 import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import { TERM } from '../../../src/kernel/diagram/sig'
+import { IOTA } from '../../../src/kernel/diagram/sig'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -60,8 +60,8 @@ describe('name-blind free ports (canonicalization at construction)', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'term', region: 'r0', term: p('used'), freePorts: declared } },
       wires: {
-        out: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        used: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'used' } }] },
+        out: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        used: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'used' } }] },
       },
     })
     expect(() => build([''])).toThrowError(/free port.*nonempty/i)
@@ -144,9 +144,9 @@ describe('name-blind free ports (canonicalization at construction)', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'term', region: 'r0', term: p('x') } },
       wires: {
-        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
-        w2: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'zzz' } }] },
+        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
+        w2: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'zzz' } }] },
       },
     })).toThrowError(/non-existent port 'v:zzz' of node 'n0'/)
   })
@@ -160,9 +160,9 @@ describe('name-blind free ports (canonicalization at construction)', () => {
       regions: { r0: { kind: 'sheet' } },
       nodes: { n0: { kind: 'term', region: 'r0', term: p('x') } },
       wires: {
-        w0: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
-        w2: { scope: 'r0', sig: TERM, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 's0' } }] },
+        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x' } }] },
+        w2: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 's0' } }] },
       },
     })).toThrowError(/non-existent port 'v:s0' of node 'n0'/)
   })

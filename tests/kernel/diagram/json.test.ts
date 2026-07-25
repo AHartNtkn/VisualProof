@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { diagramToJson, diagramFromJson } from '../../../src/kernel/diagram/json'
+import { diagramToJson, diagramFromJson, sigFromJson, sigToJson } from '../../../src/kernel/diagram/json'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 
-/** Content for a nullary-parameter body: one TERM arg stub fed by `\z. z`. */
+/** Content for a nullary-parameter body: one iota arg stub fed by `\z. z`. */
 function bodyContent() {
   const cb = new DiagramBuilder()
   const inner = cb.termNode(cb.root, p('\\z. z'))
@@ -17,21 +17,26 @@ function bodyContent() {
 }
 
 /** A cut holding a depth-2 atom (sig `((t),(t),t)`), a term node sharing its
- * TERM argument, and a body node — exercises sig, body content, and recursion. */
+ * iota argument, and a body node — exercises sig, body content, and recursion. */
 function sample() {
   const b = new DiagramBuilder()
   const cut = b.cut(b.root)
   const t = b.termNode(cut, p('\\x. y x'))                        // n0
-  const a = b.atom(cut, relSig([relSig([TERM]), relSig([TERM]), TERM]))  // n1
+  const a = b.atom(cut, relSig([relSig([IOTA]), relSig([IOTA]), IOTA]))  // n1
   b.wire(cut, [
     { node: t, port: { kind: 'output' } },
     { node: a, port: { kind: 'arg', index: 2 } },
   ])                                                              // w0
-  b.body(cut, relSig([TERM]), bodyContent())                     // n2
+  b.body(cut, relSig([IOTA]), bodyContent())                     // n2
   return b.build()
 }
 
 describe('diagram JSON', () => {
+  it('serializes iota and rejects the legacy term signature', () => {
+    expect(sigToJson(IOTA)).toEqual({ kind: 'iota' })
+    expect(() => sigFromJson({ kind: 'term' }, 'wire')).toThrow(/kind.*iota.*rel/)
+  })
+
   it('round-trips an unused declared term port and requires the declaration in strict JSON', () => {
     const b = new DiagramBuilder()
     const nodeId = b.termNode(b.root, p('used'), ['unused', 'used'])
@@ -77,11 +82,11 @@ describe('diagram JSON', () => {
     // n1 is the depth-2 atom
     expect(good.nodes['n1']!.sig).toEqual({
       kind: 'rel',
-      args: [{ kind: 'rel', args: [{ kind: 'term' }] }, { kind: 'rel', args: [{ kind: 'term' }] }, { kind: 'term' }],
+      args: [{ kind: 'rel', args: [{ kind: 'iota' }] }, { kind: 'rel', args: [{ kind: 'iota' }] }, { kind: 'iota' }],
     })
     const badKind = JSON.parse(JSON.stringify(good)) as { nodes: Record<string, { sig: { kind: string } }> }
     badKind.nodes['n1']!.sig.kind = 'bubble'
-    expect(() => diagramFromJson(badKind)).toThrowError(/malformed diagram JSON.*"kind" must be "term" or "rel"/)
+    expect(() => diagramFromJson(badKind)).toThrowError(/malformed diagram JSON.*"kind" must be "iota" or "rel"/)
     const extraKey = JSON.parse(JSON.stringify(good)) as { wires: Record<string, { sig: Record<string, unknown> }> }
     const someWire = Object.keys(extraKey.wires)[0]!
     extraKey.wires[someWire]!.sig['smuggled'] = 1

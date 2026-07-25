@@ -23,7 +23,7 @@ export type VacuousBody = {
  *
  *  - BARE (`body` omitted): add one endpoint-free wire of `sig`. ∃x.⊤ is valid
  *    at every signature — every sort has a nonempty domain (λ-terms inhabit
- *    TERM; the empty relation inhabits every relational sig) — so the wire is a
+ *    IOTA; the empty relation inhabits every relational sig) — so the wire is a
  *    valid conjunct at any polarity: an equivalence positively, a sound
  *    weakening negatively. No atom can reference a wire that did not exist, so
  *    nothing downstream is disturbed.

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { TERM, relSig } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 
 const p = (s: string) => parseTerm(s)
@@ -17,7 +17,7 @@ const head = { kind: 'head' as const }
 describe('signature-gated wire correspondence', () => {
   it('refuses to correspond a relational boundary line to a host line of a different sig', () => {
     // Step-1 scenario: match refuses unequal-sig wire correspondence.
-    const S = relSig([TERM])
+    const S = relSig([IOTA])
     const T = relSig([])
     const b = new DiagramBuilder()
     b.termNode(b.root, p('\\x. x'))
@@ -39,8 +39,8 @@ describe('signature-gated wire correspondence', () => {
   it('an endpointful relational stub matches only an equal-sig host line', () => {
     // pattern: R(t) with R's head on a boundary stub of sig S; seed the host's
     // equal-sig relation line and refuse a wrong-sig one.
-    const S = relSig([TERM])
-    const T = relSig([TERM, TERM])
+    const S = relSig([IOTA])
+    const T = relSig([IOTA, IOTA])
     const pb = new DiagramBuilder()
     const pa = pb.atom(pb.root, S)
     const stub = pb.wire(pb.root, [{ node: pa, port: head }], S)

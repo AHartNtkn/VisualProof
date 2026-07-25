@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { buildFregeTheory, natRelation } from '../../src/theories/frege'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import { verifyTheory, theoryToJson, loadTheory } from '../../src/kernel/proof/store'
 import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Diagram, DiagramNode, WireId } from '../../src/kernel/diagram/diagram'
@@ -258,8 +258,8 @@ describe('the bundled Frege theory', () => {
       wires: {
         ...d.wires,
         [ws]: { scope: d.wires[ws]!.scope, sig: d.wires[ws]!.sig, endpoints: [...d.wires[ws]!.endpoints, { node: plusN, port: { kind: 'arg', index: 0 } }] },
-        [wb]: { scope: d.root, sig: TERM, endpoints: [{ node: natB, port: { kind: 'arg', index: 0 } }, { node: plusN, port: { kind: 'arg', index: 1 } }] },
-        [wsum]: { scope: d.root, sig: TERM, endpoints: [{ node: plusN, port: { kind: 'arg', index: 2 } }] },
+        [wb]: { scope: d.root, sig: IOTA, endpoints: [{ node: natB, port: { kind: 'arg', index: 0 } }, { node: plusN, port: { kind: 'arg', index: 1 } }] },
+        [wsum]: { scope: d.root, sig: IOTA, endpoints: [{ node: plusN, port: { kind: 'arg', index: 2 } }] },
       },
     })
 

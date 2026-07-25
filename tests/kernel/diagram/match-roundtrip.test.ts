@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
-import { TERM, relSig } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import type { Diagram, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
@@ -68,12 +68,12 @@ describe('splice → match round-trip', () => {
     // pattern: R(t) — a unary-relation atom whose arg rides a term node's
     // output, head auto-wired; closed (empty boundary)
     const b = new DiagramBuilder()
-    const a = b.atom(b.root, relSig([TERM]))
+    const a = b.atom(b.root, relSig([IOTA]))
     const t = b.termNode(b.root, p('\\x. x'))
     b.wire(b.root, [
       { node: t, port: { kind: 'output' } },
       { node: a, port: { kind: 'arg', index: 0 } },
-    ], TERM)
+    ], IOTA)
     const pattern = mkDiagramWithBoundary(b.build(), [])
 
     const h = new DiagramBuilder()

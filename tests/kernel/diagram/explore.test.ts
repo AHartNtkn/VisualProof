@@ -7,7 +7,7 @@ import type {
 } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { RelSig } from '../../../src/kernel/diagram/sig'
-import { TERM, relSig, sigEquals, sigKey } from '../../../src/kernel/diagram/sig'
+import { IOTA, relSig, sigEquals, sigKey } from '../../../src/kernel/diagram/sig'
 import { exploreForm, exploreLabeling, exploreIso, boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
 import { termShapeKey, positionalPortKey } from '../../../src/kernel/diagram/canonical/shape'
 
@@ -149,7 +149,7 @@ function mulberry32(seed: number): () => number {
 }
 
 const termPool = ['\\x. x', '\\x. \\y. x', '\\x. \\y. y', 'y', 'y x']
-const sigPool: RelSig[] = [relSig([]), relSig([TERM])]
+const sigPool: RelSig[] = [relSig([]), relSig([IOTA])]
 const defIdPool = ['Nat', 'Fin']
 
 function randomDiagram(rng: () => number): Diagram {
@@ -234,7 +234,7 @@ function relabel(d: Diagram, rng: () => number): Diagram {
 
 /** Two same-scope relational (atom-head) wires inserted in either order. */
 function relWirePair(swap: boolean): Diagram {
-  const sigA = relSig([TERM]) // nA: head + a0
+  const sigA = relSig([IOTA]) // nA: head + a0
   const sigB = relSig([]) // nB: head only
   const nodes: Record<NodeId, DiagramNodeInput> = {
     nA: { kind: 'atom', region: 'r0', sig: sigA },
@@ -242,7 +242,7 @@ function relWirePair(swap: boolean): Diagram {
   }
   const hA: Wire = { scope: 'r0', sig: sigA, endpoints: [{ node: 'nA', port: { kind: 'head' } }] }
   const hB: Wire = { scope: 'r0', sig: sigB, endpoints: [{ node: 'nB', port: { kind: 'head' } }] }
-  const aA0: Wire = { scope: 'r0', sig: TERM, endpoints: [{ node: 'nA', port: { kind: 'arg', index: 0 } }] }
+  const aA0: Wire = { scope: 'r0', sig: IOTA, endpoints: [{ node: 'nA', port: { kind: 'arg', index: 0 } }] }
   return mkDiagram({
     root: 'r0',
     regions: { r0: { kind: 'sheet' } },
@@ -254,7 +254,7 @@ function relWirePair(swap: boolean): Diagram {
 /** One atom whose sig differs only in the SORT of its single argument. */
 function atomOfArgSort(relArg: boolean): Diagram {
   const b = new DiagramBuilder()
-  b.atom(b.root, relArg ? relSig([relSig([])]) : relSig([TERM]))
+  b.atom(b.root, relArg ? relSig([relSig([])]) : relSig([IOTA]))
   return b.build()
 }
 

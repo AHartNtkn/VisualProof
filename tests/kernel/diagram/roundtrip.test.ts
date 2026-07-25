@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection, type SubgraphSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
@@ -36,7 +36,7 @@ describe('extract → remove → splice round-trip (fingerprint identity)', () =
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const t = b.termNode(cut, p('\\x. x'))
-    const a = b.atom(cut, relSig([TERM, TERM]))
+    const a = b.atom(cut, relSig([IOTA, IOTA]))
     // one term output feeding both argument positions — a diagonal argument wire
     b.wire(cut, [
       { node: t, port: { kind: 'output' } },

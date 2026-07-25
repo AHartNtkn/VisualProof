@@ -1,7 +1,7 @@
 import type { Term } from '../term/term'
 import { freePorts, renameFreePorts, assertWellFormedTerm } from '../term/term'
 import type { Sig, RelSig } from './sig'
-import { TERM, sigEquals, sigKey, assertWellFormedSig } from './sig'
+import { IOTA, sigEquals, sigKey, assertWellFormedSig } from './sig'
 // Type-only: `DiagramWithBoundary` payloads live on body nodes. This import is
 // erased at runtime, so it introduces no cycle with boundary.ts (which imports
 // runtime values from here).
@@ -107,7 +107,7 @@ export function requiredPorts(node: DiagramNode): Port[] {
 
 /**
  * The sort a port accepts.
- * - term node: every port is `TERM` (output and each declared freeVar).
+ * - term node: every port is `IOTA` (output and each declared freeVar).
  * - atom: head accepts `node.sig`; arg i accepts `node.sig.args[i]`.
  * - ref: arg i accepts `node.sig.args[i]` (no head/output).
  * - body: output accepts `node.sig`; freeVar pj accepts the sig of the
@@ -118,8 +118,8 @@ export function requiredPorts(node: DiagramNode): Port[] {
 export function portSig(node: DiagramNode, port: Port): Sig {
   switch (node.kind) {
     case 'term':
-      if (port.kind === 'output') return TERM
-      if (port.kind === 'freeVar' && node.freePorts.includes(port.name)) return TERM
+      if (port.kind === 'output') return IOTA
+      if (port.kind === 'freeVar' && node.freePorts.includes(port.name)) return IOTA
       break
     case 'atom':
       if (port.kind === 'head') return node.sig

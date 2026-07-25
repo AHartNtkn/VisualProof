@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, TERM } from '../../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayActions } from '../../../src/kernel/proof/action'
@@ -362,8 +362,8 @@ describe('composeActions', () => {
       }
       if (markerFirst) marker()
       const cut = h.cut(h.root)
-      const rel = h.relWire(cut, relSig([TERM]))
-      const wParam = h.wire(h.root, [], TERM)
+      const rel = h.relWire(cut, relSig([IOTA]))
+      const wParam = h.wire(h.root, [], IOTA)
       if (!markerFirst) marker()
       return { d: h.build(), rel, wParam }
     }
@@ -547,12 +547,12 @@ describe('mapStepIds', () => {
       wires: new Map([['w0', 'W0']]),
     }
     const occurrence = { region: 'r0', regions: [], nodes: ['n0'], wires: [] }
-    expect(mapStepIds({ rule: 'fold', occurrence, args: ['w0'], target: { defId: 'nat', sig: relSig([TERM]) } }, iso))
+    expect(mapStepIds({ rule: 'fold', occurrence, args: ['w0'], target: { defId: 'nat', sig: relSig([IOTA]) } }, iso))
       .toEqual({
         rule: 'fold',
         occurrence: { region: 'R0', regions: [], nodes: ['N0'], wires: [] },
         args: ['W0'],
-        target: { defId: 'nat', sig: relSig([TERM]) },
+        target: { defId: 'nat', sig: relSig([IOTA]) },
       })
     expect(mapStepIds({ rule: 'fold', occurrence, args: ['w0'], target: { wireId: 'w0' } }, iso))
       .toEqual({

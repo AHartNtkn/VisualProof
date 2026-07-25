@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { mkEngine, recomputeRegions, computeLegs, legPaths, settle, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
 import type { Vec2 } from '../../src/view/index'
@@ -178,7 +178,7 @@ describe('hitTest', () => {
       wires: {
         [wire]: {
           scope: 'r0',
-          sig: TERM,
+          sig: IOTA,
           endpoints: [
             { node: 'a', port: { kind: 'arg', index: 0 } },
             { node: 'b', port: { kind: 'arg', index: 0 } },
@@ -217,8 +217,8 @@ describe('hitTest', () => {
       regions: { r0: { kind: 'sheet' } },
       // Deliberately insert `z` first: map traversal must not decide the hit.
       wires: {
-        z: { scope: 'r0', sig: TERM, endpoints: [] },
-        a: { scope: 'r0', sig: TERM, endpoints: [] },
+        z: { scope: 'r0', sig: IOTA, endpoints: [] },
+        a: { scope: 'r0', sig: IOTA, endpoints: [] },
       },
     })
     const e = mkEngine(d, [])

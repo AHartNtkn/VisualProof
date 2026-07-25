@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { commitBodyPositions, probeBodyPositions, projectDragToSemanticFrontier, semanticConflicts } from '../../src/view/constraints'
 import { recomputeRegions } from '../../src/view/relax'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
-const rel = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 function arrange(e: Engine, positions: Readonly<Record<string, { x: number; y: number }>>): void {
   for (const [id, pos] of Object.entries(positions)) e.bodies.get(id)!.pos = pos

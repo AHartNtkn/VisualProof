@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, TERM } from '../../src/kernel/diagram/sig'
+import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
   absorbHits,
@@ -20,8 +20,8 @@ import {
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../../src/kernel/diagram/spawn'
 
 const p = (s: string) => parseTerm(s)
-/** First-order relation signature of the given arity (all TERM arguments). */
-const R = (n: number) => relSig(Array.from({ length: n }, () => TERM))
+/** First-order relation signature of the given arity (all IOTA arguments). */
+const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
 describe('edit operations (construction mode, mkDiagram-validated surgery)', () => {
   it('starts from the empty sheet and adds parsed term nodes with auto wires', () => {
@@ -48,12 +48,12 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     expect(diagram.nodes[node]).toEqual({ kind: 'atom', region: cut, sig: R(2) })
     // the head endpoint joined the relational wire
     expect(diagram.wires[W]!.endpoints).toContainEqual({ node, port: { kind: 'head' } })
-    // one scoped singleton TERM wire per derived argument
+    // one scoped singleton IOTA wire per derived argument
     const argWires = Object.values(diagram.wires).filter((wire) =>
       wire.endpoints.some((endpoint) => endpoint.node === node && endpoint.port.kind === 'arg'))
     expect(argWires).toEqual([
-      { scope: cut, sig: TERM, endpoints: [{ node, port: { kind: 'arg', index: 0 } }] },
-      { scope: cut, sig: TERM, endpoints: [{ node, port: { kind: 'arg', index: 1 } }] },
+      { scope: cut, sig: IOTA, endpoints: [{ node, port: { kind: 'arg', index: 0 } }] },
+      { scope: cut, sig: IOTA, endpoints: [{ node, port: { kind: 'arg', index: 1 } }] },
     ])
   })
 
@@ -228,7 +228,7 @@ describe('wire construction primitives', () => {
     const survivor = [rootBare, cutBare].sort()[0]!
     const out = joinWires(d, [cutBare, rootBare])
     expect(Object.keys(out.wires)).toEqual([survivor])
-    expect(out.wires[survivor]).toEqual({ scope: d.root, sig: TERM, endpoints: [] })
+    expect(out.wires[survivor]).toEqual({ scope: d.root, sig: IOTA, endpoints: [] })
     expect(() => joinWires(d, [rootBare])).toThrow(/at least two wires/)
     expect(() => joinWires(d, [rootBare, rootBare])).toThrow(/more than once/)
     expect(() => joinWires(d, [rootBare, 'ghost'])).toThrow(/unknown wire 'ghost'/)
@@ -246,8 +246,8 @@ describe('wire construction primitives', () => {
     const d = b.build()
     const out = severEndpoint(d, wire, { node: c, port: { kind: 'arg', index: 0 } })
     const fresh = Object.keys(out.wires).find((id) => id !== wire)!
-    expect(out.wires[wire]).toEqual({ scope: cut, sig: TERM, endpoints: [{ node: a, port: { kind: 'arg', index: 0 } }] })
-    expect(out.wires[fresh]).toEqual({ scope: cut, sig: TERM, endpoints: [{ node: c, port: { kind: 'arg', index: 0 } }] })
+    expect(out.wires[wire]).toEqual({ scope: cut, sig: IOTA, endpoints: [{ node: a, port: { kind: 'arg', index: 0 } }] })
+    expect(out.wires[fresh]).toEqual({ scope: cut, sig: IOTA, endpoints: [{ node: c, port: { kind: 'arg', index: 0 } }] })
     expect(() => severEndpoint(out, fresh, out.wires[fresh]!.endpoints[0]!)).toThrow(/single loose end/)
     expect(() => severEndpoint(d, wire, { node: a, port: { kind: 'arg', index: 9 } })).toThrow(/not on wire/)
   })
@@ -384,7 +384,7 @@ describe('construction deletion and dissolution', () => {
     expect(out.nodes[survivor]).toBeDefined()
     expect(out.wires[privateWire]).toBeUndefined()
     expect(out.wires[sharedWire]?.endpoints).toEqual([{ node: survivor, port: { kind: 'arg', index: 0 } }])
-    expect(out.wires[bare]).toEqual({ scope: d.root, sig: TERM, endpoints: [] })
+    expect(out.wires[bare]).toEqual({ scope: d.root, sig: IOTA, endpoints: [] })
   })
 
   it('deletes nodes across anchors and takes a shared wire when all of its endpoints die', () => {
