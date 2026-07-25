@@ -1432,8 +1432,16 @@ function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
 /** One bounded approach step toward the best snapshot: positions and angles
     move under the travel cap; a differing wire topology is adopted whole (the
     walk re-settles junctions afterward). */
+/** PRESENTATION pace (USER ruling 2026-07-25): the visible settling should
+    read as a GENTLE approach to the minimum, not a rapid jerk — on-screen
+    motion runs ~5× slower than the solver's trust region. Presentation-only:
+    the worker's relaxations and the local solver path are untouched. The
+    value is user-calibrated ("a slow down of maybe around five x… let's see
+    if that looks good"), re-judged visually, never tuned blindly. */
+const PRESENT_SLOW = 5
+
 function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): void {
-  const bound = WIREP.travelCap * e.scale
+  const bound = (WIREP.travelCap / PRESENT_SLOW) * e.scale
   for (const [id, b] of e.bodies) {
     if (pinned !== null && pinned.has(id)) continue
     const t = best.poses.get(id)
@@ -1471,7 +1479,7 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     let the walk trade rod down while pushing separation up without bound — a limit
     cycle that never rested. The Δsep term is charged via the spatial grid of the
     other wires' segments (they do not move while this wire walks). */
-function walkWires(e: Engine): boolean {
+function walkWires(e: Engine, presentation = false): boolean {
   const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
   const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc, bound = WIREP.travelCap * sc
   const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[] }[] = []
@@ -1515,7 +1523,9 @@ function walkWires(e: Engine): boolean {
       }
       return L + sep
     }
-    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
+    // presentation frames divide the per-frame wire travel by PRESENT_SLOW
+    // (fewer substeps at the same gated bound); solver walks keep full speed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? Math.max(1, Math.round(20 / PRESENT_SLOW)) : 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
     segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
   }
@@ -1553,7 +1563,7 @@ function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: La
     st.approach = false
   }
   if (!acted) {
-    acted = walkWires(e)
+    acted = walkWires(e, true)
     if (!acted) {
       // live rest: offer the layout to the searcher once per configuration
       const key = liveKey(e)
