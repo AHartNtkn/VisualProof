@@ -69,10 +69,37 @@ function endId(wid: WireId, w: WireView, v: number): LegEnd {
   return { body: `w:${wid}:j${v - nB - nS - (w.endBodyId !== null ? 1 : 0)}`, key: null }
 }
 
+/** Exact rendering-state key: legs depend on body poses (obstacles +
+    terminals), wire nets, and the frame/scale. Building the key is microseconds
+    against a ~10 ms re-route of a large scene, so resting frames render from
+    cache. */
+function legsKey(e: Engine): string {
+  const parts: (string | number)[] = [e.scale, e.slotShift, e.frame === null ? 'nf' : `${e.frame.center.x},${e.frame.center.y},${e.frame.half}`]
+  for (const [id, b] of e.bodies) parts.push(id, b.pos.x, b.pos.y, b.theta)
+  for (const [wid, w] of e.wires) {
+    parts.push(wid)
+    for (const p of w.net.junctions) parts.push(p.x, p.y)
+    for (const [u, v] of w.net.edges) parts.push(u, v)
+  }
+  return parts.join(',')
+}
+
+const legsCache = new WeakMap<Engine, { key: string; legs: LegGeom[] }>()
+
 /** Every drawable stroke as a filleted routed polyline. A port-incident edge
     is prefixed with its fixed escape stub so the drawn stroke starts ON the
-    rim heading along the port normal. */
+    rim heading along the port normal. The result is CACHED against the exact
+    rendering state — callers must treat it as immutable. */
 export function computeLegs(e: Engine): LegGeom[] {
+  const key = legsKey(e)
+  const hit = legsCache.get(e)
+  if (hit !== undefined && hit.key === key) return hit.legs
+  const legs = computeLegsUncached(e)
+  legsCache.set(e, { key, legs })
+  return legs
+}
+
+function computeLegsUncached(e: Engine): LegGeom[] {
   const fs: FreeSpace = mkFreeSpace(routeObstacles(e), routeBounds(e))
   const out: LegGeom[] = []
   const r = FILLET_R * e.scale

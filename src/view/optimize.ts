@@ -32,7 +32,7 @@ export type LayoutBest = {
   readonly nets: ReadonlyMap<string, WireNet>
 }
 
-const snapshot = (e: Engine, score: number): LayoutBest => ({
+export const layoutSnapshot = (e: Engine, score: number): LayoutBest => ({
   score,
   poses: new Map([...e.bodies].map(([id, b]) => [id, { pos: { ...b.pos }, theta: b.theta }])),
   nets: new Map([...e.wires].map(([wid, w]) => [wid, {
@@ -41,7 +41,7 @@ const snapshot = (e: Engine, score: number): LayoutBest => ({
   }])),
 })
 
-const applySnapshot = (e: Engine, s: LayoutBest): void => {
+export const applyLayoutSnapshot = (e: Engine, s: LayoutBest): void => {
   for (const [id, b] of e.bodies) {
     const p = s.poses.get(id)
     if (p !== undefined) { b.pos = { ...p.pos }; b.theta = p.theta }
@@ -72,6 +72,15 @@ export class LayoutOptimizer {
   #cursor = 0
   #trialStep = -1 // -1: no trial in flight; ≥0: settling step of the current trial
   #exhausted = false
+  /** DESCEND-FIRST phase: after every (re)seed the searcher first settles the
+      live-seeded layout itself, publishing each improvement — the local
+      descent the frame thread no longer runs arrives asynchronously within
+      the first slices instead of after the first full trial. */
+  #descending = false
+  /** scratch must be re-synced to #best before the next descend step (the
+      best changed externally); cleared once applied so the descent keeps its
+      own state across ticks instead of restarting each slice */
+  #scratchStale = true
 
   /** Re-seed against the live engine: diagram change or pin-pose change
       invalidates the stored best (it was scored under other constraints). */
@@ -90,13 +99,17 @@ export class LayoutOptimizer {
     }
     if (pinsKey !== this.#pinsKey) { this.#best = null; this.#pinsKey = pinsKey }
     if (this.#best === null) {
-      // seed the best from the LIVE layout
-      const live = snapshot(e, 0)
-      applySnapshot(this.#scratch!, live)
-      this.#best = snapshot(this.#scratch!, layoutScore(this.#scratch!))
+      // seed the best from the LIVE layout (regions recomputed first — the
+      // score is meaningless against stale region geometry)
+      const live = layoutSnapshot(e, 0)
+      applyLayoutSnapshot(this.#scratch!, live)
+      recomputeRegions(this.#scratch!)
+      this.#best = layoutSnapshot(this.#scratch!, layoutScore(this.#scratch!))
       this.#cursor = 0
       this.#trialStep = -1
       this.#exhausted = false
+      this.#descending = true
+      this.#scratchStale = true
     }
   }
 
@@ -104,10 +117,12 @@ export class LayoutOptimizer {
 
   /** The live layout descended below the stored best: it IS the new best. */
   adoptLive(e: Engine, score: number): void {
-    this.#best = snapshot(e, score)
+    this.#best = layoutSnapshot(e, score)
     this.#cursor = 0
     this.#trialStep = -1
     this.#exhausted = false
+    this.#descending = true
+    this.#scratchStale = true
   }
   get exhausted(): boolean { return this.#exhausted }
 
@@ -119,6 +134,28 @@ export class LayoutOptimizer {
     if (scratch === null || best === null || this.#exhausted) return false
     const t0 = performance.now()
     let improved = false
+    if (this.#descending) {
+      // descend-first: settle the seeded layout, publishing every improvement
+      // as it appears — the frame thread approaches each one immediately.
+      // The scratch keeps its settling state across ticks; it re-syncs to the
+      // best only when the best changed externally.
+      if (this.#scratchStale) {
+        applyLayoutSnapshot(scratch, this.#best!)
+        recomputeRegions(scratch)
+        this.#scratchStale = false
+      }
+      let atRest = false
+      while (performance.now() - t0 < budgetMs) {
+        if (!settleStep(scratch, pinned)) { atRest = true; break }
+      }
+      const score = layoutScore(scratch)
+      if (score < this.#best!.score - 1e-9 * (Math.abs(this.#best!.score) + 1)) {
+        this.#best = layoutSnapshot(scratch, score)
+        improved = true
+      }
+      if (atRest) this.#descending = false
+      return improved
+    }
     const bodies = [...scratch.bodies.keys()]
     const singles = bodies.length * DIRS * RADII.length
     const pairs: [number, number][] = []
@@ -127,7 +164,7 @@ export class LayoutOptimizer {
     while (performance.now() - t0 < budgetMs) {
       if (this.#trialStep === -1) {
         if (this.#cursor >= trials) { this.#exhausted = true; break }
-        applySnapshot(scratch, best)
+        applyLayoutSnapshot(scratch, best)
         if (this.#cursor < singles) {
           // single-body hop: best + one enumerated displacement
           const bi = Math.floor(this.#cursor / (DIRS * RADII.length))
@@ -161,7 +198,7 @@ export class LayoutOptimizer {
         // score the settled trial
         const score = layoutScore(scratch)
         if (score < best.score - 1e-9 * (Math.abs(best.score) + 1)) {
-          this.#best = snapshot(scratch, score)
+          this.#best = layoutSnapshot(scratch, score)
           this.#cursor = 0 // a new basin: restart the schedule around it
           improved = true
         } else {

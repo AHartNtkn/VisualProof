@@ -78,8 +78,10 @@ function segInsideLen(a: Vec2, b: Vec2, D: Disc): number {
 }
 
 /** The SOFT cost of a straight segment: length + obstacle-interior surcharge
-    + outside-frame surcharge. This is THE metric; nothing is infeasible. */
-export function segSoftCost(a: Vec2, b: Vec2, fs: FreeSpace): number {
+    + outside-frame surcharge. This is THE metric; nothing is infeasible.
+    (Takes any disc/bounds pair — probe evaluators measure frozen polylines
+    against live obstacles without building a full FreeSpace.) */
+export function segSoftCost(a: Vec2, b: Vec2, fs: { readonly discs: readonly Disc[]; readonly bounds: Bounds | null }): number {
   const L = Math.hypot(b.x - a.x, b.y - a.y)
   let cost = L
   for (const D of fs.discs) cost += OBSTACLE_COST * segInsideLen(a, b, D)

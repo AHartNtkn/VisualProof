@@ -104,3 +104,58 @@ describe('wire energy charges the DRAWN stroke (stubs included)', () => {
     expect(Math.abs(E - drawn)).toBeLessThan(1e-6 * (Math.abs(drawn) + 1))
   })
 })
+
+describe('envelope probe evaluator (frozen paths)', () => {
+  it('frozen eval equals the exact energy at the captured base (real replay scenes)', async () => {
+    const { wireEnergyCapture, frozenWireEnergy } = await import('../../src/view/relax')
+    const { bootFixture } = await import('../app/boot-fixture')
+    const { mkReplay } = await import('../../src/app/replay')
+    const { resolveOverlaps } = await import('../../src/view/relax')
+    const ctx = (await bootFixture()).ctx
+    for (const [nm, at] of [['plusComm', 20], ['succShiftS', 48]] as const) {
+      const r = mkReplay(nm, ctx)
+      const e = mkEngine(r.diagramAt(at), r.boundaryAt(at))
+      recomputeRegions(e)
+      resolveOverlaps(e)
+      const cap = wireEnergyCapture(e)
+      const frozen = frozenWireEnergy(e, cap.edges)
+      // wire part of cap.E is the same sum over the same points/functions
+      expect(Math.abs(frozen - cap.E), `${nm}@${at}: frozen != exact at base`).toBeLessThan(1e-9 * (Math.abs(cap.E) + 1))
+    }
+  })
+
+  it('probe slopes match the exact energy exactly on an unobstructed scene', async () => {
+    const { wireEnergyCapture, frozenWireEnergy } = await import('../../src/view/relax')
+    const b = new DiagramBuilder()
+    const n0 = b.ref(b.root, 'A', relSig([TERM]))
+    const n1 = b.ref(b.root, 'B', relSig([TERM]))
+    b.wire(b.root, [
+      { node: n0, port: { kind: 'arg' as const, index: 0 } },
+      { node: n1, port: { kind: 'arg' as const, index: 0 } },
+    ])
+    const e = mkEngine(b.build(), [])
+    const bodies = [...e.bodies.values()].filter((x) => x.kind === 'ref')
+    const A = bodies[0]!, B = bodies[1]!
+    A.pos = { x: -80, y: 0 }; B.pos = { x: 80, y: 0 }
+    const angOf = (bd: typeof A): number => {
+      const la = [...bd.localAnchor.values()][0]!
+      return Math.atan2(la.y, la.x)
+    }
+    A.theta = -angOf(A)
+    B.theta = Math.PI - angOf(B)
+    e.frame = null
+    recomputeRegions(e)
+    const cap = wireEnergyCapture(e)
+    const h = 0.02
+    for (const [dx, dy] of [[h, 0], [0, h], [-h, 0], [0, -h]] as const) {
+      const saved = { ...A.pos }
+      A.pos = { x: A.pos.x + dx, y: A.pos.y + dy }
+      recomputeRegions(e)
+      const frozen = frozenWireEnergy(e, cap.edges)
+      const exact = wireEnergy(e)
+      expect(Math.abs(frozen - exact), `probe (${dx},${dy})`).toBeLessThan(1e-9 * (Math.abs(exact) + 1))
+      A.pos = saved
+      recomputeRegions(e)
+    }
+  })
+})

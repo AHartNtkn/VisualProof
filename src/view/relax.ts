@@ -2,12 +2,13 @@ import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame } from './engine'
 import { mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalStubs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace, route } from './route/freespace'
-import { advanceNetwork, netLength } from './route/network'
-import { LayoutOptimizer, layoutScore } from './optimize'
+import { mkFreeSpace, route, polylineTurning, segSoftCost } from './route/freespace'
+import { advanceNetwork, BEND_COST } from './route/network'
+import { layoutScore } from './optimize'
+import type { LayoutBest } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
-export const PHYSICS_REV = 'one-energy@2026-07-24'
+export const PHYSICS_REV = 'async-search@2026-07-24'
 console.info('[physics] rev', PHYSICS_REV)
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
@@ -555,15 +556,11 @@ export function resolveOverlaps(e: Engine): boolean {
   return any
 }
 
-// ---- the wire pressure (routed-network model, USER ruling 2026-07-24):
-// the NODE solver sees only COARSE wire pressure — the Euclidean graph length
-// of each wire's network (live terminal points, current junction positions).
-// Actual routing (hard obstacles, junction placement, topology) lives in the
-// separate router (src/view/route/), which observes nodes and never moves
-// them. A route basin change cannot kick a node. ----
-
-/** Wire tension (the coarse pressure's scale). */
-export const TENSION = 1.0
+// ---- THE wire energy (routed-network model, USER ruling 2026-07-24): the
+// soft routed cost + drawn turning + inter-wire separation, identical for the
+// node solver, the router's gates, and the global layout score. Junction
+// placement and wire topology live in the separate router (src/view/route/),
+// which observes nodes and never moves them. ----
 
 /** Inter-wire separation over straight segments (plan-22 constants):
     co-running pairs pay heavily, transverse crossings pay a little — the
@@ -602,20 +599,78 @@ export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[
     which is why tips rested across discs and drew half-circle wraps; the
     standoff FORCED dangles long). */
 export function wireEnergy(e: Engine): number {
+  return wireEnergyCapture(e).E
+}
+
+/** A routed edge's frozen path: its interior waypoints at the captured
+    optimum (endpoints re-derived live at probe time). */
+export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly interior: readonly Vec2[] }
+
+/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs. */
+export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[] } {
   const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
   let E = 0
+  const edges: FrozenEdge[] = []
   const routedSegs: { wid: string; a: Vec2; b: Vec2 }[] = []
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
-    E += netLength(w.net, terms, fs, wireTerminalStubs(e, w))
+    const stubs = wireTerminalStubs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const r = route(fs, pos(u), pos(v))
+      const su = u < stubs.length ? stubs[u]! : null
+      const sv = v < stubs.length ? stubs[v]! : null
+      const drawn = su === null && sv === null
+        ? r.pts
+        : [...(su !== null ? [su] : []), ...r.pts, ...(sv !== null ? [sv] : [])]
+      E += r.cost + BEND_COST * polylineTurning(drawn)
+      edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
       for (let i = 0; i + 1 < r.pts.length; i++) routedSegs.push({ wid, a: r.pts[i]!, b: r.pts[i + 1]! })
     }
   }
-  return E + segSeparationE(routedSegs, e.scale)
+  return { E: E + segSeparationE(routedSegs, e.scale), edges }
+}
+
+/**
+ * ENVELOPE-THEOREM PROBE EVALUATOR: the routed cost is a minimum over paths,
+ * so at the captured optimum the frozen-path cost has the same derivative as
+ * the true cost wherever the optimal path is unique (envelope theorem); the
+ * one-sided slope selection brackets the exceptional kinks. Gradient probes
+ * therefore re-measure the CAPTURED polylines — endpoints tracking the
+ * probed body's live terminals, soft cost against the LIVE discs — with no
+ * routing solve (the routing solve's visibility precompute dominated the
+ * probe cost ~19×, measured 2026-07-24). Every ACCEPTANCE gate still
+ * evaluates the exact routed energy: strict descent is exact; only probe
+ * DIRECTIONS use the equal-derivative majorizer.
+ */
+export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): number {
+  const space = { discs: routeObstacles(e), bounds: routeBounds(e) }
+  let E = 0
+  const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
+  const perWire = new Map<string, { terms: Vec2[]; stubs: (Vec2 | null)[]; junctions: Vec2[] }>()
+  for (const fe of edges) {
+    let c = perWire.get(fe.wid)
+    if (c === undefined) {
+      const w = e.wires.get(fe.wid)!
+      c = { terms: wireTerminalPoints(e, w), stubs: wireTerminalStubs(e, w), junctions: w.net.junctions }
+      perWire.set(fe.wid, c)
+    }
+    const cc = c
+    const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
+    const pts: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
+    for (let i = 0; i + 1 < pts.length; i++) {
+      E += segSoftCost(pts[i]!, pts[i + 1]!, space)
+      segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
+    }
+    const su = fe.u < cc.stubs.length ? cc.stubs[fe.u]! : null
+    const sv = fe.v < cc.stubs.length ? cc.stubs[fe.v]! : null
+    const drawn = su === null && sv === null
+      ? pts
+      : [...(su !== null ? [su] : []), ...pts, ...(sv !== null ? [sv] : [])]
+    E += BEND_COST * polylineTurning(drawn)
+  }
+  return E + segSeparationE(segs, e.scale)
 }
 
 /** Scope containment (soft): a finite-depth ring barrier keeping a wire-owned
@@ -865,12 +920,16 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     if (w.endBodyId !== null) wiredBodies.add(w.endBodyId)
   }
 
+  // ONE exact routed eval captures the frozen paths; every gradient probe
+  // below re-measures them via the envelope evaluator (no routing solves)
+  const base = wireEnergyCapture(e)
+
   type Coord = { get(): number; set(v: number): void; readonly m: number; localE(): number }
   const coords: Coord[] = []
   const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
     const dirty = new Set<RegionId>([b.region])
-    const localE = (): number => { recomputeRegions(e, dirty); return wireEnergy(e) + contentEnergy(e) }
+    const localE = (): number => { recomputeRegions(e, dirty); return frozenWireEnergy(e, base.edges) + contentEnergy(e) }
     if (pinned === null || !pinned.has(b.id)) {
       movedBodies.push(b)
       coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, localE })
@@ -921,7 +980,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     for (const b of e.bodies.values()) { const sn = bodySnap.get(b.id)!; b.pos = { ...sn.pos }; b.theta = sn.theta }
   }
 
-  const E0 = wireEnergy(e) + contentEnergy(e)
+  const E0 = base.E + contentEnergy(e)
   const EPS = 1e-9 * (Math.abs(E0) + 1)
   const deltaMax = WIREP.travelCap * sc
 
@@ -964,87 +1023,180 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   return false
 }
 
-export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): boolean {
-  recomputeRegions(e)
-  if (e.frame === null) establishFrame(e)
+/**
+ * ASYNCHRONOUS LAYOUT SEARCH (USER rulings 2026-07-24): whole-layout global
+ * optimization runs asynchronously — "the user should not perceive anything
+ * from a heavy search". A frame with a search attached does ONLY bounded
+ * cheap work: push live state to the searcher, take one bounded approach
+ * step toward the best-known layout when one strictly better is known, and
+ * advance the wire presentation walk. The heavy minimization (local descent
+ * + the trial schedule) runs elsewhere (a worker) and publishes best
+ * snapshots through this interface. Engines with no search attached (tests,
+ * `settle`, the searcher's own scratch engines) run the full local solvers
+ * synchronously, unchanged.
+ */
+export type LayoutSearch = {
+  /** Push the live boundary state (diagram identity, pins, live poses). */
+  sync(e: Engine, pinned: ReadonlySet<string> | null): void
+  /** Newest best-known layout (asynchronously updated), or null. */
+  best(): LayoutBest | null
+  /** The live layout is strictly better than the stored best — publish it. */
+  adoptLive(e: Engine, score: number): void
+  /** Search work still in flight (frames must keep polling). */
+  readonly searching: boolean
+}
 
-  // ── WHOLE-LAYOUT GLOBAL OPTIMIZATION (USER ruling 2026-07-24): a budgeted
-  // asynchronous searcher explores perturbed layouts on a scratch engine and
-  // stores only the best found. When a strictly better layout is known, the
-  // frame's motion is the bounded APPROACH toward it — the local solvers stand
-  // down (running both fights forever: the pull crosses terrain local descent
-  // undoes, measured as a permanent tug-of-war). Local descent + routing own
-  // the frame when the layout is at/near the best; a live layout that descends
-  // below the stored best BECOMES the best (monotone store). ──
-  let approaching = false
-  let searching = false
-  if (LAYOUT_OPT !== null && !inOptimizerTick) {
-    inOptimizerTick = true
-    try {
-      LAYOUT_OPT.sync(e, pinned)
-      LAYOUT_OPT.tick(pinned, OPT_BUDGET_MS)
-      searching = !LAYOUT_OPT.exhausted
-      const best = LAYOUT_OPT.best()
-      if (best !== null) {
-        const live = layoutScore(e)
-        const EPS = 1e-6 * (Math.abs(live) + 1)
-        if (live < best.score - EPS) {
-          LAYOUT_OPT.adoptLive(e, live)
-        } else if (best.score < live - EPS) {
-          approaching = true
-          const bound = WIREP.travelCap * e.scale
-          for (const [id, b] of e.bodies) {
-            if (pinned !== null && pinned.has(id)) continue
-            const t = best.poses.get(id)
-            if (t === undefined) continue
-            const dx = t.pos.x - b.pos.x, dy = t.pos.y - b.pos.y
-            const d = Math.hypot(dx, dy)
-            if (d > 1e-9) {
-              const st = Math.min(d, bound)
-              b.pos = { x: b.pos.x + (dx / d) * st, y: b.pos.y + (dy / d) * st }
-            }
-            const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
-            const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
-            if (Math.abs(dth) > 1e-9) b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
-          }
-          for (const [wid, w] of e.wires) {
-            const n = best.nets.get(wid)
-            if (n === undefined) continue
-            if (JSON.stringify(w.net.edges) !== JSON.stringify(n.edges)) {
-              w.net.edges = n.edges.map(([u, v]) => [u, v])
-              w.net.junctions = n.junctions.map((pt) => ({ ...pt }))
-            }
-          }
-        }
-      }
-    } finally {
-      inOptimizerTick = false
+const LAYOUT_SEARCH = new WeakMap<Engine, LayoutSearch>()
+export function attachLayoutSearch(e: Engine, s: LayoutSearch | null): void {
+  if (s === null) LAYOUT_SEARCH.delete(e)
+  else LAYOUT_SEARCH.set(e, s)
+}
+
+/** Exact live-configuration key (poses + nets): the score cache's validity. */
+function liveKey(e: Engine): string {
+  const parts: (string | number)[] = []
+  for (const [id, b] of e.bodies) parts.push(id, b.pos.x, b.pos.y, b.theta)
+  for (const [wid, w] of e.wires) {
+    parts.push(wid)
+    for (const p of w.net.junctions) parts.push(p.x, p.y)
+    for (const [u, v] of w.net.edges) parts.push(u, v)
+  }
+  return parts.join(',')
+}
+
+/** Lazily-cached live layout score: the full energy is evaluated only at
+    DECISION EVENTS (a new best arrived, or the live layout came to rest) —
+    never per frame. */
+const liveScoreCache = new WeakMap<Engine, { key: string; score: number }>()
+function liveScoreAt(e: Engine): number {
+  const key = liveKey(e)
+  const hit = liveScoreCache.get(e)
+  if (hit !== undefined && hit.key === key) return hit.score
+  const score = layoutScore(e)
+  liveScoreCache.set(e, { key, score })
+  return score
+}
+
+/** Per-engine sticky approach decision: re-scored only when the best snapshot
+    changes (event-driven — approaching/walking frames never evaluate the full
+    energy). */
+const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; lastAdoptKey: string }>()
+
+/** Does the live layout differ (beyond float dust) from the best snapshot on
+    any coordinate the approach may move? */
+function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): boolean {
+  for (const [id, b] of e.bodies) {
+    if (pinned !== null && pinned.has(id)) continue
+    const t = best.poses.get(id)
+    if (t === undefined) continue
+    if (Math.abs(t.pos.x - b.pos.x) > 1e-6 || Math.abs(t.pos.y - b.pos.y) > 1e-6) return true
+    if (Math.abs(Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))) > 1e-6) return true
+  }
+  return false
+}
+
+/** One bounded approach step toward the best snapshot: positions and angles
+    move under the travel cap; a differing wire topology is adopted whole (the
+    walk re-settles junctions afterward). */
+function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): void {
+  const bound = WIREP.travelCap * e.scale
+  for (const [id, b] of e.bodies) {
+    if (pinned !== null && pinned.has(id)) continue
+    const t = best.poses.get(id)
+    if (t === undefined) continue
+    const dx = t.pos.x - b.pos.x, dy = t.pos.y - b.pos.y
+    const d = Math.hypot(dx, dy)
+    if (d > 1e-9) {
+      const st = Math.min(d, bound)
+      b.pos = { x: b.pos.x + (dx / d) * st, y: b.pos.y + (dy / d) * st }
+    }
+    const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
+    const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
+    if (Math.abs(dth) > 1e-9) b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
+  }
+  for (const [wid, w] of e.wires) {
+    const n = best.nets.get(wid)
+    if (n === undefined) continue
+    if (JSON.stringify(w.net.edges) !== JSON.stringify(n.edges)) {
+      w.net.edges = n.edges.map(([u, v]) => [u, v])
+      w.net.junctions = n.junctions.map((pt) => ({ ...pt }))
     }
   }
+}
 
-  let moved = false
+/** The wire presentation walk: bounded continuation toward each wire's own
+    routed target. Returns whether anything moved. */
+function walkWires(e: Engine): boolean {
   let routed = false
-  if (!approaching) {
-    moved = operatorStep(e, pinned)
-    const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
-    for (const [, w] of e.wires) {
-      const terms = wireTerminalPoints(e, w)
-      if (terms.length < 2) continue
-      routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, stubs: wireTerminalStubs(e, w) }) || routed
+  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  for (const [, w] of e.wires) {
+    const terms = wireTerminalPoints(e, w)
+    if (terms.length < 2) continue
+    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, stubs: wireTerminalStubs(e, w) }) || routed
+  }
+  return routed
+}
+
+/** The searched frame: strictly bounded per-frame work. Approach owns motion
+    when a strictly better layout is known (running approach and local descent
+    together is a measured permanent tug-of-war); otherwise the walk keeps the
+    wires settling. The full energy is evaluated only at decision events. */
+function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: LayoutSearch): boolean {
+  search.sync(e, pinned)
+  const best = search.best()
+  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, lastAdoptKey: '' }
+  searchFrameState.set(e, st)
+  let acted = false
+  if (best !== null && bestMismatch(e, best, pinned)) {
+    if (st.decidedFor !== best) {
+      const live = liveScoreAt(e)
+      const EPS = 1e-6 * (Math.abs(live) + 1)
+      if (live < best.score - EPS) {
+        search.adoptLive(e, live)
+        st.approach = false
+      } else {
+        st.approach = best.score < live - EPS
+      }
+      st.decidedFor = best
+    }
+    if (st.approach) {
+      approachStep(e, best, pinned)
+      acted = true
+    }
+  } else {
+    st.decidedFor = best
+    st.approach = false
+  }
+  if (!acted) {
+    acted = walkWires(e)
+    if (!acted) {
+      // live rest: offer the layout to the searcher once per configuration
+      const key = liveKey(e)
+      if (key !== st.lastAdoptKey) {
+        st.lastAdoptKey = key
+        const live = liveScoreAt(e)
+        const b = search.best()
+        if (b === null || live < b.score - 1e-6 * (Math.abs(live) + 1)) search.adoptLive(e, live)
+      }
     }
   }
   recomputeRegions(e)
   e.tick++
-  return moved || routed || approaching || searching
+  return acted || search.searching
 }
 
-/** The app-level layout optimizer (null = disabled; tests and raw settles run
-    the local solvers alone). The shell enables it. */
-let LAYOUT_OPT: LayoutOptimizer | null = null
-let inOptimizerTick = false
-const OPT_BUDGET_MS = 4
-export function enableLayoutOptimization(on: boolean): void {
-  LAYOUT_OPT = on ? new LayoutOptimizer() : null
+export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): boolean {
+  recomputeRegions(e)
+  if (e.frame === null) establishFrame(e)
+
+  const search = LAYOUT_SEARCH.get(e)
+  if (search !== undefined) return searchedFrame(e, pinned, search)
+
+  let moved = operatorStep(e, pinned)
+  moved = walkWires(e) || moved
+  recomputeRegions(e)
+  e.tick++
+  return moved
 }
 
 /** Run a tick budget of strict descent, bracketed by the DISCRETE construction-

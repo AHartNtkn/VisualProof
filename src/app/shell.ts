@@ -17,7 +17,8 @@ import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, routeObstacles, routeBounds, wireTerminalPoints } from '../view/engine'
 import { mkFreeSpace, route } from '../view/route/freespace'
-import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, enableLayoutOptimization } from '../view/relax'
+import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, attachLayoutSearch } from '../view/relax'
+import { mkWorkerSearch } from '../view/optimize-client'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
@@ -120,7 +121,12 @@ type Pending =
   | { readonly kind: 'foldChoose'; readonly sel: SubgraphSelection }
 
 export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
-  enableLayoutOptimization(true)
+  // ASYNC LAYOUT SEARCH (USER ruling 2026-07-24): all heavy layout
+  // minimization runs in workers; frames only approach the best known.
+  // One search per continuously-shown engine (main + replay companion);
+  // each survives engine swaps (its sync detects diagram changes).
+  const mainSearch = mkWorkerSearch()
+  const companionSearch = mkWorkerSearch()
   const { canvas, chrome } = opts
   const themeCycle = opts.themes ?? THEMES
   if (themeCycle.length === 0) throw new Error('mountShell requires at least one theme')
@@ -162,6 +168,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const motionPreferences = defaultMotionPreferences(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
   let displayed: Diagram = editDiagram
   let engine: Engine = mkEngine(displayed, [])
+  if (mainSearch !== null) attachLayoutSearch(engine, mainSearch)
   seedProject(engine)
   const mainMotion = new MotionCoordinator({
     preferences: () => motionPreferences,
@@ -623,6 +630,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const previous = engine
       displayed = d
       const next = mkEngine(d, currentBoundary())
+      if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
       carryOver(previous, next)
       seedProject(next)
       mainMotion.observeSwap(previous, next, performance.now())
@@ -722,6 +730,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.cancelActiveGesture()
     displayed = replay.diagramAt(0)
     engine = mkEngine(displayed, replay.boundaryAt(0))
+    if (mainSearch !== null) attachLayoutSearch(engine, mainSearch)
     // Size the fixed border ONCE from the PROOF-WIDE max content extent (USER RULING
     // 2026-07-06, option (a)): a replay's contents are ALL its steps, so one absolute
     // border fits every step and never resizes as the proof is stepped. Cheap
@@ -754,6 +763,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const prevEngine = engine
     displayed = replay.diagramAt(replayK)
     const next = mkEngine(displayed, replay.boundaryAt(replayK))
+    if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
     carryOver(prevEngine, next)
     seedProject(next)
     engine = next
@@ -1259,6 +1269,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (comp.diagram !== companionShownDiagram || companionEngine === null) {
       const prev = companionEngine
       const next = mkEngine(comp.diagram, comp.boundary)
+      if (companionSearch !== null) attachLayoutSearch(next, companionSearch)
       if (prev !== null) carryOver(prev, next)
       seedProject(next)
       companionEngine = next
@@ -1744,7 +1755,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const afterIndex = timeline.states.length === 1 ? 0 : bounded === 0 ? 1 : bounded
       const previewEngine = mkEngine(transition.after, timeline.boundaryAt(afterIndex))
       seedProject(previewEngine)
-      for (let i = 0; i < 16; i++) settleStep(previewEngine, null)
+      // a preview is a one-shot thumbnail on the frame thread: settle toward
+      // rest but never block the UI past a frame-scale wall budget
+      const previewT0 = performance.now()
+      for (let i = 0; i < 16 && performance.now() - previewT0 < 100; i++) settleStep(previewEngine, null)
       const points: Vec2[] = []
       if (transition.focus.kind === 'items') {
         for (const id of transition.focus.nodes) {
@@ -1811,6 +1825,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const dispose = (): void => {
     if (disposed) return
     disposed = true
+    mainSearch?.dispose()
+    companionSearch?.dispose()
     cancelAnimationFrame(raf)
     interaction.dispose()
     construct.dispose()
@@ -1900,6 +1916,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         for (let i = 0; i < 10; i++) settleStep(engine, null)
         const t3 = performance.now()
         return { sweepMs: +(t1 - t0).toFixed(1), paintMs: +(t2 - t1).toFixed(1), sweeps10Ms: +(t3 - t2).toFixed(1) }
+      },
+      search(): unknown {
+        return mainSearch?.debugState() ?? null
       },
       wirePhysics(): { binds: string[]; junctions: { x: number; y: number }[]; edges: [number, number][] }[] {
         const out: { binds: string[]; junctions: { x: number; y: number }[]; edges: [number, number][] }[] = []
