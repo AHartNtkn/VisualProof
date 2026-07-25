@@ -1,7 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame } from './engine'
-import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
+import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
 import { mkFreeSpace, route } from './route/freespace'
 import { advanceNetwork } from './route/network'
 import type { CurveBC } from './route/curve'
@@ -626,7 +626,7 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[] }
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, fs, beta)
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * e.scale)
       E += rodCost(pts, fs, beta)
       edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
@@ -663,7 +663,7 @@ export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): numbe
     const cc = c
     const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
     const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
-    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, way, space, beta)
+    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, way, ROUTE_CLEAR * e.scale)
     E += rodCost(pts, space, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
@@ -1129,7 +1129,7 @@ function walkWires(e: Engine): boolean {
   for (const [, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
-    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, bcs: wireTerminalBCs(e, w), beta: rodBeta(e) }) || routed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: 20, bound: WIREP.travelCap * e.scale, bcs: wireTerminalBCs(e, w), beta: rodBeta(e), simplifyTol: ROUTE_CLEAR * e.scale }) || routed
   }
   return routed
 }

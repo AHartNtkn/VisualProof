@@ -573,7 +573,6 @@ export function wireTerminalBCs(e: Engine, w: WireView): CurveBC[] {
     return {
       p: worldBindAnchor(e, b, bd.key),
       n: { x: Math.cos(a), y: Math.sin(a) },
-      ownDisc: { c: b.pos, r: (b.discR + ROUTE_CLEAR) * e.scale },
     }
   })
   for (const position of w.slots) {

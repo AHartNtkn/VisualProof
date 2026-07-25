@@ -55,11 +55,12 @@ export function netLength(
   fs: FreeSpace,
   bcs: readonly CurveBC[] = [],
   beta = 0,
+  simplifyTol = 0,
 ): number {
   let L = 0
   for (const [u, v] of net.edges) {
     const r = route(fs, posOf(net, terms, u), posOf(net, terms, v))
-    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, fs, beta)
+    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, simplifyTol)
     L += rodCost(pts, fs, beta)
   }
   return L
@@ -181,7 +182,7 @@ export function contract(net: WireNet, terms: readonly Vec2[], _fs: FreeSpace): 
  * ≥ 3), take the largest positive first-order gain, open by SPLIT_EPS, and
  * keep it only if the ACTUAL routed length decreased (strict gate).
  */
-export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0): boolean {
+export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, simplifyTol = 0): boolean {
   const nT = terms.length
   for (let j = 0; j < net.junctions.length; j++) {
     const inc = junctionTangents(net, terms, fs, j)
@@ -215,7 +216,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bc
     const dn = Math.hypot(sx, sy)
     const d = { x: sx / dn, y: sy / dn }
     const here = net.junctions[j]!
-    const L0 = netLength(net, terms, fs, bcs, beta)
+    const L0 = netLength(net, terms, fs, bcs, beta, simplifyTol)
     const snapshot: WireNet = { junctions: net.junctions.map((p) => ({ ...p })), edges: [...net.edges] }
     const jb = net.junctions.length
     net.junctions[j] = { x: here.x + (d.x * SPLIT_EPS) / 2, y: here.y + (d.y * SPLIT_EPS) / 2 }
@@ -234,7 +235,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bc
     })
     void bi
     net.edges.push([nT + j, nT + jb])
-    const L1 = netLength(net, terms, fs, bcs, beta)
+    const L1 = netLength(net, terms, fs, bcs, beta, simplifyTol)
     if (L1 < L0 - 1e-12) return true
     net.junctions = snapshot.junctions
     net.edges = snapshot.edges
@@ -260,10 +261,11 @@ export function advanceNetwork(
   net: WireNet,
   terms: readonly Vec2[],
   fs: FreeSpace,
-  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number },
+  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number; simplifyTol?: number },
 ): boolean {
   const bcs = opts.bcs ?? []
   const beta = opts.beta ?? 0
+  const simplifyTol = opts.simplifyTol ?? 0
   let changed = false
   // the off-screen fixed-topology TARGET is solved ONCE per advance (and again
   // only after a topology change) — the substeps walk toward it under the
@@ -295,10 +297,10 @@ export function advanceNetwork(
       })
       const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
       if (anyProposed) {
-        if (curL === null) curL = netLength(net, terms, fs, bcs, beta)
+        if (curL === null) curL = netLength(net, terms, fs, bcs, beta, simplifyTol)
         const before = net.junctions
         net.junctions = proposal
-        const L1 = netLength(net, terms, fs, bcs, beta)
+        const L1 = netLength(net, terms, fs, bcs, beta, simplifyTol)
         if (L1 < curL - 1e-12) {
           curL = L1
           stepMoved = true
@@ -313,6 +315,6 @@ export function advanceNetwork(
   // one routed split check per advance, only when something changed (splits
   // are rare; when one fires the next advance's walk grows it under the gates;
   // at rest nothing scans — the state is already a gated fixed point)
-  if (changed) trySplit(net, terms, fs, bcs, beta)
+  if (changed) trySplit(net, terms, fs, bcs, beta, simplifyTol)
   return changed
 }

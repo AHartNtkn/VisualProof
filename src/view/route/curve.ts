@@ -31,11 +31,8 @@ import { segSoftCost } from './freespace'
  */
 
 /** Terminal boundary condition: fixed anchor point + the unit direction the
-    curve LEAVES it (null = natural end at the raw endpoint). `ownDisc` is the
-    terminal body's inflated obstacle disc: route waypoints hugging it are
-    escape-routing artifacts inside the clamp's ownership zone and are dropped
-    from the curve's waypoints (the clamp + rod energy own the shape there). */
-export type CurveBC = { readonly p: Vec2; readonly n: Vec2; readonly ownDisc?: Disc | null } | null
+    curve LEAVES it (null = natural end at the raw endpoint). */
+export type CurveBC = { readonly p: Vec2; readonly n: Vec2 } | null
 
 const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y })
 const len = (a: Vec2): number => Math.hypot(a.x, a.y)
@@ -99,29 +96,63 @@ function sampleCubics(cubics: readonly Cubic[]): Vec2[] {
   return out
 }
 
+/** Iterative Douglas–Peucker polyline simplification (deterministic,
+    stack-based). Keeps endpoints; drops interior points within `tol` of the
+    simplified chords. */
+export function simplifyPolyline(pts: readonly Vec2[], tol: number): Vec2[] {
+  if (pts.length <= 2 || tol <= 0) return pts.map((p) => ({ ...p }))
+  const keep = new Array<boolean>(pts.length).fill(false)
+  keep[0] = keep[pts.length - 1] = true
+  const stack: [number, number][] = [[0, pts.length - 1]]
+  while (stack.length > 0) {
+    const [a, b] = stack.pop()!
+    if (b - a < 2) continue
+    const ax = pts[a]!.x, ay = pts[a]!.y
+    const dx = pts[b]!.x - ax, dy = pts[b]!.y - ay
+    const dd = Math.hypot(dx, dy)
+    let worst = -1, wd = tol
+    for (let k = a + 1; k < b; k++) {
+      const d = dd < 1e-12
+        ? Math.hypot(pts[k]!.x - ax, pts[k]!.y - ay)
+        : Math.abs((pts[k]!.x - ax) * dy - (pts[k]!.y - ay) * dx) / dd
+      if (d > wd) { wd = d; worst = k }
+    }
+    if (worst >= 0) {
+      keep[worst] = true
+      stack.push([a, worst], [worst, b])
+    }
+  }
+  return pts.filter((_, i) => keep[i]).map((p) => ({ ...p }))
+}
+
 /**
  * The drawn curve of one edge: the Hobby cubic chain through the routed
- * corridor waypoints. Clamped ends (port rim → outward normal, frame slot →
+ * corridor. The corridor is Douglas–Peucker-simplified at `simplifyTol` =
+ * the routing CLEARANCE (ROUTE_CLEAR·scale): the corridor is only defined up
+ * to the band it was inflated by, so simplification within that band loses
+ * nothing the router promised — and the family gets the SPARSE anchors it
+ * was characterized on (the lab's legs were rim + a few control points,
+ * never polygon-corner interpolation). Clamped ends (port rim → outward normal, frame slot →
  * inward normal) fix the end tangents; interior anchors take Catmull-Rom
- * forward directions; natural ends (junctions, dots) take the chord. Route
- * corridor points inside a clamped end's neighborhood (max of one disc
- * polygon step and r*) are routing artifacts of the escape point and drop —
- * the clamped cubic owns that approach. Deterministic, closed form,
- * stateless; the same samples are rendered and charged.
+ * forward directions; natural ends (junctions, dots) take the chord.
+ * Deterministic, closed form, stateless; the same samples are rendered and
+ * charged.
  */
 export function edgeCurvePts(
   u: CurveBC,
   v: CurveBC,
   routePts: readonly Vec2[],
-  space: { readonly discs: readonly Disc[]; readonly bounds: Bounds | null } | null = null,
-  beta = 0,
+  simplifyTol = 0,
 ): Vec2[] {
-  void space
-  void beta
-  const core: Vec2[] = routePts.map((p) => ({ ...p }))
+  // A clamped end REPLACES the corridor's escape endpoint with its anchor:
+  // the escape point is the anchor displaced along the clamp normal — the
+  // same boundary datum the clamped tangent already encodes — so keeping
+  // both would interpolate one datum twice (the measured kink vertex).
+  const core = simplifyPolyline(routePts, simplifyTol)
+  const inner = core.slice(u !== null ? 1 : 0, v !== null ? core.length - 1 : core.length)
   const pts: Vec2[] = [
     ...(u !== null ? [{ ...u.p }] : []),
-    ...core,
+    ...inner,
     ...(v !== null ? [{ ...v.p }] : []),
   ]
   // dedupe
@@ -137,8 +168,6 @@ export function edgeCurvePts(
     const a = Q[Math.max(0, i - 1)]!, b = Q[Math.min(m, i + 1)]!
     return Math.atan2(b.y - a.y, b.x - a.x)
   }
-  // FORWARD travel direction at each anchor (the lab's fwd); clamped ends use
-  // their normals as OUTWARD tangents directly
   const fwd: number[] = Q.map((_, i) => catmull(i))
   const uAng = u !== null ? Math.atan2(u.n.y, u.n.x) : fwd[0]!
   const vAng = v !== null ? Math.atan2(v.n.y, v.n.x) : fwd[m]! + Math.PI

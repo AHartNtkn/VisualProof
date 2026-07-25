@@ -1,10 +1,9 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { routeObstacles, routeBounds, wireTerminalBCs, wireTerminalPoints } from './engine'
+import { ROUTE_CLEAR, routeObstacles, routeBounds, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
 import { edgeCurvePts } from './route/curve'
-import { rodBeta } from './relax'
 
 /**
  * Wire geometry over the ROUTED NETWORK (USER ruling 2026-07-24), pure —
@@ -68,7 +67,7 @@ function computeLegsUncached(e: Engine): LegGeom[] {
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const rt = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, rt.pts, fs, rodBeta(e))
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, rt.pts, ROUTE_CLEAR * e.scale)
       out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts })
     }
   }

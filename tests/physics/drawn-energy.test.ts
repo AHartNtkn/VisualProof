@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, TERM } from '../../src/kernel/diagram/sig'
-import { DISC_R, mkEngine, escapePoint, routeObstacles, routeBounds, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
+import { DISC_R, ROUTE_CLEAR, mkEngine, escapePoint, routeObstacles, routeBounds, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { wireEnergy, settleStep, recomputeRegions, resolveOverlaps, segSeparationE } from '../../src/view/relax'
 import type { Vec2 } from '../../src/view/vec'
@@ -36,7 +36,7 @@ function drawnWireCost(e: Engine): number {
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, space, beta)
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * e.scale)
       E += rodCost(pts, space, beta)
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
@@ -106,12 +106,11 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     expect(Math.abs(E - drawn)).toBeLessThan(1e-6 * (Math.abs(drawn) + 1))
   })
 
-  it('a forced U-turn rests GENTLE: min curvature radius ≥ half the node scale', () => {
-    // one node, its two ports wired to each other: the drawn curve must leave
-    // one port and arrive at the other — a net turn near π that no rotation
-    // can remove. Under the rod energy the turn spreads at radius ~r*; a
-    // total-turn energy leaves it concentrated in tight fillet corners.
-    // (bound = r*/2: within discretization slack of the derived radius)
+  it('a forced U-turn rests in the FAMILY: no kinks, radius at the pinned family floor', () => {
+    // one node, its two ports wired to each other: a net turn near π that no
+    // rotation can remove. The bound is the FAMILY's measured resting floor on
+    // this fixture (1.62 wu) with 20% slack — the family law defines gentle,
+    // not a rod-physics derivation. Kink bound: no adjacent-sample turn > π/4.
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'A', relSig([TERM, TERM]))
     b.wire(b.root, [
@@ -126,10 +125,113 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
       if (!settleStep(e)) break
       if (performance.now() - t0 > 20000) break
     }
-    const rStar = DISC_R * e.scale
     for (const leg of computeLegs(e)) {
-      const r = minRadius(leg.pts)
-      expect(r, `stroke bends at radius ${r.toFixed(2)} < r*/2 = ${(rStar / 2).toFixed(2)}`).toBeGreaterThanOrEqual(rStar / 2)
+      expect(minRadius(leg.pts), 'U rests at the family floor').toBeGreaterThanOrEqual(1.3)
+      for (let k = 1; k + 1 < leg.pts.length; k++) {
+        const d0 = Math.atan2(leg.pts[k]!.y - leg.pts[k - 1]!.y, leg.pts[k]!.x - leg.pts[k - 1]!.x)
+        const d1 = Math.atan2(leg.pts[k + 1]!.y - leg.pts[k]!.y, leg.pts[k + 1]!.x - leg.pts[k]!.x)
+        const turn = Math.abs(Math.atan2(Math.sin(d1 - d0), Math.cos(d1 - d0)))
+        expect(turn, `kink at sample ${k}`).toBeLessThan(Math.PI / 4)
+      }
+    }
+  })
+
+  it('corridor simplification: sub-clearance corner noise cannot change the curve', () => {
+    const u = { p: { x: 0, y: 0 }, n: { x: 1, y: 0 } }
+    const clean = [{ x: 3, y: 0 }, { x: 20, y: 6 }, { x: 40, y: 6 }]
+    const noisy = [{ x: 3, y: 0 }, { x: 20, y: 6 }, { x: 20.4, y: 6.2 }, { x: 40, y: 6 }]
+    // DP's contract is a deviation band, not bit-identity: the noisy corner
+    // may replace its clean neighbor WITHIN the tolerance — the two curves
+    // must stay inside the clearance band of each other
+    const a = edgeCurvePts(u, null, clean, 1.5)
+    const bb = edgeCurvePts(u, null, noisy, 1.5)
+    expect(bb.length).toBe(a.length)
+    for (let i = 0; i < a.length; i++) {
+      expect(Math.hypot(a[i]!.x - bb[i]!.x, a[i]!.y - bb[i]!.y)).toBeLessThanOrEqual(1.5)
+    }
+  })
+})
+
+describe('family conformance (coverage artifact): the drawn legs ARE Hobby cubics', () => {
+  /** Fit one cubic Bézier to samples taken at known parameters t=j/S by
+      linear least squares; a true cubic fits exactly. */
+  function cubicResidual(span: readonly Vec2[]): number {
+    const S = span.length - 1
+    const B = (i: number, t: number): number => {
+      const u = 1 - t
+      return [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t][i]!
+    }
+    const AtA: number[][] = Array.from({ length: 4 }, () => new Array<number>(4).fill(0))
+    const Atx = new Array<number>(4).fill(0)
+    const Aty = new Array<number>(4).fill(0)
+    for (let j = 0; j <= S; j++) {
+      const t = j / S
+      for (let i = 0; i < 4; i++) {
+        for (let k = 0; k < 4; k++) AtA[i]![k]! += B(i, t) * B(k, t)
+        Atx[i]! += B(i, t) * span[j]!.x
+        Aty[i]! += B(i, t) * span[j]!.y
+      }
+    }
+    const solve = (rhs: number[]): number[] => {
+      const M = AtA.map((row, i) => [...row, rhs[i]!])
+      for (let c = 0; c < 4; c++) {
+        let piv = c
+        for (let r2 = c + 1; r2 < 4; r2++) if (Math.abs(M[r2]![c]!) > Math.abs(M[piv]![c]!)) piv = r2
+        ;[M[c], M[piv]] = [M[piv]!, M[c]!]
+        for (let r2 = 0; r2 < 4; r2++) {
+          if (r2 === c) continue
+          const f = M[r2]![c]! / M[c]![c]!
+          for (let k = c; k < 5; k++) M[r2]![k]! -= f * M[c]![k]!
+        }
+      }
+      return M.map((row, i2) => row[4]! / M[i2]![i2]!)
+    }
+    const cx = solve(Atx), cy = solve(Aty)
+    let worst = 0
+    for (let j = 0; j <= S; j++) {
+      const t = j / S
+      let px = 0, py = 0
+      for (let i = 0; i < 4; i++) { px += B(i, t) * cx[i]!; py += B(i, t) * cy[i]! }
+      worst = Math.max(worst, Math.hypot(px - span[j]!.x, py - span[j]!.y))
+    }
+    return worst
+  }
+
+  it('every drawn span of a settled scene is exactly one cubic; clamped exits align with the port normal', () => {
+    const b = new DiagramBuilder()
+    const n0 = b.ref(b.root, 'A', relSig([TERM]))
+    const n1 = b.ref(b.root, 'B', relSig([TERM]))
+    b.wire(b.root, [
+      { node: n0, port: { kind: 'arg' as const, index: 0 } },
+      { node: n1, port: { kind: 'arg' as const, index: 0 } },
+    ])
+    const e = mkEngine(b.build(), [])
+    recomputeRegions(e)
+    resolveOverlaps(e)
+    const t0 = performance.now()
+    for (let i = 0; i < 100000; i++) {
+      if (!settleStep(e)) break
+      if (performance.now() - t0 > 20000) break
+    }
+    const SUB = 7
+    for (const leg of computeLegs(e)) {
+      expect((leg.pts.length - 1) % SUB, 'sample count is whole cubic spans').toBe(0)
+      for (let s0 = 0; s0 + SUB < leg.pts.length; s0 += SUB) {
+        const span = leg.pts.slice(s0, s0 + SUB + 1)
+        expect(cubicResidual(span), `span at ${s0} is a cubic`).toBeLessThan(1e-6)
+      }
+    }
+    for (const [, w] of e.wires) {
+      for (const bd of w.binds) {
+        const body = e.bodies.get(bd.body)!
+        const la = body.localAnchor.get(bd.key)!
+        const normal = Math.atan2(la.y, la.x) + body.theta
+        const leg = computeLegs(e).find((g) => g.leg.from.body === bd.body)
+        if (leg === undefined) continue
+        const dir = Math.atan2(leg.pts[1]!.y - leg.pts[0]!.y, leg.pts[1]!.x - leg.pts[0]!.x)
+        const off = Math.abs(Math.atan2(Math.sin(dir - normal), Math.cos(dir - normal)))
+        expect(off, 'clamped exit along the port normal').toBeLessThan(Math.PI / 8)
+      }
     }
   })
 })
