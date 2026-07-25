@@ -33,6 +33,7 @@ export class WorkerSearch implements LayoutSearch {
   #ackedSeq = 0
   #pending: SyncMsg | null = null
   #lastSyncKey = ''
+  #msgCounts: Record<string, number> = {}
 
   constructor() {
     this.#worker = new Worker(new URL('./optimize-worker.ts', import.meta.url), { type: 'module' })
@@ -42,6 +43,7 @@ export class WorkerSearch implements LayoutSearch {
     this.#worker.onmessageerror = (ev) => { console.error('[search] worker message error:', ev) }
     this.#worker.onmessage = (ev: MessageEvent<WorkerMsg>) => {
       const m = ev.data
+      this.#msgCounts[m.type] = (this.#msgCounts[m.type] ?? 0) + 1
       if (m.type === 'best') {
         if (m.scene === this.#scene) this.#best = { score: m.score, poses: m.poses, nets: m.nets }
       } else if (m.type === 'status') {
@@ -112,8 +114,8 @@ export class WorkerSearch implements LayoutSearch {
   }
 
   /** Debug-seam surface: current search state without log spam. */
-  debugState(): { scene: number; searching: boolean; bestScore: number | null; temperature: number } {
-    return { scene: this.#scene, searching: this.searching, bestScore: this.#best?.score ?? null, temperature: this.#temperature }
+  debugState(): { scene: number; searching: boolean; bestScore: number | null; temperature: number; msgCounts: Record<string, number> } {
+    return { scene: this.#scene, searching: this.searching, bestScore: this.#best?.score ?? null, temperature: this.#temperature, msgCounts: { ...this.#msgCounts } }
   }
 
   adoptLive(e: Engine, score: number): void {
