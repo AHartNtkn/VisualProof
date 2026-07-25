@@ -1,205 +1,248 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
-import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
-import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import {
+  applyDeiteration,
+  applyIteration,
+  findDeiterationEvidence,
+} from '../../../src/kernel/rules/iteration'
 
-const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = EMPTY_PROOF_CONTEXT
-
-const deiterate = (d: Parameters<typeof applyDeiteration>[0], sel: Parameters<typeof applyDeiteration>[1], fuel: number) => {
-  const evidence = findDeiterationEvidence(d, sel, fuel)
-  return applyDeiteration(d, sel, evidence.justifier, evidence.certificate)
+function host() {
+  const builder = new DiagramBuilder()
+  const node = builder.ref(builder.root, 'P', relSig([IOTA]))
+  const wire = builder.wire(builder.root, [
+    { node, port: { kind: 'arg', index: 0 } },
+  ])
+  const cut = builder.cut(builder.root)
+  return { diagram: builder.build(), node, wire, cut }
 }
 
-/** Host: node `y` at root wired to a hub, plus an empty cut to iterate into. */
-function host() {
-  const h = new DiagramBuilder()
-  const n = h.termNode(h.root, p('y'))
-  const hub = h.termNode(h.root, p('\\x. x'))
-  const w = h.wire(h.root, [
-    { node: n, port: { kind: 'freeVar', name: 'y' } },
-    { node: hub, port: { kind: 'output' } },
-  ])
-  const cut = h.cut(h.root)
-  return { d: h.build(), n, hub, w, cut }
+function deiterate(
+  diagram: Parameters<typeof applyDeiteration>[0],
+  selection: Parameters<typeof applyDeiteration>[1],
+  explorationFuel = 10_000,
+) {
+  const evidence = findDeiterationEvidence(diagram, selection, explorationFuel)
+  return applyDeiteration(
+    diagram,
+    selection,
+    evidence.justifier,
+    evidence.certificate,
+  )
 }
 
 describe('applyIteration', () => {
-  it('copies a subgraph into a descendant region, sharing attachments', () => {
-    const { d, n, w, cut } = host()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const out = applyIteration(d, sel, cut)
-    // the attachment wire gained the copy's endpoint
-    expect(out.wires[w]?.endpoints).toHaveLength(3)
-    const copies = Object.values(out.nodes).filter((x) => x.region === cut)
-    expect(copies).toHaveLength(1)
+  it('copies an exact subgraph into a descendant region with shared attachments', () => {
+    const { diagram, node, wire, cut } = host()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+
+    const iterated = applyIteration(diagram, selection, cut)
+
+    expect(iterated.wires[wire]!.endpoints).toHaveLength(2)
+    expect(Object.values(iterated.nodes).filter((candidate) => candidate.region === cut))
+      .toHaveLength(1)
   })
 
   it('permits iteration into the same region', () => {
-    const { d, n, w } = host()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const out = applyIteration(d, sel, d.root)
-    expect(out.wires[w]?.endpoints).toHaveLength(3)
+    const { diagram, node, wire } = host()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+
+    const iterated = applyIteration(diagram, selection, diagram.root)
+
+    expect(iterated.wires[wire]!.endpoints).toHaveLength(2)
   })
 
-  it('threads action reservations into the nested splice allocator', () => {
-    const builder = new DiagramBuilder()
-    const cut = builder.cut(builder.root)
-    builder.termNode(cut, p('\\x. x'))
-    const diagram = builder.build()
+  it('threads reservations into the splice allocator after retarget evidence', () => {
+    const { diagram, node, cut } = host()
     const selection = mkSelection(diagram, {
-      region: diagram.root, regions: [cut], nodes: [], wires: [],
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
     })
-    const action = {
-      label: 'reserved iteration',
-      steps: [{ rule: 'iteration' as const, sel: selection, target: diagram.root }],
-      placements: [],
-      allocation: { regions: [`${cut}_0`], nodes: ['n0_0'], wires: ['w0_0'] },
-    } as ProofAction & { readonly allocation: {
-      readonly regions: readonly string[]
-      readonly nodes: readonly string[]
-      readonly wires: readonly string[]
-    } }
 
-    const out = applyAction(diagram, action, ctx)
+    const iterated = applyIteration(diagram, selection, cut, [], {
+      regions: new Set(),
+      nodes: new Set([`${node}_0`]),
+      wires: new Set(),
+    })
 
-    expect(out.regions[`${cut}_1`]).toBeDefined()
-    expect(out.nodes['n0_1']).toBeDefined()
-    expect(out.wires['w0_1']).toBeDefined()
+    expect(iterated.nodes[`${node}_1`]).toBeDefined()
   })
 
   it('rejects targets outside the source region and targets inside the copy', () => {
-    const h = new DiagramBuilder()
-    const cutA = h.cut(h.root)
-    const inner = h.cut(cutA)
-    const cutB = h.cut(h.root)
-    const n = h.termNode(cutA, p('\\x. x'))
-    const d = h.build()
-    const sel = mkSelection(d, { region: cutA, regions: [inner], nodes: [n], wires: [] })
-    expect(() => applyIteration(d, sel, cutB))
-      .toThrowError(/iteration target 'r3' must lie within the source region 'r1'/)
-    expect(() => applyIteration(d, sel, inner))
-      .toThrowError(/iteration target 'r2' lies inside the iterated subgraph/)
+    const builder = new DiagramBuilder()
+    const source = builder.cut(builder.root)
+    const inner = builder.cut(source)
+    const sibling = builder.cut(builder.root)
+    const node = builder.ref(source, 'P', relSig([]))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: source,
+      regions: [inner],
+      nodes: [node],
+      wires: [],
+    })
+
+    expect(() => applyIteration(diagram, selection, sibling))
+      .toThrowError(/must lie within the source region/)
+    expect(() => applyIteration(diagram, selection, inner))
+      .toThrowError(/lies inside the iterated subgraph/)
   })
 })
 
-describe('applyDeiteration', () => {
-  it('iterate then deiterate is the identity (fingerprint)', () => {
-    const { d, n, cut } = host()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const iterated = applyIteration(d, sel, cut)
-    // the copy is the unique node in the cut
-    const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
-    const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    const back = deiterate(iterated, copySel, 100)
-    expect(exploreForm(back)).toBe(exploreForm(d))
+describe('exact applyDeiteration evidence', () => {
+  it('round-trips an iteration by canonical fingerprint', () => {
+    const { diagram, node, cut } = host()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+    const iterated = applyIteration(diagram, selection, cut)
+    const copy = Object.entries(iterated.nodes)
+      .find(([id, candidate]) => id !== node && candidate.region === cut)![0]
+    const copySelection = mkSelection(iterated, {
+      region: cut,
+      regions: [],
+      nodes: [copy],
+      wires: [],
+    })
+
+    expect(exploreForm(deiterate(iterated, copySelection))).toBe(exploreForm(diagram))
   })
 
-  it('rejects removal of an unjustified subgraph, by name', () => {
-    const { d, n } = host()
-    // the original has no second copy anywhere: deiterating it is unjustified
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    expect(() => deiterate(d, sel, 100))
-      .toThrowError(/no justifying occurrence found for deiteration at 'r0'/)
+  it('rejects removal with no disjoint exact justifier', () => {
+    const { diagram, node } = host()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+
+    expect(() => deiterate(diagram, selection))
+      .toThrowError(/no exact justifying occurrence/)
   })
 
-  it('rejects justification from a strict descendant: iteration only copies inward', () => {
-    // a (root) and b (inside a cut) share BOTH wires — b would justify a if
-    // the ancestor direction were ignored, which is the unsound direction
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('y'))
-    const cut = h.cut(h.root)
-    const b = h.termNode(cut, p('y'))
-    h.wire(h.root, [
-      { node: a, port: { kind: 'freeVar', name: 'y' } },
-      { node: b, port: { kind: 'freeVar', name: 'y' } },
+  it('rejects justification from a strict descendant', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.ref(builder.root, 'P', relSig([IOTA]))
+    const cut = builder.cut(builder.root)
+    const inner = builder.ref(cut, 'P', relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node: outer, port: { kind: 'arg', index: 0 } },
+      { node: inner, port: { kind: 'arg', index: 0 } },
     ])
-    h.wire(h.root, [
-      { node: a, port: { kind: 'output' } },
-      { node: b, port: { kind: 'output' } },
-    ])
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [a], wires: [] })
-    expect(() => deiterate(d, sel, 100))
-      .toThrowError(/no justifying occurrence/)
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [outer],
+      wires: [],
+    })
+
+    expect(() => deiterate(diagram, selection))
+      .toThrowError(/no exact justifying occurrence/)
   })
 
-  it('a copy cannot justify itself, and separate wires are not shared attachments', () => {
-    // ONE closed node: the matcher finds the node itself, but a copy cannot
-    // justify its own removal
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('\\x. x'))
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    expect(() => deiterate(d, sel, 100))
-      .toThrowError(/no justifying occurrence/)
-    // TWO separately built identical nodes have DISTINCT output wires:
-    // ∃x.P(x) ∧ ∃y.P(y) → ∃x.P(x) is erasure, not deiteration — refuse
-    const h2 = new DiagramBuilder()
-    const a = h2.termNode(h2.root, p('\\x. x'))
-    h2.termNode(h2.root, p('\\x. x'))
-    const d2 = h2.build()
-    const sel2 = mkSelection(d2, { region: d2.root, regions: [], nodes: [a], wires: [] })
-    expect(() => deiterate(d2, sel2, 100))
-      .toThrowError(/no justifying occurrence/)
+  it('does not let a copy justify itself or a separately wired isomorph justify removal', () => {
+    const singletonBuilder = new DiagramBuilder()
+    const singleton = singletonBuilder.ref(singletonBuilder.root, 'P', relSig([]))
+    const singletonDiagram = singletonBuilder.build()
+    const singletonSelection = mkSelection(singletonDiagram, {
+      region: singletonDiagram.root,
+      regions: [],
+      nodes: [singleton],
+      wires: [],
+    })
+    expect(() => deiterate(singletonDiagram, singletonSelection))
+      .toThrowError(/no exact justifying occurrence/)
+
+    const separateBuilder = new DiagramBuilder()
+    const first = separateBuilder.ref(separateBuilder.root, 'P', relSig([IOTA]))
+    const second = separateBuilder.ref(separateBuilder.root, 'P', relSig([IOTA]))
+    separateBuilder.wire(separateBuilder.root, [
+      { node: first, port: { kind: 'arg', index: 0 } },
+    ])
+    separateBuilder.wire(separateBuilder.root, [
+      { node: second, port: { kind: 'arg', index: 0 } },
+    ])
+    const separateDiagram = separateBuilder.build()
+    const separateSelection = mkSelection(separateDiagram, {
+      region: separateDiagram.root,
+      regions: [],
+      nodes: [second],
+      wires: [],
+    })
+    expect(() => deiterate(separateDiagram, separateSelection))
+      .toThrowError(/no exact justifying occurrence/)
   })
 
-  it('attachment-SHARING duplicates deiterate: ∃x.(P(x)∧P(x)) → ∃x.P(x)', () => {
-    // two `y` nodes sharing BOTH their y-wire and their output wire
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('y'))
-    const b = h.termNode(h.root, p('y'))
-    h.wire(h.root, [
-      { node: a, port: { kind: 'freeVar', name: 'y' } },
-      { node: b, port: { kind: 'freeVar', name: 'y' } },
+  it('removes an attachment-sharing duplicate', () => {
+    const builder = new DiagramBuilder()
+    const first = builder.ref(builder.root, 'P', relSig([IOTA]))
+    const second = builder.ref(builder.root, 'P', relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node: first, port: { kind: 'arg', index: 0 } },
+      { node: second, port: { kind: 'arg', index: 0 } },
     ])
-    h.wire(h.root, [
-      { node: a, port: { kind: 'output' } },
-      { node: b, port: { kind: 'output' } },
-    ])
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [b], wires: [] })
-    const out = deiterate(d, sel, 100)
-    expect(Object.keys(out.nodes)).toHaveLength(1)
-    expect(out.nodes[a]).toBeDefined()
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [second],
+      wires: [],
+    })
+
+    const result = deiterate(diagram, selection)
+
+    expect(Object.keys(result.nodes)).toEqual([first])
   })
 
-  it('refuses removal justified only by an ISOMORPHIC occurrence under a DIFFERENT relation identity', () => {
-    // Host: atom aJ and atom aT, structurally isomorphic (same arity-1 sig)
-    // and sharing their arg wire, but NOT their head wire — aJ and aT
-    // witness different relational identities. There is no binder
-    // machinery in the sig model: a relation's identity rides entirely on
-    // its head wire, an ordinary attachment, so the exact-attachment match
-    // that justification requires fails on the head wire alone, and the
-    // removal is correctly refused as unjustified.
-    const h = new DiagramBuilder()
-    const aJ = h.atom(h.root, relSig([IOTA]))
-    const c1 = h.cut(h.root)
-    const aT = h.atom(c1, relSig([IOTA]))
-    h.wire(h.root, [
-      { node: aJ, port: { kind: 'arg', index: 0 } },
-      { node: aT, port: { kind: 'arg', index: 0 } },
+  it('requires exact reference identity, not signature-only isomorphism', () => {
+    const builder = new DiagramBuilder()
+    const first = builder.ref(builder.root, 'P', relSig([IOTA]))
+    const second = builder.ref(builder.root, 'Q', relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node: first, port: { kind: 'arg', index: 0 } },
+      { node: second, port: { kind: 'arg', index: 0 } },
     ])
-    const d = h.build()
-    const sel = mkSelection(d, { region: c1, regions: [], nodes: [aT], wires: [] })
-    expect(() => deiterate(d, sel, 100))
-      .toThrowError(/no justifying occurrence/)
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [second],
+      wires: [],
+    })
+
+    expect(() => deiterate(diagram, selection))
+      .toThrowError(/no exact justifying occurrence/)
   })
 
-  it('mentions undecided pairs in the failure when fuel ran out', () => {
-    // copy and candidate original are both non-normalizing and structurally
-    // different — comparison exhausts fuel, so the failure must say so
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('(\\x. x x) (\\x. x x)'))
-    h.termNode(h.root, p('(\\x. x x x) (\\x. x x x)'))
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [a], wires: [] })
-    expect(() => deiterate(d, sel, 25))
-      .toThrowError(/undecided under fuel 25/)
+  it('reports exhausted graph exploration without a semantic undecided channel', () => {
+    const { diagram, node } = host()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+
+    expect(() => findDeiterationEvidence(diagram, selection, 1))
+      .toThrowError(/graph exploration exhausted/)
   })
 })

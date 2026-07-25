@@ -11,16 +11,16 @@ import { RuleError } from './error'
  */
 function reparent(n: DiagramNode, region: RegionId): DiagramNode {
   switch (n.kind) {
-    case 'term': return { kind: 'term', region, term: n.term, freePorts: n.freePorts }
     case 'atom': return { kind: 'atom', region, sig: n.sig }
     case 'ref': return { kind: 'ref', region, defId: n.defId, sig: n.sig }
-    case 'body': return { kind: 'body', region, sig: n.sig, content: n.content }
+    case 'identity':
+      return { kind: 'identity', region, sig: n.sig, arity: n.arity }
   }
 }
 
 /**
- * Rule 4a (spec §3.1): wrap a selection in two fresh nested cuts. Implemented
- * by REPARENTING — every id is stable, so callers' references survive.
+ * Wrap a selection in two fresh nested cuts. Implemented by REPARENTING —
+ * every id is stable, so callers' references survive.
  * Explicitly selected top-level wires keep their scope: they pass through the
  * empty annulus (∃x · ¬¬φ(x) ≡ ∃x · φ(x)). Equivalence — no polarity gate.
  */
@@ -51,8 +51,8 @@ export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection, reservat
 }
 
 /**
- * Rule 4b: eliminate a double cut. The outer cut's annulus must be empty:
- * exactly one child region (a cut), no nodes, no wires SCOPED there
+ * Eliminate a double cut. The outer cut's annulus must be empty: exactly one
+ * child region (a cut), no nodes, no wires SCOPED there
  * (pass-through wires are scoped above and unaffected). The inner cut's
  * contents are promoted to the outer cut's parent.
  */

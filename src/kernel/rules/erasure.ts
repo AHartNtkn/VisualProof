@@ -6,23 +6,21 @@ import { removeSubgraph } from '../diagram/subgraph/splice'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
-/** Rule 2a (spec §3.1): delete any subgraph from a POSITIVE region. Applied
-    with the backward orientation (reasoning from a goal), the gate flips to
-    NEGATIVE — the calculus's cut symmetry: erasing from a goal's negative
-    region is forward erasure read right-to-left. The gate stays inside the
-    applier either way; there is no gate-free entry. */
-export function applyErasure(d: Diagram, sel: SubgraphSelection, orientation: 'forward' | 'backward' = 'forward'): Diagram {
-  const need = orientation === 'forward' ? 'positive' : 'negative'
+/** Ordinary erasure deletes any selected subgraph from a positive region.
+ * Negative insertion is owned by concrete insertion rules; there is no
+ * backward-erasure insertion API. */
+export function applyErasure(d: Diagram, sel: SubgraphSelection): Diagram {
+  const need = 'positive'
   const have = polarity(d, sel.region)
   if (have !== need) {
-    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}erasure requires a ${need} region; '${sel.region}' is ${have}`)
+    throw new RuleError(`erasure requires a ${need} region; '${sel.region}' is ${have}`)
   }
   return removeSubgraph(d, sel)
 }
 
 /**
- * Rule 2b: sever a wire — split its endpoints into the kept group (staying on
- * the original wire) and the rest (moving to a fresh wire at the same scope).
+ * Sever a wire by splitting its endpoints into the kept group (staying on the
+ * original wire) and the rest (moving to a fresh wire at the same scope).
  * Replaces `φ(x,x)` by the weaker `∃y φ(x,y)` at the wire's scope, so the
  * scope must be POSITIVE.
  */

@@ -5,7 +5,10 @@ import { sigEquals, sigKey } from '../diagram/sig'
 import { RuleError } from './error'
 
 /**
- * Rule 1b: join two wires (assert identity of their individuals). Replaces
+ * General gated cross-scope merge: join two wires (assert identity of their
+ * individuals). This is distinct from the eager identity-node canonicalizer:
+ * it authorizes an inference between already-existing wires rather than
+ * normalizing stored identity content. Replaces
  * the inner quantifier's content `∃y ψ(y)` by the stronger `ψ(x)`, so the
  * INNER wire's scope must be negative. Scopes must be comparable; the merged
  * wire keeps the outer scope (and the outer wire's id). Only wires of the
@@ -52,5 +55,13 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId, orientation: 'fo
       ? { scope: outer.scope, sig: outer.sig, endpoints: [...outer.endpoints, ...inner.endpoints] }
       : w
   }
-  return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
+  // The authoritative constructor normalizes any identity nodes affected by
+  // the merge and validates the resulting graph before it crosses the rule
+  // boundary.
+  return mkDiagram({
+    root: d.root,
+    regions: { ...d.regions },
+    nodes: { ...d.nodes },
+    wires,
+  })
 }

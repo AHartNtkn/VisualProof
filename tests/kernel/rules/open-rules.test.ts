@@ -1,67 +1,87 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import {
+  applyDeiteration,
+  applyIteration,
+  findDeiterationEvidence,
+} from '../../../src/kernel/rules/iteration'
 
-const p = (s: string) => parseTerm(s)
-
-/** A relational atom applied to a term on a shared wire, inside an outer cut
- * (the source region), plus an inner empty cut to iterate into. The atom's head
- * sits on its own relational wire scoped in the outer cut. */
 function host() {
-  const h = new DiagramBuilder()
-  const outer = h.cut(h.root)
-  const n = h.termNode(outer, p('\\x. x'))
-  const a = h.atom(outer, relSig([IOTA]))
-  const w = h.wire(outer, [
-    { node: n, port: { kind: 'output' } },
-    { node: a, port: { kind: 'arg', index: 0 } },
+  const builder = new DiagramBuilder()
+  const outer = builder.cut(builder.root)
+  const atom = builder.atom(outer, relSig([IOTA]))
+  const argument = builder.wire(outer, [
+    { node: atom, port: { kind: 'arg', index: 0 } },
   ])
-  const cut = h.cut(outer)
-  return { d: h.build(), outer, n, a, w, cut }
+  const target = builder.cut(outer)
+  return { diagram: builder.build(), outer, atom, argument, target }
 }
 
-describe('open iteration / deiteration', () => {
-  it('iterates a relational application into a cut, then deiterates back (fingerprint)', () => {
-    const { d, outer, n, a, cut } = host()
-    const sel = mkSelection(d, { region: outer, regions: [], nodes: [n, a], wires: [] })
-    const iterated = applyIteration(d, sel, cut)
-    const copies = Object.entries(iterated.nodes).filter(([, x]) => x.region === cut)
-    expect(copies).toHaveLength(2)
-    const copyAtom = copies.find(([, x]) => x.kind === 'atom')!
-    expect(copyAtom[1].kind).toBe('atom')
-    const copySel = mkSelection(iterated, {
-      region: cut, regions: [], nodes: copies.map(([id]) => id), wires:
-        Object.entries(iterated.wires).filter(([, wv]) =>
-          wv.scope === cut).map(([id]) => id),
+describe('open relational iteration and deiteration', () => {
+  it('copies an atom with ordinary argument and relational-head attachments, then removes it exactly', () => {
+    const { diagram, outer, atom, argument, target } = host()
+    const selection = mkSelection(diagram, {
+      region: outer,
+      regions: [],
+      nodes: [atom],
+      wires: [],
     })
-    const evidence = findDeiterationEvidence(iterated, copySel, 100)
-    const back = applyDeiteration(iterated, copySel, evidence.justifier, evidence.certificate)
-    expect(exploreForm(back)).toBe(exploreForm(d))
+
+    const iterated = applyIteration(diagram, selection, target)
+    const copy = Object.entries(iterated.nodes)
+      .find(([id, node]) => id !== atom && node.kind === 'atom' && node.region === target)![0]
+    const copySelection = mkSelection(iterated, {
+      region: target,
+      regions: [],
+      nodes: [copy],
+      wires: [],
+    })
+    const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+    const restored = applyDeiteration(
+      iterated,
+      copySelection,
+      evidence.justifier,
+      evidence.certificate,
+    )
+
+    expect(iterated.wires[argument]!.endpoints.some((endpoint) => endpoint.node === copy))
+      .toBe(true)
+    expect(exploreForm(restored)).toBe(exploreForm(diagram))
   })
 
-  it('refuses iteration to a target that does not lie within the source region', () => {
-    const { d, outer, n, a } = host()
-    const sel = mkSelection(d, { region: outer, regions: [], nodes: [n, a], wires: [] })
-    // the root encloses the source cut, so it is not within it
-    expect(() => applyIteration(d, sel, d.root))
+  it('rejects iteration to a region outside the source', () => {
+    const { diagram, outer, atom } = host()
+    const selection = mkSelection(diagram, {
+      region: outer,
+      regions: [],
+      nodes: [atom],
+      wires: [],
+    })
+
+    expect(() => applyIteration(diagram, selection, diagram.root))
       .toThrowError(/must lie within the source region/)
   })
 
-  it('deiteration justification requires a matching occurrence: a lone application does not justify', () => {
-    const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, p('\\x. x'))
-    const a1 = h.atom(h.root, relSig([IOTA]))
-    h.wire(h.root, [
-      { node: n1, port: { kind: 'output' } },
-      { node: a1, port: { kind: 'arg', index: 0 } },
+  it('requires the same relational head attachment, not only atom signature and arguments', () => {
+    const builder = new DiagramBuilder()
+    const first = builder.atom(builder.root, relSig([IOTA]))
+    const second = builder.atom(builder.root, relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node: first, port: { kind: 'arg', index: 0 } },
+      { node: second, port: { kind: 'arg', index: 0 } },
     ])
-    const d = h.build()
-    // only ONE R-application exists: deiterating it must fail (no justifier)
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n1, a1], wires: [] })
-    expect(() => findDeiterationEvidence(d, sel, 100)).toThrowError(/no justifying occurrence/)
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [second],
+      wires: [],
+    })
+
+    expect(() => findDeiterationEvidence(diagram, selection, 10_000))
+      .toThrowError(/no exact justifying occurrence/)
   })
 })

@@ -1,82 +1,131 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyOpenTermSpawn } from '../../../src/kernel/rules/spawn'
+import type { Diagram } from '../../../src/kernel/diagram/diagram'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import {
+  mkSelection,
+  type SubgraphSelection,
+} from '../../../src/kernel/diagram/subgraph/selection'
+import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
-import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
-import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
+import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
+import {
+  applyDeiteration,
+  applyIteration,
+  findDeiterationEvidence,
+} from '../../../src/kernel/rules/iteration'
 
-const p = (s: string) => parseTerm(s)
-
-/** Depth-parameterized host: a node nested under `depth` cuts. */
 function nested(depth: number) {
-  const h = new DiagramBuilder()
-  let region = h.root
-  const cuts: string[] = []
-  for (let i = 0; i < depth; i++) {
-    region = h.cut(region)
-    cuts.push(region)
-  }
-  const n = h.termNode(region, p('\\x. x'))
-  return { d: h.build(), region, n, cuts }
+  const builder = new DiagramBuilder()
+  let region = builder.root
+  for (let index = 0; index < depth; index++) region = builder.cut(region)
+  const node = builder.ref(region, 'closed', relSig([]))
+  const left = builder.wire(builder.root, [])
+  const right = builder.wire(builder.root, [])
+  return { diagram: builder.build(), region, node, left, right }
 }
 
-describe('polarity matrix across depths 0..3', () => {
+describe('polarity matrix across depths 0–3', () => {
   for (let depth = 0; depth <= 3; depth++) {
     const positive = depth % 2 === 0
-    it(`depth ${depth} (${positive ? 'positive' : 'negative'}): atomic spawn ${positive ? 'rejected' : 'allowed'}, erasure ${positive ? 'allowed' : 'rejected'}`, () => {
-      const { d, region, n } = nested(depth)
+
+    it(`depth ${depth} (${positive ? 'positive' : 'negative'}): identity insertion and erasure are complementary`, () => {
+      const { diagram, region, node, left, right } = nested(depth)
+      const selection = mkSelection(diagram, {
+        region,
+        regions: [],
+        nodes: [node],
+        wires: [],
+      })
+
       if (positive) {
-        expect(() => applyOpenTermSpawn(d, region, p('x'), ['x']))
-          .toThrowError(/spawning requires a negative region/)
-        const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
-        expect(() => applyErasure(d, sel)).not.toThrow()
+        expect(() => applyIdentityInsertion(diagram, region, [left, right]))
+          .toThrowError(/identity insertion requires a negative region/)
+        expect(() => applyErasure(diagram, selection)).not.toThrow()
       } else {
-        expect(() => applyOpenTermSpawn(d, region, p('x'), ['x'])).not.toThrow()
-        const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
-        expect(() => applyErasure(d, sel))
+        expect(() => applyIdentityInsertion(diagram, region, [left, right])).not.toThrow()
+        expect(() => applyErasure(diagram, selection))
+          .toThrowError(/erasure requires a positive region/)
+        const legacyShape = applyErasure as unknown as (
+          d: Diagram,
+          selection: SubgraphSelection,
+          orientation: string,
+        ) => Diagram
+        expect(() => legacyShape(diagram, selection, 'backward'))
           .toThrowError(/erasure requires a positive region/)
       }
     })
 
-    it(`depth ${depth}: iteration and double cut are polarity-free`, () => {
-      const { d, region, n } = nested(depth)
-      const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
-      expect(() => applyIteration(d, sel, region)).not.toThrow()
-      expect(() => applyDoubleCutIntro(d, sel)).not.toThrow()
+    it(`depth ${depth}: iteration and double-cut rules remain polarity-free`, () => {
+      const { diagram, region, node } = nested(depth)
+      const selection = mkSelection(diagram, {
+        region,
+        regions: [],
+        nodes: [node],
+        wires: [],
+      })
+
+      expect(() => applyIteration(diagram, selection, region)).not.toThrow()
+      expect(() => applyDoubleCutIntro(diagram, selection)).not.toThrow()
     })
   }
 })
 
-describe('inverse round-trips (fingerprint identities)', () => {
-  it('double-cut round-trips at every depth', () => {
+describe('structural round trips', () => {
+  it('double-cut introduction and elimination round-trip at every depth', () => {
     for (let depth = 0; depth <= 2; depth++) {
-      const { d, region, n } = nested(depth)
-      const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
-      const wrapped = applyDoubleCutIntro(d, sel)
-      const outer = Object.entries(wrapped.regions)
-        .find(([id, r]) => r.kind === 'cut' && r.parent === region && d.regions[id] === undefined)![0]
-      expect(exploreForm(applyDoubleCutElim(wrapped, outer))).toBe(exploreForm(d))
+      const { diagram, region, node } = nested(depth)
+      const selection = mkSelection(diagram, {
+        region,
+        regions: [],
+        nodes: [node],
+        wires: [],
+      })
+      const wrapped = applyDoubleCutIntro(diagram, selection)
+      const outer = Object.entries(wrapped.regions).find(
+        ([id, candidate]) =>
+          id !== region
+          && candidate.kind === 'cut'
+          && candidate.parent === region
+          && diagram.regions[id] === undefined,
+      )![0]
+
+      expect(exploreForm(applyDoubleCutElim(wrapped, outer)))
+        .toBe(exploreForm(diagram))
     }
   })
 
-  it('iterate-into-cut then deiterate round-trips under nesting', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const n = h.termNode(h.root, p('y'))
-    const hub = h.termNode(h.root, p('\\x. x'))
-    h.wire(h.root, [
-      { node: n, port: { kind: 'freeVar', name: 'y' } },
-      { node: hub, port: { kind: 'output' } },
+  it('iteration into a cut and exact deiteration round-trip under nesting', () => {
+    const builder = new DiagramBuilder()
+    const target = builder.cut(builder.root)
+    const node = builder.ref(builder.root, 'P', relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node, port: { kind: 'arg', index: 0 } },
     ])
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const iterated = applyIteration(d, sel, cut)
-    const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
-    const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    const evidence = findDeiterationEvidence(iterated, copySel, 100)
-    expect(exploreForm(applyDeiteration(iterated, copySel, evidence.justifier, evidence.certificate))).toBe(exploreForm(d))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+    const iterated = applyIteration(diagram, selection, target)
+    const copy = Object.entries(iterated.nodes)
+      .find(([id, candidate]) => id !== node && candidate.region === target)![0]
+    const copySelection = mkSelection(iterated, {
+      region: target,
+      regions: [],
+      nodes: [copy],
+      wires: [],
+    })
+    const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+
+    expect(exploreForm(applyDeiteration(
+      iterated,
+      copySelection,
+      evidence.justifier,
+      evidence.certificate,
+    ))).toBe(exploreForm(diagram))
   })
 })

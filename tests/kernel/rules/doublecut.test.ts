@@ -1,131 +1,161 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { relSig } from '../../../src/kernel/diagram/sig'
-import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
-
-const p = (s: string) => parseTerm(s)
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 
 describe('double cut', () => {
-  it('intro wraps a selection in two fresh cuts; elim undoes it (fingerprint identity)', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('y'))
-    const hub = h.termNode(h.root, p('\\x. x'))
-    h.wire(h.root, [
-      { node: n, port: { kind: 'freeVar', name: 'y' } },
-      { node: hub, port: { kind: 'output' } },
+  it('wraps a selection in two cuts and eliminates them as a fingerprint identity', () => {
+    const builder = new DiagramBuilder()
+    const selected = builder.ref(builder.root, 'P', relSig([IOTA]))
+    const outside = builder.ref(builder.root, 'Q', relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node: selected, port: { kind: 'arg', index: 0 } },
+      { node: outside, port: { kind: 'arg', index: 0 } },
     ])
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const wrapped = applyDoubleCutIntro(d, sel)
-    // find the new outer cut: a cut in root whose only child is a cut
-    const outer = Object.entries(wrapped.regions).find(([, r]) => r.kind === 'cut' && r.parent === d.root)![0]
-    const inner = Object.entries(wrapped.regions).find(([, r]) => r.kind === 'cut' && r.parent === outer)![0]
-    const movedNode = Object.values(wrapped.nodes).find((x) => x.region === inner)
-    expect(movedNode).toBeDefined()
-    // the crossing wire passes through: still scoped at root
-    const crossing = Object.values(wrapped.wires).find((w) => w.endpoints.length === 2)
-    expect(crossing?.scope).toBe(d.root)
-    const unwrapped = applyDoubleCutElim(wrapped, outer)
-    expect(exploreForm(unwrapped)).toBe(exploreForm(d))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [selected],
+      wires: [],
+    })
+
+    const wrapped = applyDoubleCutIntro(diagram, selection)
+    const outer = Object.entries(wrapped.regions).find(
+      ([id, region]) =>
+        diagram.regions[id] === undefined
+        && region.kind === 'cut'
+        && region.parent === diagram.root,
+    )![0]
+    const inner = Object.entries(wrapped.regions).find(
+      ([, region]) => region.kind === 'cut' && region.parent === outer,
+    )![0]
+
+    expect(wrapped.nodes[selected]!.region).toBe(inner)
+    expect(Object.values(wrapped.wires).find((wire) => wire.endpoints.length === 2)!.scope)
+      .toBe(diagram.root)
+    expect(exploreForm(applyDoubleCutElim(wrapped, outer))).toBe(exploreForm(diagram))
   })
 
-  it('intro on an empty selection produces a bare double cut', () => {
-    const h = new DiagramBuilder()
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [], wires: [] })
-    const wrapped = applyDoubleCutIntro(d, sel)
-    expect(Object.keys(wrapped.regions)).toHaveLength(3) // root + two cuts
+  it('wraps an empty selection as a bare double cut', () => {
+    const builder = new DiagramBuilder()
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [],
+      wires: [],
+    })
+
+    const wrapped = applyDoubleCutIntro(diagram, selection)
+
+    expect(Object.keys(wrapped.regions)).toHaveLength(3)
   })
 
-  it('elim rejects non-cuts, annulus content, and multiple children, by name', () => {
-    const h = new DiagramBuilder()
-    // Region has no third kind besides sheet/cut, so the root itself (the
-    // only sheet) is the successor of the old "not a cut" bubble case.
-    const cutA = h.cut(h.root)
-    h.cut(cutA) // cutA has a child cut...
-    h.termNode(cutA, p('\\x. x')) // ...but also a node in the annulus
-    const cutB = h.cut(h.root)
-    h.cut(cutB)
-    h.cut(cutB) // second child: not a lone double cut
-    const cutC = h.cut(h.root)
-    h.cut(cutC)
-    h.wire(cutC, []) // wire scoped in the annulus
-    const cutD = h.cut(h.root)
-    h.cut(cutD) // clean double cut for contrast
-    const d = h.build()
-    expect(() => applyDoubleCutElim(d, d.root))
-      .toThrowError(new RegExp(`double-cut elimination requires a cut; '${d.root}' is a sheet`))
-    expect(() => applyDoubleCutElim(d, cutA))
-      .toThrowError(new RegExp(`annulus '${cutA}' must contain exactly one child cut and nothing else`))
-    expect(() => applyDoubleCutElim(d, cutB))
-      .toThrowError(new RegExp(`annulus '${cutB}' must contain exactly one child cut and nothing else`))
-    expect(() => applyDoubleCutElim(d, cutC))
-      .toThrowError(new RegExp(`annulus '${cutC}' must contain exactly one child cut and nothing else`))
-    expect(() => applyDoubleCutElim(d, cutD)).not.toThrow()
+  it('rejects sheets, annulus nodes, annulus wires, and multiple child cuts', () => {
+    const builder = new DiagramBuilder()
+    const withNode = builder.cut(builder.root)
+    builder.cut(withNode)
+    builder.ref(withNode, 'annulus', relSig([]))
+    const withChildren = builder.cut(builder.root)
+    builder.cut(withChildren)
+    builder.cut(withChildren)
+    const withWire = builder.cut(builder.root)
+    builder.cut(withWire)
+    builder.wire(withWire, [])
+    const clean = builder.cut(builder.root)
+    builder.cut(clean)
+    const diagram = builder.build()
+
+    expect(() => applyDoubleCutElim(diagram, diagram.root))
+      .toThrowError(/double-cut elimination requires a cut/)
+    expect(() => applyDoubleCutElim(diagram, withNode))
+      .toThrowError(/must contain exactly one child cut and nothing else/)
+    expect(() => applyDoubleCutElim(diagram, withChildren))
+      .toThrowError(/must contain exactly one child cut and nothing else/)
+    expect(() => applyDoubleCutElim(diagram, withWire))
+      .toThrowError(/must contain exactly one child cut and nothing else/)
+    expect(() => applyDoubleCutElim(diagram, clean)).not.toThrow()
   })
 
-  it('elim promotes inner-scoped wires to the outer parent', () => {
-    const h = new DiagramBuilder()
-    const outer = h.cut(h.root)
-    const inner = h.cut(outer)
-    const n = h.termNode(inner, p('\\x. x'))
-    const w = h.wire(inner, [{ node: n, port: { kind: 'output' } }])
-    const d = h.build()
-    const out = applyDoubleCutElim(d, outer)
-    expect(out.wires[w]?.scope).toBe(d.root)
-    expect(out.nodes[n]?.region).toBe(d.root)
-    expect(out.regions[outer]).toBeUndefined()
-    expect(out.regions[inner]).toBeUndefined()
+  it('promotes inner-scoped wires and exact ref nodes to the outer parent', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.cut(builder.root)
+    const inner = builder.cut(outer)
+    const node = builder.ref(inner, 'P', relSig([IOTA]))
+    const wire = builder.wire(inner, [
+      { node, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+
+    const eliminated = applyDoubleCutElim(diagram, outer)
+
+    expect(eliminated.wires[wire]!.scope).toBe(diagram.root)
+    expect(eliminated.nodes[node]!.region).toBe(diagram.root)
+    expect(eliminated.regions[outer]).toBeUndefined()
+    expect(eliminated.regions[inner]).toBeUndefined()
   })
 
-  it('intro_at_nested_region: outer cut is parented to sel.region not root (kills M1)', () => {
-    // sel.region is a cut, not the sheet root
-    const h = new DiagramBuilder()
-    const enclosing = h.cut(h.root)
-    const n = h.termNode(enclosing, p('\\x. x'))
-    const d = h.build()
-    const sel = mkSelection(d, { region: enclosing, regions: [], nodes: [n], wires: [] })
-    const wrapped = applyDoubleCutIntro(d, sel)
-    // a new cut must be parented directly to enclosing, not to root
-    const outer = Object.entries(wrapped.regions).find(([, r]) => r.kind === 'cut' && r.parent === enclosing)
-    expect(outer).toBeDefined()
-    const newCutsAtRoot = Object.entries(wrapped.regions).filter(
-      ([id, r]) => r.kind === 'cut' && r.parent === h.root && id !== enclosing,
+  it('parents introduction at the selected nested region rather than the sheet', () => {
+    const builder = new DiagramBuilder()
+    const enclosing = builder.cut(builder.root)
+    const node = builder.ref(enclosing, 'P', relSig([]))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: enclosing,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+
+    const wrapped = applyDoubleCutIntro(diagram, selection)
+    const freshAtEnclosing = Object.entries(wrapped.regions).filter(
+      ([id, region]) =>
+        diagram.regions[id] === undefined
+        && region.kind === 'cut'
+        && region.parent === enclosing,
     )
-    expect(newCutsAtRoot).toHaveLength(0)
+
+    expect(freshAtEnclosing).toHaveLength(1)
   })
 
-  it('elim_nested_in_cut: promotes to enclosing cut not root (kills M2)', () => {
-    // double-cut sits inside another cut; contents must go there, not to sheet root
-    const h = new DiagramBuilder()
-    const enclosing = h.cut(h.root)
-    const outer = h.cut(enclosing)
-    const inner = h.cut(outer)
-    const n = h.termNode(inner, p('\\x. x'))
-    const d = h.build()
-    const out = applyDoubleCutElim(d, outer)
-    expect(out.nodes[n]?.region).toBe(enclosing)
-    expect(out.nodes[n]?.region).not.toBe(h.root)
+  it('promotes nested elimination content to the enclosing cut, not the sheet', () => {
+    const builder = new DiagramBuilder()
+    const enclosing = builder.cut(builder.root)
+    const outer = builder.cut(enclosing)
+    const inner = builder.cut(outer)
+    const node = builder.ref(inner, 'P', relSig([]))
+    const diagram = builder.build()
+
+    const eliminated = applyDoubleCutElim(diagram, outer)
+
+    expect(eliminated.nodes[node]!.region).toBe(enclosing)
   })
 
-  it('elim_rejects_node_only_in_annulus: arity-0 atom with no wire triggers gate (kills M5)', () => {
-    // An arity-0 ref node (unlike atom, which always has a head port) has
-    // zero required ports, so it produces no auto-wire: wiresInOuter=false
-    // but nodesInOuter=true — the gate must still fire.
-    const h = new DiagramBuilder()
-    const outer = h.cut(h.root)
-    h.cut(outer)      // lone child cut — otherwise the test would reject for wrong reason
-    h.ref(outer, 'dummy', relSig([])) // arity-0 ref in annulus; no ports, no auto-wires
-    const d = h.build()
-    expect(() => applyDoubleCutElim(d, outer))
-      .toThrowError(new RegExp(`annulus '${outer}' must contain exactly one child cut and nothing else`))
-  })
+  it('reparents identity nodes without introducing an alternate identity model', () => {
+    const builder = new DiagramBuilder()
+    const enclosing = builder.cut(builder.root)
+    const identity = builder.identity(enclosing, IOTA, 2)
+    builder.wire(builder.root, [
+      { node: identity, port: { kind: 'identity', index: 0 } },
+    ])
+    builder.wire(builder.root, [
+      { node: identity, port: { kind: 'identity', index: 1 } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: enclosing,
+      regions: [],
+      nodes: [identity],
+      wires: [],
+    })
 
-  // The old "lone child is a bubble, not a cut" mutation-kill (M6) has no
-  // successor: Region has no third kind, so mkDiagram itself now guarantees
-  // every non-root region is a cut — the case this test targeted is
-  // unreachable by construction, not merely untested.
+    const wrapped = applyDoubleCutIntro(diagram, selection)
+    const moved = wrapped.nodes[identity]
+
+    expect(moved).toMatchObject({ kind: 'identity', sig: IOTA, arity: 2 })
+    expect(moved!.region).not.toBe(enclosing)
+  })
 })
