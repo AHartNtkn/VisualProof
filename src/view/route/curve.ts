@@ -1,6 +1,6 @@
 import type { Vec2 } from '../vec'
 import type { Bounds, Disc } from './freespace'
-import { POLY_K, segSoftCost } from './freespace'
+import { segSoftCost } from './freespace'
 
 /**
  * THE DRAWN CURVE + ROD ENERGY (USER ruling 2026-07-24: "the minimal energy
@@ -40,62 +40,74 @@ export type CurveBC = { readonly p: Vec2; readonly n: Vec2; readonly ownDisc?: D
 const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y })
 const len = (a: Vec2): number => Math.hypot(a.x, a.y)
 
-const perp = (a: Vec2): Vec2 => ({ x: -a.y, y: a.x })
+const wrapA = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
 
 /**
- * The rod boundary layer at a clamped end, in closed form: the arc of radius
- * ρ tangent to the clamp direction `n` at `A`, followed until its tangent
- * line aims at `P` (the first corridor point). Both circle sides are tried;
- * the smaller sweep wins (deterministic, ties → left). Returns [A, …arc
- * samples…, touch point]; empty sweep (P straight ahead) returns just [A].
- * Degenerate P inside both circles falls back to the straight leave.
+ * THE CURVE FAMILY (USER LAW, 2026-07-24): wires are drawn as HOBBY cubic
+ * splines — the round-8 render-lab family ("good to integrate"), ported
+ * faithfully from render-lab8/round9-spline (hobbyRho mock-curvature
+ * velocity, cubic control arms |rho|·d/3). Spiral-curvature representations
+ * (Euler spirals, clothoids, θ-polynomials) are BANNED — the plan-22
+ * elastica legs were an approximation of this family that introduced
+ * exactly that banned class. Arc-line-arc constant-curvature chains are
+ * likewise rejected (mechanical drafting look). The cubics are sampled for
+ * both painting and energy — what is drawn IS what is charged.
  */
-function clampArc(A: Vec2, n: Vec2, P: Vec2, rho: number): Vec2[] {
-  let best: { sweep: number; C: Vec2; a0: number; o: number; psi: number } | null = null
-  for (const side of [1, -1] as const) {
-    const C = { x: A.x + rho * side * perp(n).x, y: A.y + rho * side * perp(n).y }
-    const dx = P.x - C.x, dy = P.y - C.y
-    const d = Math.hypot(dx, dy)
-    if (d < rho * (1 + 1e-9)) continue
-    const a0 = Math.atan2(A.y - C.y, A.x - C.x)
-    // orientation: the tangent at A must equal +n
-    const o = -Math.sin(a0) * n.x + Math.cos(a0) * n.y > 0 ? 1 : -1
-    const phi = Math.atan2(dy, dx)
-    const delta = Math.acos(Math.min(1, rho / d))
-    for (const sgn of [1, -1] as const) {
-      const psi = phi + sgn * delta
-      // leaving tangent at the touch point must continue the orientation AND head toward P
-      const tx = -Math.sin(psi) * o, ty = Math.cos(psi) * o
-      const touch = { x: C.x + rho * Math.cos(psi), y: C.y + rho * Math.sin(psi) }
-      if (tx * (P.x - touch.x) + ty * (P.y - touch.y) <= 0) continue
-      let sweep = o * (psi - a0)
-      sweep = ((sweep % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)
-      if (best === null || sweep < best.sweep) best = { sweep, C, a0, o, psi }
-    }
+function hobbyRho(t: number, f: number): number {
+  const a = Math.sqrt(2), b = 1 / 16, c = (3 - Math.sqrt(5)) / 2
+  return (2 + a * (Math.sin(t) - b * Math.sin(f)) * (Math.sin(f) - b * Math.sin(t)) * (Math.cos(t) - Math.cos(f))) /
+    (1 + (1 - c) * Math.cos(t) + c * Math.cos(f))
+}
+
+type Cubic = { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }
+
+/** One Hobby segment: pa → pb with OUTWARD tangent angles at both ends
+    (start: forward travel; end: forward + π, or the far rim's port normal). */
+function hobbySeg(pa: Vec2, ta: number, pb: Vec2, tb: number): Cubic {
+  const chord = Math.atan2(pb.y - pa.y, pb.x - pa.x)
+  const d = Math.hypot(pb.x - pa.x, pb.y - pa.y)
+  const th = wrapA(ta - chord), ph = wrapA(chord - (tb + Math.PI))
+  const ra = (Math.abs(hobbyRho(th, ph)) * d) / 3
+  const rb = (Math.abs(hobbyRho(ph, th)) * d) / 3
+  return {
+    a: pa,
+    c1: { x: pa.x + Math.cos(ta) * ra, y: pa.y + Math.sin(ta) * ra },
+    c2: { x: pb.x + Math.cos(tb) * rb, y: pb.y + Math.sin(tb) * rb },
+    b: pb,
   }
-  if (best === null) return [A]
-  const { sweep, C, a0, o } = best
-  if (sweep < 1e-6) return [A]
-  const N = Math.max(2, Math.ceil(sweep / (Math.PI / 8)))
-  const out: Vec2[] = [A]
-  for (let k = 1; k <= N; k++) {
-    const t = a0 + o * sweep * (k / N)
-    out.push({ x: C.x + rho * Math.cos(t), y: C.y + rho * Math.sin(t) })
+}
+
+/** Samples per cubic (the lab's SUB): painting and energy share them. */
+const SUB = 7
+
+function sampleCubics(cubics: readonly Cubic[]): Vec2[] {
+  const out: Vec2[] = []
+  for (const c of cubics) {
+    const from = out.length === 0 ? 0 : 1
+    for (let k = from; k <= SUB; k++) {
+      const t = k / SUB
+      const u = 1 - t
+      const p = {
+        x: u * u * u * c.a.x + 3 * u * u * t * c.c1.x + 3 * u * t * t * c.c2.x + t * t * t * c.b.x,
+        y: u * u * u * c.a.y + 3 * u * u * t * c.c1.y + 3 * u * t * t * c.c2.y + t * t * t * c.b.y,
+      }
+      const last = out[out.length - 1]
+      if (last !== undefined && Math.hypot(p.x - last.x, p.y - last.y) < 1e-9) continue
+      out.push(p)
+    }
   }
   return out
 }
 
 /**
- * The drawn curve of one edge: closed-form rod geometry over the routed
- * corridor. `routePts` are the router's waypoints (escape-level endpoints
- * included). At a clamped end the curve is the r*-arc tangent to the clamp
- * normal (the rod boundary layer — within r* of a clamped end a rod cannot
- * conform to corridor detail, so corridor points inside that zone drop),
- * leaving tangentially toward the first corridor point; the corridor
- * polyline follows (its corners live at the disc-polygon resolution, gentle
- * by construction); the far end mirrors. Natural ends (junctions, dots) join
- * the corridor directly. Deterministic, closed form, stateless — the same
- * construction is rendered and charged (drawn = charged, one law).
+ * The drawn curve of one edge: the Hobby cubic chain through the routed
+ * corridor waypoints. Clamped ends (port rim → outward normal, frame slot →
+ * inward normal) fix the end tangents; interior anchors take Catmull-Rom
+ * forward directions; natural ends (junctions, dots) take the chord. Route
+ * corridor points inside a clamped end's neighborhood (max of one disc
+ * polygon step and r*) are routing artifacts of the escape point and drop —
+ * the clamped cubic owns that approach. Deterministic, closed form,
+ * stateless; the same samples are rendered and charged.
  */
 export function edgeCurvePts(
   u: CurveBC,
@@ -105,35 +117,38 @@ export function edgeCurvePts(
   beta = 0,
 ): Vec2[] {
   void space
+  void beta
   const core: Vec2[] = routePts.map((p) => ({ ...p }))
-  const rStar = Math.sqrt(beta)
-  const zone = (bc: CurveBC): number =>
-    bc !== null && bc.ownDisc != null ? Math.max((2 * Math.PI * bc.ownDisc.r) / POLY_K, rStar) : rStar
-  let lead = 0
-  const zoneU = zone(u)
-  while (u !== null && lead < core.length && Math.hypot(core[lead]!.x - u.p.x, core[lead]!.y - u.p.y) < zoneU) lead++
-  let trail = core.length - 1
-  const zoneV = zone(v)
-  while (v !== null && trail >= lead && Math.hypot(core[trail]!.x - v.p.x, core[trail]!.y - v.p.y) < zoneV) trail--
-  const mid = core.slice(lead, trail + 1)
-  // arc targets: the first surviving corridor point; with the corridor fully
-  // consumed, aim at the far end's own boundary-layer knee (its virtual
-  // escape) — the two arcs then join by their common tangent line
-  const uTarget = mid.length > 0 ? mid[0]! : v !== null ? { x: v.p.x + v.n.x * rStar, y: v.p.y + v.n.y * rStar } : core[core.length - 1]!
-  const vTarget = mid.length > 0 ? mid[mid.length - 1]! : u !== null ? { x: u.p.x + u.n.x * rStar, y: u.p.y + u.n.y * rStar } : core[0]!
-  const head = u !== null && rStar > 0 ? clampArc(u.p, u.n, uTarget, rStar) : [core[0] ?? (u !== null ? u.p : { x: 0, y: 0 })]
-  const tail = v !== null && rStar > 0 ? clampArc(v.p, v.n, vTarget, rStar).reverse() : [core[core.length - 1] ?? (v !== null ? v.p : { x: 0, y: 0 })]
-  if (u !== null && rStar <= 0) head[0] = { ...u.p }
-  if (v !== null && rStar <= 0) tail[tail.length - 1] = { ...v.p }
-  const way = [...head, ...mid, ...tail]
-  // drop degenerate duplicates
-  const out: Vec2[] = []
-  for (const p of way) {
-    const last = out[out.length - 1]
+  const pts: Vec2[] = [
+    ...(u !== null ? [{ ...u.p }] : []),
+    ...core,
+    ...(v !== null ? [{ ...v.p }] : []),
+  ]
+  // dedupe
+  const Q: Vec2[] = []
+  for (const p of pts) {
+    const last = Q[Q.length - 1]
     if (last !== undefined && Math.hypot(p.x - last.x, p.y - last.y) < 1e-9) continue
-    out.push(p)
+    Q.push(p)
   }
-  return out
+  if (Q.length < 2) return Q
+  const m = Q.length - 1
+  const catmull = (i: number): number => {
+    const a = Q[Math.max(0, i - 1)]!, b = Q[Math.min(m, i + 1)]!
+    return Math.atan2(b.y - a.y, b.x - a.x)
+  }
+  // FORWARD travel direction at each anchor (the lab's fwd); clamped ends use
+  // their normals as OUTWARD tangents directly
+  const fwd: number[] = Q.map((_, i) => catmull(i))
+  const uAng = u !== null ? Math.atan2(u.n.y, u.n.x) : fwd[0]!
+  const vAng = v !== null ? Math.atan2(v.n.y, v.n.x) : fwd[m]! + Math.PI
+  const cubics: Cubic[] = []
+  for (let i = 0; i + 1 < Q.length; i++) {
+    const ta = i === 0 ? uAng : fwd[i]!
+    const tb = i + 1 === m ? vAng : fwd[i + 1]! + Math.PI
+    cubics.push(hobbySeg(Q[i]!, ta, Q[i + 1]!, tb))
+  }
+  return sampleCubics(cubics)
 }
 
 /**

@@ -5,50 +5,11 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle, recomputeRegions } from '../../src/view/relax'
 import { computeLegs } from '../../src/view/wires'
-import { worldBindAnchor } from '../../src/view/engine'
 
 const p = (s: string) => parseTerm(s)
 
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
 
-describe('computeLegs — the traced θ-quadratic legs ARE the wire (PLAN 22)', () => {
-  it('a 3-endpoint wire yields three legs meeting at the hub, each leaving its port rim perpendicular', () => {
-    // three nodes sharing one line of identity => three hub legs into a single
-    // wire-owned branch point (there is no polyline chain — each leg IS the
-    // minimum-energy Euler-spiral interpolant of its live boundary data)
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('x'))
-    const b = h.termNode(h.root, p('x'))
-    const c = h.termNode(h.root, p('x'))
-    const w = h.wire(h.root, [
-      { node: a, port: { kind: 'freeVar', name: 'x' } },
-      { node: b, port: { kind: 'freeVar', name: 'x' } },
-      { node: c, port: { kind: 'freeVar', name: 'x' } },
-    ])
-    const e = mkEngine(h.build(), [])
-    settle(e, 2600)
-    const legged = computeLegs(e).filter((g) => g.leg.wid === w)
-    expect(legged, 'a 3-endpoint wire draws three legs').toHaveLength(3)
-    for (const g of legged) {
-      // every leg starts ON its port's disc rim and leaves along the port
-      // normal (the perpendicular exit is a boundary condition of the solve)
-      const bind = e.wires.get(w)!.binds.find((bd) => bd.body === g.leg.from.body)!
-      const body = e.bodies.get(bind.body)!
-      const anchor = worldBindAnchor(e, body, bind.key)
-      expect(Math.hypot(g.pts[0]!.x - anchor.x, g.pts[0]!.y - anchor.y), 'leg starts on the rim').toBeLessThan(1e-6)
-      const la = body.localAnchor.get(bind.key)!
-      const normal = Math.atan2(la.y, la.x) + body.theta
-      const dir = Math.atan2(g.pts[1]!.y - g.pts[0]!.y, g.pts[1]!.x - g.pts[0]!.x)
-      expect(Math.abs(wrap(dir - normal)), 'leg leaves the port perpendicular').toBeLessThan(0.05)
-      // the traced polyline turns smoothly — no kink between adjacent segments
-      for (let k = 1; k < g.pts.length - 1; k++) {
-        const d0 = Math.atan2(g.pts[k]!.y - g.pts[k - 1]!.y, g.pts[k]!.x - g.pts[k - 1]!.x)
-        const d1 = Math.atan2(g.pts[k + 1]!.y - g.pts[k]!.y, g.pts[k + 1]!.x - g.pts[k]!.x)
-        expect(Math.abs(wrap(d1 - d0)), `kink at segment ${k}`).toBeLessThan(Math.PI / 4)
-      }
-    }
-  })
-})
 
 
 describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (plan 24)', () => {

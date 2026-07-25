@@ -13,10 +13,20 @@ special-casing of dangling wires; the plan-22 tip standoff force is deleted
 (it manufactured dangle length). (4) The node solver optimizes THE routed
 energy itself — the coarse Euclidean proxy is deleted (it saw through
 obstacles, stranding tips across discs as half-circle wraps).
-(5) THE ENERGY CHARGES THE DRAWN STROKE: turning includes the bends where
-the fixed port/slot stubs meet the routed path — the stub-blind energy let
-a route double straight back over the stub for free (the resting needle/
-loop at ports observed 2026-07-24); with the bend charged, node rotation
+(5) THE ENERGY CHARGES THE DRAWN STROKE: what is rendered is exactly what
+is charged, one construction shared by energy, router gates, layout score,
+and renderer. (5b) ROD ENERGY (USER ruling, later 2026-07-24: "the minimal
+energy curves should be gentle... the energy function for the curve shapes
+is simply wrong — rethink it from first principles"): a total-turn charge
+is placement-invariant, so its minimizers are straight polylines with point
+corners — REJECTED. The wire energy is the elastic rod functional
+∫(α + β·κ²)ds over the drawn curve, α = 1, β = r*² with r* = the node-disc
+scale (derived, not tuned). The drawn curve is closed-form rod geometry:
+at a clamped end (port outward normal / slot inward normal) an r*-arc
+tangent to the clamp leaves toward the first corridor waypoint outside the
+clamp's r* ownership zone (within r* a rod cannot conform to corridor
+detail); the corridor polyline follows; junctions and dots are natural
+ends. Fillets and the escape-stub drawing are deleted; node rotation
 descends the same functional, so port angles are calculated along with the
 curves. (6) LAYOUT MINIMIZATION IS ASYNCHRONOUS (USER: "the user should
 not perceive anything from a heavy search"): the LayoutOptimizer runs in a

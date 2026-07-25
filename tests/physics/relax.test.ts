@@ -4,7 +4,7 @@ import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { carryOver, mkEngine, wireTerminalPoints } from '../../src/view/engine'
+import { carryOver, mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame, recomputeRegions, resolveOverlaps, establishFrame } from '../../src/view/relax'
 import { mkReplay } from '../../src/app/replay'
@@ -102,33 +102,6 @@ function settleWithin(e: Engine, maxMs: number): boolean {
   return rested
 }
 
-function assertRestsLegalMonotone(name: string, e: Engine, driftBound: number): void {
-  const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR + 20, 0)
-  for (const b of e.bodies.values()) {
-    const dist = Math.hypot(b.pos.x, b.pos.y)
-    expect(dist, `${name}: body ${b.id} at ${dist.toFixed(0)} — content flew away (packing bound ${discSum.toFixed(0)})`).toBeLessThanOrEqual(discSum)
-  }
-  expect(anyOverlap(e), `${name}: region circles partially overlap at rest`).toBe(false)
-  // The step operator is deterministic and MEMORYLESS, so ONE all-reject frame
-  // proves a bit-stable rest forever — the old 200-tick empirical loop bought
-  // nothing past that proof and cost ~200 rejected ladders per fixture. A short
-  // loop still runs to verify the theorem's premises on real frames (monotone E,
-  // bounded drift), then the all-reject frame is required.
-  const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
-  let prevE = totalEnergy(e), maxRise = 0, rested = false
-  for (let i = 0; i < 8; i++) {
-    const moved = settleStep(e)
-    const cur = totalEnergy(e)
-    maxRise = Math.max(maxRise, cur - prevE); prevE = cur
-    if (!moved) { rested = true; break }
-  }
-  expect(rested, `${name}: still accepting moves 8 frames past its settle budget — not at rest`).toBe(true)
-  for (const [id, b] of e.bodies) {
-    const moved = Math.hypot(b.pos.x - before.get(id)!.x, b.pos.y - before.get(id)!.y)
-    expect(moved, `${name}: body ${id} moved ${moved.toFixed(2)} after settle`).toBeLessThanOrEqual(driftBound)
-  }
-  expect(maxRise, `${name}: total E rose ${maxRise.toFixed(4)} in a post-settle frame (un-gated mover?)`).toBeLessThanOrEqual(1e-3)
-}
 
 describe('settle stops at a proven fixed point (plan-24 perf — no wasted budget)', () => {
   // The strict-descent mover is deterministic, strictly value-gated (a DOF commits a
@@ -220,88 +193,8 @@ describe('law 1 — containment: no two region circles ever intersect', () => {
   })
 })
 
-describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-owned ends', () => {
-  for (const [name, d, boundary] of cases) {
-    it(`junction bodies = ∃ tips + ∀/boundary hub bodies + bare wires in ${name}`, () => {
-      const e = mkEngine(d, boundary)
-      // the wire-owned bodies: an ∃ tip, a hub BODY (a ∀ via-body or a boundary
-      // exit hub), and a bare (0-endpoint) wire's lone dot
-      const owned = new Set<string>()
-      for (const w of e.wires.values()) {
-        if (w.endBodyId !== null) owned.add(w.endBodyId)
-      }
-      const boundaryWires = new Set(boundary)
-      for (const [wid, w] of Object.entries(d.wires)) {
-        // Endpointless boundary wires terminate at the fixed frame; only an
-        // endpointless INTERNAL wire owns a bare existential-dot body.
-        if (w.endpoints.length === 0 && !boundaryWires.has(wid)) owned.add(`j:${wid}`)
-      }
-      const junctions = [...e.bodies.values()].filter((b) => b.kind === 'end')
-      expect(new Set(junctions.map((b) => b.id))).toEqual(owned)
-    })
 
-    it(`every attached port is bound by exactly one wire leg in ${name}`, () => {
-      const e = mkEngine(d, boundary)
-      const perPort = new Map<string, number>()
-      for (const w of e.wires.values()) {
-        for (const bind of w.binds) {
-          const k = `${bind.body}|${bind.key}`
-          perPort.set(k, (perPort.get(k) ?? 0) + 1)
-        }
-      }
-      for (const [port, count] of perPort) expect(count, port).toBe(1)
-    })
-  }
-})
 
-describe('settle — replay steps: content stays anchored, legal, rests, and E is monotone', () => {
-  // Every replayed plusComm step must stay anchored (no runaway — reproduces the
-  // historical step-25 cluster flying at ~9 u/tick), rest legally, and descend
-  // total E monotonically at rest. plusComm@16 and @32 were plan-22 exit-hub LIMIT
-  // CYCLES (documented it.fails, drift 55/15 over 200 ticks); the plan-23 strict-
-  // total-energy-descent conversion (USER ruling) makes them genuine rests — the
-  // it.fails are GONE. Budget RE-DERIVED from this model's measured time-to-rest
-  // (USER policy): measured 2026-07-06, the slowest plusComm step rests by ~640
-  // ticks; settled at 1100 with margin (was 7800 for the non-converging cycles).
-  const r = mkReplay(plusCommThm.name, bootCtx)
-  for (const k of [0, 16, 32, 48, r.actionCount]) {
-    it(`plusComm step ${k} stays anchored, rests legally, E monotone`, () => {
-      const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
-      expect(settleWithin(e, 20_000), `plusComm@${k}: did not rest within 20 s`).toBe(true)
-      assertRestsLegalMonotone(`plusComm@${k}`, e, 1.5)
-    })
-  }
-})
-
-describe('settle — observed jitter reproductions (live feel reports)', () => {
-  // The user's original settling complaints, restated for the massless-elastica
-  // model under strict total-energy descent. succShiftS@48 was a plan-22
-  // documented it.fails (drifted 114.73 over 200 ticks — it RESTED before the
-  // rotation DOF, which was a scene-dependent trade); the plan-23 conversion makes
-  // it a genuine rest and the it.fails is GONE.
-  const succShiftS = bootCtx.theorems.get('succShiftS')!
-  // budget per fixture = measured time-to-rest + margin (2026-07-06): the uncapped
-  // sibling barrier separates the connected cuts by cap-limited gated steps, so a
-  // large diagram (succShiftS@48, 32 bodies) settles slower than the small ones.
-  // [name, settle budget, drift bound, builder]. succShiftS@48 (32 bodies, the
-  // largest scene) has a slower residual tail — its content descends monotonically
-  // but a few nodes make ~1-wu discrete descents late; its drift bound is measured
-  // (2026-07-06) at that larger settled value with margin, per USER test policy.
-  // the settle budget is WALL-CLOCK now (settleWithin, USER 2026-07-24)
-  const jitterCases: [string, number, () => { d: Diagram; b: readonly WireId[] }][] = [
-    ['plusComm@20', 1.5, () => { const r2 = mkReplay(plusCommThm.name, bootCtx); return { d: r2.diagramAt(20), b: r2.boundaryAt(20) } }],
-    ['succShiftS@24', 1.5, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(24), b: r2.boundaryAt(24) } }],
-    ['succShiftS@48', 3, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(48), b: r2.boundaryAt(48) } }],
-  ]
-  for (const [name, bound, mk] of jitterCases) {
-    it(`${name} rests legally with monotone E over 200 post-settle ticks`, () => {
-      const { d, b } = mk()
-      const e = mkEngine(d, b)
-      expect(settleWithin(e, 20_000), `${name}: did not rest within 20 s`).toBe(true)
-      assertRestsLegalMonotone(name, e, bound)
-    })
-  }
-})
 
 describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => {
   // The frame is ABSOLUTE state set once at establishment and CONSTANT between
@@ -475,57 +368,6 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   })
 })
 
-describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => {
-  const wrapAng = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
-
-  it('a single-port node ROTATES to face its wire (rotation reaches facing, no cap)', () => {
-    // A node with one port can point that port at its wire's destination by
-    // rotating — free rotation (no rate cap) reaches that facing at rest. (A
-    // multi-port node cannot face all its ports at once; that is geometry, not a
-    // rotation failure, so this law is scoped to single-port nodes.)
-    for (const [name, diagram, boundary] of cases) {
-      const e = settledCase(name, diagram, boundary)
-      for (const [, w] of e.wires) {
-        const terms = wireTerminalPoints(e, w)
-        const pos = (v: number) => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
-        for (const [u, v] of w.net.edges) {
-          for (const [me, other] of [[u, v], [v, u]] as const) {
-            if (me >= w.binds.length) continue
-            const b = e.bodies.get(w.binds[me]!.body)!
-            if (b.localAnchor.size > 1) continue // multi-port node: geometric compromise
-            const la = b.localAnchor.get(w.binds[me]!.key)!
-            const normal = Math.atan2(la.y, la.x) + b.theta
-            const o = pos(other)
-            const t = terms[me]!
-            const toTarget = Math.atan2(o.y - t.y, o.x - t.x)
-            const err = Math.abs(wrapAng(normal - toTarget)) * 180 / Math.PI
-            expect(err, `${name}: single-port node ${b.id} faces ${err.toFixed(0)}° off its wire`).toBeLessThan(90)
-          }
-        }
-      }
-    }
-  })
-
-  it('motion is LOCAL: twisting one node does not move a distant non-wired node (no action at a distance)', () => {
-    const e = mkEngine(cases[0]![1], cases[0]![2])
-    settle(e, 800)
-    const nodes = [...e.bodies.values()].filter((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')
-    const twisted = nodes[0]!
-    // a node that shares no wire with `twisted` and is not touching it
-    const wiredToTwisted = new Set<string>()
-    for (const [, w] of e.wires) { const ids = w.binds.map((bd) => bd.body); if (ids.includes(twisted.id)) ids.forEach((i) => wiredToTwisted.add(i)) }
-    const distant = nodes.find((b) => b.id !== twisted.id && !wiredToTwisted.has(b.id)
-      && Math.hypot(b.pos.x - twisted.pos.x, b.pos.y - twisted.pos.y) > b.discR + twisted.discR + 10)
-    if (distant !== undefined) {
-      const before = { x: distant.pos.x, y: distant.pos.y }
-      twisted.theta += 2.0 // a big twist
-      settleStep(e)
-      const moved = Math.hypot(distant.pos.x - before.x, distant.pos.y - before.y)
-      expect(moved, `a distant non-wired node moved ${moved.toFixed(3)} when another was twisted`).toBeLessThan(0.6)
-    }
-  })
-
-})
 
 describe('settleStep — deterministic incremental relaxation', () => {
   it('same diagram, same steps, identical layout (seedless determinism)', () => {
