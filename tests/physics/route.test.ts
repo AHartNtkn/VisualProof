@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Vec2 } from '../../src/view/vec'
-import { mkFreeSpace, route, segmentClear } from '../../src/view/route/freespace'
+import type { Disc } from '../../src/view/route/freespace'
+import { mkFreeSpace, route, segmentClear, insideAnyDisc } from '../../src/view/route/freespace'
 import { advanceNetwork, contract, netLength, netPaths, solveTarget, trySplit, type WireNet } from '../../src/view/route/network'
 
 /**
@@ -142,6 +143,117 @@ describe('presentation continuation', () => {
       .flatMap(([u, v]) => [u, v].filter((x) => x < 4)).sort().join('')
     const pairing = [side(0), side(1)].sort().join('|')
     expect(pairing, 'rows pairing after the pinch-and-stretch').toBe('02|13')
+  })
+})
+
+/** Seeded xorshift32 — deterministic, no Math.random. */
+function mkRng(seed: number): () => number {
+  let s = seed >>> 0
+  if (s === 0) s = 0x9e3779b9
+  return () => {
+    s ^= s << 13; s >>>= 0
+    s ^= s >>> 17
+    s ^= s << 5; s >>>= 0
+    return s / 4294967296
+  }
+}
+
+/** Reference clear-detour LENGTH via the deleted disc-polygon corner graph
+    (16-gon circumscribed at r/cos(π/16), all-pairs visibility, Dijkstra p→q).
+    Inlined HERE (not kept in src) purely as the exactness oracle: the smooth
+    tangent-graph geodesic can only be ≤ this polygon path. Returns null if the
+    corner graph finds no detour. */
+function polygonDetourLength(discs: readonly Disc[], p: Vec2, q: Vec2): number | null {
+  const K = 16
+  const corners: Vec2[] = []
+  for (const D of discs) {
+    const R = D.r / Math.cos(Math.PI / K)
+    for (let k = 0; k < K; k++) {
+      const a = (2 * Math.PI * k) / K
+      const pt = { x: D.c.x + R * Math.cos(a), y: D.c.y + R * Math.sin(a) }
+      if (insideAnyDisc(pt, discs) >= 0) continue
+      corners.push(pt)
+    }
+  }
+  const n = corners.length, P = n, Q = n + 1
+  const adj: { j: number; d: number }[][] = corners.map(() => [])
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (!segmentClear(corners[i]!, corners[j]!, discs)) continue
+      const d = Math.hypot(corners[i]!.x - corners[j]!.x, corners[i]!.y - corners[j]!.y)
+      adj[i]!.push({ j, d }); adj[j]!.push({ j: i, d })
+    }
+  }
+  const pcon: { j: number; d: number }[] = [], qcon: { j: number; d: number }[] = []
+  for (let i = 0; i < n; i++) {
+    if (segmentClear(p, corners[i]!, discs)) pcon.push({ j: i, d: Math.hypot(corners[i]!.x - p.x, corners[i]!.y - p.y) })
+    if (segmentClear(q, corners[i]!, discs)) qcon.push({ j: i, d: Math.hypot(corners[i]!.x - q.x, corners[i]!.y - q.y) })
+  }
+  const dist = new Array<number>(n + 2).fill(Infinity)
+  const done = new Array<boolean>(n + 2).fill(false)
+  dist[P] = 0
+  for (;;) {
+    let u = -1, best = Infinity
+    for (let i = 0; i < n + 2; i++) if (!done[i] && dist[i]! < best) { best = dist[i]!; u = i }
+    if (u < 0) break
+    done[u] = true
+    if (u === Q) break
+    const edges = u === P ? pcon : u < n ? adj[u]! : []
+    for (const { j, d } of edges) if (dist[u]! + d < dist[j]!) dist[j] = dist[u]! + d
+    if (u !== P && u < n) {
+      const qc = qcon.find((e) => e.j === u)
+      if (qc !== undefined && dist[u]! + qc.d < dist[Q]!) dist[Q] = dist[u]! + qc.d
+    }
+  }
+  return Number.isFinite(dist[Q]!) ? dist[Q]! : null
+}
+
+describe('bitangent routing is exact vs the polygon reference', () => {
+  it('the clear detour is never longer than the 16-gon detour, and every drawn segment is clear', () => {
+    const rng = mkRng(0x7a9e1)
+    let detours = 0
+    for (let t = 0; t < 20; t++) {
+      const p = { x: -30, y: 0 }, q = { x: 30, y: 0 }
+      const nd = 1 + Math.floor(rng() * 3)
+      const discs: Disc[] = []
+      while (discs.length < nd) {
+        const c = { x: -15 + 30 * rng(), y: -8 + 16 * rng() }
+        const r = 4 + 4 * rng()
+        if (Math.hypot(c.x - p.x, c.y - p.y) <= r + 0.5 || Math.hypot(c.x - q.x, c.y - q.y) <= r + 0.5) continue
+        discs.push({ c, r })
+      }
+      const fs = mkFreeSpace(discs) // no bounds ⇒ cost == length, so a detour is taken iff it is shorter
+      const r = route(fs, p, q)
+      if (r.pts.length > 2) {
+        detours++
+        const poly = polygonDetourLength(discs, p, q)
+        expect(poly, `config ${t}: polygon found no detour but tangent graph did`).not.toBeNull()
+        expect(r.length, `config ${t}: tangent detour ${r.length.toFixed(4)} longer than polygon ${poly!.toFixed(4)}`)
+          .toBeLessThanOrEqual(poly! + 1e-6)
+        for (let i = 0; i + 1 < r.pts.length; i++) {
+          expect(segmentClear(r.pts[i]!, r.pts[i + 1]!, discs), `config ${t}: detour segment ${i} enters a disc`).toBe(true)
+        }
+      }
+    }
+    expect(detours, 'the random configs must exercise real detours').toBeGreaterThan(4)
+  })
+})
+
+describe('tangency winding', () => {
+  it('a route around a single disc hugs it with monotone angular progression (no zigzag)', () => {
+    const fs = mkFreeSpace([{ c: { x: 0, y: 0 }, r: 5 }])
+    const r = route(fs, { x: -20, y: 0 }, { x: 20, y: 0 })
+    expect(r.pts.length, 'the route must detour around the disc').toBeGreaterThan(2)
+    let sign = 0
+    for (let i = 1; i < r.pts.length; i++) {
+      let d = Math.atan2(r.pts[i]!.y, r.pts[i]!.x) - Math.atan2(r.pts[i - 1]!.y, r.pts[i - 1]!.x)
+      while (d > Math.PI) d -= 2 * Math.PI
+      while (d < -Math.PI) d += 2 * Math.PI
+      if (Math.abs(d) < 1e-9) continue
+      const s = Math.sign(d)
+      if (sign === 0) sign = s
+      expect(s, `angular progression reversed at point ${i} (a zigzag)`).toBe(sign)
+    }
   })
 })
 
