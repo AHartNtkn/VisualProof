@@ -556,11 +556,9 @@ const SEP_N = 8
 export type WireSeg = { readonly wid: string; readonly a: Vec2; readonly b: Vec2 }
 
 /** The separation energy of ONE segment pair (bbox-rejected, then the SEP_N²
-    sample quadrature). The single numeric kernel shared by the whole-scene
-    `segSeparationE` and the incremental delta's cross-wire sums (score-delta.ts)
-    — one definition so the exact routed/global/gate objective and its delta can
-    never drift apart. `R` = WIREP.sepR·scale. */
-export function segPairSepE(A: { a: Vec2; b: Vec2 }, B: { a: Vec2; b: Vec2 }, R: number): number {
+    sample quadrature) — the numeric kernel of `segSeparationE`. `R` =
+    WIREP.sepR·scale. */
+function segPairSepE(A: { a: Vec2; b: Vec2 }, B: { a: Vec2; b: Vec2 }, R: number): number {
   if (Math.min(A.a.x, A.b.x) - R > Math.max(B.a.x, B.b.x) || Math.min(B.a.x, B.b.x) - R > Math.max(A.a.x, A.b.x)) return 0
   if (Math.min(A.a.y, A.b.y) - R > Math.max(B.a.y, B.b.y) || Math.min(B.a.y, B.b.y) - R > Math.max(A.a.y, A.b.y)) return 0
   let E = 0
@@ -590,16 +588,6 @@ export function segSeparationE(segs: readonly WireSeg[], sc: number): number {
       E += segPairSepE(A, B, R)
     }
   }
-  return E
-}
-
-/** The separation energy BETWEEN two wires' segment sets (no same-wire skip —
-    the caller guarantees distinct wires). The incremental delta re-evaluates
-    exactly the wire pairs a move touches; this is their exact cross contribution. */
-export function segSeparationBetween(segsA: readonly { a: Vec2; b: Vec2 }[], segsB: readonly { a: Vec2; b: Vec2 }[], sc: number): number {
-  const R = WIREP.sepR * sc
-  let E = 0
-  for (const A of segsA) for (const B of segsB) E += segPairSepE(A, B, R)
   return E
 }
 
