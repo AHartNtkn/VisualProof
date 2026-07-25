@@ -1,12 +1,11 @@
 import type { Diagram, DiagramNode, Endpoint, Region, RegionId, Wire, WireId } from '../diagram'
-import { DiagramError, mkDiagram } from '../diagram'
+import { DiagramError, mkDiagram, mkDiagramNormalized } from '../diagram'
 import { isAncestorOrEqual } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import { sigEquals, sigKey } from '../sig'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
 import { freshId, type IdReservation } from './freshId'
-import { port } from '../../term/term'
 
 export type SpliceOptions = {
   readonly reserved?: IdReservation | undefined
@@ -103,7 +102,6 @@ export function spliceSubgraphMapped(
   // below. Repeating the same stub/attachment pair adds no new equality.
   const firstAttachmentOfStub = new Map<WireId, WireId>()
   const attachmentsOfStub = new Map<WireId, Set<WireId>>()
-  const aliasIncidences: Array<{ representative: WireId; attachment: WireId; position: number }> = []
   pattern.boundary.forEach((stub, i) => {
     const attachment = attachments[i]!
     const first = firstAttachmentOfStub.get(stub)
@@ -114,7 +112,6 @@ export function spliceSubgraphMapped(
       const seen = attachmentsOfStub.get(stub)!
       if (!seen.has(attachment)) {
         seen.add(attachment)
-        aliasIncidences.push({ representative: first, attachment, position: i })
       }
     }
   })
@@ -135,11 +132,18 @@ export function spliceSubgraphMapped(
     takenNodes.add(fresh)
     nodeMap.set(id, fresh)
   }
-  const aliasNodes = aliasIncidences.map(({ representative, attachment, position }) => {
-    const fresh = freshId(takenNodes, `alias_${position}`, options.reserved?.nodes)
-    takenNodes.add(fresh)
-    return { id: fresh, representative, attachment }
-  })
+  const aliasNodes = [...attachmentsOfStub]
+    .filter(([, attached]) => attached.size > 1)
+    .map(([stub, attached]) => {
+      const position = pattern.boundary.indexOf(stub)
+      const fresh = freshId(takenNodes, `identity_${position}`, options.reserved?.nodes)
+      takenNodes.add(fresh)
+      return {
+        id: fresh,
+        sig: pd.wires[stub]!.sig,
+        attachments: [...attached],
+      }
+    })
   // Mint against the full PRE-QUOTIENT namespace: a wire removed by the
   // pushout must never be resurrected as unrelated copied content.
   const takenWires = new Set(Object.keys(host.wires))
@@ -165,10 +169,15 @@ export function spliceSubgraphMapped(
   // Return-typed switch (no default): a new node kind forces its rebuild here.
   const rebuildNode = (n: DiagramNode): DiagramNode => {
     switch (n.kind) {
-      case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term, freePorts: n.freePorts }
       case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, sig: n.sig }
       case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, sig: n.sig }
-      case 'body': return { kind: 'body', region: regionMap.get(n.region)!, sig: n.sig, content: n.content }
+      case 'identity':
+        return {
+          kind: 'identity',
+          region: regionMap.get(n.region)!,
+          sig: n.sig,
+          arity: n.arity,
+        }
     }
   }
   const nodes: Record<string, DiagramNode> = { ...host.nodes }
@@ -176,7 +185,12 @@ export function spliceSubgraphMapped(
     nodes[nodeMap.get(id)!] = rebuildNode(n)
   }
   for (const alias of aliasNodes) {
-    nodes[alias.id] = { kind: 'term', region: atRegion, term: port('s0'), freePorts: ['s0'] }
+    nodes[alias.id] = {
+      kind: 'identity',
+      region: atRegion,
+      sig: alias.sig,
+      arity: alias.attachments.length,
+    }
   }
 
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>
@@ -205,37 +219,35 @@ export function spliceSubgraphMapped(
     }
   })
   for (const alias of aliasNodes) {
-    const representative = wires[alias.representative]!
-    const attachment = wires[alias.attachment]!
-    if (alias.representative === alias.attachment) {
-      wires[alias.representative] = {
-        scope: representative.scope,
-        sig: representative.sig,
+    alias.attachments.forEach((wireId, index) => {
+      const wire = wires[wireId]!
+      wires[wireId] = {
+        scope: wire.scope,
+        sig: wire.sig,
         endpoints: [
-          ...representative.endpoints,
-          { node: alias.id, port: { kind: 'output' } },
-          { node: alias.id, port: { kind: 'freeVar', name: 's0' } },
+          ...wire.endpoints,
+          { node: alias.id, port: { kind: 'identity', index } },
         ],
       }
-    } else {
-      wires[alias.representative] = {
-        scope: representative.scope,
-        sig: representative.sig,
-        endpoints: [...representative.endpoints, { node: alias.id, port: { kind: 'output' } }],
-      }
-      wires[alias.attachment] = {
-        scope: attachment.scope,
-        sig: attachment.sig,
-        endpoints: [...attachment.endpoints, { node: alias.id, port: { kind: 'freeVar', name: 's0' } }],
-      }
-    }
+    })
   }
 
+  const normalized = mkDiagramNormalized({ root: host.root, regions, nodes, wires })
+  const normalizedWireMap = new Map<WireId, WireId>()
+  for (const [patternWire, preNormalizedWire] of wireMap) {
+    const image = normalized.wireImage.get(preNormalizedWire)
+    if (image === undefined) {
+      throw new DiagramError(
+        `normalization removed splice wire '${preNormalizedWire}' without a surviving image`,
+      )
+    }
+    normalizedWireMap.set(patternWire, image)
+  }
   return Object.freeze({
-    diagram: mkDiagram({ root: host.root, regions, nodes, wires }),
+    diagram: normalized.diagram,
     regionMap: new Map(regionMap),
     nodeMap: new Map(nodeMap),
-    wireMap: new Map(wireMap),
+    wireMap: normalizedWireMap,
   })
 }
 

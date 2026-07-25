@@ -1,174 +1,173 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
-import { mkDiagram, DiagramError, type Region, type DiagramNode, type Wire } from '../../../src/kernel/diagram/diagram'
-import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-
-const p = (s: string) => parseTerm(s)
+import { describe, expect, it } from 'vitest'
+import {
+  DiagramError,
+  mkDiagram,
+  type DiagramNode,
+  type Region,
+  type Wire,
+} from '../../../src/kernel/diagram/diagram'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 const sheet: Record<string, Region> = { r0: { kind: 'sheet' } }
+const refNode: DiagramNode = {
+  kind: 'ref',
+  region: 'r0',
+  defId: 'P',
+  sig: relSig([IOTA]),
+}
 
-describe('mkDiagram rejections', () => {
-  it('rejects a missing root', () => {
-    expect(() => mkDiagram({ root: 'nope', regions: sheet }))
-      .toThrowError(/root region 'nope' does not exist/)
+function oneRef(wires: Record<string, Wire>) {
+  return mkDiagram({
+    root: 'r0',
+    regions: sheet,
+    nodes: { n0: refNode },
+    wires,
   })
+}
 
-  it('rejects a non-sheet root', () => {
+describe('mkDiagram validation', () => {
+  it('rejects invalid roots, second sheets, missing parents, and cycles', () => {
+    expect(() => mkDiagram({ root: 'missing', regions: sheet }))
+      .toThrowError(/root region 'missing' does not exist/)
     expect(() => mkDiagram({
       root: 'r1',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'cut', parent: 'r0' } },
-    })).toThrowError(/root region 'r1' must be a sheet/)
-  })
-
-  it('rejects a second sheet', () => {
+      regions: { ...sheet, r1: { kind: 'cut', parent: 'r0' } },
+    })).toThrowError(/must be a sheet/)
     expect(() => mkDiagram({
       root: 'r0',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'sheet' } },
+      regions: { ...sheet, r1: { kind: 'sheet' } },
     })).toThrowError(/second sheet/)
-  })
-
-  it('rejects an atom whose inline signature is not a relation signature', () => {
-    // Successor of the old "bubble arity bounds" concern: the malformed inline
-    // structural datum on a relation node is now its signature, not an arity.
-    expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      // IOTA where a RelSig is required (typed as any to bypass the compile guard,
-      // exercising the runtime constructor gate against structural literals)
-      nodes: { n0: { kind: 'atom', region: 'r0', sig: IOTA as never } },
-    })).toThrowError(/atom node 'n0' sig must be a relation signature/)
-    expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      nodes: { n0: { kind: 'atom', region: 'r0', sig: { kind: 'rel', args: [{ kind: 'bogus' }] } as never } },
-    })).toThrowError(/atom node 'n0' sig:.*"kind" must be "iota" or "rel"/)
-  })
-
-  it('rejects a missing parent', () => {
     expect(() => mkDiagram({
       root: 'r0',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'cut', parent: 'ghost' } },
+      regions: { ...sheet, r1: { kind: 'cut', parent: 'ghost' } },
     })).toThrowError(/missing parent 'ghost'/)
-  })
-
-  it('rejects a parent cycle', () => {
     expect(() => mkDiagram({
       root: 'r0',
       regions: {
-        r0: { kind: 'sheet' },
+        ...sheet,
         r1: { kind: 'cut', parent: 'r2' },
         r2: { kind: 'cut', parent: 'r1' },
       },
     })).toThrowError(/cycle/)
   })
 
-  it('rejects a node in a missing region', () => {
+  it('rejects nodes in missing regions and malformed node signatures', () => {
     expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      nodes: { n0: { kind: 'term', region: 'ghost', term: p('\\x. x') } },
+      root: 'r0',
+      regions: sheet,
+      nodes: {
+        n0: { kind: 'ref', region: 'ghost', defId: 'P', sig: relSig([]) },
+      },
     })).toThrowError(/node 'n0' is in missing region 'ghost'/)
-  })
-
-  it('rejects a body node whose content is incoherent with its signature', () => {
-    // Successor of the old atom-binder placement concern: a relation node's
-    // structural coherence is now enforced between its sig and its content
-    // (arg-stub count and per-stub sorts), not against an enclosing bubble.
-    const okContent = () => {
-      const inner: Record<string, DiagramNode> = { m0: { kind: 'term', region: 'c0', term: p('\\z. z'), freePorts: [] } }
-      return mkDiagram({
-        root: 'c0', regions: { c0: { kind: 'sheet' } }, nodes: inner,
-        wires: { cw0: { scope: 'c0', sig: IOTA, endpoints: [{ node: 'm0', port: { kind: 'output' } }] } },
-      })
-    }
-    // sig arity 1 but content exposes zero boundary wires
     expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      nodes: { n0: { kind: 'body', region: 'r0', sig: relSig([IOTA]),
-        content: mkDiagramWithBoundary(okContent(), []) } },
-    })).toThrowError(/body node 'n0' boundary length 0 is shorter than sig arity 1/)
-    // sig arg sort disagrees with the arg-stub sort (rel vs term)
+      root: 'r0',
+      regions: sheet,
+      nodes: {
+        n0: { kind: 'atom', region: 'r0', sig: IOTA as never },
+      },
+    })).toThrowError(/must be a relation signature/)
     expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      nodes: { n0: { kind: 'body', region: 'r0', sig: relSig([relSig([IOTA])]),
-        content: mkDiagramWithBoundary(okContent(), ['cw0']) } },
-    })).toThrowError(/body node 'n0' boundary\[0\].*does not match sig arg 0/)
+      root: 'r0',
+      regions: sheet,
+      nodes: {
+        n0: {
+          kind: 'identity',
+          region: 'r0',
+          sig: { kind: 'bogus' } as never,
+          arity: 2,
+        },
+      },
+    })).toThrowError(/identity node 'n0' sig/)
   })
 
-  const oneNode = (wires: Record<string, Wire>) => {
-    const nodes: Record<string, DiagramNode> = {
-      n0: { kind: 'term', region: 'r0', term: p('\\x. x'), freePorts: [] },
-    }
-    return mkDiagram({ root: 'r0', regions: sheet, nodes, wires })
-  }
-
-  it('rejects a wire with a missing scope', () => {
-    expect(() => oneNode({ w0: { scope: 'ghost', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } }))
-      .toThrowError(/missing scope region 'ghost'/)
-  })
-
-  it('rejects an endpoint on a missing node', () => {
-    expect(() => oneNode({ w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'ghost', port: { kind: 'output' } }] } }))
-      .toThrowError(/missing node 'ghost'/)
-  })
-
-  it('rejects an endpoint on a non-existent port', () => {
-    expect(() => oneNode({
-      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'zz' } }] },
-    })).toThrowError(/non-existent port 'v:zz'/)
-  })
-
-  it('rejects a port attached to two wires', () => {
-    expect(() => oneNode({
-      w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-      w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
-    })).toThrowError(/attached to two wires/)
-  })
-
-  it('rejects a duplicate endpoint within a single wire, naming the wire once', () => {
-    expect(() => oneNode({
+  it('rejects missing scopes, nodes, ports, duplicate attachments, and omissions', () => {
+    expect(() => oneRef({
+      w0: {
+        scope: 'ghost',
+        sig: IOTA,
+        endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+      },
+    })).toThrowError(/missing scope region 'ghost'/)
+    expect(() => oneRef({
+      w0: {
+        scope: 'r0',
+        sig: IOTA,
+        endpoints: [{ node: 'ghost', port: { kind: 'arg', index: 0 } }],
+      },
+    })).toThrowError(/missing node 'ghost'/)
+    expect(() => oneRef({
+      w0: {
+        scope: 'r0',
+        sig: IOTA,
+        endpoints: [{ node: 'n0', port: { kind: 'head' } }],
+      },
+    })).toThrowError(/non-existent port 'hd'/)
+    expect(() => oneRef({
       w0: {
         scope: 'r0',
         sig: IOTA,
         endpoints: [
-          { node: 'n0', port: { kind: 'output' } },
-          { node: 'n0', port: { kind: 'output' } },
+          { node: 'n0', port: { kind: 'arg', index: 0 } },
+          { node: 'n0', port: { kind: 'arg', index: 0 } },
         ],
       },
-    })).toThrowError(/appears more than once in wire 'w0'/)
+    })).toThrowError(/appears more than once/)
+    expect(() => oneRef({
+      w0: {
+        scope: 'r0',
+        sig: IOTA,
+        endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+      },
+      w1: {
+        scope: 'r0',
+        sig: IOTA,
+        endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+      },
+    })).toThrowError(/attached to two wires/)
+    expect(() => oneRef({})).toThrowError(/port 'a:0'.*not attached/)
   })
 
-  it('rejects an unattached port (the partition invariant)', () => {
-    expect(() => oneNode({})).toThrowError(/port 'out' of node 'n0' is not attached/)
-  })
-
-  it('rejects a wire whose scope does not enclose an endpoint', () => {
-    // node inside the sheet, wire scoped inside a cut that does not contain the node
+  it('rejects signature mismatch and a wire scope below its endpoint', () => {
+    expect(() => oneRef({
+      w0: {
+        scope: 'r0',
+        sig: relSig([]),
+        endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+      },
+    })).toThrowError(/does not match port 'a:0'/)
     expect(() => mkDiagram({
       root: 'r0',
-      regions: { r0: { kind: 'sheet' }, r1: { kind: 'cut', parent: 'r0' } },
-      nodes: { n0: { kind: 'term', region: 'r0', term: p('\\x. x') } },
-      wires: { w0: { scope: 'r1', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+      regions: {
+        ...sheet,
+        r1: { kind: 'cut', parent: 'r0' },
+      },
+      nodes: { n0: refNode },
+      wires: {
+        w0: {
+          scope: 'r1',
+          sig: IOTA,
+          endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+        },
+      },
     })).toThrowError(/does not enclose node 'n0'/)
   })
 
-  it('all rejections are DiagramError instances', () => {
-    try {
-      mkDiagram({ root: 'nope', regions: sheet })
-      expect.unreachable('should have thrown')
-    } catch (e) {
-      expect(e).toBeInstanceOf(DiagramError)
+  it('rejects displaced term/body node vocabulary and throws DiagramError', () => {
+    for (const node of [
+      { kind: 'term', region: 'r0', term: {} },
+      { kind: 'body', region: 'r0', content: {} },
+    ]) {
+      try {
+        mkDiagram({
+          root: 'r0',
+          regions: sheet,
+          nodes: { legacy: node as never },
+        })
+        expect.unreachable('legacy node should be rejected')
+      } catch (error) {
+        expect(error).toBeInstanceOf(DiagramError)
+        expect((error as Error).message).toMatch(/unrecognized kind/)
+      }
     }
-  })
-
-  it('rejects term nodes carrying malformed terms (structural literals bypassing constructors)', () => {
-    expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      nodes: { n0: { kind: 'term', region: 'r0', term: { kind: 'bvar', index: 0 } } },
-      wires: { w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
-    })).toThrowError(/node 'n0' term:.*unbound de Bruijn index/)
-    expect(() => mkDiagram({
-      root: 'r0', regions: sheet,
-      nodes: { n0: { kind: 'term', region: 'r0', term: { kind: 'port', name: '' } } },
-      wires: { w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
-    })).toThrowError(/node 'n0' term:.*non-empty/)
   })
 })

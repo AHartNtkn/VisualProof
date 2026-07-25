@@ -2,41 +2,29 @@ import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../di
 import { DiagramError } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { sigKey } from '../sig'
-import { termShapeKey, positionalPortKey } from './shape'
 
 /**
  * THE CANONICAL EXPLORER (labeling mode).
  *
- * A diagram is a port-hypergraph: nodes carry ORDERED positional ports, so
- * exploration from an anchor is deterministic wherever ports decide the next
- * step. The two sources of genuine unorderedness are equality wires (their
- * endpoints have no order) and sibling regions (a region's children are a
- * set). The explorer assigns every region/node/wire a canonical ordinal such
- * that isomorphic diagrams receive corresponding ordinals.
+ * A diagram is a port-hypergraph. Atom/ref argument ports are positional;
+ * identity incidences, wire endpoints, and sibling regions are unordered.
+ * Identity incidence indices are storage addresses and never enter semantic
+ * refinement or serialization.
  *
  * Mechanically the exploration is individualization-refinement seeded by the
  * anchor: each pinned boundary wire gets the ordered vector of positions at
  * which it occurs (their order and aliasing are the open-diagram anchor);
  * every object otherwise starts colored by its
- * isomorphism-invariant local content (kind, arity, exact term shape). A
+ * isomorphism-invariant local content (kind, signature, arity). A
  * refinement round replaces each color by the rank of its neighborhood
- * signature — the ordered-port keys make a node's signature order-sensitive,
- * while unordered wire-endpoint and sibling-region sets enter as SORTED color
- * multisets (this is the "defer the set" step: a set whose members are already
- * distinguished elsewhere is split with no choice). Rounds only ever split
- * classes, so the class count is monotone and refinement terminates.
+ * signature. Positional ports preserve their keys, while identity incident
+ * wires, wire endpoints, and sibling regions enter as sorted multisets.
  *
  * A class refinement cannot split is a genuine automorphism orbit. Only then
  * is a choice forced: individualize each member in turn, re-refine, recurse,
  * and keep the lexicographically least serialization. Every member is
  * explored, so the minimum is invariant — this is what makes the labeling a
  * COMPLETE invariant (equal forms iff isomorphic) rather than a heuristic.
- *
- * IOTA COMPARISON IS EXACT (USER RULING): free ports name-blind by positional
- * role, but bodies compared by structural de Bruijn identity — never modulo
- * beta-eta. The labeling is therefore total, deterministic, and fuel-free.
- * Beta-eta looseness lives only in the matcher's node-compatibility, never in
- * this invariant.
  */
 
 export type ExploreLabeling = {
@@ -94,6 +82,7 @@ export type ExploreIndex = {
   readonly nodeRegion: ReadonlyMap<NodeId, RegionId>
   readonly nodePortOrder: ReadonlyMap<NodeId, readonly string[]>
   readonly nodePortWire: ReadonlyMap<NodeId, ReadonlyMap<string, WireId>>
+  readonly identityIncidentWires: ReadonlyMap<NodeId, readonly WireId[]>
   readonly wireScope: ReadonlyMap<WireId, RegionId>
   /** Canonical injective key of each wire's sort (intrinsic wire content). */
   readonly wireSigKey: ReadonlyMap<WireId, string>
@@ -102,18 +91,9 @@ export type ExploreIndex = {
   readonly pinOf: ReadonlyMap<WireId, readonly number[]>
 }
 
-/**
- * Positional port key of a wire endpoint (name-blind). The key vocabulary is
- * shared with each node kind's `portOrder` so `nodePortWire` lookups line up:
- * 'out' output, 'v{i}' term free port i, 'hd' atom head, 'a{i}' arg i,
- * 'p{j}' body parameter j (already positional by construction).
- */
 function endpointKey(d: Diagram, node: NodeId, port: Port): string {
   const n = d.nodes[node]!
-  // Return-typed switch (no default): a new node kind must decide its key here.
   switch (n.kind) {
-    case 'term':
-      return positionalPortKey(n.term, port, n.freePorts)
     case 'atom':
       if (port.kind === 'head') return 'hd'
       if (port.kind === 'arg') return `a${port.index}`
@@ -121,10 +101,9 @@ function endpointKey(d: Diagram, node: NodeId, port: Port): string {
     case 'ref':
       if (port.kind === 'arg') return `a${port.index}`
       throw new DiagramError(`ref '${node}' cannot carry port '${port.kind}'`)
-    case 'body':
-      if (port.kind === 'output') return 'out'
-      if (port.kind === 'freeVar') return port.name
-      throw new DiagramError(`body '${node}' cannot carry port '${port.kind}'`)
+    case 'identity':
+      if (port.kind === 'identity') return 'i'
+      throw new DiagramError(`identity '${node}' cannot carry port '${port.kind}'`)
   }
 }
 
@@ -158,18 +137,9 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
   const nodeRegion = new Map<NodeId, RegionId>()
   const nodePortOrder = new Map<NodeId, string[]>()
   const nodePortWire = new Map<NodeId, Map<string, WireId>>()
-  // Return-typed switch (no default): a new node kind forces its canonical
-  // content key and port order to be decided here. The content key is the
-  // node's isomorphism-invariant intrinsic identity: for atom/ref/body it
-  // carries `sigKey(n.sig)`; body additionally pins its payload by the
-  // boundary-anchored canonical form of its content (`boundaryForm`).
+  const identityIncidentWires = new Map<NodeId, WireId[]>()
   const nodeCanon = (_id: NodeId, n: DiagramNode): { contentKey: string; portOrder: string[] } => {
     switch (n.kind) {
-      case 'term':
-        return {
-          contentKey: `term:${termShapeKey(n.term, n.freePorts)}`,
-          portOrder: ['out', ...n.freePorts.map((_, i) => `v${i}`)],
-        }
       case 'atom':
         return {
           contentKey: `atom|${sigKey(n.sig)}`,
@@ -180,13 +150,11 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
           contentKey: `ref:${n.defId}:${sigKey(n.sig)}`,
           portOrder: n.sig.args.map((_, i) => `a${i}`),
         }
-      case 'body': {
-        const paramCount = n.content.boundary.length - n.sig.args.length
+      case 'identity':
         return {
-          contentKey: `body|${sigKey(n.sig)}|${boundaryForm(n.content)}`,
-          portOrder: ['out', ...Array.from({ length: paramCount }, (_, j) => `p${j}`)],
+          contentKey: `identity:${sigKey(n.sig)}:${n.arity}`,
+          portOrder: [],
         }
-      }
     }
   }
   for (const id of nodeIds) {
@@ -194,6 +162,7 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
     nodeRegion.set(id, n.region)
     nodesIn.get(n.region)!.push(id)
     nodePortWire.set(id, new Map())
+    if (n.kind === 'identity') identityIncidentWires.set(id, [])
     const canon = nodeCanon(id, n)
     nodeContentKey.set(id, canon.contentKey)
     nodePortOrder.set(id, canon.portOrder)
@@ -209,7 +178,11 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
     wiresScoped.get(w.scope)!.push(id)
     const eps = w.endpoints.map((ep) => {
       const pkey = endpointKey(d, ep.node, ep.port)
-      nodePortWire.get(ep.node)!.set(pkey, id)
+      if (d.nodes[ep.node]!.kind === 'identity') {
+        identityIncidentWires.get(ep.node)!.push(id)
+      } else {
+        nodePortWire.get(ep.node)!.set(pkey, id)
+      }
       return { node: ep.node, pkey }
     })
     wireEndpoints.set(id, eps)
@@ -225,7 +198,8 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
   return {
     regionIds, nodeIds, wireIds, regionKindKey, parentOf, childrenOf, nodesIn,
     wiresScoped, nodeContentKey, nodeRegion, nodePortOrder,
-    nodePortWire, wireScope, wireSigKey, wireEndpoints, pinOf,
+    nodePortWire, identityIncidentWires,
+    wireScope, wireSigKey, wireEndpoints, pinOf,
   }
 }
 
@@ -275,11 +249,19 @@ function refineOnce(idx: ExploreIndex, c: Colors): Colors {
       `R|${c.region.get(id)!}|p:${parentColor}|c:${children.join(',')}|n:${nodes.join(',')}|w:${wires.join(',')}`])
   }
   for (const id of idx.nodeIds) {
-    const ports = idx.nodePortOrder.get(id)!.map((pk) => {
-      const wireId = idx.nodePortWire.get(id)!.get(pk)
-      if (wireId === undefined) throw new DiagramError(`port '${pk}' missing wire for node '${id}'`)
-      return `${pk}=${c.wire.get(wireId)!}`
-    })
+    const identityWires = idx.identityIncidentWires.get(id)
+    const ports = identityWires === undefined
+      ? idx.nodePortOrder.get(id)!.map((pk) => {
+          const wireId = idx.nodePortWire.get(id)!.get(pk)
+          if (wireId === undefined) {
+            throw new DiagramError(`port '${pk}' missing wire for node '${id}'`)
+          }
+          return `${pk}=${c.wire.get(wireId)!}`
+        })
+      : identityWires
+          .map((wireId) => c.wire.get(wireId)!)
+          .sort((left, right) => left - right)
+          .map((color) => `i=${color}`)
     entries.push([`N${id}`,
       `N|${c.node.get(id)!}|r:${c.region.get(idx.nodeRegion.get(id)!)!}|${ports.join(',')}`])
   }

@@ -1,24 +1,24 @@
 export type {
-  RegionId, NodeId, WireId, Region, DiagramNode, Port, Endpoint, Wire, Diagram,
+  RegionId, NodeId, WireId, Region, IdentityDiagramNode, DiagramNode, Port,
+  Endpoint, Wire, Diagram, DiagramParts, DiagramNormalization,
 } from './diagram'
-export { mkDiagram, portKey, requiredPorts, portSig, DiagramError } from './diagram'
+export {
+  mkDiagram, mkDiagramNormalized, portKey, requiredPorts, portSig, DiagramError,
+} from './diagram'
 export * from './sig'
 export { isAncestorOrEqual, cutDepth, polarity } from './regions'
 export { DiagramBuilder } from './builder'
 export { diagramToJson, diagramFromJson } from './json'
 export type { DiagramWithBoundary } from './boundary'
 export { mkDiagramWithBoundary, boundaryArity } from './boundary'
-export { termShapeKey, positionalPortKey } from './canonical/shape'
 export type { ExploreLabeling, DiagramIso } from './canonical/explore'
 export { exploreForm, boundaryForm, exploreLabeling, exploreIso } from './canonical/explore'
-export type { NodeMatchVerdict } from './canonical/matchkey'
-export { closeOverPorts, termsMatchModuloBetaEta } from './canonical/matchkey'
 export type { SubgraphSelection, SelectionContents } from './subgraph/selection'
 export { mkSelection, selectionContents } from './subgraph/selection'
 export type { Extraction } from './subgraph/extract'
 export { extractSubgraph } from './subgraph/extract'
 export { removeSubgraph, spliceSubgraph } from './subgraph/splice'
-export type { Occurrence, OccurrenceCertificate, UndecidedPair, MatchResult } from './subgraph/match'
+export type { Occurrence, OccurrenceCertificate, MatchResult } from './subgraph/match'
 export { findOccurrences } from './subgraph/match'
 export type { OccurrenceCertificateCheck } from './subgraph/occurrence-certificate'
 export { checkOccurrenceCertificate } from './subgraph/occurrence-certificate'

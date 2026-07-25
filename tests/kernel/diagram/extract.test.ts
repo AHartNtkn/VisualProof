@@ -1,113 +1,115 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { boundaryArity } from '../../../src/kernel/diagram/boundary'
-import { IOTA, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
-
-const p = (s: string) => parseTerm(s)
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 
 function host() {
-  const b = new DiagramBuilder()
-  const nA = b.termNode(b.root, p('y x'))
-  const cut = b.cut(b.root)
-  const nB = b.termNode(cut, p('\\x. x'))
-  const wShared = b.wire(b.root, [
-    { node: nA, port: { kind: 'freeVar', name: 'y' } },
-    { node: nB, port: { kind: 'output' } },
+  const builder = new DiagramBuilder()
+  const outer = builder.ref(builder.root, 'Outer', relSig([IOTA]))
+  const cut = builder.cut(builder.root)
+  const inner = builder.ref(cut, 'Inner', relSig([IOTA, IOTA]))
+  const shared = builder.wire(builder.root, [
+    { node: outer, port: { kind: 'arg', index: 0 } },
+    { node: inner, port: { kind: 'arg', index: 0 } },
   ])
-  const wBare = b.wire(cut, [])
-  return { d: b.build(), nA, cut, nB, wShared, wBare }
+  const inside = builder.wire(cut, [
+    { node: inner, port: { kind: 'arg', index: 1 } },
+  ])
+  return {
+    diagram: builder.build(),
+    outer,
+    cut,
+    inner,
+    shared,
+    inside,
+  }
 }
 
 describe('extractSubgraph', () => {
-  it('produces a valid pattern with root-scoped boundary stubs and an attachment record', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    const { pattern, attachments } = extractSubgraph(h.d, sel)
-    // boundary: exactly the touching wire (wShared), as a root-scoped stub
-    expect(boundaryArity(pattern)).toBe(1)
-    expect(attachments).toEqual([h.wShared])
-    const stubId = pattern.boundary[0]!
-    const stub = pattern.diagram.wires[stubId]!
-    expect(stub.scope).toBe(pattern.diagram.root)
-    // the stub keeps only the selected endpoint (nB's output)
-    expect(stub.endpoints).toHaveLength(1)
-    expect(stub.endpoints[0]?.node).toBe(h.nB)
-    // internal content carried over: the cut, nB, and the bare wire inside
-    expect(Object.keys(pattern.diagram.regions)).toHaveLength(2) // fresh root + cut
-    expect(pattern.diagram.nodes[h.nB]).toBeDefined()
-    expect(pattern.diagram.wires[h.wBare]).toBeDefined()
-  })
-
-  it('maps selection-region scopes to the pattern root', () => {
-    const h = host()
-    const sel = mkSelection(h.d, {
-      region: h.d.root, regions: [h.cut], nodes: [h.nA], wires: [h.wShared],
+  it('copies a selected subtree and exposes crossings as ordered root stubs', () => {
+    const value = host()
+    const selection = mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [],
+      wires: [],
     })
-    const { pattern, attachments } = extractSubgraph(h.d, sel)
-    // wShared is internal here: copied with scope at the fresh root
-    expect(pattern.diagram.wires[h.wShared]?.scope).toBe(pattern.diagram.root)
-    // nA's other ports (out, v:x) were auto-wired at root scope in the host:
-    // those host wires touch only nA, so they become boundary stubs
-    expect(boundaryArity(pattern)).toBe(2)
-    expect(attachments).toHaveLength(2)
+    const extraction = extractSubgraph(value.diagram, selection)
+    const boundary = extraction.pattern.boundary[0]!
+    const pattern = extraction.pattern.diagram
+
+    expect(extraction.attachments).toEqual([value.shared])
+    expect(pattern.nodes[value.inner]).toEqual(value.diagram.nodes[value.inner])
+    expect(pattern.wires[value.inside]?.scope).toBe(value.cut)
+    expect(pattern.wires[boundary]?.scope).toBe(pattern.root)
+    expect(pattern.wires[boundary]?.endpoints).toEqual([
+      { node: value.inner, port: { kind: 'arg', index: 0 } },
+    ])
   })
 
-  it('orders boundary stubs deterministically by host wire id', () => {
-    const h = host()
-    const sel = mkSelection(h.d, {
-      region: h.d.root, regions: [h.cut], nodes: [h.nA], wires: [h.wShared],
+  it('moves directly selected nodes to the fresh pattern root', () => {
+    const value = host()
+    const extraction = extractSubgraph(value.diagram, mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [],
+      nodes: [value.outer],
+      wires: [],
+    }))
+
+    expect(extraction.pattern.diagram.nodes[value.outer]?.region)
+      .toBe(extraction.pattern.diagram.root)
+    expect(extraction.attachments).toEqual([value.shared])
+  })
+
+  it('is deterministic and non-destructive', () => {
+    const value = host()
+    const selection = mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [],
+      wires: [],
     })
-    const { attachments } = extractSubgraph(h.d, sel)
-    expect([...attachments]).toEqual([...attachments].sort())
+    const first = extractSubgraph(value.diagram, selection)
+    const second = extractSubgraph(value.diagram, selection)
+
+    expect(first).toEqual(second)
+    expect(value.diagram.nodes[value.inner]?.region).toBe(value.cut)
   })
 
-  it('extracted pattern is a valid diagram (re-validated through mkDiagram)', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    // construction inside extractSubgraph runs mkDiagram; reaching here means it passed
-    expect(() => extractSubgraph(h.d, sel)).not.toThrow()
-  })
-})
+  it('transports collapsed identity stubs into a repeated boundary', () => {
+    const diagram = mkDiagram({
+      root: 'r0',
+      regions: {
+        r0: { kind: 'sheet' },
+        r1: { kind: 'cut', parent: 'r0' },
+      },
+      nodes: {
+        eq: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+      },
+      wires: {
+        a: {
+          scope: 'r0',
+          sig: IOTA,
+          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+        },
+        b: {
+          scope: 'r0',
+          sig: IOTA,
+          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
+        },
+      },
+    })
+    const extraction = extractSubgraph(diagram, mkSelection(diagram, {
+      region: 'r1',
+      regions: [],
+      nodes: ['eq'],
+      wires: [],
+    }))
 
-describe('extractSubgraph relational-atom boundary', () => {
-  it('an atom whose head wire is internal produces no boundary stub', () => {
-    // ∃R inside the cut, with R(t): the head wire is scoped in the selection, so
-    // the relation line travels with the pattern and crosses no boundary.
-    const S = relSig([IOTA])
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const a = b.atom(cut, S)
-    b.wire(cut, [{ node: a, port: { kind: 'head' } }], S) // R scoped INSIDE the cut
-    const d = b.build()
-    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
-    const ex = extractSubgraph(d, sel)
-    expect(ex.attachments).toEqual([])
-    expect(boundaryArity(ex.pattern)).toBe(0)
-    expect(() => extractSubgraph(d, sel)).not.toThrow()
-  })
-
-  it('an atom whose head wire is external contributes a relational boundary stub of the atom sig', () => {
-    // ∃R OUTSIDE the cut; inside the cut sits R(t). Selecting the cut leaves R's
-    // line of identity crossing the boundary — it becomes a root-scoped
-    // relational stub carrying the atom's signature, uniformly with an arg wire.
-    const S = relSig([IOTA])
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const a = b.atom(cut, S)
-    const headWire = b.wire(b.root, [{ node: a, port: { kind: 'head' } }], S) // R scoped at ROOT
-    const d = b.build()
-    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
-    const ex = extractSubgraph(d, sel)
-    expect(ex.attachments).toEqual([headWire])
-    expect(boundaryArity(ex.pattern)).toBe(1)
-    const stubId = ex.pattern.boundary[0]!
-    const stub = ex.pattern.diagram.wires[stubId]!
-    expect(stub.scope).toBe(ex.pattern.diagram.root)
-    expect(sigEquals(stub.sig, S)).toBe(true) // the stub CARRIES the relational sig
-    expect(stub.endpoints).toHaveLength(1)
-    expect(stub.endpoints[0]).toEqual({ node: a, port: { kind: 'head' } })
+    expect(extraction.pattern.diagram.nodes).toEqual({})
+    expect(extraction.pattern.boundary[0]).toBe(extraction.pattern.boundary[1])
+    expect(extraction.attachments).toEqual(['a', 'b'])
   })
 })

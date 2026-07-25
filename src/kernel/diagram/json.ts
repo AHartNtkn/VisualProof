@@ -1,186 +1,214 @@
-import { deserializeTerm, serializeTerm } from '../term/serialize'
-import type { Diagram, Port, Region, DiagramNode, Wire } from './diagram'
+import type { Diagram, DiagramNode, Port, Region, Wire } from './diagram'
 import { mkDiagram, portKey } from './diagram'
-import type { Sig, RelSig } from './sig'
-import { IOTA, relSig, assertWellFormedSig } from './sig'
+import type { RelSig, Sig } from './sig'
+import { assertWellFormedSig, IOTA, relSig } from './sig'
 import type { DiagramWithBoundary } from './boundary'
 import { mkDiagramWithBoundary } from './boundary'
 
-/**
- * Pure-data JSON form of a diagram. Semantic content only — by the layer
- * separation edict there is nothing else to save. Terms are embedded as
- * injective term-serialization strings; ports as portKey strings; signatures
- * as their own recursive `{kind}` objects. Ids are preserved verbatim. Theory
- * files (Plan 5) wrap this in their own versioned envelope; this object carries
- * no version of its own.
- */
-export function diagramToJson(d: Diagram): unknown {
+/** Serialize semantic diagram content with IDs preserved verbatim. */
+export function diagramToJson(diagram: Diagram): unknown {
   const regions: Record<string, unknown> = {}
-  for (const [id, r] of Object.entries(d.regions)) regions[id] = { ...r }
-  // Return-typed switch (no default): a new node kind forces a serialization here.
-  const nodeToJson = (n: DiagramNode): Record<string, unknown> => {
-    switch (n.kind) {
-      case 'term': return { kind: 'term', region: n.region, term: serializeTerm(n.term), freePorts: [...n.freePorts] }
-      case 'atom': return { kind: 'atom', region: n.region, sig: sigToJson(n.sig) }
-      case 'ref': return { kind: 'ref', region: n.region, defId: n.defId, sig: sigToJson(n.sig) }
-      case 'body': return { kind: 'body', region: n.region, sig: sigToJson(n.sig), content: dwbToJson(n.content) }
+  for (const [id, region] of Object.entries(diagram.regions)) {
+    regions[id] = { ...region }
+  }
+
+  const nodeToJson = (node: DiagramNode): Record<string, unknown> => {
+    switch (node.kind) {
+      case 'atom':
+        return { kind: 'atom', region: node.region, sig: sigToJson(node.sig) }
+      case 'ref':
+        return {
+          kind: 'ref',
+          region: node.region,
+          defId: node.defId,
+          sig: sigToJson(node.sig),
+        }
+      case 'identity':
+        return {
+          kind: 'identity',
+          region: node.region,
+          sig: sigToJson(node.sig),
+          arity: node.arity,
+        }
     }
   }
   const nodes: Record<string, unknown> = {}
-  for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[id] = nodeToJson(n)
+  for (const [id, node] of Object.entries(diagram.nodes)) {
+    nodes[id] = nodeToJson(node)
   }
+
   const wires: Record<string, unknown> = {}
-  for (const [id, w] of Object.entries(d.wires)) {
+  for (const [id, wire] of Object.entries(diagram.wires)) {
     wires[id] = {
-      scope: w.scope,
-      sig: sigToJson(w.sig),
-      endpoints: w.endpoints.map((ep) => ({ node: ep.node, port: portKey(ep.port) })),
+      scope: wire.scope,
+      sig: sigToJson(wire.sig),
+      endpoints: wire.endpoints.map((endpoint) => ({
+        node: endpoint.node,
+        port: portKey(endpoint.port),
+      })),
     }
   }
-  return { root: d.root, regions, nodes, wires }
+  return { root: diagram.root, regions, nodes, wires }
 }
 
-function fail(msg: string): never {
-  throw new Error(`malformed diagram JSON: ${msg}`)
+function fail(message: string): never {
+  throw new Error(`malformed diagram JSON: ${message}`)
 }
 
-function assertOnlyKeys(v: Record<string, unknown>, allowed: readonly string[], what: string): void {
-  for (const k of Object.keys(v)) {
-    if (!allowed.includes(k)) fail(`${what} has unknown field '${k}' (semantic files carry no extra data)`)
+function assertOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  what: string,
+): void {
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) {
+      fail(`${what} has unknown field '${key}' (semantic files carry no extra data)`)
+    }
   }
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Canonical recursive JSON of a signature: `{kind:'iota'}` or `{kind:'rel',args}`. */
-export function sigToJson(s: Sig): unknown {
-  return s.kind === 'iota' ? { kind: 'iota' } : { kind: 'rel', args: s.args.map(sigToJson) }
+export function sigToJson(sig: Sig): unknown {
+  return sig.kind === 'iota'
+    ? { kind: 'iota' }
+    : { kind: 'rel', args: sig.args.map(sigToJson) }
 }
 
-/**
- * Decode an untrusted signature. Structural validity is enforced loudly by
- * `assertWellFormedSig`; strict key membership (no smuggled extra data) and
- * canonicalization into shared frozen values (`IOTA`, `relSig`) are enforced on
- * the way back out.
- */
-export function sigFromJson(v: unknown, what: string): Sig {
+export function sigFromJson(value: unknown, what: string): Sig {
   try {
-    assertWellFormedSig(v)
-  } catch (e) {
-    fail(`${what} sig: ${e instanceof Error ? e.message : String(e)}`)
+    assertWellFormedSig(value)
+  } catch (error) {
+    fail(`${what} sig: ${error instanceof Error ? error.message : String(error)}`)
   }
-  return rebuildSig(v as Sig, what)
+  return rebuildSig(value as Sig, what)
 }
 
-function rebuildSig(s: Sig, what: string): Sig {
-  if (s.kind === 'iota') {
-    if (Object.keys(s).length !== 1) fail(`${what} sig: iota signature carries extra fields`)
+function rebuildSig(sig: Sig, what: string): Sig {
+  if (sig.kind === 'iota') {
+    if (Object.keys(sig).length !== 1) {
+      fail(`${what} sig: iota signature carries extra fields`)
+    }
     return IOTA
   }
-  if (Object.keys(s).length !== 2) fail(`${what} sig: relation signature carries extra fields`)
-  return relSig(s.args.map((a, i) => rebuildSig(a, `${what} sig arg ${i}`)))
+  if (Object.keys(sig).length !== 2) {
+    fail(`${what} sig: relation signature carries extra fields`)
+  }
+  return relSig(sig.args.map((argument, index) =>
+    rebuildSig(argument, `${what} sig arg ${index}`),
+  ))
 }
 
-/** Decode an untrusted signature that must be relational (atoms, refs, bodies). */
-export function relSigFromJson(v: unknown, what: string): RelSig {
-  const s = sigFromJson(v, what)
-  if (s.kind !== 'rel') fail(`${what} sig must be a relation signature`)
-  return s
+export function relSigFromJson(value: unknown, what: string): RelSig {
+  const sig = sigFromJson(value, what)
+  if (sig.kind !== 'rel') fail(`${what} sig must be a relation signature`)
+  return sig
 }
 
-/** A diagram plus an ordered boundary — the serialized form of a relation body
- * and of body-node content. Recursive: the diagram may itself carry body nodes. */
 export function dwbToJson(dwb: DiagramWithBoundary): unknown {
-  return { diagram: diagramToJson(dwb.diagram), boundary: [...dwb.boundary] }
+  return {
+    diagram: diagramToJson(dwb.diagram),
+    boundary: [...dwb.boundary],
+  }
 }
 
-export function dwbFromJson(v: unknown, what = 'pattern'): DiagramWithBoundary {
-  if (!isRecord(v)) fail(`${what} must be an object`)
-  assertOnlyKeys(v, ['diagram', 'boundary'], what)
-  if (!Array.isArray(v.boundary) || !v.boundary.every((x) => typeof x === 'string')) {
+export function dwbFromJson(value: unknown, what = 'pattern'): DiagramWithBoundary {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['diagram', 'boundary'], what)
+  if (
+    !Array.isArray(value.boundary)
+    || !value.boundary.every((wireId) => typeof wireId === 'string')
+  ) {
     fail(`${what}.boundary must be an array of wire ids`)
   }
   try {
-    return mkDiagramWithBoundary(diagramFromJson(v.diagram), v.boundary as string[])
-  } catch (e) {
-    return fail(`${what}: ${e instanceof Error ? e.message : String(e)}`)
+    return mkDiagramWithBoundary(
+      diagramFromJson(value.diagram),
+      value.boundary as string[],
+    )
+  } catch (error) {
+    return fail(`${what}: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
 export function parsePortKey(key: string): Port {
-  if (key === 'out') return { kind: 'output' }
   if (key === 'hd') return { kind: 'head' }
-  if (key.startsWith('v:') && key.length > 2) return { kind: 'freeVar', name: key.slice(2) }
-  if (key.startsWith('a:')) {
-    const raw = key.slice(2)
-    const n = Number(raw)
-    // canonical form only: portKey emits plain decimal digits, never '1e2' etc.
-    if (Number.isSafeInteger(n) && n >= 0 && String(n) === raw) return { kind: 'arg', index: n }
+  for (const [prefix, kind] of [
+    ['a:', 'arg'],
+    ['i:', 'identity'],
+  ] as const) {
+    if (!key.startsWith(prefix)) continue
+    const raw = key.slice(prefix.length)
+    const index = Number(raw)
+    if (
+      Number.isSafeInteger(index)
+      && index >= 0
+      && String(index) === raw
+    ) {
+      return { kind, index }
+    }
   }
   return fail(`unrecognized port key '${key}'`)
 }
 
-export function diagramFromJson(j: unknown): Diagram {
-  if (!isRecord(j)) fail('top level must be an object')
-  assertOnlyKeys(j, ['root', 'regions', 'nodes', 'wires'], 'top level')
-  const { root, regions: jr, nodes: jn, wires: jw } = j
+export function diagramFromJson(json: unknown): Diagram {
+  if (!isRecord(json)) fail('top level must be an object')
+  assertOnlyKeys(json, ['root', 'regions', 'nodes', 'wires'], 'top level')
+  const { root, regions: jsonRegions, nodes: jsonNodes, wires: jsonWires } = json
   if (typeof root !== 'string') fail("'root' must be a string")
-  if (!isRecord(jr) || !isRecord(jn) || !isRecord(jw)) fail("'regions', 'nodes', 'wires' must be objects")
+  if (!isRecord(jsonRegions) || !isRecord(jsonNodes) || !isRecord(jsonWires)) {
+    fail("'regions', 'nodes', 'wires' must be objects")
+  }
 
   const regions: Record<string, Region> = {}
-  for (const [id, v] of Object.entries(jr)) {
-    if (!isRecord(v)) fail(`region '${id}' must be an object`)
-    if (v.kind === 'sheet') {
-      assertOnlyKeys(v, ['kind'], `region '${id}'`)
+  for (const [id, value] of Object.entries(jsonRegions)) {
+    if (!isRecord(value)) fail(`region '${id}' must be an object`)
+    if (value.kind === 'sheet') {
+      assertOnlyKeys(value, ['kind'], `region '${id}'`)
       regions[id] = { kind: 'sheet' }
       continue
     }
-    if (v.kind === 'cut' && typeof v.parent === 'string') {
-      assertOnlyKeys(v, ['kind', 'parent'], `region '${id}'`)
-      regions[id] = { kind: 'cut', parent: v.parent }
+    if (value.kind === 'cut' && typeof value.parent === 'string') {
+      assertOnlyKeys(value, ['kind', 'parent'], `region '${id}'`)
+      regions[id] = { kind: 'cut', parent: value.parent }
       continue
     }
     fail(`region '${id}' has unrecognized shape`)
   }
 
   const nodes: Record<string, DiagramNode> = {}
-  for (const [id, v] of Object.entries(jn)) {
-    if (!isRecord(v) || typeof v.region !== 'string') fail(`node '${id}' has unrecognized shape`)
-    if (v.kind === 'term' && typeof v.term === 'string'
-      && Array.isArray(v.freePorts) && v.freePorts.every((name) => typeof name === 'string')) {
-      assertOnlyKeys(v, ['kind', 'region', 'term', 'freePorts'], `node '${id}'`)
-      try {
-        nodes[id] = {
-          kind: 'term',
-          region: v.region,
-          term: deserializeTerm(v.term),
-          freePorts: v.freePorts as string[],
-        }
-      } catch (e) {
-        fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
+  for (const [id, value] of Object.entries(jsonNodes)) {
+    if (!isRecord(value) || typeof value.region !== 'string') {
+      fail(`node '${id}' has unrecognized shape`)
+    }
+    if (value.kind === 'atom') {
+      assertOnlyKeys(value, ['kind', 'region', 'sig'], `node '${id}'`)
+      nodes[id] = {
+        kind: 'atom',
+        region: value.region,
+        sig: relSigFromJson(value.sig, `node '${id}'`),
       }
       continue
     }
-    if (v.kind === 'atom' && 'sig' in v) {
-      assertOnlyKeys(v, ['kind', 'region', 'sig'], `node '${id}'`)
-      nodes[id] = { kind: 'atom', region: v.region, sig: relSigFromJson(v.sig, `node '${id}'`) }
-      continue
-    }
-    if (v.kind === 'ref' && typeof v.defId === 'string' && 'sig' in v) {
-      assertOnlyKeys(v, ['kind', 'region', 'defId', 'sig'], `node '${id}'`)
-      nodes[id] = { kind: 'ref', region: v.region, defId: v.defId, sig: relSigFromJson(v.sig, `node '${id}'`) }
-      continue
-    }
-    if (v.kind === 'body' && 'sig' in v && 'content' in v) {
-      assertOnlyKeys(v, ['kind', 'region', 'sig', 'content'], `node '${id}'`)
+    if (value.kind === 'ref' && typeof value.defId === 'string') {
+      assertOnlyKeys(value, ['kind', 'region', 'defId', 'sig'], `node '${id}'`)
       nodes[id] = {
-        kind: 'body',
-        region: v.region,
-        sig: relSigFromJson(v.sig, `node '${id}'`),
-        content: dwbFromJson(v.content, `node '${id}' content`),
+        kind: 'ref',
+        region: value.region,
+        defId: value.defId,
+        sig: relSigFromJson(value.sig, `node '${id}'`),
+      }
+      continue
+    }
+    if (value.kind === 'identity' && typeof value.arity === 'number') {
+      assertOnlyKeys(value, ['kind', 'region', 'sig', 'arity'], `node '${id}'`)
+      nodes[id] = {
+        kind: 'identity',
+        region: value.region,
+        sig: sigFromJson(value.sig, `node '${id}'`),
+        arity: value.arity,
       }
       continue
     }
@@ -188,22 +216,35 @@ export function diagramFromJson(j: unknown): Diagram {
   }
 
   const wires: Record<string, Wire> = {}
-  for (const [id, v] of Object.entries(jw)) {
-    if (!isRecord(v) || typeof v.scope !== 'string' || !Array.isArray(v.endpoints)) {
+  for (const [id, value] of Object.entries(jsonWires)) {
+    if (
+      !isRecord(value)
+      || typeof value.scope !== 'string'
+      || !Array.isArray(value.endpoints)
+    ) {
       fail(`wire '${id}' has unrecognized shape`)
     }
-    assertOnlyKeys(v, ['scope', 'sig', 'endpoints'], `wire '${id}'`)
-    if (!('sig' in v)) fail(`wire '${id}' is missing its 'sig' field`)
-    const sig = sigFromJson(v.sig, `wire '${id}'`)
-    const endpoints = v.endpoints.map((ep, k) => {
-      if (!isRecord(ep) || typeof ep.node !== 'string' || typeof ep.port !== 'string') {
-        return fail(`wire '${id}' endpoint ${k} has unrecognized shape`)
-      }
-      assertOnlyKeys(ep, ['node', 'port'], `wire '${id}' endpoint ${k}`)
-      return { node: ep.node, port: parsePortKey(ep.port) }
-    })
-    wires[id] = { scope: v.scope, sig, endpoints }
+    assertOnlyKeys(value, ['scope', 'sig', 'endpoints'], `wire '${id}'`)
+    wires[id] = {
+      scope: value.scope,
+      sig: sigFromJson(value.sig, `wire '${id}'`),
+      endpoints: value.endpoints.map((endpoint, index) => {
+        if (
+          !isRecord(endpoint)
+          || typeof endpoint.node !== 'string'
+          || typeof endpoint.port !== 'string'
+        ) {
+          return fail(`wire '${id}' endpoint ${index} has unrecognized shape`)
+        }
+        assertOnlyKeys(endpoint, ['node', 'port'], `wire '${id}' endpoint ${index}`)
+        return { node: endpoint.node, port: parsePortKey(endpoint.port) }
+      }),
+    }
   }
 
-  return mkDiagram({ root, regions, nodes, wires })
+  try {
+    return mkDiagram({ root, regions, nodes, wires })
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error))
+  }
 }

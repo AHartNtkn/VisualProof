@@ -1,109 +1,98 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkSelection, selectionContents } from '../../../src/kernel/diagram/subgraph/selection'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import {
+  mkSelection,
+  selectionContents,
+} from '../../../src/kernel/diagram/subgraph/selection'
 
-const p = (s: string) => parseTerm(s)
-
-// host: sheet contains node nA('y x'), cut C containing node nB('\x. x'),
-// wire wShared (scope root) joining nA.v:y with nB.out (crosses into the cut),
-// nA.out and nA.v:x auto-wired; plus a bare wire wBare scoped inside C.
 function host() {
-  const b = new DiagramBuilder()
-  const nA = b.termNode(b.root, p('y x'))
-  const cut = b.cut(b.root)
-  const nB = b.termNode(cut, p('\\x. x'))
-  const wShared = b.wire(b.root, [
-    { node: nA, port: { kind: 'freeVar', name: 'y' } },
-    { node: nB, port: { kind: 'output' } },
+  const builder = new DiagramBuilder()
+  const outer = builder.ref(builder.root, 'Outer', relSig([IOTA]))
+  const cut = builder.cut(builder.root)
+  const inner = builder.ref(cut, 'Inner', relSig([IOTA, IOTA]))
+  const shared = builder.wire(builder.root, [
+    { node: outer, port: { kind: 'arg', index: 0 } },
+    { node: inner, port: { kind: 'arg', index: 0 } },
   ])
-  const wBare = b.wire(cut, [])
-  return { d: b.build(), nA, cut, nB, wShared, wBare }
+  const inside = builder.wire(cut, [
+    { node: inner, port: { kind: 'arg', index: 1 } },
+  ])
+  return {
+    diagram: builder.build(),
+    outer,
+    cut,
+    inner,
+    shared,
+    inside,
+  }
 }
 
-describe('mkSelection', () => {
-  it('validates region, child subtrees, direct nodes, explicit top-level wires', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [h.nA], wires: [] })
-    expect(sel.region).toBe(h.d.root)
-  })
-
-  it('rejects regions that are not children of the selection region', () => {
-    const h = host()
-    expect(() => mkSelection(h.d, { region: h.cut, regions: [h.cut], nodes: [], wires: [] }))
-      .toThrowError(/region 'r1' is not a child of selection region 'r1'/)
-  })
-
-  it('rejects nodes not directly in the selection region, duplicates, and unknown ids', () => {
-    const h = host()
-    expect(() => mkSelection(h.d, { region: h.d.root, regions: [], nodes: [h.nB], wires: [] }))
-      .toThrowError(/node 'n1' is not directly in selection region/)
-    expect(() => mkSelection(h.d, { region: h.d.root, regions: [h.cut, h.cut], nodes: [], wires: [] }))
-      .toThrowError(/duplicate selected region 'r1'/)
-    expect(() => mkSelection(h.d, { region: h.d.root, regions: [], nodes: ['ghost'], wires: [] }))
-      .toThrowError(/unknown node 'ghost'/)
-  })
-
-  it('rejects explicit wires not scoped at the region or with unselected endpoints', () => {
-    const h = host()
-    // wShared has an endpoint on nB (inside the cut) — selecting it without the cut fails
-    expect(() => mkSelection(h.d, { region: h.d.root, regions: [], nodes: [h.nA], wires: [h.wShared] }))
-      .toThrowError(/wire 'w0' has endpoints outside the selection/)
-    // wBare is scoped inside the cut, not at the selection region
-    expect(() => mkSelection(h.d, { region: h.d.root, regions: [], nodes: [h.nA], wires: [h.wBare] }))
-      .toThrowError(/wire 'w1' is not scoped at selection region/)
-  })
-})
-
-describe('selectionContents', () => {
-  it('classifies wires: scoped-inside-subtree internal, cross-boundary touching', () => {
-    const h = host()
-    // select ONLY the cut subtree: nB inside, wShared touches nB from outside
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    const c = selectionContents(h.d, sel)
-    expect([...c.allRegions]).toEqual([h.cut])
-    expect([...c.allNodes]).toEqual([h.nB])
-    expect(c.internalWires).toContain(h.wBare) // scoped inside the selected cut
-    expect(c.touchingWires).toContain(h.wShared) // endpoint on nB, scope outside
-  })
-
-  it('explicitly selected top-level wires are internal; unselected all-inside wires are touching', () => {
-    const h = host()
-    const withWire = mkSelection(h.d, {
-      region: h.d.root, regions: [h.cut], nodes: [h.nA], wires: [h.wShared],
+describe('subgraph selection', () => {
+  it('validates direct nodes, child regions, and explicit wires', () => {
+    const value = host()
+    expect(mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [value.outer],
+      wires: [],
+    })).toEqual({
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [value.outer],
+      wires: [],
     })
-    expect(selectionContents(h.d, withWire).internalWires).toContain(h.wShared)
 
-    const withoutWire = mkSelection(h.d, {
-      region: h.d.root, regions: [h.cut], nodes: [h.nA], wires: [],
+    expect(() => mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [],
+      nodes: [value.inner],
+      wires: [],
+    })).toThrowError(/not directly/)
+    expect(() => mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut, value.cut],
+      nodes: [],
+      wires: [],
+    })).toThrowError(/duplicate/)
+  })
+
+  it('classifies subtree-owned wires as internal and crossings as touching', () => {
+    const value = host()
+    const selection = mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [],
+      wires: [],
     })
-    // all endpoints selected, but membership is the caller's choice
-    expect(selectionContents(h.d, withoutWire).touchingWires).toContain(h.wShared)
+    const contents = selectionContents(value.diagram, selection)
+
+    expect([...contents.allRegions]).toEqual([value.cut])
+    expect([...contents.allNodes]).toEqual([value.inner])
+    expect(contents.internalWires).toEqual([value.inside])
+    expect(contents.touchingWires).toEqual([value.shared])
   })
 
-  it('wires with no contact are neither internal nor touching', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [], nodes: [h.nA], wires: [] })
-    const c = selectionContents(h.d, sel)
-    expect(c.internalWires).not.toContain(h.wBare)
-    expect(c.touchingWires).not.toContain(h.wBare)
-  })
-
-  it('zero-endpoint wires at the selection region are explicitly selectable and classify internal', () => {
-    const b = new DiagramBuilder()
-    const nA = b.termNode(b.root, p('\\x. x'))
-    void nA
-    const wEmpty = b.wire(b.root, [])
-    const d = b.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [], wires: [wEmpty] })
-    expect(selectionContents(d, sel).internalWires).toContain(wEmpty)
-  })
-
-  describe('selection provenance (all entry points validate)', () => {
-    it('selectionContents rejects raw garbage selections loudly', () => {
-      const h = host()
-      expect(() => selectionContents(h.d, { region: 'ghost', regions: [], nodes: [], wires: [] }))
-        .toThrowError(/unknown selection region 'ghost'/)
+  it('allows an all-selected top-level wire to be chosen explicitly', () => {
+    const value = host()
+    const selection = mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [value.outer],
+      wires: [value.shared],
     })
+
+    expect(selectionContents(value.diagram, selection).internalWires)
+      .toEqual([value.shared, value.inside].sort())
+  })
+
+  it('rejects unknown selection ids at every entry point', () => {
+    const value = host()
+    expect(() => selectionContents(value.diagram, {
+      region: value.diagram.root,
+      regions: [],
+      nodes: ['ghost'],
+      wires: [],
+    })).toThrowError(/unknown node 'ghost'/)
   })
 })

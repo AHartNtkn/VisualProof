@@ -1,207 +1,155 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph, spliceSubgraphMapped } from '../../../src/kernel/diagram/subgraph/splice'
-
-const p = (s: string) => parseTerm(s)
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import {
+  removeSubgraph,
+  spliceSubgraphMapped,
+} from '../../../src/kernel/diagram/subgraph/splice'
 
 function host() {
-  const b = new DiagramBuilder()
-  const nA = b.termNode(b.root, p('y x'))
-  const cut = b.cut(b.root)
-  const nB = b.termNode(cut, p('\\x. x'))
-  const wShared = b.wire(b.root, [
-    { node: nA, port: { kind: 'freeVar', name: 'y' } },
-    { node: nB, port: { kind: 'output' } },
+  const builder = new DiagramBuilder()
+  const outer = builder.ref(builder.root, 'Outer', relSig([IOTA]))
+  const cut = builder.cut(builder.root)
+  const inner = builder.ref(cut, 'Inner', relSig([IOTA, IOTA]))
+  const shared = builder.wire(builder.root, [
+    { node: outer, port: { kind: 'arg', index: 0 } },
+    { node: inner, port: { kind: 'arg', index: 0 } },
   ])
-  const wBare = b.wire(cut, [])
-  return { d: b.build(), nA, cut, nB, wShared, wBare }
+  const inside = builder.wire(cut, [
+    { node: inner, port: { kind: 'arg', index: 1 } },
+  ])
+  return {
+    diagram: builder.build(),
+    outer,
+    cut,
+    inner,
+    shared,
+    inside,
+  }
 }
 
-describe('removeSubgraph', () => {
-  it('drops selected content and trims touching wires to their outside endpoints', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    const after = removeSubgraph(h.d, sel)
-    expect(after.regions[h.cut]).toBeUndefined()
-    expect(after.nodes[h.nB]).toBeUndefined()
-    expect(after.wires[h.wBare]).toBeUndefined()
-    // wShared survives with only nA's endpoint
-    expect(after.wires[h.wShared]?.endpoints).toHaveLength(1)
-    expect(after.wires[h.wShared]?.endpoints[0]?.node).toBe(h.nA)
+function repeatedBareBoundary() {
+  const diagram = mkDiagram({
+    root: 'p0',
+    regions: { p0: { kind: 'sheet' } },
+    wires: {
+      stub: { scope: 'p0', sig: IOTA, endpoints: [] },
+    },
+  })
+  return mkDiagramWithBoundary(diagram, ['stub', 'stub'])
+}
+
+describe('subgraph removal and splice', () => {
+  it('removes selected content and trims touching wires', () => {
+    const value = host()
+    const selection = mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [],
+      wires: [],
+    })
+    const removed = removeSubgraph(value.diagram, selection)
+
+    expect(removed.regions[value.cut]).toBeUndefined()
+    expect(removed.nodes[value.inner]).toBeUndefined()
+    expect(removed.wires[value.inside]).toBeUndefined()
+    expect(removed.wires[value.shared]?.endpoints).toEqual([
+      { node: value.outer, port: { kind: 'arg', index: 0 } },
+    ])
   })
 
-  it('a touching wire trimmed to zero endpoints survives as a bare wire at its scope', () => {
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const n = b.termNode(cut, p('\\x. x'))
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }]) // scoped at root, only endpoint inside the cut
-    const d = b.build()
-    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
-    const after = removeSubgraph(d, sel)
-    expect(after.wires[w]).toBeDefined()
-    expect(after.wires[w]?.endpoints).toHaveLength(0)
-    expect(after.wires[w]?.scope).toBe(d.root)
+  it('extract → remove → mapped splice round-trips canonically', () => {
+    const value = host()
+    const selection = mkSelection(value.diagram, {
+      region: value.diagram.root,
+      regions: [value.cut],
+      nodes: [],
+      wires: [],
+    })
+    const extraction = extractSubgraph(value.diagram, selection)
+    const removed = removeSubgraph(value.diagram, selection)
+    const spliced = spliceSubgraphMapped(
+      removed,
+      removed.root,
+      extraction.pattern,
+      extraction.attachments,
+    )
+
+    expect(exploreForm(spliced.diagram)).toBe(exploreForm(value.diagram))
+    expect(spliced.wireMap.get(extraction.pattern.boundary[0]!)).toBe(value.shared)
   })
 
-  it('rejects never-validated selections loudly instead of silently no-op-ing', () => {
-    const h = host()
-    expect(() => removeSubgraph(h.d, { region: 'ghost', regions: [], nodes: [], wires: [] }))
-      .toThrowError(/unknown selection region 'ghost'/)
-    // a grandchild subtree root would re-parent across a cut (polarity change) if accepted
-    const b = new DiagramBuilder()
-    const outer = b.cut(b.root)
-    const inner = b.cut(outer)
-    b.termNode(inner, p('\\x. x'))
-    const d = b.build()
-    expect(() => removeSubgraph(d, { region: d.root, regions: [inner], nodes: [], wires: [] }))
-      .toThrowError(/region 'r2' is not a child of selection region 'r0'/)
-  })
-})
-
-describe('spliceSubgraph', () => {
-  it('reserves an external namespace and returns the canonical clone maps', () => {
-    const patternBuilder = new DiagramBuilder()
-    const cut = patternBuilder.cut(patternBuilder.root)
-    const node = patternBuilder.termNode(cut, p('\\x. x'))
-    const internal = patternBuilder.wire(cut, [{ node, port: { kind: 'output' } }])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
-    const hostDiagram = new DiagramBuilder().build()
-
-    const mapped = spliceSubgraphMapped(hostDiagram, hostDiagram.root, pattern, [], {
-      reserved: {
-        regions: new Set(Object.keys(pattern.diagram.regions)),
-        nodes: new Set(Object.keys(pattern.diagram.nodes)),
-        wires: new Set(Object.keys(pattern.diagram.wires)),
+  it('collapses a repeated boundary identity when attachments are co-scoped', () => {
+    const hostDiagram = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      wires: {
+        b: { scope: 'r0', sig: IOTA, endpoints: [] },
+        a: { scope: 'r0', sig: IOTA, endpoints: [] },
       },
     })
+    const spliced = spliceSubgraphMapped(
+      hostDiagram,
+      hostDiagram.root,
+      repeatedBareBoundary(),
+      ['b', 'a'],
+    )
 
-    expect(mapped.regionMap.get(pattern.diagram.root)).toBe(hostDiagram.root)
-    expect(mapped.regionMap.get(cut)).not.toBe(cut)
-    expect(mapped.nodeMap.get(node)).not.toBe(node)
-    expect(mapped.wireMap.get(internal)).not.toBe(internal)
-    const copiedNode = mapped.nodeMap.get(node)!
-    const copiedWire = mapped.wireMap.get(internal)!
-    expect(mapped.diagram.nodes[copiedNode]).toMatchObject({ kind: 'term', region: mapped.regionMap.get(cut) })
-    expect(mapped.diagram.wires[copiedWire]?.endpoints).toEqual([
-      { node: copiedNode, port: { kind: 'output' } },
-    ])
+    expect(spliced.diagram.nodes).toEqual({})
+    expect(Object.keys(spliced.diagram.wires)).toEqual(['a'])
+    expect(spliced.wireMap.get('stub')).toBe('a')
   })
 
-  it('maps a boundary stub to the surviving host attachment', () => {
-    const patternBuilder = new DiagramBuilder()
-    const node = patternBuilder.termNode(patternBuilder.root, p('y'))
-    const boundary = patternBuilder.wire(patternBuilder.root, [
-      { node, port: { kind: 'freeVar', name: 'y' } },
-    ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [boundary])
-    const hostBuilder = new DiagramBuilder()
-    const hostNode = hostBuilder.termNode(hostBuilder.root, p('\\x. x'))
-    const attachment = hostBuilder.wire(hostBuilder.root, [
-      { node: hostNode, port: { kind: 'output' } },
-    ])
-    const hostDiagram = hostBuilder.build()
-
-    const mapped = spliceSubgraphMapped(hostDiagram, hostDiagram.root, pattern, [attachment])
-
-    expect(mapped.wireMap.get(boundary)).toBe(attachment)
-    expect(mapped.diagram.wires[attachment]?.endpoints).toHaveLength(2)
-  })
-
-  it('extract → remove → splice round-trips structurally (endpoint restored)', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    const { pattern, attachments } = extractSubgraph(h.d, sel)
-    const removed = removeSubgraph(h.d, sel)
-    const restored = spliceSubgraph(removed, h.d.root, pattern, attachments)
-    // the shared wire regained a second endpoint
-    expect(restored.wires[h.wShared]?.endpoints).toHaveLength(2)
-    // one cut exists again, holding one node and one bare wire
-    const cuts = Object.entries(restored.regions).filter(([, r]) => r.kind === 'cut')
-    expect(cuts).toHaveLength(1)
-  })
-
-  it('rejects boundary wires not scoped at the pattern root before splice', () => {
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const n = b.termNode(cut, p('\\x. x'))
-    const w = b.wire(cut, [{ node: n, port: { kind: 'output' } }]) // scoped INSIDE the cut
-    expect(() => mkDiagramWithBoundary(b.build(), [w]))
-      .toThrowError(/boundary wire 'w0' must be scoped at the diagram root/)
-  })
-
-  it('rejects attachment arity mismatches and attachments that cannot reach the splice region', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    const { pattern } = extractSubgraph(h.d, sel)
-    expect(() => spliceSubgraph(h.d, h.d.root, pattern, []))
-      .toThrowError(/expected 1 attachments, got 0/)
-    expect(() => spliceSubgraph(h.d, h.d.root, pattern, ['ghost']))
-      .toThrowError(/attachment wire 'ghost' does not exist/)
-    // a wire scoped inside the cut cannot serve a splice at the root
-    expect(() => spliceSubgraph(h.d, h.d.root, pattern, [h.wBare]))
-      .toThrowError(/attachment wire 'w1' \(scope 'r1'\) does not enclose splice region 'r0'/)
-  })
-
-  it('generates fresh ids on collision and re-validates the result', () => {
-    const h = host()
-    const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
-    const { pattern, attachments } = extractSubgraph(h.d, sel)
-    // splice into the ORIGINAL host (not removed): ids collide, fresh ones must be coined
-    const doubled = spliceSubgraph(h.d, h.d.root, pattern, attachments)
-    const cuts = Object.entries(doubled.regions).filter(([, r]) => r.kind === 'cut')
-    expect(cuts).toHaveLength(2)
-    // wShared now carries nA + two copies of nB-output
-    expect(doubled.wires[h.wShared]?.endpoints).toHaveLength(3)
-  })
-
-  it('two boundary stubs may attach to the same host wire', () => {
-    // pattern: node 'y x' with both free-var stubs; attach both to one host wire
-    const pb = new DiagramBuilder()
-    const pn = pb.termNode(pb.root, p('y x'))
-    const sY = pb.wire(pb.root, [{ node: pn, port: { kind: 'freeVar', name: 'y' } }])
-    const sX = pb.wire(pb.root, [{ node: pn, port: { kind: 'freeVar', name: 'x' } }])
-    const pd = pb.build() // pn.out auto-wired internally
-    const pattern = mkDiagramWithBoundary(pd, [sY, sX])
-    const hb = new DiagramBuilder()
-    const hn = hb.termNode(hb.root, p('\\x. x'))
-    const hw = hb.wire(hb.root, [{ node: hn, port: { kind: 'output' } }])
-    const out = spliceSubgraph(hb.build(), 'r0', pattern, [hw, hw])
-    expect(out.wires[hw]?.endpoints).toHaveLength(3) // hn.out + spliced y + spliced x
-  })
-
-  it('materializes an intrinsically aliased boundary at the splice site without moving host scopes', () => {
-    const pb = new DiagramBuilder()
-    const pn = pb.termNode(pb.root, p('y'))
-    const shared = pb.wire(pb.root, [{ node: pn, port: { kind: 'output' } }])
-    const pattern = mkDiagramWithBoundary(pb.build(), [shared, shared])
-
-    const hb = new DiagramBuilder()
-    const cut = hb.cut(hb.root)
-    const outerNode = hb.termNode(cut, p('\\x. x'))
-    const innerNode = hb.termNode(cut, p('\\x. \\y. x'))
-    const outer = hb.wire(hb.root, [{ node: outerNode, port: { kind: 'output' } }])
-    const inner = hb.wire(cut, [{ node: innerNode, port: { kind: 'output' } }])
-    const out = spliceSubgraph(hb.build(), cut, pattern, [inner, outer])
-
-    expect(out.wires[inner]?.scope).toBe(cut)
-    expect(out.wires[outer]?.scope).toBe(out.root)
-    // The first attachment receives the copied pattern endpoint. The repeated
-    // incidence contributes one local identity node connecting the untouched
-    // host wires, so neither quantifier owner changes.
-    expect(out.wires[inner]?.endpoints).toHaveLength(3)
-    expect(out.wires[outer]?.endpoints).toHaveLength(2)
-    const aliases = Object.entries(out.nodes).filter(([id]) => id.startsWith('alias_'))
-    expect(aliases).toHaveLength(1)
-    expect(aliases[0]![1].region).toBe(cut)
-    expect(out.wires[inner]?.endpoints).toContainEqual({
-      node: aliases[0]![0], port: { kind: 'output' },
+  it('keeps a repeated-boundary identity for outer-scoped attachments', () => {
+    const hostDiagram = mkDiagram({
+      root: 'r0',
+      regions: {
+        r0: { kind: 'sheet' },
+        r1: { kind: 'cut', parent: 'r0' },
+      },
+      wires: {
+        a: { scope: 'r0', sig: IOTA, endpoints: [] },
+        b: { scope: 'r0', sig: IOTA, endpoints: [] },
+      },
     })
-    expect(out.wires[outer]?.endpoints).toContainEqual({
-      node: aliases[0]![0], port: { kind: 'freeVar', name: 's0' },
+    const spliced = spliceSubgraphMapped(
+      hostDiagram,
+      'r1',
+      repeatedBareBoundary(),
+      ['a', 'b'],
+    )
+    const identities = Object.entries(spliced.diagram.nodes)
+      .filter(([, node]) => node.kind === 'identity')
+
+    expect(identities).toHaveLength(1)
+    expect(identities[0]?.[1]).toMatchObject({
+      kind: 'identity',
+      region: 'r1',
+      sig: IOTA,
+      arity: 2,
     })
+    expect(Object.keys(spliced.diagram.wires).sort()).toEqual(['a', 'b'])
+    expect(spliced.wireMap.get('stub')).toBe('a')
+  })
+
+  it('rejects arity, visibility, and signature mismatches', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const innerWire = builder.wire(cut, [])
+    const relational = builder.relWire(builder.root, relSig([]))
+    const diagram = builder.build()
+    const pattern = repeatedBareBoundary()
+
+    expect(() => spliceSubgraphMapped(diagram, cut, pattern, [relational]))
+      .toThrowError(/expected 2 attachments/)
+    expect(() => spliceSubgraphMapped(diagram, builder.root, pattern, [innerWire, innerWire]))
+      .toThrowError(/does not enclose splice region/)
+    expect(() => spliceSubgraphMapped(diagram, cut, pattern, [relational, relational]))
+      .toThrowError(/cannot land.*sig/)
   })
 })

@@ -1,5 +1,5 @@
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram'
-import { mkDiagram } from '../diagram'
+import { DiagramError, mkDiagramNormalized } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
@@ -44,10 +44,9 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
   // Return-typed switch (no default): a new node kind forces its rebuild here.
   const rebuildNode = (n: DiagramNode, region: RegionId): DiagramNode => {
     switch (n.kind) {
-      case 'term': return { kind: 'term', region, term: n.term, freePorts: n.freePorts }
       case 'atom': return { kind: 'atom', region, sig: n.sig }
       case 'ref': return { kind: 'ref', region, defId: n.defId, sig: n.sig }
-      case 'body': return { kind: 'body', region, sig: n.sig, content: n.content }
+      case 'identity': return { kind: 'identity', region, sig: n.sig, arity: n.arity }
     }
   }
   const nodes: Record<string, DiagramNode> = {}
@@ -83,7 +82,17 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
     attachments.push(hostWireId)
   }
 
-  const pattern = mkDiagramWithBoundary(mkDiagram({ root, regions, nodes, wires }), boundary)
+  const normalized = mkDiagramNormalized({ root, regions, nodes, wires })
+  const normalizedBoundary = boundary.map((wireId) => {
+    const image = normalized.wireImage.get(wireId)
+    if (image === undefined) {
+      throw new DiagramError(
+        `normalization removed extracted boundary wire '${wireId}' without a surviving image`,
+      )
+    }
+    return image
+  })
+  const pattern = mkDiagramWithBoundary(normalized.diagram, normalizedBoundary)
   return Object.freeze({
     pattern,
     attachments: Object.freeze(attachments),

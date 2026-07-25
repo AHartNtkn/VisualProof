@@ -1,286 +1,162 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
 
-const p = (s: string) => parseTerm(s)
-
-/** Pattern: single node `y x` with its v:y wire as the only boundary stub. */
-function nodePattern() {
-  const b = new DiagramBuilder()
-  const n = b.termNode(b.root, p('y x'))
-  const stub = b.wire(b.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }])
-  return { pattern: mkDiagramWithBoundary(b.build(), [stub]), node: n }
+function unaryPattern(defId = 'P') {
+  const builder = new DiagramBuilder()
+  const node = builder.ref(builder.root, defId, relSig([IOTA]))
+  const boundary = builder.wire(builder.root, [
+    { node, port: { kind: 'arg', index: 0 } },
+  ])
+  return mkDiagramWithBoundary(builder.build(), [boundary])
 }
 
-describe('findOccurrences basics', () => {
-  it('matches and certifies the full declared term interface, including unused slots', () => {
+function unaryHost(defId = 'P') {
+  const builder = new DiagramBuilder()
+  const node = builder.ref(builder.root, defId, relSig([IOTA]))
+  const wire = builder.wire(builder.root, [
+    { node, port: { kind: 'arg', index: 0 } },
+  ])
+  return { diagram: builder.build(), node, wire }
+}
+
+describe('exact occurrence matching', () => {
+  it('finds and certifies an exact ref occurrence', () => {
+    const host = unaryHost()
+    const pattern = unaryPattern()
+    const result = findOccurrences(host.diagram, pattern)
+
+    expect(result.status).toBe('complete')
+    expect(result.matches).toHaveLength(1)
+    expect(result.explorationSteps).toBeGreaterThan(0)
+    expect(result.matches[0]?.attachments).toEqual([host.wire])
+    expect(checkOccurrenceCertificate(host.diagram, pattern, result.matches[0]!))
+      .toEqual({ ok: true })
+  })
+
+  it('uses exact node content and proper-subtree structure', () => {
+    expect(findOccurrences(unaryHost('Q').diagram, unaryPattern('P')).matches)
+      .toHaveLength(0)
+
     const patternBuilder = new DiagramBuilder()
-    patternBuilder.termNode(patternBuilder.root, p('\\x. x'), ['unused'])
+    const patternCut = patternBuilder.cut(patternBuilder.root)
+    patternBuilder.ref(patternCut, 'P', relSig([]))
     const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
 
     const hostBuilder = new DiagramBuilder()
-    hostBuilder.termNode(hostBuilder.root, p('\\x. x'), ['spare'])
-    const host = hostBuilder.build()
-    const found = findOccurrences(host, pattern, { fuel: 100 })
-    expect(found.matches).toHaveLength(1)
-    expect(checkOccurrenceCertificate(host, pattern, found.matches[0]!)).toEqual({ ok: true })
-
-    const narrower = new DiagramBuilder()
-    narrower.termNode(narrower.root, p('\\x. x'))
-    expect(findOccurrences(narrower.build(), pattern, { fuel: 100 }).matches).toHaveLength(0)
+    const hostCut = hostBuilder.cut(hostBuilder.root)
+    hostBuilder.ref(hostCut, 'P', relSig([]))
+    hostBuilder.ref(hostCut, 'extra', relSig([]))
+    expect(findOccurrences(hostBuilder.build(), pattern).matches).toHaveLength(0)
   })
 
-  it('finds a single-node occurrence and discovers its attachment', () => {
-    const h = new DiagramBuilder()
-    const target = h.termNode(h.root, p('y x'))
-    const other = h.termNode(h.root, p('\\x. x'))
-    const wire = h.wire(h.root, [
-      { node: target, port: { kind: 'freeVar', name: 'y' } },
-      { node: other, port: { kind: 'output' } },
+  it('allows extra host endpoints only at the open boundary', () => {
+    const builder = new DiagramBuilder()
+    const target = builder.ref(builder.root, 'P', relSig([IOTA]))
+    const extra = builder.ref(builder.root, 'Q', relSig([IOTA]))
+    builder.wire(builder.root, [
+      { node: target, port: { kind: 'arg', index: 0 } },
+      { node: extra, port: { kind: 'arg', index: 0 } },
     ])
-    const host = h.build()
-    const { pattern } = nodePattern()
-    const r = findOccurrences(host, pattern, { fuel: 100 })
-    expect(r.undecided).toHaveLength(0)
-    expect(r.matches).toHaveLength(1)
-    expect(r.matches[0]?.region).toBe(host.root)
-    expect(r.matches[0]?.nodeMap.get('n0')).toBe(target)
-    expect(r.matches[0]?.attachments).toEqual([wire])
+
+    expect(findOccurrences(builder.build(), unaryPattern()).matches).toHaveLength(1)
   })
 
-  it('subset semantics at the root: extra host content beside the occurrence is fine', () => {
-    const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x'))
-    h.cut(h.root)
-    h.termNode(h.root, p('y x'))
-    const host = h.build()
-    const { pattern } = nodePattern()
-    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(1)
-  })
-
-  it('exact semantics below the root: a host cut with extra content is not a copy', () => {
-    const mkPattern = () => {
-      const b = new DiagramBuilder()
-      const cut = b.cut(b.root)
-      b.termNode(cut, p('\\x. x'))
-      return mkDiagramWithBoundary(b.build(), [])
-    }
-    const mkHost = (extra: boolean) => {
-      const h = new DiagramBuilder()
-      const cut = h.cut(h.root)
-      h.termNode(cut, p('\\x. x'))
-      if (extra) h.termNode(cut, p('\\x. \\y. x'))
-      return h.build()
-    }
-    expect(findOccurrences(mkHost(false), mkPattern(), { fuel: 100 }).matches).toHaveLength(1)
-    expect(findOccurrences(mkHost(true), mkPattern(), { fuel: 100 }).matches).toHaveLength(0)
-  })
-
-  it('restricts to inRegion when given', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    h.termNode(cut, p('y x'))
-    h.termNode(h.root, p('y x'))
-    const host = h.build()
-    const { pattern } = nodePattern()
-    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(2)
-    const restricted = findOccurrences(host, pattern, { fuel: 100, inRegion: cut })
-    expect(restricted.matches).toHaveLength(1)
-    expect(restricted.matches[0]?.region).toBe(cut)
-  })
-
-  it('atoms match only when their relational signatures are equal', () => {
-    // pattern: a lone unary-relation atom (sig rel([ι])), head + arg auto-wired
-    const mkPattern = () => {
-      const b = new DiagramBuilder()
-      b.atom(b.root, relSig([IOTA]))
-      return mkDiagramWithBoundary(b.build(), [])
-    }
-    // host holds one unary-relation atom and one nullary-relation atom; only
-    // the equal-sig atom is a compatible image
-    const h = new DiagramBuilder()
-    const unary = h.atom(h.root, relSig([IOTA]))
-    h.atom(h.root, relSig([]))
-    const host = h.build()
-    const r = findOccurrences(host, mkPattern(), { fuel: 100 })
-    expect(r.matches).toHaveLength(1)
-    expect(r.matches[0]?.nodeMap.get('n0')).toBe(unary)
-  })
-
-  it('refuses UNSEEDED bare boundary stubs, non-positive fuel, unknown inRegion', () => {
-    const b = new DiagramBuilder()
-    b.termNode(b.root, p('\\x. x'))
-    const bare = b.wire(b.root, [])
-    const pattern = mkDiagramWithBoundary(b.build(), [bare])
-    const h = new DiagramBuilder()
-    const host = h.build()
-    // a bare boundary wire has no endpoints to anchor a search; unseeded it is
-    // refused with an instructive message, not silently guessed
-    expect(() => findOccurrences(host, pattern, { fuel: 100 }))
-      .toThrowError(/bare boundary wire 'w0' has no endpoints to anchor a search; supply its attachment/)
-    const { pattern: ok } = nodePattern()
-    expect(() => findOccurrences(host, ok, { fuel: 0 }))
-      .toThrowError(/fuel must be a positive integer/)
-    expect(() => findOccurrences(host, ok, { fuel: 10, inRegion: 'ghost' }))
-      .toThrowError(/unknown region 'ghost'/)
-  })
-
-  it('SEEDED bare boundary wire: its image is the supplied host wire, gated only by visibility', () => {
-    // pattern: a `\x. x` node plus a bare boundary wire (a pass-through arg)
-    const b = new DiagramBuilder()
-    b.termNode(b.root, p('\\x. x'))
-    const bare = b.wire(b.root, [])
-    const pattern = mkDiagramWithBoundary(b.build(), [bare])
-    // host: a matching node plus a spare root-scoped wire to anchor the arg to
-    const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x'))
-    const anchor = h.wire(h.root, [])
-    const host = h.build()
-    const r = findOccurrences(host, pattern, { fuel: 100, attachments: [anchor] })
-    expect(r.matches).toHaveLength(1)
-    expect(r.matches[0]?.attachments).toEqual([anchor])
-    expect(r.matches[0]?.wireMap.get(bare)).toBe(anchor)
-  })
-
-  it('SEEDED distinct bare boundary identities may share one call-site attachment', () => {
-    const b = new DiagramBuilder()
-    b.termNode(b.root, p('\\x. x'))
-    const bare0 = b.wire(b.root, [])
-    const bare1 = b.wire(b.root, [])
-    const pattern = mkDiagramWithBoundary(b.build(), [bare0, bare1])
-    const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x'))
-    const anchor = h.wire(h.root, [])
-    const other = h.wire(h.root, [])
-    const host = h.build()
-    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, anchor] }).matches).toHaveLength(1)
-    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, other] }).matches).toHaveLength(1)
-  })
-
-  it('repeats the host image for repeated incidences of one intrinsic boundary identity', () => {
-    const b = new DiagramBuilder()
-    const pn = b.termNode(b.root, p('y'))
-    const shared = b.wire(b.root, [{ node: pn, port: { kind: 'output' } }])
-    const pattern = mkDiagramWithBoundary(b.build(), [shared, shared])
-    const h = new DiagramBuilder()
-    const hn = h.termNode(h.root, p('y'))
-    const anchor = h.wire(h.root, [{ node: hn, port: { kind: 'output' } }])
-    const other = h.wire(h.root, [])
-    const host = h.build()
-
-    const found = findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, anchor] })
-    expect(found.matches).toHaveLength(1)
-    expect(found.matches[0]?.attachments).toEqual([anchor, anchor])
-    expect(found.matches[0]?.wireMap.get(shared)).toBe(anchor)
-    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, other] }).matches).toHaveLength(0)
-  })
-
-  it('recognizes distinct endpointful boundary identities quotiented onto one host wire', () => {
-    const b = new DiagramBuilder()
-    const pn0 = b.termNode(b.root, p('y'))
-    const pn1 = b.termNode(b.root, p('y'))
-    const boundary0 = b.wire(b.root, [{ node: pn0, port: { kind: 'output' } }])
-    const boundary1 = b.wire(b.root, [{ node: pn1, port: { kind: 'output' } }])
-    const pattern = mkDiagramWithBoundary(b.build(), [boundary0, boundary1])
-
-    const h = new DiagramBuilder()
-    const hn0 = h.termNode(h.root, p('y'))
-    const hn1 = h.termNode(h.root, p('y'))
-    const shared = h.wire(h.root, [
-      { node: hn0, port: { kind: 'output' } },
-      { node: hn1, port: { kind: 'output' } },
-    ])
-    const host = h.build()
-
-    const found = findOccurrences(host, pattern, { fuel: 100, attachments: [shared, shared] })
-    expect(found.matches).toHaveLength(1)
-    expect(found.matches[0]?.attachments).toEqual([shared, shared])
-  })
-
-  it('SEEDED bare boundary wire is refused when the supplied wire is not in scope', () => {
-    const b = new DiagramBuilder()
-    b.termNode(b.root, p('\\x. x'))
-    const bare = b.wire(b.root, [])
-    const pattern = mkDiagramWithBoundary(b.build(), [bare])
-    // host: the seed wire is scoped INSIDE a cut, so it does not enclose the
-    // root region the occurrence lands in — the visibility gate refuses it
-    const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x'))
-    const cut = h.cut(h.root)
-    const buried = h.wire(cut, [])
-    const host = h.build()
-    const r = findOccurrences(host, pattern, { fuel: 100, inRegion: 'r0', attachments: [buried] })
-    expect(r.matches).toHaveLength(0)
-  })
-})
-
-describe('adversarial ids (soundness and dedup under unconstrained id strings)', () => {
-  it('verdict caching cannot alias across node-id boundaries (no forged occurrences)', () => {
-    // pattern nodes 'a' (\x.x) and 'a b' (\x. x x): distinct shapes
-    const pd = mkDiagram({
-      root: 'r0',
-      regions: { r0: { kind: 'sheet' } },
-      nodes: {
-        'a': { kind: 'term', region: 'r0', term: p('\\x. x') },
-        'a b': { kind: 'term', region: 'r0', term: p('\\x. x x') },
-      },
-      wires: {
-        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a b', port: { kind: 'output' } }] },
-      },
+  it('reports graph-exploration exhaustion without semantic verdict fields', () => {
+    const host = unaryHost()
+    const exhausted = findOccurrences(host.diagram, unaryPattern(), {
+      explorationFuel: 1,
     })
-    const pattern = mkDiagramWithBoundary(pd, [])
-    // host nodes 'b c' (\x.x) and 'c' (\x.x): both identity — the pattern's
-    // \x. x x node has NO image, so zero occurrences exist
+    const complete = findOccurrences(host.diagram, unaryPattern())
+
+    expect(exhausted.status).toBe('exhausted')
+    expect(exhausted.matches).toEqual([])
+    expect(Object.keys(complete).sort()).toEqual([
+      'explorationSteps',
+      'matches',
+      'status',
+    ])
+    expect(() => findOccurrences(host.diagram, unaryPattern(), {
+      explorationFuel: 0,
+    })).toThrowError(/positive safe integer/)
+  })
+
+  it('requires a seed for bare boundary wires and validates the seed', () => {
+    const pattern = mkDiagramWithBoundary(mkDiagram({
+      root: 'p0',
+      regions: { p0: { kind: 'sheet' } },
+      wires: {
+        stub: { scope: 'p0', sig: IOTA, endpoints: [] },
+      },
+    }), ['stub'])
     const host = mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
-      nodes: {
-        'b c': { kind: 'term', region: 'r0', term: p('\\x. x') },
-        'c': { kind: 'term', region: 'r0', term: p('\\x. x') },
-      },
       wires: {
-        w0: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b c', port: { kind: 'output' } }] },
-        w1: { scope: 'r0', sig: IOTA, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+        target: { scope: 'r0', sig: IOTA, endpoints: [] },
       },
     })
-    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(0)
+
+    expect(() => findOccurrences(host, pattern)).toThrowError(/supply its attachment/)
+    expect(findOccurrences(host, pattern, { attachments: ['target'] }).matches)
+      .toHaveLength(1)
+    expect(() => findOccurrences(host, pattern, { attachments: [] }))
+      .toThrowError(/index-aligned/)
   })
 
-  it('footprint dedup cannot alias across id boundaries (no dropped occurrences)', () => {
-    // pattern: two identity nodes; host: four identity nodes with ids crafted
-    // so two DIFFERENT image sets join to the same string — C(4,2)=6 distinct
-    // occurrences must all survive
-    const mkNode = () => ({ kind: 'term' as const, region: 'r0', term: p('\\x. x') })
-    const pb = new DiagramBuilder()
-    pb.termNode(pb.root, p('\\x. x'))
-    pb.termNode(pb.root, p('\\x. x'))
-    const pattern = mkDiagramWithBoundary(pb.build(), [])
+  it('matches identity incidences as an unordered mapped multiset', () => {
+    const pattern = mkDiagramWithBoundary(mkDiagram({
+      root: 'p0',
+      regions: {
+        p0: { kind: 'sheet' },
+        p1: { kind: 'cut', parent: 'p0' },
+      },
+      nodes: {
+        eq: { kind: 'identity', region: 'p1', sig: IOTA, arity: 2 },
+      },
+      wires: {
+        left: {
+          scope: 'p0',
+          sig: IOTA,
+          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+        },
+        right: {
+          scope: 'p0',
+          sig: IOTA,
+          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
+        },
+      },
+    }), ['left', 'right'])
     const host = mkDiagram({
       root: 'r0',
-      regions: { r0: { kind: 'sheet' } },
-      nodes: { 'a': mkNode(), 'b,c': mkNode(), 'a,b': mkNode(), 'c': mkNode() },
+      regions: {
+        r0: { kind: 'sheet' },
+        r1: { kind: 'cut', parent: 'r0' },
+      },
+      nodes: {
+        identity: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+      },
       wires: {
-        'wa': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a', port: { kind: 'output' } }] },
-        'wb,wc': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'b,c', port: { kind: 'output' } }] },
-        'wa,wb': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'a,b', port: { kind: 'output' } }] },
-        'wc': { scope: 'r0', sig: IOTA, endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+        a: {
+          scope: 'r0',
+          sig: IOTA,
+          endpoints: [{ node: 'identity', port: { kind: 'identity', index: 1 } }],
+        },
+        b: {
+          scope: 'r0',
+          sig: IOTA,
+          endpoints: [{ node: 'identity', port: { kind: 'identity', index: 0 } }],
+        },
       },
     })
-    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(6)
-  })
 
-  it('rejects boundary stubs not scoped at the pattern root before matching', () => {
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const n = b.termNode(cut, p('y'))
-    const stub = b.wire(cut, [{ node: n, port: { kind: 'freeVar', name: 'y' } }]) // scoped INSIDE
-    expect(() => mkDiagramWithBoundary(b.build(), [stub]))
-      .toThrowError(/boundary wire 'w0' must be scoped at the diagram root/)
+    expect(findOccurrences(host, pattern, {
+      inRegion: 'r0',
+      attachments: ['a', 'b'],
+    }).matches).toHaveLength(1)
   })
 })
