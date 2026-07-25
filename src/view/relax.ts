@@ -7,7 +7,7 @@ import { advanceNetwork, netLength } from './route/network'
 import { LayoutOptimizer, layoutScore } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
-export const PHYSICS_REV = 'routed-network@2026-07-24'
+export const PHYSICS_REV = 'one-energy@2026-07-24'
 console.info('[physics] rev', PHYSICS_REV)
 
 /** LIVE-TUNABLE wire ENERGY parameters (plan 22, promoted from the accepted
