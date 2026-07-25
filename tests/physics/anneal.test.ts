@@ -67,23 +67,26 @@ function cutDiameterOf(best: LayoutBest, d: Diagram, cut: string): number {
   return 2 * g.regions.get(cut)!.radius
 }
 
-/** Drive the search directly for a bounded wall budget, returning the best.
-    `sync` runs the 16-probe calibration (each probe a full relaxation); the
-    budgeted loop then runs basin-hopping epochs. */
-function anneal(e: Engine, seed: number, budgetMs: number): LayoutBest {
+/** Drive the search one atomic unit per tick until the best reaches `target` or
+    `maxUnits` is spent, returning the best. `tick(null, 0)` advances exactly one
+    unit (one descent quantum / one calibration probe / one hop) — the sliced
+    granularity the worker uses so no single tick blocks for the whole 16-probe
+    calibration or an epoch of hops. */
+function anneal(e: Engine, seed: number, target: number, maxUnits: number): LayoutBest {
   const opt = new LayoutOptimizer(seed)
   opt.sync(e, null)
-  const t0 = performance.now()
-  while (performance.now() - t0 < budgetMs) opt.tick(null, 200)
+  for (let k = 0; k < maxUnits && opt.best()!.score > target; k++) opt.tick(null, 0)
   return opt.best()!
 }
 
-/** The published-best score after each of `epochs` single-epoch ticks. */
-function bestSequence(e: Engine, seed: number, epochs: number): number[] {
+/** The published-best score after each of `units` single-unit ticks — the
+    deterministic published sequence (phase-0 descent quanta, then, once past the
+    16 calibration probes, accepted basin floors). */
+function bestSequence(e: Engine, seed: number, units: number): number[] {
   const opt = new LayoutOptimizer(seed)
   opt.sync(e, null)
   const seq: number[] = []
-  for (let k = 0; k < epochs; k++) { opt.tick(null, 0); seq.push(opt.best()!.score) }
+  for (let k = 0; k < units; k++) { opt.tick(null, 0); seq.push(opt.best()!.score) }
   return seq
 }
 
@@ -93,13 +96,14 @@ describe('basin hopping escapes the wedged-cut trap (plan Task 6 acceptance)', (
     const e = trappedEngine(d, cut, n0, n1)
     const trapped = layoutScore(e)
 
-    // Basin hopping escapes this wedged 3-ref cut in ONE epoch of relaxed hops
-    // after the 16-probe calibration; a 4 s budget runs ≥1 epoch. The whole test
-    // is ~16 s, comfortably under the 30 s suite cap. K=3 is the largest wedged
-    // cut that fits: each hop is a full relaxation, ~1.5 s here vs ~2.9 s on the
-    // ratified K=4 cut whose 16-probe calibration alone would exceed 30 s (the
-    // brief's 60 s budget is impossible under the cap) — see task6-report.md.
-    const best = anneal(e, 0xace4, 4000)
+    // Basin hopping escapes this wedged 3-ref cut a few hops after the sliced
+    // 16-probe calibration (measured ~19 units, ~10 s). Each unit is one atomic
+    // relaxation; the loop stops at the first escape (safety cap 40 units). K=3
+    // is the largest wedged cut that fits the 30 s suite cap — each hop is a full
+    // relaxation (~1.5 s here vs ~2.9 s on the ratified K=4 cut, whose calibration
+    // alone would exceed 30 s; the brief's 60 s budget is impossible under the
+    // cap) — see task6-report.md.
+    const best = anneal(e, 0xace4, 0.6 * trapped, 40)
 
     const b0 = best.poses.get(n0)!.pos, b1 = best.poses.get(n1)!.pos
     const refDist = Math.hypot(b0.x - b1.x, b0.y - b1.y)
@@ -113,28 +117,31 @@ describe('basin hopping escapes the wedged-cut trap (plan Task 6 acceptance)', (
 })
 
 describe('the basin-hopping search is deterministic in its seed (plan Task 6)', () => {
-  it('same seed ⇒ identical accepted-best sequence; a different seed ⇒ a different one', () => {
-    // Two wired refs, no cut — the cheapest scene with a wire (2 bodies, so each
-    // relaxation is fast) whose distinct ROTATIONAL basins make the search
-    // strongly seed-divergent: 0xace4 settles to ~30.99, 0x0111 stays in a
-    // misaligned-port basin at ~99.8 (measured). A trap would relax too slowly
-    // here (16-probe calibration × 3 runs); this stays a few seconds.
-    const b0 = new DiagramBuilder()
-    const n0 = b0.ref(b0.root, 'R', relSig([TERM]))
-    const n1 = b0.ref(b0.root, 'S', relSig([TERM]))
-    b0.wire(b0.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], TERM)
-    const e = mkEngine(b0.build(), [])
-    e.bodies.get(n0)!.pos = { x: -20, y: 5 }
-    e.bodies.get(n1)!.pos = { x: 20, y: -5 }
-    settle(e, 8000)
-    recomputeRegions(e)
+  it('same seed ⇒ identical published sequence (phase-0 quanta included); a different seed ⇒ a different one', () => {
+    // A RAW (un-settled) two-ref scene — the cheapest scene with a wire (2 bodies,
+    // fast relaxations). The published sequence over single-unit ticks is: the
+    // phase-0 descent quantum(s) (seed-INDEPENDENT — descent has no randomness),
+    // then 16 flat calibration units, then the accepted hops, which escape a
+    // misaligned-port basin (182) to the aligned one (30.99) at a SEED-DEPENDENT
+    // unit. Publishing on a fixed step quantum (RELAX_PUBLISH_STEPS) makes the
+    // sequence a pure function of the seed, robust to how ticks slice wall-time.
+    const rawTwoRef = (): Engine => {
+      const b0 = new DiagramBuilder()
+      const n0 = b0.ref(b0.root, 'R', relSig([TERM]))
+      const n1 = b0.ref(b0.root, 'S', relSig([TERM]))
+      b0.wire(b0.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], TERM)
+      const e = mkEngine(b0.build(), [])
+      e.bodies.get(n0)!.pos = { x: -20, y: 5 }
+      e.bodies.get(n1)!.pos = { x: 20, y: -5 }
+      recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
+      return e
+    }
+    const a1 = bestSequence(rawTwoRef(), 0xace4, 30)
+    const a2 = bestSequence(rawTwoRef(), 0xace4, 30)
+    const b = bestSequence(rawTwoRef(), 0x0111, 30)
 
-    const a1 = bestSequence(e, 0xace4, 2)
-    const a2 = bestSequence(e, 0xace4, 2)
-    const b = bestSequence(e, 0x0111, 2)
-
-    expect(a1, 'same seed must reproduce the accepted-best sequence bit-for-bit').toEqual(a2)
-    expect(a1, 'a different seed must accept a different trajectory').not.toEqual(b)
+    expect(a1, 'same seed must reproduce the published sequence bit-for-bit').toEqual(a2)
+    expect(a1, 'a different seed must produce a different sequence').not.toEqual(b)
   })
 })
 

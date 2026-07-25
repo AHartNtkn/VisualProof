@@ -304,16 +304,19 @@ const LOW_DUTY_REHEATS = 8
     quality knob. A wall-clock cap is rejected: it would make the accepted
     sequence machine-dependent and break determinism. */
 const RELAX_REST_CAP = 2000
-/** Settle steps per incremental-descent slice (Phase 0). Relaxing the seed /
-    incumbent publishes its monotone descent per slice so the app shows it
-    settling from the first frames (app-mode frames run no node descent — the
-    frame-lightness law — so without this the visible layout sits raw-kinked
-    until the first best). The batch amortizes one layoutScore eval over this
-    many settleSteps; it is a publish-granularity knob (smaller = smoother app
-    updates, more evals), NOT a quality knob — the final basin floor is
-    identical for any value. Descent has no randomness, so every published
-    descent state is on the scene's own downhill path, never a perturbation. */
-const DESCENT_BATCH = 32
+/** Settle steps per incremental-descent PUBLISH quantum (Phase 0). Relaxing the
+    seed / incumbent publishes its monotone descent every this-many steps so the
+    app shows it settling from the first frames (app-mode frames run no node
+    descent — the frame-lightness law — so without this the visible layout sits
+    raw-kinked until the first best). Publishing on a FIXED STEP quantum (not a
+    wall-clock slice) makes the published descent sequence a pure function of the
+    scene — deterministic and robust to how ticks slice wall-time. 50 ≈ a
+    display frame's worth of descent (~40 ms at the ~1 ms/settleStep the routing
+    layer targets), so the app sees ~frame-cadence updates; it is a
+    publish-granularity knob (any value gives the same final basin floor), not a
+    quality knob. Descent has no randomness, so every published descent state is
+    on the scene's own downhill path, never a perturbation. */
+const RELAX_PUBLISH_STEPS = 50
 
 const eps = (x: number): number => 1e-9 * (Math.abs(x) + 1)
 const EMPTY: ReadonlySet<string> = new Set()
@@ -335,13 +338,21 @@ export class LayoutOptimizer {
   #restartParity = 0
   #reheatsSinceImprove = 0
   #lowDuty = false
-  /** Phase 0: relaxing the seed / adopted incumbent, publishing its descent
-      incrementally (no random proposal). Cleared once it reaches rest. */
-  #descending = false
-  /** T0 is calibrated once, after the seed descent reaches its basin floor
-      (each probe is a full relaxation — deferring it off the sync keeps the
-      first descent slices flowing immediately). */
-  #calibrated = false
+  /** The search phase. Every tick advances ONE atomic unit of the current phase
+      (one descent quantum, one calibration probe, or one hop) so a worker
+      message handler never blocks for many relaxations:
+      - 'descend': relax the seed / adopted incumbent to its basin floor,
+        publishing its monotone descent per RELAX_PUBLISH_STEPS quantum;
+      - 'calibrate': the 16 T0 probes, one full relaxation per tick (restored,
+        no publish) — they cannot all live in one handler;
+      - 'hop': basin hopping (publish on Metropolis acceptance). */
+  #phase: 'descend' | 'calibrate' | 'hop' = 'descend'
+  /** Accumulated calibration-probe |ΔE|s (one appended per 'calibrate' unit). */
+  #calibMags: number[] = []
+  /** Hops taken at the current temperature; cool + maybe reheat at #epochLen. */
+  #hopsThisEpoch = 0
+  /** Accepts at the current temperature (reheat when an epoch accepts nothing). */
+  #epochAccepts = 0
 
   constructor(seed: number = DEFAULT_SEED) {
     this.#seed = (seed >>> 0) || DEFAULT_SEED
@@ -389,46 +400,53 @@ export class LayoutOptimizer {
     this.#best = layoutSnapshot(e, score)
     this.#T = 0
     this.#T0 = 0
-    this.#descending = true
-    this.#calibrated = false
+    this.#enterDescent()
     this.#reheatsSinceImprove = 0
     this.#lowDuty = false
   }
 
-  /** One budgeted slice of asynchronous search. In Phase 0 it advances the
-      incumbent's incremental descent; otherwise it calibrates once (deferred)
-      then runs basin-hopping epochs. Runs until the wall budget is spent
-      (always at least one step), or exactly one epoch in low duty. Returns
-      whether the published best improved this slice. */
+  /** One budgeted slice of asynchronous search. Advances ONE atomic unit of the
+      current phase per iteration — one descent quantum, one calibration probe,
+      or one hop — so a worker message handler never blocks for a whole 16-probe
+      calibration or an E-hop epoch (each is a full relaxation; acks/syncs would
+      stall). Runs units until the wall budget is spent (always at least one), or
+      exactly one unit in low duty. Returns whether the published best improved. */
   tick(_pinned: ReadonlySet<string> | null, budgetMs: number): boolean {
     if (this.#scratch === null || this.#best === null) return false
     const t0 = performance.now()
     let improved = false
     do {
-      if (this.#descending) {
-        if (this.#descentSlice()) improved = true
-      } else {
-        if (!this.#calibrated) {
-          this.#T0 = this.#calibrateT0()
-          this.#T = this.#T0
-          this.#calibrated = true
-        }
-        if (this.#runEpoch()) improved = true
-      }
+      if (this.#stepUnit()) improved = true
     } while (!this.#lowDuty && performance.now() - t0 < budgetMs)
     return improved
   }
 
   // -- internals --
 
-  /** One slice of incremental descent (Phase 0): a batch of plain settle steps,
-      then publish the improved state. Every published state is on the scene's
-      own monotone downhill path — never a random perturbation — so nothing
-      absurd is shown. Clears #descending (and fixes the basin floor) at rest. */
-  #descentSlice(): boolean {
+  /** One atomic unit of work, dispatched by phase. Returns whether best improved. */
+  #stepUnit(): boolean {
+    switch (this.#phase) {
+      case 'descend': return this.#descentQuantum()
+      case 'calibrate': this.#probeOne(); return false
+      case 'hop': return this.#hopUnit()
+    }
+  }
+
+  #enterDescent(): void {
+    this.#phase = 'descend'
+    this.#calibMags = []
+    this.#hopsThisEpoch = 0
+    this.#epochAccepts = 0
+  }
+
+  /** One PUBLISH quantum of incremental descent (Phase 0): RELAX_PUBLISH_STEPS
+      plain settle steps, then publish the improved state. Every published state
+      is on the scene's own monotone downhill path — never a random perturbation.
+      At rest, fixes the basin floor and advances to the calibration phase. */
+  #descentQuantum(): boolean {
     const scratch = this.#scratch!, pinned = this.#pinned
     let atRest = false
-    for (let s = 0; s < DESCENT_BATCH; s++) {
+    for (let s = 0; s < RELAX_PUBLISH_STEPS; s++) {
       if (!settleStep(scratch, pinned)) { atRest = true; break }
     }
     recomputeRegions(scratch)
@@ -438,8 +456,36 @@ export class LayoutOptimizer {
       this.#best = layoutSnapshot(scratch, score)
       improved = true
     }
-    if (atRest) { this.#descending = false; this.#basinE = score }
+    if (atRest) { this.#basinE = score; this.#phase = 'calibrate'; this.#calibMags = [] }
     return improved
+  }
+
+  /** One calibration probe (one full relaxation, restored — no publish): perturb
+      the basin floor, relax, record |ΔE_basin|. After PROBE_BATCH probes, set
+      T0 = their median (the typical hop → acceptance ~e^-1) and begin hopping. */
+  #probeOne(): void {
+    const scratch = this.#scratch!, pinned = this.#pinned, rng = this.#rng
+    const kinds = MOVE_REGISTRY.filter((m) => m.applicable(scratch, pinned))
+    if (kinds.length > 0) {
+      const saved = layoutSnapshot(scratch, 0)
+      const kind = kinds[Math.floor(rng() * kinds.length)]!
+      const p = kind.propose(scratch, pinned, rng)
+      if (p !== null) {
+        recomputeRegions(scratch)
+        this.#relaxToRest()
+        this.#calibMags.push(Math.abs(layoutScore(scratch) - this.#basinE))
+        applyLayoutSnapshot(scratch, saved)
+        recomputeRegions(scratch)
+      }
+    }
+    if (this.#calibMags.length >= PROBE_BATCH || kinds.length === 0) {
+      const mags = this.#calibMags
+      this.#T0 = mags.length === 0 ? 0 : (mags.sort((a, b) => a - b), mags[mags.length >> 1]!)
+      this.#T = this.#T0
+      this.#phase = 'hop'
+      this.#hopsThisEpoch = 0
+      this.#epochAccepts = 0
+    }
   }
 
   #reseedFrom(e: Engine): void {
@@ -460,8 +506,7 @@ export class LayoutOptimizer {
     this.#rng = mkRng(this.#seed)
     this.#T = 0
     this.#T0 = 0
-    this.#descending = true
-    this.#calibrated = false
+    this.#enterDescent()
     this.#restartParity = 0
     this.#reheatsSinceImprove = 0
     this.#lowDuty = false
@@ -477,47 +522,26 @@ export class LayoutOptimizer {
     recomputeRegions(scratch)
   }
 
-  /** T0 = the typical (median) basin-floor |ΔE| over a seeded probe batch of
-      relaxed hops at the seed basin; each probe is restored so it measures, it
-      does not advance the chain. */
-  #calibrateT0(): number {
-    const scratch = this.#scratch!, pinned = this.#pinned, rng = this.#rng
-    const mags: number[] = []
-    for (let k = 0; k < PROBE_BATCH; k++) {
-      const kinds = MOVE_REGISTRY.filter((m) => m.applicable(scratch, pinned))
-      if (kinds.length === 0) break
-      const saved = layoutSnapshot(scratch, 0)
-      const kind = kinds[Math.floor(rng() * kinds.length)]!
-      const p = kind.propose(scratch, pinned, rng)
-      if (p === null) continue
-      recomputeRegions(scratch)
-      this.#relaxToRest()
-      mags.push(Math.abs(layoutScore(scratch) - this.#basinE))
-      applyLayoutSnapshot(scratch, saved)
-      recomputeRegions(scratch)
-    }
-    if (mags.length === 0) return 0
-    mags.sort((a, b) => a - b)
-    return mags[mags.length >> 1]!
-  }
-
   /** The DOF count driving the epoch length and reheat cadence. */
   #dofCount(): number {
     return nonPinnedIds(this.#scratch!, this.#pinned).length + this.#scratch!.childrenOf.size
   }
 
-  #runEpoch(): boolean {
-    const E = EPOCH_PER_DOF * this.#dofCount()
-    let accepts = 0
-    let improved = false
-    for (let m = 0; m < E; m++) {
-      const r = this.#hop()
-      if (r.accepted) accepts++
-      if (r.improved) improved = true
+  /** One hop of the proposal phase, with per-hop epoch bookkeeping: after an
+      epoch's worth of hops (EPOCH_PER_DOF·DOF) cool the temperature and reheat
+      if it fell through the floor or the epoch accepted nothing. Slicing to one
+      hop per unit keeps a tick from blocking for a whole epoch of relaxations. */
+  #hopUnit(): boolean {
+    const r = this.#hop()
+    this.#hopsThisEpoch++
+    if (r.accepted) this.#epochAccepts++
+    if (this.#hopsThisEpoch >= EPOCH_PER_DOF * this.#dofCount()) {
+      this.#T *= COOL
+      if (this.#T < this.#T0 * REHEAT_FLOOR || this.#epochAccepts === 0) this.#reheat()
+      this.#hopsThisEpoch = 0
+      this.#epochAccepts = 0
     }
-    this.#T *= COOL
-    if (this.#T < this.#T0 * REHEAT_FLOOR || accepts === 0) this.#reheat()
-    return improved
+    return r.improved
   }
 
   /** One basin hop: perturb the current basin minimum by one move, relax to
