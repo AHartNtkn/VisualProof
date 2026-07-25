@@ -125,3 +125,9 @@ Tasks 1 → 2 → 3 → 4 → 5 strictly (3 blocks 4; 1 blocks everything visual
 - Task 1's radius floor is deliberately re-pinned from measurement of the ratified family, not carried from the rod bound — the family is the law, the number documents it.
 - Task 3 is the single shared fix for annealer throughput AND the six wall-budget suite failures; no separate "make tests faster" work exists.
 - The rod energy remains the scoring functional throughout — nothing in this plan changes WHAT is minimized, only the curve family drawn/charged and WHO searches.
+
+## Execution record (2026-07-25)
+
+- Task 0: 969fe83 (purge, 85→67 physics tests). Task 1: e31b2a7 (Hobby family + conformance artifact). Task 2: 1c5d2ce (sweep). Task 3: c7932b8 + 853d7e3 (exact delta primitive; operatorStep integration measured as regression and rejected; physics suite serialized — wall budgets need isolation). Task 4: 13025cc (annealer; five ratified deviations recorded in .superpowers/sdd/task4-report.md — median T0, step-count polish backstop, populated-cut fixture, 15 s budget, worker glue typecheck-only).
+- Gates: physics 76/76 serialized (184 s), fast 1426/1426, tsc clean.
+- In-app (frege zeroIsNat@17, real worker): annealer live with temperature telemetry; best 49,385 → 434 in ~2 min of hidden-tab time (the old searcher plateaued ~35,000 in the same time); Hobby curves throughout; bounded approach carries the visible layout between bests.
