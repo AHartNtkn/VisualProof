@@ -26,7 +26,12 @@ export const WIREP = {
   sepSlope: 1.4,
   /** wire↔wire separation radius */
   sepR: 5,
-  /** trust region: max per-tick motion of any DOF (continuity law) */
+  /** POSITION locality budget (continuity law): the max per-tick POSITION motion
+      of any DOF — both the synchronous descent's position step (operatorStep) and
+      the live layout's approach toward a searched best (approachStep). Rotation is
+      NOT bound by this: the descent turns a node up to π per tick (USER
+      2026-07-25), since global positional reconfiguration is the search layer's
+      job but a node's orientation is a purely local DOF. */
   travelCap: 0.55,
 }
 
@@ -1193,13 +1198,12 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
 }
 
 /** Finite-difference probe scale (drawn units): each coordinate is probed at
-    h = HX / m so the DRAWN perturbation is uniform across unlike coordinates. */
+    h = HX / m so the DRAWN perturbation is uniform across unlike coordinates.
+    It is also the descent ladder's FLOOR — a trial finer than the probe cannot
+    resolve descent from sensing noise, so a frame rejected at every rung down to
+    HX is a proven rest (deterministic memoryless operator + unchanged state ⇒
+    every later frame rejects identically). */
 const HX = 0.02
-
-/** Δ ladder depth: Δmin = Δmax / 2^8. A frame rejected at Δmin is a proven
-    rest (deterministic memoryless operator + unchanged state ⇒ every later
-    frame rejects identically). */
-const DELTA_HALVINGS = 8
 
 /**
  * THE per-frame NODE step (routed-network model): bodies are the only
@@ -1226,7 +1230,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   // frozenWireEnergy rebuild — no routing solves, and no whole-scene re-eval.
   const fst = mkFrozenState(e)
 
-  type Coord = { get(): number; set(v: number): void; readonly m: number; localE(): number }
+  type Coord = { get(): number; set(v: number): void; readonly m: number; readonly rot: boolean; localE(): number }
   const coords: Coord[] = []
   const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
@@ -1234,13 +1238,13 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     const localE = (): number => { recomputeRegions(e, dirty); return fst.frozenTotal + frozenProbe(fst, e, b.id) + contentEnergy(e) }
     if (pinned === null || !pinned.has(b.id)) {
       movedBodies.push(b)
-      coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, localE })
-      coords.push({ get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } }, m: 1, localE })
+      coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, rot: false, localE })
+      coords.push({ get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } }, m: 1, rot: false, localE })
     }
     // rotation: an ordinary coordinate under the same budget (2026-07-24 law);
     // only port-bearing wired bodies feel it (content is rotation-invariant)
     if (wiredBodies.has(b.id) && b.localAnchor.size > 0) {
-      coords.push({ get: () => b.theta, set: (v) => { b.theta = v }, m: Math.max(b.discR * sc, 1e-6), localE })
+      coords.push({ get: () => b.theta, set: (v) => { b.theta = v }, m: Math.max(b.discR * sc, 1e-6), rot: true, localE })
     }
   }
 
@@ -1286,13 +1290,48 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   // routed curves at the captured optimum), so this is the old `base.E + content`.
   const E0 = fst.frozenTotal + contentEnergy(e)
   const EPS = 1e-9 * (Math.abs(E0) + 1)
-  const deltaMax = WIREP.travelCap * sc
 
-  for (let k = 0; gsup > 0 && k <= DELTA_HALVINGS; k++) {
-    const delta = deltaMax / (1 << k)
+  // ── ANISOTROPIC TRUST REGION. A DOF's step ceiling is its own natural range,
+  // which differs by KIND (USER 2026-07-25: rotation is not throttled like an ODE
+  // integrator — it may turn as far as the geometry allows):
+  //   • rotation — θ is periodic, so π is the largest DISTINCT turn (beyond π is
+  //     the same orientation reached the short way). This is the false-rest cure:
+  //     a node whose port faces AWAY from its partner sits at a rotation barrier
+  //     that only a ~π turn clears; the old sub-radian cap rested against it. The
+  //     ladder tries the largest turn FIRST, so it steps over the barrier instead
+  //     of resting on the near side.
+  //   • position — the per-tick LOCALITY budget (travelCap·scale). A body's
+  //     position descends locally; GLOBAL positional reconfiguration is the search
+  //     layer's job (the optimizer's subtree/hop moves), NOT the local step. A
+  //     frame-scale joint position step was measured to defeat basin hopping — it
+  //     lets one aggressive descent slide a hop-displaced subtree straight back
+  //     into its trap, so the wedged-cut acceptance basin (anneal.test) became
+  //     inescapable. Keeping the step local leaves the search's hops intact.
+  // The ladder runs LARGEST→smallest and commits the first strictly-descending
+  // rung. Its floor HX is the gradient-probe drawn step — a trial finer than the
+  // probe is below sensing noise. Memoryless: nothing persists between ticks.
+  if (e.frame === null) throw new Error('operatorStep: frame must be established before descent')
+  const posCeil = WIREP.travelCap * sc
+  const rotCeil = (m: number): number => Math.PI * m // drawn ceiling of an m-metric rotation
+  const ceilDrawn = (c: Coord): number => (c.rot ? rotCeil(c.m) : posCeil)
+
+  // Joint trust region: the direction rides the box boundary of the FIRST
+  // coordinate to saturate its own drawn ceiling, so no coordinate exceeds its
+  // limit while the descent direction is preserved (each position coord is capped
+  // at posCeil by its own term, so rotation may reach π here without the joint
+  // position step ever exceeding the locality budget).
+  let jointCeil = Infinity
+  for (let i = 0; i < coords.length; i++) {
+    if (g[i] === 0) continue
+    const c = coords[i]!
+    const drawnGrad = Math.abs(g[i]!) / c.m
+    jointCeil = Math.min(jointCeil, (ceilDrawn(c) * gsup) / drawnGrad)
+  }
+
+  for (let delta = jointCeil; gsup > 0 && delta >= HX; delta /= 2) {
     if (delta * (gnorm2 / gsup) < EPS) break
     // one simultaneous trial: the M-metric steepest-descent DIRECTION, scaled
-    // so the LARGEST drawn coordinate displacement is delta (the visual budget)
+    // so the LARGEST drawn coordinate displacement is delta (the trust radius)
     for (let i = 0; i < coords.length; i++) {
       const c = coords[i]!
       c.set(c.get() - delta * (g[i]! / (c.m * c.m)) / gsup)
@@ -1306,14 +1345,13 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   }
   // ── COORDINATE FALLBACK: a crease from coordinate interactions can block the
   // joint direction while single coordinates still descend — try them in
-  // steepest order under the same gate and budget. ──
+  // steepest order under the same gate, each under its own drawn ceiling. ──
   const order = coords.map((_, i) => i).filter((i) => g[i] !== 0)
   order.sort((x, y) => Math.abs(g[y]! / coords[y]!.m) - Math.abs(g[x]! / coords[x]!.m) || x - y)
   for (const i of order) {
     const c = coords[i]!
     const dir = -Math.sign(g[i]!)
-    for (let k = 0; k <= DELTA_HALVINGS; k++) {
-      const delta = deltaMax / (1 << k)
+    for (let delta = ceilDrawn(c); delta >= HX; delta /= 2) {
       if ((delta * Math.abs(g[i]!)) / c.m < EPS) break
       c.set(c.get() + (dir * delta) / c.m)
       for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
