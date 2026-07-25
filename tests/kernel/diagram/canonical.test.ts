@@ -1,0 +1,174 @@
+import { describe, expect, it } from 'vitest'
+import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+
+describe('exploreForm', () => {
+  it('is invariant under construction order and id renaming', () => {
+    const first = new DiagramBuilder()
+    const firstCut = first.cut(first.root)
+    const firstInner = first.ref(firstCut, 'Inner', relSig([IOTA]))
+    const firstOuter = first.ref(first.root, 'Outer', relSig([IOTA]))
+    first.wire(first.root, [
+      { node: firstOuter, port: { kind: 'arg', index: 0 } },
+      { node: firstInner, port: { kind: 'arg', index: 0 } },
+    ])
+
+    const second = new DiagramBuilder()
+    const secondOuter = second.ref(second.root, 'Outer', relSig([IOTA]))
+    const secondCut = second.cut(second.root)
+    const secondInner = second.ref(secondCut, 'Inner', relSig([IOTA]))
+    second.wire(second.root, [
+      { node: secondInner, port: { kind: 'arg', index: 0 } },
+      { node: secondOuter, port: { kind: 'arg', index: 0 } },
+    ])
+
+    expect(exploreForm(first.build())).toBe(exploreForm(second.build()))
+  })
+
+  it('distinguishes shared and separate positional argument wires', () => {
+    const make = (shared: boolean) => {
+      const builder = new DiagramBuilder()
+      const ref = builder.ref(builder.root, 'P', relSig([IOTA, IOTA]))
+      if (shared) {
+        builder.wire(builder.root, [
+          { node: ref, port: { kind: 'arg', index: 0 } },
+          { node: ref, port: { kind: 'arg', index: 1 } },
+        ])
+      }
+      return builder.build()
+    }
+
+    expect(exploreForm(make(true))).not.toBe(exploreForm(make(false)))
+  })
+
+  it('handles symmetric disconnected cuts by individualization', () => {
+    const make = (swap: boolean) => {
+      const builder = new DiagramBuilder()
+      const first = builder.cut(builder.root)
+      const second = builder.cut(builder.root)
+      const [left, right] = swap ? [second, first] : [first, second]
+      builder.ref(left, 'P', relSig([]))
+      builder.ref(right, 'P', relSig([]))
+      return builder.build()
+    }
+
+    expect(exploreForm(make(false))).toBe(exploreForm(make(true)))
+  })
+
+  it('distinguishes wire scope with otherwise identical endpoints', () => {
+    const make = (atRoot: boolean) => {
+      const builder = new DiagramBuilder()
+      const cut = builder.cut(builder.root)
+      const ref = builder.ref(cut, 'P', relSig([IOTA]))
+      builder.wire(atRoot ? builder.root : cut, [
+        { node: ref, port: { kind: 'arg', index: 0 } },
+      ])
+      return builder.build()
+    }
+
+    expect(exploreForm(make(true))).not.toBe(exploreForm(make(false)))
+  })
+
+  it('pins boundary wires by order', () => {
+    const builder = new DiagramBuilder()
+    const ref = builder.ref(builder.root, 'P', relSig([IOTA, IOTA]))
+    const first = builder.wire(builder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+    ])
+    const second = builder.wire(builder.root, [
+      { node: ref, port: { kind: 'arg', index: 1 } },
+    ])
+    const diagram = builder.build()
+
+    expect(exploreForm(diagram, [first, second]))
+      .not.toBe(exploreForm(diagram, [second, first]))
+  })
+
+  it('rejects a pinned wire that does not exist', () => {
+    const builder = new DiagramBuilder()
+    builder.ref(builder.root, 'P', relSig([]))
+    expect(() => exploreForm(builder.build(), ['ghost']))
+      .toThrowError(/pinned wire 'ghost' does not exist/)
+  })
+
+  it('records the complete ordered incidence vector of an aliased boundary', () => {
+    const builder = new DiagramBuilder()
+    const ref = builder.ref(builder.root, 'P', relSig([IOTA]))
+    const exposed = builder.wire(builder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+    ])
+    const bare = builder.wire(builder.root, [])
+    const diagram = builder.build()
+
+    expect(exploreForm(diagram, [exposed, exposed, bare]))
+      .not.toBe(exploreForm(diagram, [exposed, bare, exposed]))
+    expect(exploreForm(diagram, [exposed, exposed, bare]))
+      .not.toBe(exploreForm(diagram, [exposed, bare, bare]))
+  })
+})
+
+describe('exploreForm signature-indexed content', () => {
+  it('ignores insertion order for same-scope relational wires', () => {
+    const unary = relSig([IOTA])
+    const nullary = relSig([])
+    const nodes = {
+      unary: { kind: 'atom', region: 'r0', sig: unary },
+      nullary: { kind: 'atom', region: 'r0', sig: nullary },
+    } as const
+    const unaryHead = {
+      scope: 'r0',
+      sig: unary,
+      endpoints: [{ node: 'unary', port: { kind: 'head' as const } }],
+    }
+    const nullaryHead = {
+      scope: 'r0',
+      sig: nullary,
+      endpoints: [{ node: 'nullary', port: { kind: 'head' as const } }],
+    }
+    const unaryArg = {
+      scope: 'r0',
+      sig: IOTA,
+      endpoints: [{ node: 'unary', port: { kind: 'arg' as const, index: 0 } }],
+    }
+    const forward = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { ...nodes },
+      wires: { unaryHead, nullaryHead, unaryArg },
+    })
+    const reversed = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { ...nodes },
+      wires: { nullaryHead, unaryHead, unaryArg },
+    })
+
+    expect(exploreForm(forward)).toBe(exploreForm(reversed))
+  })
+
+  it('distinguishes wire signatures at the same scope', () => {
+    const make = (arity: number) => {
+      const builder = new DiagramBuilder()
+      builder.relWire(
+        builder.root,
+        relSig(Array.from({ length: arity }, () => IOTA)),
+      )
+      return builder.build()
+    }
+
+    expect(exploreForm(make(0))).not.toBe(exploreForm(make(1)))
+    expect(exploreForm(make(1))).not.toBe(exploreForm(make(2)))
+  })
+
+  it('distinguishes exact reference content beyond graph shape', () => {
+    const make = (defId: string) => {
+      const builder = new DiagramBuilder()
+      builder.ref(builder.root, defId, relSig([]))
+      return builder.build()
+    }
+
+    expect(exploreForm(make('P'))).not.toBe(exploreForm(make('Q')))
+  })
+})

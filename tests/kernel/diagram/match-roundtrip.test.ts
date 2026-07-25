@@ -1,0 +1,177 @@
+import { describe, expect, it } from 'vitest'
+import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import {
+  mkDiagramWithBoundary,
+  type DiagramWithBoundary,
+} from '../../../src/kernel/diagram/boundary'
+import type {
+  Diagram,
+  RegionId,
+  WireId,
+} from '../../../src/kernel/diagram/diagram'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
+
+function expectFound(
+  host: Diagram,
+  atRegion: RegionId,
+  pattern: DiagramWithBoundary,
+  attachments: readonly WireId[],
+): Diagram {
+  const spliced = spliceSubgraph(host, atRegion, pattern, attachments)
+  const result = findOccurrences(spliced, pattern)
+  const occurrence = result.matches.find((candidate) =>
+    candidate.region === atRegion
+    && JSON.stringify(candidate.attachments) === JSON.stringify(attachments),
+  )
+  expect(
+    occurrence,
+    `expected occurrence at '${atRegion}' with ${JSON.stringify(attachments)}`,
+  ).toBeDefined()
+  return spliced
+}
+
+function unaryRefPattern(defId = 'P'): DiagramWithBoundary {
+  const builder = new DiagramBuilder()
+  const ref = builder.ref(builder.root, defId, relSig([IOTA]))
+  const stub = builder.wire(builder.root, [
+    { node: ref, port: { kind: 'arg', index: 0 } },
+  ])
+  return mkDiagramWithBoundary(builder.build(), [stub])
+}
+
+describe('splice to exact-match round trip', () => {
+  it('finds a spliced reference pattern at the root with its attachment', () => {
+    const pattern = unaryRefPattern()
+    const hostBuilder = new DiagramBuilder()
+    const attachment = hostBuilder.wire(hostBuilder.root, [])
+    expectFound(
+      hostBuilder.build(),
+      hostBuilder.root,
+      pattern,
+      [attachment],
+    )
+  })
+
+  it('finds a spliced pattern deep inside nested cuts', () => {
+    const pattern = unaryRefPattern()
+    const hostBuilder = new DiagramBuilder()
+    const outer = hostBuilder.cut(hostBuilder.root)
+    const inner = hostBuilder.cut(outer)
+    const attachment = hostBuilder.wire(hostBuilder.root, [])
+    expectFound(hostBuilder.build(), inner, pattern, [attachment])
+  })
+
+  it('finds a spliced cut-subtree pattern with a crossing boundary', () => {
+    const patternBuilder = new DiagramBuilder()
+    const cut = patternBuilder.cut(patternBuilder.root)
+    const ref = patternBuilder.ref(cut, 'P', relSig([IOTA]))
+    const stub = patternBuilder.wire(patternBuilder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+    ])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
+    const hostBuilder = new DiagramBuilder()
+    const attachment = hostBuilder.wire(hostBuilder.root, [])
+
+    expectFound(
+      hostBuilder.build(),
+      hostBuilder.root,
+      pattern,
+      [attachment],
+    )
+  })
+
+  it('finds a closed relational-atom pattern after splicing', () => {
+    const patternBuilder = new DiagramBuilder()
+    patternBuilder.atom(patternBuilder.root, relSig([IOTA]))
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const hostBuilder = new DiagramBuilder()
+    hostBuilder.ref(hostBuilder.root, 'Existing', relSig([]))
+
+    expectFound(hostBuilder.build(), hostBuilder.root, pattern, [])
+  })
+
+  it('finds two distinct stubs spliced onto one repeated attachment', () => {
+    const patternBuilder = new DiagramBuilder()
+    const ref = patternBuilder.ref(
+      patternBuilder.root,
+      'P',
+      relSig([IOTA, IOTA]),
+    )
+    const first = patternBuilder.wire(patternBuilder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+    ])
+    const second = patternBuilder.wire(patternBuilder.root, [
+      { node: ref, port: { kind: 'arg', index: 1 } },
+    ])
+    const pattern = mkDiagramWithBoundary(
+      patternBuilder.build(),
+      [first, second],
+    )
+    const hostBuilder = new DiagramBuilder()
+    const attachment = hostBuilder.wire(hostBuilder.root, [])
+
+    expectFound(
+      hostBuilder.build(),
+      hostBuilder.root,
+      pattern,
+      [attachment, attachment],
+    )
+  })
+
+  it('keeps attachment order index-aligned with distinct boundary wires', () => {
+    const patternBuilder = new DiagramBuilder()
+    const ref = patternBuilder.ref(
+      patternBuilder.root,
+      'P',
+      relSig([IOTA, IOTA]),
+    )
+    const first = patternBuilder.wire(patternBuilder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+    ])
+    const second = patternBuilder.wire(patternBuilder.root, [
+      { node: ref, port: { kind: 'arg', index: 1 } },
+    ])
+    const pattern = mkDiagramWithBoundary(
+      patternBuilder.build(),
+      [first, second],
+    )
+    const hostBuilder = new DiagramBuilder()
+    const firstAttachment = hostBuilder.wire(hostBuilder.root, [])
+    const secondAttachment = hostBuilder.wire(hostBuilder.root, [])
+    const host = hostBuilder.build()
+
+    expectFound(host, host.root, pattern, [firstAttachment, secondAttachment])
+    expectFound(host, host.root, pattern, [secondAttachment, firstAttachment])
+  })
+
+  it('finds both an existing occurrence and a copy spliced into a cut', () => {
+    const pattern = unaryRefPattern()
+    const hostBuilder = new DiagramBuilder()
+    const existing = hostBuilder.ref(
+      hostBuilder.root,
+      'P',
+      relSig([IOTA]),
+    )
+    const hub = hostBuilder.ref(
+      hostBuilder.root,
+      'Hub',
+      relSig([IOTA]),
+    )
+    const attachment = hostBuilder.wire(hostBuilder.root, [
+      { node: existing, port: { kind: 'arg', index: 0 } },
+      { node: hub, port: { kind: 'arg', index: 0 } },
+    ])
+    const cut = hostBuilder.cut(hostBuilder.root)
+    const host = hostBuilder.build()
+    const spliced = spliceSubgraph(host, cut, pattern, [attachment])
+    const result = findOccurrences(spliced, pattern)
+
+    expect(result.matches.map((match) => match.region).sort())
+      .toEqual([host.root, cut].sort())
+    for (const match of result.matches) {
+      expect(match.attachments).toEqual([attachment])
+    }
+  })
+})
