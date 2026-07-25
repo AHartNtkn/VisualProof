@@ -52,6 +52,12 @@ export type BestMsg = {
 
 export type SyncedMsg = { readonly type: 'synced'; readonly seq: number }
 
-export type StatusMsg = { readonly type: 'status'; readonly scene: number; readonly searching: boolean }
+export type StatusMsg = {
+  readonly type: 'status'
+  readonly scene: number
+  readonly searching: boolean
+  /** current annealing temperature (surfaced through the client's debugState). */
+  readonly temperature: number
+}
 
 export type WorkerMsg = BestMsg | SyncedMsg | StatusMsg

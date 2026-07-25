@@ -26,6 +26,7 @@ export class WorkerSearch implements LayoutSearch {
   #worker: Worker
   #best: LayoutBest | null = null
   #searching = true
+  #temperature = 0
   #scene = 0
   #sceneDiagram: unknown = null
   #seq = 0
@@ -44,7 +45,7 @@ export class WorkerSearch implements LayoutSearch {
       if (m.type === 'best') {
         if (m.scene === this.#scene) this.#best = { score: m.score, poses: m.poses, nets: m.nets }
       } else if (m.type === 'status') {
-        if (m.scene === this.#scene) this.#searching = m.searching
+        if (m.scene === this.#scene) { this.#searching = m.searching; this.#temperature = m.temperature }
       } else {
         this.#ackedSeq = m.seq
         if (this.#pending !== null) {
@@ -111,8 +112,8 @@ export class WorkerSearch implements LayoutSearch {
   }
 
   /** Debug-seam surface: current search state without log spam. */
-  debugState(): { scene: number; searching: boolean; bestScore: number | null } {
-    return { scene: this.#scene, searching: this.searching, bestScore: this.#best?.score ?? null }
+  debugState(): { scene: number; searching: boolean; bestScore: number | null; temperature: number } {
+    return { scene: this.#scene, searching: this.searching, bestScore: this.#best?.score ?? null, temperature: this.#temperature }
   }
 
   adoptLive(e: Engine, score: number): void {

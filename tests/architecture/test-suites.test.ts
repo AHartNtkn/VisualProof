@@ -19,6 +19,9 @@ describe('Vitest suite ownership', () => {
       // or it fails — waiting longer can only hide a defect.
       testTimeout: 30_000,
       hookTimeout: 60_000,
+      // physics tests assert wall-clock budgets — one file at a time so those
+      // budgets measure the solver, not cross-file CPU contention.
+      fileParallelism: false,
     })
   })
 

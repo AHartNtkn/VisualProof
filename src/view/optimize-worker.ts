@@ -21,13 +21,17 @@ const post = (m: WorkerMsg): void => {
 /** Per-slice tick budget. The worker yields to its message queue between
     slices so incoming syncs (drags, edits) are never starved. */
 const SLICE_MS = 200
+/** Low-duty spacing between epochs (plan Task 4): after 8 fruitless reheats the
+    annealer keeps searching but at ~one epoch per few seconds so an idle,
+    already-good layout stops burning the core. Never a claim of optimality. */
+const LOW_DUTY_MS = 4000
 
 let mirror: Engine | null = null
 let scene = -1
 let opt = new LayoutOptimizer()
 let pins: ReadonlySet<string> | null = null
 let pumping = false
-let lastSearching: boolean | null = null
+let lastStatusKey: string | null = null
 
 function applyToMirror(m: Extract<ClientMsg, { type: 'sync' }>): void {
   if (m.scene !== scene) {
@@ -64,34 +68,38 @@ function publishBest(): void {
 }
 
 function publishStatus(): void {
-  const searching = !opt.exhausted
-  if (searching !== lastSearching) {
-    lastSearching = searching
-    post({ type: 'status', scene, searching })
+  // simulated annealing never exhausts; the status carries the live temperature
+  // and coalesces on an unchanged key so an idle search does not spam messages
+  const key = `${opt.searching}|${opt.lowDuty}|${opt.temperature.toFixed(4)}`
+  if (key !== lastStatusKey) {
+    lastStatusKey = key
+    post({ type: 'status', scene, searching: opt.searching, temperature: opt.temperature })
   }
 }
 
 function pump(): void {
   pumping = false
-  if (mirror === null || opt.exhausted) { publishStatus(); return }
+  if (mirror === null) { publishStatus(); return }
   // an exception here escapes to the client's worker.onerror and STOPS the
   // pump — a dead search is reported loudly, never rescheduled silently
   const improved = opt.tick(pins, SLICE_MS)
   if (improved) publishBest()
   publishStatus()
-  if (!opt.exhausted) schedule()
+  schedule()
 }
 
 /** Yield-then-continue via a MessageChannel: unlike setTimeout, channel
     messages are NOT throttled in background tabs — the search keeps full
-    speed when the app tab is hidden. */
+    speed when the app tab is hidden. Low duty is the one case that DOES want a
+    timed gap between epochs. */
 const pumpChannel = new MessageChannel()
 pumpChannel.port1.onmessage = () => pump()
 
 function schedule(): void {
   if (pumping) return
   pumping = true
-  pumpChannel.port2.postMessage(null)
+  if (opt.lowDuty) setTimeout(() => pumpChannel.port2.postMessage(null), LOW_DUTY_MS)
+  else pumpChannel.port2.postMessage(null)
 }
 
 self.onmessage = (ev: MessageEvent<ClientMsg>) => {
@@ -103,7 +111,7 @@ self.onmessage = (ev: MessageEvent<ClientMsg>) => {
     // a (re)seeded searcher has a best immediately — publish it so the client
     // never approaches a stale snapshot from a previous scene
     publishBest()
-    lastSearching = null
+    lastStatusKey = null
     publishStatus()
     schedule()
   } else {
@@ -122,7 +130,7 @@ self.onmessage = (ev: MessageEvent<ClientMsg>) => {
     }
     recomputeRegions(e)
     opt.adoptLive(e, m.score)
-    lastSearching = null
+    lastStatusKey = null
     publishStatus()
     schedule()
   }
