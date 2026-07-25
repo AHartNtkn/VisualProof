@@ -78,8 +78,8 @@ Affected-set rule (exact, conservative): a move displacing body set S re-evaluat
 
 - [ ] **Step 1: failing property test.** On plusComm@20 and succShiftS@48 fixtures: 200 seeded random single-body and subtree moves; assert delta-tracked total equals fresh full eval each 10th move within tolerance. Fails (module absent).
 - [ ] **Step 2: implement** as specified. FreeSpace update: moved discs invalidate `fs.adj` rows touching their corners and the route memo entries whose keys involve re-evaluated wires — rebuild lazily.
-- [ ] **Step 3: wire into operatorStep's ladder/fallback gates** (exact gates, now delta-priced). Re-measure: `settleStep` at succShiftS@48 target < 60 ms (from 201 ms).
-- [ ] **Step 4:** property test green; the remaining wall-sensitive fixture (natBody via `settledCase`) rests inside its 20 s budget.
+- [x] **Step 3 — OUTCOME (measured, 2026-07-25):** wiring the delta into operatorStep's gates was built three ways and REGRESSED or was neutral in all three (fresh-base joint trials + dense small fixtures are the delta's worst regime; exact per-trial re-routing is Ω(trials·corners²) when 62–77% of routes are blocked). Integration reverted; operatorStep stays on fresh exact evals. The delta's regime is the ANNEALER's (persistent ScoreState, local moves, commit-on-accept) — Task 4 consumes it there. The natBody wall-budget failure was CPU contention from parallel test files, not solver speed (16.4 s isolated vs 20 s+ under load): physics suite now runs `fileParallelism: false` — wall budgets require isolated measurement.
+- [x] **Step 4:** property tests green (4/4: exactness over 200 committed moves on two fixtures, reject path, large-move telemetry); natBody rests in budget under the serialized suite.
 - [ ] **Step 5: commit** `perf: exact incremental energy deltas — gates and annealer share them`.
 
 ### Task 4: The annealer (replace LayoutOptimizer's searcher core)

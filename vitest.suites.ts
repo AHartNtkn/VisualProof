@@ -4,7 +4,7 @@ export type TestSuite = 'ordinary' | 'physics' | 'all'
 
 export function suiteTestConfig(
   suite: TestSuite,
-): Pick<InlineConfig, 'include' | 'exclude' | 'testTimeout' | 'hookTimeout'> {
+): Pick<InlineConfig, 'include' | 'exclude' | 'testTimeout' | 'hookTimeout' | 'fileParallelism'> {
   if (suite === 'ordinary') {
     return {
       include: ['tests/**/*.test.ts'],
@@ -24,6 +24,11 @@ export function suiteTestConfig(
       // test; make the test (or the physics) fast.
       testTimeout: 30_000,
       hookTimeout: 60_000,
+      // Physics tests assert WALL-CLOCK settle budgets; running files in
+      // parallel workers makes those budgets measure CPU contention instead
+      // of the solver (natBody: 16.4 s isolated vs 20 s+ under suite load).
+      // Wall budgets require isolated measurement — one file at a time.
+      fileParallelism: false,
     }
   }
   return {
