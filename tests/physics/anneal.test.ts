@@ -146,21 +146,30 @@ describe('the basin-hopping search is deterministic in its seed (plan Task 6)', 
 })
 
 describe('every movable unit has a covering move (plan Task 6 coverage)', () => {
-  it('the move registry covers each body, region subtree, and wire-owned end dot', () => {
+  it('the move registry covers each body, region subtree, end dot, and wire junction', () => {
     // a nested scene: a cut holding an atom (its dangling ports become wire-owned
-    // end dots), plus a root ref — every unit taxon is present.
+    // end dots), a root ref, and a THREE-terminal wire (whose routed Steiner point
+    // is a junction) — every unit taxon is present, junctions included.
     const b = new DiagramBuilder()
     const inner = b.cut(b.root)
     b.atom(inner, relSig([TERM]))
-    b.ref(b.root, 'R', relSig([TERM]))
+    const r0 = b.ref(b.root, 'R', relSig([TERM]))
+    const r1 = b.ref(b.root, 'S', relSig([TERM]))
+    const r2 = b.ref(b.root, 'T', relSig([TERM]))
+    b.wire(b.root, [
+      { node: r0, port: { kind: 'arg', index: 0 } },
+      { node: r1, port: { kind: 'arg', index: 0 } },
+      { node: r2, port: { kind: 'arg', index: 0 } },
+    ], TERM)
     const e = mkEngine(b.build(), [])
     recomputeRegions(e)
 
     const units = movableUnits(e)
-    // the fixture must actually exercise all three taxa, or the test is vacuous
+    // the fixture must actually exercise all four taxa, or the test is vacuous
     expect(units.some((u) => u.kind === 'body'), 'fixture has body units').toBe(true)
     expect(units.some((u) => u.kind === 'region'), 'fixture has region units').toBe(true)
     expect(units.some((u) => u.kind === 'endDot'), 'fixture has wire-owned end-dot units').toBe(true)
+    expect(units.some((u) => u.kind === 'junction'), 'fixture has wire junction units').toBe(true)
 
     for (const u of units) {
       const covered = MOVE_REGISTRY.some((m) => m.covers(u))

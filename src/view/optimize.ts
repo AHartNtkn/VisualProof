@@ -1,6 +1,6 @@
-import type { RegionId } from '../kernel/diagram/diagram'
-import type { BodyKind, Engine } from './engine'
-import { mkEngine, subtreeCarriers, frameBounds } from './engine'
+import type { RegionId, WireId } from '../kernel/diagram/diagram'
+import type { BodyKind, Engine, WireView } from './engine'
+import { mkEngine, subtreeCarriers, frameBounds, wireTerminalPoints } from './engine'
 import {
   settleStep, contentEnergy, wireEnergy, recomputeRegions, resolveOverlaps, establishFrame,
 } from './relax'
@@ -95,14 +95,18 @@ export type MovableUnit =
   | { readonly kind: 'body'; readonly bodyKind: BodyKind; readonly id: string }
   | { readonly kind: 'region'; readonly id: RegionId }
   | { readonly kind: 'endDot'; readonly id: string }
+  | { readonly kind: 'junction'; readonly wid: WireId; readonly j: number }
 
 /** Every movable unit of an engine: each body (by kind), each region subtree
-    (via childrenOf), and each wire-owned end dot (via endBodyId). */
+    (via childrenOf), each wire-owned end dot (via endBodyId), and each wire
+    junction (a routed Steiner point — a positional DOF the local walk can only
+    settle within its basin, so crossing a junction cusp is a search-layer move). */
 export function movableUnits(e: Engine): MovableUnit[] {
   const units: MovableUnit[] = []
   for (const [id, b] of e.bodies) units.push({ kind: 'body', bodyKind: b.kind, id })
   for (const rid of e.childrenOf.keys()) units.push({ kind: 'region', id: rid })
   for (const [, w] of e.wires) if (w.endBodyId !== null) units.push({ kind: 'endDot', id: w.endBodyId })
+  for (const [wid, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) units.push({ kind: 'junction', wid, j })
   return units
 }
 
@@ -135,6 +139,23 @@ const octaveBase = (rng: Rng): number => OCTAVES[Math.floor(rng() * OCTAVES.leng
 
 const isPortBearing = (kind: BodyKind): boolean =>
   kind === 'ref' || kind === 'term' || kind === 'atom' || kind === 'body'
+
+/** The wire's bounding-circle radius: the greatest distance from the terminals'
+    centroid to any terminal — the wire's own spatial extent. A junction lives
+    within its wire's reach, so this is the natural scale for a junction hop (the
+    octave ladder over it spans within-wire to just-past-wire jumps). A degenerate
+    wire whose terminals coincide floors at one world unit (e.scale) so the hop is
+    never zero. */
+function wireBoundRadius(e: Engine, w: WireView): number {
+  const ts = wireTerminalPoints(e, w)
+  if (ts.length === 0) return e.scale
+  let cx = 0, cy = 0
+  for (const t of ts) { cx += t.x; cy += t.y }
+  cx /= ts.length; cy /= ts.length
+  let r = 0
+  for (const t of ts) r = Math.max(r, Math.hypot(t.x - cx, t.y - cy))
+  return Math.max(r, e.scale)
+}
 
 /** Save the exact pose of a body set; the returned thunk restores it. */
 function savePoses(e: Engine, ids: Iterable<string>): () => void {
@@ -249,6 +270,31 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
       const dx = Math.cos(a) * r, dy = Math.sin(a) * r
       for (const c of carriers) { const b = e.bodies.get(c)!; b.pos = { x: b.pos.x + dx, y: b.pos.y + dy } }
       return { moved: new Set(carriers), undo }
+    },
+  },
+  {
+    name: 'displaceJunction',
+    covers: (u) => u.kind === 'junction',
+    // junctions are internal routing DOFs with no body id — `pinned` (a body-id
+    // set) never pins them; a junction is movable whenever any wire has one.
+    applicable: (e) => { for (const [, w] of e.wires) if (w.net.junctions.length > 0) return true; return false },
+    propose: (e, _pinned, rng) => {
+      const targets: { w: WireView; j: number }[] = []
+      for (const [, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) targets.push({ w, j })
+      if (targets.length === 0) return null
+      const { w, j } = targets[Math.floor(rng() * targets.length)]!
+      const saved = { ...w.net.junctions[j]! }
+      const undo = (): void => { w.net.junctions[j] = { ...saved } }
+      // octave ladder over the wire's own extent: a positional hop big enough to
+      // clear a routing barrier (the junction cusp is a barrier-separated basin);
+      // the relaxation that follows settles the junction into the new basin, and
+      // Metropolis keeps it only if that basin is lower. `moved` is empty — a
+      // junction is not a body — and the rejected-hop restore comes from the
+      // whole-basin snapshot (which captures junctions), not this undo.
+      const r = octaveBase(rng) * wireBoundRadius(e, w)
+      const a = rng() * 2 * Math.PI
+      w.net.junctions[j] = { x: saved.x + Math.cos(a) * r, y: saved.y + Math.sin(a) * r }
+      return { moved: new Set<string>(), undo }
     },
   },
   {

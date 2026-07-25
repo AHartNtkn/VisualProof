@@ -275,6 +275,17 @@ function popcount(x: number): number {
   return c
 }
 
+/** Finite-difference probe scale (drawn units) for the node descent
+    (relax.operatorStep): each coordinate is probed at ±FD_PROBE, and it is the
+    descent ladder's FLOOR — a trial finer than the probe cannot resolve descent
+    from sensing noise, so a rung set rejected down to FD_PROBE is a proven rest.
+    Homed here among the routing/descent constants; imported by the descent.
+    (Wire junctions get NO such in-walk descent: they are positional DOFs, so a
+    junction cusp is a barrier-separated basin the walk cannot cross without
+    defeating basin hopping — the Task-9 locality result — and the search layer's
+    `displaceJunction` hop owns that global move instead.) */
+export const FD_PROBE = 0.02
+
 /**
  * PRESENTATION CONTINUATION (`advanceNetwork`): target layout and visible
  * transition speed are separate operations. Solve the fixed-topology target

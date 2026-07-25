@@ -4,7 +4,7 @@ import type { Body, Engine, StoredFrame, WireView } from './engine'
 import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
 import { mkFreeSpace, route, segSoftCost } from './route/freespace'
 import type { Disc as RouteDisc, Bounds } from './route/freespace'
-import { advanceNetwork, netEval } from './route/network'
+import { advanceNetwork, netEval, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
 import type { CurveBC } from './route/curve'
 import { edgeCurvePts, rodCost } from './route/curve'
@@ -1197,14 +1197,6 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
   return { x, y }
 }
 
-/** Finite-difference probe scale (drawn units): each coordinate is probed at
-    h = HX / m so the DRAWN perturbation is uniform across unlike coordinates.
-    It is also the descent ladder's FLOOR — a trial finer than the probe cannot
-    resolve descent from sensing noise, so a frame rejected at every rung down to
-    HX is a proven rest (deterministic memoryless operator + unchanged state ⇒
-    every later frame rejects identically). */
-const HX = 0.02
-
 /**
  * THE per-frame NODE step (routed-network model): bodies are the only
  * dynamical coordinates — positions, rotations of port-bearing bodies, and
@@ -1260,7 +1252,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   for (let i = 0; i < coords.length; i++) {
     const c = coords[i]!
     const v0 = c.get()
-    const h = HX / c.m
+    const h = FD_PROBE / c.m
     const e0 = baseOf(c)
     c.set(v0 + h); const ep = c.localE()
     c.set(v0 - h); const em = c.localE()
@@ -1308,7 +1300,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   //     into its trap, so the wedged-cut acceptance basin (anneal.test) became
   //     inescapable. Keeping the step local leaves the search's hops intact.
   // The ladder runs LARGEST→smallest and commits the first strictly-descending
-  // rung. Its floor HX is the gradient-probe drawn step — a trial finer than the
+  // rung. Its floor FD_PROBE is the gradient-probe drawn step — a trial finer than the
   // probe is below sensing noise. Memoryless: nothing persists between ticks.
   if (e.frame === null) throw new Error('operatorStep: frame must be established before descent')
   const posCeil = WIREP.travelCap * sc
@@ -1328,7 +1320,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     jointCeil = Math.min(jointCeil, (ceilDrawn(c) * gsup) / drawnGrad)
   }
 
-  for (let delta = jointCeil; gsup > 0 && delta >= HX; delta /= 2) {
+  for (let delta = jointCeil; gsup > 0 && delta >= FD_PROBE; delta /= 2) {
     if (delta * (gnorm2 / gsup) < EPS) break
     // one simultaneous trial: the M-metric steepest-descent DIRECTION, scaled
     // so the LARGEST drawn coordinate displacement is delta (the trust radius)
@@ -1351,7 +1343,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   for (const i of order) {
     const c = coords[i]!
     const dir = -Math.sign(g[i]!)
-    for (let delta = ceilDrawn(c); delta >= HX; delta /= 2) {
+    for (let delta = ceilDrawn(c); delta >= FD_PROBE; delta /= 2) {
       if ((delta * Math.abs(g[i]!)) / c.m < EPS) break
       c.set(c.get() + (dir * delta) / c.m)
       for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
