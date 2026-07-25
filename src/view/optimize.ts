@@ -343,12 +343,15 @@ export class LayoutOptimizer {
       message handler never blocks for many relaxations:
       - 'descend': relax the seed / adopted incumbent to its basin floor,
         publishing its monotone descent per RELAX_PUBLISH_STEPS quantum;
-      - 'calibrate': the 16 T0 probes, one full relaxation per tick (restored,
         no publish) — they cannot all live in one handler;
       - 'hop': basin hopping (publish on Metropolis acceptance). */
-  #phase: 'descend' | 'calibrate' | 'hop' = 'descend'
-  /** Accumulated calibration-probe |ΔE|s (one appended per 'calibrate' unit). */
-  #calibMags: number[] = []
+  #phase: 'descend' | 'hop' = 'descend'
+  /** Warmup |ΔE_basin| magnitudes: the FIRST PROBE_BATCH hops are accepted
+      unconditionally (the standard T=∞ annealing start) and their magnitudes
+      calibrate T0 — the same median statistic as dedicated probes, but the
+      relaxations ADVANCE the chain instead of being discarded, so there is no
+      dead window between the descent floor and the first hop. */
+  #warmupMags: number[] = []
   /** Hops taken at the current temperature; cool + maybe reheat at #epochLen. */
   #hopsThisEpoch = 0
   /** Accepts at the current temperature (reheat when an epoch accepts nothing). */
@@ -445,14 +448,13 @@ export class LayoutOptimizer {
   #stepUnit(): boolean {
     switch (this.#phase) {
       case 'descend': return this.#descentQuantum()
-      case 'calibrate': this.#probeOne(); return false
       case 'hop': return this.#hopUnit()
     }
   }
 
   #enterDescent(): void {
     this.#phase = 'descend'
-    this.#calibMags = []
+    this.#warmupMags = []
     this.#hopsThisEpoch = 0
     this.#epochAccepts = 0
   }
@@ -470,36 +472,8 @@ export class LayoutOptimizer {
     recomputeRegions(scratch)
     const score = layoutScore(scratch)
     const improved = this.#publishIfBetter(score)
-    if (atRest) { this.#basinE = score; this.#phase = 'calibrate'; this.#calibMags = [] }
+    if (atRest) { this.#basinE = score; this.#phase = 'hop'; this.#warmupMags = []; this.#T0 = 0; this.#T = 0 }
     return improved
-  }
-
-  /** One calibration probe (one full relaxation, restored — no publish): perturb
-      the basin floor, relax, record |ΔE_basin|. After PROBE_BATCH probes, set
-      T0 = their median (the typical hop → acceptance ~e^-1) and begin hopping. */
-  #probeOne(): void {
-    const scratch = this.#scratch!, pinned = this.#pinned, rng = this.#rng
-    const kinds = MOVE_REGISTRY.filter((m) => m.applicable(scratch, pinned))
-    if (kinds.length > 0) {
-      const saved = layoutSnapshot(scratch, 0)
-      const kind = kinds[Math.floor(rng() * kinds.length)]!
-      const p = kind.propose(scratch, pinned, rng)
-      if (p !== null) {
-        recomputeRegions(scratch)
-        this.#relaxToRest()
-        this.#calibMags.push(Math.abs(layoutScore(scratch) - this.#basinE))
-        applyLayoutSnapshot(scratch, saved)
-        recomputeRegions(scratch)
-      }
-    }
-    if (this.#calibMags.length >= PROBE_BATCH || kinds.length === 0) {
-      const mags = this.#calibMags
-      this.#T0 = mags.length === 0 ? 0 : (mags.sort((a, b) => a - b), mags[mags.length >> 1]!)
-      this.#T = this.#T0
-      this.#phase = 'hop'
-      this.#hopsThisEpoch = 0
-      this.#epochAccepts = 0
-    }
   }
 
   #reseedFrom(e: Engine): void {
@@ -549,7 +523,7 @@ export class LayoutOptimizer {
     const r = this.#hop()
     this.#hopsThisEpoch++
     if (r.accepted) this.#epochAccepts++
-    if (this.#hopsThisEpoch >= EPOCH_PER_DOF * this.#dofCount()) {
+    if (this.#warmupMags.length >= PROBE_BATCH && this.#hopsThisEpoch >= EPOCH_PER_DOF * this.#dofCount()) {
       this.#T *= COOL
       if (this.#T < this.#T0 * REHEAT_FLOOR || this.#epochAccepts === 0) this.#reheat()
       this.#hopsThisEpoch = 0
@@ -574,8 +548,19 @@ export class LayoutOptimizer {
     this.#relaxToRest()
     const newE = layoutScore(scratch)
     const dE = newE - this.#basinE
+    // warmup: the first PROBE_BATCH hops accept unconditionally (T = ∞ start)
+    // and their |ΔE| magnitudes fix T0 = median — no dedicated probe phase
+    const warming = this.#warmupMags.length < PROBE_BATCH
+    if (warming) {
+      this.#warmupMags.push(Math.abs(dE))
+      if (this.#warmupMags.length >= PROBE_BATCH) {
+        const mags = [...this.#warmupMags].sort((a, b) => a - b)
+        this.#T0 = mags[mags.length >> 1]!
+        this.#T = this.#T0
+      }
+    }
     const T = this.#T
-    const accept = dE < 0 || (T > 0 && rng() < Math.exp(-dE / T))
+    const accept = warming || dE < 0 || (T > 0 && rng() < Math.exp(-dE / T))
     if (accept) {
       this.#basinE = newE
       const improved = this.#publishIfBetter(newE)
