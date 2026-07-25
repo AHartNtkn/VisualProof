@@ -118,6 +118,6 @@ describe('endpointless frame ports', () => {
     if (logical0[0]!.kind !== 'dot' || logical1[0]!.kind !== 'dot') throw new Error('frame ports must paint as dots')
     expect(logical0[0]!.rPx).toBeGreaterThan(logical1[0]!.rPx)
     expect(computeLegs(engine).filter((leg) => leg.leg.wid === shared)).toHaveLength(1)
-    expect(shapes.some((shape) => shape.kind === 'polyline')).toBe(true)
+    expect(shapes.some((shape) => shape.kind === 'bezierPath')).toBe(true)
   })
 })
