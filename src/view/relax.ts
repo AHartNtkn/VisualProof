@@ -549,31 +549,57 @@ export function resolveOverlaps(e: Engine): boolean {
 // placement and wire topology live in the separate router (src/view/route/),
 // which observes nodes and never moves them. ----
 
+/** Number of samples along each segment for the separation quadrature. */
+const SEP_N = 8
+
+/** Wire-segment type: a drawn curve segment tagged with its owning wire. */
+export type WireSeg = { readonly wid: string; readonly a: Vec2; readonly b: Vec2 }
+
+/** The separation energy of ONE segment pair (bbox-rejected, then the SEP_N²
+    sample quadrature). The single numeric kernel shared by the whole-scene
+    `segSeparationE` and the incremental delta's cross-wire sums (score-delta.ts)
+    — one definition so the exact routed/global/gate objective and its delta can
+    never drift apart. `R` = WIREP.sepR·scale. */
+export function segPairSepE(A: { a: Vec2; b: Vec2 }, B: { a: Vec2; b: Vec2 }, R: number): number {
+  if (Math.min(A.a.x, A.b.x) - R > Math.max(B.a.x, B.b.x) || Math.min(B.a.x, B.b.x) - R > Math.max(A.a.x, A.b.x)) return 0
+  if (Math.min(A.a.y, A.b.y) - R > Math.max(B.a.y, B.b.y) || Math.min(B.a.y, B.b.y) - R > Math.max(A.a.y, A.b.y)) return 0
+  let E = 0
+  for (let ki = 0; ki <= SEP_N; ki++) {
+    const ta = ki / SEP_N
+    const pa = { x: A.a.x + (A.b.x - A.a.x) * ta, y: A.a.y + (A.b.y - A.a.y) * ta }
+    for (let kj = 0; kj <= SEP_N; kj++) {
+      const tb = kj / SEP_N
+      const pb = { x: B.a.x + (B.b.x - B.a.x) * tb, y: B.a.y + (B.b.y - B.a.y) * tb }
+      const d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
+      if (d < R) E += (WIREP.sepSlope * (R - d) * (R - d)) / R / (SEP_N * SEP_N)
+    }
+  }
+  return E
+}
+
 /** Inter-wire separation over straight segments (plan-22 constants):
     co-running pairs pay heavily, transverse crossings pay a little — the
     objective SEES crossings and pointless co-routing. */
-export function segSeparationE(segs: readonly { wid: string; a: Vec2; b: Vec2 }[], sc: number): number {
+export function segSeparationE(segs: readonly WireSeg[], sc: number): number {
   const R = WIREP.sepR * sc
-  const N = 8
   let E = 0
   for (let i = 0; i < segs.length; i++) {
     for (let j = i + 1; j < segs.length; j++) {
       const A = segs[i]!, B = segs[j]!
       if (A.wid === B.wid) continue
-      if (Math.min(A.a.x, A.b.x) - R > Math.max(B.a.x, B.b.x) || Math.min(B.a.x, B.b.x) - R > Math.max(A.a.x, A.b.x)) continue
-      if (Math.min(A.a.y, A.b.y) - R > Math.max(B.a.y, B.b.y) || Math.min(B.a.y, B.b.y) - R > Math.max(A.a.y, A.b.y)) continue
-      for (let ki = 0; ki <= N; ki++) {
-        const ta = ki / N
-        const pa = { x: A.a.x + (A.b.x - A.a.x) * ta, y: A.a.y + (A.b.y - A.a.y) * ta }
-        for (let kj = 0; kj <= N; kj++) {
-          const tb = kj / N
-          const pb = { x: B.a.x + (B.b.x - B.a.x) * tb, y: B.a.y + (B.b.y - B.a.y) * tb }
-          const d = Math.hypot(pa.x - pb.x, pa.y - pb.y)
-          if (d < R) E += (WIREP.sepSlope * (R - d) * (R - d)) / R / (N * N)
-        }
-      }
+      E += segPairSepE(A, B, R)
     }
   }
+  return E
+}
+
+/** The separation energy BETWEEN two wires' segment sets (no same-wire skip —
+    the caller guarantees distinct wires). The incremental delta re-evaluates
+    exactly the wire pairs a move touches; this is their exact cross contribution. */
+export function segSeparationBetween(segsA: readonly { a: Vec2; b: Vec2 }[], segsB: readonly { a: Vec2; b: Vec2 }[], sc: number): number {
+  const R = WIREP.sepR * sc
+  let E = 0
+  for (const A of segsA) for (const B of segsB) E += segPairSepE(A, B, R)
   return E
 }
 
