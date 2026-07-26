@@ -179,41 +179,40 @@ function existsProp(
     rootBranches.filter((region) => region !== forward),
     'True-to-P branch',
   )
-  const inner = exactlyOne(
-    directCuts(recorder.diagram, forward),
-    'inner substitution scope',
+  const reverseInner = exactlyOne(
+    directCuts(recorder.diagram, reverse),
+    'inner witness scope',
   )
-  const pOccurrence = exactlyOne(
-    directNodes(recorder.diagram, forward),
-    'reified P occurrence',
+  const originalWitness = exactlyOne(
+    directNodes(recorder.diagram, reverseInner),
+    'original witness occurrence',
   )
 
   before = recorder.diagram
-  recorder.record('introduce pending proposition X', {
+  recorder.record('introduce pending proposition X in witness branch', {
     rule: 'vacuousIntro',
-    scope: forward,
+    scope: reverse,
     sig: PROPOSITION,
   })
-  const x = onlyNewWire(before, recorder.diagram, forward)
+  const x = onlyNewWire(before, recorder.diagram, reverse)
 
   before = recorder.diagram
   recorder.record('connect reified P to pending X', {
     rule: 'identityInsert',
-    region: forward,
+    region: reverse,
     wires: [p, x],
   })
-  const connection = onlyNewNode(before, recorder.diagram, forward)
+  const connection = onlyNewNode(before, recorder.diagram, reverse)
 
-  before = recorder.diagram
-  recorder.record('iterate connected P occurrence inward as X', {
+  recorder.record('iterate witness occurrence as X', {
     rule: 'iteration',
     sel: {
-      region: forward,
+      region: reverseInner,
       regions: [],
-      nodes: [pOccurrence],
+      nodes: [originalWitness],
       wires: [],
     },
-    target: inner,
+    target: reverseInner,
     retargets: [{
       boundary: 0,
       identity: connection,
@@ -221,29 +220,24 @@ function existsProp(
       to: x,
     }],
   })
-  const innerX = onlyNewNode(before, recorder.diagram, inner)
 
-  recorder.record('replace inner X occurrence with blank', {
-    rule: 'erasure',
-    sel: {
-      region: inner,
-      regions: [],
-      nodes: [innerX],
-      wires: [],
-    },
+  recorder.record('discharge P-to-X connection', {
+    rule: 'wireJoin',
+    a: p,
+    b: x,
   })
-  recorder.record('remove spent biconditional and connection scaffold', {
+  recorder.record('expose original and substituted witnesses', {
+    rule: 'doubleCutElim',
+    region: reverse,
+  })
+  recorder.record('remove unused branch and original witness', {
     rule: 'erasure',
     sel: {
       region: recorder.diagram.root,
       regions: [forward],
-      nodes: [],
+      nodes: [originalWitness],
       wires: [],
     },
-  })
-  recorder.record('remove final double cut around witness P', {
-    rule: 'doubleCutElim',
-    region: reverse,
   })
 
   let target = emptyGraph()

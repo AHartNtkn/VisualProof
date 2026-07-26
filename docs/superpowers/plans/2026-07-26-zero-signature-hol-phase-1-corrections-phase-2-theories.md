@@ -226,12 +226,17 @@ existsProp : Exists X : rel(). X
 Both theorem sides are closed diagrams. Record this proof:
 
 1. Reify the empty sheet, obtaining fresh `P : rel()` with `P <-> True`.
-2. Establish `Exists P. P <-> True`.
-3. Connect that `P` to the pending proposition wire `X`.
-4. Iterate the connected reified occurrence into the required inner scope.
-5. Replace the inner `X` occurrence with the empty sheet using ordinary moves.
-6. Remove the biconditional, cuts, and temporary identity/wire scaffolding.
-7. Finish with exactly `Exists X. X`.
+2. Unfold the exact definition and introduce pending `X` in the negative
+   `True -> P` branch.
+3. Connect `P` to `X` there with ordinary identity insertion.
+4. Identity-retarget the inner witness occurrence through iteration, creating a
+   distinct occurrence attached to `X`.
+5. Join the gated branch-local `X` into `P`, discharging the temporary identity
+   while preserving the iteration-created occurrence.
+6. Eliminate the branch's double cut, exposing both original and substituted
+   occurrences.
+7. Positively erase the unused `P -> True` branch and the original occurrence.
+8. Finish with exactly the iteration-created `Exists X. X` occurrence.
 
 Add the ordinary equality/disequality contradiction theorem to the same dependency
 prefix. It must record the law of noncontradiction all-forward from blank using
@@ -241,8 +246,11 @@ normal logic and no identity-specific contradiction primitive.
 
 - `checkTheorem` replays both theorems.
 - `existsProp` has empty DWB boundaries and a nullary relation witness.
-- Replay observes reified `P`, connection to `X`, iteration into the inner scope,
-  and final cleanup.
+- Replay observes reified `P`, connection to `X`, the distinct
+  iteration-created occurrence, identity discharge, exposure of both
+  occurrences, and cleanup leaving only the created occurrence.
+- Removing only the iteration must let later actions replay to a non-RHS result;
+  the displaced four-step no-substitution subsequence must also fail.
 - JSON round-trip re-verifies.
 - Exact reification definitions spawn forward at positive root and nested scopes;
   ordinary refs and malformed lookalikes do not.
@@ -500,7 +508,8 @@ stash.
   construction. Only a stored definition matching that graph may bypass ordinary
   ref polarity and spawn at every scope.
 - Extensionality and comprehension are unavailable as grammar or kernel authority.
-- `existsProp : Exists X. X` is replayable and serialized.
+- `existsProp : Exists X. X` is replayable and serialized, and its sole final
+  atom has provenance from the identity-retargeted iteration.
 - `buildFregeTheory()` verifies the logical prefix and all eight arithmetic
   theorems.
 - Arithmetic statements are closed and inline the selected hypotheses.

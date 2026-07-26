@@ -837,9 +837,9 @@ describe('logical and reification theorem prefix', () => {
       'vacuousIntro',
       'identityInsert',
       'iteration',
-      'erasure',
-      'erasure',
+      'wireJoin',
       'doubleCutElim',
+      'erasure',
     ])
 
     const snapshots: Diagram[] = []
@@ -876,30 +876,40 @@ describe('logical and reification theorem prefix', () => {
         directNodes(unfolded, cut).length === 1),
       'one P-to-True branch',
     )
-    const inner = exactOne(
-      directCuts(unfolded, forward),
-      'one inner substitution scope',
+    const reverse = exactOne(
+      directCuts(unfolded, unfolded.root).filter((cut) =>
+        cut !== forward),
+      'one True-to-P branch',
+    )
+    const reverseInner = exactOne(
+      directCuts(unfolded, reverse),
+      'one inner witness scope',
     )
     const pOccurrence = exactOne(
       directNodes(unfolded, forward),
       'one reified P occurrence',
     )
     expect(endpointWire(unfolded, pOccurrence, 'head')).toBe(p)
+    const originalWitness = exactOne(
+      directNodes(unfolded, reverseInner),
+      'one original witness occurrence',
+    )
+    expect(endpointWire(unfolded, originalWitness, 'head')).toBe(p)
 
     const pending = snapshots[2]!
     const x = exactOne(
-      scopedWires(pending, forward),
+      scopedWires(pending, reverse),
       'one pending X wire',
     )
     expect(pending.wires[x]).toMatchObject({
-      scope: forward,
+      scope: reverse,
       sig: relSig([]),
       endpoints: [],
     })
 
     const connected = snapshots[3]!
     const connection = exactOne(
-      directNodes(connected, forward).filter((node) =>
+      directNodes(connected, reverse).filter((node) =>
         connected.nodes[node]!.kind === 'identity'),
       'one explicit P-to-X connection',
     )
@@ -910,37 +920,114 @@ describe('logical and reification theorem prefix', () => {
 
     const iterated = snapshots[4]!
     const innerX = exactOne(
-      directNodes(iterated, inner),
-      'one iterated inner X occurrence',
+      directNodes(iterated, reverseInner).filter((node) =>
+        node !== originalWitness),
+      'one iteration-created X occurrence',
     )
     expect(iterated.nodes[innerX]).toMatchObject({
       kind: 'atom',
-      region: inner,
+      region: reverseInner,
       sig: relSig([]),
     })
     expect(endpointWire(iterated, innerX, 'head')).toBe(x)
 
-    const replaced = snapshots[5]!
-    expect(directNodes(replaced, inner)).toEqual([])
-    expect(replaced.regions[inner]).toBeDefined()
+    const discharged = snapshots[5]!
+    expect(discharged.wires[x]).toBeUndefined()
+    expect(discharged.nodes[connection]).toBeUndefined()
+    expect(discharged.nodes[innerX]).toBeDefined()
+    expect(endpointWire(discharged, innerX, 'head')).toBe(p)
 
-    const cleaned = snapshots[6]!
-    expect(cleaned.regions[forward]).toBeUndefined()
-    expect(cleaned.wires[x]).toBeUndefined()
-    expect(Object.values(cleaned.nodes).some((node) =>
-      node.kind === 'identity' || node.kind === 'ref')).toBe(false)
+    const exposed = snapshots[6]!
+    expect(exposed.regions[reverse]).toBeUndefined()
+    expect(exposed.nodes[originalWitness]).toMatchObject({
+      kind: 'atom',
+      region: exposed.root,
+    })
+    expect(exposed.nodes[innerX]).toMatchObject({
+      kind: 'atom',
+      region: exposed.root,
+    })
 
     const finished = snapshots[7]!
+    expect(finished.regions[forward]).toBeUndefined()
+    expect(finished.nodes[originalWitness]).toBeUndefined()
+    expect(finished.nodes[innerX]).toMatchObject({
+      kind: 'atom',
+      region: finished.root,
+      sig: relSig([]),
+    })
+    expect(endpointWire(finished, innerX, 'head')).toBe(p)
     expect(Object.values(finished.regions)).toEqual([{ kind: 'sheet' }])
-    expect(Object.values(finished.nodes)).toEqual([
-      expect.objectContaining({ kind: 'atom', sig: relSig([]) }),
-    ])
+    expect(Object.keys(finished.nodes)).toEqual([innerX])
     expect(Object.values(finished.wires)).toEqual([
       expect.objectContaining({
         scope: finished.root,
         sig: relSig([]),
       }),
     ])
+  })
+
+  it('requires the substitution segment to reach existsProp', () => {
+    const theory = buildFregeTheory()
+    const ordinary = theoremByName(
+      theory.theorems,
+      'ordinaryEqualityContradiction',
+    )
+    const theorem = theoremByName(theory.theorems, 'existsProp')
+    const context = registerTheorem(verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    }), ordinary)
+    const iterationIndex = theorem.actions.findIndex((action) =>
+      action.steps.length === 1
+      && action.steps[0]?.rule === 'iteration')
+    expect(iterationIndex).toBeGreaterThanOrEqual(0)
+
+    const ablatedActions = theorem.actions.filter((_, index) =>
+      index !== iterationIndex)
+    const ablatedResult = replayActions(
+      theorem.lhs.diagram,
+      ablatedActions,
+      context,
+    )
+    expect(Object.keys(ablatedResult.nodes)).toEqual([])
+    expect(Object.values(ablatedResult.wires).every((wire) =>
+      wire.endpoints.length === 0)).toBe(true)
+    expect(exploreForm(ablatedResult))
+      .not.toBe(exploreForm(theorem.rhs.diagram))
+    expect(() => checkTheorem({
+      ...theorem,
+      actions: ablatedActions,
+    }, context)).toThrowError(
+      /proof does not arrive at the stated right-hand side/i,
+    )
+
+    const shortcutActions = theorem.actions.filter((action) =>
+      action.steps[0]?.rule === 'refSpawn'
+      || action.steps[0]?.rule === 'unfold'
+      || action.steps[0]?.rule === 'doubleCutElim'
+      || action.steps[0]?.rule === 'erasure')
+    expect(shortcutActions.flatMap((action) =>
+      action.steps.map((step) => step.rule))).toEqual([
+      'refSpawn',
+      'unfold',
+      'doubleCutElim',
+      'erasure',
+    ])
+    const shortcutResult = replayActions(
+      theorem.lhs.diagram,
+      shortcutActions,
+      context,
+    )
+    expect(Object.keys(shortcutResult.nodes)).toEqual([])
+    expect(exploreForm(shortcutResult))
+      .not.toBe(exploreForm(theorem.rhs.diagram))
+    expect(() => checkTheorem({
+      ...theorem,
+      actions: shortcutActions,
+    }, context)).toThrowError(
+      /proof does not arrive at the stated right-hand side/i,
+    )
   })
 
   it('round-trips and re-verifies every theorem against its prior prefix', () => {

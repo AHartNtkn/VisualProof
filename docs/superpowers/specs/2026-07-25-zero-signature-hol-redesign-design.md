@@ -53,6 +53,10 @@ deletions.
 >    requires a negative region forward and the dual positive region backward.
 >    The checker and contextual action discovery enforce the same matrix, so a
 >    backward-negative insertion cannot fabricate a theorem.
+> 9. **The `existsProp` substitution trace is causal.** Its final atom is the
+>    occurrence created by identity-retargeted iteration; the original witness
+>    and unused biconditional branch are erased. Removing that iteration, or the
+>    whole substitution segment, no longer reaches the theorem RHS.
 
 ## Motivation
 
@@ -190,10 +194,12 @@ than reproving them.
 The minimal higher-order substitution demonstration is
 `existsProp : Exists X : rel(). X`. It reifies the empty assertion with the same
 grammatical construction, connects its checked fresh witness to a pending `X`,
-iterates that connected occurrence inward, erases the inner occurrence only in a
-forward-positive scope, cleans the temporary identity/wire and biconditional
-scaffolding, and finishes as `Exists X. X`. It is a kernel-verified theorem, not a
-primitive instantiation or a backward-erasure shortcut.
+creates an identity-retargeted copy in the inner witness scope, discharges the
+temporary connection, exposes the original and substituted occurrences, and
+erases the original witness with the unused biconditional branch. The sole final
+atom is the iteration-created occurrence. It is a kernel-verified theorem, not a
+primitive instantiation, a decorative substitution trace, or a backward-erasure
+shortcut.
 
 - **Standing hypotheses = exactly what the target theorems invoke.** A property is
   in the baseline iff some target proof uses it — the only criterion, and one
