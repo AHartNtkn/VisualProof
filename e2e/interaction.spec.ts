@@ -1,4 +1,10 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import {
+  expect,
+  loadTinyTheory,
+  test,
+  type TheoryFiles,
+} from './zero-signature-fixture'
 
 type Point = { readonly x: number; readonly y: number }
 type Hit = { readonly kind: 'node' | 'region' | 'wire'; readonly id: string }
@@ -21,18 +27,21 @@ type DebugHook = {
   view(): { readonly scale: number; readonly offsetX: number; readonly offsetY: number }
   bodies(): readonly Body[]
   regions(): readonly { id: string; kind: string; x: number; y: number; r: number }[]
+  wires(): readonly { id: string; x: number; y: number }[]
+  wireBinds(): readonly { id: string; node: string; x: number; y: number }[]
   editForm(): string
   interaction(): InteractionDebug
 }
 
 type DebugWindow = Window & { __vpaDebug?: DebugHook }
 
-async function openApp(page: Page): Promise<void> {
+async function openApp(page: Page, files: TheoryFiles): Promise<void> {
   await page.goto('/?debug')
   await page.waitForFunction(() => {
     const debug = (window as DebugWindow).__vpaDebug
     return debug !== undefined && typeof debug.interaction === 'function'
   })
+  await loadTinyTheory(page, files)
 }
 
 async function openMode(page: Page): Promise<void> {
@@ -40,31 +49,52 @@ async function openMode(page: Page): Promise<void> {
   if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click()
 }
 
-async function addTerm(page: Page, source: string): Promise<void> {
+async function addRef(page: Page): Promise<void> {
   const box = await page.locator('#c').boundingBox()
   if (box === null) throw new Error('the main canvas has no bounding box')
-  const count = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().filter((body) => body.kind === 'term').length)
+  const count = await page.evaluate(() =>
+    (window as DebugWindow).__vpaDebug!.bodies().filter((body) => body.kind === 'ref').length)
   await page.mouse.click(
     box.x + box.width * (0.38 + (count % 3) * 0.12),
     box.y + box.height * (0.42 + (Math.floor(count / 3) % 2) * 0.14),
     { button: 'right' },
   )
-  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
-  const input = page.getByLabel('Lambda term to spawn')
-  await input.fill(source)
-  await input.press('Enter')
+  const search = page.getByLabel('Search relation references to spawn')
+  await search.fill('UnaryWitness')
+  await search.press('Enter')
 }
 
-async function addTwoTerms(page: Page): Promise<readonly [string, string]> {
-  await addTerm(page, '\\x. x')
-  await addTerm(page, '\\y. y')
+async function addTwoRefs(page: Page): Promise<readonly [string, string]> {
+  await addRef(page)
+  await addRef(page)
   await expect.poll(async () => page.evaluate(() =>
-    (window as DebugWindow).__vpaDebug!.bodies().filter((body) => body.kind === 'term').length,
+    (window as DebugWindow).__vpaDebug!.bodies().filter((body) => body.kind === 'ref').length,
   )).toBe(2)
+  const box = await page.locator('#c').boundingBox()
+  if (box === null) throw new Error('the main canvas has no bounding box')
+  const endpoints = await page.evaluate(() => {
+    const debug = (window as DebugWindow).__vpaDebug!
+    const source = debug.wireBinds()[0]
+    if (source === undefined) throw new Error('the first ref has no rendered wire binding')
+    const target = debug.wires().find((wire) => wire.id !== source.id)
+    if (target === undefined) throw new Error('the second ref has no rendered loose wire')
+    const view = debug.view()
+    const screen = (point: { readonly x: number; readonly y: number }) => ({
+      x: point.x * view.scale + view.offsetX,
+      y: point.y * view.scale + view.offsetY,
+    })
+    return { source: screen(source), target: screen(target) }
+  })
+  await page.mouse.move(box.x + endpoints.source.x, box.y + endpoints.source.y)
+  await page.mouse.down()
+  await page.mouse.move(box.x + endpoints.target.x, box.y + endpoints.target.y, { steps: 10 })
+  await page.mouse.up()
+  await expect.poll(() => page.evaluate(() =>
+    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(2)
   await waitForRest(page)
   const ids = await page.evaluate(() =>
     (window as DebugWindow).__vpaDebug!.bodies()
-      .filter((body) => body.kind === 'term')
+      .filter((body) => body.kind === 'ref')
       .sort((a, b) => a.x - b.x)
       .map((body) => body.id),
   )
@@ -149,9 +179,9 @@ async function physicsDrag(
   if (!pinOnRelease) await page.keyboard.up('Control')
 }
 
-test('brush adds and removes nodes, may start in the void, and a void click clears', async ({ page }) => {
-  await openApp(page)
-  const [leftId, rightId] = await addTwoTerms(page)
+test('brush adds and removes nodes, may start in the void, and a void click clears', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const [leftId, rightId] = await addTwoRefs(page)
   const left = await pagePointForBody(page, leftId)
   const right = await pagePointForBody(page, rightId)
 
@@ -179,9 +209,9 @@ test('brush adds and removes nodes, may start in the void, and a void click clea
   await expect.poll(async () => selected(page)).toEqual([])
 })
 
-test('plain and Shift drags are selection-only while Ctrl-drag is physics-only', async ({ page }) => {
-  await openApp(page)
-  const [leftId, rightId] = await addTwoTerms(page)
+test('plain and Shift drags are selection-only while Ctrl-drag is physics-only', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const [leftId, rightId] = await addTwoRefs(page)
   const semanticBefore = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editForm())
 
   const left = await pagePointForBody(page, leftId)
@@ -227,9 +257,9 @@ test('plain and Shift drags are selection-only while Ctrl-drag is physics-only',
   expect(await pins(page)).toEqual([])
 })
 
-test('changing visible selection cancels a pending operation with an older source', async ({ page }) => {
-  await openApp(page)
-  const [leftId, rightId] = await addTwoTerms(page)
+test('changing visible selection cancels a pending operation with an older source', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const [leftId, rightId] = await addTwoRefs(page)
   const left = await pagePointForBody(page, leftId)
   const right = await pagePointForBody(page, rightId)
 
@@ -268,9 +298,9 @@ test('changing visible selection cancels a pending operation with an older sourc
   await expect(page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true })).toBeVisible()
 })
 
-test('release order controls a node pin and moving it preserves unrelated pins', async ({ page }) => {
-  await openApp(page)
-  const [leftId, rightId] = await addTwoTerms(page)
+test('release order controls a node pin and moving it preserves unrelated pins', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const [leftId, rightId] = await addTwoRefs(page)
 
   let left = await pagePointForBody(page, leftId)
   await physicsDrag(page, left, { x: left.x - 45, y: left.y + 25 }, true)
@@ -297,7 +327,7 @@ test('release order controls a node pin and moving it preserves unrelated pins',
   await page.mouse.move(left.x, left.y)
   await page.mouse.wheel(0, -450)
   const focusedView = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.view())
-  await addTerm(page, '\\z. z')
+  await addRef(page)
   await expect.poll(async () => [...await pins(page)].sort()).toEqual([leftId, rightId].sort())
   const reconciledView = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.view())
   expect(Math.abs(reconciledView.scale - focusedView.scale)).toBeLessThan(0.001)
@@ -305,11 +335,11 @@ test('release order controls a node pin and moving it preserves unrelated pins',
   expect(Math.abs(reconciledView.offsetY - focusedView.offsetY)).toBeLessThan(0.1)
 })
 
-test('moving brush uses the cut ring and a cut drag can never create a node pin', async ({ page }) => {
-  await openApp(page)
-  await addTerm(page, '\\x. x')
+test('moving brush uses the cut ring and a cut drag can never create a node pin', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  await addRef(page)
   await waitForRest(page)
-  const nodeId = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const nodeId = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   const node = await pagePointForBody(page, nodeId)
   await page.mouse.click(node.x, node.y)
   await page.keyboard.press('w')
@@ -318,7 +348,7 @@ test('moving brush uses the cut ring and a cut drag can never create a node pin'
   const geometry = await page.evaluate(() => {
     const debug = (window as DebugWindow).__vpaDebug!
     const cut = debug.regions().find((region) => region.kind === 'cut')!
-    const body = debug.bodies().find((candidate) => candidate.kind === 'term')!
+    const body = debug.bodies().find((candidate) => candidate.kind === 'ref')!
     const view = debug.view()
     const angle = Math.atan2(cut.y - body.y, cut.x - body.x)
     const point = (distance: number) => ({
@@ -349,11 +379,11 @@ test('moving brush uses the cut ring and a cut drag can never create a node pin'
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
-test('pointer-up is an authoritative physics sample without an intermediate move event', async ({ page }) => {
-  await openApp(page)
-  await addTerm(page, '\\x. x')
+test('pointer-up is an authoritative physics sample without an intermediate move event', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  await addRef(page)
   await waitForRest(page)
-  const id = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const id = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   const start = await pagePointForBody(page, id)
   const target = { x: start.x + 10, y: start.y + 35 }
   const cdp = await page.context().newCDPSession(page)
@@ -373,9 +403,9 @@ test('pointer-up is an authoritative physics sample without an intermediate move
   expect(Math.hypot(dropped.x - target.x, dropped.y - target.y)).toBeLessThan(25)
 })
 
-test('pointer cancellation rolls selection, body position, and released pins back', async ({ page }) => {
-  await openApp(page)
-  const [leftId, rightId] = await addTwoTerms(page)
+test('pointer cancellation rolls selection, body position, and released pins back', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const [leftId, rightId] = await addTwoRefs(page)
   let left = await pagePointForBody(page, leftId)
   await physicsDrag(page, left, { x: left.x - 30, y: left.y + 15 }, true)
   await expect.poll(async () => pins(page)).toEqual([leftId])
@@ -413,15 +443,15 @@ test('pointer cancellation rolls selection, body position, and released pins bac
   await expect.poll(async () => selected(page)).toEqual([])
 })
 
-test('a logical surface change resets interaction even when it reuses the same diagram object', async ({ page }) => {
-  await openApp(page)
-  await addTerm(page, '\\x. x')
+test('a logical surface change resets interaction even when it reuses the same diagram object', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  await addRef(page)
   await waitForRest(page)
   await openMode(page)
   await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
 
-  const id = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const id = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   let node = await pagePointForBody(page, id)
   await physicsDrag(page, node, { x: node.x + 25, y: node.y + 20 }, true)
   await expect.poll(async () => pins(page)).toEqual([id])
@@ -447,9 +477,9 @@ test('a logical surface change resets interaction even when it reuses the same d
   expect(Math.hypot(reset.offsetX - focused.offsetX, reset.offsetY - focused.offsetY)).toBeGreaterThan(5)
 })
 
-test('wheel zoom stays under the cursor and cannot zoom out beyond full-boundary fit', async ({ page }) => {
-  await openApp(page)
-  const [leftId] = await addTwoTerms(page)
+test('wheel zoom stays under the cursor and cannot zoom out beyond full-boundary fit', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const [leftId] = await addTwoRefs(page)
   const box = await page.locator('#c').boundingBox()
   if (box === null) throw new Error('the main canvas has no bounding box')
 

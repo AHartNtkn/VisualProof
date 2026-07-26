@@ -1,23 +1,21 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, loadTinyTheory, test, type TheoryFiles } from './zero-signature-fixture'
+import type { Page } from '@playwright/test'
 
 type Hit = { readonly kind: 'node' | 'region' | 'wire'; readonly id: string }
 type Debug = {
   nodeCount(): number
   view(): { scale: number; offsetX: number; offsetY: number }
   bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
-  fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]
-  interactionOverlays(): string[]
-  feedback(): { refusal: null | { text: string }; problems: readonly unknown[] }
   regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
   wires(): { id: string; x: number; y: number; dx: number; dy: number }[]
   wireBinds(): { id: string; node: string; x: number; y: number }[]
+  interactionOverlays(): string[]
   interaction(): { selected: readonly Hit[] }
   diagram(): {
-    nodes: { id: string; kind: string; region: string; defId: string | null; headWire: string | null }[]
+    nodes: { id: string; kind: string; region: string }[]
     wires: { id: string; scope: string; endpoints: number }[]
     regions: { id: string; kind: string; parent: string | null }[]
   }
-  spawnHeadWireHover(): string | null
   dispose(): void
 }
 
@@ -25,14 +23,10 @@ declare global {
   interface Window { __vpaDebug?: Debug }
 }
 
-async function openApp(page: Page): Promise<void> {
+async function openApp(page: Page, files: TheoryFiles): Promise<void> {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
-}
-
-async function openMode(page: Page): Promise<void> {
-  const trigger = page.getByRole('button', { name: /Mode:/ })
-  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click()
+  await loadTinyTheory(page, files)
 }
 
 async function canvasBox(page: Page) {
@@ -41,7 +35,25 @@ async function canvasBox(page: Page) {
   return box
 }
 
-async function spawnTerm(page: Page, source: string, at?: { x: number; y: number }): Promise<void> {
+async function pagePoint(page: Page, world: { x: number; y: number }) {
+  const box = await canvasBox(page)
+  const view = await page.evaluate(() => window.__vpaDebug!.view())
+  return {
+    x: box.x + world.x * view.scale + view.offsetX,
+    y: box.y + world.y * view.scale + view.offsetY,
+  }
+}
+
+async function bodyPoint(page: Page, id: string) {
+  const body = await page.evaluate((node) =>
+    window.__vpaDebug!.bodies().find((candidate) => candidate.id === node)!, id)
+  return pagePoint(page, body)
+}
+
+async function spawnRef(
+  page: Page,
+  at?: { readonly x: number; readonly y: number },
+): Promise<void> {
   const box = await canvasBox(page)
   const count = await page.evaluate(() => window.__vpaDebug!.nodeCount())
   const invocation = at ?? {
@@ -49,242 +61,58 @@ async function spawnTerm(page: Page, source: string, at?: { x: number; y: number
     y: box.y + box.height * (0.40 + (Math.floor(count / 3) % 2) * 0.16),
   }
   await page.mouse.click(invocation.x, invocation.y, { button: 'right' })
-  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
-  const input = page.getByLabel('Lambda term to spawn')
-  await input.fill(source)
-  await input.press('Enter')
-}
-
-async function pagePoint(page: Page, world: { x: number; y: number }) {
-  const box = await canvasBox(page)
-  const view = await page.evaluate(() => window.__vpaDebug!.view())
-  return { x: box.x + world.x * view.scale + view.offsetX, y: box.y + world.y * view.scale + view.offsetY }
-}
-
-async function bodyPoint(page: Page, id: string) {
-  const body = await page.evaluate((node) => window.__vpaDebug!.bodies().find((candidate) => candidate.id === node)!, id)
-  return pagePoint(page, body)
+  const search = page.getByLabel('Search relation references to spawn')
+  await search.fill('UnaryWitness')
+  await search.press('Enter')
 }
 
 async function waitForNodes(page: Page, count: number): Promise<void> {
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(count)
-  await waitForRest(page)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(count)
 }
 
-async function waitForRest(page: Page): Promise<void> {
-  let previous = ''
-  let stable = 0
-  await expect.poll(async () => {
-    const signature = await page.evaluate(() => JSON.stringify({
-      bodies: window.__vpaDebug!.bodies().map((body) => [body.id, Math.round(body.x * 2), Math.round(body.y * 2)]),
-      regions: window.__vpaDebug!.regions().map((region) => [region.id, Math.round(region.x * 2), Math.round(region.y * 2), Math.round(region.r * 2)]),
-      wires: window.__vpaDebug!.wires().map((wire) => [wire.id, Math.round(wire.x * 2), Math.round(wire.y * 2)]),
-    }))
-    stable = signature === previous ? stable + 1 : 0
-    previous = signature
-    return stable
-  }, { timeout: 30_000, intervals: [150, 200, 250] }).toBeGreaterThanOrEqual(3)
-}
-
-test('fission pulls an exact internal subterm in Edit while Ctrl remains physics-only', async ({ page }) => {
-  const pageErrors: string[] = []
-  page.on('pageerror', (error) => { pageErrors.push(error.message) })
-  await openApp(page)
-  await spawnTerm(page, 'a ((\\x. x) b)')
+test('the structural spawn cascade is disposable and preserves selection', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  await spawnRef(page)
   await waitForNodes(page, 1)
-  const target = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
-    .find((candidate) => candidate.path.join('/') === 'arg')!)
-  const start = await pagePoint(page, target)
-  await page.mouse.move(start.x, start.y)
-  await expect.poll(() => page.evaluate(() => {
-    const kinds = window.__vpaDebug!.interactionOverlays()
-    return kinds.length > 0 && kinds.includes('arc') && !kinds.includes('circle')
-  })).toBe(true)
-  const canvas = await canvasBox(page)
-  await page.mouse.move(canvas.x + canvas.width + 5, canvas.y + canvas.height / 2)
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toEqual([])
-  await page.mouse.move(start.x, start.y)
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays().includes('arc'))).toBe(true)
-
-  const destination = await pagePoint(page, { x: target.dropX, y: target.dropY })
-  await page.mouse.move(start.x, start.y)
-  await page.mouse.down()
-  await page.mouse.move(destination.x, destination.y, { steps: 5 })
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays().includes('arc'))).toBe(true)
-  await page.mouse.up()
-  expect(pageErrors).toEqual([])
-  const immediate = await page.evaluate(() => ({
-    count: window.__vpaDebug!.nodeCount(),
-    refusal: window.__vpaDebug!.feedback().refusal?.text ?? null,
-    overlays: window.__vpaDebug!.interactionOverlays(),
-  }))
-  expect(immediate).toEqual({ count: 2, refusal: null, overlays: [] })
-  await page.keyboard.press('Control+z')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
-  const blurTarget = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
-    .find((candidate) => candidate.path.join('/') === 'arg')!)
-  const blurStart = await pagePoint(page, blurTarget)
-  const blurDrop = await pagePoint(page, { x: blurTarget.dropX, y: blurTarget.dropY })
-  await page.mouse.move(blurStart.x, blurStart.y)
-  await page.mouse.down()
-  await page.mouse.move(blurDrop.x, blurDrop.y, { steps: 4 })
-  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
-  await page.mouse.up()
-  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
-  expect(await page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toEqual([])
-  const ctrlTarget = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
-    .find((candidate) => candidate.path.join('/') === 'arg')!)
-  const ctrlStart = await pagePoint(page, ctrlTarget)
-  await page.keyboard.down('Control')
-  await page.mouse.move(ctrlStart.x, ctrlStart.y)
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toEqual([])
-  await page.mouse.down()
-  await page.mouse.move(ctrlStart.x + 35, ctrlStart.y + 20, { steps: 4 })
-  await page.mouse.up()
-  await page.keyboard.up('Control')
-  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
-
-  await waitForRest(page)
-  const root = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
-    .find((candidate) => candidate.path.length === 0)!)
-  const rootStart = await pagePoint(page, root)
-  const rootDrop = await pagePoint(page, { x: root.dropX, y: root.dropY })
-  await page.mouse.move(rootStart.x, rootStart.y)
-  await page.mouse.down()
-  await page.mouse.move(rootDrop.x, rootDrop.y, { steps: 5 })
-  await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
-  await page.keyboard.press('Control+z')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
-  await page.keyboard.press('Control+Shift+z')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
-})
-
-test('the contextual spawn cascade is disposable and preserves the construction selection', async ({ page }) => {
-  await openApp(page)
-  await spawnTerm(page, '\\x. x')
-  await waitForNodes(page, 1)
-  const node = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const node = await page.evaluate(() =>
+    window.__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   const nodeAt = await bodyPoint(page, node)
   await page.mouse.click(nodeAt.x, nodeAt.y)
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: node }])
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected))
+    .toEqual([{ kind: 'node', id: node }])
 
   const box = await canvasBox(page)
-  const invoke = { x: box.x + box.width * 0.72, y: box.y + box.height * 0.68 }
-  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
-  await expect(page.locator('.vpa-spawn-column')).toBeVisible()
-  expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: node }])
+  const invocation = {
+    x: box.x + box.width * 0.72,
+    y: box.y + box.height * 0.68,
+  }
+  await page.mouse.click(invocation.x, invocation.y, { button: 'right' })
+  await expect(page.locator('.vpa-spawn-cascade')).toBeVisible()
+  expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected))
+    .toEqual([{ kind: 'node', id: node }])
   await page.keyboard.press('Escape')
-  await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
+  await expect(page.locator('.vpa-spawn-cascade')).toHaveCount(0)
 
-  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await page.mouse.click(invocation.x, invocation.y, { button: 'right' })
   await page.locator('.vpa-spawn-backdrop').click({ position: { x: 4, y: 4 } })
-  await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
+  await expect(page.locator('.vpa-spawn-cascade')).toHaveCount(0)
 
-  await spawnTerm(page, '\\y. y', invoke)
+  await spawnRef(page, invocation)
   await waitForNodes(page, 2)
-  expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: node }])
+  expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected))
+    .toEqual([{ kind: 'node', id: node }])
 
   await page.evaluate(() => window.__vpaDebug!.dispose())
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug === undefined)).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug === undefined)).toBe(true)
   await expect(page.locator('#chrome')).toBeEmpty()
-  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
-  await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
+  await page.mouse.click(invocation.x, invocation.y, { button: 'right' })
+  await expect(page.locator('.vpa-spawn-cascade')).toHaveCount(0)
 })
 
-test('spawns, identifies, highlights, and undoes a predicate bound to the enclosing bubble', async ({ page }) => {
-  await openApp(page)
-  await spawnTerm(page, '\\x. x')
-  await waitForNodes(page, 1)
-  const term = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
-  const termAt = await bodyPoint(page, term)
-  await page.mouse.click(termAt.x, termAt.y)
-  await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('2')
-  await page.getByLabel('Bubble arity').press('Enter')
-  await waitForRest(page)
-  const bubble = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!)
-  const openAt = await pagePoint(page, { x: bubble.x + bubble.r * 0.55, y: bubble.y })
-  await page.mouse.click(openAt.x, openAt.y, { button: 'right' })
-
-  const option = page.locator('.vpa-spawn-bound-predicate')
-  await expect(option).toHaveCount(1)
-  await expect(option).toContainText('Bound predicate')
-  await expect(option).toContainText('/2')
-  await expect(page.locator('.vpa-spawn-relation-swatch')).toHaveCSS('background-color', /rgb/)
-  await option.hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBe(bubble.id)
-  await option.click()
-
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.diagram().nodes.filter((node) => node.kind === 'atom'))).toEqual([
-    expect.objectContaining({ kind: 'atom', region: bubble.id, headWire: bubble.id }),
-  ])
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBeNull()
-  expect((await page.evaluate(() => window.__vpaDebug!.diagram())).wires.filter((wire) =>
-    wire.scope === bubble.id && wire.endpoints === 1,
-  )).toHaveLength(3)
-
-  await page.keyboard.press('Control+z')
-  await expect.poll(() => page.evaluate(() =>
-    window.__vpaDebug!.diagram().nodes.some((node) => node.kind === 'atom'),
-  )).toBe(false)
-})
-
-test('nested bound-predicate choices identify their bubbles by order, color, and hover', async ({ page }) => {
-  await openApp(page)
-  await spawnTerm(page, '\\x. x')
-  await waitForNodes(page, 1)
-  const term = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
-  const termAt = await bodyPoint(page, term)
-  await page.mouse.click(termAt.x, termAt.y)
-  await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('1')
-  await page.getByLabel('Bubble arity').press('Enter')
-  await waitForRest(page)
-
-  const innerBefore = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!)
-  const innerInterior = await pagePoint(page, { x: innerBefore.x + innerBefore.r * 0.8, y: innerBefore.y })
-  await page.mouse.click(innerInterior.x, innerInterior.y)
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([
-    { kind: 'region', id: innerBefore.id },
-  ])
-  await page.keyboard.press('Shift+w')
-  await page.getByLabel('Bubble arity').fill('2')
-  await page.getByLabel('Bubble arity').press('Enter')
-  await waitForRest(page)
-
-  const bubbles = await page.evaluate(() => window.__vpaDebug!.regions().filter((region) => region.kind === 'bubble'))
-  const inner = bubbles.find((bubble) => bubble.parent !== 'r0')!
-  const outer = bubbles.find((bubble) => bubble.parent === 'r0')!
-  const invoke = await pagePoint(page, { x: inner.x + inner.r * 0.55, y: inner.y })
-  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
-
-  const rows = page.locator('.vpa-spawn-bound-predicate')
-  await expect(rows).toHaveCount(2)
-  await expect(rows.nth(0)).toContainText('Binder 1 (innermost)')
-  await expect(rows.nth(0)).toContainText('/1')
-  await expect(rows.nth(1)).toContainText('Binder 2 (outermost)')
-  await expect(rows.nth(1)).toContainText('/2')
-  const swatches = page.locator('.vpa-spawn-relation-swatch')
-  expect(await swatches.nth(0).evaluate((element) => getComputedStyle(element).backgroundColor))
-    .not.toBe(await swatches.nth(1).evaluate((element) => getComputedStyle(element).backgroundColor))
-
-  await rows.nth(0).hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBe(inner.id)
-  await rows.nth(1).hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBe(outer.id)
-  await page.getByLabel('Search relations to spawn').hover()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBeNull()
-  await rows.nth(0).hover()
-  await page.keyboard.press('Escape')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnHeadWireHover())).toBeNull()
-  await expect(rows).toHaveCount(0)
-})
-
-test('one selected Edit node uses the shared contextual copy gesture', async ({ page }) => {
-  await openApp(page)
-  await spawnTerm(page, '\\x. x')
-  await spawnTerm(page, '\\y. y')
+test('one selected structural ref uses the shared contextual copy gesture', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  await spawnRef(page)
+  await spawnRef(page)
   await waitForNodes(page, 2)
 
   const loose = await page.evaluate(() => window.__vpaDebug!.wires())
@@ -296,10 +124,12 @@ test('one selected Edit node uses the shared contextual copy gesture', async ({ 
   await page.mouse.down()
   await page.mouse.move(secondWire.x, secondWire.y, { steps: 10 })
   await page.mouse.up()
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints))).toEqual([2])
-  await waitForRest(page)
+  await expect.poll(() =>
+    page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints)))
+    .toEqual([2])
 
-  const bodies = await page.evaluate(() => window.__vpaDebug!.bodies().filter((body) => body.kind === 'term'))
+  const bodies = await page.evaluate(() =>
+    window.__vpaDebug!.bodies().filter((body) => body.kind === 'ref'))
   const held = bodies[0]!
   const neighbour = bodies[1]!
   const heldPoint = await bodyPoint(page, held.id)
@@ -308,125 +138,34 @@ test('one selected Edit node uses the shared contextual copy gesture', async ({ 
   await page.mouse.move(heldPoint.x, heldPoint.y)
   await page.mouse.down()
   await page.mouse.move(target.x, target.y)
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toContain('circle')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays()))
+    .toContain('circle')
   await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(3)
+  await waitForNodes(page, 3)
   expect(await page.evaluate(({ held, neighbour }) => {
     const ids = window.__vpaDebug!.diagram().nodes.map((node) => node.id)
     return ids.includes(held) && ids.includes(neighbour)
   }, { held: held.id, neighbour: neighbour.id })).toBe(true)
 })
 
-test('direct EDIT gestures wrap, copy, join, sever, and dissolve semantic objects', async ({ page }) => {
-  await openApp(page)
-  await spawnTerm(page, '\\x. x')
-  await spawnTerm(page, '\\y. y')
-  await spawnTerm(page, '\\z. z')
-  await waitForNodes(page, 3)
-  const ids = await page.evaluate(() => window.__vpaDebug!.bodies().filter((body) => body.kind === 'term').map((body) => body.id))
-
-  // W draws one construction cut around the current selection.
-  let at = await bodyPoint(page, ids[0]!)
-  await page.mouse.click(at.x, at.y)
-  await page.keyboard.press('w')
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().regions.filter((region) => region.kind === 'cut').length)).toBe(1)
-  const cut = await page.evaluate(() => window.__vpaDebug!.diagram().regions.find((region) => region.kind === 'cut')!)
-  expect((await page.evaluate(() => window.__vpaDebug!.diagram())).nodes.find((node) => node.id === ids[0])!.region).toBe(cut.id)
-
-  // Select, then drag: shared Edit copy creates a new node in the destination
-  // region and leaves the selected source in place.
-  at = await bodyPoint(page, ids[1]!)
-  await page.mouse.click(at.x, at.y)
-  const cutGeometry = await page.evaluate((id) => window.__vpaDebug!.regions().find((region) => region.id === id)!, cut.id)
-  const cutCenter = await pagePoint(page, cutGeometry)
-  await page.mouse.move(at.x, at.y)
-  await page.mouse.down()
-  await page.mouse.move(cutCenter.x, cutCenter.y, { steps: 12 })
-  await page.mouse.up()
-  await expect.poll(async () => page.evaluate(({ initial, region }) =>
-    window.__vpaDebug!.diagram().nodes.filter((node) => !initial.includes(node.id) && node.region === region).length,
-  { initial: ids, region: cut.id })).toBe(1)
-  expect(await page.evaluate((id) => window.__vpaDebug!.diagram().nodes.find((node) => node.id === id)!.region, ids[1]!)).toBe('r0')
-
-  // Shift-W requests the bubble's semantic arity at the point of use.
-  at = await bodyPoint(page, ids[2]!)
-  await page.mouse.click(at.x, at.y)
-  await page.keyboard.press('Shift+w')
-  const arity = page.getByLabel('Bubble arity')
-  await arity.fill('1')
-  await arity.press('Enter')
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().regions.filter((region) => region.kind === 'bubble').length)).toBe(1)
-
-  // J joins every selected line, including the copied and bubble-port lines.
-  await waitForRest(page)
-  const twoWires = await page.evaluate(() => {
-    const semantic = window.__vpaDebug!.diagram().wires.map((wire) => wire.id)
-    const rendered = window.__vpaDebug!.wires()
-    return semantic.map((id) => rendered.find((wire) => wire.id === id)!)
-  })
-  for (const wire of twoWires) {
-    const point = await pagePoint(page, wire)
-    await page.mouse.click(point.x, point.y)
-  }
-  await page.keyboard.press('j')
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints))).toEqual([4])
-
-  // A perpendicular right-drag across a real rendered leg severs one endpoint.
-  await waitForRest(page)
-  const joined = await page.evaluate(() => {
-    const semantic = window.__vpaDebug!.diagram().wires.find((wire) => wire.endpoints === 4)!
-    return window.__vpaDebug!.wires().find((wire) => wire.id === semantic.id)!
-  })
-  const joinedAt = await pagePoint(page, joined)
-  const length = Math.hypot(joined.dx, joined.dy)
-  const px = length === 0 ? 0 : -joined.dy / length * 24
-  const py = length === 0 ? 24 : joined.dx / length * 24
-  await page.mouse.move(joinedAt.x - px, joinedAt.y - py)
-  await page.mouse.down({ button: 'right' })
-  await page.mouse.move(joinedAt.x + px, joinedAt.y + py, { steps: 10 })
-  await page.mouse.up({ button: 'right' })
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints).sort())).toEqual([1, 3])
-
-  // Delete on a boundary dissolves it and promotes all unselected contents.
-  const liveCut = await page.evaluate((id) => window.__vpaDebug!.regions().find((region) => region.id === id)!, cut.id)
-  let selectedCut = false
-  const box = await canvasBox(page)
-  for (let i = 0; i < 24 && !selectedCut; i++) {
-    const angle = i * Math.PI * 2 / 24
-    const ring = await pagePoint(page, {
-      x: liveCut.x + Math.cos(angle) * liveCut.r,
-      y: liveCut.y + Math.sin(angle) * liveCut.r,
-    })
-    await page.mouse.click(ring.x, ring.y)
-    selectedCut = await page.evaluate((id) => window.__vpaDebug!.interaction().selected.some((hit) => hit.kind === 'region' && hit.id === id), cut.id)
-    if (!selectedCut) await page.mouse.click(box.x + 20, box.y + box.height - 20)
-  }
-  expect(selectedCut).toBe(true)
-  await page.keyboard.press('Delete')
-  await expect.poll(async () => page.evaluate((id) => window.__vpaDebug!.diagram().regions.some((region) => region.id === id), cut.id)).toBe(false)
-  const structure = await page.evaluate(() => window.__vpaDebug!.diagram())
-  expect(structure.nodes.filter((node) => ids.slice(0, 2).includes(node.id)).every((node) => node.region === 'r0')).toBe(true)
-})
-
-test('a contextual spawn inside a cut belongs to that cut', async ({ page }) => {
-  await openApp(page)
-  await spawnTerm(page, '\\x. x')
+test('a contextual structural spawn inside a cut belongs to that cut', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  await spawnRef(page)
   await waitForNodes(page, 1)
-  const original = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const original = await page.evaluate(() =>
+    window.__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   const originalAt = await bodyPoint(page, original)
   await page.mouse.click(originalAt.x, originalAt.y)
   await page.keyboard.press('w')
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().regions.filter((region) => region.kind === 'cut').length)).toBe(1)
-  await waitForRest(page)
+  await expect.poll(() =>
+    page.evaluate(() => window.__vpaDebug!.diagram().regions
+      .filter((region) => region.kind === 'cut').length)).toBe(1)
 
-  const cut = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'cut')!)
+  const cut = await page.evaluate(() =>
+    window.__vpaDebug!.regions().find((region) => region.kind === 'cut')!)
   const center = await pagePoint(page, cut)
-  await page.mouse.click(center.x, center.y, { button: 'right' })
-  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
-  const input = page.getByLabel('Lambda term to spawn')
-  await input.fill('\\y. y')
-  await input.press('Enter')
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
+  await spawnRef(page, center)
+  await waitForNodes(page, 2)
   const structure = await page.evaluate(() => window.__vpaDebug!.diagram())
   const added = structure.nodes.find((node) => node.id !== original)!
   expect(added.region).toBe(cut.id)
