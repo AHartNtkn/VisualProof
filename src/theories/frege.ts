@@ -1,9 +1,4 @@
-import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Theory } from '../kernel/proof/context'
-import {
-  emptyGraph,
-  finishDiagramWithBoundary,
-} from './graph'
 import {
   associativityInductionReification,
   commutativityInductionReification,
@@ -12,11 +7,9 @@ import {
   truthReification,
 } from './reification'
 import { buildLogicalTheoremPrefix } from './logic'
+import { natRelation } from './naturals'
 
-export function natRelation(): DiagramWithBoundary {
-  const graph = emptyGraph()
-  return finishDiagramWithBoundary(graph, [])
-}
+export { natRelation } from './naturals'
 
 export function buildFregeTheory(): Theory {
   const relations: Theory['relations'] = [
@@ -25,6 +18,7 @@ export function buildFregeTheory(): Theory {
     ['associativityInductionReification', associativityInductionReification()],
     ['successorShiftInductionReification', successorShiftInductionReification()],
     ['commutativityInductionReification', commutativityInductionReification()],
+    ['nat', natRelation()],
   ]
   return {
     relations,
