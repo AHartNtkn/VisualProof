@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, writeSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const MAX_LINES = 3000
@@ -42,15 +42,15 @@ const violations = maintainedTextFiles(process.cwd())
   .sort((left, right) => right.lines - left.lines)
 
 if (violations.length > 0) {
-  process.stderr.write(
-    `Maintained source files may not exceed ${MAX_LINES} physical lines:\n`,
-  )
+  let diagnostic = `Maintained source files may not exceed ${MAX_LINES} physical lines:\n`
   for (const violation of violations) {
-    process.stderr.write(`  ${violation.lines} ${violation.path}\n`)
+    diagnostic += `  ${violation.lines} ${violation.path}\n`
   }
+  writeSync(2, diagnostic)
   process.exit(1)
 }
 
-process.stdout.write(
+writeSync(
+  1,
   `Size audit passed: no maintained text file exceeds ${MAX_LINES} lines.\n`,
 )

@@ -289,7 +289,7 @@ export class InteractiveViewport {
     const engine = this.#opts.engine()
     const target = dragTarget(engine, world, { scale: this.#opts.view.scale })
     if (target === null) return null
-    const ids = target.kind === 'body' ? [target.id] : subtreeCarriers(engine, target.id)
+    const ids = target.kind === 'carrier' ? [target.id] : subtreeCarriers(engine, target.id)
     const bodies = new Map<string, Vec2>()
     const origins = new Map<string, Vec2>()
     for (const id of ids) {
@@ -300,7 +300,7 @@ export class InteractiveViewport {
       }
     }
     if (bodies.size === 0) return null
-    const pinNode = target.kind === 'body' && this.#opts.diagram().nodes[target.id] !== undefined
+    const pinNode = target.kind === 'carrier' && this.#opts.diagram().nodes[target.id] !== undefined
       ? target.id
       : null
     return { drag: { bodies, origins }, pinNode }

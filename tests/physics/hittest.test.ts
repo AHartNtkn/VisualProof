@@ -15,7 +15,7 @@ describe('settled hit targets', () => {
     settle(e, 2600)
     const j = e.bodies.get(e.wires.get(w)!.endBodyId!)!
     expect(hitTest(e, j.pos, viewport())).toEqual({ kind: 'wire', id: w })
-    expect(dragTarget(e, j.pos, viewport())).toEqual({ kind: 'body', id: j.id })
+    expect(dragTarget(e, j.pos, viewport())).toEqual({ kind: 'carrier', id: j.id })
   })
 
   it('a click on a branch junction resolves to its wire — hit-tested on the DRAWN tributary curves', () => {

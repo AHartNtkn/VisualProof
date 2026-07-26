@@ -92,7 +92,7 @@ export function mkRng(seed: number): Rng {
     FROM an engine and asserts every one is covered by some registered move —
     adding a unit kind without a mover must fail that test. */
 export type MovableUnit =
-  | { readonly kind: 'body'; readonly bodyKind: BodyKind; readonly id: string }
+  | { readonly kind: 'carrier'; readonly carrierKind: BodyKind; readonly id: string }
   | { readonly kind: 'region'; readonly id: RegionId }
   | { readonly kind: 'endDot'; readonly id: string }
   | { readonly kind: 'junction'; readonly wid: WireId; readonly j: number }
@@ -103,7 +103,7 @@ export type MovableUnit =
     settle within its basin, so crossing a junction cusp is a search-layer move). */
 export function movableUnits(e: Engine): MovableUnit[] {
   const units: MovableUnit[] = []
-  for (const [id, b] of e.bodies) units.push({ kind: 'body', bodyKind: b.kind, id })
+  for (const [id, b] of e.bodies) units.push({ kind: 'carrier', carrierKind: b.kind, id })
   for (const rid of e.childrenOf.keys()) units.push({ kind: 'region', id: rid })
   for (const [, w] of e.wires) if (w.endBodyId !== null) units.push({ kind: 'endDot', id: w.endBodyId })
   for (const [wid, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) units.push({ kind: 'junction', wid, j })
@@ -210,7 +210,7 @@ const twoDistinct = (rng: Rng, n: number): [number, number] => {
 export const MOVE_REGISTRY: readonly MoveKind[] = [
   {
     name: 'displaceBody',
-    covers: (u) => u.kind === 'body' || u.kind === 'endDot',
+    covers: (u) => u.kind === 'carrier' || u.kind === 'endDot',
     applicable: (e, pinned) => nonPinnedIds(e, pinned).length >= 1,
     propose: (e, pinned, rng) => {
       const ids = nonPinnedIds(e, pinned)
@@ -226,7 +226,7 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
   },
   {
     name: 'rotateBody',
-    covers: (u) => u.kind === 'body' && isPortBearing(u.bodyKind),
+    covers: (u) => u.kind === 'carrier' && isPortBearing(u.carrierKind),
     applicable: (e, pinned) => portBearingIds(e, pinned).length >= 1,
     propose: (e, pinned, rng) => {
       const ids = portBearingIds(e, pinned)
@@ -240,7 +240,7 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
   },
   {
     name: 'swapBodies',
-    covers: (u) => u.kind === 'body' || u.kind === 'endDot',
+    covers: (u) => u.kind === 'carrier' || u.kind === 'endDot',
     applicable: (e, pinned) => nonPinnedIds(e, pinned).length >= 2,
     propose: (e, pinned, rng) => {
       const ids = nonPinnedIds(e, pinned)

@@ -148,7 +148,7 @@ describe('applicableActions', () => {
     expect(actions.map((action) => action.kind)).not.toContain('erase')
   })
 
-  it('has no computation, comprehension, or semantic inconsistent-cut affordance', () => {
+  it('offers only Phase-1 actions for a generic selected cut', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const first = builder.identity(cut, IOTA, 2)
@@ -161,12 +161,14 @@ describe('applicableActions', () => {
       nodes: [],
       wires: [],
     })
-    expect(kinds(diagram, selection)).not.toEqual(expect.arrayContaining([
-      'convert',
-      'instantiate',
-      'abstractWrap',
-      'inconsistentCutElim',
-    ]))
+    expect(kinds(diagram, selection)).toEqual([
+      'erase',
+      'doubleCutWrap',
+      'iterate',
+      'deiterate',
+      'relFold',
+      'citeTheorem',
+    ])
   })
 
   it('offers double-cut elimination and vacuous elimination only for their structural shapes', () => {

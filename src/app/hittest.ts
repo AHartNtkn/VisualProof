@@ -184,7 +184,7 @@ export function brushHitTest(e: Engine, point: Vec2, viewport: HitViewport, movi
 }
 
 export type DragTarget =
-  | { readonly kind: 'body'; readonly id: string }
+  | { readonly kind: 'carrier'; readonly id: string }
   | { readonly kind: 'region'; readonly id: RegionId }
 
 /**
@@ -200,11 +200,11 @@ export function dragTarget(e: Engine, point: Vec2, viewport: HitViewport): DragT
   // a disc's margin ring must stay independently grabbable (loose-ends law)
   for (const b of e.bodies.values()) {
     if (b.kind !== 'end') continue
-    if (length(sub(point, b.pos)) <= radius) return { kind: 'body', id: b.id }
+    if (length(sub(point, b.pos)) <= radius) return { kind: 'carrier', id: b.id }
   }
   for (const b of e.bodies.values()) {
     if (b.kind === 'anchor') continue // an empty cut is grabbed by its region circle
-    if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'body', id: b.id }
+    if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'carrier', id: b.id }
   }
   let best: { id: RegionId; radius: number } | null = null
   for (const [rid, g] of e.regions) {

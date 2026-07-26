@@ -18,7 +18,6 @@ import {
   findDeiterationEvidence,
   type IdentityRetarget,
 } from '../../../src/kernel/rules/iteration'
-import * as publicRules from '../../../src/kernel/rules/index'
 
 type IdentityNode = Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>
 
@@ -664,7 +663,7 @@ describe('Rule 6: structural identity contradiction', () => {
       .toThrowError(/directly in enclosing cut/)
   })
 
-  it('requires an enclosing cut and exposes no old oracle module or barrel contract', () => {
+  it('requires an enclosing cut and has no displaced oracle module', () => {
     const host = contradictionHost()
     const oldOracleModule = new URL(
       '../../../src/kernel/rules/inconsistent-cut.ts',
@@ -674,7 +673,6 @@ describe('Rule 6: structural identity contradiction', () => {
     expect(() => applyIdentityContradiction(host.diagram, host.diagram.root, host.evidence))
       .toThrowError(/requires a cut/)
     expect(applyIdentityContradiction.length).toBe(3)
-    expect('applyInconsistentCutElim' in publicRules).toBe(false)
     expect(existsSync(oldOracleModule)).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 /**
- * Junction gallery renderer (uncommitted deliverable for the user's VISUAL RULING on
+ * Junction gallery renderer for the user's VISUAL RULING on
  * the freed-tangent + restructuring junctions). Builds each scene, settles it through
  * the real mkEngine + settle pipeline, paints it with the LIGHT theme, and serializes
  * the emitted Shape[] verbatim to SVG — no hand-drawing. Run: `npx tsx

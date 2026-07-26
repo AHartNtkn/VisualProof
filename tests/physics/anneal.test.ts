@@ -166,7 +166,7 @@ describe('every movable unit has a covering move (plan Task 6 coverage)', () => 
 
     const units = movableUnits(e)
     // the fixture must actually exercise all four taxa, or the test is vacuous
-    expect(units.some((u) => u.kind === 'body'), 'fixture has body units').toBe(true)
+    expect(units.some((u) => u.kind === 'carrier'), 'fixture has carrier units').toBe(true)
     expect(units.some((u) => u.kind === 'region'), 'fixture has region units').toBe(true)
     expect(units.some((u) => u.kind === 'endDot'), 'fixture has wire-owned end-dot units').toBe(true)
     expect(units.some((u) => u.kind === 'junction'), 'fixture has wire junction units').toBe(true)
