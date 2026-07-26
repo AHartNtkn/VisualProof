@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
@@ -149,5 +150,19 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const second = builder.wire(builder.root, [])
     const joined = joinWires(builder.build(), [second, first])
     expect(Object.keys(joined.wires)).toEqual([first])
+  })
+
+  it('rejects heterogeneous endpoint-free wires before mutation', () => {
+    const builder = new DiagramBuilder()
+    const individual = builder.wire(builder.root, [])
+    const relation = builder.wire(builder.root, [], UNARY)
+    const diagram = builder.build()
+    const before = exploreForm(diagram)
+
+    expect(() => joinWires(diagram, [individual, relation]))
+      .toThrow(/same signature/)
+    expect(exploreForm(diagram)).toBe(before)
+    expect(diagram.wires[individual]).toBeDefined()
+    expect(diagram.wires[relation]).toBeDefined()
   })
 })

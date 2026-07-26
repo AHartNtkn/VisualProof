@@ -1,15 +1,15 @@
-import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import type { Diagram } from '../../kernel/diagram/diagram'
 import { selectionContents, type SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
-import { existentialStubs, legPaths } from '../../view/wires'
 import { absorbHits } from '../edit'
-import { buildSelection, type Hit } from '../hittest'
+import { buildSelection, type Hit } from '../hit-selection'
 import {
   planCopy,
   revalidateCopy,
   type CopyDestination,
   type CopyPlan,
+  type CopyRefusal,
 } from '../copy-planner'
 import type { PointerClaim, PointerSample } from './viewport'
 
@@ -23,67 +23,22 @@ export type CopyDragControllerOptions = {
   readonly commit: (plan: CopyPlan, sample: PointerSample) => void
   readonly refuse: (text: string, sample: PointerSample) => void
   readonly theme: () => Theme
+  readonly sourcePreview?: (
+    engine: Engine,
+    selection: SubgraphSelection,
+    theme: Theme,
+  ) => readonly Shape[]
   readonly destinationPreview?: (destination: CopyDestination, plan: CopyPlan) => readonly Shape[]
 }
 
 type CopyDrag = {
   readonly source: Diagram
   readonly selection: SubgraphSelection
-  plan: CopyPlan | null
+  planned: CopyPlan | CopyRefusal | null
   destination: CopyDestination | null
   moved: boolean
   current: boolean
   sample: PointerSample
-}
-
-export function copyRegionAt(engine: Engine, diagram: Diagram, point: { readonly x: number; readonly y: number }): RegionId {
-  let best: { readonly id: RegionId; readonly radius: number } | null = null
-  for (const [id, geometry] of engine.regions) {
-    if (diagram.regions[id]?.kind === 'sheet') continue
-    if (Math.hypot(point.x - geometry.center.x, point.y - geometry.center.y) <= geometry.radius
-      && (best === null || geometry.radius < best.radius)) best = { id, radius: geometry.radius }
-  }
-  return best?.id ?? diagram.root
-}
-
-export function copyDestinationPreview(engine: Engine, region: RegionId, theme: Theme): readonly Shape[] {
-  const geometry = engine.regions.get(region)
-  if (geometry === undefined) return []
-  const color = theme.interaction.valid
-  return [{
-    kind: 'circle', center: geometry.center, r: geometry.radius,
-    fill: `${color}22`, stroke: color, width: 2.4, insetColor: null, glow: null,
-  }]
-}
-
-function selectionHalo(engine: Engine, selection: SubgraphSelection, stroke: string): Shape[] {
-  const discs: Array<{ readonly center: { readonly x: number; readonly y: number }; readonly r: number }> = []
-  for (const node of selection.nodes) {
-    const body = engine.bodies.get(node)
-    if (body !== undefined) discs.push({ center: body.pos, r: body.discR * engine.scale + 2 })
-  }
-  for (const region of selection.regions) {
-    const geometry = engine.regions.get(region)
-    if (geometry !== undefined) discs.push({ center: geometry.center, r: geometry.radius + 2 })
-  }
-  const wires = new Set(selection.wires)
-  for (const path of legPaths(engine)) if (wires.has(path.wid)) {
-    for (const point of path.pts) discs.push({ center: point, r: 2 })
-  }
-  for (const stub of existentialStubs(engine)) if (wires.has(stub.wid)) {
-    discs.push({ center: stub.from, r: 2 }, { center: stub.to, r: 2 }, { center: stub.dot, r: 2 })
-  }
-  if (discs.length === 0) return []
-  const left = Math.min(...discs.map((disc) => disc.center.x - disc.r))
-  const right = Math.max(...discs.map((disc) => disc.center.x + disc.r))
-  const top = Math.min(...discs.map((disc) => disc.center.y - disc.r))
-  const bottom = Math.max(...discs.map((disc) => disc.center.y + disc.r))
-  const center = { x: (left + right) / 2, y: (top + bottom) / 2 }
-  const radius = Math.max(...discs.map((disc) => Math.hypot(disc.center.x - center.x, disc.center.y - center.y) + disc.r))
-  return [{
-    kind: 'circle', center, r: radius,
-    fill: null, stroke, width: 2.5, insetColor: null, glow: null,
-  }]
 }
 
 /** Shared ownership for selected-pattern copy gestures. All semantic target
@@ -116,7 +71,15 @@ export class CopyDragController {
         ? contents.allRegions.has(sample.hit.id)
         : contents.internalWires.includes(sample.hit.id)
     if (!onSelectedSurface) return null
-    const drag: CopyDrag = { source, selection, plan: null, destination: null, moved: false, current: true, sample }
+    const drag: CopyDrag = {
+      source,
+      selection,
+      planned: null,
+      destination: null,
+      moved: false,
+      current: true,
+      sample,
+    }
     this.#drag = drag
     return {
       still: 'selection',
@@ -129,21 +92,29 @@ export class CopyDragController {
         const destination = this.#options.destination(next)
         drag.destination = destination
         if (destination === null) {
-          drag.plan = null
+          drag.planned = null
           return
         }
-        const planned = planCopy(drag.source, drag.selection, destination)
-        drag.plan = planned.kind === 'refusal' ? null : planned
+        drag.planned = planCopy(drag.source, drag.selection, destination)
       },
       release: (next, moved) => {
         if (next.ctrlKey) { this.#cancel(drag); return }
         if (!drag.current || this.#drag !== drag) return
         this.#drag = null
         drag.current = false
-        if (!moved || !drag.moved || drag.plan === null || drag.destination === null) return
+        if (!moved || !drag.moved || drag.destination === null) return
         const liveDestination = this.#options.destination(next)
         if (liveDestination === null) return
-        const checked = revalidateCopy(drag.plan, this.#options.sourceDiagram(), liveDestination)
+        const planned = planCopy(drag.source, drag.selection, liveDestination)
+        if (planned.kind === 'refusal') {
+          this.#options.refuse(planned.message, next)
+          return
+        }
+        const checked = revalidateCopy(
+          planned,
+          this.#options.sourceDiagram(),
+          liveDestination,
+        )
         if (checked.kind === 'refusal') {
           this.#options.refuse(checked.message, next)
           return
@@ -191,19 +162,35 @@ export class CopyDragController {
 
   #previewableDrag(): CopyDrag | null {
     const drag = this.#drag
-    if (drag === null || !drag.current || !drag.moved || drag.plan === null || drag.destination === null
+    if (drag === null || !drag.current || !drag.moved || drag.planned === null
+      || drag.planned.kind === 'refusal' || drag.destination === null
       || !this.#options.active()) return null
     const destination = this.#options.destination(drag.sample)
     if (destination === null) return null
-    return revalidateCopy(drag.plan, this.#options.sourceDiagram(), destination).kind === 'refusal' ? null : drag
+    return revalidateCopy(
+      drag.planned,
+      this.#options.sourceDiagram(),
+      destination,
+    ).kind === 'refusal' ? null : drag
   }
 
   #sourceShapes(drag: CopyDrag): readonly Shape[] {
-    return selectionHalo(this.#options.sourceEngine(), drag.selection, this.#options.theme().interaction.valid)
+    return this.#options.sourcePreview?.(
+      this.#options.sourceEngine(),
+      drag.selection,
+      this.#options.theme(),
+    ) ?? []
   }
 
   #destinationShapes(drag: CopyDrag): readonly Shape[] {
-    if (drag.destination === null || drag.plan === null) return []
-    return this.#options.destinationPreview?.(drag.destination, drag.plan) ?? []
+    if (
+      drag.destination === null
+      || drag.planned === null
+      || drag.planned.kind === 'refusal'
+    ) return []
+    return this.#options.destinationPreview?.(
+      drag.destination,
+      drag.planned,
+    ) ?? []
   }
 }

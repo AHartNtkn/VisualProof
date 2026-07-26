@@ -555,6 +555,42 @@ describe('Rule 6: structural identity contradiction', () => {
     })).toThrowError(/different signatures/)
   })
 
+  it.each(['node', 'region', 'wire'] as const)(
+    'refuses a disequality child with unrelated %s content and preserves the source',
+    (extra) => {
+      const builder = new DiagramBuilder()
+      const enclosingCut = builder.cut(builder.root)
+      const disequalityCut = builder.cut(enclosingCut)
+      const equality = builder.identity(enclosingCut, IOTA, 2)
+      const disequality = builder.identity(disequalityCut, IOTA, 2)
+      builder.wire(builder.root, [
+        { node: equality, port: { kind: 'identity', index: 0 } },
+        { node: disequality, port: { kind: 'identity', index: 0 } },
+      ])
+      builder.wire(builder.root, [
+        { node: equality, port: { kind: 'identity', index: 1 } },
+        { node: disequality, port: { kind: 'identity', index: 1 } },
+      ])
+      const unrelated = extra === 'node'
+        ? builder.ref(disequalityCut, 'unrelated', relSig([]))
+        : extra === 'region'
+          ? builder.cut(disequalityCut)
+          : builder.wire(disequalityCut, [])
+      const diagram = builder.build()
+      const before = exploreForm(diagram)
+
+      expect(() => applyIdentityContradiction(diagram, enclosingCut, {
+        equality,
+        disequalityCut,
+        disequality,
+      })).toThrowError(/must contain exactly the matching identity/)
+      expect(exploreForm(diagram)).toBe(before)
+      if (extra === 'node') expect(diagram.nodes[unrelated]).toBeDefined()
+      if (extra === 'region') expect(diagram.regions[unrelated]).toBeDefined()
+      if (extra === 'wire') expect(diagram.wires[unrelated]).toBeDefined()
+    },
+  )
+
   it('rejects identities with different unordered wire sets', () => {
     const builder = new DiagramBuilder()
     const enclosingCut = builder.cut(builder.root)

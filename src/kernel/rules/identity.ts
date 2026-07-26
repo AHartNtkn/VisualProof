@@ -111,6 +111,67 @@ export type IdentityContradictionEvidence = {
   readonly disequality: NodeId
 }
 
+function assertExactDisequalityChild(
+  diagram: Diagram,
+  disequalityCut: RegionId,
+  disequality: NodeId,
+): void {
+  const inSubtree = (region: RegionId): boolean =>
+    isAncestorOrEqual(diagram, disequalityCut, region)
+  const extraRegion = Object.keys(diagram.regions)
+    .some((region) => region !== disequalityCut && inSubtree(region))
+  const extraNode = Object.entries(diagram.nodes)
+    .some(([nodeId, node]) => nodeId !== disequality && inSubtree(node.region))
+  const scopedWire = Object.values(diagram.wires)
+    .some((wire) => inSubtree(wire.scope))
+  if (extraRegion || extraNode || scopedWire) {
+    throw new RuleError(
+      `disequality cut '${disequalityCut}' must contain exactly the matching identity`,
+    )
+  }
+}
+
+/** Discover one exact asserted/directly-negated identity contradiction. */
+export function findIdentityContradictionEvidence(
+  diagram: Diagram,
+  enclosingCut: RegionId,
+): IdentityContradictionEvidence | null {
+  const enclosing = diagram.regions[enclosingCut]
+  if (enclosing === undefined || enclosing.kind !== 'cut') return null
+  const equalities = Object.entries(diagram.nodes)
+    .filter((entry): entry is [NodeId, Extract<DiagramNode, { kind: 'identity' }>] =>
+      entry[1].kind === 'identity' && entry[1].region === enclosingCut)
+    .sort(([left], [right]) => left.localeCompare(right))
+  const childCuts = Object.entries(diagram.regions)
+    .filter((entry): entry is [RegionId, Extract<Diagram['regions'][RegionId], { kind: 'cut' }>] =>
+      entry[1].kind === 'cut' && entry[1].parent === enclosingCut)
+    .sort(([left], [right]) => left.localeCompare(right))
+  for (const [equality, equalityNode] of equalities) {
+    const equalityWires = identityWireSet(diagram, equality)
+    for (const [disequalityCut] of childCuts) {
+      const disequalities = Object.entries(diagram.nodes)
+        .filter((entry): entry is [NodeId, Extract<DiagramNode, { kind: 'identity' }>] =>
+          entry[1].kind === 'identity' && entry[1].region === disequalityCut)
+        .sort(([left], [right]) => left.localeCompare(right))
+      for (const [disequality, disequalityNode] of disequalities) {
+        if (!sigEquals(equalityNode.sig, disequalityNode.sig)) continue
+        const disequalityWires = identityWireSet(diagram, disequality)
+        if (
+          equalityWires.size !== disequalityWires.size
+          || [...equalityWires].some((wire) => !disequalityWires.has(wire))
+        ) continue
+        try {
+          assertExactDisequalityChild(diagram, disequalityCut, disequality)
+          return { equality, disequalityCut, disequality }
+        } catch (error) {
+          if (!(error instanceof RuleError)) throw error
+        }
+      }
+    }
+  }
+  return null
+}
+
 /**
  * Rule 6: discharge an enclosing cut containing x=y together with a direct
  * child cut containing the same unordered identity. Every premise is graph
@@ -167,6 +228,11 @@ export function applyIdentityContradiction(
   ) {
     throw new RuleError('identity contradiction nodes have different attached wire sets')
   }
+  assertExactDisequalityChild(
+    diagram,
+    evidence.disequalityCut,
+    evidence.disequality,
+  )
 
   return removeSubgraph(diagram, {
     region: enclosing.parent,

@@ -21,7 +21,8 @@ import {
 import { relSig, IOTA } from '../../kernel/diagram/sig'
 import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
-import { CopyDragController, copyDestinationPreview } from './copy'
+import { CopyDragController } from './copy'
+import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import type { CopyDestination, CopyPlan } from '../copy-planner'
 
@@ -130,6 +131,7 @@ export class ConstructController {
       commit: options.copy.commit,
       refuse: (text, sample) => options.refuse(text, sample.client),
       theme: options.theme,
+      sourcePreview: copySelectionPreview,
       destinationPreview: (destination) => copyDestinationPreview(
         options.engine(), destination.region, options.theme(),
       ),

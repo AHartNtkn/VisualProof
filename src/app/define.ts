@@ -1,10 +1,11 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { exploreLabeling } from '../kernel/diagram/canonical/explore'
 import { findOccurrences } from '../kernel/diagram/subgraph/match'
+import { occurrenceToSelection } from '../kernel/diagram/subgraph/occurrence'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
 
@@ -17,29 +18,24 @@ import { assertProofContext } from '../kernel/proof/context'
  * a definition is a conservative definitional extension — nothing on the sheet
  * changes when a relation is defined.
  *
- * `orderedWires` is the caller's pick order over the selection's crossing wires;
- * that order IS the argument order (boundary index i = the i-th pick), exactly
- * mirroring citation/relFold's "click the argument wires in boundary order". The
- * extracted boundary (sorted by host-wire id) is reordered to the picks, so the
- * disc's port pip renders the picked order.
- *
  * Every failure is a loud, instructive error:
  * - empty name;
  * - name collision with an existing relation (loaded or session) or a theorem
  *   (relations and theorems share one namespace so fold/cite inputs stay
  *   unambiguous);
- * - a crossing wire left unpicked, a wire picked twice, or a non-crossing wire
- *   picked;
  * Every crossing wire is an explicit boundary incidence; there is no separate
- * binding or closure interpretation at this layer.
+ * binding or closure interpretation at this layer. Boundary order is always
+ * the canonical explorer order and cannot be overridden by a caller.
  */
 export function defineRelation(
   diagram: Diagram,
   sel: SubgraphSelection,
-  orderedWires: readonly WireId[],
   name: string,
   ctx: ProofContext,
 ): { relation: DiagramWithBoundary } {
+  if (typeof name !== 'string') {
+    throw new Error('manual boundary order is not supported; definitions use canonical boundary order')
+  }
   assertProofContext(ctx)
   if (name.trim() === '') {
     throw new Error('relation name is empty: type a name in the name input first')
@@ -58,31 +54,8 @@ export function defineRelation(
   // parameters — a self-contained relation may still take relation arguments.
   const { pattern, attachments } = extractSubgraph(diagram, sel)
 
-  // The picks must be exactly the crossing wires, each once: the boundary IS the
-  // crossing-wire set, and the argument order is the pick order.
-  const picked = new Set<WireId>()
-  for (const w of orderedWires) {
-    if (picked.has(w)) {
-      throw new Error(`argument wire '${w}' is picked more than once; pick each crossing wire exactly once`)
-    }
-    if (!attachments.includes(w)) {
-      throw new Error(
-        `wire '${w}' is not a crossing wire of the selection; only the selection's boundary wires (${attachments.join(', ') || 'none'}) are arguments`,
-      )
-    }
-    picked.add(w)
-  }
-  for (const a of attachments) {
-    if (!picked.has(a)) {
-      throw new Error(
-        `crossing wire '${a}' was not picked; every boundary wire is an argument — pick all ${attachments.length} of them`,
-      )
-    }
-  }
-
-  // Reorder the extracted boundary (host-wire-id order) to the pick order, so
-  // boundary index i is the i-th picked wire's stub.
-  const boundary = orderedWires.map((w) => pattern.boundary[attachments.indexOf(w)]!)
+  const boundary = canonicalArgOrder(diagram, sel).map((wire) =>
+    pattern.boundary[attachments.indexOf(wire)]!)
   return { relation: mkDiagramWithBoundary(pattern.diagram, boundary) }
 }
 
@@ -90,8 +63,7 @@ export function defineRelation(
  * The canonical argument order for a selection's crossing wires: the order the
  * canonical explorer assigns to their boundary stubs in the extracted body.
  * Deterministic and id-invariant — isomorphic selections get the same order —
- * so "Define relation" needs no wire-picking in the common case; picking
- * remains available to override.
+ * so definition authoring has one authoritative order.
  */
 export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): WireId[] {
   const { pattern, attachments } = extractSubgraph(diagram, sel)
@@ -121,33 +93,23 @@ export function inferFoldArgs(
   if (body === undefined) {
     throw new Error(`unknown relation '${defId}' (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
   }
-  // The covered footprint of the selection: its direct nodes plus everything
-  // inside its selected subtrees.
-  const coveredNodes = new Set<NodeId>(sel.nodes)
-  const coveredRegions = new Set<RegionId>()
-  const walk = (r: RegionId): void => {
-    coveredRegions.add(r)
-    for (const [id, reg] of Object.entries(diagram.regions)) {
-      if (reg.kind !== 'sheet' && reg.parent === r) walk(id)
-    }
-  }
-  for (const r of sel.regions) walk(r)
-  for (const [id, n] of Object.entries(diagram.nodes)) {
-    if (coveredRegions.has(n.region)) coveredNodes.add(id)
-  }
-
   const found = findOccurrences(diagram, body, {
     explorationFuel: 64,
     inRegion: sel.region,
   })
+  const sameIds = (left: readonly string[], right: readonly string[]): boolean => {
+    const a = [...left].sort()
+    const b = [...right].sort()
+    return a.length === b.length && a.every((id, index) => id === b[index])
+  }
   for (const occ of found.matches) {
-    const mapped = new Set(occ.nodeMap.values())
-    if (mapped.size !== coveredNodes.size) continue
-    let same = true
-    for (const n of coveredNodes) {
-      if (!mapped.has(n)) { same = false; break }
-    }
-    if (same) return [...occ.attachments]
+    const occurrence = occurrenceToSelection(diagram, body, occ)
+    if (
+      occurrence.region === sel.region
+      && sameIds(occurrence.regions, sel.regions)
+      && sameIds(occurrence.nodes, sel.nodes)
+      && sameIds(occurrence.wires, sel.wires)
+    ) return [...occ.attachments]
   }
   if (found.status === 'exhausted') {
     throw new Error(`graph exploration exhausted while matching definition '${defId}'`)

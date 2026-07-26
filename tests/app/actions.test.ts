@@ -76,6 +76,29 @@ describe('applicableActions', () => {
       nodes: [],
       wires: [],
     }))).not.toContain('identityContradiction')
+
+    const nearMissBuilder = new DiagramBuilder()
+    const nearMissEnclosing = nearMissBuilder.cut(nearMissBuilder.root)
+    const nearMissChild = nearMissBuilder.cut(nearMissEnclosing)
+    const equality = nearMissBuilder.identity(nearMissEnclosing, IOTA, 2)
+    const disequality = nearMissBuilder.identity(nearMissChild, IOTA, 2)
+    const unrelated = nearMissBuilder.ref(nearMissChild, 'unrelated', relSig([]))
+    nearMissBuilder.wire(nearMissBuilder.root, [
+      { node: equality, port: { kind: 'identity', index: 0 } },
+      { node: disequality, port: { kind: 'identity', index: 0 } },
+    ])
+    nearMissBuilder.wire(nearMissBuilder.root, [
+      { node: equality, port: { kind: 'identity', index: 1 } },
+      { node: disequality, port: { kind: 'identity', index: 1 } },
+    ])
+    const nearMiss = nearMissBuilder.build()
+    expect(kinds(nearMiss, mkSelection(nearMiss, {
+      region: nearMiss.root,
+      regions: [nearMissEnclosing],
+      nodes: [],
+      wires: [],
+    }))).not.toContain('identityContradiction')
+    expect(nearMiss.nodes[unrelated]).toBeDefined()
   })
 
   it('keeps generic structural actions, fold/unfold, and theorem citation', () => {
@@ -103,6 +126,26 @@ describe('applicableActions', () => {
       direction: 'forward',
     })
     expect(actions.every((action) => action.label.length > 0)).toBe(true)
+  })
+
+  it('does not invent backward erasure in a physically negative region', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const ref = builder.ref(cut, 'UnaryWitness', UNARY)
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: cut,
+      regions: [],
+      nodes: [ref],
+      wires: [],
+    })
+    const actions = applicableActions(
+      diagram,
+      selection,
+      verifyTheory(tinyTheory()),
+      true,
+    )
+    expect(actions.map((action) => action.kind)).not.toContain('erase')
   })
 
   it('has no computation, comprehension, or semantic inconsistent-cut affordance', () => {

@@ -18,7 +18,8 @@ import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { ConnectionDragController, type ConnectionEnd } from './connection'
-import { CopyDragController, copyDestinationPreview } from './copy'
+import { CopyDragController } from './copy'
+import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
@@ -204,6 +205,7 @@ export class ProofMoveController {
       },
       refuse: (text, sample) => options.refuse(text, sample.client),
       theme: options.theme,
+      sourcePreview: copySelectionPreview,
       destinationPreview: (destination) =>
         copyDestinationPreview(options.engine(), destination.region, options.theme()),
     })

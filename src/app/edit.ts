@@ -158,6 +158,16 @@ export function joinWires(d: Diagram, wireIds: readonly WireId[]): Diagram {
     if (d.wires[id] === undefined) throw new Error(`unknown wire '${id}'`)
   }
   const survivor = ids[0]!
+  const sig = d.wires[survivor]!.sig
+  for (const id of ids.slice(1)) {
+    const candidate = d.wires[id]!.sig
+    if (!sigEquals(sig, candidate)) {
+      throw new Error(
+        `joining wires requires the same signature; '${survivor}' has '${sigKey(sig)}' `
+        + `but '${id}' has '${sigKey(candidate)}'`,
+      )
+    }
+  }
   const scope = ids.slice(1).reduce(
     (current, id) => deepestCommonAncestor(d, current, d.wires[id]!.scope),
     d.wires[survivor]!.scope,

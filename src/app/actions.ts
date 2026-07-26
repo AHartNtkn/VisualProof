@@ -1,10 +1,12 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import { isAncestorOrEqual, polarity } from '../kernel/diagram/regions'
 import { sigEquals } from '../kernel/diagram/sig'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
-import type { IdentityContradictionEvidence } from '../kernel/rules/identity'
+import { findIdentityContradictionEvidence } from '../kernel/rules/identity'
+
+export { findIdentityContradictionEvidence } from '../kernel/rules/identity'
 
 /**
  * Pure, read-only enumeration of moves the UI may offer for a selection.
@@ -26,19 +28,16 @@ export type ActionDescriptor =
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 /**
- * `backward` is the reasoning orientation (USER ruling): the SAME move list
- * with exactly the orientation-aware gates flipped. Identity insertion is
- * Rule 4 and remains tied to a physically negative region in both proof
- * orientations.
+ * `backward` changes citation direction only. Structural rule gates retain
+ * their physical polarity because their appliers have no orientation dual.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   assertProofContext(ctx)
   const out: ActionDescriptor[] = []
   const pol = polarity(d, sel.region)
-  const eraseSign = backward ? 'negative' : 'positive'
   const hasContent = sel.nodes.length + sel.regions.length + sel.wires.length > 0
 
-  if (hasContent && pol === eraseSign) out.push({ kind: 'erase', label: `Erase (${eraseSign} region)` })
+  if (hasContent && pol === 'positive') out.push({ kind: 'erase', label: 'Erase (positive region)' })
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })
@@ -119,44 +118,4 @@ function identityInsertionWires(
     ) return null
   }
   return selection.wires
-}
-
-function incidentWires(diagram: Diagram, node: NodeId): ReadonlySet<WireId> {
-  return new Set(Object.entries(diagram.wires)
-    .filter(([, wire]) => wire.endpoints.some((endpoint) => endpoint.node === node))
-    .map(([wire]) => wire))
-}
-
-export function findIdentityContradictionEvidence(
-  diagram: Diagram,
-  enclosingCut: RegionId,
-): IdentityContradictionEvidence | null {
-  const enclosing = diagram.regions[enclosingCut]
-  if (enclosing === undefined || enclosing.kind !== 'cut') return null
-  const equalities = Object.entries(diagram.nodes)
-    .filter((entry): entry is [NodeId, Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>] =>
-      entry[1].kind === 'identity' && entry[1].region === enclosingCut)
-    .sort(([left], [right]) => left.localeCompare(right))
-  const childCuts = Object.entries(diagram.regions)
-    .filter((entry): entry is [RegionId, Extract<Diagram['regions'][RegionId], { kind: 'cut' }>] =>
-      entry[1].kind === 'cut' && entry[1].parent === enclosingCut)
-    .sort(([left], [right]) => left.localeCompare(right))
-  for (const [equality, equalityNode] of equalities) {
-    const equalityWires = incidentWires(diagram, equality)
-    for (const [disequalityCut] of childCuts) {
-      const disequalities = Object.entries(diagram.nodes)
-        .filter((entry): entry is [NodeId, Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>] =>
-          entry[1].kind === 'identity' && entry[1].region === disequalityCut)
-        .sort(([left], [right]) => left.localeCompare(right))
-      for (const [disequality, disequalityNode] of disequalities) {
-        if (!sigEquals(equalityNode.sig, disequalityNode.sig)) continue
-        const disequalityWires = incidentWires(diagram, disequality)
-        if (
-          equalityWires.size === disequalityWires.size
-          && [...equalityWires].every((wire) => disequalityWires.has(wire))
-        ) return { equality, disequalityCut, disequality }
-      }
-    }
-  }
-  return null
 }

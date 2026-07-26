@@ -25,7 +25,7 @@ import { seedBodyPlacement } from '../view/placement'
 import { seedActionHistoryPlacements } from './proof-placement'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
-import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
+import { defineRelation, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram } from './edit'
@@ -44,7 +44,7 @@ import type { Hit } from './hittest'
 import { hitTest, wireHitTest, buildSelection } from './hittest'
 import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
-import { copyRegionAt } from './interact/copy'
+import { copyRegionAt } from './interact/copy-view'
 import { SpawnCascade, atomHeadOptions } from './interact/spawn'
 import { ProofSpawnController } from './interact/proof-spawn'
 import { ProofMoveController } from './interact/moves'
@@ -109,7 +109,7 @@ export type LibraryRenderer = (
     which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
     shell already imports relax.ts, so it runs it after every seed. */
 type Pending =
-  | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; readonly args: WireId[]; name: string }
+  | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; name: string }
   | { readonly kind: 'foldChoose'; readonly sel: SubgraphSelection }
 
 export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
@@ -932,36 +932,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // ---- define relation (EDIT mode, two-phase like relFold) ----
-  // Enter the pending pick: the crossing wires clicked in order become the
-  // relation's argument boundary. Defining never mutates the sheet.
+  // Boundary order is canonical; defining never mutates the sheet.
   const enterDefineRelation = (sel: SubgraphSelection): void => {
-    pending = { kind: 'defineRelation', sel, args: [], name: '' }
+    pending = { kind: 'defineRelation', sel, name: '' }
     refreshChrome()
   }
 
   // ---- domain pointer claims (selection is owned by InteractiveViewport) ----
-  const handleClaimedClick = (sample: PointerSample): void => {
-    const hit = hitTest(engine, sample.world, { scale: view.scale })
-    if (pending !== null && pending.kind === 'defineRelation') {
-      if (hit !== null && hit.kind === 'wire') {
-        pending.args.push(hit.id)
-        refreshChrome()
-      } else {
-        refuse('define relation: click wires only (or Commit/Cancel in the palette)', sample.client)
-      }
-      return
-    }
-  }
-
   const claimPointer = (sample: PointerSample): PointerClaim | null => {
-    const pendingClaim: PointerClaim | null = sample.button === 0 && pending?.kind === 'defineRelation' ? {
-        still: 'claim',
-        blocksPassiveRelaxation: false,
-        move: () => {},
-        release: (at, moved) => { if (!moved) handleClaimedClick(at) },
-        cancel: () => {},
-      } : null
-    return pendingClaim ?? (mode === 'prove' ? proofMoves.claim(sample) : construct.claim(sample))
+    return mode === 'prove' ? proofMoves.claim(sample) : construct.claim(sample)
   }
 
   // ---- chrome refresh ----
@@ -1007,7 +986,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const instruction = document.createElement('p')
       instruction.className = 'vpa-action-instruction'
       instruction.textContent = p.kind === 'defineRelation'
-        ? `Name the relation; optionally click crossing wires to override canonical order (${p.args.length} picked).`
+        ? 'Name the relation; its boundary uses canonical structural order.'
         : 'Choose the relation whose definition matches the selection.'
       menuDiv.append(instruction)
       if (p.kind === 'foldChoose') {
@@ -1039,17 +1018,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         nameField.value = p.name
         nameField.addEventListener('input', () => { p.name = nameField.value })
         menuDiv.append(nameField)
-        const label = p.args.length > 0
-          ? `Commit relation definition (${p.args.length} picked arg(s))`
-          : 'Commit relation definition (canonical argument order)'
-        menuDiv.append(button(label, guard(() => {
+        menuDiv.append(button('Commit relation definition', guard(() => {
           const name = p.name.trim()
-          // No picks = the canonical explorer order; picking the crossing
-          // wires yourself overrides it. defineRelation gates the
-          // name/pick/extraction; defineEntry re-checks against the whole
+          // defineRelation owns canonical extraction and boundary order;
+          // defineEntry re-checks against the whole
           // library. A refusal stays attached to this pending interaction.
-          const order = p.args.length > 0 ? [...p.args] : canonicalArgOrder(editDiagram, p.sel)
-          const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx)
+          const { relation } = defineRelation(editDiagram, p.sel, name, ctx)
           const next = defineEntry(library, name, relation)
           pending = null
           applyLibrary(next)
