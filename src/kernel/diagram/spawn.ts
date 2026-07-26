@@ -3,57 +3,80 @@ import { DiagramError, mkDiagram, portSig, requiredPorts } from './diagram'
 import type { RelSig } from './sig'
 import { freshId, type IdReservation } from './subgraph/freshId'
 
-export function spawnRelationNode(
-  d: Diagram,
+export function spawnRefNode(
+  diagram: Diagram,
   region: RegionId,
   defId: string,
   sig: RelSig,
   reservation?: IdReservation,
 ): { diagram: Diagram; node: NodeId } {
-  const node = freshId(new Set(Object.keys(d.nodes)), 'n', reservation?.nodes)
+  const node = freshId(new Set(Object.keys(diagram.nodes)), 'n', reservation?.nodes)
   const ref: DiagramNode = { kind: 'ref', region, defId, sig }
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: ref }
-  const wires: Record<WireId, Wire> = { ...d.wires }
-  const takenWires = new Set(Object.keys(d.wires))
+  const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes, [node]: ref }
+  const wires: Record<WireId, Wire> = { ...diagram.wires }
+  const takenWires = new Set(Object.keys(diagram.wires))
   for (const port of requiredPorts(ref)) {
     const wire = freshId(takenWires, 'w', reservation?.wires)
     takenWires.add(wire)
-    wires[wire] = { scope: region, sig: portSig(ref, port), endpoints: [{ node, port }] }
+    wires[wire] = {
+      scope: region,
+      sig: portSig(ref, port),
+      endpoints: [{ node, port }],
+    }
   }
-  return { node, diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }) }
+  return {
+    node,
+    diagram: mkDiagram({
+      root: diagram.root,
+      regions: { ...diagram.regions },
+      nodes,
+      wires,
+    }),
+  }
 }
 
-/**
- * Spawns a fresh atom bound to an existing relational wire: the atom's sig is
- * read from the wire (`wireId`), its head port becomes a new endpoint on that
- * wire, and fresh arg wires are created from `sig.args`. `wireId` names a line
- * of identity, not an old-model binder region — any relational wire enclosing
- * `region` qualifies (mkDiagram enforces scope-encloses-region on the modified wire).
- */
-export function spawnBoundRelationNode(
-  d: Diagram,
+/** Bind a fresh atom head to one existing relational wire. */
+export function spawnAtomNode(
+  diagram: Diagram,
   region: RegionId,
   wireId: WireId,
   reservation?: IdReservation,
 ): { diagram: Diagram; node: NodeId } {
-  const target = d.wires[wireId]
+  const target = diagram.wires[wireId]
   if (target === undefined) {
-    throw new DiagramError(`spawnBoundRelationNode: wire '${wireId}' does not exist`)
+    throw new DiagramError(`spawnAtomNode: wire '${wireId}' does not exist`)
   }
   if (target.sig.kind !== 'rel') {
-    throw new DiagramError(`spawnBoundRelationNode: wire '${wireId}' has sig 'iota', expected a relation signature`)
+    throw new DiagramError(
+      `spawnAtomNode: wire '${wireId}' has sig 'iota', expected a relation signature`,
+    )
   }
-  const sig = target.sig
-  const node = freshId(new Set(Object.keys(d.nodes)), 'n', reservation?.nodes)
-  const atom: DiagramNode = { kind: 'atom', region, sig }
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: atom }
-  const wires: Record<WireId, Wire> = { ...d.wires }
-  const takenWires = new Set(Object.keys(d.wires))
-  wires[wireId] = { scope: target.scope, sig: target.sig, endpoints: [...target.endpoints, { node, port: { kind: 'head' } }] }
-  for (let index = 0; index < sig.args.length; index++) {
+  const node = freshId(new Set(Object.keys(diagram.nodes)), 'n', reservation?.nodes)
+  const atom: DiagramNode = { kind: 'atom', region, sig: target.sig }
+  const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes, [node]: atom }
+  const wires: Record<WireId, Wire> = { ...diagram.wires }
+  const takenWires = new Set(Object.keys(diagram.wires))
+  wires[wireId] = {
+    scope: target.scope,
+    sig: target.sig,
+    endpoints: [...target.endpoints, { node, port: { kind: 'head' } }],
+  }
+  for (let index = 0; index < target.sig.args.length; index += 1) {
     const wire = freshId(takenWires, 'w', reservation?.wires)
     takenWires.add(wire)
-    wires[wire] = { scope: region, sig: sig.args[index]!, endpoints: [{ node, port: { kind: 'arg', index } }] }
+    wires[wire] = {
+      scope: region,
+      sig: target.sig.args[index]!,
+      endpoints: [{ node, port: { kind: 'arg', index } }],
+    }
   }
-  return { node, diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }) }
+  return {
+    node,
+    diagram: mkDiagram({
+      root: diagram.root,
+      regions: { ...diagram.regions },
+      nodes,
+      wires,
+    }),
+  }
 }

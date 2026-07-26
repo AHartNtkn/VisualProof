@@ -5,6 +5,9 @@ import { checkTheorem } from './theorem'
 import { dwbFromJson, dwbToJson } from '../diagram/json'
 import { theoremFromJson, theoremToJson } from './json'
 import { ProofError } from './error'
+import type { RelSig } from '../diagram/sig'
+import { sigEquals, sigKey } from '../diagram/sig'
+import { definitionSig } from '../rules/fold'
 
 const proofContextBrand: unique symbol = Symbol('ProofContext')
 
@@ -303,27 +306,32 @@ function checkedBoundary(value: DiagramWithBoundary, where: string): DiagramWith
 /** Every ref node must resolve against exactly the supplied relation prefix. */
 export function assertRefsResolve(
   diagram: Diagram,
-  relationArities: ReadonlyMap<string, number>,
+  relationSignatures: ReadonlyMap<string, RelSig>,
   where: string,
 ): void {
   for (const [id, node] of Object.entries(diagram.nodes)) {
     if (node.kind !== 'ref') continue
-    const arity = relationArities.get(node.defId)
-    if (arity === undefined) {
+    const expected = relationSignatures.get(node.defId)
+    if (expected === undefined) {
       throw new ProofError(`${where}: reference node '${id}' names unknown relation '${node.defId}'`)
     }
-    const refArity = node.sig.args.length
-    if (arity !== refArity) {
+    if (!sigEquals(node.sig, expected)) {
       throw new ProofError(
-        `${where}: reference node '${id}' to relation '${node.defId}' has arity ${refArity} but the relation has arity ${arity}`,
+        `${where}: reference node '${id}' signature '${sigKey(node.sig)}' `
+        + `does not match definition '${node.defId}' signature '${sigKey(expected)}'`,
       )
     }
   }
 }
 
-function relationArities(ctx: ProofContext): ImmutableMap<string, number> {
-  const entries: Array<readonly [string, number]> = []
-  for (const [name, relation] of ctx.relations) entries[entries.length] = [name, relation.boundary.length]
+function relationSignatures(ctx: ProofContext): ImmutableMap<string, RelSig> {
+  const entries: Array<readonly [string, RelSig]> = []
+  for (const [name, relation] of ctx.relations) {
+    entries[entries.length] = [
+      name,
+      definitionSig(relation),
+    ]
+  }
   return new ImmutableMap(entries)
 }
 
@@ -339,17 +347,25 @@ export function extendRelations(
     throw new ProofError('relations cannot be added after theorem registration')
   }
   const relations: Array<readonly [string, DiagramWithBoundary]> = Array.from(base.relations)
-  const arities: Array<readonly [string, number]> = []
-  for (const [name, relation] of base.relations) arities[arities.length] = [name, relation.boundary.length]
+  const signatures: Array<readonly [string, RelSig]> = []
+  for (const [name, relation] of base.relations) {
+    signatures[signatures.length] = [
+      name,
+      definitionSig(relation),
+    ]
+  }
   for (const [name, value] of additions) {
     const relationPrefix = new ImmutableMap(relations)
     if (relationPrefix.has(name) || base.theorems.has(name)) {
       throw new ProofError(`duplicate proof-context name '${name}'`)
     }
     const relation = checkedBoundary(value, `relation '${name}'`)
-    assertRefsResolve(relation.diagram, new ImmutableMap(arities), `relation '${name}' body`)
+    assertRefsResolve(relation.diagram, new ImmutableMap(signatures), `relation '${name}' body`)
     relations[relations.length] = [name, relation]
-    arities[arities.length] = [name, relation.boundary.length]
+    signatures[signatures.length] = [
+      name,
+      definitionSig(relation),
+    ]
   }
   return makeContext(base.theorems, relations)
 }
@@ -379,9 +395,9 @@ export function registerTheorem(base: ProofContext, value: Theorem): ProofContex
   const theorem = checkedTheorem(value)
   if (base.theorems.has(theorem.name)) throw new ProofError(`duplicate theorem name '${theorem.name}'`)
   if (base.relations.has(theorem.name)) throw new ProofError(`duplicate proof-context name '${theorem.name}'`)
-  const arities = relationArities(base)
-  assertRefsResolve(theorem.lhs.diagram, arities, `theorem '${theorem.name}' left-hand side`)
-  assertRefsResolve(theorem.rhs.diagram, arities, `theorem '${theorem.name}' right-hand side`)
+  const signatures = relationSignatures(base)
+  assertRefsResolve(theorem.lhs.diagram, signatures, `theorem '${theorem.name}' left-hand side`)
+  assertRefsResolve(theorem.rhs.diagram, signatures, `theorem '${theorem.name}' right-hand side`)
   checkTheorem(theorem, base)
   return makeContext([...base.theorems, [theorem.name, theorem]], base.relations)
 }

@@ -2,24 +2,27 @@ import type { Diagram, DiagramNode, NodeId, Port, WireId } from '../diagram/diag
 import { DiagramError, portKey } from '../diagram/diagram'
 import { RuleError } from './error'
 
-/** The node, required to be a term node: unknown id is malformed input, an atom is a refusal. */
-export function termNodeAt(d: Diagram, nodeId: NodeId): Extract<DiagramNode, { kind: 'term' }> {
-  const node = d.nodes[nodeId]
+/** Resolve one node and require the sole definition-bearing node kind. */
+export function refNodeAt(
+  diagram: Diagram,
+  nodeId: NodeId,
+): Extract<DiagramNode, { kind: 'ref' }> {
+  const node = diagram.nodes[nodeId]
   if (node === undefined) throw new DiagramError(`unknown node '${nodeId}'`)
-  if (node.kind !== 'term') throw new RuleError(`this rule applies to term nodes; '${nodeId}' has kind '${node.kind}'`)
+  if (node.kind !== 'ref') {
+    throw new RuleError(
+      `fold/unfold applies to ref nodes; '${nodeId}' has kind '${node.kind}'`,
+    )
+  }
   return node
 }
 
-/**
- * The unique wire holding (node, port). The port-partition invariant of
- * mkDiagram guarantees existence for every required port of a validated
- * diagram, so a miss means the caller asked about a port the node lacks.
- */
-export function wireAt(d: Diagram, node: NodeId, p: Port): WireId {
-  const key = portKey(p)
-  for (const [id, w] of Object.entries(d.wires)) {
-    for (const ep of w.endpoints) {
-      if (ep.node === node && portKey(ep.port) === key) return id
+/** Find the unique wire holding one validated node port. */
+export function wireAt(diagram: Diagram, node: NodeId, port: Port): WireId {
+  const key = portKey(port)
+  for (const [id, wire] of Object.entries(diagram.wires)) {
+    for (const endpoint of wire.endpoints) {
+      if (endpoint.node === node && portKey(endpoint.port) === key) return id
     }
   }
   throw new DiagramError(`no wire holds port '${key}' of node '${node}'`)

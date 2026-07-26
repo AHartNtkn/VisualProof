@@ -252,6 +252,28 @@ describe('verified ProofContext authority', () => {
     expect(stored.diagram.wires[baseWire]!.scope).toBe(stored.diagram.root)
   })
 
+  it('rejects a reference whose arity matches but nested signature differs', () => {
+    const baseBuilder = new DiagramBuilder()
+    const nested = relSig([IOTA])
+    const baseWire = baseBuilder.wire(baseBuilder.root, [], nested)
+    const base = mkDiagramWithBoundary(baseBuilder.build(), [baseWire])
+    const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', base]])
+
+    const aliasBuilder = new DiagramBuilder()
+    const alias = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([IOTA]))
+    const aliasWire = aliasBuilder.wire(aliasBuilder.root, [
+      { node: alias, port: { kind: 'arg', index: 0 } },
+    ], IOTA)
+
+    expect(() => extendRelations(first, [[
+      'Alias',
+      mkDiagramWithBoundary(aliasBuilder.build(), [aliasWire]),
+    ]])).toThrowError(
+      "relation 'Alias' body: reference node 'n0' signature '(i)' "
+      + "does not match definition 'Base' signature '((i))'",
+    )
+  })
+
   it('rejects a relation boundary below the root while preserving repeated root positions', () => {
     const nestedBuilder = new DiagramBuilder()
     const cut = nestedBuilder.cut(nestedBuilder.root)
