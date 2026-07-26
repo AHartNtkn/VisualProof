@@ -1,7 +1,4 @@
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram'
-import {
-  validateRawDiagram,
-} from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
@@ -91,8 +88,7 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
    * that explicit equality evidence: only a later splice knows the host scopes
    * that decide whether the identity survives or normalizes to a shared wire.
    */
-  const boundedDiagram = validateRawDiagram({ root, regions, nodes, wires })
-  const pattern = mkDiagramWithBoundary(boundedDiagram, boundary)
+  const pattern = mkDiagramWithBoundary({ root, regions, nodes, wires }, boundary)
   return Object.freeze({
     pattern,
     attachments: Object.freeze(attachments),

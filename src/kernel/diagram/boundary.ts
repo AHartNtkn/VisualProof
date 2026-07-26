@@ -1,5 +1,5 @@
 import type { Diagram, WireId } from './diagram'
-import { DiagramError } from './diagram'
+import { DiagramError, validateRawDiagram } from './diagram'
 
 /**
  * A diagram plus an ordered list of boundary wires. One concept, three roles
@@ -14,18 +14,27 @@ export type DiagramWithBoundary = {
   readonly boundary: readonly WireId[]
 }
 
-/** Construct an intrinsically root-open diagram interface. */
+/**
+ * Construct the authoritative intrinsically root-open interface. Unlike an
+ * ordinary closed Diagram constructor, this validates without normalizing:
+ * root-co-scoped identity nodes may encode equality between distinct external
+ * attachments whose scopes are unavailable until splice.
+ */
 export function mkDiagramWithBoundary(diagram: Diagram, boundary: readonly WireId[]): DiagramWithBoundary {
+  const validated = validateRawDiagram(diagram)
   for (const w of boundary) {
-    const wire = diagram.wires[w]
+    const wire = validated.wires[w]
     if (wire === undefined) throw new DiagramError(`boundary wire '${w}' does not exist`)
-    if (wire.scope !== diagram.root) {
+    if (wire.scope !== validated.root) {
       throw new DiagramError(
-        `boundary wire '${w}' must be scoped at the diagram root '${diagram.root}', got '${wire.scope}'`,
+        `boundary wire '${w}' must be scoped at the diagram root '${validated.root}', got '${wire.scope}'`,
       )
     }
   }
-  return Object.freeze({ diagram, boundary: Object.freeze([...boundary]) })
+  return Object.freeze({
+    diagram: validated,
+    boundary: Object.freeze([...boundary]),
+  })
 }
 
 export function boundaryArity(d: DiagramWithBoundary): number {

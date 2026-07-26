@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { canonicalArgOrder, defineRelation, inferFoldArgs } from '../../src/app/define'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { IOTA } from '../../src/kernel/diagram/sig'
+import { findOccurrences } from '../../src/kernel/diagram/subgraph/match'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { verifyTheory } from '../../src/kernel/proof/context'
+import { extendRelations, verifyTheory } from '../../src/kernel/proof/context'
+import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
 import { BINARY, UNARY } from '../fixtures/zero-signature'
 
 function definitionFixture() {
@@ -24,7 +28,69 @@ function definitionFixture() {
   return { diagram, selection, argument }
 }
 
+function boundedIdentityFixture(swap: boolean) {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const identity = builder.identity(cut, IOTA, 2)
+  builder.wire(builder.root, [
+    { node: identity, port: { kind: 'identity', index: swap ? 1 : 0 } },
+  ])
+  builder.wire(builder.root, [
+    { node: identity, port: { kind: 'identity', index: swap ? 0 : 1 } },
+  ])
+  const diagram = builder.build()
+  const selection = mkSelection(diagram, {
+    region: cut,
+    regions: [],
+    nodes: [identity],
+    wires: [],
+  })
+  return { diagram, cut, selection }
+}
+
 describe('structural relation definition', () => {
+  it('registers and persists bounded identities independent of incidence indices', () => {
+    const runs = [false, true].map((swap, index) => {
+      const fixture = boundedIdentityFixture(swap)
+      const name = `BoundedIdentity${index}`
+      const empty = verifyTheory({ relations: [], theorems: [] })
+      const { relation } = defineRelation(
+        fixture.diagram,
+        fixture.selection,
+        name,
+        empty,
+      )
+      const ctx = extendRelations(empty, [[name, relation]])
+      const serialized = theoryToJson({
+        relations: [[name, relation]],
+        theorems: [],
+      })
+      const loaded = loadTheory(JSON.parse(JSON.stringify(serialized)))
+      const stored = ctx.relations.get(name)!
+      const reloaded = loaded.ctx.relations.get(name)!
+
+      expect(stored.boundary).toHaveLength(2)
+      expect(reloaded.boundary).toHaveLength(2)
+      return {
+        fixture,
+        relation,
+        form: exploreForm(reloaded.diagram, reloaded.boundary),
+      }
+    })
+
+    expect(runs[1]!.form).toBe(runs[0]!.form)
+    expect(findOccurrences(
+      runs[1]!.fixture.diagram,
+      runs[0]!.relation,
+      { inRegion: runs[1]!.fixture.cut },
+    ).matches).toHaveLength(2)
+    expect(findOccurrences(
+      runs[0]!.fixture.diagram,
+      runs[1]!.relation,
+      { inRegion: runs[0]!.fixture.cut },
+    ).matches).toHaveLength(2)
+  })
+
   it('extracts an exact ordered boundary and infers the same fold attachment', () => {
     const fixture = definitionFixture()
     const { relation } = defineRelation(

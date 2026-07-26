@@ -109,4 +109,34 @@ describe('diagram JSON', () => {
     expect(() => sigFromJson({ kind: 'iota', extra: true }, 'wire'))
       .toThrowError(/extra fields/)
   })
+
+  it('keeps eager co-scoped identity normalization for ordinary diagram JSON', () => {
+    const decoded = diagramFromJson({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: {
+        eq: {
+          kind: 'identity',
+          region: 'r0',
+          sig: { kind: 'iota' },
+          arity: 2,
+        },
+      },
+      wires: {
+        left: {
+          scope: 'r0',
+          sig: { kind: 'iota' },
+          endpoints: [{ node: 'eq', port: 'i:0' }],
+        },
+        right: {
+          scope: 'r0',
+          sig: { kind: 'iota' },
+          endpoints: [{ node: 'eq', port: 'i:1' }],
+        },
+      },
+    })
+
+    expect(decoded.nodes).toEqual({})
+    expect(Object.keys(decoded.wires)).toEqual(['left'])
+  })
 })

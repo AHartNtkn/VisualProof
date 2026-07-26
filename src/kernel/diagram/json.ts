@@ -125,7 +125,7 @@ export function dwbFromJson(value: unknown, what = 'pattern'): DiagramWithBounda
   }
   try {
     return mkDiagramWithBoundary(
-      diagramFromJson(value.diagram),
+      rawDiagramFromJson(value.diagram),
       value.boundary as string[],
     )
   } catch (error) {
@@ -153,7 +153,7 @@ export function parsePortKey(key: string): Port {
   return fail(`unrecognized port key '${key}'`)
 }
 
-export function diagramFromJson(json: unknown): Diagram {
+function rawDiagramFromJson(json: unknown): Diagram {
   if (!isRecord(json)) fail('top level must be an object')
   assertOnlyKeys(json, ['root', 'regions', 'nodes', 'wires'], 'top level')
   const { root, regions: jsonRegions, nodes: jsonNodes, wires: jsonWires } = json
@@ -242,8 +242,18 @@ export function diagramFromJson(json: unknown): Diagram {
     }
   }
 
+  return { root, regions, nodes, wires }
+}
+
+/**
+ * Decode an ordinary diagram through eager identity normalization. Bounded
+ * interfaces use dwbFromJson, whose boundary authority validates the same raw
+ * graph without collapsing equality that depends on external attachments.
+ */
+export function diagramFromJson(json: unknown): Diagram {
+  const raw = rawDiagramFromJson(json)
   try {
-    return mkDiagram({ root, regions, nodes, wires })
+    return mkDiagram(raw)
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error))
   }

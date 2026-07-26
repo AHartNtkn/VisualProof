@@ -149,8 +149,8 @@ function fail(message: string): never {
 
 /**
  * Validate and freeze a graph without normalizing it. The identity canonicalizer
- * uses this between rewrites, and bounded extraction uses it to preserve
- * equality evidence whose host scopes are temporarily outside the pattern.
+ * uses this between rewrites, and the DiagramWithBoundary authority uses it to
+ * preserve equality evidence whose host scopes are outside the bounded graph.
  * Ordinary public construction goes through mkDiagramNormalized/mkDiagram.
  */
 export function validateRawDiagram(raw: Diagram): Diagram {

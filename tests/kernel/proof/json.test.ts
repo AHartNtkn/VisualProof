@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { dwbFromJson, dwbToJson } from '../../../src/kernel/diagram/json'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 import {
   actionFromJson,
@@ -34,6 +37,25 @@ const occurrenceCertificate = {
   wireMap: new Map([['pw0', 'w1']]),
   attachments: ['w1'],
 } as const
+
+function boundedIdentity(swap: boolean) {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const identity = builder.identity(cut, IOTA, 2)
+  builder.wire(builder.root, [
+    { node: identity, port: { kind: 'identity', index: swap ? 1 : 0 } },
+  ])
+  builder.wire(builder.root, [
+    { node: identity, port: { kind: 'identity', index: swap ? 0 : 1 } },
+  ])
+  const diagram = builder.build()
+  return extractSubgraph(diagram, mkSelection(diagram, {
+    region: cut,
+    regions: [],
+    nodes: [identity],
+    wires: [],
+  })).pattern
+}
 
 const retargets = [{
   boundary: 0,
@@ -212,6 +234,24 @@ describe('step JSON', () => {
 })
 
 describe('diagram-with-boundary JSON', () => {
+  it('round-trips bounded identity structure for both storage permutations', () => {
+    const decoded = [false, true].map((swap) => {
+      const body = boundedIdentity(swap)
+      const result = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(body))))
+      expect(result.boundary).toHaveLength(2)
+      expect(new Set(result.boundary).size).toBe(2)
+      expect(Object.values(result.diagram.nodes)).toContainEqual({
+        kind: 'identity',
+        region: result.diagram.root,
+        sig: IOTA,
+        arity: 2,
+      })
+      return exploreForm(result.diagram, result.boundary)
+    })
+
+    expect(decoded[1]).toBe(decoded[0])
+  })
+
   it('round-trips repeated boundary positions without collapsing arity', () => {
     const builder = new DiagramBuilder()
     const wire = builder.wire(builder.root, [], IOTA)

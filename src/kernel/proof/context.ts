@@ -290,13 +290,8 @@ export function assertProofContext(value: unknown): asserts value is ProofContex
 function checkedBoundary(value: DiagramWithBoundary, where: string): DiagramWithBoundary {
   try {
     assertSchemaCarrier(value, where)
-    const checked = immutableClone(dwbFromJson(dwbToJson(value), where))
-    for (const wire of checked.boundary) {
-      if (checked.diagram.wires[wire]!.scope !== checked.diagram.root) {
-        throw new Error(`boundary wire '${wire}' is not scoped at the diagram root`)
-      }
-    }
-    return checked
+    // The DWB decoder is the single graph-plus-boundary validation authority.
+    return immutableClone(dwbFromJson(dwbToJson(value), where))
   } catch (error) {
     if (error instanceof ProofError) throw error
     throw new ProofError(`${where}: ${error instanceof Error ? error.message : String(error)}`)
