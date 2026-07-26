@@ -8,11 +8,7 @@ export {
   applyDeiteration,
   findDeiterationEvidence,
 } from './iteration'
-export type { IdentityContradictionEvidence } from './identity'
-export {
-  applyIdentityInsertion,
-  applyIdentityContradiction,
-} from './identity'
+export { applyIdentityInsertion } from './identity'
 export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'
 export { applyUnfold, applyFold } from './fold'
 export { applyVacuousIntro, applyVacuousElim } from './vacuous'

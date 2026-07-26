@@ -4,9 +4,6 @@ import { sigEquals } from '../kernel/diagram/sig'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
-import { findIdentityContradictionEvidence } from '../kernel/rules/identity'
-
-export { findIdentityContradictionEvidence } from '../kernel/rules/identity'
 
 /**
  * Pure, read-only enumeration of moves the UI may offer for a selection.
@@ -19,7 +16,6 @@ export type ActionDescriptor =
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
   | { readonly kind: 'identityInsert'; readonly label: string }
-  | { readonly kind: 'identityContradiction'; readonly label: string }
   | { readonly kind: 'vacuousElim'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
@@ -75,9 +71,6 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
       const wiresIn = Object.values(d.wires).some((w) => w.scope === rid)
       if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
         out.push({ kind: 'doubleCutElim', label: 'Eliminate the double cut' })
-      }
-      if (findIdentityContradictionEvidence(d, rid) !== null) {
-        out.push({ kind: 'identityContradiction', label: 'Eliminate the identity contradiction' })
       }
     }
   }

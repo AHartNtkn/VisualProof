@@ -14,7 +14,6 @@ import {
   type ProofStep,
 } from '../../../src/kernel/proof/step'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
-import { applyIdentityContradiction } from '../../../src/kernel/rules/identity'
 
 describe('primitive replay', () => {
   it('routes erasure through the direct primitive', () => {
@@ -63,37 +62,6 @@ describe('primitive replay', () => {
       .toEqual(['atom', 'ref'])
   })
 
-  it('replays supplied identity-contradiction evidence directly', () => {
-    const builder = new DiagramBuilder()
-    const enclosing = builder.cut(builder.root)
-    const disequalityCut = builder.cut(enclosing)
-    const equality = builder.identity(enclosing, IOTA, 2)
-    const disequality = builder.identity(disequalityCut, IOTA, 2)
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 0 } },
-      { node: disequality, port: { kind: 'identity', index: 0 } },
-    ])
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 1 } },
-      { node: disequality, port: { kind: 'identity', index: 1 } },
-    ])
-    const diagram = builder.build()
-    const evidence = { equality, disequalityCut, disequality }
-
-    const replayed = applyStep(diagram, {
-      rule: 'identityContradiction',
-      enclosingCut: enclosing,
-      evidence,
-    }, EMPTY_PROOF_CONTEXT)
-    const direct = applyIdentityContradiction(
-      diagram,
-      enclosing,
-      evidence,
-    )
-
-    expect(replayed).toEqual(direct)
-    expect(replayed.regions[enclosing]).toBeUndefined()
-  })
 })
 
 describe('normalized step receipts', () => {

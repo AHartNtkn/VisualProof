@@ -10,7 +10,6 @@ import {
 } from '../diagram/json'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import type { IdentityContradictionEvidence } from '../rules/identity'
 import type { IdentityRetarget } from '../rules/iteration'
 import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { ProofStep } from './step'
@@ -171,29 +170,6 @@ function retargetsFromJson(value: unknown, what: string): IdentityRetarget[] {
     retargetFromJson(retarget, `${what}[${index}]`))
 }
 
-function contradictionEvidenceToJson(
-  evidence: IdentityContradictionEvidence,
-): unknown {
-  return {
-    equality: evidence.equality,
-    disequalityCut: evidence.disequalityCut,
-    disequality: evidence.disequality,
-  }
-}
-
-function contradictionEvidenceFromJson(
-  value: unknown,
-  what: string,
-): IdentityContradictionEvidence {
-  if (!isRecord(value)) fail(`${what} must be an object`)
-  assertOnlyKeys(value, ['equality', 'disequalityCut', 'disequality'], what)
-  return {
-    equality: str(value.equality, `${what}.equality`),
-    disequalityCut: str(value.disequalityCut, `${what}.disequalityCut`),
-    disequality: str(value.disequality, `${what}.disequality`),
-  }
-}
-
 function applicationToJson(application: TheoremApplication): unknown {
   return {
     sel: selectionToJson(application.sel),
@@ -229,12 +205,6 @@ export function stepToJson(step: ProofStep): unknown {
         rule: step.rule,
         region: step.region,
         wires: [...step.wires],
-      }
-    case 'identityContradiction':
-      return {
-        rule: step.rule,
-        enclosingCut: step.enclosingCut,
-        evidence: contradictionEvidenceToJson(step.evidence),
       }
     case 'wireJoin':
       return { rule: step.rule, a: step.a, b: step.b }
@@ -317,17 +287,6 @@ export function stepFromJson(value: unknown): ProofStep {
         rule,
         region: str(value.region, 'region'),
         wires: strArray(value.wires, 'wires'),
-      }
-    case 'identityContradiction':
-      assertOnlyKeys(
-        value,
-        ['rule', 'enclosingCut', 'evidence'],
-        'identityContradiction step',
-      )
-      return {
-        rule,
-        enclosingCut: str(value.enclosingCut, 'enclosingCut'),
-        evidence: contradictionEvidenceFromJson(value.evidence, 'evidence'),
       }
     case 'wireJoin':
       assertOnlyKeys(value, ['rule', 'a', 'b'], 'wireJoin step')

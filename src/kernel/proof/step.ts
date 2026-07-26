@@ -15,11 +15,7 @@ import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../rules/doublecut'
 import { applyErasure, applyWireSever } from '../rules/erasure'
 import { applyFold, applyUnfold } from '../rules/fold'
-import {
-  applyIdentityContradiction,
-  applyIdentityInsertion,
-  type IdentityContradictionEvidence,
-} from '../rules/identity'
+import { applyIdentityInsertion } from '../rules/identity'
 import {
   applyDeiteration,
   applyIteration,
@@ -37,7 +33,6 @@ export type ProofStep =
   | { readonly rule: 'refSpawn'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }
   | { readonly rule: 'atomSpawn'; readonly region: RegionId; readonly wire: WireId }
   | { readonly rule: 'identityInsert'; readonly region: RegionId; readonly wires: readonly WireId[] }
-  | { readonly rule: 'identityContradiction'; readonly enclosingCut: RegionId; readonly evidence: IdentityContradictionEvidence }
   | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
@@ -121,12 +116,6 @@ function applyStepRaw(
         step.region,
         step.wires,
         reservation,
-      )
-    case 'identityContradiction':
-      return applyIdentityContradiction(
-        diagram,
-        step.enclosingCut,
-        step.evidence,
       )
     case 'wireJoin':
       return applyWireJoin(diagram, step.a, step.b, orientation)

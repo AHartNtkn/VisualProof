@@ -110,11 +110,6 @@ describe('step JSON', () => {
       { rule: 'refSpawn', region: 'r1', defId: 'nat', sig: relSig([IOTA]) },
       { rule: 'atomSpawn', region: 'r1', wire: 'w0' },
       { rule: 'identityInsert', region: 'r1', wires: ['w0', 'w1'] },
-      {
-        rule: 'identityContradiction',
-        enclosingCut: 'r1',
-        evidence: { equality: 'n0', disequalityCut: 'r2', disequality: 'n1' },
-      },
       { rule: 'wireJoin', a: 'w0', b: 'w1' },
       { rule: 'erasure', sel: selection },
       {
@@ -177,6 +172,7 @@ describe('step JSON', () => {
     for (const rule of [
       'openTermSpawn', 'relationSpawn', 'boundRelationSpawn',
       'inconsistentCutElim', 'conversion', 'congruenceJoin',
+      ['identity', 'Contradiction'].join(''),
       'anchoredWireSplit', 'anchoredWireContract', 'headStrip',
       'closedTermIntro', 'fusion', 'fission',
       'bodyAttach', 'bodyDetach',
@@ -194,10 +190,10 @@ describe('step JSON', () => {
       rule: 'identityInsert', region: 'r0', wires: 'w0',
     })).toThrowError(/wires must be an array/)
     expect(() => stepFromJson({
-      rule: 'identityContradiction',
+      rule: ['identity', 'Contradiction'].join(''),
       enclosingCut: 'r1',
-      evidence: { equality: 'n0', disequalityCut: 'r2' },
-    })).toThrowError(/disequality must be a string/)
+      evidence: { equality: 'n0', disequalityCut: 'r2', disequality: 'n1' },
+    })).toThrowError(/unknown rule/)
     expect(() => stepFromJson({
       rule: 'iteration',
       sel: selection,

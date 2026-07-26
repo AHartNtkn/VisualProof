@@ -282,7 +282,7 @@ describe('mapStepIds', () => {
     attachments: ['W2'],
   } as const
 
-  it('maps spawn, identity, and contradiction operands', () => {
+  it('maps spawn and identity operands', () => {
     expect(mapStepIds({
       rule: 'refSpawn',
       region: 'r1',
@@ -311,23 +311,6 @@ describe('mapStepIds', () => {
       rule: 'identityInsert',
       region: 'R1',
       wires: ['W0', 'W1'],
-    })
-    expect(mapStepIds({
-      rule: 'identityContradiction',
-      enclosingCut: 'r1',
-      evidence: {
-        equality: 'n0',
-        disequalityCut: 'r2',
-        disequality: 'n1',
-      },
-    }, iso)).toEqual({
-      rule: 'identityContradiction',
-      enclosingCut: 'R1',
-      evidence: {
-        equality: 'N0',
-        disequalityCut: 'R2',
-        disequality: 'N1',
-      },
     })
   })
 
@@ -433,13 +416,9 @@ describe('mapStepIds', () => {
 
   it('fails loudly when any host id is absent', () => {
     expect(() => mapStepIds({
-      rule: 'identityContradiction',
-      enclosingCut: 'r1',
-      evidence: {
-        equality: 'n0',
-        disequalityCut: 'r2',
-        disequality: 'missing',
-      },
-    }, iso)).toThrowError(/cannot map node 'missing'/)
+      rule: 'identityInsert',
+      region: 'r1',
+      wires: ['missing'],
+    }, iso)).toThrowError(/cannot map wire 'missing'/)
   })
 })

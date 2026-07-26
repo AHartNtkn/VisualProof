@@ -115,32 +115,6 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         wires: step.wires.map((wire) =>
           mapId(iso.wires, wire, 'wire')),
       }
-    case 'identityContradiction':
-      return {
-        ...step,
-        enclosingCut: mapId(
-          iso.regions,
-          step.enclosingCut,
-          'region',
-        ),
-        evidence: {
-          equality: mapId(
-            iso.nodes,
-            step.evidence.equality,
-            'node',
-          ),
-          disequalityCut: mapId(
-            iso.regions,
-            step.evidence.disequalityCut,
-            'region',
-          ),
-          disequality: mapId(
-            iso.nodes,
-            step.evidence.disequality,
-            'node',
-          ),
-        },
-      }
     case 'wireJoin':
       return {
         ...step,

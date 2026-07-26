@@ -56,7 +56,7 @@ describe('applicableActions', () => {
     }))).not.toContain('identityInsert')
   })
 
-  it('offers identity contradiction only for the exact direct asserted/negated identity shape', () => {
+  it('does not offer a specialized action for a cut-contained disequality', () => {
     const exact = identityInCut()
     const enclosing = Object.entries(exact.regions)
       .find(([, region]) => region.kind === 'cut' && region.parent === exact.root)![0]
@@ -65,40 +65,7 @@ describe('applicableActions', () => {
       regions: [enclosing],
       nodes: [],
       wires: [],
-    }))).toContain('identityContradiction')
-
-    const builder = new DiagramBuilder()
-    const cut = builder.cut(builder.root)
-    const diagram = builder.build()
-    expect(kinds(diagram, mkSelection(diagram, {
-      region: diagram.root,
-      regions: [cut],
-      nodes: [],
-      wires: [],
-    }))).not.toContain('identityContradiction')
-
-    const nearMissBuilder = new DiagramBuilder()
-    const nearMissEnclosing = nearMissBuilder.cut(nearMissBuilder.root)
-    const nearMissChild = nearMissBuilder.cut(nearMissEnclosing)
-    const equality = nearMissBuilder.identity(nearMissEnclosing, IOTA, 2)
-    const disequality = nearMissBuilder.identity(nearMissChild, IOTA, 2)
-    const unrelated = nearMissBuilder.ref(nearMissChild, 'unrelated', relSig([]))
-    nearMissBuilder.wire(nearMissBuilder.root, [
-      { node: equality, port: { kind: 'identity', index: 0 } },
-      { node: disequality, port: { kind: 'identity', index: 0 } },
-    ])
-    nearMissBuilder.wire(nearMissBuilder.root, [
-      { node: equality, port: { kind: 'identity', index: 1 } },
-      { node: disequality, port: { kind: 'identity', index: 1 } },
-    ])
-    const nearMiss = nearMissBuilder.build()
-    expect(kinds(nearMiss, mkSelection(nearMiss, {
-      region: nearMiss.root,
-      regions: [nearMissEnclosing],
-      nodes: [],
-      wires: [],
-    }))).not.toContain('identityContradiction')
-    expect(nearMiss.nodes[unrelated]).toBeDefined()
+    }))).not.toContain(['identity', 'Contradiction'].join(''))
   })
 
   it('keeps generic structural actions, fold/unfold, and theorem citation', () => {

@@ -1,17 +1,18 @@
-import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Diagram, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection, type SubgraphSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { EMPTY_PROOF_CONTEXT, registerTheorem } from '../../../src/kernel/proof/context'
+import { replayProof } from '../../../src/kernel/proof/step'
+import { checkTheorem, type Theorem } from '../../../src/kernel/proof/theorem'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
-import {
-  applyIdentityContradiction,
-  applyIdentityInsertion,
-  type IdentityContradictionEvidence,
-} from '../../../src/kernel/rules/identity'
+import * as identityRules from '../../../src/kernel/rules/identity'
+import * as rules from '../../../src/kernel/rules'
+import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
   applyDeiteration,
   applyIteration,
@@ -543,199 +544,71 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
   })
 })
 
-function contradictionHost() {
-  const builder = new DiagramBuilder()
-  const enclosingCut = builder.cut(builder.root)
-  const disequalityCut = builder.cut(enclosingCut)
-  const equality = builder.identity(enclosingCut, IOTA, 2)
-  const disequality = builder.identity(disequalityCut, IOTA, 2)
-  const survivor = builder.ref(builder.root, 'survivor', relSig([]))
-  const left = builder.wire(builder.root, [
+function ordinaryEqualityCutTheorem(): Theorem {
+  const lhsBuilder = new DiagramBuilder()
+  const enclosing = lhsBuilder.cut(lhsBuilder.root)
+  const disequalityCut = lhsBuilder.cut(enclosing)
+  const equality = lhsBuilder.identity(enclosing, IOTA, 2)
+  const disequality = lhsBuilder.identity(disequalityCut, IOTA, 2)
+  const lhsLeft = lhsBuilder.wire(lhsBuilder.root, [
     { node: equality, port: { kind: 'identity', index: 0 } },
-    { node: disequality, port: { kind: 'identity', index: 1 } },
-  ])
-  const right = builder.wire(builder.root, [
-    { node: equality, port: { kind: 'identity', index: 1 } },
     { node: disequality, port: { kind: 'identity', index: 0 } },
   ])
+  const lhsRight = lhsBuilder.wire(lhsBuilder.root, [
+    { node: equality, port: { kind: 'identity', index: 1 } },
+    { node: disequality, port: { kind: 'identity', index: 1 } },
+  ])
+  const lhs = mkDiagramWithBoundary(lhsBuilder.build(), [lhsLeft, lhsRight])
+  const rhsBuilder = new DiagramBuilder()
+  const left = rhsBuilder.wire(rhsBuilder.root, [])
+  const right = rhsBuilder.wire(rhsBuilder.root, [])
+  const rhsDiagram = rhsBuilder.build()
+
   return {
-    diagram: builder.build(),
-    enclosingCut,
-    disequalityCut,
-    equality,
-    disequality,
-    survivor,
-    left,
-    right,
-    evidence: { equality, disequalityCut, disequality } satisfies IdentityContradictionEvidence,
+    name: 'ordinaryEqualityCut',
+    lhs,
+    rhs: mkDiagramWithBoundary(rhsDiagram, [left, right]),
+    actions: [],
+    backActions: [{
+      label: 'construct equality and its cut-contained disequality',
+      placements: [],
+      steps: [{
+        rule: 'doubleCutIntro',
+        sel: { region: rhsDiagram.root, regions: [], nodes: [], wires: [] },
+      }, {
+        rule: 'identityInsert', region: 'dc', wires: [left, right],
+      }, {
+        rule: 'iteration',
+        sel: { region: 'dc', regions: [], nodes: ['identity'], wires: [] },
+        target: 'dc_0',
+        retargets: [],
+      }],
+    }],
   }
 }
 
-describe('Rule 6: structural identity contradiction', () => {
-  it('removes a cut containing x=y and a direct child cut containing the same unordered identity', () => {
-    const host = contradictionHost()
+describe('ordinary identity contradiction theorem', () => {
+  it('has no specialized identity-contradiction authority and replays by normal theorem citation', () => {
+    expect(identityRules).not.toHaveProperty(['applyIdentity', 'Contradiction'].join(''))
+    expect(identityRules).not.toHaveProperty(['findIdentity', 'ContradictionEvidence'].join(''))
+    expect(rules).not.toHaveProperty(['applyIdentity', 'Contradiction'].join(''))
 
-    const discharged = applyIdentityContradiction(
-      host.diagram,
-      host.enclosingCut,
-      host.evidence,
-    )
+    const theorem = ordinaryEqualityCutTheorem()
+    expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
 
-    expect(discharged.regions[host.enclosingCut]).toBeUndefined()
-    expect(discharged.regions[host.disequalityCut]).toBeUndefined()
-    expect(discharged.nodes[host.equality]).toBeUndefined()
-    expect(discharged.nodes[host.disequality]).toBeUndefined()
-    expect(discharged.nodes[host.survivor]).toBeDefined()
-    expect(discharged.wires[host.left]).toBeDefined()
-    expect(discharged.wires[host.right]).toBeDefined()
-  })
+    const context = registerTheorem(EMPTY_PROOF_CONTEXT, theorem)
+    const enclosing = Object.entries(theorem.lhs.diagram.regions)
+      .find(([, region]) => region.kind === 'cut' && region.parent === theorem.lhs.diagram.root)![0]
+    const result = replayProof(theorem.lhs.diagram, [{
+      rule: 'theorem',
+      name: theorem.name,
+      at: {
+        sel: { region: theorem.lhs.diagram.root, regions: [enclosing], nodes: [], wires: [] },
+        args: Object.keys(theorem.lhs.diagram.wires),
+      },
+      direction: 'forward',
+    }], context)
 
-  it('rejects identities with mismatched signatures', () => {
-    const builder = new DiagramBuilder()
-    const enclosingCut = builder.cut(builder.root)
-    const disequalityCut = builder.cut(enclosingCut)
-    const equality = builder.identity(enclosingCut, IOTA, 2)
-    const disequality = builder.identity(disequalityCut, relSig([]), 2)
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 0 } },
-    ])
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 1 } },
-    ])
-    builder.wire(builder.root, [
-      { node: disequality, port: { kind: 'identity', index: 0 } },
-    ], relSig([]))
-    builder.wire(builder.root, [
-      { node: disequality, port: { kind: 'identity', index: 1 } },
-    ], relSig([]))
-    const diagram = builder.build()
-
-    expect(() => applyIdentityContradiction(diagram, enclosingCut, {
-      equality,
-      disequalityCut,
-      disequality,
-    })).toThrowError(/different signatures/)
-  })
-
-  it.each(['node', 'region', 'wire'] as const)(
-    'refuses a disequality child with unrelated %s content and preserves the source',
-    (extra) => {
-      const builder = new DiagramBuilder()
-      const enclosingCut = builder.cut(builder.root)
-      const disequalityCut = builder.cut(enclosingCut)
-      const equality = builder.identity(enclosingCut, IOTA, 2)
-      const disequality = builder.identity(disequalityCut, IOTA, 2)
-      builder.wire(builder.root, [
-        { node: equality, port: { kind: 'identity', index: 0 } },
-        { node: disequality, port: { kind: 'identity', index: 0 } },
-      ])
-      builder.wire(builder.root, [
-        { node: equality, port: { kind: 'identity', index: 1 } },
-        { node: disequality, port: { kind: 'identity', index: 1 } },
-      ])
-      const unrelated = extra === 'node'
-        ? builder.ref(disequalityCut, 'unrelated', relSig([]))
-        : extra === 'region'
-          ? builder.cut(disequalityCut)
-          : builder.wire(disequalityCut, [])
-      const diagram = builder.build()
-      const before = exploreForm(diagram)
-
-      expect(() => applyIdentityContradiction(diagram, enclosingCut, {
-        equality,
-        disequalityCut,
-        disequality,
-      })).toThrowError(/must contain exactly the matching identity/)
-      expect(exploreForm(diagram)).toBe(before)
-      if (extra === 'node') expect(diagram.nodes[unrelated]).toBeDefined()
-      if (extra === 'region') expect(diagram.regions[unrelated]).toBeDefined()
-      if (extra === 'wire') expect(diagram.wires[unrelated]).toBeDefined()
-    },
-  )
-
-  it('rejects identities with different unordered wire sets', () => {
-    const builder = new DiagramBuilder()
-    const enclosingCut = builder.cut(builder.root)
-    const disequalityCut = builder.cut(enclosingCut)
-    const equality = builder.identity(enclosingCut, IOTA, 2)
-    const disequality = builder.identity(disequalityCut, IOTA, 2)
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 0 } },
-      { node: disequality, port: { kind: 'identity', index: 0 } },
-    ])
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 1 } },
-    ])
-    builder.wire(builder.root, [
-      { node: disequality, port: { kind: 'identity', index: 1 } },
-    ])
-    const diagram = builder.build()
-
-    expect(() => applyIdentityContradiction(diagram, enclosingCut, {
-      equality,
-      disequalityCut,
-      disequality,
-    })).toThrowError(/different attached wire sets/)
-  })
-
-  it('rejects a disequality cut that is not a direct child', () => {
-    const builder = new DiagramBuilder()
-    const enclosingCut = builder.cut(builder.root)
-    const middle = builder.cut(enclosingCut)
-    const disequalityCut = builder.cut(middle)
-    const equality = builder.identity(enclosingCut, IOTA, 2)
-    const disequality = builder.identity(disequalityCut, IOTA, 2)
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 0 } },
-      { node: disequality, port: { kind: 'identity', index: 0 } },
-    ])
-    builder.wire(builder.root, [
-      { node: equality, port: { kind: 'identity', index: 1 } },
-      { node: disequality, port: { kind: 'identity', index: 1 } },
-    ])
-    const diagram = builder.build()
-
-    expect(() => applyIdentityContradiction(diagram, enclosingCut, {
-      equality,
-      disequalityCut,
-      disequality,
-    })).toThrowError(/must be a direct child/)
-  })
-
-  it('rejects non-identity node evidence and evidence outside the enclosing cut', () => {
-    const host = contradictionHost()
-    const nonIdentityBuilder = new DiagramBuilder()
-    const enclosingCut = nonIdentityBuilder.cut(nonIdentityBuilder.root)
-    const disequalityCut = nonIdentityBuilder.cut(enclosingCut)
-    const equality = nonIdentityBuilder.ref(enclosingCut, 'not-equality', relSig([]))
-    const disequality = nonIdentityBuilder.identity(disequalityCut, IOTA, 2)
-    nonIdentityBuilder.wire(nonIdentityBuilder.root, [
-      { node: disequality, port: { kind: 'identity', index: 0 } },
-    ])
-    nonIdentityBuilder.wire(nonIdentityBuilder.root, [
-      { node: disequality, port: { kind: 'identity', index: 1 } },
-    ])
-    const nonIdentityDiagram = nonIdentityBuilder.build()
-
-    expect(() => applyIdentityContradiction(nonIdentityDiagram, enclosingCut, {
-      equality,
-      disequalityCut,
-      disequality,
-    })).toThrowError(/does not name an identity node/)
-    expect(() => applyIdentityContradiction(host.diagram, host.disequalityCut, host.evidence))
-      .toThrowError(/directly in enclosing cut/)
-  })
-
-  it('requires an enclosing cut and has no displaced oracle module', () => {
-    const host = contradictionHost()
-    const oldOracleModule = new URL(
-      '../../../src/kernel/rules/inconsistent-cut.ts',
-      import.meta.url,
-    )
-
-    expect(() => applyIdentityContradiction(host.diagram, host.diagram.root, host.evidence))
-      .toThrowError(/requires a cut/)
-    expect(applyIdentityContradiction.length).toBe(3)
-    expect(existsSync(oldOracleModule)).toBe(false)
+    expect(result).toEqual(theorem.rhs.diagram)
   })
 })

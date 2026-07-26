@@ -10,7 +10,6 @@ import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import {
   applicableActions,
-  findIdentityContradictionEvidence,
   type ActionDescriptor,
 } from '../actions'
 import { inferFoldArgs } from '../define'
@@ -84,13 +83,6 @@ export function contextualDeleteStep(
     discovery.actions.some((action) => action.kind === kind)
   if (has('doubleCutElim')) {
     return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
-  }
-  if (has('identityContradiction')) {
-    const enclosingCut = discovery.sel.regions[0]!
-    const evidence = findIdentityContradictionEvidence(diagram, enclosingCut)
-    return evidence === null
-      ? null
-      : { rule: 'identityContradiction', enclosingCut, evidence }
   }
   if (has('vacuousElim')) {
     return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
@@ -490,17 +482,6 @@ export class ProofMoveController {
           region: selection.region,
           wires: selection.wires,
         }))
-        return
-      case 'identityContradiction':
-        row(action.label, () => {
-          const enclosingCut = selection.regions[0]!
-          const evidence = findIdentityContradictionEvidence(
-            this.#options.diagram(),
-            enclosingCut,
-          )
-          if (evidence === null) throw new Error('identity contradiction is no longer present')
-          this.#commit({ rule: 'identityContradiction', enclosingCut, evidence })
-        })
         return
       case 'vacuousElim':
         row(action.label, () => this.#commit({
