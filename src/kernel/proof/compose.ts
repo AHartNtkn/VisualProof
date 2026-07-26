@@ -1,14 +1,17 @@
 import type { Diagram, Endpoint, WireId } from '../diagram/diagram'
 import type { DiagramIso } from '../diagram/canonical/explore'
 import { exploreIso } from '../diagram/canonical/explore'
-import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
-import type { ProofStep } from './step'
-import type { ProofContext } from './context'
-import { assertProofContext } from './context'
-import { applyStepWithReceipt, transportBoundary } from './step'
+import type { SubgraphSelection } from '../diagram/subgraph/selection'
+import type { IdentityRetarget } from '../rules/iteration'
 import { allocationReservation, type ProofAction } from './action'
+import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
+import {
+  applyStepWithReceipt,
+  transportBoundary,
+  type ProofStep,
+} from './step'
 
 export type CompositionBoundaries = {
   readonly target: readonly WireId[]
@@ -20,177 +23,236 @@ export type CompositionOptions = {
   readonly orientation?: 'forward' | 'backward'
 }
 
-function mapId<T extends string>(m: ReadonlyMap<string, string>, id: T, what: string): T {
-  const img = m.get(id)
-  if (img === undefined) throw new ProofError(`composition cannot map ${what} '${id}': not present at the meet`)
-  return img as T
+function mapId<T extends string>(
+  map: ReadonlyMap<string, string>,
+  id: T,
+  what: string,
+): T {
+  const image = map.get(id)
+  if (image === undefined) {
+    throw new ProofError(
+      `composition cannot map ${what} '${id}': not present at the meet`,
+    )
+  }
+  return image as T
 }
 
-function mapSel(iso: DiagramIso, sel: SubgraphSelection): SubgraphSelection {
+function mapSelection(
+  iso: DiagramIso,
+  selection: SubgraphSelection,
+): SubgraphSelection {
   return {
-    region: mapId(iso.regions, sel.region, 'region'),
-    regions: sel.regions.map((r) => mapId(iso.regions, r, 'region')),
-    nodes: sel.nodes.map((n) => mapId(iso.nodes, n, 'node')),
-    wires: sel.wires.map((w) => mapId(iso.wires, w, 'wire')),
+    region: mapId(iso.regions, selection.region, 'region'),
+    regions: selection.regions.map((region) =>
+      mapId(iso.regions, region, 'region')),
+    nodes: selection.nodes.map((node) =>
+      mapId(iso.nodes, node, 'node')),
+    wires: selection.wires.map((wire) =>
+      mapId(iso.wires, wire, 'wire')),
   }
 }
 
-function mapEndpoint(iso: DiagramIso, ep: Endpoint): Endpoint {
-  return { node: mapId(iso.nodes, ep.node, 'node'), port: ep.port }
+function mapEndpoint(iso: DiagramIso, endpoint: Endpoint): Endpoint {
+  return {
+    node: mapId(iso.nodes, endpoint.node, 'node'),
+    port: endpoint.port,
+  }
 }
 
-function mapOccurrenceCertificate(iso: DiagramIso, certificate: OccurrenceCertificate): OccurrenceCertificate {
+function mapRetarget(
+  iso: DiagramIso,
+  retarget: IdentityRetarget,
+): IdentityRetarget {
+  return {
+    boundary: retarget.boundary,
+    identity: mapId(iso.nodes, retarget.identity, 'node'),
+    from: mapId(iso.wires, retarget.from, 'wire'),
+    to: mapId(iso.wires, retarget.to, 'wire'),
+  }
+}
+
+function mapOccurrenceCertificate(
+  iso: DiagramIso,
+  certificate: OccurrenceCertificate,
+): OccurrenceCertificate {
   return {
     region: mapId(iso.regions, certificate.region, 'region'),
     regionMap: new Map([...certificate.regionMap].map(([pattern, host]) => [
-      pattern, mapId(iso.regions, host, 'region'),
+      pattern,
+      mapId(iso.regions, host, 'region'),
     ])),
     nodeMap: new Map([...certificate.nodeMap].map(([pattern, host]) => [
-      pattern, mapId(iso.nodes, host, 'node'),
+      pattern,
+      mapId(iso.nodes, host, 'node'),
     ])),
     wireMap: new Map([...certificate.wireMap].map(([pattern, host]) => [
-      pattern, mapId(iso.wires, host, 'wire'),
+      pattern,
+      mapId(iso.wires, host, 'wire'),
     ])),
-    attachments: certificate.attachments.map((wire) => mapId(iso.wires, wire, 'wire')),
-    termCertificates: certificate.termCertificates,
+    attachments: certificate.attachments.map((wire) =>
+      mapId(iso.wires, wire, 'wire')),
   }
 }
 
-/**
- * Rewrite one step's HOST ids through an isomorphism. Embedded patterns
- * (DiagramWithBoundary values) are self-contained namespaces and terms are
- * port-name-internal — neither is mapped.
- */
+/** Rewrite every host identifier in one durable proof primitive. */
 export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
   switch (step.rule) {
-    case 'openTermSpawn':
-    case 'relationSpawn':
-      return { ...step, region: mapId(iso.regions, step.region, 'region') }
-    case 'boundRelationSpawn':
-      return { ...step, region: mapId(iso.regions, step.region, 'region'), wire: mapId(iso.wires, step.wire, 'wire') }
-    case 'wireJoin':
-      return { ...step, a: mapId(iso.wires, step.a, 'wire'), b: mapId(iso.wires, step.b, 'wire') }
-    case 'erasure':
-      return { ...step, sel: mapSel(iso, step.sel) }
-    case 'wireSever':
-      return { ...step, wire: mapId(iso.wires, step.wire, 'wire'), keep: step.keep.map((ep) => mapEndpoint(iso, ep)) }
-    case 'iteration':
-      return { ...step, sel: mapSel(iso, step.sel), target: mapId(iso.regions, step.target, 'region') }
-    case 'deiteration':
-      return {
-        ...step,
-        sel: mapSel(iso, step.sel),
-        justifier: mapSel(iso, step.justifier),
-        certificate: mapOccurrenceCertificate(iso, step.certificate),
-      }
-    case 'doubleCutIntro':
-      return { ...step, sel: mapSel(iso, step.sel) }
-    case 'doubleCutElim':
-      return { ...step, region: mapId(iso.regions, step.region, 'region') }
-    case 'inconsistentCutElim':
+    case 'refSpawn':
       return {
         ...step,
         region: mapId(iso.regions, step.region, 'region'),
-        first: mapId(iso.nodes, step.first, 'node'),
-        second: mapId(iso.nodes, step.second, 'node'),
       }
-    case 'conversion': {
-      const attachments = Object.create(null) as Record<string, WireId>
-      for (const [name, w] of Object.entries(step.attachments)) attachments[name] = mapId(iso.wires, w, 'wire')
-      return { ...step, node: mapId(iso.nodes, step.node, 'node'), attachments }
-    }
-    case 'congruenceJoin':
-      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
-    case 'anchoredWireSplit':
+    case 'atomSpawn':
+      return {
+        ...step,
+        region: mapId(iso.regions, step.region, 'region'),
+        wire: mapId(iso.wires, step.wire, 'wire'),
+      }
+    case 'identityInsert':
+      return {
+        ...step,
+        region: mapId(iso.regions, step.region, 'region'),
+        wires: step.wires.map((wire) =>
+          mapId(iso.wires, wire, 'wire')),
+      }
+    case 'identityContradiction':
+      return {
+        ...step,
+        enclosingCut: mapId(
+          iso.regions,
+          step.enclosingCut,
+          'region',
+        ),
+        evidence: {
+          equality: mapId(
+            iso.nodes,
+            step.evidence.equality,
+            'node',
+          ),
+          disequalityCut: mapId(
+            iso.regions,
+            step.evidence.disequalityCut,
+            'region',
+          ),
+          disequality: mapId(
+            iso.nodes,
+            step.evidence.disequality,
+            'node',
+          ),
+        },
+      }
+    case 'wireJoin':
+      return {
+        ...step,
+        a: mapId(iso.wires, step.a, 'wire'),
+        b: mapId(iso.wires, step.b, 'wire'),
+      }
+    case 'erasure':
+      return { ...step, sel: mapSelection(iso, step.sel) }
+    case 'wireSever':
       return {
         ...step,
         wire: mapId(iso.wires, step.wire, 'wire'),
-        witness: mapId(iso.nodes, step.witness, 'node'),
-        endpoints: step.endpoints.map((endpoint) => mapEndpoint(iso, endpoint)),
-        target: mapId(iso.regions, step.target, 'region'),
+        keep: step.keep.map((endpoint) => mapEndpoint(iso, endpoint)),
       }
-    case 'anchoredWireContract':
+    case 'iteration':
       return {
         ...step,
-        redundant: mapId(iso.nodes, step.redundant, 'node'),
-        survivor: mapId(iso.nodes, step.survivor, 'node'),
+        sel: mapSelection(iso, step.sel),
+        target: mapId(iso.regions, step.target, 'region'),
+        retargets: step.retargets.map((retarget) =>
+          mapRetarget(iso, retarget)),
       }
-    case 'headStrip':
-      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
-    case 'closedTermIntro':
-      return { ...step, region: mapId(iso.regions, step.region, 'region') }
-    case 'fusion':
-      return { ...step, wire: mapId(iso.wires, step.wire, 'wire') }
-    case 'fission':
-      return { ...step, node: mapId(iso.nodes, step.node, 'node') }
+    case 'deiteration':
+      return {
+        ...step,
+        sel: mapSelection(iso, step.sel),
+        justifier: mapSelection(iso, step.justifier),
+        certificate: mapOccurrenceCertificate(iso, step.certificate),
+        retargets: step.retargets.map((retarget) =>
+          mapRetarget(iso, retarget)),
+      }
+    case 'doubleCutIntro':
+      return { ...step, sel: mapSelection(iso, step.sel) }
+    case 'doubleCutElim':
+      return {
+        ...step,
+        region: mapId(iso.regions, step.region, 'region'),
+      }
     case 'theorem':
-      return { ...step, at: { sel: mapSel(iso, step.at.sel), args: step.at.args.map((w) => mapId(iso.wires, w, 'wire')) } }
+      return {
+        ...step,
+        at: {
+          sel: mapSelection(iso, step.at.sel),
+          args: step.at.args.map((wire) =>
+            mapId(iso.wires, wire, 'wire')),
+        },
+      }
     case 'vacuousIntro':
       return {
         ...step,
         scope: mapId(iso.regions, step.scope, 'region'),
-        ...(step.body !== undefined
-          ? { body: { content: step.body.content, params: step.body.params.map((w) => mapId(iso.wires, w, 'wire')) } }
-          : {}),
       }
     case 'vacuousElim':
-      return { ...step, wireId: mapId(iso.wires, step.wireId, 'wire') }
-    case 'bodyAttach':
       return {
         ...step,
         wireId: mapId(iso.wires, step.wireId, 'wire'),
-        params: step.params.map((w) => mapId(iso.wires, w, 'wire')),
       }
-    case 'bodyDetach':
-      return { ...step, bodyNodeId: mapId(iso.nodes, step.bodyNodeId, 'node') }
     case 'unfold':
-      return { ...step, nodeId: mapId(iso.nodes, step.nodeId, 'node') }
+      return {
+        ...step,
+        nodeId: mapId(iso.nodes, step.nodeId, 'node'),
+      }
     case 'fold':
       return {
         ...step,
-        occurrence: mapSel(iso, step.occurrence),
-        args: step.args.map((w) => mapId(iso.wires, w, 'wire')),
-        target: 'wireId' in step.target
-          ? { ...step.target, wireId: mapId(iso.wires, step.target.wireId, 'wire') }
-          : step.target,
+        occurrence: mapSelection(iso, step.occurrence),
+        args: step.args.map((wire) =>
+          mapId(iso.wires, wire, 'wire')),
       }
   }
 }
 
 /**
- * Meet-in-the-middle: transplant a tail of actions recorded against
- * `meetSource` onto the isomorphic `meetTarget`. Fresh ids minted during
- * replay depend on the id environment, so a single up-front rewrite cannot
- * work — instead the isomorphism is re-derived from canonical labelings
- * after every step (appliers are iso-equivariant up to fresh-id choice).
- * Optional ordered meet boundaries pin each isomorphism and are transported
- * position-by-position through both actual step receipts. Empty boundaries
- * are the closed-diagram specialization.
+ * Transplant a recorded tail across an isomorphic meet, re-deriving the
+ * identifier isomorphism after every normalized primitive receipt.
  */
 export function composeActions(
   meetTarget: Diagram,
   meetSource: Diagram,
   tail: readonly ProofAction[],
-  ctx: ProofContext,
+  context: ProofContext,
   options: CompositionOptions = {},
 ): ProofAction[] {
-  assertProofContext(ctx)
+  assertProofContext(context)
   const boundaries = options.boundaries ?? { target: [], source: [] }
   const orientation = options.orientation ?? 'forward'
   if (boundaries.source.length !== boundaries.target.length) {
     throw new ProofError(
-      `the two sides do not meet: boundary arity differs (source ${boundaries.source.length}, target ${boundaries.target.length})`,
+      `the two sides do not meet: boundary arity differs `
+      + `(source ${boundaries.source.length}, `
+      + `target ${boundaries.target.length})`,
     )
   }
+
   let sourceBoundary = boundaries.source
   let targetBoundary = boundaries.target
-  let iso = exploreIso(meetSource, meetTarget, sourceBoundary, targetBoundary)
+  let iso = exploreIso(
+    meetSource,
+    meetTarget,
+    sourceBoundary,
+    targetBoundary,
+  )
   if (iso === null) {
-    throw new ProofError('the two sides do not meet: the diagrams or ordered boundaries are not isomorphic')
+    throw new ProofError(
+      'the two sides do not meet: the diagrams or ordered boundaries '
+      + 'are not isomorphic',
+    )
   }
-  let curTarget = meetTarget
-  let curSource = meetSource
-  const out: ProofAction[] = []
+
+  let currentTarget = meetTarget
+  let currentSource = meetSource
+  const output: ProofAction[] = []
   for (const [actionIndex, action] of tail.entries()) {
     const reservation = allocationReservation(action.allocation)
     const mappedSteps: ProofStep[] = []
@@ -198,44 +260,82 @@ export function composeActions(
       const mapped = mapStepIds(step, iso)
       mappedSteps.push(mapped)
       try {
-        const targetReceipt = applyStepWithReceipt(curTarget, mapped, ctx, orientation, reservation)
-        const sourceReceipt = applyStepWithReceipt(curSource, step, ctx, orientation, reservation)
-        const mappedTargetBoundary = transportBoundary(targetReceipt.interface, targetBoundary)
-        const mappedSourceBoundary = transportBoundary(sourceReceipt.interface, sourceBoundary)
-        if (mappedTargetBoundary === undefined || mappedSourceBoundary === undefined) {
+        const targetReceipt = applyStepWithReceipt(
+          currentTarget,
+          mapped,
+          context,
+          orientation,
+          reservation,
+        )
+        const sourceReceipt = applyStepWithReceipt(
+          currentSource,
+          step,
+          context,
+          orientation,
+          reservation,
+        )
+        const nextTargetBoundary = transportBoundary(
+          targetReceipt.interface,
+          targetBoundary,
+        )
+        const nextSourceBoundary = transportBoundary(
+          sourceReceipt.interface,
+          sourceBoundary,
+        )
+        if (
+          nextTargetBoundary === undefined
+          || nextSourceBoundary === undefined
+        ) {
           const failures: string[] = []
-          if (mappedTargetBoundary === undefined) {
-            const position = targetBoundary.findIndex((wire) => targetReceipt.interface.image(wire) === undefined)
-            failures.push(`target boundary position ${position} has no semantic image`)
+          if (nextTargetBoundary === undefined) {
+            const position = targetBoundary.findIndex((wire) =>
+              targetReceipt.interface.image(wire) === undefined)
+            failures.push(
+              `target boundary position ${position} has no semantic image`,
+            )
           }
-          if (mappedSourceBoundary === undefined) {
-            const position = sourceBoundary.findIndex((wire) => sourceReceipt.interface.image(wire) === undefined)
-            failures.push(`source boundary position ${position} has no semantic image`)
+          if (nextSourceBoundary === undefined) {
+            const position = sourceBoundary.findIndex((wire) =>
+              sourceReceipt.interface.image(wire) === undefined)
+            failures.push(
+              `source boundary position ${position} has no semantic image`,
+            )
           }
           throw new ProofError(failures.join('; '))
         }
-        curTarget = targetReceipt.result
-        curSource = sourceReceipt.result
-        targetBoundary = mappedTargetBoundary
-        sourceBoundary = mappedSourceBoundary
-      } catch (e) {
+        currentTarget = targetReceipt.result
+        currentSource = sourceReceipt.result
+        targetBoundary = nextTargetBoundary
+        sourceBoundary = nextSourceBoundary
+      } catch (error) {
         throw new ProofError(
-          `composing action ${actionIndex} step ${stepIndex} (${step.rule}) failed: ${e instanceof Error ? e.message : String(e)}`,
+          `composing action ${actionIndex} step ${stepIndex} `
+          + `(${step.rule}) failed: `
+          + `${error instanceof Error ? error.message : String(error)}`,
         )
       }
-      iso = exploreIso(curSource, curTarget, sourceBoundary, targetBoundary)
+
+      iso = exploreIso(
+        currentSource,
+        currentTarget,
+        sourceBoundary,
+        targetBoundary,
+      )
       if (iso === null) {
         throw new ProofError(
-          `composing action ${actionIndex} step ${stepIndex} (${step.rule}) diverged: the sides are no longer isomorphic`,
+          `composing action ${actionIndex} step ${stepIndex} `
+          + `(${step.rule}) diverged: the sides are no longer isomorphic`,
         )
       }
     }
-    out.push({
+    output.push({
       label: action.label,
       steps: mappedSteps,
       placements: action.placements,
-      ...(action.allocation === undefined ? {} : { allocation: action.allocation }),
+      ...(action.allocation === undefined
+        ? {}
+        : { allocation: action.allocation }),
     })
   }
-  return out
+  return output
 }

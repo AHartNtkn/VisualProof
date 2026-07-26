@@ -1,113 +1,137 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
-import { parseTerm } from '../../../src/kernel/term/parse'
-import {
-  applyBoundRelationSpawn,
-  applyOpenTermSpawn,
-  applyRelationSpawn,
-} from '../../../src/kernel/rules/spawn'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { applyAtomSpawn, applyRefSpawn } from '../../../src/kernel/rules/spawn'
 
-const p = (source: string) => parseTerm(source)
-const arity2 = relSig([IOTA, IOTA])
+const ARITY_TWO = relSig([IOTA, IOTA])
 
 function host() {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
-  // A sibling cut, at the same depth as `cut` but outside `relWire`'s scope —
-  // exercises the "does not enclose" gate below.
-  const siblingCut = builder.cut(builder.root)
-  const relWire = builder.relWire(cut, arity2)
-  const innerCut = builder.cut(cut)
-  return { diagram: builder.build(), root: builder.root, cut, siblingCut, relWire, innerCut }
+  const sibling = builder.cut(builder.root)
+  const relationWire = builder.relWire(cut, ARITY_TWO)
+  const inner = builder.cut(cut)
+  return {
+    diagram: builder.build(),
+    root: builder.root,
+    cut,
+    sibling,
+    relationWire,
+    inner,
+  }
 }
 
-function relations() {
+function definitions() {
   const body = new DiagramBuilder()
-  const left = body.wire(body.root, [])
-  const right = body.wire(body.root, [])
-  return new Map([['logic/R', mkDiagramWithBoundary(body.build(), [left, right])]])
+  const left = body.wire(body.root, [], IOTA)
+  const right = body.wire(body.root, [], IOTA)
+  return new Map([[
+    'logic/R',
+    mkDiagramWithBoundary(body.build(), [left, right]),
+  ]])
 }
 
-/** Wires created by a spawn: `relWire` in `host()` pre-exists (endpoint-free,
- *  the bound-relation identity), so filter it out to isolate the fresh set. */
-function freshWires(before: ReturnType<typeof host>['diagram'], after: ReturnType<typeof host>['diagram']) {
-  return Object.entries(after.wires).filter(([id]) => before.wires[id] === undefined).map(([, w]) => w)
-}
+describe('Phase-1 primitive spawning', () => {
+  it('spawns a ref with signature-indexed argument wires', () => {
+    const fixture = host()
+    const result = applyRefSpawn(
+      fixture.diagram,
+      fixture.cut,
+      'logic/R',
+      ARITY_TWO,
+      definitions(),
+    )
+    const ref = Object.values(result.nodes)[0]
+    const freshWires = Object.entries(result.wires).filter(([id]) =>
+      fixture.diagram.wires[id] === undefined)
 
-describe('atomic proof spawning', () => {
-  it('spawns one open term with one singleton wire per required port', () => {
-    const h = host()
-    const out = applyOpenTermSpawn(h.diagram, h.cut, p('f x'), ['f', 'x'], 'forward')
-    expect(Object.keys(out.nodes)).toHaveLength(1)
-    const fresh = freshWires(h.diagram, out)
-    expect(fresh).toHaveLength(3)
-    expect(fresh.every((wire) => wire.scope === h.cut && wire.endpoints.length === 1)).toBe(true)
+    expect(ref).toMatchObject({
+      kind: 'ref',
+      region: fixture.cut,
+      defId: 'logic/R',
+      sig: ARITY_TWO,
+    })
+    expect(freshWires).toHaveLength(2)
+    expect(freshWires.every(([, wire]) =>
+      wire.scope === fixture.cut
+      && wire.endpoints.length === 1)).toBe(true)
   })
 
-  it('accepts a closed term with one explicit unused port', () => {
-    const h = host()
-    const out = applyOpenTermSpawn(h.diagram, h.cut, p('\\x. x'), ['unused'], 'forward')
-    const node = Object.values(out.nodes)[0]
-    expect(node?.kind === 'term' && node.freePorts).toEqual(['s0'])
-    expect(freshWires(h.diagram, out).map((wire) => wire.endpoints[0]?.port)).toEqual([
-      { kind: 'output' },
-      { kind: 'freeVar', name: 's0' },
+  it('revalidates definition identity and signature', () => {
+    const fixture = host()
+    expect(() => applyRefSpawn(
+      fixture.diagram,
+      fixture.cut,
+      'logic/R',
+      relSig([IOTA]),
+      definitions(),
+    )).toThrowError(/changed signature/)
+    expect(() => applyRefSpawn(
+      fixture.diagram,
+      fixture.cut,
+      'missing',
+      ARITY_TWO,
+      definitions(),
+    )).toThrowError(/no longer loaded/)
+  })
+
+  it('binds a new atom head to the named relational wire', () => {
+    const fixture = host()
+    const result = applyAtomSpawn(
+      fixture.diagram,
+      fixture.cut,
+      fixture.relationWire,
+    )
+
+    expect(Object.values(result.nodes)).toEqual([
+      expect.objectContaining({
+        kind: 'atom',
+        region: fixture.cut,
+        sig: ARITY_TWO,
+      }),
+    ])
+    expect(result.wires[fixture.relationWire]?.endpoints).toEqual([
+      { node: 'n', port: { kind: 'head' } },
     ])
   })
 
-  it('preserves declared order independently of syntactic support order', () => {
-    const h = host()
-    const out = applyOpenTermSpawn(h.diagram, h.cut, p('used'), ['unused', 'used'], 'forward')
-    const node = Object.values(out.nodes)[0]
-    expect(node?.kind === 'term' && node.freePorts).toEqual(['s0', 's1'])
-    expect(node?.kind === 'term' && node.term).toEqual({ kind: 'port', name: 's1' })
-    expect(freshWires(h.diagram, out).map((wire) => wire.endpoints[0]?.port)).toEqual([
-      { kind: 'output' },
-      { kind: 'freeVar', name: 's0' },
-      { kind: 'freeVar', name: 's1' },
-    ])
-  })
+  it('shares the flipped polarity gate and enforces wire scope', () => {
+    const fixture = host()
+    expect(() => applyRefSpawn(
+      fixture.diagram,
+      fixture.root,
+      'logic/R',
+      ARITY_TWO,
+      definitions(),
+      'forward',
+    )).toThrowError(/negative region/)
+    expect(() => applyRefSpawn(
+      fixture.diagram,
+      fixture.root,
+      'logic/R',
+      ARITY_TWO,
+      definitions(),
+      'backward',
+    )).not.toThrow()
 
-  it('requires a nonempty, unique declared interface covering syntactic support', () => {
-    const h = host()
-    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), [], 'forward'))
-      .toThrow(/at least one declared free port/)
-    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), ['x', 'x'], 'forward'))
-      .toThrow(/unique|repeated/)
-    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), ['unused'], 'forward'))
-      .toThrow(/does not declare|cover.*x/)
-    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), [''], 'forward'))
-      .toThrow(/nonempty/)
-  })
-
-  it('revalidates named relation identity and arity before spawning', () => {
-    const h = host()
-    const context = relations()
-    const out = applyRelationSpawn(h.diagram, h.cut, 'logic/R', arity2, context, 'forward')
-    expect(Object.values(out.nodes)).toEqual([
-      expect.objectContaining({ kind: 'ref', region: h.cut, defId: 'logic/R', sig: arity2 }),
-    ])
-    expect(() => applyRelationSpawn(h.diagram, h.cut, 'logic/R', relSig([IOTA]), context, 'forward')).toThrow(/changed.*arity|arity.*changed/)
-    expect(() => applyRelationSpawn(h.diagram, h.cut, 'missing', arity2, context, 'forward')).toThrow(/no longer loaded/)
-  })
-
-  it('shares one flipped polarity gate and additionally validates bound-relation scope', () => {
-    const h = host()
-    expect(() => applyOpenTermSpawn(h.diagram, h.root, p('x'), ['x'], 'forward')).toThrow(/negative region/)
-    expect(() => applyOpenTermSpawn(h.diagram, h.root, p('x'), ['x'], 'backward')).not.toThrow()
-    expect(() => applyRelationSpawn(h.diagram, h.root, 'logic/R', arity2, relations(), 'forward')).toThrow(/negative region/)
-    expect(() => applyRelationSpawn(h.diagram, h.root, 'logic/R', arity2, relations(), 'backward')).not.toThrow()
-
-    const out = applyBoundRelationSpawn(h.diagram, h.cut, h.relWire, 'forward')
-    expect(Object.values(out.nodes)).toEqual([
-      expect.objectContaining({ kind: 'atom', region: h.cut, sig: arity2 }),
-    ])
-    // The wire's scope must enclose the spawn region — a sibling cut outside
-    // relWire's scope is refused (mkDiagram's own scope-encloses-node check,
-    // the successor of the old explicit binder-ancestry gate).
-    expect(() => applyBoundRelationSpawn(h.diagram, h.siblingCut, h.relWire, 'forward')).toThrow(/does not enclose/)
-    expect(() => applyBoundRelationSpawn(h.diagram, h.innerCut, h.relWire, 'backward')).not.toThrow()
+    expect(() => applyAtomSpawn(
+      fixture.diagram,
+      fixture.root,
+      fixture.relationWire,
+      'forward',
+    )).toThrowError(/negative region/)
+    expect(() => applyAtomSpawn(
+      fixture.diagram,
+      fixture.sibling,
+      fixture.relationWire,
+      'forward',
+    )).toThrowError(/does not enclose/)
+    expect(() => applyAtomSpawn(
+      fixture.diagram,
+      fixture.inner,
+      fixture.relationWire,
+      'backward',
+    )).not.toThrow()
   })
 })

@@ -38,7 +38,13 @@ function deiterationTheory(): Theory {
   const action: ProofAction = {
     label: 'deiterate the copy',
     placements: [],
-    steps: [{ rule: 'deiteration', sel: selCopy, justifier: evidence.justifier, certificate: evidence.certificate }],
+    steps: [{
+      rule: 'deiteration',
+      sel: selCopy,
+      justifier: evidence.justifier,
+      certificate: evidence.certificate,
+      retargets: [],
+    }],
   }
   const theorem: Theorem = {
     name: 'deiterate-copy',
@@ -217,13 +223,13 @@ describe('verified ProofContext authority', () => {
     }
     expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, functionActions)).toThrow(/unsupported function value/)
 
-    const certificate = { leftSteps: [] as unknown[], rightSteps: [] as unknown[] }
-    certificate.leftSteps.push(certificate)
+    const wires: unknown[] = []
+    wires.push(wires)
     const cyclic = {
-      ...identity('cyclic-certificate'),
+      ...identity('cyclic-wires'),
       actions: [{
         label: 'cyclic',
-        steps: [{ rule: 'anchoredWireContract', redundant: 'n0', survivor: 'n1', certificate }],
+        steps: [{ rule: 'identityInsert', region: 'r0', wires }],
         placements: [],
       }],
     } as unknown as ReturnType<typeof identity>

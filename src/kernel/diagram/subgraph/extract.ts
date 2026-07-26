@@ -1,5 +1,9 @@
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram'
-import { DiagramError, mkDiagramNormalized } from '../diagram'
+import {
+  DiagramError,
+  mkDiagramNormalized,
+  withoutDiagramNormalizationCapture,
+} from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
@@ -82,7 +86,9 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
     attachments.push(hostWireId)
   }
 
-  const normalized = mkDiagramNormalized({ root, regions, nodes, wires })
+  const normalized = withoutDiagramNormalizationCapture(() =>
+    mkDiagramNormalized({ root, regions, nodes, wires }),
+  )
   const normalizedBoundary = boundary.map((wireId) => {
     const image = normalized.wireImage.get(wireId)
     if (image === undefined) {

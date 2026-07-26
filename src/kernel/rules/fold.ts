@@ -1,5 +1,10 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, Wire, WireId } from '../diagram/diagram'
-import { DiagramError, mkDiagram, mkDiagramNormalized } from '../diagram/diagram'
+import {
+  DiagramError,
+  mkDiagram,
+  mkDiagramNormalized,
+  withoutDiagramNormalizationCapture,
+} from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { mkDiagramWithBoundary } from '../diagram/boundary'
 import { exploreForm } from '../diagram/canonical/explore'
@@ -143,12 +148,14 @@ function diagonalize(
     const source = definition.diagram.wires[id]!
     wires[id] = { scope: source.scope, sig: source.sig, endpoints: wireEndpoints }
   }
-  const normalized = mkDiagramNormalized({
-    root: definition.diagram.root,
-    regions: { ...definition.diagram.regions },
-    nodes: { ...definition.diagram.nodes },
-    wires,
-  })
+  const normalized = withoutDiagramNormalizationCapture(() =>
+    mkDiagramNormalized({
+      root: definition.diagram.root,
+      regions: { ...definition.diagram.regions },
+      nodes: { ...definition.diagram.nodes },
+      wires,
+    }),
+  )
   const normalizedBoundary = boundary.map((wire) => {
     const image = normalized.wireImage.get(wire)
     if (image === undefined) {

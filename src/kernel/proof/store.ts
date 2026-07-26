@@ -13,7 +13,7 @@ export type { Theory } from './context'
 export { assertRefsResolve, verifyTheory } from './context'
 
 const FORMAT = 'visual-proof-theory'
-const VERSION = 1
+const VERSION = 2
 
 export function theoryToJson(t: Theory): unknown {
   return {

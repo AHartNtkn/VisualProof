@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { portKey } from '../../../src/kernel/diagram/diagram'
 import {
-  spawnBoundRelationNode,
-  spawnRelationNode,
+  spawnAtomNode,
+  spawnRefNode,
 } from '../../../src/kernel/diagram/spawn'
 import { IOTA, relSig, sigKey } from '../../../src/kernel/diagram/sig'
 import type { IdReservation } from '../../../src/kernel/diagram/subgraph/freshId'
@@ -12,7 +12,7 @@ describe('relation node spawning', () => {
   it('adds a ref with signature-indexed argument wires', () => {
     const diagram = new DiagramBuilder().build()
     const sig = relSig([IOTA, relSig([])])
-    const spawned = spawnRelationNode(diagram, diagram.root, 'P', sig)
+    const spawned = spawnRefNode(diagram, diagram.root, 'P', sig)
     const byPort = new Map(
       Object.values(spawned.diagram.wires).flatMap((wire) =>
         wire.endpoints.map((endpoint) => [portKey(endpoint.port), wire] as const),
@@ -33,7 +33,7 @@ describe('relation node spawning', () => {
     const builder = new DiagramBuilder()
     const sig = relSig([IOTA])
     const target = builder.relWire(builder.root, sig)
-    const spawned = spawnBoundRelationNode(
+    const spawned = spawnAtomNode(
       builder.build(),
       builder.root,
       target,
@@ -50,13 +50,13 @@ describe('relation node spawning', () => {
 
   it('rejects missing and non-relational target wires', () => {
     const empty = new DiagramBuilder().build()
-    expect(() => spawnBoundRelationNode(empty, empty.root, 'ghost'))
+    expect(() => spawnAtomNode(empty, empty.root, 'ghost'))
       .toThrowError(/wire 'ghost' does not exist/)
 
     const builder = new DiagramBuilder()
     const iota = builder.wire(builder.root, [])
     const diagram = builder.build()
-    expect(() => spawnBoundRelationNode(diagram, diagram.root, iota))
+    expect(() => spawnAtomNode(diagram, diagram.root, iota))
       .toThrowError(/has sig 'iota'/)
   })
 
@@ -68,7 +68,7 @@ describe('relation node spawning', () => {
       nodes: new Set(['n']),
       wires: new Set(),
     }
-    const spawned = spawnBoundRelationNode(
+    const spawned = spawnAtomNode(
       builder.build(),
       builder.root,
       target,

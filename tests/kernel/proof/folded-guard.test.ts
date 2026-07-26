@@ -1,95 +1,106 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
-import { termEq } from '../../../src/kernel/term/term'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import type { DiagramNode } from '../../../src/kernel/diagram/diagram'
-import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyStep } from '../../../src/kernel/proof/step'
-import { verifyTheory } from '../../../src/kernel/proof/context'
-import type { ProofStep } from '../../../src/kernel/proof/step'
-import { checkTheorem } from '../../../src/kernel/proof/theorem'
-import type { Theorem } from '../../../src/kernel/proof/theorem'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { singleStepAction } from '../../../src/kernel/proof/action'
+import { verifyTheory } from '../../../src/kernel/proof/context'
+import { applyStep, type ProofStep } from '../../../src/kernel/proof/step'
+import { checkTheorem, type Theorem } from '../../../src/kernel/proof/theorem'
 import { applyUnfold } from '../../../src/kernel/rules/fold'
 
-/**
- * The exact usage pattern the arithmetic theorems will follow: a theorem whose
- * statement ships with a FOLDED relation guard on a boundary line, whose
- * derivation unfolds only a WORKING COPY of that guard, and whose stated rhs
- * keeps the ambient guard folded. This proves fold survives a derivation and
- * that folded/unfolded statements are DISTINCT statements (ref-keyed identity).
- */
-
-const p = (s: string) => parseTerm(s)
-
-/** R(x): a two-node closed body — the argument line `x` plus a disconnected
- *  closed-term conjunct (a clean node for the derivation to operate on). */
 function bodyR() {
-  const b = new DiagramBuilder()
-  const tArg = b.termNode(b.root, p('y')) // freeVar y is the argument line
-  b.termNode(b.root, p('\\z. z')) // a disconnected closed conjunct
-  const bound = b.wire(b.root, [{ node: tArg, port: { kind: 'freeVar', name: 'y' } }])
-  return mkDiagramWithBoundary(b.build(), [bound])
+  const builder = new DiagramBuilder()
+  const predicate = builder.atom(builder.root, relSig([IOTA]))
+  const argument = builder.wire(builder.root, [{
+    node: predicate,
+    port: { kind: 'arg', index: 0 },
+  }])
+  builder.atom(builder.root, relSig([]))
+  return mkDiagramWithBoundary(builder.build(), [argument])
 }
 
-const isConjunct = (n: DiagramNode): boolean => n.kind === 'term' && termEq(n.term, p('\\z. z'))
-
 describe('folded-guard integration proof', () => {
-  it('unfolds a working copy while the ambient guard stays folded, and folded ≠ unfolded statements', () => {
-    const relations = new Map([['R', bodyR()]])
-    const ctx = verifyTheory({ relations: [...relations], theorems: [] })
+  it('unfolds only a working copy while the ambient ref remains folded', () => {
+    const definitions = new Map([['R', bodyR()]])
+    const context = verifyTheory({
+      relations: [...definitions],
+      theorems: [],
+    })
+    const left = new DiagramBuilder()
+    const ambient = left.ref(left.root, 'R', relSig([IOTA]))
+    const argument = left.wire(left.root, [{
+      node: ambient,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const lhs = mkDiagramWithBoundary(left.build(), [argument])
 
-    // lhs: a single folded reference R(x) with x as the boundary line.
-    const lb = new DiagramBuilder()
-    const ref = lb.ref(lb.root, 'R', relSig([IOTA]))
-    const x = lb.wire(lb.root, [{ node: ref, port: { kind: 'arg', index: 0 } }])
-    const lhs = mkDiagramWithBoundary(lb.build(), [x])
-
-    // Build the derivation by executing it (fresh ids are deterministic, so the
-    // recorded concrete-id steps replay identically inside checkTheorem).
     const steps: ProofStep[] = []
-    let cur = lhs.diagram
+    let current = lhs.diagram
+    const iterate: ProofStep = {
+      rule: 'iteration',
+      sel: mkSelection(current, {
+        region: current.root,
+        regions: [],
+        nodes: [ambient],
+        wires: [],
+      }),
+      target: current.root,
+      retargets: [],
+    }
+    current = applyStep(current, iterate, context)
+    steps.push(iterate)
+    expect(Object.values(current.nodes).filter((node) =>
+      node.kind === 'ref')).toHaveLength(2)
 
-    // 1. iterate the guard into a working sibling copy (same region)
-    const iterSel = mkSelection(cur, { region: cur.root, regions: [], nodes: [ref], wires: [] })
-    const s1: ProofStep = { rule: 'iteration', sel: iterSel, target: cur.root }
-    cur = applyStep(cur, s1, ctx); steps.push(s1)
-    expect(Object.values(cur.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
+    const copy = Object.entries(current.nodes).find(([id, node]) =>
+      id !== ambient && node.kind === 'ref')![0]
+    const unfold: ProofStep = { rule: 'unfold', nodeId: copy }
+    current = applyStep(current, unfold, context)
+    steps.push(unfold)
+    expect(Object.values(current.nodes).filter((node) =>
+      node.kind === 'ref')).toHaveLength(1)
 
-    // 2. unfold the COPY only (the ref that is not the original)
-    const copyId = Object.entries(cur.nodes).find(([id, n]) => n.kind === 'ref' && id !== ref)![0]
-    const s2: ProofStep = { rule: 'unfold', nodeId: copyId }
-    cur = applyStep(cur, s2, ctx); steps.push(s2)
-    expect(Object.values(cur.nodes).filter((n) => n.kind === 'ref')).toHaveLength(1) // ambient survives
+    const conjunct = Object.entries(current.nodes).find(([, node]) =>
+      node.kind === 'atom' && node.sig.args.length === 0)![0]
+    const wrap: ProofStep = {
+      rule: 'doubleCutIntro',
+      sel: mkSelection(current, {
+        region: current.root,
+        regions: [],
+        nodes: [conjunct],
+        wires: [],
+      }),
+    }
+    current = applyStep(current, wrap, context)
+    steps.push(wrap)
 
-    // 3. one real rule application inside the unfolded material: double-cut the conjunct
-    const qNode = Object.entries(cur.nodes).find(([, n]) => isConjunct(n))![0]
-    const wrapSel = mkSelection(cur, { region: cur.root, regions: [], nodes: [qNode], wires: [] })
-    const s3: ProofStep = { rule: 'doubleCutIntro', sel: wrapSel }
-    cur = applyStep(cur, s3, ctx); steps.push(s3)
+    const rhs = mkDiagramWithBoundary(current, lhs.boundary)
+    const theorem: Theorem = {
+      name: 'foldedGuard',
+      lhs,
+      rhs,
+      actions: steps.map((step) =>
+        singleStepAction(step.rule, step)),
+    }
 
-    // rhs keeps the ambient guard folded (the ref is still there)
-    const rhs = mkDiagramWithBoundary(cur, lhs.boundary)
-    const thm: Theorem = { name: 'foldedGuard', lhs, rhs, actions: steps.map((step) => singleStepAction(step.rule, step)) }
+    expect(() => checkTheorem(theorem, context)).not.toThrow()
+    expect(Object.values(rhs.diagram.nodes).filter((node) =>
+      node.kind === 'ref')).toHaveLength(1)
 
-    // (a) the theorem verifies end to end
-    expect(() => checkTheorem(thm, ctx)).not.toThrow()
-
-    // (b) the ambient fold survived the derivation
-    const refsInRhs = Object.values(rhs.diagram.nodes).filter((n) => n.kind === 'ref')
-    expect(refsInRhs).toHaveLength(1)
-
-    // (c) statement identity is ref-keyed: unfolding the ambient guard too yields a
-    //     diagram that is NOT isomorphic to the actual (folded) rhs — folded and
-    //     unfolded statements are distinct statements.
-    const ambientRef = Object.entries(rhs.diagram.nodes).find(([, n]) => n.kind === 'ref')![0]
-    const unfoldEverything = applyUnfold(rhs.diagram, ambientRef, (defId) => relations.get(defId))
-    expect(boundaryForm(mkDiagramWithBoundary(unfoldEverything, lhs.boundary)))
-      .not.toBe(boundaryForm(rhs))
-    // and the unfold-everything variant carries NO ref at all
-    expect(Object.values(unfoldEverything.nodes).some((n) => n.kind === 'ref')).toBe(false)
+    const remainingRef = Object.entries(rhs.diagram.nodes).find(([, node]) =>
+      node.kind === 'ref')![0]
+    const fullyUnfolded = applyUnfold(
+      rhs.diagram,
+      remainingRef,
+      definitions,
+    )
+    expect(boundaryForm(mkDiagramWithBoundary(
+      fullyUnfolded,
+      lhs.boundary,
+    ))).not.toBe(boundaryForm(rhs))
+    expect(Object.values(fullyUnfolded.nodes).some((node) =>
+      node.kind === 'ref')).toBe(false)
   })
 })

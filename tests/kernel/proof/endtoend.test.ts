@@ -1,116 +1,180 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
-  EMPTY_PROOF_CONTEXT, replayProof, composeActions, singleStepAction, checkTheorem, verifyTheory, loadTheory, theoryToJson,
+  EMPTY_PROOF_CONTEXT,
+  checkTheorem,
+  composeActions,
+  loadTheory,
+  replayProof,
+  singleStepAction,
+  theoryToJson,
+  verifyTheory,
+  type Theorem,
+  type Theory,
 } from '../../../src/kernel/proof/index'
-import type { ProofStep, Theorem, Theory } from '../../../src/kernel/proof/index'
 
-const p = (s: string) => parseTerm(s)
+const PROPOSITION = relSig([])
 
-describe('end to end: a sentence theorem built bidirectionally', () => {
-  it('blank ⟹ ¬¬(empty cut pair) via forward and backward halves meeting in the middle', () => {
-    // statement: from the empty sheet, derive a bare double cut.
+function dropQ(): Theorem {
+  const left = new DiagramBuilder()
+  const p = left.atom(left.root, PROPOSITION)
+  const q = left.atom(left.root, PROPOSITION)
+  const boundary = left.wire(left.root, [
+    { node: p, port: { kind: 'head' } },
+    { node: q, port: { kind: 'head' } },
+  ], PROPOSITION)
+  const lhs = mkDiagramWithBoundary(left.build(), [boundary])
+
+  const right = new DiagramBuilder()
+  const rightP = right.atom(right.root, PROPOSITION)
+  const rightBoundary = right.wire(right.root, [{
+    node: rightP,
+    port: { kind: 'head' },
+  }], PROPOSITION)
+  const rhs = mkDiagramWithBoundary(right.build(), [rightBoundary])
+
+  return {
+    name: 'dropQ',
+    lhs,
+    rhs,
+    actions: [singleStepAction('erase Q', {
+      rule: 'erasure',
+      sel: {
+        region: lhs.diagram.root,
+        regions: [],
+        nodes: [q],
+        wires: [],
+      },
+    })],
+  }
+}
+
+describe('end-to-end bidirectional proof', () => {
+  it('derives a double cut from the blank sheet', () => {
     const blank = new DiagramBuilder().build()
     const goalBuilder = new DiagramBuilder()
     const outer = goalBuilder.cut(goalBuilder.root)
     goalBuilder.cut(outer)
     const goal = goalBuilder.build()
-
-    // forward half: nothing (stay at blank). backward half, recorded against
-    // an INDEPENDENTLY built blank (different from the forward side's blank
-    // only in construction history — ids are deterministic, so exercise the
-    // composition machinery anyway):
     const backwardStart = new DiagramBuilder().build()
-    const tail: ProofStep[] = [{
+    const tail = [singleStepAction('double-cut intro', {
       rule: 'doubleCutIntro',
-      sel: mkSelection(backwardStart, { region: backwardStart.root, regions: [], nodes: [], wires: [] }),
-    }]
-    const composed = composeActions(blank, backwardStart, tail.map((step) => singleStepAction(step.rule, step)), EMPTY_PROOF_CONTEXT)
-    const thm: Theorem = {
+      sel: mkSelection(backwardStart, {
+        region: backwardStart.root,
+        regions: [],
+        nodes: [],
+        wires: [],
+      }),
+    })]
+    const actions = composeActions(
+      blank,
+      backwardStart,
+      tail,
+      EMPTY_PROOF_CONTEXT,
+    )
+    const theorem: Theorem = {
       name: 'blankToDoubleCut',
       lhs: mkDiagramWithBoundary(blank, []),
       rhs: mkDiagramWithBoundary(goal, []),
-      actions: composed,
+      actions,
     }
-    expect(() => checkTheorem(thm, EMPTY_PROOF_CONTEXT)).not.toThrow()
+
+    expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
   })
 })
 
-describe('end to end: derived rule proved, stored, loaded, applied natively', () => {
-  function dropQ(): Theorem {
-    const l = new DiagramBuilder()
-    const lp = l.termNode(l.root, p('\\a. a'))
-    const lq = l.termNode(l.root, p('\\a. \\b. a'))
-    const lb = l.wire(l.root, [
-      { node: lp, port: { kind: 'output' } },
-      { node: lq, port: { kind: 'output' } },
-    ])
-    const lhs = mkDiagramWithBoundary(l.build(), [lb])
-    const r = new DiagramBuilder()
-    const rp = r.termNode(r.root, p('\\a. a'))
-    const rb = r.wire(r.root, [{ node: rp, port: { kind: 'output' } }])
-    const rhs = mkDiagramWithBoundary(r.build(), [rb])
-    return {
-      name: 'dropQ', lhs, rhs,
-      actions: [singleStepAction('erase Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
-    }
-  }
-
-  it('save → load → apply in a host through a proof step', () => {
+describe('stored derived rule pipeline', () => {
+  it('saves, loads, and applies a theorem natively', () => {
     const theory: Theory = { relations: [], theorems: [dropQ()] }
-    const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))
+    const { ctx } = loadTheory(
+      JSON.parse(JSON.stringify(theoryToJson(theory))),
+    )
 
-    const h = new DiagramBuilder()
-    const hp = h.termNode(h.root, p('\\a. a'))
-    const hq = h.termNode(h.root, p('\\a. \\b. a'))
-    const hub = h.termNode(h.root, p('y'))
-    const v = h.wire(h.root, [
-      { node: hp, port: { kind: 'output' } },
-      { node: hq, port: { kind: 'output' } },
-      { node: hub, port: { kind: 'freeVar', name: 'y' } },
-    ])
-    const d = h.build()
-    const out = replayProof(d, [{
-      rule: 'theorem', name: 'dropQ',
-      at: { sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] }, args: [v] },
+    const host = new DiagramBuilder()
+    const p = host.atom(host.root, PROPOSITION)
+    const q = host.atom(host.root, PROPOSITION)
+    const boundary = host.wire(host.root, [
+      { node: p, port: { kind: 'head' } },
+      { node: q, port: { kind: 'head' } },
+    ], PROPOSITION)
+    const marker = host.atom(host.root, relSig([IOTA]))
+    const markerArgument = host.wire(host.root, [{
+      node: marker,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const diagram = host.build()
+
+    const result = replayProof(diagram, [{
+      rule: 'theorem',
+      name: 'dropQ',
+      at: {
+        sel: {
+          region: diagram.root,
+          regions: [],
+          nodes: [p, q],
+          wires: [],
+        },
+        args: [boundary],
+      },
       direction: 'forward',
     }], ctx)
-    // one application, regardless of the stored proof's length: hub + one P node
-    expect(Object.values(out.nodes)).toHaveLength(2)
-    expect(out.wires[v]?.endpoints).toHaveLength(2)
+
+    expect(Object.values(result.nodes)).toHaveLength(2)
+    expect(result.wires[boundary]?.endpoints).toHaveLength(1)
+    expect(result.wires[markerArgument]).toBeDefined()
   })
 
-  it('the whole pipeline preserves verification: tampered files are refused', () => {
-    const theory: Theory = { relations: [], theorems: [dropQ()] }
-    const j = JSON.parse(JSON.stringify(theoryToJson(theory))) as { theorems: { actions: unknown[] }[] }
-    j.theorems[0]!.actions = [] // tamper: claim the theorem with no proof
-    expect(() => loadTheory(j)).toThrowError(/does not arrive at the stated right-hand side/)
+  it('rejects a theory file whose proof actions were removed', () => {
+    const encoded = JSON.parse(JSON.stringify(theoryToJson({
+      relations: [],
+      theorems: [dropQ()],
+    }))) as { theorems: Array<{ actions: unknown[] }> }
+    encoded.theorems[0]!.actions = []
+
+    expect(() => loadTheory(encoded))
+      .toThrowError(/does not arrive at the stated right-hand side/)
   })
 
-  it('verifyTheory + fingerprints: applying a theorem equals replaying its expansion', () => {
-    const t = dropQ()
-    const ctx = verifyTheory({ relations: [], theorems: [t] })
-    const h = new DiagramBuilder()
-    const hp = h.termNode(h.root, p('\\a. a'))
-    const hq = h.termNode(h.root, p('\\a. \\b. a'))
-    const v = h.wire(h.root, [
-      { node: hp, port: { kind: 'output' } },
-      { node: hq, port: { kind: 'output' } },
-    ])
-    const d = h.build()
-    const native = replayProof(d, [{
-      rule: 'theorem', name: 'dropQ',
-      at: { sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] }, args: [v] },
+  it('native theorem application equals its primitive expansion', () => {
+    const theorem = dropQ()
+    const context = verifyTheory({ relations: [], theorems: [theorem] })
+    const host = new DiagramBuilder()
+    const p = host.atom(host.root, PROPOSITION)
+    const q = host.atom(host.root, PROPOSITION)
+    const boundary = host.wire(host.root, [
+      { node: p, port: { kind: 'head' } },
+      { node: q, port: { kind: 'head' } },
+    ], PROPOSITION)
+    const diagram = host.build()
+
+    const native = replayProof(diagram, [{
+      rule: 'theorem',
+      name: 'dropQ',
+      at: {
+        sel: {
+          region: diagram.root,
+          regions: [],
+          nodes: [p, q],
+          wires: [],
+        },
+        args: [boundary],
+      },
       direction: 'forward',
-    }], ctx)
-    // the same logical move done primitively: erase hq
-    const primitive = replayProof(d, [{
-      rule: 'erasure', sel: { region: d.root, regions: [], nodes: [hq], wires: [] },
-    }], ctx)
+    }], context)
+    const primitive = replayProof(diagram, [{
+      rule: 'erasure',
+      sel: {
+        region: diagram.root,
+        regions: [],
+        nodes: [q],
+        wires: [],
+      },
+    }], context)
+
     expect(exploreForm(native)).toBe(exploreForm(primitive))
   })
 })

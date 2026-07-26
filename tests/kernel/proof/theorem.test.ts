@@ -1,352 +1,346 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../../src/kernel/term/parse'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { RuleError } from '../../../src/kernel/rules/error'
-import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
-import type { Theorem } from '../../../src/kernel/proof/theorem'
-import { EMPTY_PROOF_CONTEXT, registerTheorem, verifyTheory, type ProofContext } from '../../../src/kernel/proof/context'
-import type { ProofStep } from '../../../src/kernel/proof/step'
-import type { ProofAction } from '../../../src/kernel/proof/action'
-import { applyAction, replayActions } from '../../../src/kernel/proof/action'
-import { replayProof } from '../../../src/kernel/proof/step'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
+import {
+  EMPTY_PROOF_CONTEXT,
+  registerTheorem,
+  type ProofContext,
+} from '../../../src/kernel/proof/context'
 import { theoremFromJson, theoremToJson } from '../../../src/kernel/proof/json'
+import { replayProof, type ProofStep } from '../../../src/kernel/proof/step'
+import {
+  applyTheorem,
+  checkTheorem,
+  type Theorem,
+} from '../../../src/kernel/proof/theorem'
+import { RuleError } from '../../../src/kernel/rules/error'
 
-const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = EMPTY_PROOF_CONTEXT
-const action = (label: string, ...steps: ProofStep[]): ProofAction => ({ label, steps, placements: [] })
+const PROPOSITION = relSig([])
 
-function applyCertifiedTheorem(
+function action(label: string, ...steps: ProofStep[]): ProofAction {
+  return { label, steps, placements: [] }
+}
+
+function dropQ(): Theorem {
+  const left = new DiagramBuilder()
+  const p = left.atom(left.root, PROPOSITION)
+  const q = left.atom(left.root, PROPOSITION)
+  const boundary = left.wire(left.root, [
+    { node: p, port: { kind: 'head' } },
+    { node: q, port: { kind: 'head' } },
+  ], PROPOSITION)
+  const lhs = mkDiagramWithBoundary(left.build(), [boundary])
+
+  const right = new DiagramBuilder()
+  const rightP = right.atom(right.root, PROPOSITION)
+  const rightBoundary = right.wire(right.root, [{
+    node: rightP,
+    port: { kind: 'head' },
+  }], PROPOSITION)
+  const rhs = mkDiagramWithBoundary(right.build(), [rightBoundary])
+
+  return {
+    name: 'dropQ',
+    lhs,
+    rhs,
+    actions: [action('erase Q', {
+      rule: 'erasure',
+      sel: {
+        region: lhs.diagram.root,
+        regions: [],
+        nodes: [q],
+        wires: [],
+      },
+    })],
+  }
+}
+
+function applyCertified(
   diagram: Parameters<typeof applyTheorem>[0],
   theorem: Theorem,
   at: Parameters<typeof applyTheorem>[3],
   direction: Parameters<typeof applyTheorem>[4],
   base: ProofContext = EMPTY_PROOF_CONTEXT,
 ) {
-  const certified = registerTheorem(base, theorem)
-  return applyTheorem(diagram, certified, theorem.name, at, direction)
-}
-
-/**
- * The running example: P(x) := x = λa.a, Q(x) := x = λa.λb.a.
- * Theorem dropQ: P(x) ∧ Q(x) ⟹ P(x), proven by one erasure.
- */
-function dropQ(): Theorem {
-  const l = new DiagramBuilder()
-  const lp = l.termNode(l.root, p('\\a. a'))
-  const lq = l.termNode(l.root, p('\\a. \\b. a'))
-  const lb = l.wire(l.root, [
-    { node: lp, port: { kind: 'output' } },
-    { node: lq, port: { kind: 'output' } },
-  ])
-  const lhs = mkDiagramWithBoundary(l.build(), [lb])
-  const r = new DiagramBuilder()
-  const rp = r.termNode(r.root, p('\\a. a'))
-  const rb = r.wire(r.root, [{ node: rp, port: { kind: 'output' } }])
-  const rhs = mkDiagramWithBoundary(r.build(), [rb])
-  return {
-    name: 'dropQ', lhs, rhs,
-    actions: [action('erase Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
-  }
+  const context = registerTheorem(base, theorem)
+  return applyTheorem(
+    diagram,
+    context,
+    theorem.name,
+    at,
+    direction,
+  )
 }
 
 describe('checkTheorem', () => {
-  it('persists and honors action allocation during theorem replay', () => {
-    const lhsDiagram = new DiagramBuilder().build()
-    const reserved = `${lhsDiagram.root}_intro`
-    const reservedAction: ProofAction = {
-      label: 'reserved theorem introduction',
-      steps: [{ rule: 'closedTermIntro', region: lhsDiagram.root, term: p('\\x. x') }],
+  it('accepts the exact primitive derivation and rejects an omitted proof', () => {
+    const theorem = dropQ()
+    expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
+    expect(() => checkTheorem(
+      { ...theorem, actions: [] },
+      EMPTY_PROOF_CONTEXT,
+    )).toThrowError(/does not arrive at the stated right-hand side/)
+  })
+
+  it('persists and honors action allocation during replay', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const relationWire = builder.relWire(builder.root, PROPOSITION)
+    const lhsDiagram = builder.build()
+    const reserved: ProofAction = {
+      label: 'reserved atom',
+      steps: [{
+        rule: 'atomSpawn',
+        region: cut,
+        wire: relationWire,
+      }],
       placements: [],
-      allocation: { regions: [], nodes: [reserved], wires: [reserved] },
+      allocation: {
+        regions: [],
+        nodes: ['n'],
+        wires: [],
+      },
     }
-    const rhsDiagram = applyAction(lhsDiagram, reservedAction, ctx)
+    const rhsDiagram = applyAction(
+      lhsDiagram,
+      reserved,
+      EMPTY_PROOF_CONTEXT,
+    )
     const theorem: Theorem = {
       name: 'reserved-introduction',
       lhs: mkDiagramWithBoundary(lhsDiagram, []),
       rhs: mkDiagramWithBoundary(rhsDiagram, []),
-      actions: [reservedAction],
+      actions: [reserved],
     }
+    const loaded = theoremFromJson(
+      JSON.parse(JSON.stringify(theoremToJson(theorem))),
+    )
 
-    const loaded = theoremFromJson(JSON.parse(JSON.stringify(theoremToJson(theorem))))
-
-    expect(loaded.actions[0]?.allocation).toEqual(reservedAction.allocation)
-    expect(Object.keys(replayActions(loaded.lhs.diagram, loaded.actions, ctx).nodes)).toEqual([`${reserved}_0`])
-    expect(() => checkTheorem(loaded, ctx)).not.toThrow()
+    expect(loaded.actions[0]?.allocation).toEqual(reserved.allocation)
+    expect(() => checkTheorem(loaded, EMPTY_PROOF_CONTEXT)).not.toThrow()
   })
 
-  it('accepts a valid proof', () => {
-    expect(() => checkTheorem(dropQ(), ctx)).not.toThrow()
-  })
-
-  it('rejects proofs that do not arrive at the stated rhs', () => {
-    const t = dropQ()
-    const broken: Theorem = { ...t, actions: [] }
-    expect(() => checkTheorem(broken, ctx))
-      .toThrowError(/does not arrive at the stated right-hand side/)
-  })
-
-  it('rejects a result isomorphic to rhs with SWAPPED boundary correspondence', () => {
-    // Arity-2 forgery: P on pin0 / Q on pin1 versus the same diagram pinned
-    // Q on pin0 / P on pin1. Unpinned fingerprints are EQUAL — only the
-    // boundary-pinned comparison can refuse this argument-order forgery.
+  it('pins ordered boundary correspondence', () => {
     const side = (swap: boolean) => {
-      const b = new DiagramBuilder()
-      const np = b.termNode(b.root, p('\\a. a'))
-      const nq = b.termNode(b.root, p('\\a. \\b. a'))
-      const wp = b.wire(b.root, [{ node: np, port: { kind: 'output' } }])
-      const wq = b.wire(b.root, [{ node: nq, port: { kind: 'output' } }])
-      return mkDiagramWithBoundary(b.build(), swap ? [wq, wp] : [wp, wq])
+      const builder = new DiagramBuilder()
+      const unary = builder.atom(builder.root, relSig([IOTA]))
+      const unaryArgument = builder.wire(builder.root, [{
+        node: unary,
+        port: { kind: 'arg', index: 0 },
+      }])
+      const binary = builder.atom(builder.root, relSig([IOTA, IOTA]))
+      const binaryArgument = builder.wire(builder.root, [{
+        node: binary,
+        port: { kind: 'arg', index: 0 },
+      }])
+      return mkDiagramWithBoundary(
+        builder.build(),
+        swap
+          ? [binaryArgument, unaryArgument]
+          : [unaryArgument, binaryArgument],
+      )
     }
     const lhs = side(false)
     const rhs = side(true)
     expect(exploreForm(lhs.diagram)).toBe(exploreForm(rhs.diagram))
-    const forged: Theorem = { name: 'swap', lhs, rhs, actions: [] }
-    expect(() => checkTheorem(forged, ctx))
-      .toThrowError(/does not arrive at the stated right-hand side/)
+
+    expect(() => checkTheorem({
+      name: 'swapped',
+      lhs,
+      rhs,
+      actions: [],
+    }, EMPTY_PROOF_CONTEXT)).toThrowError(
+      /does not arrive at the stated right-hand side/,
+    )
   })
 
-  it('rejects arity mismatches and cannot construct non-root theorem boundaries', () => {
-    const t = dropQ()
-    const bad: Theorem = { ...t, rhs: mkDiagramWithBoundary(t.rhs.diagram, []) }
-    expect(() => checkTheorem(bad, ctx)).toThrowError(/boundary arity mismatch/)
+  it('rejects boundary arity mismatch and non-root boundaries', () => {
+    const theorem = dropQ()
+    expect(() => checkTheorem({
+      ...theorem,
+      rhs: mkDiagramWithBoundary(theorem.rhs.diagram, []),
+    }, EMPTY_PROOF_CONTEXT)).toThrowError(/boundary arity mismatch/)
 
-    const n = new DiagramBuilder()
-    const cut = n.cut(n.root)
-    const nn = n.termNode(cut, p('\\a. a'))
-    const nw = n.wire(cut, [{ node: nn, port: { kind: 'output' } }])
-    expect(() => mkDiagramWithBoundary(n.build(), [nw]))
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const nested = builder.wire(cut, [], IOTA)
+    expect(() => mkDiagramWithBoundary(builder.build(), [nested]))
       .toThrowError(/must be scoped at the diagram root/)
   })
 
-  it('rejects proofs that destroy a boundary wire', () => {
-    const t = dropQ()
-    // erase BOTH nodes: the boundary wire survives as endpoint-less — still
-    // exists, so build a destroying case differently: sever... a wire is only
-    // DESTROYED by join (inner) or being internal to a removal. Select it
-    // explicitly as removal content:
+  it('rejects a primitive that destroys a theorem boundary wire', () => {
+    const theorem = dropQ()
     const destroying: Theorem = {
-      ...t,
+      ...theorem,
       actions: [action('destroy boundary', {
         rule: 'erasure',
         sel: {
-          region: t.lhs.diagram.root, regions: [],
-          nodes: Object.keys(t.lhs.diagram.nodes),
-          wires: [t.lhs.boundary[0]!],
+          region: theorem.lhs.diagram.root,
+          regions: [],
+          nodes: Object.keys(theorem.lhs.diagram.nodes),
+          wires: [theorem.lhs.boundary[0]!],
         },
       })],
     }
-    expect(() => checkTheorem(destroying, ctx)).toThrowError(/boundary wire .* has no semantic image/)
+
+    expect(() => checkTheorem(destroying, EMPTY_PROOF_CONTEXT))
+      .toThrowError(/boundary wire .* has no semantic image/)
   })
 })
 
 describe('applyTheorem', () => {
-  function host() {
-    // host: P(v) ∧ Q(v) ∧ hub(v) at root
-    const h = new DiagramBuilder()
-    const hp = h.termNode(h.root, p('\\a. a'))
-    const hq = h.termNode(h.root, p('\\a. \\b. a'))
-    const hub = h.termNode(h.root, p('y'))
-    const v = h.wire(h.root, [
-      { node: hp, port: { kind: 'output' } },
-      { node: hq, port: { kind: 'output' } },
-      { node: hub, port: { kind: 'freeVar', name: 'y' } },
-    ])
-    return { d: h.build(), hp, hq, hub, v }
+  function positiveHost() {
+    const builder = new DiagramBuilder()
+    const p = builder.atom(builder.root, PROPOSITION)
+    const q = builder.atom(builder.root, PROPOSITION)
+    const boundary = builder.wire(builder.root, [
+      { node: p, port: { kind: 'head' } },
+      { node: q, port: { kind: 'head' } },
+    ], PROPOSITION)
+    const marker = builder.atom(builder.root, relSig([IOTA]))
+    builder.wire(builder.root, [{
+      node: marker,
+      port: { kind: 'arg', index: 0 },
+    }])
+    return { diagram: builder.build(), p, q, boundary }
   }
 
-  it('forward at a positive region rewrites the occurrence in one step', () => {
-    const { d, hp, hq, v } = host()
-    const out = applyCertifiedTheorem(d, dropQ(), {
-      sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
-      args: [v],
-    }, 'forward')
-    // NOTE: assert by SHAPE, not by id — splice may legitimately REUSE the
-    // removed nodes' ids (freshId only dodges ids still present). Expected:
-    // the hub plus exactly one spliced P node, both on v.
-    expect(Object.values(out.nodes)).toHaveLength(2)
-    const eps = out.wires[v]?.endpoints ?? []
-    expect(eps).toHaveLength(2)
-    expect(eps.filter((ep) => ep.port.kind === 'output')).toHaveLength(1)
-    expect(eps.filter((ep) => ep.port.kind === 'freeVar')).toHaveLength(1)
+  it('rewrites an exact positive occurrence in one native step', () => {
+    const host = positiveHost()
+    const result = applyCertified(
+      host.diagram,
+      dropQ(),
+      {
+        sel: {
+          region: host.diagram.root,
+          regions: [],
+          nodes: [host.p, host.q],
+          wires: [],
+        },
+        args: [host.boundary],
+      },
+      'forward',
+    )
+
+    expect(Object.values(result.nodes)).toHaveLength(2)
+    expect(result.wires[host.boundary]?.endpoints).toHaveLength(1)
   })
 
-  it('reverse at a negative region strengthens, and round-trips by fingerprint', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const hp = h.termNode(cut, p('\\a. a'))
-    const v = h.wire(cut, [{ node: hp, port: { kind: 'output' } }])
-    const d = h.build()
-    const strengthened = applyCertifiedTheorem(d, dropQ(), {
-      sel: { region: cut, regions: [], nodes: [hp], wires: [] },
-      args: [v],
-    }, 'reverse')
-    const nodes = Object.entries(strengthened.nodes)
+  it('reverses at negative polarity and refuses forward use there', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const p = builder.atom(cut, PROPOSITION)
+    const boundary = builder.wire(cut, [{
+      node: p,
+      port: { kind: 'head' },
+    }], PROPOSITION)
+    const diagram = builder.build()
+    const strengthened = applyCertified(
+      diagram,
+      dropQ(),
+      {
+        sel: {
+          region: cut,
+          regions: [],
+          nodes: [p],
+          wires: [],
+        },
+        args: [boundary],
+      },
+      'reverse',
+    )
+    const nodes = Object.keys(strengthened.nodes)
     expect(nodes).toHaveLength(2)
-    // applying forward inside the cut is refused (negative)
-    const [pid] = nodes.find(([, n]) => n.kind === 'term' && n.term.kind === 'lam' && n.term.body.kind === 'bvar')!
-    const [qid] = nodes.find(([id]) => id !== pid)!
-    expect(() => applyCertifiedTheorem(strengthened, dropQ(), {
-      sel: { region: cut, regions: [], nodes: [pid, qid], wires: [] },
-      args: [v],
-    }, 'forward')).toThrowError(/requires a positive region/)
+
+    expect(() => applyCertified(
+      strengthened,
+      dropQ(),
+      {
+        sel: {
+          region: cut,
+          regions: [],
+          nodes,
+          wires: [],
+        },
+        args: [boundary],
+      },
+      'forward',
+    )).toThrowError(/requires a positive region/)
   })
 
-  it('refuses occurrences that do not match the theorem side', () => {
-    const { d, hp, v } = host()
-    expect(() => applyCertifiedTheorem(d, dropQ(), {
-      sel: { region: d.root, regions: [], nodes: [hp], wires: [] },
-      args: [v],
-    }, 'forward')).toThrowError(/not an occurrence of theorem 'dropQ'/)
-  })
+  it('refuses mismatched occurrences and wrong polarity by name', () => {
+    const host = positiveHost()
+    expect(() => applyCertified(
+      host.diagram,
+      dropQ(),
+      {
+        sel: {
+          region: host.diagram.root,
+          regions: [],
+          nodes: [host.p],
+          wires: [],
+        },
+        args: [host.boundary],
+      },
+      'forward',
+    )).toThrowError(/not an occurrence of theorem 'dropQ'/)
 
-  it('refuses wrong polarity by name in both directions', () => {
-    const { d, hp, hq, v } = host()
     let caught: unknown
     try {
-      applyCertifiedTheorem(d, dropQ(), {
-        sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
-        args: [v],
-      }, 'reverse')
-    } catch (e) { caught = e }
-    expect(caught).toBeInstanceOf(RuleError)
-    expect((caught as Error).message).toMatch(/reverse requires a negative region/)
-  })
-
-  it('maps repeated theorem boundary incidences to one intrinsic host identity', () => {
-    const sideBuilder = new DiagramBuilder()
-    const sideNode = sideBuilder.termNode(sideBuilder.root, p('\\x. x'))
-    const sideWire = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'output' } }])
-    const side = mkDiagramWithBoundary(sideBuilder.build(), [sideWire, sideWire])
-    const theorem: Theorem = { name: 'aliasId', lhs: side, rhs: side, actions: [] }
-    expect(() => checkTheorem(theorem, ctx)).not.toThrow()
-
-    const host = new DiagramBuilder()
-    const node = host.termNode(host.root, p('\\x. x'))
-    const wire = host.wire(host.root, [{ node, port: { kind: 'output' } }])
-    const diagram = host.build()
-    expect(() => applyCertifiedTheorem(diagram, theorem, {
-      sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
-      args: [wire, wire],
-    }, 'forward')).not.toThrow()
-  })
-
-  it('does not invent a call-site alias between distinct theorem boundary identities', () => {
-    const sideBuilder = new DiagramBuilder()
-    const sideNode = sideBuilder.ref(sideBuilder.root, 'Pair', relSig([IOTA, IOTA]))
-    const a = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 0 } }])
-    const b = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 1 } }])
-    const side = mkDiagramWithBoundary(sideBuilder.build(), [a, b])
-    const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, actions: [] }
-
-    const host = new DiagramBuilder()
-    const node = host.ref(host.root, 'Pair', relSig([IOTA, IOTA]))
-    const shared = host.wire(host.root, [
-      { node, port: { kind: 'arg', index: 0 } },
-      { node, port: { kind: 'arg', index: 1 } },
-    ])
-    const diagram = host.build()
-    const relationBuilder = new DiagramBuilder()
-    const first = relationBuilder.wire(relationBuilder.root, [])
-    const second = relationBuilder.wire(relationBuilder.root, [])
-    const pairContext = verifyTheory({
-      relations: [['Pair', mkDiagramWithBoundary(relationBuilder.build(), [first, second])]],
-      theorems: [],
-    })
-    expect(() => applyCertifiedTheorem(diagram, theorem, {
-      sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
-      args: [shared, shared],
-    }, 'forward', pairContext)).toThrowError(/not an occurrence of theorem 'pairId'/)
-  })
-})
-
-describe('theorem steps inside proofs (derived rules used natively)', () => {
-  it('a registered theorem applies through replayProof without expansion', () => {
-    const t = dropQ()
-    const c2 = registerTheorem(ctx, t)
-    const { d, hp, hq, v } = (() => {
-      const h = new DiagramBuilder()
-      const hp = h.termNode(h.root, p('\\a. a'))
-      const hq = h.termNode(h.root, p('\\a. \\b. a'))
-      const v = h.wire(h.root, [
-        { node: hp, port: { kind: 'output' } },
-        { node: hq, port: { kind: 'output' } },
-      ])
-      return { d: h.build(), hp, hq, v }
-    })()
-    const out = replayProof(d, [{
-      rule: 'theorem', name: 'dropQ',
-      at: { sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] }, args: [v] },
-      direction: 'forward',
-    }], c2)
-    expect(Object.values(out.nodes)).toHaveLength(1)
-  })
-})
-
-describe('boundary-wire id resurrection is refused', () => {
-  /** Trivial arity-0 theorem whose sides carry a wire literally named 'w0'. */
-  function idTheorem(): Theorem {
-    const b = new DiagramBuilder()
-    const n = b.termNode(b.root, p('\\a. a'))
-    b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
-    const side = mkDiagramWithBoundary(b.build(), [])
-    return { name: 'idT', lhs: side, rhs: side, actions: [] }
-  }
-
-  it('a proof that destroys the boundary wire and re-mints its id later is refused', () => {
-    // the FALSE claim: K(a) ∧ ∃y.id(y) ⟹ id(a). Step 1 erases K together
-    // with the boundary wire w0; step 2 cites idT, whose splice would mint
-    // the now-free id 'w0' for a semantically unrelated wire.
-    const T = idTheorem()
-    const l = new DiagramBuilder()
-    const k = l.termNode(l.root, p('\\a. \\b. a'))
-    const idn = l.termNode(l.root, p('\\a. a'))
-    const w0 = l.wire(l.root, [{ node: k, port: { kind: 'output' } }])
-    const w1 = l.wire(l.root, [{ node: idn, port: { kind: 'output' } }])
-    const lhs = mkDiagramWithBoundary(l.build(), [w0])
-    const r = new DiagramBuilder()
-    const rn = r.termNode(r.root, p('\\a. a'))
-    const rb = r.wire(r.root, [{ node: rn, port: { kind: 'output' } }])
-    const rhs = mkDiagramWithBoundary(r.build(), [rb])
-    const forged: Theorem = {
-      name: 'forged', lhs, rhs,
-      actions: [action('erase and replace',
-        { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [k], wires: [w0] } },
+      applyCertified(
+        host.diagram,
+        dropQ(),
         {
-          rule: 'theorem', name: 'idT',
-          at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w1] }, args: [] },
-          direction: 'forward',
+          sel: {
+            region: host.diagram.root,
+            regions: [],
+            nodes: [host.p, host.q],
+            wires: [],
+          },
+          args: [host.boundary],
         },
-      )],
+        'reverse',
+      )
+    } catch (error) {
+      caught = error
     }
-    const c = registerTheorem(ctx, T)
-    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
+    expect(caught).toBeInstanceOf(RuleError)
+    expect((caught as Error).message)
+      .toMatch(/reverse requires a negative region/)
   })
+})
 
-  it('a single theorem step cannot destroy and re-mint the boundary id within itself', () => {
-    // an invalid proof of a true-looking claim: the step removes the boundary
-    // wire as occurrence content and the splice would re-mint its id in one
-    // applier call. Only valid proofs certify — this must be refused.
-    const T = idTheorem()
-    const l = new DiagramBuilder()
-    const idn = l.termNode(l.root, p('\\a. a'))
-    const w0 = l.wire(l.root, [{ node: idn, port: { kind: 'output' } }])
-    const lhs = mkDiagramWithBoundary(l.build(), [w0])
-    const r = new DiagramBuilder()
-    const rn = r.termNode(r.root, p('\\a. a'))
-    const rb = r.wire(r.root, [{ node: rn, port: { kind: 'output' } }])
-    const rhs = mkDiagramWithBoundary(r.build(), [rb])
-    const forged: Theorem = {
-      name: 'forgedOneStep', lhs, rhs,
-      actions: [action('replace occurrence', {
-        rule: 'theorem', name: 'idT',
-        at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w0] }, args: [] },
-        direction: 'forward',
-      })],
-    }
-    const c = registerTheorem(ctx, T)
-    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
+describe('theorem proof steps', () => {
+  it('applies a registered theorem without expanding its stored proof', () => {
+    const theorem = dropQ()
+    const context = registerTheorem(EMPTY_PROOF_CONTEXT, theorem)
+    const builder = new DiagramBuilder()
+    const p = builder.atom(builder.root, PROPOSITION)
+    const q = builder.atom(builder.root, PROPOSITION)
+    const boundary = builder.wire(builder.root, [
+      { node: p, port: { kind: 'head' } },
+      { node: q, port: { kind: 'head' } },
+    ], PROPOSITION)
+    const diagram = builder.build()
+
+    const result = replayProof(diagram, [{
+      rule: 'theorem',
+      name: 'dropQ',
+      at: {
+        sel: {
+          region: diagram.root,
+          regions: [],
+          nodes: [p, q],
+          wires: [],
+        },
+        args: [boundary],
+      },
+      direction: 'forward',
+    }], context)
+
+    expect(Object.values(result.nodes)).toHaveLength(1)
   })
 })

@@ -58,6 +58,14 @@ export type DiagramNormalization = {
   readonly wireImage: ReadonlyMap<WireId, WireId | undefined>
 }
 
+export type DiagramNormalizationCapture<T> = {
+  readonly result: T
+  readonly normalizations: readonly DiagramNormalization[]
+}
+
+const normalizationCaptures: DiagramNormalization[][] = []
+let normalizationCaptureSuppression = 0
+
 export class DiagramError extends Error {
   constructor(message: string) {
     super(message)
@@ -288,10 +296,50 @@ function rawFromParts(parts: DiagramParts): Diagram {
 
 /** Validate, eagerly normalize identities to a fixpoint, and retain transport. */
 export function mkDiagramNormalized(parts: DiagramParts): DiagramNormalization {
-  return normalizeIdentities(rawFromParts(parts))
+  const normalization = normalizeIdentities(rawFromParts(parts))
+  if (
+    normalizationCaptureSuppression === 0
+    && normalizationCaptures.length > 0
+  ) {
+    normalizationCaptures[normalizationCaptures.length - 1]!.push(
+      normalization,
+    )
+  }
+  return normalization
 }
 
 /** Canonical diagram construction when the caller does not need transport. */
 export function mkDiagram(parts: DiagramParts): Diagram {
   return mkDiagramNormalized(parts).diagram
+}
+
+/**
+ * Capture the authoritative wire images produced by one synchronous graph
+ * mutation. Detached pattern construction may suppress capture explicitly.
+ */
+export function captureDiagramNormalizations<T>(
+  operation: () => T,
+): DiagramNormalizationCapture<T> {
+  const normalizations: DiagramNormalization[] = []
+  normalizationCaptures.push(normalizations)
+  try {
+    return {
+      result: operation(),
+      normalizations: Object.freeze([...normalizations]),
+    }
+  } finally {
+    normalizationCaptures.pop()
+  }
+}
+
+/** Exclude self-contained pattern normalization from a host mutation trace. */
+export function withoutDiagramNormalizationCapture<T>(
+  operation: () => T,
+): T {
+  normalizationCaptureSuppression += 1
+  try {
+    return operation()
+  } finally {
+    normalizationCaptureSuppression -= 1
+  }
 }

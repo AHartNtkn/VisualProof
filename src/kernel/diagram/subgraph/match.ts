@@ -70,7 +70,7 @@ function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
 
 /**
  * Exhaustive exact structural occurrence search. Fuel limits graph candidate
- * probes only; no semantic conversion or secondary verdict exists.
+ * probes only; no semantic equivalence oracle or secondary verdict exists.
  */
 export function findOccurrences(
   host: Diagram,

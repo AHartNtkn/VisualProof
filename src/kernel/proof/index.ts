@@ -1,7 +1,17 @@
 export { ProofError } from './error'
 export type { ProofContext, Theory } from './context'
-export type { ProofStep } from './step'
-export { applyStep, replayProof } from './step'
+export type {
+  ProofStep,
+  StepReceipt,
+  WireInterfaceTransport,
+  WireProvenance,
+} from './step'
+export {
+  applyStep,
+  applyStepWithReceipt,
+  replayProof,
+  transportBoundary,
+} from './step'
 export {
   EMPTY_PROOF_CONTEXT, assertProofContext, extendRelations, registerTheorem, verifyTheory,
 } from './context'

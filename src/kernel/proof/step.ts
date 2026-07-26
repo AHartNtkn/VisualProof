@@ -1,90 +1,66 @@
-import type { Term } from '../term/term'
-import type { PathSeg } from '../term/reduce'
-import type { ConversionCertificate } from '../term/certificate'
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/diagram'
-import type { Sig, RelSig } from '../diagram/sig'
+import type {
+  Diagram,
+  DiagramNormalization,
+  Endpoint,
+  NodeId,
+  RegionId,
+  WireId,
+} from '../diagram/diagram'
+import { captureDiagramNormalizations } from '../diagram/diagram'
+import { isAncestorOrEqual } from '../diagram/regions'
+import type { RelSig, Sig } from '../diagram/sig'
 import type { IdReservation } from '../diagram/subgraph/freshId'
-import type { DiagramWithBoundary } from '../diagram/boundary'
-import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
-import type { PortCorrespondence } from '../rules/port-correspondence'
-import { applyWireJoin } from '../rules/wire-join'
-import { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from '../rules/spawn'
+import type { SubgraphSelection } from '../diagram/subgraph/selection'
+import { applyDoubleCutElim, applyDoubleCutIntro } from '../rules/doublecut'
 import { applyErasure, applyWireSever } from '../rules/erasure'
-import { applyIteration, applyDeiteration } from '../rules/iteration'
-import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
-import { applyConversionByCertificate } from '../rules/conversion'
-import { applyCongruenceJoin } from '../rules/congruence'
-import { anchorAvailability, applyAnchoredWireSplit, applyAnchoredWireContract } from '../rules/anchored-wire'
-import { applyHeadStrip } from '../rules/headstrip'
-import { applyClosedTermIntro } from '../rules/intro'
-import { applyFusion, applyFission } from '../rules/fusion'
-import { applyVacuousIntro, applyVacuousElim, type VacuousBody } from '../rules/vacuous'
-import { applyBodyAttach, applyBodyDetach } from '../rules/body'
-import { applyUnfold, applyFold } from '../rules/fold'
-import type { TheoremApplication } from './theorem'
-import { applyTheorem } from './theorem'
+import { applyFold, applyUnfold } from '../rules/fold'
+import {
+  applyIdentityContradiction,
+  applyIdentityInsertion,
+  type IdentityContradictionEvidence,
+} from '../rules/identity'
+import {
+  applyDeiteration,
+  applyIteration,
+  type IdentityRetarget,
+} from '../rules/iteration'
+import { applyRefSpawn, applyAtomSpawn } from '../rules/spawn'
+import { applyVacuousElim, applyVacuousIntro } from '../rules/vacuous'
+import { applyWireJoin } from '../rules/wire-join'
+import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
-import type { ProofContext } from './context'
-import { assertProofContext } from './context'
+import { applyTheorem, type TheoremApplication } from './theorem'
 
-/**
- * One serializable rule application. Replay carries no trust: applyStep calls
- * the real appliers, each enforcing its own gate. Conversion replays by
- * certificates. Replay is entirely fuel-free and never reruns proof search.
- */
-// Every rule name below requires a corresponding Lean StepTag
-// (VisualProof/Correspondence/StepTags.lean, Plan 2's TS↔Lean pointer).
+/** One replayable Phase-1 primitive. This union is the durable proof language. */
 export type ProofStep =
-  | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term; readonly freePorts: readonly string[] }
-  | { readonly rule: 'relationSpawn'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }
-  | { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly wire: WireId }
+  | { readonly rule: 'refSpawn'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }
+  | { readonly rule: 'atomSpawn'; readonly region: RegionId; readonly wire: WireId }
+  | { readonly rule: 'identityInsert'; readonly region: RegionId; readonly wires: readonly WireId[] }
+  | { readonly rule: 'identityContradiction'; readonly enclosingCut: RegionId; readonly evidence: IdentityContradictionEvidence }
   | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
-  | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId }
-  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
+  | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId; readonly retargets: readonly IdentityRetarget[] }
+  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate; readonly retargets: readonly IdentityRetarget[] }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
-  | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence; readonly attachments: Readonly<Record<string, WireId>> }
-  | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence }
-  | { readonly rule: 'anchoredWireSplit'; readonly wire: WireId; readonly witness: NodeId; readonly endpoints: readonly Endpoint[]; readonly target: RegionId }
-  | { readonly rule: 'anchoredWireContract'; readonly redundant: NodeId; readonly survivor: NodeId; readonly certificate: ConversionCertificate }
-  | { readonly rule: 'headStrip'; readonly a: NodeId; readonly b: NodeId; readonly correspondence: PortCorrespondence }
-  | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
-  | { readonly rule: 'fusion'; readonly wire: WireId }
-  | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
-  | { readonly rule: 'vacuousIntro'; readonly scope: RegionId; readonly sig: Sig; readonly body?: VacuousBody }
+  | { readonly rule: 'vacuousIntro'; readonly scope: RegionId; readonly sig: Sig }
   | { readonly rule: 'vacuousElim'; readonly wireId: WireId }
-  | { readonly rule: 'bodyAttach'; readonly wireId: WireId; readonly content: DiagramWithBoundary; readonly params: readonly WireId[] }
-  | { readonly rule: 'bodyDetach'; readonly bodyNodeId: NodeId }
   | { readonly rule: 'unfold'; readonly nodeId: NodeId }
-  | { readonly rule: 'fold'; readonly occurrence: SubgraphSelection; readonly args: readonly WireId[]; readonly target: FoldStepTarget }
+  | { readonly rule: 'fold'; readonly occurrence: SubgraphSelection; readonly args: readonly WireId[]; readonly defId: string }
 
-/** The serializable half of a fold target: the resolver is injected at replay
- * from the proof's theory context, never persisted. */
-export type FoldStepTarget =
-  | { readonly wireId: WireId }
-  | { readonly defId: string; readonly sig: RelSig }
-
-/** Logical transport of source wire identities through one proof step.
- * Unlike graph provenance, distinct source identities may intentionally
- * coalesce. An absent image means the identity cannot remain on an open
- * boundary after this step. */
+/** Logical transport of source wire identities through one proof step. */
 export type WireInterfaceTransport = {
   readonly image: (wire: WireId) => WireId | undefined
 }
 
-/** Injective graph-identity provenance through one proof step.
- * A source wire has an image exactly when that same identity survives as a
- * root-scoped result wire. Unlike the logical interface, provenance never
- * coalesces distinct source identities. */
+/** Injective graph provenance: only the same surviving source ID is retained. */
 export type WireProvenance = {
   readonly image: (wire: WireId) => WireId | undefined
 }
 
-/** Authoritative result of executing one serialized proof step. */
 export type StepReceipt = {
   readonly result: Diagram
   readonly provenance: WireProvenance
@@ -105,188 +81,231 @@ export function transportBoundary(
   return mapped
 }
 
-function rootFilteredInterface(
+function rootImage(
   target: Diagram,
-  candidate: (wire: WireId) => WireId | undefined,
-): WireInterfaceTransport {
-  return {
-    image(wire) {
-      const mapped = candidate(wire)
-      if (mapped === undefined) return undefined
-      const targetWire = target.wires[mapped]
-      return targetWire !== undefined && targetWire.scope === target.root ? mapped : undefined
-    },
-  }
+  candidate: WireId | undefined,
+): WireId | undefined {
+  if (candidate === undefined) return undefined
+  return target.wires[candidate]?.scope === target.root ? candidate : undefined
 }
 
-function rootFilteredProvenance(
-  target: Diagram,
-  candidate: (wire: WireId) => WireId | undefined,
-): WireProvenance {
-  return {
-    image(wire) {
-      const mapped = candidate(wire)
-      if (mapped === undefined) return undefined
-      const targetWire = target.wires[mapped]
-      return targetWire !== undefined && targetWire.scope === target.root ? mapped : undefined
-    },
-  }
-}
-
-/**
- * Apply one step. `orientation` is the reasoning direction: 'forward' (the
- * default — replay and forward proving) keeps every gate as stated;
- * 'backward' (acting on a GOAL) flips exactly the polarity-tied gates
- * (erasure, atomic spawning, wire joining, theorem citation) — the calculus's cut symmetry.
- * Execution is IDENTICAL either way: one applier per rule, no mirrors.
- */
 function applyStepRaw(
-  d: Diagram,
+  diagram: Diagram,
   step: ProofStep,
-  ctx: ProofContext,
-  orientation: 'forward' | 'backward' = 'forward',
+  context: ProofContext,
+  orientation: 'forward' | 'backward',
   reservation?: IdReservation,
 ): Diagram {
   switch (step.rule) {
-    case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, step.freePorts, orientation, reservation)
-    case 'relationSpawn': return applyRelationSpawn(d, step.region, step.defId, step.sig, ctx.relations, orientation, reservation)
-    case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.wire, orientation, reservation)
-    case 'wireJoin': return applyWireJoin(d, step.a, step.b, orientation)
-    case 'erasure': return applyErasure(d, step.sel, orientation)
-    case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation, reservation)
-    case 'iteration': return applyIteration(d, step.sel, step.target, reservation)
-    case 'deiteration': return applyDeiteration(d, step.sel, step.justifier, step.certificate)
-    case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel, reservation)
-    case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
-    case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.correspondence, step.attachments, reservation)
-    case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate, step.correspondence)
-    case 'anchoredWireSplit': return applyAnchoredWireSplit(d, step.wire, step.witness, step.endpoints, step.target, reservation)
-    case 'anchoredWireContract': return applyAnchoredWireContract(d, step.redundant, step.survivor, step.certificate)
-    case 'headStrip': return applyHeadStrip(d, step.a, step.b, step.correspondence, reservation)
-    case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term, reservation)
-    case 'fusion': return applyFusion(d, step.wire)
-    case 'fission': return applyFission(d, step.node, step.path, reservation)
-    case 'theorem': {
-      return applyTheorem(d, ctx, step.name, step.at, step.direction, orientation, reservation)
-    }
-    case 'vacuousIntro': return applyVacuousIntro(d, step.scope, step.sig, reservation, step.body)
-    case 'vacuousElim': return applyVacuousElim(d, step.wireId)
-    case 'bodyAttach': return applyBodyAttach(d, step.wireId, step.content, step.params, orientation, reservation)
-    case 'bodyDetach': return applyBodyDetach(d, step.bodyNodeId, orientation)
-    case 'unfold': return applyUnfold(d, step.nodeId, ctx.relations, reservation)
-    case 'fold': {
-      if ('wireId' in step.target) {
-        throw new ProofError('fold wire targets are not supported by the ref definition store')
-      }
-      return applyFold(
-        d,
-        step.occurrence,
-        step.args,
-        step.target.defId,
-        ctx.relations,
+    case 'refSpawn':
+      return applyRefSpawn(
+        diagram,
+        step.region,
+        step.defId,
+        step.sig,
+        context.relations,
+        orientation,
         reservation,
       )
+    case 'atomSpawn':
+      return applyAtomSpawn(
+        diagram,
+        step.region,
+        step.wire,
+        orientation,
+        reservation,
+      )
+    case 'identityInsert':
+      return applyIdentityInsertion(
+        diagram,
+        step.region,
+        step.wires,
+        reservation,
+      )
+    case 'identityContradiction':
+      return applyIdentityContradiction(
+        diagram,
+        step.enclosingCut,
+        step.evidence,
+      )
+    case 'wireJoin':
+      return applyWireJoin(diagram, step.a, step.b, orientation)
+    case 'erasure':
+      return applyErasure(diagram, step.sel)
+    case 'wireSever':
+      return applyWireSever(
+        diagram,
+        step.wire,
+        step.keep,
+        orientation,
+        reservation,
+      )
+    case 'iteration':
+      return applyIteration(
+        diagram,
+        step.sel,
+        step.target,
+        step.retargets,
+        reservation,
+      )
+    case 'deiteration':
+      return applyDeiteration(
+        diagram,
+        step.sel,
+        step.justifier,
+        step.certificate,
+        step.retargets,
+      )
+    case 'doubleCutIntro':
+      return applyDoubleCutIntro(diagram, step.sel, reservation)
+    case 'doubleCutElim':
+      return applyDoubleCutElim(diagram, step.region)
+    case 'theorem':
+      return applyTheorem(
+        diagram,
+        context,
+        step.name,
+        step.at,
+        step.direction,
+        orientation,
+        reservation,
+      )
+    case 'vacuousIntro':
+      return applyVacuousIntro(
+        diagram,
+        step.scope,
+        step.sig,
+        reservation,
+      )
+    case 'vacuousElim':
+      return applyVacuousElim(diagram, step.wireId)
+    case 'unfold':
+      return applyUnfold(
+        diagram,
+        step.nodeId,
+        context.relations,
+        reservation,
+      )
+    case 'fold':
+      return applyFold(
+        diagram,
+        step.occurrence,
+        step.args,
+        step.defId,
+        context.relations,
+        reservation,
+      )
+  }
+}
+
+function joinedRepresentative(
+  diagram: Diagram,
+  step: ProofStep,
+  wire: WireId,
+): WireId {
+  if (step.rule !== 'wireJoin') return wire
+  const a = diagram.wires[step.a]
+  const b = diagram.wires[step.b]
+  if (a === undefined || b === undefined) return wire
+  const retained = isAncestorOrEqual(diagram, a.scope, b.scope)
+    ? step.a
+    : step.b
+  return wire === step.a || wire === step.b ? retained : wire
+}
+
+function composeNormalizationWireImage(
+  source: WireId,
+  normalizations: readonly DiagramNormalization[],
+): WireId | undefined {
+  let current: WireId | undefined = source
+  for (const normalization of normalizations) {
+    if (current === undefined || !normalization.wireImage.has(current)) {
+      return undefined
     }
+    current = normalization.wireImage.get(current)
   }
-}
-
-/** Execute one step and return its semantic open-interface transport.
- * Graph operations continue to own concrete mutation; this receipt is the
- * single authority for carrying an ordered boundary across that mutation. */
-export function applyStepWithReceipt(
-  d: Diagram,
-  step: ProofStep,
-  ctx: ProofContext,
-  orientation: 'forward' | 'backward' = 'forward',
-  reservation?: IdReservation,
-): StepReceipt {
-  assertProofContext(ctx)
-  const result = applyStepRaw(d, step, ctx, orientation, reservation)
-  const survivingSameId = (wire: WireId): WireId | undefined =>
-    d.wires[wire] !== undefined && result.wires[wire] !== undefined ? wire : undefined
-  const provenance = rootFilteredProvenance(
-    result,
-    survivingSameId,
-  )
-  let candidate: (wire: WireId) => WireId | undefined =
-    survivingSameId
-
-  if (step.rule === 'wireJoin') {
-    const aSurvives = result.wires[step.a] !== undefined
-    const retained = aSurvives ? step.a : step.b
-    const absorbed = aSurvives ? step.b : step.a
-    candidate = (wire) => wire === absorbed
-      ? retained
-      : survivingSameId(wire)
-  } else if (step.rule === 'anchoredWireContract') {
-    const redundant = d.nodes[step.redundant]
-    const survivor = d.nodes[step.survivor]
-    const drop = redundant?.kind === 'term'
-      ? Object.keys(d.wires).find((wire) => d.wires[wire]!.endpoints.some((endpoint) =>
-          endpoint.node === step.redundant && endpoint.port.kind === 'output'))
-      : undefined
-    const keep = survivor?.kind === 'term'
-      ? Object.keys(d.wires).find((wire) => d.wires[wire]!.endpoints.some((endpoint) =>
-          endpoint.node === step.survivor && endpoint.port.kind === 'output'))
-      : undefined
-    const coalescesAtRoot = drop !== undefined
-      && keep !== undefined
-      && anchorAvailability(d, step.survivor) === d.root
-    candidate = (wire) => wire === drop && coalescesAtRoot
-      ? keep
-      : survivingSameId(wire)
-  } else if (step.rule === 'congruenceJoin') {
-    const outputWire = (node: NodeId): WireId | undefined => Object.keys(d.wires).find((wire) =>
-      d.wires[wire]!.endpoints.some((endpoint) => endpoint.node === node && endpoint.port.kind === 'output'))
-    const aOutput = outputWire(step.a)
-    const bOutput = outputWire(step.b)
-    const keep = aOutput !== undefined && result.wires[aOutput] !== undefined ? aOutput : bOutput
-    const drop = keep === aOutput ? bOutput : aOutput
-    candidate = (wire) => wire === drop && keep !== undefined
-      ? keep
-      : survivingSameId(wire)
-  }
-
-  return {
-    result,
-    provenance,
-    interface: rootFilteredInterface(result, candidate),
-  }
-}
-
-/** Diagram projection for callers that do not carry an open boundary. */
-export function applyStep(
-  d: Diagram,
-  step: ProofStep,
-  ctx: ProofContext,
-  orientation: 'forward' | 'backward' = 'forward',
-  reservation?: IdReservation,
-): Diagram {
-  assertProofContext(ctx)
-  return applyStepWithReceipt(d, step, ctx, orientation, reservation).result
+  return current
 }
 
 /**
- * Fold steps over a diagram, naming the failing step on any refusal. The
- * optional onStep invariant runs after every step; its throws propagate
- * unwrapped (they carry their own context).
+ * Execute one primitive and compose its wire receipt in the required order:
+ * rule-intent, identity canonicalization, then root visibility.
  */
+export function applyStepWithReceipt(
+  diagram: Diagram,
+  step: ProofStep,
+  context: ProofContext,
+  orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
+): StepReceipt {
+  assertProofContext(context)
+  const captured = captureDiagramNormalizations(
+    () => applyStepRaw(
+      diagram,
+      step,
+      context,
+      orientation,
+      reservation,
+    ),
+  )
+  const result = captured.result
+  const interfaceImage = (source: WireId): WireId | undefined => {
+    if (diagram.wires[source] === undefined) return undefined
+    const intentional = joinedRepresentative(diagram, step, source)
+    return rootImage(
+      result,
+      composeNormalizationWireImage(intentional, captured.normalizations),
+    )
+  }
+  const provenanceImage = (source: WireId): WireId | undefined =>
+    diagram.wires[source] !== undefined
+    && result.wires[source] !== undefined
+    && result.wires[source]!.scope === result.root
+      ? source
+      : undefined
+
+  return {
+    result,
+    provenance: { image: provenanceImage },
+    interface: { image: interfaceImage },
+  }
+}
+
+export function applyStep(
+  diagram: Diagram,
+  step: ProofStep,
+  context: ProofContext,
+  orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
+): Diagram {
+  return applyStepWithReceipt(
+    diagram,
+    step,
+    context,
+    orientation,
+    reservation,
+  ).result
+}
+
 export function replayProof(
   start: Diagram,
   steps: readonly ProofStep[],
-  ctx: ProofContext,
-  onStep?: (d: Diagram, stepIndex: number) => void,
+  context: ProofContext,
+  onStep?: (diagram: Diagram, stepIndex: number) => void,
   orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
-  assertProofContext(ctx)
-  let cur = start
-  steps.forEach((s, i) => {
+  assertProofContext(context)
+  let current = start
+  steps.forEach((step, index) => {
     try {
-      cur = applyStep(cur, s, ctx, orientation)
-    } catch (e) {
-      throw new ProofError(`step ${i} (${s.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
+      current = applyStep(current, step, context, orientation)
+    } catch (error) {
+      throw new ProofError(
+        `step ${index} (${step.rule}) failed: `
+        + `${error instanceof Error ? error.message : String(error)}`,
+      )
     }
-    onStep?.(cur, i)
+    onStep?.(current, index)
   })
-  return cur
+  return current
 }
