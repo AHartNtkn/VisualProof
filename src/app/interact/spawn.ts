@@ -9,7 +9,6 @@ export type SpawnRelationBody = { readonly boundary: readonly unknown[] }
 export type SpawnRelationSource = Iterable<readonly [string, SpawnRelationBody]>
 
 export type SpawnRelation = {
-  /** Exact relation identifier submitted to the edit layer. */
   readonly defId: string
   readonly namespace: string | null
   readonly leaf: string
@@ -28,36 +27,33 @@ export type SpawnCatalog = {
   readonly byId: ReadonlyMap<string, SpawnRelation>
 }
 
-export type SpawnBoundPredicateOption = {
-  readonly source: 'draft' | 'host'
+export type AtomHeadOption = {
   readonly wire: WireId
   readonly arity: number
   readonly position: number
   readonly total: number
 }
 
-/**
- * Every relational wire enclosing `region` is a second-order existential line an
- * atom may be spawned onto (the old "bound predicate binder"). Ordered
- * innermost-scope first, deterministic within a scope by wire id.
- */
-export function boundPredicateOptions(d: Diagram, region: RegionId): readonly SpawnBoundPredicateOption[] {
-  const found: { wire: WireId; arity: number }[] = []
+/** Visible relational wires that can own the head of a new atom. */
+export function atomHeadOptions(
+  diagram: Diagram,
+  region: RegionId,
+): readonly AtomHeadOption[] {
+  const found: Array<{ readonly wire: WireId; readonly arity: number }> = []
   let current: RegionId | undefined = region
   for (;;) {
-    const value: Diagram['regions'][string] | undefined = d.regions[current]
+    const value: Diagram['regions'][string] | undefined = diagram.regions[current]
     if (value === undefined) throw new Error(`unknown region '${current}'`)
-    const here = Object.entries(d.wires)
-      .filter(([, w]) => w.scope === current && w.sig.kind === 'rel')
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    for (const [wid, w] of here) {
-      if (w.sig.kind === 'rel') found.push({ wire: wid, arity: w.sig.args.length })
+    const here = Object.entries(diagram.wires)
+      .filter(([, wire]) => wire.scope === current && wire.sig.kind === 'rel')
+      .sort(([left], [right]) => left.localeCompare(right))
+    for (const [wire, value] of here) {
+      if (value.sig.kind === 'rel') found.push({ wire, arity: value.sig.args.length })
     }
     if (value.kind === 'sheet') break
     current = value.parent
   }
   return Object.freeze(found.map((option, index) => Object.freeze({
-    source: 'draft' as const,
     ...option,
     position: index + 1,
     total: found.length,
@@ -70,19 +66,13 @@ export type SpawnInvocation = {
   readonly region: RegionId
 }
 
-export type SpawnTermRequest = {
-  readonly source: string
-  readonly invocation: SpawnInvocation
-}
-
-export type SpawnRelationRequest = {
+export type SpawnRefRequest = {
   readonly defId: string
   readonly arity: number
   readonly invocation: SpawnInvocation
 }
 
-export type SpawnBoundPredicateRequest = {
-  readonly source: SpawnBoundPredicateOption['source']
+export type SpawnAtomRequest = {
   readonly wire: WireId
   readonly arity: number
   readonly invocation: SpawnInvocation
@@ -90,93 +80,99 @@ export type SpawnBoundPredicateRequest = {
 
 export type SpawnCascadeOptions = {
   readonly host: HTMLElement
-  /** Return false to keep the cascade open after a refused edit. */
-  readonly spawnTerm: (request: SpawnTermRequest) => boolean | void
-  /** Return false to keep the cascade open after a refused edit. */
-  readonly spawnRelation: (request: SpawnRelationRequest) => boolean | void
-  /** Return false to keep the cascade open after a refused edit. */
-  readonly spawnBoundPredicate: (request: SpawnBoundPredicateRequest) => boolean | void
-  /** Presentation color derived from the renderer's authoritative relation-wire hue. */
-  readonly headWireColor: (wire: WireId, source: SpawnBoundPredicateOption['source']) => string
-  /** View-only relation-wire emphasis. Null clears every cascade-owned emphasis. */
-  readonly hoverHeadWire?: (
-    wire: WireId | null,
-    source: SpawnBoundPredicateOption['source'] | null,
-  ) => void
+  readonly spawnRef: (request: SpawnRefRequest) => boolean | void
+  readonly spawnAtom: (request: SpawnAtomRequest) => boolean | void
+  readonly headWireColor: (wire: WireId) => string
+  readonly hoverHeadWire?: (wire: WireId | null) => void
   readonly openChanged?: (open: boolean) => void
   readonly recentsLimit?: number
 }
 
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
-function relationParts(defId: string): { readonly namespace: string | null; readonly leaf: string } {
+function relationParts(defId: string): {
+  readonly namespace: string | null
+  readonly leaf: string
+} {
   const separator = defId.lastIndexOf('/')
   return separator < 0
     ? { namespace: null, leaf: defId }
     : { namespace: defId.slice(0, separator), leaf: defId.slice(separator + 1) }
 }
 
-/** Snapshot the current real relation map into deterministic browse groups. */
 export function buildSpawnCatalog(relations: SpawnRelationSource): SpawnCatalog {
   const byId = new Map<string, SpawnRelation>()
   for (const [defId, body] of relations) {
-    const parts = relationParts(defId)
-    const entry = Object.freeze({ defId, ...parts, arity: body.boundary.length })
+    const entry = Object.freeze({
+      defId,
+      ...relationParts(defId),
+      arity: body.boundary.length,
+    })
     const previous = byId.get(defId)
     if (previous !== undefined) {
-      if (previous.arity !== entry.arity) throw new Error(`relation id '${defId}' has conflicting arities`)
+      if (previous.arity !== entry.arity) {
+        throw new Error(`relation id '${defId}' has conflicting arities`)
+      }
       continue
     }
     byId.set(defId, entry)
   }
-
-  const entries = [...byId.values()].sort((a, b) => compareText(a.defId, b.defId))
+  const entries = [...byId.values()].sort((left, right) =>
+    compareText(left.defId, right.defId))
   const grouped = new Map<string | null, SpawnRelation[]>()
   for (const entry of entries) {
     const group = grouped.get(entry.namespace) ?? []
     group.push(entry)
     grouped.set(entry.namespace, group)
   }
-  const namespaces = [...grouped.keys()].sort((a, b) => {
-    if (a === null) return b === null ? 0 : -1
-    if (b === null) return 1
-    return compareText(a, b)
+  const namespaces = [...grouped.keys()].sort((left, right) => {
+    if (left === null) return right === null ? 0 : -1
+    if (right === null) return 1
+    return compareText(left, right)
   })
-  const groups = namespaces.map((namespace): SpawnNamespaceGroup => Object.freeze({
-    namespace,
-    label: namespace === null ? UNQUALIFIED_GROUP_LABEL : namespace === '' ? '/' : namespace,
-    entries: Object.freeze([...(grouped.get(namespace) ?? [])]),
-  }))
   return Object.freeze({
     entries: Object.freeze(entries),
-    groups: Object.freeze(groups),
+    groups: Object.freeze(namespaces.map((namespace): SpawnNamespaceGroup =>
+      Object.freeze({
+        namespace,
+        label: namespace === null
+          ? UNQUALIFIED_GROUP_LABEL
+          : namespace === '' ? '/' : namespace,
+        entries: Object.freeze([...(grouped.get(namespace) ?? [])]),
+      }))),
     byId,
   })
 }
 
-/** Case-insensitive substring search over the complete exact identifier. */
-export function searchSpawnCatalog(catalog: SpawnCatalog, query: string): readonly SpawnRelation[] {
+export function searchSpawnCatalog(
+  catalog: SpawnCatalog,
+  query: string,
+): readonly SpawnRelation[] {
   const needle = query.trim().toLowerCase()
   if (needle === '') return []
   return catalog.entries
-    .map((entry) => ({ entry, lower: entry.defId.toLowerCase() }))
-    .map(({ entry, lower }) => ({ entry, position: lower.indexOf(needle), length: lower.length }))
+    .map((entry) => ({
+      entry,
+      position: entry.defId.toLowerCase().indexOf(needle),
+    }))
     .filter((result) => result.position >= 0)
-    .sort((a, b) => a.position - b.position
-      || a.length - b.length
-      || compareText(a.entry.defId, b.entry.defId))
+    .sort((left, right) =>
+      left.position - right.position
+      || left.entry.defId.length - right.entry.defId.length
+      || compareText(left.entry.defId, right.entry.defId))
     .map((result) => result.entry)
 }
 
-/** Session-local recency: exact identifiers, most recent first, deduped. */
 export class SpawnRecents {
   readonly #limit: number
   readonly #ids: string[] = []
 
   constructor(limit = DEFAULT_RECENTS_LIMIT) {
-    if (!Number.isInteger(limit) || limit < 0) throw new RangeError('recent spawn limit must be a nonnegative integer')
+    if (!Number.isInteger(limit) || limit < 0) {
+      throw new RangeError('recent spawn limit must be a nonnegative integer')
+    }
     this.#limit = limit
   }
 
@@ -203,18 +199,11 @@ export function snapshotSpawnInvocation(invocation: SpawnInvocation): SpawnInvoc
   })
 }
 
-/**
- * Disposable contextual cascade. The host application owns gesture routing:
- * it calls `open` for a still secondary click and forwards Escape/outside
- * presses through the explicit methods below. This class installs no canvas,
- * window, or document listeners.
- */
 export class SpawnCascade {
   readonly #host: HTMLElement
   readonly #document: Document
-  readonly #spawnTerm: SpawnCascadeOptions['spawnTerm']
-  readonly #spawnRelation: SpawnCascadeOptions['spawnRelation']
-  readonly #spawnBoundPredicate: SpawnCascadeOptions['spawnBoundPredicate']
+  readonly #spawnRef: SpawnCascadeOptions['spawnRef']
+  readonly #spawnAtom: SpawnCascadeOptions['spawnAtom']
   readonly #headWireColor: SpawnCascadeOptions['headWireColor']
   readonly #hoverHeadWire: SpawnCascadeOptions['hoverHeadWire']
   readonly #openChanged: SpawnCascadeOptions['openChanged']
@@ -227,9 +216,8 @@ export class SpawnCascade {
   constructor(options: SpawnCascadeOptions) {
     this.#host = options.host
     this.#document = options.host.ownerDocument
-    this.#spawnTerm = options.spawnTerm
-    this.#spawnRelation = options.spawnRelation
-    this.#spawnBoundPredicate = options.spawnBoundPredicate
+    this.#spawnRef = options.spawnRef
+    this.#spawnAtom = options.spawnAtom
     this.#headWireColor = options.headWireColor
     this.#hoverHeadWire = options.hoverHeadWire
     this.#openChanged = options.openChanged
@@ -242,228 +230,126 @@ export class SpawnCascade {
   open(
     invocation: SpawnInvocation,
     relations: SpawnRelationSource,
-    boundPredicates: readonly SpawnBoundPredicateOption[],
+    atomHeads: readonly AtomHeadOption[],
   ): void {
     if (this.#disposed) throw new Error('spawn cascade is disposed')
     const snapshot = snapshotSpawnInvocation(invocation)
     const catalog = buildSpawnCatalog(relations)
-    const predicates = Object.freeze([...boundPredicates])
+    const heads = Object.freeze([...atomHeads])
     this.close()
     this.#invocation = snapshot
 
     const menu = this.#document.createElement('div')
     menu.className = 'vpa-spawn-cascade'
     menu.setAttribute('role', 'menu')
-    const viewport = this.#document.defaultView
-    const maxLeft = Math.max(0, (viewport?.innerWidth ?? snapshot.screen.x + 360) - 360)
-    const maxTop = Math.max(0, (viewport?.innerHeight ?? snapshot.screen.y + 320) - 320)
-    menu.style.cssText = `position:fixed;left:${Math.max(0, Math.min(snapshot.screen.x, maxLeft))}px;top:${Math.max(0, Math.min(snapshot.screen.y, maxTop))}px;z-index:31;display:flex;align-items:flex-start;font:13px system-ui,sans-serif`
-
+    menu.style.cssText = `position:fixed;left:${snapshot.screen.x}px;top:${snapshot.screen.y}px;z-index:31;width:240px;max-height:320px;overflow:auto;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui,sans-serif`
     const backdrop = this.#document.createElement('div')
     backdrop.className = 'vpa-spawn-backdrop'
     backdrop.style.cssText = 'position:fixed;inset:0;z-index:30;background:transparent'
     backdrop.addEventListener('pointerdown', () => this.close())
 
-    const column = this.#document.createElement('div')
-    column.className = 'vpa-spawn-column'
-    column.style.cssText = 'width:220px;overflow:hidden;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003'
     const search = this.#document.createElement('input')
     search.className = 'vpa-spawn-search'
     search.type = 'search'
     search.autocomplete = 'off'
-    search.placeholder = `search relations → '${snapshot.region}'`
-    search.setAttribute('aria-label', 'Search relations to spawn')
-    search.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:0;border-bottom:1px solid #e7e5e4;outline:0;font:13px system-ui,sans-serif'
+    search.placeholder = `search references → '${snapshot.region}'`
+    search.setAttribute('aria-label', 'Search relation references to spawn')
+    search.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:0;border-bottom:1px solid #e7e5e4'
     const listing = this.#document.createElement('div')
     listing.className = 'vpa-spawn-listing'
-    listing.style.cssText = 'max-height:270px;overflow-y:auto'
-    column.append(search, listing)
-
-    const submenu = this.#document.createElement('div')
-    submenu.className = 'vpa-spawn-submenu'
-    submenu.style.cssText = 'display:none;width:190px;max-height:300px;margin-left:2px;overflow-y:auto;border:1px solid #a8a29e;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0002'
-    menu.append(column, submenu)
+    menu.append(search, listing)
     this.#menu = menu
     this.#backdrop = backdrop
     this.#host.append(backdrop, menu)
     this.#openChanged?.(true)
 
-    let termMode = false
-    const current = (): boolean => this.#menu === menu && this.#invocation === snapshot
-
-    const row = (label: string, hint: string, pick: (() => void) | null): HTMLElement => {
+    const current = (): boolean =>
+      this.#menu === menu && this.#invocation === snapshot
+    const row = (
+      label: string,
+      hint: string,
+      pick: (() => void) | null,
+    ): HTMLElement => {
       const item = this.#document.createElement(pick === null ? 'div' : 'button')
-      item.className = 'vpa-spawn-row'
-      if (pick !== null) (item as HTMLButtonElement).type = 'button'
-      item.style.cssText = `display:flex;width:100%;box-sizing:border-box;justify-content:space-between;gap:6px;padding:6px 10px;border:0;background:#fff;text-align:left;font:13px system-ui,sans-serif;${pick === null ? 'color:#78716c' : 'cursor:pointer'}`
-      const name = this.#document.createElement('span')
-      name.textContent = label
-      const meta = this.#document.createElement('span')
-      meta.textContent = hint
-      meta.style.color = '#a8a29e'
-      item.append(name, meta)
-      if (pick !== null) {
-        item.addEventListener('pointerenter', () => { item.style.background = '#fef3c7' })
-        item.addEventListener('pointerleave', () => { item.style.background = '#fff' })
-        item.addEventListener('click', pick)
-      }
+      item.className = pick === null ? 'vpa-spawn-heading' : 'vpa-spawn-row'
+      item.textContent = hint === '' ? label : `${label} ${hint}`
+      item.style.cssText = 'display:block;width:100%;box-sizing:border-box;padding:6px 10px;border:0;background:#fff;text-align:left'
+      if (pick !== null) item.addEventListener('click', pick)
       return item
     }
-
-    const heading = (text: string): HTMLElement => {
-      const item = this.#document.createElement('div')
-      item.className = 'vpa-spawn-heading'
-      item.textContent = text
-      item.style.cssText = 'padding:6px 10px 3px;color:#78716c;font:10px system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase'
-      return item
-    }
-
-    const pickRelation = (entry: SpawnRelation): void => {
+    const pickRef = (entry: SpawnRelation): void => {
       if (!current()) return
-      const accepted = this.#spawnRelation({ defId: entry.defId, arity: entry.arity, invocation: snapshot })
+      const accepted = this.#spawnRef({
+        defId: entry.defId,
+        arity: entry.arity,
+        invocation: snapshot,
+      })
       if (accepted === false) return
       this.#recents.note(entry.defId)
-      if (current()) this.close()
+      this.close()
     }
-
-    const relationRow = (entry: SpawnRelation, fullId: boolean): HTMLElement => {
-      const item = row(
-        fullId ? entry.defId : entry.leaf,
-        `${entry.namespace === null || fullId ? '' : `${entry.namespace} · `}/${entry.arity}`,
-        () => pickRelation(entry),
-      )
+    const refRow = (entry: SpawnRelation): HTMLElement => {
+      const item = row(entry.defId, `/${entry.arity}`, () => pickRef(entry))
       item.dataset.defId = entry.defId
       return item
     }
-
-    const relationLabel = (entry: SpawnBoundPredicateOption): string => entry.total === 1
-      ? 'Bound predicate'
-      : entry.position === 1
-        ? 'Relation 1 (innermost)'
-        : entry.position === entry.total
-          ? `Relation ${entry.position} (outermost)`
-          : `Relation ${entry.position}`
-
-    const pickBoundPredicate = (entry: SpawnBoundPredicateOption): void => {
-      if (!current()) return
-      const accepted = this.#spawnBoundPredicate({
-        source: entry.source, wire: entry.wire, arity: entry.arity, invocation: snapshot,
+    const headRow = (entry: AtomHeadOption): HTMLElement => {
+      const label = entry.total === 1
+        ? 'Atom on visible relation'
+        : `Atom on relation ${entry.position}`
+      const item = row(label, `/${entry.arity}`, () => {
+        if (!current()) return
+        const accepted = this.#spawnAtom({
+          wire: entry.wire,
+          arity: entry.arity,
+          invocation: snapshot,
+        })
+        if (accepted !== false) this.close()
       })
-      if (accepted === false) return
-      if (current()) this.close()
-    }
-
-    const boundPredicateRow = (entry: SpawnBoundPredicateOption): HTMLElement => {
-      const item = row(relationLabel(entry), `/${entry.arity}`, () => pickBoundPredicate(entry))
-      item.classList.add('vpa-spawn-bound-predicate')
       item.dataset.wire = entry.wire
-      item.dataset.source = entry.source
-      const swatch = this.#document.createElement('span')
-      swatch.className = 'vpa-spawn-relation-swatch'
-      swatch.setAttribute('aria-hidden', 'true')
-      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#headWireColor(entry.wire, entry.source)};box-shadow:0 0 0 1px #0002`
-      item.firstElementChild?.prepend(swatch)
-      item.addEventListener('pointerenter', () => {
-        if (current()) this.#setHoveredHeadWire(entry.wire, entry.source)
-      })
-      item.addEventListener('pointerleave', () => {
-        if (current()) this.#setHoveredHeadWire(null, null)
-      })
+      item.style.borderLeft = `6px solid ${this.#headWireColor(entry.wire)}`
+      item.addEventListener('pointerenter', () => this.#hoverHeadWire?.(entry.wire))
+      item.addEventListener('pointerleave', () => this.#hoverHeadWire?.(null))
       return item
     }
-
-    const showNamespace = (group: SpawnNamespaceGroup): void => {
-      if (!current()) return
-      submenu.replaceChildren(
-        heading(group.label),
-        ...group.entries.map((entry) => relationRow(entry, false)),
-      )
-      submenu.style.display = 'block'
-    }
-
-    const enterTermMode = (): void => {
-      if (!current()) return
-      termMode = true
-      submenu.style.display = 'none'
-      search.value = ''
-      search.type = 'text'
-      search.placeholder = 'λ-term, e.g. \\x. x x'
-      search.setAttribute('aria-label', 'Lambda term to spawn')
-      listing.replaceChildren(heading('Term'), row('Press Enter to place the term', '', null))
-      search.focus()
-    }
-
-    const renderTree = (): void => {
-      submenu.style.display = 'none'
-      const nodes: HTMLElement[] = [row('λ term…', '', enterTermMode)]
-      if (predicates.length > 0) {
-        nodes.push(heading('Bound predicates'), ...predicates.map(boundPredicateRow))
-      }
-      const recent = this.#recents.list(catalog)
-      if (recent.length > 0) nodes.push(heading('Recent'), ...recent.map((entry) => relationRow(entry, true)))
-      if (catalog.groups.length > 0) nodes.push(heading('Namespaces'))
-      for (const group of catalog.groups) {
-        const groupRow = row(group.label, `${group.entries.length} ▸`, null)
-        groupRow.style.cursor = 'pointer'
-        groupRow.addEventListener('pointerenter', () => {
-          groupRow.style.background = '#fef3c7'
-          showNamespace(group)
-        })
-        groupRow.addEventListener('pointerleave', () => { groupRow.style.background = '#fff' })
-        nodes.push(groupRow)
-      }
-      listing.replaceChildren(...nodes)
-    }
-
-    const renderSearch = (): void => {
-      if (termMode || !current()) return
+    const render = (): void => {
       const query = search.value.trim()
-      if (query === '') {
-        renderTree()
-        return
+      const refs = query === ''
+        ? this.#recents.list(catalog)
+        : searchSpawnCatalog(catalog, query).slice(0, SEARCH_RESULT_LIMIT)
+      const content: HTMLElement[] = []
+      if (heads.length > 0 && query === '') {
+        content.push(row('Atoms', '', null), ...heads.map(headRow))
       }
-      submenu.style.display = 'none'
-      const found = searchSpawnCatalog(catalog, query)
-      const shown = found.slice(0, SEARCH_RESULT_LIMIT)
-      const nodes = shown.map((entry) => relationRow(entry, true))
-      if (found.length > shown.length) nodes.push(row(`…and ${found.length - shown.length} more`, '', null))
-      if (nodes.length === 0) nodes.push(row('No relation matches', '', null))
-      listing.replaceChildren(...nodes)
+      if (refs.length > 0) {
+        content.push(row(query === '' ? 'Recent references' : 'References', '', null))
+        content.push(...refs.map(refRow))
+      } else if (query === '' && catalog.entries.length > 0) {
+        content.push(row('References', '', null), ...catalog.entries.slice(0, SEARCH_RESULT_LIMIT).map(refRow))
+      }
+      if (content.length === 0) content.push(row('No structural spawn is available', '', null))
+      listing.replaceChildren(...content)
     }
-
-    search.addEventListener('input', renderSearch)
+    search.addEventListener('input', render)
     search.addEventListener('keydown', (event) => {
       event.stopPropagation()
       if (event.key === 'Escape') {
         event.preventDefault()
-        this.escape()
-        return
+        this.close()
+      } else if (event.key === 'Enter') {
+        event.preventDefault()
+        const first = searchSpawnCatalog(catalog, search.value)[0]
+        if (first !== undefined) pickRef(first)
       }
-      if (event.key !== 'Enter') return
-      event.preventDefault()
-      if (termMode) {
-        if (search.value.trim() === '') return
-        const accepted = this.#spawnTerm({ source: search.value, invocation: snapshot })
-        if (accepted !== false && current()) this.close()
-        return
-      }
-      const first = searchSpawnCatalog(catalog, search.value)[0]
-      if (first !== undefined) pickRelation(first)
     })
-
-    renderTree()
-    queueMicrotask(() => { if (current()) search.focus() })
-  }
-
-  #setHoveredHeadWire(
-    wire: WireId | null,
-    source: SpawnBoundPredicateOption['source'] | null,
-  ): void {
-    this.#hoverHeadWire?.(wire, source)
+    render()
+    queueMicrotask(() => {
+      if (current()) search.focus()
+    })
   }
 
   close(): boolean {
-    this.#setHoveredHeadWire(null, null)
+    this.#hoverHeadWire?.(null)
     if (this.#menu === null) return false
     this.#menu.remove()
     this.#backdrop?.remove()
@@ -474,9 +360,7 @@ export class SpawnCascade {
     return true
   }
 
-  escape(): boolean {
-    return this.close()
-  }
+  escape(): boolean { return this.close() }
 
   outside(target: Node | null): boolean {
     const menu = this.#menu

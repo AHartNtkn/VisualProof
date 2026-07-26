@@ -1,77 +1,27 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
-import { convertible } from '../../kernel/term/convert'
-import type { ConversionCertificate } from '../../kernel/term/certificate'
-import { parseTerm } from '../../kernel/term/parse'
-import { freePorts } from '../../kernel/term/term'
-import { applyConversion } from '../../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
-import { RuleError } from '../../kernel/rules/error'
-import { termNodeAt, wireAt } from '../../kernel/rules/access'
-import { mapTermToCommonCarrier, proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
-import type { PortCorrespondence } from '../../kernel/rules/port-correspondence'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { applicableActions, type ActionDescriptor } from '../actions'
+import {
+  applicableActions,
+  findIdentityContradictionEvidence,
+  type ActionDescriptor,
+} from '../actions'
 import { inferFoldArgs } from '../define'
-import { relationSig } from '../../theories/macros'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
-import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { ConnectionDragController, type ConnectionEnd } from './connection'
-import type { KeySample, PointerClaim, PointerSample } from './viewport'
-import { FissionDragController, type FissionRequest } from './fission'
 import { CopyDragController, copyDestinationPreview } from './copy'
-import { resolveNamedRelationInstantiation } from '../../interaction/named-relation'
-
-export { foldedComprehension } from '../../interaction/named-relation'
+import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
-
-/** Author a correspondence whose shared columns already satisfy the kernel's
- * attachment gate. Declared ports on different wires become one-sided. */
-function proposeAttachedPortCorrespondence(d: Diagram, a: NodeId, b: NodeId): PortCorrespondence {
-  const leftNode = termNodeAt(d, a)
-  const rightNode = termNodeAt(d, b)
-  const left = new Map<string, number>()
-  const right = new Map<string, number>()
-  const usedRight = new Set<string>()
-  let commonArity = 0
-  for (const leftName of leftNode.freePorts) {
-    const leftWire = wireAt(d, a, { kind: 'freeVar', name: leftName })
-    const rightName = rightNode.freePorts.find((candidate) =>
-      !usedRight.has(candidate)
-      && wireAt(d, b, { kind: 'freeVar', name: candidate }) === leftWire)
-    if (rightName === undefined) continue
-    left.set(leftName, commonArity)
-    right.set(rightName, commonArity)
-    usedRight.add(rightName)
-    commonArity++
-  }
-  for (const name of leftNode.freePorts) if (!left.has(name)) left.set(name, commonArity++)
-  for (const name of rightNode.freePorts) if (!right.has(name)) right.set(name, commonArity++)
-  return { commonArity, left: Object.fromEntries(left), right: Object.fromEntries(right) }
-}
-
-export type InstantiationChoice =
-  | { readonly kind: 'anonymous'; readonly label: 'New relation…' }
-  | { readonly kind: 'named'; readonly label: string; readonly name: string }
-
-export function instantiationChoices(ctx: ProofContext, arity: number): readonly InstantiationChoice[] {
-  assertProofContext(ctx)
-  const choices: InstantiationChoice[] = [{ kind: 'anonymous', label: 'New relation…' }]
-  for (const [name, relation] of ctx.relations) {
-    if (relation.boundary.length === arity) choices.push({ kind: 'named', label: name, name })
-  }
-  return choices
-}
 
 export type ProofDiscovery = {
   readonly sel: SubgraphSelection
@@ -79,147 +29,88 @@ export type ProofDiscovery = {
 }
 
 export function discoverProofActions(
-  d: Diagram,
+  diagram: Diagram,
   hits: readonly Hit[],
-  ctx: ProofContext,
+  context: ProofContext,
   orientation: ProofOrientation,
 ): ProofDiscovery | null {
-  assertProofContext(ctx)
+  assertProofContext(context)
   if (hits.length === 0) return null
   try {
-    const sel = buildSelection(d, absorbHits(d, hits))
-    return { sel, actions: applicableActions(d, sel, ctx, orientation === 'backward') }
+    const sel = buildSelection(diagram, absorbHits(diagram, hits))
+    return {
+      sel,
+      actions: applicableActions(diagram, sel, context, orientation === 'backward'),
+    }
   } catch {
     return null
   }
 }
 
-function erasureSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelection {
-  const existing = new Set(sel.wires)
-  const riders = orphanedWires(d, new Set(sel.nodes))
-    .filter((wire) => !existing.has(wire) && d.wires[wire]!.scope === sel.region)
-  return riders.length === 0 ? sel : { ...sel, wires: [...sel.wires, ...riders] }
+function erasureSelection(diagram: Diagram, selection: SubgraphSelection): SubgraphSelection {
+  const existing = new Set(selection.wires)
+  const riders = orphanedWires(diagram, new Set(selection.nodes))
+    .filter((wire) => !existing.has(wire) && diagram.wires[wire]!.scope === selection.region)
+  return riders.length === 0
+    ? selection
+    : { ...selection, wires: [...selection.wires, ...riders] }
 }
 
-export function erasureStep(d: Diagram, sel: SubgraphSelection): ProofStep {
-  return { rule: 'erasure', sel: erasureSelection(d, sel) }
+export function erasureStep(diagram: Diagram, selection: SubgraphSelection): ProofStep {
+  return { rule: 'erasure', sel: erasureSelection(diagram, selection) }
 }
 
-/** Interactive construction of a replayable, fuel-free deiteration step. */
-export function deiterationStep(d: Diagram, sel: SubgraphSelection, fuel: number): ProofStep {
-  const evidence = findDeiterationEvidence(d, sel, fuel)
-  return { rule: 'deiteration', sel, ...evidence }
-}
-
-function inconsistentCutStep(d: Diagram, region: RegionId, fuel: number): ProofStep | null {
-  const result = findInconsistentCutEvidence(d, region, fuel)
-  if (result.status === 'certified') {
-    return {
-      rule: 'inconsistentCutElim', region,
-      first: result.first, second: result.second, certificate: result.certificate,
-    }
+export function deiterationStep(
+  diagram: Diagram,
+  selection: SubgraphSelection,
+  fuel: number,
+): ProofStep {
+  const evidence = findDeiterationEvidence(diagram, selection, fuel)
+  return {
+    rule: 'deiteration',
+    sel: selection,
+    ...evidence,
+    retargets: [],
   }
-  if (result.status === 'undecided') {
-    throw new RuleError('inconsistency is undecided under the current fuel')
+}
+
+export function contextualDeleteStep(
+  diagram: Diagram,
+  discovery: ProofDiscovery,
+  fuel: number,
+): ProofStep | null {
+  const has = (kind: ActionDescriptor['kind']): boolean =>
+    discovery.actions.some((action) => action.kind === kind)
+  if (has('doubleCutElim')) {
+    return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
   }
-  return null
-}
-
-export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel: number): ProofStep | null {
-  const byKind = (kind: ActionDescriptor['kind']): ActionDescriptor | undefined =>
-    discovery.actions.find((action) => action.kind === kind)
-  const doubleCut = byKind('doubleCutElim')
-  if (doubleCut !== undefined) return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
-  const vacuous = byKind('vacuousElim')
-  if (vacuous !== undefined) return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
-  if (byKind('inconsistentCutElim') !== undefined) {
-    const inconsistent = inconsistentCutStep(d, discovery.sel.regions[0]!, fuel)
-    if (inconsistent !== null) return inconsistent
+  if (has('identityContradiction')) {
+    const enclosingCut = discovery.sel.regions[0]!
+    const evidence = findIdentityContradictionEvidence(diagram, enclosingCut)
+    return evidence === null
+      ? null
+      : { rule: 'identityContradiction', enclosingCut, evidence }
   }
-  const erase = byKind('erase')
-  if (erase !== undefined) return erasureStep(d, discovery.sel)
-  const deiterate = byKind('deiterate')
-  return deiterate === undefined ? null : deiterationStep(d, discovery.sel, fuel)
+  if (has('vacuousElim')) {
+    return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
+  }
+  if (has('erase')) return erasureStep(diagram, discovery.sel)
+  return has('deiterate') ? deiterationStep(diagram, discovery.sel, fuel) : null
 }
 
-const connectionContext = EMPTY_PROOF_CONTEXT
-
-function outputNodes(d: Diagram, wire: WireId): NodeId[] {
-  return d.wires[wire]!.endpoints
-    .filter((endpoint) => endpoint.port.kind === 'output' && d.nodes[endpoint.node]?.kind === 'term')
-    .map((endpoint) => endpoint.node)
-}
-
-/** Resolve the one graphical connection gesture to a replayable proof record.
-    Candidate choice is deterministic but intentionally invisible: every
-    accepted different-wire candidate has the same visible merged-wire result. */
 export function proofConnectionStep(
-  d: Diagram,
+  diagram: Diagram,
   source: ConnectionEnd,
   target: ConnectionEnd,
   orientation: ProofOrientation,
-  fuel: number,
+  _fuel: number,
 ): ProofStep {
   if (source.wire === target.wire) {
-    const a = source.endpoint
-    const b = target.endpoint
-    if (a === null || b === null || a.port.kind !== 'output' || b.port.kind !== 'output'
-      || a.node === b.node || d.nodes[a.node]?.kind !== 'term' || d.nodes[b.node]?.kind !== 'term') {
-      throw new Error("release on another term's output strand to compare arguments")
-    }
-    const correspondence = proposeAttachedPortCorrespondence(d, a.node, b.node)
-    const step: ProofStep = { rule: 'headStrip', a: a.node, b: b.node, correspondence }
-    applyStep(d, step, connectionContext, orientation)
-    return step
+    throw new Error(`line '${source.wire}' is already one identity`)
   }
-
-  const candidates: ProofStep[] = [{ rule: 'wireJoin', a: source.wire, b: target.wire }]
-  const left = outputNodes(d, source.wire)
-  const right = outputNodes(d, target.wire)
-  const concreteOutput = (end: ConnectionEnd): NodeId | null => end.endpoint?.port.kind === 'output'
-    && d.nodes[end.endpoint.node]?.kind === 'term' ? end.endpoint.node : null
-  const sourceNode = concreteOutput(source)
-  const targetNode = concreteOutput(target)
-  const leftCandidates = sourceNode === null ? left : [sourceNode]
-  const rightCandidates = targetNode === null ? right : [targetNode]
-  const unambiguous = leftCandidates.length === 1 && rightCandidates.length === 1
-  const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }> = []
-  if (unambiguous) for (const a of leftCandidates) {
-    for (const b of rightCandidates) {
-      const leftNode = termNodeAt(d, a)
-      const rightNode = termNodeAt(d, b)
-      const leftTerm = leftNode.term
-      const rightTerm = rightNode.term
-      const correspondence = proposeAttachedPortCorrespondence(d, a, b)
-      const result = convertible(
-        mapTermToCommonCarrier(leftTerm, correspondence.left),
-        mapTermToCommonCarrier(rightTerm, correspondence.right),
-        fuel,
-      )
-      if (result.status !== 'convertible') continue
-      convertiblePairs.push({ a, b, certificate: result.certificate })
-      candidates.push({ rule: 'congruenceJoin', a, b, certificate: result.certificate, correspondence })
-    }
-  }
-  for (const pair of convertiblePairs) {
-    candidates.push({ rule: 'anchoredWireContract', redundant: pair.a, survivor: pair.b, certificate: pair.certificate })
-    candidates.push({
-      rule: 'anchoredWireContract', redundant: pair.b, survivor: pair.a,
-      certificate: { leftSteps: pair.certificate.rightSteps, rightSteps: pair.certificate.leftSteps },
-    })
-  }
-  for (const candidate of candidates) {
-    try {
-      applyStep(d, candidate, connectionContext, orientation)
-      return candidate
-    } catch {
-      // Another proof justification may license the same visible connection.
-    }
-  }
-  if (!unambiguous && (leftCandidates.length > 1 || rightCandidates.length > 1)) {
-    throw new Error('proof connection is ambiguous; drag from one producer output strand to the other')
-  }
-  throw new Error(`no valid proof connection joins lines '${source.wire}' and '${target.wire}'`)
+  const step: ProofStep = { rule: 'wireJoin', a: source.wire, b: target.wire }
+  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+  return step
 }
 
 export type ProofMoveControllerOptions = {
@@ -233,27 +124,26 @@ export type ProofMoveControllerOptions = {
   readonly context: () => ProofContext
   readonly orientation: () => ProofOrientation
   readonly apply: (action: ProofAction) => void
-  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
-  readonly openComprehension: (wire: WireId, pointer: Vec2) => void
-  readonly openAbstraction: (selection: SubgraphSelection, pointer: Vec2) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
 }
 
 type CitationCycle = { readonly candidate: CitationCandidate; index: number }
 
-function sameHit(a: Hit, b: Hit): boolean {
-  return a.kind === b.kind && a.id === b.id
+function sameHit(left: Hit, right: Hit): boolean {
+  return left.kind === right.kind && left.id === right.id
 }
 
 function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
   let best: { readonly id: RegionId; readonly radius: number } | null = null
   for (const [id, geometry] of engine.regions) {
     if (diagram.regions[id]?.kind === 'sheet') continue
-    if (Math.hypot(point.x - geometry.center.x, point.y - geometry.center.y) <= geometry.radius
-      && (best === null || geometry.radius < best.radius)) best = { id, radius: geometry.radius }
+    if (
+      Math.hypot(point.x - geometry.center.x, point.y - geometry.center.y) <= geometry.radius
+      && (best === null || geometry.radius < best.radius)
+    ) best = { id, radius: geometry.radius }
   }
   return best?.id ?? diagram.root
 }
@@ -262,18 +152,15 @@ export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
   readonly #connection: ConnectionDragController
-  readonly #fission: FissionDragController
   readonly #copy: CopyDragController
   #menu: HTMLDivElement | null = null
-  #prompt: HTMLDivElement | null = null
   #cycle: CitationCycle | null = null
-  #lastPointer: Vec2
+  #lastPointer: Vec2 = { x: 0, y: 0 }
 
   constructor(options: ProofMoveControllerOptions) {
     assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
-    this.#lastPointer = { x: 0, y: 0 }
     this.#connection = new ConnectionDragController({
       active: options.active,
       engine: options.engine,
@@ -283,24 +170,18 @@ export class ProofMoveController {
         this.#lastPointer = pointer
         try {
           this.#commit(proofConnectionStep(
-            this.#options.diagram(), source, target,
-            this.#options.orientation(), this.#options.fuel(),
+            options.diagram(),
+            source,
+            target,
+            options.orientation(),
+            options.fuel(),
           ))
           return true
         } catch (error) {
-          this.#options.refuse(error instanceof Error ? error.message : String(error), pointer)
+          options.refuse(error instanceof Error ? error.message : String(error), pointer)
           return false
         }
       },
-      refuse: options.refuse,
-    })
-    this.#fission = new FissionDragController({
-      active: options.active,
-      diagram: options.diagram,
-      engine: options.engine,
-      viewScale: options.viewScale,
-      theme: options.theme,
-      commit: options.commitFission,
       refuse: options.refuse,
     })
     this.#copy = new CopyDragController({
@@ -309,24 +190,22 @@ export class ProofMoveController {
       sourceSelection: options.selection,
       sourceEngine: options.engine,
       viewScale: options.viewScale,
-      destination: (sample) => {
-        const context = this.#context()
-        return {
-          kind: 'proof', diagram: options.diagram(),
-          region: regionAt(options.engine(), options.diagram(), sample.world),
-          orientation: options.orientation(), ctx: context,
-        }
-      },
+      destination: (sample) => ({
+        kind: 'proof',
+        diagram: options.diagram(),
+        region: regionAt(options.engine(), options.diagram(), sample.world),
+        orientation: options.orientation(),
+        ctx: this.#context(),
+      }),
       commit: (plan) => {
-        if (plan.kind !== 'proof') throw new Error('proof copy produced a structural plan')
-        this.#options.apply(plan.action)
-        this.#options.setSelection([])
+        if (plan.kind !== 'proof') throw new Error('proof copy produced an edit plan')
+        options.apply(plan.action)
+        options.setSelection([])
       },
       refuse: (text, sample) => options.refuse(text, sample.client),
       theme: options.theme,
-      destinationPreview: (destination) => copyDestinationPreview(
-        options.engine(), destination.region, options.theme(),
-      ),
+      destinationPreview: (destination) =>
+        copyDestinationPreview(options.engine(), destination.region, options.theme()),
     })
   }
 
@@ -334,25 +213,9 @@ export class ProofMoveController {
     this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active() || sample.button !== 0) return null
-    if (this.#cycle !== null && !sample.ctrlKey) {
-      const cycle = this.#cycle
-      return {
-        still: 'claim', blocksPassiveRelaxation: false, move: () => {},
-        release: (_next, moved) => {
-          if (!moved) cycle.index = (cycle.index + 1) % cycle.candidate.occurrences!.length
-        },
-        cancel: () => {},
-      }
-    }
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
-    const connection = this.#connection.claim(sample)
-    if (connection !== null) return connection
-    const fission = this.#fission.claim(sample)
-    if (fission !== null) return fission
-    const copy = this.#copy.claim(sample)
-    if (copy !== null) this.#fission.hover(null)
-    return copy
+    return this.#connection.claim(sample) ?? this.#copy.claim(sample)
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -361,40 +224,34 @@ export class ProofMoveController {
     if (!this.#options.active()) return false
     this.#closeMenu()
     const selection = this.#options.selection()
-    if (selection.length > 0 && (sample.hit === null || !selection.some((hit) => sameHit(hit, sample.hit!)))) return false
+    if (
+      selection.length > 0
+      && (sample.hit === null || !selection.some((hit) => sameHit(hit, sample.hit!)))
+    ) return false
     if (selection.length === 0 && (sample.hit === null || sample.hit.kind === 'region')) {
-      this.#options.openSpawn(sample, regionAt(this.#options.engine(), this.#options.diagram(), sample.world))
+      this.#options.openSpawn(
+        sample,
+        regionAt(this.#options.engine(), this.#options.diagram(), sample.world),
+      )
       return true
     }
     try {
-      this.#openMenu(sample, selection)
+      this.#openMenu(sample, selection.length === 0 && sample.hit !== null ? [sample.hit] : selection)
     } catch (error) {
-      this.#options.refuse(error instanceof Error ? error.message : String(error), sample.client)
+      this.#options.refuse(
+        error instanceof Error ? error.message : String(error),
+        sample.client,
+      )
     }
     return true
   }
 
   doubleClick(sample: PointerSample): boolean {
     this.#context()
-    this.#lastPointer = sample.client
-    if (!this.#options.active()) return false
-    if (sample.hit?.kind === 'wire') {
-      this.#commit({ rule: 'fusion', wire: sample.hit.id })
-      return true
-    }
-    if (sample.hit?.kind !== 'node') return false
+    if (!this.#options.active() || sample.hit?.kind !== 'node') return false
     const node = this.#options.diagram().nodes[sample.hit.id]
-    if (node?.kind !== 'term') return false
-    const fuel = this.#options.fuel()
-    try {
-      this.#commit(convertToWeakHeadNormal(this.#options.diagram(), sample.hit.id, fuel).step)
-    } catch {
-      try {
-        this.#commit(convertToHeadNormal(this.#options.diagram(), sample.hit.id, fuel).step)
-      } catch {
-        this.#options.refuse('already in normal form — use Convert → custom target for a specific βη-equal shape', sample.client)
-      }
-    }
+    if (node?.kind !== 'ref') return false
+    this.#commit({ rule: 'unfold', nodeId: sample.hit.id })
     return true
   }
 
@@ -402,29 +259,34 @@ export class ProofMoveController {
     this.#context()
     if (!this.#options.active() || sample.repeat) return false
     if (sample.key === 'Escape') {
-      const active = this.#menu !== null || this.#prompt !== null || this.#cycle !== null
+      const active = this.#menu !== null || this.#cycle !== null
       this.cancel()
       return active
     }
     if (this.#cycle !== null) {
       if (sample.key === 'Tab') {
-        this.#cycle.index = (this.#cycle.index + 1) % this.#cycle.candidate.occurrences!.length
+        this.#cycle.index =
+          (this.#cycle.index + 1) % this.#cycle.candidate.occurrences!.length
         return true
       }
       if (sample.key === 'Enter') {
-        this.#commit(citationStep(this.#options.diagram(), this.#cycle.candidate, this.#cycle.index))
+        this.#commit(citationStep(
+          this.#options.diagram(),
+          this.#cycle.candidate,
+          this.#cycle.index,
+        ))
         this.#cycle = null
         return true
       }
     }
-    if ((sample.key === 'f' || sample.key === 'F')
-      && !sample.ctrlKey && !sample.altKey && !sample.metaKey) {
-      const selection = this.#options.selection()
-      if (selection.length !== 1 || selection[0]?.kind !== 'wire') return false
-      this.#commit({ rule: 'fusion', wire: selection[0].id })
-      return true
-    }
-    if (sample.key !== 'Delete' && sample.key !== 'Backspace' && sample.key !== 'w' && sample.key !== 'W') return false
+    if (
+      sample.key !== 'Delete'
+      && sample.key !== 'Backspace'
+      && sample.key !== 'w'
+      && sample.key !== 'W'
+      && sample.key !== 'i'
+      && sample.key !== 'I'
+    ) return false
     const discovery = discoverProofActions(
       this.#options.diagram(),
       this.#options.selection(),
@@ -432,72 +294,104 @@ export class ProofMoveController {
       this.#options.orientation(),
     )
     if (discovery === null) {
-      this.#options.refuse(this.#options.selection().length === 0 ? 'select something first' : 'this selection spans several regions', this.#lastPointer)
+      this.#options.refuse(
+        this.#options.selection().length === 0
+          ? 'select something first'
+          : 'this selection spans several regions',
+        this.#lastPointer,
+      )
       return true
     }
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      let step: ProofStep | null
       try {
-        step = contextualDeleteStep(this.#options.diagram(), discovery, this.#options.fuel())
+        const step = contextualDeleteStep(
+          this.#options.diagram(),
+          discovery,
+          this.#options.fuel(),
+        )
+        if (step === null) {
+          this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
+        } else this.#commit(step)
       } catch (error) {
-        this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer)
-        return true
+        this.#options.refuse(
+          error instanceof Error ? error.message : String(error),
+          this.#lastPointer,
+        )
       }
-      if (step === null) this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
-      else this.#commit(step)
       return true
     }
-    if (sample.shiftKey) {
-      this.#options.openAbstraction(discovery.sel, this.#lastPointer)
-      this.cancel()
-    } else this.#commit({ rule: 'doubleCutIntro', sel: discovery.sel })
+    if (sample.key === 'i' || sample.key === 'I') {
+      if (!discovery.actions.some((action) => action.kind === 'identityInsert')) {
+        this.#options.refuse('identity insertion is not valid for this selection', this.#lastPointer)
+      } else {
+        this.#commit({
+          rule: 'identityInsert',
+          region: discovery.sel.region,
+          wires: discovery.sel.wires,
+        })
+      }
+      return true
+    }
+    this.#commit({ rule: 'doubleCutIntro', sel: discovery.sel })
     return true
   }
 
   overlay(): readonly Shape[] {
     this.#context()
-    const out: Shape[] = [...this.#connection.overlay(), ...this.#fission.overlay(), ...this.#copy.overlay()]
+    const result: Shape[] = [...this.#connection.overlay(), ...this.#copy.overlay()]
     const cycle = this.#cycle
     if (cycle !== null && cycle.candidate.occurrences !== null) {
       const occurrence = cycle.candidate.occurrences[cycle.index]!
       for (const node of occurrence.nodeMap.values()) {
         const body = this.#options.engine().bodies.get(node)
-        if (body !== undefined) out.push({ kind: 'circle', center: body.pos, r: body.discR * this.#options.engine().scale + 1.5, fill: null, stroke: '#7c3aed', width: 2.6, insetColor: null, glow: null })
+        if (body !== undefined) {
+          result.push({
+            kind: 'circle',
+            center: body.pos,
+            r: body.discR * this.#options.engine().scale + 1.5,
+            fill: null,
+            stroke: '#7c3aed',
+            width: 2.6,
+            insetColor: null,
+            glow: null,
+          })
+        }
       }
     }
-    return out
+    return result
   }
 
   cancel(): void {
     this.#context()
     this.#closeMenu()
-    this.#closePrompt()
     this.#cycle = null
     this.#connection.cancel()
-    this.#fission.cancel()
     this.#copy.cancel()
   }
 
-  dispose(): void { this.cancel(); this.#fission.dispose(); this.#copy.dispose() }
-
-  passiveSample(sample: PointerSample | null): void {
-    this.#context()
-    this.#fission.hover(this.#copy.dragging ? null : sample)
+  dispose(): void {
+    this.cancel()
+    this.#copy.dispose()
   }
+
   modifiersChanged(ctrlHeld: boolean): void {
     this.#context()
-    this.#fission.modifiersChanged(ctrlHeld)
     this.#copy.modifiersChanged(ctrlHeld)
   }
 
   #commit(step: ProofStep): void {
     try {
-      this.#options.apply(singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step))
+      this.#options.apply(singleStepAction(
+        step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
+        step,
+      ))
       this.#options.setSelection([])
       this.#closeMenu()
-      this.#closePrompt()
     } catch (error) {
-      this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer)
+      this.#options.refuse(
+        error instanceof Error ? error.message : String(error),
+        this.#lastPointer,
+      )
     }
   }
 
@@ -511,98 +405,140 @@ export class ProofMoveController {
       element.textContent = label
       element.className = run === null ? 'vpa-proof-heading' : 'vpa-proof-action'
       element.style.cssText = `display:block;width:100%;box-sizing:border-box;padding:6px 10px;border:0;background:#fff;text-align:left;${run === null ? 'color:#78716c;font-size:10px;text-transform:uppercase' : 'cursor:pointer'}`
-      if (run !== null) element.addEventListener('click', () => {
-        try { run() } catch (error) { this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer) }
-      })
+      if (run !== null) {
+        element.addEventListener('click', () => {
+          try {
+            run()
+          } catch (error) {
+            this.#options.refuse(
+              error instanceof Error ? error.message : String(error),
+              this.#lastPointer,
+            )
+          }
+        })
+      }
       menu.append(element)
     }
-    const d = this.#options.diagram()
-    const region = regionAt(this.#options.engine(), d, sample.world)
+    const diagram = this.#options.diagram()
+    const region = regionAt(this.#options.engine(), diagram, sample.world)
     const context = this.#context()
-    const discovery = discoverProofActions(d, hits, context, this.#options.orientation())
+    const discovery = discoverProofActions(
+      diagram,
+      hits,
+      context,
+      this.#options.orientation(),
+    )
     if (discovery !== null) {
       row('Actions', null)
-      for (const action of discovery.actions) this.#appendAction(row, action, discovery.sel)
+      for (const action of discovery.actions) {
+        this.#appendAction(row, action, discovery.sel)
+      }
     }
-    const candidates = citationCandidates(d, hits, discovery?.sel.region ?? region, context, this.#options.orientation(), this.#options.fuel())
-    const citations = hits.length === 0 ? { applicable: [], closed: candidates.closed } : candidates
+    const candidates = citationCandidates(
+      diagram,
+      hits,
+      discovery?.sel.region ?? region,
+      context,
+      this.#options.orientation(),
+      this.#options.fuel(),
+    )
+    const citations = hits.length === 0
+      ? { applicable: [], closed: candidates.closed }
+      : candidates
     if (citations.applicable.length > 0) {
       row('Applicable theorems', null)
-      for (const candidate of citations.applicable) row(`${candidate.name} (${candidate.occurrences!.length === 1 ? 'applies' : `${candidate.occurrences!.length} places`})`, () => this.#beginCitation(candidate))
+      for (const candidate of citations.applicable) {
+        row(candidate.name, () => this.#beginCitation(candidate))
+      }
     }
     if (citations.closed.length > 0) {
       row('Closed theorems', null)
-      for (const candidate of citations.closed) row(candidate.name, () => this.#commit(citationStep(d, candidate, undefined, region)))
+      for (const candidate of citations.closed) {
+        row(candidate.name, () => this.#commit(
+          citationStep(diagram, candidate, undefined, region),
+        ))
+      }
     }
     if (menu.childElementCount === 0) return
     this.#menu = menu
     this.#options.host.append(menu)
   }
 
-  #appendAction(row: (label: string, run: (() => void) | null) => void, action: ActionDescriptor, sel: SubgraphSelection): void {
+  #appendAction(
+    row: (label: string, run: (() => void) | null) => void,
+    action: ActionDescriptor,
+    selection: SubgraphSelection,
+  ): void {
     switch (action.kind) {
-      case 'erase': row(action.label, () => this.#commit(erasureStep(this.#options.diagram(), sel))); return
-      case 'doubleCutWrap': row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel })); return
-      case 'doubleCutElim': row(action.label, () => this.#commit({ rule: 'doubleCutElim', region: sel.regions[0]! })); return
-      case 'inconsistentCutElim': row(action.label, () => {
-        const step = inconsistentCutStep(this.#options.diagram(), sel.regions[0]!, this.#options.fuel())
-        if (step === null) throw new RuleError('no inconsistent pair was found in the selected cut')
-        this.#commit(step)
-      }); return
-      case 'abstractWrap': row(action.label, () => {
-        this.#closeMenu()
-        this.#options.openAbstraction(sel, this.#lastPointer)
-      }); return
-      case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', wireId: sel.wires[0]! })); return
-      case 'iterate': row('Copy by dragging the selection', null); return
-      case 'deiterate': row(action.label, () => this.#commit(
-        deiterationStep(this.#options.diagram(), sel, this.#options.fuel()),
-      )); return
-      case 'convert': this.#appendConversions(row, sel.nodes[0]!); return
-      case 'instantiate': {
-        row('Instantiate with', null)
-        const wire = sel.wires[0]!
-        const targetWire = this.#options.diagram().wires[wire]!
-        const arity = targetWire.sig.kind === 'rel' ? targetWire.sig.args.length : -1
-        const context = this.#context()
-        for (const choice of instantiationChoices(context, arity)) {
-          if (choice.kind === 'anonymous') row(choice.label, () => {
-            this.#closeMenu()
-            this.#options.openComprehension(wire, this.#lastPointer)
-          })
-          else row(choice.label, () => this.#commit(resolveNamedRelationInstantiation(
-            this.#options.diagram(), wire, this.#context(), choice.name, this.#options.orientation(),
-          )))
-        }
+      case 'erase':
+        row(action.label, () => this.#commit(erasureStep(this.#options.diagram(), selection)))
         return
-      }
-      case 'relUnfold': row(action.label, () => this.#commit({ rule: 'unfold', nodeId: sel.nodes[0]! })); return
-      case 'relFold': {
-        row('Fold into', null)
-        const context = this.#context()
-        for (const [name, relation] of context.relations) row(name, () => this.#commit({
-          rule: 'fold',
-          occurrence: sel,
-          args: inferFoldArgs(this.#options.diagram(), sel, name, this.#context()),
-          target: { defId: name, sig: relationSig(relation) },
+      case 'doubleCutWrap':
+        row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel: selection }))
+        return
+      case 'doubleCutElim':
+        row(action.label, () => this.#commit({
+          rule: 'doubleCutElim',
+          region: selection.regions[0]!,
         }))
         return
-      }
-      case 'citeTheorem': return
+      case 'identityInsert':
+        row(action.label, () => this.#commit({
+          rule: 'identityInsert',
+          region: selection.region,
+          wires: selection.wires,
+        }))
+        return
+      case 'identityContradiction':
+        row(action.label, () => {
+          const enclosingCut = selection.regions[0]!
+          const evidence = findIdentityContradictionEvidence(
+            this.#options.diagram(),
+            enclosingCut,
+          )
+          if (evidence === null) throw new Error('identity contradiction is no longer present')
+          this.#commit({ rule: 'identityContradiction', enclosingCut, evidence })
+        })
+        return
+      case 'vacuousElim':
+        row(action.label, () => this.#commit({
+          rule: 'vacuousElim',
+          wireId: selection.wires[0]!,
+        }))
+        return
+      case 'deiterate':
+        row(action.label, () => this.#commit(deiterationStep(
+          this.#options.diagram(),
+          selection,
+          this.#options.fuel(),
+        )))
+        return
+      case 'relUnfold':
+        row(action.label, () => this.#commit({
+          rule: 'unfold',
+          nodeId: selection.nodes[0]!,
+        }))
+        return
+      case 'relFold':
+        row('Fold into', null)
+        for (const [name] of this.#context().relations) {
+          row(name, () => this.#commit({
+            rule: 'fold',
+            occurrence: selection,
+            args: inferFoldArgs(
+              this.#options.diagram(),
+              selection,
+              name,
+              this.#context(),
+            ),
+            defId: name,
+          }))
+        }
+        return
+      case 'iterate':
+      case 'citeTheorem':
+        return
     }
-  }
-
-  #appendConversions(row: (label: string, run: (() => void) | null) => void, node: NodeId): void {
-    row('Normalize (also: double-click)', () => this.doubleClick({ pointerId: 0, button: 0, client: this.#lastPointer, screen: this.#lastPointer, world: { x: 0, y: 0 }, hit: { kind: 'node', id: node }, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false }))
-    row('Convert → head normal', () => this.#commit(convertToHeadNormal(this.#options.diagram(), node, this.#options.fuel()).step))
-    row('Convert → custom target…', () => this.#openTextPrompt('Conversion target', 'target term', (value) => {
-      const term = parseTerm(value)
-      const diagram = this.#options.diagram()
-      const source = termNodeAt(diagram, node)
-      const correspondence = proposePortCorrespondence(source.term, term, source.freePorts, freePorts(term))
-      const conversion = applyConversion(diagram, node, term, correspondence, this.#options.fuel())
-      this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, correspondence, attachments: {} })
-    }))
   }
 
   #beginCitation(candidate: CitationCandidate): void {
@@ -610,33 +546,14 @@ export class ProofMoveController {
     this.#closeMenu()
     if (candidate.occurrences.length === 1) {
       this.#commit(citationStep(this.#options.diagram(), candidate, 0))
-      return
-    }
-    this.#cycle = { candidate, index: 0 }
+    } else this.#cycle = { candidate, index: 0 }
   }
 
-  #openTextPrompt(label: string, placeholder: string, accept: (value: string) => void): void {
-    this.#closePrompt()
-    const wrap = this.#document.createElement('div')
-    wrap.className = 'vpa-proof-prompt'
-    wrap.style.cssText = `position:fixed;left:${this.#lastPointer.x + 10}px;top:${this.#lastPointer.y + 10}px;z-index:32`
-    const input = this.#document.createElement('input')
-    input.setAttribute('aria-label', label)
-    input.placeholder = placeholder
-    input.addEventListener('keydown', (event) => {
-      event.stopPropagation()
-      if (event.key === 'Escape') this.#closePrompt()
-      if (event.key !== 'Enter') return
-      try { accept(input.value) } catch (error) { this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer) }
-    })
-    wrap.append(input)
-    this.#prompt = wrap
-    this.#options.host.append(wrap)
-    queueMicrotask(() => input.focus())
+  #closeMenu(): void {
+    this.#menu?.remove()
+    this.#menu = null
   }
 
-  #closeMenu(): void { this.#menu?.remove(); this.#menu = null }
-  #closePrompt(): void { this.#prompt?.remove(); this.#prompt = null }
   #context(): ProofContext {
     const context = this.#options.context()
     assertProofContext(context)

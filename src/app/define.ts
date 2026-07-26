@@ -9,8 +9,8 @@ import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
 
 /**
- * Name a live selection as a new relation: the EXTRACTED COPY of the selection
- * (extractSubgraph — the same gates comprehension abstraction and relFold use)
+ * Name a live selection as a new relation: the extracted copy of the selection
+ * (the same structural boundary authority used by relFold)
  * with its crossing wires as the ordered boundary. Pure and headless: the input
  * diagram is never mutated (extractSubgraph copies), and the result is a
  * self-contained DiagramWithBoundary the caller registers as `name`. Registering
@@ -30,10 +30,8 @@ import { assertProofContext } from '../kernel/proof/context'
  *   unambiguous);
  * - a crossing wire left unpicked, a wire picked twice, or a non-crossing wire
  *   picked;
- * - a selection that binds atoms OUTSIDE itself — an open subgraph — is refused,
- *   the same gate comprehension abstraction (comprehension.ts) and relFold apply:
- *   such a body references a variable it does not bind, so it could never be
- *   folded and is not a self-contained relation.
+ * Every crossing wire is an explicit boundary incidence; there is no separate
+ * binding or closure interpretation at this layer.
  */
 export function defineRelation(
   diagram: Diagram,
@@ -109,9 +107,8 @@ export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): Wir
  * order is already fixed, so which host wire plays which argument is exactly
  * an occurrence match of the body against the selection — no user picking.
  * When the body has symmetric arguments, any valid assignment folds to the
- * same diagram, so the first (canonical) occurrence is taken. Loud refusal
- * when the selection is not an exact occurrence of the body (convert first if
- * the difference is merely beta-eta).
+ * same diagram, so the first (canonical) occurrence is taken. Refusal is based
+ * only on bounded exact graph matching.
  */
 export function inferFoldArgs(
   diagram: Diagram,
@@ -139,7 +136,10 @@ export function inferFoldArgs(
     if (coveredRegions.has(n.region)) coveredNodes.add(id)
   }
 
-  const found = findOccurrences(diagram, body, { fuel: 64, inRegion: sel.region, mode: 'exact' })
+  const found = findOccurrences(diagram, body, {
+    explorationFuel: 64,
+    inRegion: sel.region,
+  })
   for (const occ of found.matches) {
     const mapped = new Set(occ.nodeMap.values())
     if (mapped.size !== coveredNodes.size) continue
@@ -149,7 +149,8 @@ export function inferFoldArgs(
     }
     if (same) return [...occ.attachments]
   }
-  throw new Error(
-    `the selection is not an occurrence of '${defId}': its shape must match the definition exactly (convert first if the difference is beta-eta)`,
-  )
+  if (found.status === 'exhausted') {
+    throw new Error(`graph exploration exhausted while matching definition '${defId}'`)
+  }
+  throw new Error(`the selection must match the definition exactly.`)
 }

@@ -67,7 +67,7 @@ export function citationCandidates(
       closed.push({ name, direction, from, occurrences: null })
       continue
     }
-    const occurrences = findOccurrences(d, from, { fuel, mode: 'exact' }).matches
+    const occurrences = findOccurrences(d, from, { explorationFuel: fuel }).matches
       .filter((occurrence) => containsHits(occurrence, hits))
     if (occurrences.length > 0) applicable.push({ name, direction, from, occurrences })
   }

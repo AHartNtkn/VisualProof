@@ -1,47 +1,38 @@
 import { describe, expect, it } from 'vitest'
+import {
+  frontInputAllowed,
+  frontKeyRoute,
+  retainedFrontIds,
+} from '../../src/app/proof-front-policy'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { parseTerm } from '../../src/kernel/term/parse'
-import type { KeySample } from '../../src/app/interact/viewport'
-import { frontInputAllowed, frontKeyRoute, retainedFrontIds } from '../../src/app/proof-front'
+import { UNARY } from '../fixtures/zero-signature'
 
-const key: KeySample = {
-  key: 'z', shiftKey: false, ctrlKey: true, altKey: false, metaKey: false, repeat: false,
-}
-
-describe('proof front routing state', () => {
-  it('routes a keyboard sample only through the focused front', () => {
+describe('proof-front policy', () => {
+  it('routes input only to the focused, enabled front', () => {
+    const key = {
+      key: 'Home',
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      repeat: false,
+    }
     expect(frontKeyRoute(false, key)).toBeNull()
     expect(frontKeyRoute(true, key)).toBe(key)
+    expect(frontInputAllowed(true, true)).toBe(true)
+    expect(frontInputAllowed(true, false)).toBe(false)
   })
 
-  it('admits front input only when focused, idle, and workspace-safe', () => {
-    expect(frontInputAllowed(true, false, true)).toBe(true)
-    expect(frontInputAllowed(false, false, true)).toBe(false)
-    expect(frontInputAllowed(true, true, true)).toBe(false)
-    expect(frontInputAllowed(true, false, false)).toBe(false)
-  })
-
-  it('retains only selection and pin identities in that front diagram', () => {
-    const b = new DiagramBuilder()
-    const node = b.termNode(b.root, parseTerm('\\x. x'))
-    const diagram = b.build()
-    const wire = Object.keys(diagram.wires)[0]!
+  it('drops selection and pin IDs absent from the current structural graph', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.ref(builder.root, 'UnaryWitness', UNARY)
+    const diagram = builder.build()
     expect(retainedFrontIds(
       diagram,
-      [
-        { kind: 'node', id: node },
-        { kind: 'node', id: 'missing-node' },
-        { kind: 'region', id: diagram.root },
-        { kind: 'wire', id: wire },
-        { kind: 'wire', id: 'missing-wire' },
-      ],
-      [node, 'missing-node'],
+      [{ kind: 'node', id: node }, { kind: 'node', id: 'gone' }],
+      [node, 'gone'],
     )).toEqual({
-      selection: [
-        { kind: 'node', id: node },
-        { kind: 'region', id: diagram.root },
-        { kind: 'wire', id: wire },
-      ],
+      selection: [{ kind: 'node', id: node }],
       pins: [node],
     })
   })

@@ -21,7 +21,6 @@ import {
 import { relSig, IOTA } from '../../kernel/diagram/sig'
 import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
-import { FissionDragController, type FissionRequest } from './fission'
 import { CopyDragController, copyDestinationPreview } from './copy'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import type { CopyDestination, CopyPlan } from '../copy-planner'
@@ -41,7 +40,6 @@ export type ConstructOptions = {
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly commit: (diagram: Diagram) => void
-  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer?: Vec2) => void
   readonly setProblem: (problemId: string, text: string) => void
   readonly clearProblem: (problemId: string) => void
@@ -102,7 +100,6 @@ function endpointAt(diagram: Diagram, leg: Leg): Endpoint | null {
 export class ConstructController {
   readonly #options: ConstructOptions
   readonly #connection: ConnectionDragController
-  readonly #fission: FissionDragController
   readonly #copy: CopyDragController | null
   #preview: Preview | null = null
   #prompt: HTMLDivElement | null = null
@@ -122,15 +119,6 @@ export class ConstructController {
         return this.#tryCommit(() => joinWires(this.#options.diagram(), [source.wire, target.wire]), 'lines joined — one individual now')
       },
       refuse: options.refuse,
-    })
-    this.#fission = new FissionDragController({
-      active: options.active,
-      diagram: options.diagram,
-      engine: options.engine,
-      viewScale: options.viewScale,
-      theme: options.theme,
-      commit: options.commitFission,
-      refuse: (text, pointer) => options.refuse(text, pointer),
     })
     this.#copy = options.copy === undefined ? null : new CopyDragController({
       active: options.active,
@@ -155,11 +143,9 @@ export class ConstructController {
 
     const connection = this.#connection.claim(sample)
     if (connection !== null) return connection
-    const fission = this.#fission.claim(sample)
-    if (fission !== null) return fission
     const selected = this.#options.selection()
     const copy = this.#copy?.claim(sample) ?? null
-    if (copy !== null) { this.#fission.hover(null); return copy }
+    if (copy !== null) return copy
 
     if (sample.hit?.kind === 'node' && selected.some((hit) => sameHit(hit, sample.hit!))) {
       return this.#placementClaim(sample.hit.id)
@@ -191,19 +177,18 @@ export class ConstructController {
       return true
     }
     if (sample.key === 'Escape') {
-      const cancelledFission = this.#fission.cancel()
       this.#copy?.cancel()
       if (this.#prompt !== null) {
         this.#closePrompt()
         return true
       }
-      return cancelledFission
+      return false
     }
     return false
   }
 
   overlay(): readonly Shape[] {
-    const connection = [...this.#connection.overlay(), ...this.#fission.overlay(), ...(this.#copy?.overlay() ?? [])]
+    const connection = [...this.#connection.overlay(), ...(this.#copy?.overlay() ?? [])]
     const preview = this.#preview
     if (preview === null) return connection
     const colors = this.#options.theme().interaction
@@ -221,12 +206,10 @@ export class ConstructController {
   dispose(): void {
     this.#closePrompt()
     this.#connection.cancel()
-    this.#fission.dispose()
     this.#copy?.dispose()
   }
 
-  passiveSample(sample: PointerSample | null): void { this.#fission.hover(this.#copy?.dragging === true ? null : sample) }
-  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy?.modifiersChanged(ctrlHeld) }
+  modifiersChanged(ctrlHeld: boolean): void { this.#copy?.modifiersChanged(ctrlHeld) }
 
   #slashClaim(start: PointerSample): PointerClaim {
     const preview: Extract<Preview, { kind: 'slash' }> = { kind: 'slash', from: start.world, at: start.world }

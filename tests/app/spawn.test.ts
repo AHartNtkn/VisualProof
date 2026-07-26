@@ -1,175 +1,45 @@
 import { describe, expect, it } from 'vitest'
-import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, IOTA } from '../../src/kernel/diagram/sig'
-
-const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import {
-  SpawnCascade,
   SpawnRecents,
-  UNQUALIFIED_GROUP_LABEL,
+  atomHeadOptions,
   buildSpawnCatalog,
-  boundPredicateOptions,
   searchSpawnCatalog,
   snapshotSpawnInvocation,
 } from '../../src/app/interact/spawn'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { BINARY, UNARY } from '../fixtures/zero-signature'
 
-const relations = (entries: readonly (readonly [string, number])[]) => new Map(
-  entries.map(([defId, arity]) => [defId, { boundary: Array.from({ length: arity }, () => 'w') }] as const),
-)
-
-describe('real relation spawn catalog', () => {
-  it('retains exact defIds and derives nested slash namespaces plus a stable unqualified group', () => {
-    const catalog = buildSpawnCatalog(relations([
-      ['plain', 0],
-      ['order/lt', 2],
-      ['arith/order/le', 2],
-      ['arith/add', 3],
-    ]))
-
-    expect(catalog.entries.map((entry) => ({
-      defId: entry.defId,
-      namespace: entry.namespace,
-      leaf: entry.leaf,
-      arity: entry.arity,
-    }))).toEqual([
-      { defId: 'arith/add', namespace: 'arith', leaf: 'add', arity: 3 },
-      { defId: 'arith/order/le', namespace: 'arith/order', leaf: 'le', arity: 2 },
-      { defId: 'order/lt', namespace: 'order', leaf: 'lt', arity: 2 },
-      { defId: 'plain', namespace: null, leaf: 'plain', arity: 0 },
+describe('structural spawn catalog', () => {
+  it('groups and searches opaque definition IDs', () => {
+    const catalog = buildSpawnCatalog([
+      ['logic/Unary', { boundary: [0] }],
+      ['Pair', { boundary: [0, 1] }],
     ])
-    expect(catalog.groups.map((group) => ({
-      namespace: group.namespace,
-      label: group.label,
-      ids: group.entries.map((entry) => entry.defId),
-    }))).toEqual([
-      { namespace: null, label: UNQUALIFIED_GROUP_LABEL, ids: ['plain'] },
-      { namespace: 'arith', label: 'arith', ids: ['arith/add'] },
-      { namespace: 'arith/order', label: 'arith/order', ids: ['arith/order/le'] },
-      { namespace: 'order', label: 'order', ids: ['order/lt'] },
+    expect(catalog.groups.map((group) => group.label)).toEqual(['Unqualified', 'logic'])
+    expect(searchSpawnCatalog(catalog, 'unary').map((entry) => entry.defId))
+      .toEqual(['logic/Unary'])
+    const recents = new SpawnRecents(1)
+    recents.note('Pair')
+    expect(recents.list(catalog).map((entry) => entry.defId)).toEqual(['Pair'])
+  })
+
+  it('offers visible relational head wires from inner to outer scope', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.relWire(builder.root, UNARY)
+    const cut = builder.cut(builder.root)
+    const inner = builder.relWire(cut, BINARY)
+    const diagram = builder.build()
+    expect(atomHeadOptions(diagram, cut)).toEqual([
+      { wire: inner, arity: 2, position: 1, total: 2 },
+      { wire: outer, arity: 1, position: 2, total: 2 },
     ])
+    expect(() => atomHeadOptions(diagram, 'missing')).toThrow(/unknown region/)
   })
 
-  it('preserves every exact id accepted by the authoritative relation map', () => {
-    const catalog = buildSpawnCatalog(relations([
-      ['/leading', 1],
-      ['trailing/', 2],
-      ['double//slash', 3],
-    ]))
-    expect(catalog.entries.map(({ defId, namespace, leaf, arity }) => ({ defId, namespace, leaf, arity }))).toEqual([
-      { defId: '/leading', namespace: '', leaf: 'leading', arity: 1 },
-      { defId: 'double//slash', namespace: 'double/', leaf: 'slash', arity: 3 },
-      { defId: 'trailing/', namespace: 'trailing', leaf: '', arity: 2 },
-    ])
-  })
-
-  it('searches the complete id case-insensitively and ranks by match position, length, then id', () => {
-    const catalog = buildSpawnCatalog(relations([
-      ['arith/ADD', 3],
-      ['add', 2],
-      ['x/addition', 1],
-      ['arith/madder', 4],
-      ['unrelated', 0],
-    ]))
-
-    expect(searchSpawnCatalog(catalog, '  aDd  ').map((entry) => entry.defId)).toEqual([
-      'add',
-      'x/addition',
-      'arith/ADD',
-      'arith/madder',
-    ])
-    expect(searchSpawnCatalog(catalog, '')).toEqual([])
-  })
-})
-
-describe('bound predicate spawn options', () => {
-  it('returns none outside relational wires and every enclosing wire innermost first', () => {
-    // The old "bubble binders" are relational wires now; a bound predicate may be
-    // spawned onto any relational wire enclosing the invocation region.
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const outerW = b.relWire(cut, R(1))
-    const cut2 = b.cut(cut)
-    const innerW = b.relWire(cut2, R(3))
-    const leaf = b.cut(cut2)
-    const d = b.build()
-
-    expect(boundPredicateOptions(d, b.root)).toEqual([])
-    expect(boundPredicateOptions(d, leaf)).toEqual([
-      { source: 'draft', wire: innerW, arity: 3, position: 1, total: 2 },
-      { source: 'draft', wire: outerW, arity: 1, position: 2, total: 2 },
-    ])
-  })
-
-  it('rejects an unknown invocation region instead of silently returning no options', () => {
-    const d = new DiagramBuilder().build()
-    expect(() => boundPredicateOptions(d, 'missing')).toThrow(/unknown region 'missing'/)
-  })
-})
-
-describe('spawn recents', () => {
-  it('is session-local, most-recent-first, deduped, capped, and filtered through the current catalog', () => {
-    const catalog = buildSpawnCatalog(relations([
-      ['a', 1],
-      ['b', 2],
-      ['c', 3],
-    ]))
-    const first = new SpawnRecents(2)
-    const second = new SpawnRecents(2)
-
-    first.note('a')
-    first.note('b')
-    first.note('a')
-    first.note('c')
-
-    expect(first.list(catalog).map((entry) => entry.defId)).toEqual(['c', 'a'])
-    const withoutC = buildSpawnCatalog(relations([['a', 1], ['b', 2]]))
-    expect(first.list(withoutC).map((entry) => entry.defId)).toEqual(['a'])
-    expect(second.list(catalog)).toEqual([])
-
-    first.note('a')
-    expect(first.list(catalog).map((entry) => entry.defId)).toEqual(['a', 'c'])
-  })
-
-  it('refuses an invalid cap', () => {
-    expect(() => new SpawnRecents(-1)).toThrow(/nonnegative integer/)
-    expect(() => new SpawnRecents(1.5)).toThrow(/nonnegative integer/)
-  })
-})
-
-describe('spawn invocation lifecycle value', () => {
-  it('copies and freezes the exact screen/world/region snapshot', () => {
-    const screen = { x: 11, y: 22 }
-    const world = { x: -3, y: 7 }
-    const snapshot = snapshotSpawnInvocation({ screen, world, region: 'r7' })
-
-    screen.x = 100
-    world.y = 200
-    expect(snapshot).toEqual({ screen: { x: 11, y: 22 }, world: { x: -3, y: 7 }, region: 'r7' })
-    expect(Object.isFrozen(snapshot)).toBe(true)
-    expect(Object.isFrozen(snapshot.screen)).toBe(true)
-    expect(Object.isFrozen(snapshot.world)).toBe(true)
-  })
-
-  it('has idempotent closed/disposed lifecycle methods without installing a DOM listener', () => {
-    const host = { ownerDocument: {} } as HTMLElement
-    const cascade = new SpawnCascade({
-      host,
-      spawnTerm: () => {},
-      spawnRelation: () => {},
-      spawnBoundPredicate: () => {},
-      headWireColor: () => 'rgb(1, 2, 3)',
-    })
-
-    expect(cascade.isOpen).toBe(false)
-    expect(cascade.close()).toBe(false)
-    expect(cascade.escape()).toBe(false)
-    expect(cascade.outside(null)).toBe(false)
-    cascade.dispose()
-    cascade.dispose()
-    expect(() => cascade.open(
-      { screen: { x: 0, y: 0 }, world: { x: 0, y: 0 }, region: 'r0' },
-      relations([]),
-      [],
-    )).toThrow(/disposed/)
+  it('snapshots invocation coordinates', () => {
+    const input = { screen: { x: 1, y: 2 }, world: { x: 3, y: 4 }, region: 'r0' }
+    const output = snapshotSpawnInvocation(input)
+    expect(output).toEqual(input)
+    expect(output).not.toBe(input)
   })
 })

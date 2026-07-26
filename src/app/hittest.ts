@@ -1,15 +1,11 @@
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { mkSelection } from '../kernel/diagram/subgraph/selection'
+import type { Endpoint, RegionId, WireId } from '../kernel/diagram/diagram'
 import { pkey, resolvedFrameSlot, type Engine, type LegEnd } from '../view/engine'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
+import type { Hit } from './hit-selection'
 
-export type Hit =
-  | { readonly kind: 'node'; readonly id: NodeId }
-  | { readonly kind: 'region'; readonly id: RegionId }
-  | { readonly kind: 'wire'; readonly id: WireId }
+export { buildSelection, type Hit } from './hit-selection'
 
 type WireHit = Extract<Hit, { readonly kind: 'wire' }>
 
@@ -226,36 +222,3 @@ export function dragTarget(e: Engine, point: Vec2, viewport: HitViewport): DragT
  * must be its direct child — anything deeper needs its enclosing subtree
  * picked instead, and the refusal says so.
  */
-export function buildSelection(d: Diagram, items: readonly Hit[]): SubgraphSelection {
-  const nodes: NodeId[] = []
-  const regions: RegionId[] = []
-  const wires: WireId[] = []
-  const anchors = new Set<RegionId>()
-  for (const item of items) {
-    if (item.kind === 'node') {
-      const n = d.nodes[item.id]
-      if (n === undefined) throw new Error(`unknown node '${item.id}'`)
-      nodes.push(item.id)
-      anchors.add(n.region)
-    } else if (item.kind === 'region') {
-      const r = d.regions[item.id]
-      if (r === undefined) throw new Error(`unknown region '${item.id}'`)
-      if (r.kind === 'sheet') throw new Error('the sheet cannot be selected')
-      regions.push(item.id)
-      anchors.add(r.parent)
-    } else {
-      const w = d.wires[item.id]
-      if (w === undefined) throw new Error(`unknown wire '${item.id}'`)
-      wires.push(item.id)
-      anchors.add(w.scope)
-    }
-  }
-  if (anchors.size === 0) throw new Error('nothing selected')
-  if (anchors.size > 1) {
-    throw new Error(
-      `selection spans several regions (${[...anchors].map((a) => `'${a}'`).join(', ')}); select the enclosing cut instead of reaching inside it`,
-    )
-  }
-  const region = [...anchors][0]!
-  return mkSelection(d, { region, regions, nodes, wires })
-}

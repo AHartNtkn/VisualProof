@@ -1,34 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import type { ProofContext } from '../../src/kernel/proof/context'
 import { applicableActions } from '../../src/app/actions'
-import { defineRelation } from '../../src/app/define'
-import { instantiationChoices } from '../../src/app/interact/moves'
-import { sessionTheory } from '../../src/app/persist'
-import { mkReplay } from '../../src/app/replay'
-import { startSession, startTrack } from '../../src/app/session'
-import { revalidateCopy, type CopyPlan } from '../../src/app/copy-planner'
+import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { verifyTheory } from '../../src/kernel/proof/context'
+import { unaryDefinition, tinyTheory } from '../fixtures/zero-signature'
 
-describe('application ProofContext boundaries', () => {
-  it('rejects a structural forgery before zero-work or unrelated validation', () => {
-    const forged = { theorems: new Map(), relations: new Map() } as unknown as ProofContext
-    const diagram = new DiagramBuilder().build()
-    const side = mkDiagramWithBoundary(diagram, [])
-    const theorem = { name: 'identity', lhs: side, rhs: side, actions: [] }
-    const selection = { region: diagram.root, regions: [], nodes: [], wires: [] }
-    const calls = [
-      () => mkReplay(theorem.name, forged),
-      () => startTrack(side, 'forward', forged),
-      () => startSession(side, side, forged),
-      () => applicableActions(diagram, selection, forged),
-      () => instantiationChoices(forged, 0),
-      () => sessionTheory(forged, { relations: [] }),
-      () => defineRelation(diagram, selection, [], '', forged),
-      () => revalidateCopy({} as CopyPlan, diagram, {
-        kind: 'proof', diagram, region: 'missing', orientation: 'forward', ctx: forged,
-      }),
-    ]
-    for (const call of calls) expect(call).toThrowError('invalid proof context')
+describe('proof-context authority', () => {
+  it('uses only the supplied verified relation and theorem stores', () => {
+    const definition = unaryDefinition()
+    const node = Object.keys(definition.diagram.nodes)[0]!
+    const selection = mkSelection(definition.diagram, {
+      region: definition.diagram.root, regions: [], nodes: [node], wires: [],
+    })
+    const actions = applicableActions(
+      definition.diagram,
+      selection,
+      verifyTheory(tinyTheory()),
+    )
+    expect(actions.some((action) => action.kind === 'relFold')).toBe(true)
+    expect(actions.some((action) =>
+      action.kind === 'citeTheorem' && action.name === 'StructuralReflexivity')).toBe(true)
   })
 })

@@ -7,7 +7,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: resolve(process.cwd(), 'app/index.html'),
-        relationWorkspace: resolve(process.cwd(), 'app/test/relation-workspace.html'),
       },
     },
   },

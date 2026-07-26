@@ -1,36 +1,35 @@
-import type { Diagram } from '../kernel/diagram/diagram'
-import { polarity } from '../kernel/diagram/regions'
+import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import { isAncestorOrEqual, polarity } from '../kernel/diagram/regions'
+import { sigEquals } from '../kernel/diagram/sig'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
-import { hasInconsistentCutCandidate } from '../kernel/rules/inconsistent-cut'
+import type { IdentityContradictionEvidence } from '../kernel/rules/identity'
 
 /**
  * Pure, read-only enumeration of moves the UI may offer for a selection.
  * Gates are MIRRORED here (never invoked): the applier remains the sole
  * authority at commit time, and its refusal message is surfaced verbatim.
- * Two-phase moves (targets, arguments, terms) are flagged, not resolved.
+ * Two-phase moves (targets and fold arguments) are flagged, not resolved.
  */
 export type ActionDescriptor =
   | { readonly kind: 'erase'; readonly label: string }
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
-  | { readonly kind: 'inconsistentCutElim'; readonly label: string }
-  | { readonly kind: 'abstractWrap'; readonly label: string; readonly needsInput: 'abstraction' }
+  | { readonly kind: 'identityInsert'; readonly label: string }
+  | { readonly kind: 'identityContradiction'; readonly label: string }
   | { readonly kind: 'vacuousElim'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
-  | { readonly kind: 'instantiate'; readonly label: string; readonly needsInput: 'comprehension' }
-  | { readonly kind: 'convert'; readonly label: string; readonly needsInput: 'term' }
   | { readonly kind: 'relUnfold'; readonly label: string }
   | { readonly kind: 'relFold'; readonly label: string; readonly needsInput: 'relation' }
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 /**
  * `backward` is the reasoning orientation (USER ruling): the SAME move list
- * with exactly the polarity-tied gates flipped — erasure offers in negative
- * regions, atomic spawning in positive, and citation direction ties to sign XOR
- * orientation. Everything else is direction-free and unchanged.
+ * with exactly the orientation-aware gates flipped. Identity insertion is
+ * Rule 4 and remains tied to a physically negative region in both proof
+ * orientations.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   assertProofContext(ctx)
@@ -41,13 +40,13 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
 
   if (hasContent && pol === eraseSign) out.push({ kind: 'erase', label: `Erase (${eraseSign} region)` })
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
-  out.push({ kind: 'abstractWrap', label: 'Abstract as a relation…', needsInput: 'abstraction' })
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })
     out.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })
   }
-  if (sel.nodes.length === 1 && sel.regions.length === 0 && d.nodes[sel.nodes[0]!]?.kind === 'term') {
-    out.push({ kind: 'convert', label: 'Convert (βη)…', needsInput: 'term' })
+
+  if (identityInsertionWires(d, sel) !== null) {
+    out.push({ kind: 'identityInsert', label: 'Insert identity' })
   }
 
   // A single reference node unfolds when its relation is in scope. Unfold is a
@@ -78,28 +77,17 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
       if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
         out.push({ kind: 'doubleCutElim', label: 'Eliminate the double cut' })
       }
-      if (hasInconsistentCutCandidate(d, rid)) {
-        out.push({ kind: 'inconsistentCutElim', label: 'Eliminate the inconsistent cut' })
+      if (findIdentityContradictionEvidence(d, rid) !== null) {
+        out.push({ kind: 'identityContradiction', label: 'Eliminate the identity contradiction' })
       }
     }
   }
 
-  // single selected relational wire: second-order eliminations. A relational
-  // wire is a second-order existential line; an endpoint-free one is vacuous
-  // (dissolvable by vacuous elim, selectable alone), and one carrying atoms may
-  // be instantiated by attaching a witnessing body (its selection necessarily
-  // includes the riding atoms). Instantiation's gate flips with orientation like
-  // every polarity gate.
-  if (sel.wires.length === 1 && sel.regions.length === 0) {
+  // A single endpoint-free wire of any signature is structurally vacuous.
+  if (sel.wires.length === 1 && sel.regions.length === 0 && sel.nodes.length === 0) {
     const wid = sel.wires[0]!
     const w = d.wires[wid]!
-    if (w.sig.kind === 'rel') {
-      const bound = w.endpoints.length > 0
-      if (!bound && sel.nodes.length === 0) out.push({ kind: 'vacuousElim', label: 'Dissolve the vacuous relation wire' })
-      if (bound && polarity(d, w.scope) === (backward ? 'positive' : 'negative')) {
-        out.push({ kind: 'instantiate', label: 'Instantiate the relation…', needsInput: 'comprehension' })
-      }
-    }
+    if (w.endpoints.length === 0) out.push({ kind: 'vacuousElim', label: 'Eliminate the vacuous wire' })
   }
 
   for (const [name] of ctx.theorems) {
@@ -107,4 +95,68 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
     out.push({ kind: 'citeTheorem', label: `Cite ${name} (${direction})`, name, direction })
   }
   return out
+}
+
+function identityInsertionWires(
+  diagram: Diagram,
+  selection: SubgraphSelection,
+): readonly WireId[] | null {
+  if (
+    polarity(diagram, selection.region) !== 'negative'
+    || selection.nodes.length !== 0
+    || selection.regions.length !== 0
+    || selection.wires.length < 2
+    || new Set(selection.wires).size !== selection.wires.length
+  ) return null
+  const first = diagram.wires[selection.wires[0]!]
+  if (first === undefined) return null
+  for (const wireId of selection.wires) {
+    const wire = diagram.wires[wireId]
+    if (
+      wire === undefined
+      || !sigEquals(first.sig, wire.sig)
+      || !isAncestorOrEqual(diagram, wire.scope, selection.region)
+    ) return null
+  }
+  return selection.wires
+}
+
+function incidentWires(diagram: Diagram, node: NodeId): ReadonlySet<WireId> {
+  return new Set(Object.entries(diagram.wires)
+    .filter(([, wire]) => wire.endpoints.some((endpoint) => endpoint.node === node))
+    .map(([wire]) => wire))
+}
+
+export function findIdentityContradictionEvidence(
+  diagram: Diagram,
+  enclosingCut: RegionId,
+): IdentityContradictionEvidence | null {
+  const enclosing = diagram.regions[enclosingCut]
+  if (enclosing === undefined || enclosing.kind !== 'cut') return null
+  const equalities = Object.entries(diagram.nodes)
+    .filter((entry): entry is [NodeId, Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>] =>
+      entry[1].kind === 'identity' && entry[1].region === enclosingCut)
+    .sort(([left], [right]) => left.localeCompare(right))
+  const childCuts = Object.entries(diagram.regions)
+    .filter((entry): entry is [RegionId, Extract<Diagram['regions'][RegionId], { kind: 'cut' }>] =>
+      entry[1].kind === 'cut' && entry[1].parent === enclosingCut)
+    .sort(([left], [right]) => left.localeCompare(right))
+  for (const [equality, equalityNode] of equalities) {
+    const equalityWires = incidentWires(diagram, equality)
+    for (const [disequalityCut] of childCuts) {
+      const disequalities = Object.entries(diagram.nodes)
+        .filter((entry): entry is [NodeId, Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>] =>
+          entry[1].kind === 'identity' && entry[1].region === disequalityCut)
+        .sort(([left], [right]) => left.localeCompare(right))
+      for (const [disequality, disequalityNode] of disequalities) {
+        if (!sigEquals(equalityNode.sig, disequalityNode.sig)) continue
+        const disequalityWires = incidentWires(diagram, disequality)
+        if (
+          equalityWires.size === disequalityWires.size
+          && [...equalityWires].every((wire) => disequalityWires.has(wire))
+        ) return { equality, disequalityCut, disequality }
+      }
+    }
+  }
+  return null
 }

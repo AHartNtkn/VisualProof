@@ -1,30 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { parseTerm } from '../../src/kernel/term/parse'
-import { verifyTheory } from '../../src/kernel/proof/store'
-import { registerTheorem } from '../../src/kernel/proof/context'
-import { buildFregeTheory } from '../../src/theories/frege'
-import { mkReplay } from '../../src/app/replay'
 import { companionFor } from '../../src/app/companion'
+import { mkReplay } from '../../src/app/replay'
+import { verifyTheory } from '../../src/kernel/proof/context'
+import { tinyTheory } from '../fixtures/zero-signature'
 
-describe('replay companion', () => {
-  it('is absent from edit and proving modes', () => {
-    expect(companionFor({ mode: 'edit', replay: null })).toBeNull()
-    expect(companionFor({ mode: 'prove', replay: null })).toBeNull()
-  })
-
-  it('is absent from replay until a verified replay exists', () => {
+describe('companion projection', () => {
+  it('shows only an active replay goal', () => {
+    const ctx = verifyTheory(tinyTheory())
+    const replay = mkReplay('StructuralReflexivity', ctx)
+    expect(companionFor({ mode: 'edit', replay })).toBeNull()
+    expect(companionFor({ mode: 'prove', replay })).toBeNull()
     expect(companionFor({ mode: 'replay', replay: null })).toBeNull()
-  })
-
-  it('shows the immutable final replay state', () => {
-    const builder = new DiagramBuilder()
-    builder.termNode(builder.root, parseTerm('\\x. x'))
-    const statement = mkDiagramWithBoundary(builder.build(), [])
-    const theorem = { name: 'identity', lhs: statement, rhs: statement, actions: [] }
-    const replay = mkReplay(theorem.name, registerTheorem(verifyTheory(buildFregeTheory()), theorem))
-    const companion = companionFor({ mode: 'replay', replay })
-    expect(companion).toEqual({ diagram: statement.diagram, boundary: [], label: 'goal: final state' })
+    expect(companionFor({ mode: 'replay', replay })?.label).toBe('goal: final state')
   })
 })

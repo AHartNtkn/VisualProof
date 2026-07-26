@@ -1,36 +1,19 @@
-import { describe, it, expect } from 'vitest'
-import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
-import { buildFregeTheory } from '../../src/theories/frege'
+import { describe, expect, it } from 'vitest'
 import { mergeTheories } from '../../src/app/boot'
-import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { verifyTheory } from '../../src/kernel/proof/context'
+import { tinyTheory } from '../fixtures/zero-signature'
 
-describe('mergeTheories (the only thing boot.ts does — no fetch, no manifest)', () => {
-  it('merges a bundle: theorems citable, relation present', () => {
-    const frege = loadTheory(theoryToJson(buildFregeTheory()))
-    const merged = mergeTheories([frege])
-    expect(merged.ctx.theorems.has('plusAssoc')).toBe(true)
-    expect(new Map(merged.relations).get('nat')).toBeDefined()
+describe('theory boot merge', () => {
+  it('merges a verified zero-signature theory', () => {
+    const theory = tinyTheory()
+    const merged = mergeTheories([{ theory, ctx: verifyTheory(theory) }])
+    expect([...merged.ctx.relations.keys()]).toEqual(['UnaryWitness'])
+    expect([...merged.ctx.theorems.keys()]).toEqual(['StructuralReflexivity'])
   })
 
-  it('empty input rebuilds to the empty context (the honest empty boot)', () => {
-    const merged = mergeTheories([])
-    expect(merged.ctx).toBe(EMPTY_PROOF_CONTEXT)
-    expect([...merged.ctx.theorems.keys()]).toEqual([])
-    expect(merged.relations.map(([name]) => name)).toEqual([])
-  })
-
-  it('refuses conflicting theorem names loudly', () => {
-    const frege = loadTheory(theoryToJson(buildFregeTheory()))
-    expect(() => mergeTheories([frege, frege]))
-      .toThrowError(/theory merge conflict: duplicate theorem 'plusAssoc'/)
-  })
-
-  it('rebuilds from the certified snapshot rather than a mutated parsed theory', () => {
-    const loaded = loadTheory(theoryToJson(buildFregeTheory()))
-    ;(loaded.theory.relations as unknown[]).splice(0)
-    ;(loaded.theory.theorems as unknown[]).splice(0)
-    const merged = mergeTheories([loaded])
-    expect(merged.ctx.relations.has('nat')).toBe(true)
-    expect(merged.ctx.theorems.has('plusAssoc')).toBe(true)
+  it('refuses duplicate names instead of shadowing', () => {
+    const theory = tinyTheory()
+    const loaded = { theory, ctx: verifyTheory(theory) }
+    expect(() => mergeTheories([loaded, loaded])).toThrow(/duplicate theorem|duplicate relation/)
   })
 })

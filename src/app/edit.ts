@@ -1,7 +1,8 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { mkDiagram, portKey, requiredPorts } from '../kernel/diagram/diagram'
 import type { RelSig } from '../kernel/diagram/sig'
-import { deepestCommonAncestor } from '../kernel/diagram/regions'
+import { sigEquals, sigKey } from '../kernel/diagram/sig'
+import { deepestCommonAncestor, isAncestorOrEqual } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { selectionContents } from '../kernel/diagram/subgraph/selection'
 import { removeSubgraph } from '../kernel/diagram/subgraph/splice'
@@ -25,10 +26,9 @@ export type ConstructionHit =
 
 function moveNodeToRegion(node: DiagramNode, region: RegionId): DiagramNode {
   switch (node.kind) {
-    case 'term': return { kind: 'term', region, term: node.term, freePorts: node.freePorts }
     case 'atom': return { kind: 'atom', region, sig: node.sig }
     case 'ref': return { kind: 'ref', region, defId: node.defId, sig: node.sig }
-    case 'body': return { kind: 'body', region, sig: node.sig, content: node.content }
+    case 'identity': return { kind: 'identity', region, sig: node.sig, arity: node.arity }
   }
 }
 
@@ -88,6 +88,63 @@ export function addRelationWire(d: Diagram, scope: RegionId, sig: RelSig): { dia
   const wire = freshId(new Set(Object.keys(d.wires)), 'w')
   const wires: Record<WireId, Wire> = { ...d.wires, [wire]: { scope, sig, endpoints: [] } }
   return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires }), wire }
+}
+
+/**
+ * Construction-level identity placement. Unlike Rule 4 this is available at
+ * either polarity because edit mode authors a statement rather than deriving
+ * one. The canonical diagram constructor immediately merges a co-scoped
+ * identity and retains a conditional identity over inherited wires.
+ */
+export function addIdentity(
+  diagram: Diagram,
+  region: RegionId,
+  wires: readonly WireId[],
+): Diagram {
+  if (diagram.regions[region] === undefined) throw new Error(`unknown region '${region}'`)
+  if (wires.length < 2 || new Set(wires).size !== wires.length) {
+    throw new Error('identity construction requires at least two distinct wires')
+  }
+  const selected = wires.map((wireId) => {
+    const wire = diagram.wires[wireId]
+    if (wire === undefined) throw new Error(`unknown wire '${wireId}'`)
+    return [wireId, wire] as const
+  })
+  const sig = selected[0]![1].sig
+  for (const [wireId, wire] of selected) {
+    if (!sigEquals(wire.sig, sig)) {
+      throw new Error(
+        `identity construction wires must have the same signature; `
+        + `'${wires[0]}' has '${sigKey(sig)}' but '${wireId}' has '${sigKey(wire.sig)}'`,
+      )
+    }
+    if (!isAncestorOrEqual(diagram, wire.scope, region)) {
+      throw new Error(
+        `identity construction wire '${wireId}' scoped at '${wire.scope}' is not visible at '${region}'`,
+      )
+    }
+  }
+
+  const node = freshId(new Set(Object.keys(diagram.nodes)), 'identity')
+  const nodes: Record<NodeId, DiagramNode> = {
+    ...diagram.nodes,
+    [node]: { kind: 'identity', region, sig, arity: wires.length },
+  }
+  const rebuiltWires: Record<WireId, Wire> = { ...diagram.wires }
+  wires.forEach((wireId, index) => {
+    const wire = rebuiltWires[wireId]!
+    rebuiltWires[wireId] = {
+      scope: wire.scope,
+      sig: wire.sig,
+      endpoints: [...wire.endpoints, { node, port: { kind: 'identity', index } }],
+    }
+  })
+  return mkDiagram({
+    root: diagram.root,
+    regions: { ...diagram.regions },
+    nodes,
+    wires: rebuiltWires,
+  })
 }
 
 /** Identify any number of semantic wires directly. The lexicographically first

@@ -1,222 +1,148 @@
-import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
-import { freePorts } from '../../src/kernel/term/term'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { relSig, IOTA } from '../../src/kernel/diagram/sig'
-
-const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
+import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { buildFregeTheory } from '../../src/theories/frege'
-import { verifyTheory } from '../../src/kernel/proof/store'
+import { verifyTheory } from '../../src/kernel/proof/context'
 import { applicableActions } from '../../src/app/actions'
-import { bootFixture } from './boot-fixture'
-import { applyConversion } from '../../src/kernel/rules/conversion'
-import { applyStep } from '../../src/kernel/proof/step'
-import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
-import { termNodeAt } from '../../src/kernel/rules/access'
+import { identityInCut, tinyTheory, UNARY } from '../fixtures/zero-signature'
 
-const p = (s: string) => parseTerm(s)
+const kinds = (
+  diagram: Parameters<typeof applicableActions>[0],
+  selection: Parameters<typeof applicableActions>[1],
+) => applicableActions(diagram, selection, verifyTheory(tinyTheory())).map((action) => action.kind)
 
 describe('applicableActions', () => {
-  it('offers inconsistent-cut elimination structurally at both polarities and orientations', () => {
-    const h = new DiagramBuilder()
-    const positive = h.cut(h.root)
-    const positiveFirst = h.termNode(positive, p('\\x. x'))
-    const positiveSecond = h.termNode(positive, p('\\x. \\y. x'))
-    h.wire(positive, [positiveFirst, positiveSecond]
-      .map((node) => ({ node, port: { kind: 'output' as const } })))
-    const enclosing = h.cut(h.root)
-    const negative = h.cut(enclosing)
-    const negativeFirst = h.termNode(negative, p('\\x. x'))
-    const negativeSecond = h.termNode(negative, p('\\x. \\y. x'))
-    h.wire(negative, [negativeFirst, negativeSecond]
-      .map((node) => ({ node, port: { kind: 'output' as const } })))
-    const d = h.build()
-    const proof = verifyTheory(buildFregeTheory())
+  it('offers identity insertion only for two or more homogeneous selected wires in a negative region', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const left = builder.wire(cut, [])
+    const right = builder.wire(cut, [])
+    const relation = builder.wire(cut, [], relSig([]))
+    const diagram = builder.build()
 
-    for (const backward of [false, true]) {
-      for (const [region, cut] of [[d.root, positive], [enclosing, negative]] as const) {
-        const selection = mkSelection(d, { region, regions: [cut], nodes: [], wires: [] })
-        expect(applicableActions(d, selection, proof, backward).map((action) => action.kind))
-          .toContain('inconsistentCutElim')
-      }
-    }
+    const pair = mkSelection(diagram, {
+      region: cut,
+      regions: [],
+      nodes: [],
+      wires: [left, right],
+    })
+    expect(kinds(diagram, pair)).toContain('identityInsert')
+
+    const singleton = mkSelection(diagram, {
+      region: cut,
+      regions: [],
+      nodes: [],
+      wires: [left],
+    })
+    expect(kinds(diagram, singleton)).not.toContain('identityInsert')
+
+    const mixed = mkSelection(diagram, {
+      region: cut,
+      regions: [],
+      nodes: [],
+      wires: [left, relation],
+    })
+    expect(kinds(diagram, mixed)).not.toContain('identityInsert')
+
+    const positiveBuilder = new DiagramBuilder()
+    const positiveLeft = positiveBuilder.wire(positiveBuilder.root, [])
+    const positiveRight = positiveBuilder.wire(positiveBuilder.root, [])
+    const positive = positiveBuilder.build()
+    expect(kinds(positive, mkSelection(positive, {
+      region: positive.root,
+      regions: [],
+      nodes: [],
+      wires: [positiveLeft, positiveRight],
+    }))).not.toContain('identityInsert')
   })
 
-  it('offers erasure contextually while spawning remains on the direct canvas interaction', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('\\x. x'))
-    const cut = h.cut(h.root)
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
+  it('offers identity contradiction only for the exact direct asserted/negated identity shape', () => {
+    const exact = identityInCut()
+    const enclosing = Object.entries(exact.regions)
+      .find(([, region]) => region.kind === 'cut' && region.parent === exact.root)![0]
+    expect(kinds(exact, mkSelection(exact, {
+      region: exact.root,
+      regions: [enclosing],
+      nodes: [],
+      wires: [],
+    }))).toContain('identityContradiction')
 
-    const pos = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const atPos = applicableActions(d, pos, ctx).map((a) => a.kind)
-    expect(atPos).toContain('erase')
-    expect(atPos).toContain('doubleCutWrap')
-    expect(atPos).toContain('iterate')
-    expect(atPos).toContain('abstractWrap')
-
-    const neg = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
-    const atNeg = applicableActions(d, neg, ctx).map((a) => a.kind)
-    expect(atNeg).not.toContain('insert')
-    expect(atNeg).not.toContain('erase')
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const diagram = builder.build()
+    expect(kinds(diagram, mkSelection(diagram, {
+      region: diagram.root,
+      regions: [cut],
+      nodes: [],
+      wires: [],
+    }))).not.toContain('identityContradiction')
   })
 
-  it('offers double-cut elimination only on empty-annulus cuts', () => {
-    const h = new DiagramBuilder()
-    const c1 = h.cut(h.root)
-    h.cut(c1)
-    const c3 = h.cut(h.root)
-    h.termNode(c3, p('y'))
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const onClean = applicableActions(d, mkSelection(d, { region: d.root, regions: [c1], nodes: [], wires: [] }), ctx)
-    expect(onClean.map((a) => a.kind)).toContain('doubleCutElim')
-    const onDirty = applicableActions(d, mkSelection(d, { region: d.root, regions: [c3], nodes: [], wires: [] }), ctx)
-    expect(onDirty.map((a) => a.kind)).not.toContain('doubleCutElim')
+  it('keeps generic structural actions, fold/unfold, and theorem citation', () => {
+    const builder = new DiagramBuilder()
+    const ref = builder.ref(builder.root, 'UnaryWitness', UNARY)
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [ref],
+      wires: [],
+    })
+    const actions = applicableActions(diagram, selection, verifyTheory(tinyTheory()))
+    expect(actions.map((action) => action.kind)).toEqual(expect.arrayContaining([
+      'erase',
+      'doubleCutWrap',
+      'iterate',
+      'deiterate',
+      'relUnfold',
+      'relFold',
+      'citeTheorem',
+    ]))
+    expect(actions.find((action) => action.kind === 'citeTheorem')).toMatchObject({
+      name: 'StructuralReflexivity',
+      direction: 'forward',
+    })
+    expect(actions.every((action) => action.label.length > 0)).toBe(true)
   })
 
-  it('offers vacuous elimination only on endpoint-free relation wires, and instantiation only on negative bound ones', () => {
-    const h = new DiagramBuilder()
-    const empty = h.relWire(h.root, R(1))
-    const cut = h.cut(h.root)
-    const atom = h.atom(cut, R(1))
-    const negW = h.wire(cut, [{ node: atom, port: { kind: 'head' } }], R(1))
-    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }])
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const onEmpty = applicableActions(d, mkSelection(d, { region: d.root, regions: [], nodes: [], wires: [empty] }), ctx).map((a) => a.kind)
-    expect(onEmpty).toContain('vacuousElim')
-    expect(onEmpty).not.toContain('instantiate')
-    const onNeg = applicableActions(d, mkSelection(d, { region: cut, regions: [], nodes: [atom], wires: [negW] }), ctx).map((a) => a.kind)
-    expect(onNeg).toContain('instantiate')
-    expect(onNeg).not.toContain('vacuousElim')
+  it('has no computation, comprehension, or semantic inconsistent-cut affordance', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const first = builder.identity(cut, IOTA, 2)
+    builder.wire(builder.root, [{ node: first, port: { kind: 'identity', index: 0 } }])
+    builder.wire(builder.root, [{ node: first, port: { kind: 'identity', index: 1 } }])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [cut],
+      nodes: [],
+      wires: [],
+    })
+    expect(kinds(diagram, selection)).not.toEqual(expect.arrayContaining([
+      'convert',
+      'instantiate',
+      'abstractWrap',
+      'inconsistentCutElim',
+    ]))
   })
 
-  it('offers theorem citations whose direction matches the selection polarity', async () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)'))
-    const d = h.build()
-    const { ctx } = await bootFixture()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const cites = applicableActions(d, sel, ctx).filter((a) => a.kind === 'citeTheorem')
-    expect(cites.length).toBeGreaterThan(0)
-    expect(cites.every((c) => c.kind === 'citeTheorem' && c.direction === 'forward')).toBe(true)
-  })
-
-  it('every descriptor carries a human label', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('\\x. x'))
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    for (const a of applicableActions(d, sel, ctx)) {
-      expect(a.label.length).toBeGreaterThan(0)
-    }
-  })
-})
-
-describe('erase polarity with content', () => {
-  it('does not offer erase for content selected at a negative region', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const n = h.termNode(cut, p('\\x. x'))
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: cut, regions: [], nodes: [n], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('erase')
-  })
-})
-
-describe('double-cut elimination annulus content', () => {
-  it('is not offered when the annulus holds a node beside the inner cut... or anything at all', () => {
-    const h = new DiagramBuilder()
-    const outer = h.cut(h.root)
-    h.cut(outer)
-    h.termNode(outer, p('y')) // annulus polluted but children.length is still 1
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [outer], nodes: [], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('doubleCutElim')
-  })
-})
-
-describe('reference-node gates', () => {
-  const refHost = (defId: string) => {
-    const b = new DiagramBuilder()
-    const ref = b.ref(b.root, defId, R(1))
-    const carrier = b.termNode(b.root, p('y'))
-    b.wire(b.root, [
-      { node: ref, port: { kind: 'arg', index: 0 } },
-      { node: carrier, port: { kind: 'freeVar', name: 'y' } },
-    ])
-    return { d: b.build(), ref }
-  }
-
-  it('a ref node is not convertible, unfolds when its relation is in scope, and joins selection-based actions', () => {
-    const { d, ref } = refHost('nat') // buildFregeTheory carries the 'nat' relation
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
-    const kinds = applicableActions(d, sel, ctx).map((a) => a.kind)
-    expect(kinds).not.toContain('convert') // refs are not term nodes
-    expect(kinds).toContain('relUnfold')
-    expect(kinds).toContain('doubleCutWrap') // selection-based actions still flow through
-    expect(kinds).toContain('iterate')
-  })
-
-  it('does not offer relUnfold when the referenced relation is not in scope', () => {
-    const { d, ref } = refHost('ghost')
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('relUnfold')
-  })
-
-  it('offers relFold on a content selection when a relation exists, and not otherwise', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('y'))
-    const d = h.build()
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    const withRel = verifyTheory(buildFregeTheory())
-    expect(applicableActions(d, sel, withRel).map((a) => a.kind)).toContain('relFold')
-    const noRel = verifyTheory({ relations: [], theorems: [] })
-    expect(applicableActions(d, sel, noRel).map((a) => a.kind)).not.toContain('relFold')
-  })
-})
-
-describe('descriptor → step construction (the shell contract)', () => {
-  it('convert: an enumerated convert commits via the certificate path', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('(\\a. a) y'))
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('convert')
-    // the node's source free 'y' is canonical s0 after construction
-    const target = p('s0')
-    const source = termNodeAt(d, n)
-    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
-    const pre = applyConversion(d, n, target, correspondence, 32)
-    const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, correspondence, attachments: {} }, ctx)
-    expect(JSON.stringify(out.nodes[n])).toContain('"port"')
-  })
-
-  it('relUnfold: an enumerated unfold commits via applyStep against ctx.relations', () => {
-    const b = new DiagramBuilder()
-    const ref = b.ref(b.root, 'nat', R(1))
-    const carrier = b.termNode(b.root, p('y'))
-    b.wire(b.root, [
-      { node: ref, port: { kind: 'arg', index: 0 } },
-      { node: carrier, port: { kind: 'freeVar', name: 'y' } },
-    ])
-    const d = b.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('relUnfold')
-    const out = applyStep(d, { rule: 'unfold', nodeId: ref }, ctx)
-    // the nat reference is gone and the nat body has been inlined (the body
-    // itself contains zero/succ references — nat is defined over them)
-    expect(Object.values(out.nodes).some((n) => n.kind === 'ref' && n.defId === 'nat')).toBe(false)
-    expect(Object.keys(out.nodes).length).toBeGreaterThan(Object.keys(d.nodes).length)
+  it('offers double-cut elimination and vacuous elimination only for their structural shapes', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.cut(builder.root)
+    builder.cut(outer)
+    const bare = builder.wire(builder.root, [], IOTA)
+    const diagram = builder.build()
+    expect(kinds(diagram, mkSelection(diagram, {
+      region: diagram.root,
+      regions: [outer],
+      nodes: [],
+      wires: [],
+    }))).toContain('doubleCutElim')
+    expect(kinds(diagram, mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [],
+      wires: [bare],
+    }))).toContain('vacuousElim')
   })
 })
