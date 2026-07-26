@@ -282,20 +282,33 @@ function loopExecutesDecoderRejection(
     && matcher.getText(parsed) === '/unknown rule/'
 }
 
+function bindingNameDeclares(binding: ts.BindingName, name: string): boolean {
+  if (ts.isIdentifier(binding)) return binding.text === name
+  return binding.elements.some((element) =>
+    !ts.isOmittedExpression(element)
+    && bindingNameDeclares(element.name, name),
+  )
+}
+
 function declaresValueName(parsed: ts.SourceFile, name: string): boolean {
   let found = false
   const visit = (node: ts.Node): void => {
     if (found) return
-    const declarationName = (
-      ts.isVariableDeclaration(node)
-      || ts.isParameter(node)
-      || ts.isFunctionDeclaration(node)
+    if (
+      (ts.isVariableDeclaration(node) || ts.isParameter(node))
+      && bindingNameDeclares(node.name, name)
+    ) {
+      found = true
+      return
+    }
+    const directName = (
+      ts.isFunctionDeclaration(node)
       || ts.isFunctionExpression(node)
       || ts.isClassDeclaration(node)
       || ts.isClassExpression(node)
       || ts.isEnumDeclaration(node)
     ) ? node.name : undefined
-    if (declarationName !== undefined && ts.isIdentifier(declarationName) && declarationName.text === name) {
+    if (directName !== undefined && directName.text === name) {
       found = true
       return
     }
