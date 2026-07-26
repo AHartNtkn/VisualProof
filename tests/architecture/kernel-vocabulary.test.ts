@@ -52,6 +52,7 @@ const removedCodecRules = [
   'inconsistentCutElim',
   'conversion',
   'congruenceJoin',
+  'identityContradiction',
   'anchoredWireSplit',
   'anchoredWireContract',
   'headStrip',

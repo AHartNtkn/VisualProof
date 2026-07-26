@@ -172,7 +172,7 @@ describe('step JSON', () => {
     for (const rule of [
       'openTermSpawn', 'relationSpawn', 'boundRelationSpawn',
       'inconsistentCutElim', 'conversion', 'congruenceJoin',
-      ['identity', 'Contradiction'].join(''),
+      'identityContradiction',
       'anchoredWireSplit', 'anchoredWireContract', 'headStrip',
       'closedTermIntro', 'fusion', 'fission',
       'bodyAttach', 'bodyDetach',
