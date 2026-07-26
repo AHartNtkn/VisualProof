@@ -1,1 +1,1 @@
-export {}
+export { buildFregeTheory, natRelation } from './frege'
