@@ -506,19 +506,28 @@ describe('closed relational arithmetic statements', () => {
     )
   })
 
-  it('states associativity with a contained existential intermediate sum', () => {
+  it('states associativity with distinct Nat guards and an existential intermediate sum', () => {
     const skeleton = assertStatementSkeleton(statements.plusAssoc)
     const claim = assertUniversalClaim(skeleton, ['a', 'b', 'c', 't', 'o'])
     assertClaim(
       claim,
       [
         'nat(zero,succ,a)',
+        'nat(zero,succ,b)',
         'plus(a,b,t)',
         'plus(t,c,o)',
       ],
       ['plus(b,c,u)', 'plus(a,u,o)'],
       ['u'],
     )
+
+    const natCandidates = directNodes(claim.diagram, claim.premise)
+      .filter((node) => claim.diagram.nodes[node]!.kind === 'ref')
+      .map((node) => endpointWire(claim.diagram, node, 'arg', 2))
+    expect(natCandidates).toHaveLength(2)
+    expect(new Set(natCandidates).size).toBe(2)
+    expect(natCandidates.map((wire) => claim.labels.get(wire)).sort())
+      .toEqual(['a', 'b'])
   })
 
   it('states zeroIsNat as a closed existential fact', () => {

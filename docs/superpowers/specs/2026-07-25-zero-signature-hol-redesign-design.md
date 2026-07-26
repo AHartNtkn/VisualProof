@@ -187,6 +187,18 @@ a hypothesis):
 - **`plus`** — a further definition/relation with its own defining and functional
   properties assumed the same way.
 
+No global totality property is assumed for `plus`. Consequently, associativity
+is guarded by both `Nat(a)` and `Nat(b)`: the first guard supports the
+associativity induction, while the second supports the derived existence of the
+intermediate `Plus(b,c,u)` witness. Its exact conclusion is
+`∃u. Plus(b,c,u) ∧ Plus(a,u,o)`.
+
+The proof-local associativity carrier remains induction-closed by transporting
+an existential output: from `Plus(a,b,t)` and `Plus(b,c,u)` it produces some
+`v` with `Plus(t,c,v)` and `Plus(a,u,v)`. Addition single-valuedness identifies
+that internal `v` with the statement's supplied `o`; the carrier witness is not
+part of the public theorem conclusion.
+
 Theorems are **rebuilt by citing earlier theorems**, at least up to `plusComm`
 (commutativity of addition): each theorem references the ones it depends on rather
 than reproving them.

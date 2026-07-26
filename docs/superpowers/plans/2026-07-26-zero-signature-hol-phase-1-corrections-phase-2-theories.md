@@ -340,7 +340,8 @@ The hypotheses are duplicated inline, not hidden behind a ref or bundle.
 **Statement requirements:**
 
 - `plusLeftUnit`: unguarded.
-- `plusRightUnit`, `plusAssoc`, `succShiftS`: guarded by Nat of the first addend.
+- `plusRightUnit` and `succShiftS`: guarded by Nat of the first addend.
+- `plusAssoc`: guarded by Nat of both its first and second addends.
 - `plusComm`: guarded by Nat of both addends.
 - `zeroIsNat`, `succNat`, `oneIsNat`: closed over the quantified primitives.
 - Tests inspect scopes, signatures, shared wires, cuts, and boundaries rather than

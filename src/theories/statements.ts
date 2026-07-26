@@ -379,6 +379,12 @@ function plusAssociativityStatement(): DiagramWithBoundary {
       primitives,
       left!,
     )
+    graph = drawNat(
+      graph,
+      claim.value.antecedent,
+      primitives,
+      right!,
+    )
     graph = atom(
       graph,
       claim.value.antecedent,
