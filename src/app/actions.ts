@@ -24,9 +24,9 @@ export type ActionDescriptor =
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 /**
- * `backward` changes citation direction and suppresses forward-only erasure.
- * Other structural rule gates retain their physical polarity when their
- * appliers have no orientation dual.
+ * `backward` changes citation direction, flips identity insertion's polarity
+ * gate, and suppresses forward-only erasure. Other structural rule gates retain
+ * their physical polarity when their appliers have no orientation dual.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   assertProofContext(ctx)
@@ -43,7 +43,7 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
     out.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })
   }
 
-  if (identityInsertionWires(d, sel) !== null) {
+  if (identityInsertionWires(d, sel, backward) !== null) {
     out.push({ kind: 'identityInsert', label: 'Insert identity' })
   }
 
@@ -95,9 +95,11 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
 function identityInsertionWires(
   diagram: Diagram,
   selection: SubgraphSelection,
+  backward: boolean,
 ): readonly WireId[] | null {
+  const need = backward ? 'positive' : 'negative'
   if (
-    polarity(diagram, selection.region) !== 'negative'
+    polarity(diagram, selection.region) !== need
     || selection.nodes.length !== 0
     || selection.regions.length !== 0
     || selection.wires.length < 2

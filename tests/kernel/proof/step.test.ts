@@ -14,6 +14,7 @@ import {
   type ProofStep,
 } from '../../../src/kernel/proof/step'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
+import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 
 describe('primitive replay', () => {
   it('routes erasure through the direct primitive', () => {
@@ -51,6 +52,48 @@ describe('primitive replay', () => {
       EMPTY_PROOF_CONTEXT,
       'backward',
     )).toThrowError(/backward erasure is not supported/i)
+  })
+
+  it('routes identity insertion through the orientation-aware polarity gate', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const left = builder.wire(builder.root, [])
+    const right = builder.wire(builder.root, [])
+    const diagram = builder.build()
+    const step: ProofStep = {
+      rule: 'identityInsert',
+      region: cut,
+      wires: [left, right],
+    }
+
+    expect(exploreForm(applyStep(
+      diagram,
+      step,
+      EMPTY_PROOF_CONTEXT,
+    ))).toBe(exploreForm(applyIdentityInsertion(
+      diagram,
+      cut,
+      [left, right],
+    )))
+    expect(() => applyStep(
+      diagram,
+      step,
+      EMPTY_PROOF_CONTEXT,
+      'backward',
+    )).toThrowError(/backward identity insertion requires a positive region/i)
+
+    const backwardPositive: ProofStep = { ...step, region: diagram.root }
+    expect(() => applyStep(
+      diagram,
+      backwardPositive,
+      EMPTY_PROOF_CONTEXT,
+      'backward',
+    )).not.toThrow()
+    expect(() => applyStep(
+      diagram,
+      backwardPositive,
+      EMPTY_PROOF_CONTEXT,
+    )).toThrowError(/identity insertion requires a negative region/i)
   })
 
   it('replays ref and atom spawning with the stored signature authority', () => {

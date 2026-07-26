@@ -49,6 +49,10 @@ deletions.
 >    polarity-gated assertion semantics; same-signature lookalikes do not receive
 >    this permission. Erasure remains forward-only and is rejected during
 >    backward theorem replay.
+> 8. **Identity insertion replay is orientation-aware.** Physical insertion
+>    requires a negative region forward and the dual positive region backward.
+>    The checker and contextual action discovery enforce the same matrix, so a
+>    backward-negative insertion cannot fabricate a theorem.
 
 ## Motivation
 
@@ -98,10 +102,11 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
 
 **Rules — keep / add / delete:**
 
-- *Keep:* insertion (negative region), forward-only erasure (positive region),
+- *Keep:* forward insertion (negative region), backward physical insertion
+  (positive region), forward-only erasure (positive region),
   iteration/deiteration, double-cut intro/elim, `wireJoin` (gated cross-scope
-  merge). Theorem replay passes orientation to every directional rule and never
-  executes positive erasure as a backward action.
+  merge). Theorem replay passes orientation to every directional rule, uses the
+  dual insertion gate, and never executes positive erasure as a backward action.
 - *Add:* five identity transformations: degeneracy drop, co-scoped collapse,
   same-region fusion, inherited insertion/erasure, and substitution via
   iteration/deiteration. Former Rule 6 is ordinary logical inconsistency: with no

@@ -115,6 +115,7 @@ function applyStepRaw(
         diagram,
         step.region,
         step.wires,
+        orientation,
         reservation,
       )
     case 'wireJoin':

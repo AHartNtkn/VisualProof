@@ -18,7 +18,8 @@ When a ref spawn would otherwise violate ordinary polarity, the definition store
 checks that exact two-sided graph. Because that checked construction guarantees
 its fresh `P` witness, a reification ref may spawn at every scope; ordinary refs
 and malformed lookalikes retain ordinary polarity gates. Erasure is forward-only
-and cannot be replayed backward.
+and cannot be replayed backward. Physical identity insertion uses the dual
+orientation matrix: forward-negative and backward-positive.
 
 **Tech stack:** TypeScript, Vitest, Playwright, existing diagram/proof kernel,
 stable theory JSON.
@@ -192,6 +193,7 @@ git commit -m "feat: add explicit relation reification constructions"
 - Add: `src/kernel/rules/reification.ts`
 - Modify: `src/kernel/rules/spawn.ts`
 - Modify: `src/kernel/rules/erasure.ts`
+- Modify: `src/kernel/rules/identity.ts`
 - Modify: `src/kernel/proof/step.ts`
 - Modify: `src/app/actions.ts`
 - Extend focused spawn, erasure, polarity-matrix, proof-JSON, step, theorem, and
@@ -210,6 +212,8 @@ git commit -m "feat: add explicit relation reification constructions"
 - Reject malformed and same-signature lookalikes. The serialized step remains
   self-validating because replay resolves and rechecks the stored definition.
 - Pass orientation to erasure and reject every erasure in backward replay.
+- Pass orientation to identity insertion, requiring a negative region forward
+  and a positive region backward.
 - Do not introduce comprehension, arbitrary positive ref insertion, a macro, or
   primitive second-order instantiation.
 
@@ -230,7 +234,8 @@ Both theorem sides are closed diagrams. Record this proof:
 7. Finish with exactly `Exists X. X`.
 
 Add the ordinary equality/disequality contradiction theorem to the same dependency
-prefix. It must use normal logic and no identity-specific primitive.
+prefix. It must record the law of noncontradiction all-forward from blank using
+normal logic and no identity-specific contradiction primitive.
 
 **Tests:**
 
@@ -243,6 +248,9 @@ prefix. It must use normal logic and no identity-specific primitive.
   ordinary refs and malformed lookalikes do not.
 - Rule, step, theorem, and contextual-action regressions reject backward erasure,
   including the two-step fabricated-existence exploit.
+- Rule, step, theorem, polarity-matrix, and contextual-action regressions enforce
+  forward-negative/backward-positive identity insertion and reject fabricated
+  backward insertion inside a negative goal.
 - Recorded actions contain only surviving kernel steps and ordinary citations.
 - Architecture checks forbid comprehension, instantiate, extensional,
   identityContradiction, term/body, and beta-eta rule tags.
@@ -253,6 +261,7 @@ prefix. It must use normal logic and no identity-specific primitive.
 npx vitest run \
   tests/kernel/rules/spawn.test.ts \
   tests/kernel/rules/erasure.test.ts \
+  tests/kernel/rules/identity.test.ts \
   tests/kernel/rules/polarity-matrix.test.ts \
   tests/kernel/proof/json.test.ts \
   tests/kernel/proof/step.test.ts \
@@ -271,9 +280,11 @@ git add -- \
   docs/superpowers/specs/2026-07-25-identity-node-design.md \
   docs/superpowers/plans/2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md \
   src/kernel/rules/reification.ts src/kernel/rules/spawn.ts \
-  src/kernel/rules/erasure.ts src/kernel/proof/step.ts src/app/actions.ts \
+  src/kernel/rules/erasure.ts src/kernel/rules/identity.ts \
+  src/kernel/proof/step.ts src/app/actions.ts \
   src/theories/logic.ts src/theories/frege.ts \
   tests/kernel/rules/spawn.test.ts tests/kernel/rules/erasure.test.ts \
+  tests/kernel/rules/identity.test.ts \
   tests/kernel/rules/polarity-matrix.test.ts tests/kernel/proof/json.test.ts \
   tests/kernel/proof/step.test.ts tests/kernel/proof/theorem.test.ts \
   tests/app/actions.test.ts tests/theories/reification.test.ts \

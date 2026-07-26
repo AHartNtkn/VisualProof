@@ -19,18 +19,25 @@ function wireAt(diagram: Diagram, wireId: WireId): Wire {
 }
 
 /**
- * Rule 4: insert one inherited identity in a negative region. Construction
- * delegates immediately to the canonical diagram owner, so an unconditional
- * same-scope identity collapses instead of surviving as a second authority.
+ * Rule 4: physically insert one inherited identity. Forward replay requires a
+ * negative region; backward replay requires the dual positive region.
+ * Construction delegates immediately to the canonical diagram owner, so an
+ * unconditional same-scope identity collapses instead of surviving as a second
+ * authority.
  */
 export function applyIdentityInsertion(
   diagram: Diagram,
   region: RegionId,
   wires: readonly WireId[],
+  orientation: 'forward' | 'backward' = 'forward',
   reservation?: IdReservation,
 ): Diagram {
-  if (polarity(diagram, region) !== 'negative') {
-    throw new RuleError('identity insertion requires a negative region')
+  const need = orientation === 'forward' ? 'negative' : 'positive'
+  if (polarity(diagram, region) !== need) {
+    throw new RuleError(
+      `${orientation === 'backward' ? 'backward ' : ''}`
+      + `identity insertion requires a ${need} region`,
+    )
   }
   if (wires.length < 2 || new Set(wires).size !== wires.length) {
     throw new RuleError('identity insertion requires at least two distinct wires')

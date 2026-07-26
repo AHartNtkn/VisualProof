@@ -38,9 +38,21 @@ describe('polarity matrix across depths 0–3', () => {
       if (positive) {
         expect(() => applyIdentityInsertion(diagram, region, [left, right]))
           .toThrowError(/identity insertion requires a negative region/)
+        expect(() => applyIdentityInsertion(
+          diagram,
+          region,
+          [left, right],
+          'backward',
+        )).not.toThrow()
         expect(() => applyErasure(diagram, selection)).not.toThrow()
       } else {
         expect(() => applyIdentityInsertion(diagram, region, [left, right])).not.toThrow()
+        expect(() => applyIdentityInsertion(
+          diagram,
+          region,
+          [left, right],
+          'backward',
+        )).toThrowError(/backward identity insertion requires a positive region/)
         expect(() => applyErasure(diagram, selection))
           .toThrowError(/erasure requires a positive region/)
       }

@@ -224,6 +224,44 @@ describe('checkTheorem', () => {
       /backward erasure is not supported/i,
     )
   })
+
+  it('rejects backward identity insertion inside a negative goal region', () => {
+    const side = (withIdentity: boolean) => {
+      const builder = new DiagramBuilder()
+      const cut = builder.cut(builder.root)
+      const identity = withIdentity
+        ? builder.identity(cut, IOTA, 2)
+        : undefined
+      const left = builder.wire(builder.root, identity === undefined
+        ? []
+        : [{ node: identity, port: { kind: 'identity', index: 0 } }])
+      const right = builder.wire(builder.root, identity === undefined
+        ? []
+        : [{ node: identity, port: { kind: 'identity', index: 1 } }])
+      return {
+        side: mkDiagramWithBoundary(builder.build(), [left, right]),
+        cut,
+        left,
+        right,
+      }
+    }
+    const lhs = side(true)
+    const rhs = side(false)
+
+    expect(() => checkTheorem({
+      name: 'fabricated-negative-identity',
+      lhs: lhs.side,
+      rhs: rhs.side,
+      actions: [],
+      backActions: [action('insert equality backward', {
+        rule: 'identityInsert',
+        region: rhs.cut,
+        wires: [rhs.left, rhs.right],
+      })],
+    }, EMPTY_PROOF_CONTEXT)).toThrowError(
+      /backward identity insertion requires a positive region/i,
+    )
+  })
 })
 
 describe('applyTheorem', () => {

@@ -25,6 +25,10 @@
 >    `forall x. P(x) <-> S(x)` graph before granting this permission. Ordinary
 >    refs and malformed lookalikes remain polarity-gated, and forward-only
 >    erasure is not a backward proof action.
+> 6. **Identity insertion replay uses the dual gate.** Physical insertion is
+>    permitted in negative regions forward and positive regions backward.
+>    Backward insertion in a negative region is rejected rather than accepted as
+>    a forward-shaped checker shortcut.
 
 Status: design draft. Scope: the kernel primitive for equality-as-a-proposition
 and its five identity transformations. **Out of scope by instruction:** any
@@ -134,7 +138,10 @@ insert an identity node into a **negative** region (assert an equality — this 
 how `x≠y` and the consequent of a uniqueness statement are built); erase an
 identity node from a **positive** region (discard an equality) in the forward
 direction. There is no backward-erasure insertion action: theorem replay rejects
-an erasure step when replaying backward. No identity-specific rule is needed here.
+an erasure step when replaying backward. When the physical identity-insertion
+operation is replayed backward, its entailment dual requires a **positive**
+region; a backward-negative insertion is invalid. No identity-specific rule is
+needed here.
 
 **Rule 5 — substitution / congruence (equals for equals).** This is the one
 genuinely new inference rule. Where an identity node asserts `x=y` and holds in a

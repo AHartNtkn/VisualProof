@@ -730,15 +730,15 @@ describe('logical and reification theorem prefix', () => {
       theorems: [],
     })
     expect(() => checkTheorem(theorem, context)).not.toThrow()
-    expect(theorem.actions).toEqual([])
-    expect(theorem.backActions?.flatMap((action) =>
+    expect(theorem.actions.flatMap((action) =>
       action.steps.map((step) => step.rule))).toEqual([
       'doubleCutIntro',
       'identityInsert',
       'iteration',
     ])
-    expect(theorem.backActions?.every((action) =>
+    expect(theorem.actions.every((action) =>
       action.steps.length === 1)).toBe(true)
+    expect(theorem.backActions).toBeUndefined()
 
     expect(theorem.lhs.boundary).toHaveLength(2)
     expect(theorem.rhs.boundary).toHaveLength(2)
@@ -746,41 +746,41 @@ describe('logical and reification theorem prefix', () => {
       expect(side.boundary.map((wire) =>
         side.diagram.wires[wire]!.sig)).toEqual([IOTA, IOTA])
     }
-    expect(Object.keys(theorem.rhs.diagram.nodes)).toEqual([])
+    expect(Object.keys(theorem.lhs.diagram.nodes)).toEqual([])
     expect(directCuts(
-      theorem.rhs.diagram,
-      theorem.rhs.diagram.root,
+      theorem.lhs.diagram,
+      theorem.lhs.diagram.root,
     )).toEqual([])
-    expect(theorem.rhs.boundary.every((wire) =>
-      theorem.rhs.diagram.wires[wire]!.endpoints.length === 0)).toBe(true)
+    expect(theorem.lhs.boundary.every((wire) =>
+      theorem.lhs.diagram.wires[wire]!.endpoints.length === 0)).toBe(true)
 
     const enclosing = exactOne(
-      directCuts(theorem.lhs.diagram, theorem.lhs.diagram.root),
+      directCuts(theorem.rhs.diagram, theorem.rhs.diagram.root),
       'one enclosing contradiction cut',
     )
     const disequality = exactOne(
-      directCuts(theorem.lhs.diagram, enclosing),
+      directCuts(theorem.rhs.diagram, enclosing),
       'one direct disequality cut',
     )
     const equalityNode = exactOne(
-      directNodes(theorem.lhs.diagram, enclosing),
+      directNodes(theorem.rhs.diagram, enclosing),
       'one equality identity',
     )
     const disequalityNode = exactOne(
-      directNodes(theorem.lhs.diagram, disequality),
+      directNodes(theorem.rhs.diagram, disequality),
       'one disequality identity',
     )
     for (const node of [equalityNode, disequalityNode]) {
-      expect(theorem.lhs.diagram.nodes[node]).toEqual({
+      expect(theorem.rhs.diagram.nodes[node]).toEqual({
         kind: 'identity',
         region: node === equalityNode ? enclosing : disequality,
         sig: IOTA,
         arity: 2,
       })
       expect([
-        endpointWire(theorem.lhs.diagram, node, 'identity', 0),
-        endpointWire(theorem.lhs.diagram, node, 'identity', 1),
-      ]).toEqual(theorem.lhs.boundary)
+        endpointWire(theorem.rhs.diagram, node, 'identity', 0),
+        endpointWire(theorem.rhs.diagram, node, 'identity', 1),
+      ]).toEqual(theorem.rhs.boundary)
     }
   })
 

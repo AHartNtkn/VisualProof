@@ -61,61 +61,38 @@ function exactlyOne<T>(
 function ordinaryEqualityContradiction(
   relations: Theory['relations'],
 ): Theorem {
-  let left = emptyGraph()
-  const leftWire = declareWire(left, left.root, IOTA)
-  left = leftWire.graph
-  const rightWire = declareWire(left, left.root, IOTA)
-  left = rightWire.graph
-  const contradiction = implication(left, left.root)
-  left = contradiction.graph
-  left = identity(
-    left,
-    contradiction.value.antecedent,
-    [leftWire.value, rightWire.value],
-  ).graph
-  left = identity(
-    left,
-    contradiction.value.consequent,
-    [leftWire.value, rightWire.value],
-  ).graph
+  let blank = emptyGraph()
+  const leftWire = declareWire(blank, blank.root, IOTA)
+  blank = leftWire.graph
+  const rightWire = declareWire(blank, blank.root, IOTA)
+  blank = rightWire.graph
   const lhs = finishDiagramWithBoundary(
-    left,
+    blank,
     [leftWire.value, rightWire.value],
-  )
-
-  let right = emptyGraph()
-  const rightLeft = declareWire(right, right.root, IOTA)
-  right = rightLeft.graph
-  const rightRight = declareWire(right, right.root, IOTA)
-  right = rightRight.graph
-  const rhs = finishDiagramWithBoundary(
-    right,
-    [rightLeft.value, rightRight.value],
   )
   const context = verifyTheory({ relations, theorems: [] })
   const recorder = new PrimitiveStepRecorder(
-    rhs.diagram,
+    lhs.diagram,
     context,
-    'backward',
   )
   let before = recorder.diagram
-  recorder.record('open equality contradiction cuts', {
+  recorder.record('open law-of-noncontradiction cuts', {
     rule: 'doubleCutIntro',
     sel: {
-      region: rhs.diagram.root,
+      region: lhs.diagram.root,
       regions: [],
       nodes: [],
       wires: [],
     },
   })
-  const enclosing = onlyNewCut(before, recorder.diagram, rhs.diagram.root)
+  const enclosing = onlyNewCut(before, recorder.diagram, lhs.diagram.root)
   const disequality = onlyNewCut(before, recorder.diagram, enclosing)
 
   before = recorder.diagram
   recorder.record('insert the equality hypothesis', {
     rule: 'identityInsert',
     region: enclosing,
-    wires: [rightLeft.value, rightRight.value],
+    wires: [leftWire.value, rightWire.value],
   })
   const equality = onlyNewNode(before, recorder.diagram, enclosing)
   recorder.record('iterate equality beneath the disequality cut', {
@@ -130,12 +107,33 @@ function ordinaryEqualityContradiction(
     retargets: [],
   })
 
+  let law = emptyGraph()
+  const lawLeft = declareWire(law, law.root, IOTA)
+  law = lawLeft.graph
+  const lawRight = declareWire(law, law.root, IOTA)
+  law = lawRight.graph
+  const contradiction = implication(law, law.root)
+  law = contradiction.graph
+  law = identity(
+    law,
+    contradiction.value.antecedent,
+    [lawLeft.value, lawRight.value],
+  ).graph
+  law = identity(
+    law,
+    contradiction.value.consequent,
+    [lawLeft.value, lawRight.value],
+  ).graph
+  const rhs = finishDiagramWithBoundary(
+    law,
+    [lawLeft.value, lawRight.value],
+  )
+
   return {
     name: 'ordinaryEqualityContradiction',
     lhs,
     rhs,
-    actions: [],
-    backActions: recorder.actions,
+    actions: recorder.actions,
   }
 }
 

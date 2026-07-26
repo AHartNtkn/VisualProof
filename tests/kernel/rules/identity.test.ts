@@ -193,22 +193,29 @@ describe('Rule 4: inherited identity insertion and ordinary erasure', () => {
     expect(Object.keys(inserted.wires)).toHaveLength(1)
   })
 
-  it('rejects positive insertion even if a caller supplies the removed backward orientation', () => {
+  it('uses the forward-negative and backward-positive polarity matrix', () => {
     const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
     const left = builder.wire(builder.root, [])
     const right = builder.wire(builder.root, [])
     const diagram = builder.build()
-    const invokeLegacyShape = applyIdentityInsertion as unknown as (
-      d: Diagram,
-      region: string,
-      wires: readonly WireId[],
-      orientation: string,
-    ) => Diagram
 
     expect(() => applyIdentityInsertion(diagram, diagram.root, [left, right]))
       .toThrowError(/identity insertion requires a negative region/)
-    expect(() => invokeLegacyShape(diagram, diagram.root, [left, right], 'backward'))
-      .toThrowError(/identity insertion requires a negative region/)
+    expect(() => applyIdentityInsertion(
+      diagram,
+      diagram.root,
+      [left, right],
+      'backward',
+    )).not.toThrow()
+    expect(() => applyIdentityInsertion(diagram, cut, [left, right]))
+      .not.toThrow()
+    expect(() => applyIdentityInsertion(
+      diagram,
+      cut,
+      [left, right],
+      'backward',
+    )).toThrowError(/backward identity insertion requires a positive region/)
   })
 
   it('rejects duplicate, mismatched-signature, and invisible insertion wires', () => {
@@ -545,36 +552,38 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
 })
 
 function ordinaryEqualityCutTheorem(): Theorem {
-  const lhsBuilder = new DiagramBuilder()
-  const enclosing = lhsBuilder.cut(lhsBuilder.root)
-  const disequalityCut = lhsBuilder.cut(enclosing)
-  const equality = lhsBuilder.identity(enclosing, IOTA, 2)
-  const disequality = lhsBuilder.identity(disequalityCut, IOTA, 2)
-  const lhsLeft = lhsBuilder.wire(lhsBuilder.root, [
+  const rhsBuilder = new DiagramBuilder()
+  const enclosing = rhsBuilder.cut(rhsBuilder.root)
+  const disequalityCut = rhsBuilder.cut(enclosing)
+  const equality = rhsBuilder.identity(enclosing, IOTA, 2)
+  const disequality = rhsBuilder.identity(disequalityCut, IOTA, 2)
+  const rhsLeft = rhsBuilder.wire(rhsBuilder.root, [
     { node: equality, port: { kind: 'identity', index: 0 } },
     { node: disequality, port: { kind: 'identity', index: 0 } },
   ])
-  const lhsRight = lhsBuilder.wire(lhsBuilder.root, [
+  const rhsRight = rhsBuilder.wire(rhsBuilder.root, [
     { node: equality, port: { kind: 'identity', index: 1 } },
     { node: disequality, port: { kind: 'identity', index: 1 } },
   ])
-  const lhs = mkDiagramWithBoundary(lhsBuilder.build(), [lhsLeft, lhsRight])
-  const rhsBuilder = new DiagramBuilder()
-  const left = rhsBuilder.wire(rhsBuilder.root, [])
-  const right = rhsBuilder.wire(rhsBuilder.root, [])
-  const rhsDiagram = rhsBuilder.build()
+  const rhs = mkDiagramWithBoundary(
+    rhsBuilder.build(),
+    [rhsLeft, rhsRight],
+  )
+  const lhsBuilder = new DiagramBuilder()
+  const left = lhsBuilder.wire(lhsBuilder.root, [])
+  const right = lhsBuilder.wire(lhsBuilder.root, [])
+  const lhsDiagram = lhsBuilder.build()
 
   return {
     name: 'ordinaryEqualityCut',
-    lhs,
-    rhs: mkDiagramWithBoundary(rhsDiagram, [left, right]),
-    actions: [],
-    backActions: [{
+    lhs: mkDiagramWithBoundary(lhsDiagram, [left, right]),
+    rhs,
+    actions: [{
       label: 'construct equality and its cut-contained disequality',
       placements: [],
       steps: [{
         rule: 'doubleCutIntro',
-        sel: { region: rhsDiagram.root, regions: [], nodes: [], wires: [] },
+        sel: { region: lhsDiagram.root, regions: [], nodes: [], wires: [] },
       }, {
         rule: 'identityInsert', region: 'dc', wires: [left, right],
       }, {
@@ -597,18 +606,19 @@ describe('ordinary identity contradiction theorem', () => {
     expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
 
     const context = registerTheorem(EMPTY_PROOF_CONTEXT, theorem)
-    const enclosing = Object.entries(theorem.lhs.diagram.regions)
-      .find(([, region]) => region.kind === 'cut' && region.parent === theorem.lhs.diagram.root)![0]
-    const result = replayProof(theorem.lhs.diagram, [{
+    const enclosing = Object.entries(theorem.rhs.diagram.regions)
+      .find(([, region]) => region.kind === 'cut' && region.parent === theorem.rhs.diagram.root)![0]
+    const result = replayProof(theorem.rhs.diagram, [{
       rule: 'theorem',
       name: theorem.name,
       at: {
-        sel: { region: theorem.lhs.diagram.root, regions: [enclosing], nodes: [], wires: [] },
-        args: Object.keys(theorem.lhs.diagram.wires),
+        sel: { region: theorem.rhs.diagram.root, regions: [enclosing], nodes: [], wires: [] },
+        args: Object.keys(theorem.rhs.diagram.wires),
       },
-      direction: 'forward',
-    }], context)
+      direction: 'reverse',
+    }], context, undefined, 'backward')
 
-    expect(result).toEqual(theorem.rhs.diagram)
+    expect(exploreForm(result, theorem.rhs.boundary))
+      .toBe(exploreForm(theorem.lhs.diagram, theorem.lhs.boundary))
   })
 })

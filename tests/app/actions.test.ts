@@ -9,10 +9,16 @@ import { identityInCut, tinyTheory, UNARY } from '../fixtures/zero-signature'
 const kinds = (
   diagram: Parameters<typeof applicableActions>[0],
   selection: Parameters<typeof applicableActions>[1],
-) => applicableActions(diagram, selection, verifyTheory(tinyTheory())).map((action) => action.kind)
+  backward = false,
+) => applicableActions(
+  diagram,
+  selection,
+  verifyTheory(tinyTheory()),
+  backward,
+).map((action) => action.kind)
 
 describe('applicableActions', () => {
-  it('offers identity insertion only for two or more homogeneous selected wires in a negative region', () => {
+  it('mirrors the orientation-aware identity-insertion polarity matrix', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const left = builder.wire(cut, [])
@@ -27,6 +33,7 @@ describe('applicableActions', () => {
       wires: [left, right],
     })
     expect(kinds(diagram, pair)).toContain('identityInsert')
+    expect(kinds(diagram, pair, true)).not.toContain('identityInsert')
 
     const singleton = mkSelection(diagram, {
       region: cut,
@@ -48,12 +55,14 @@ describe('applicableActions', () => {
     const positiveLeft = positiveBuilder.wire(positiveBuilder.root, [])
     const positiveRight = positiveBuilder.wire(positiveBuilder.root, [])
     const positive = positiveBuilder.build()
-    expect(kinds(positive, mkSelection(positive, {
+    const positivePair = mkSelection(positive, {
       region: positive.root,
       regions: [],
       nodes: [],
       wires: [positiveLeft, positiveRight],
-    }))).not.toContain('identityInsert')
+    })
+    expect(kinds(positive, positivePair)).not.toContain('identityInsert')
+    expect(kinds(positive, positivePair, true)).toContain('identityInsert')
   })
 
   it('does not offer a specialized action for a cut-contained disequality', () => {
