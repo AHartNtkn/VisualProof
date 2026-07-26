@@ -51,6 +51,15 @@ const removedCodecRules = [
   'bodyDetach',
 ] as const
 
+const prohibitedAuthorityStrings = new Set<string>([
+  ...prohibitedIdentifiers,
+  ...removedCodecRules,
+])
+const removedTestRuleLiterals = new Set<string>([
+  ...removedRuleSymbols,
+  ...removedCodecRules,
+])
+
 const negativeCodecFixture = 'tests/kernel/proof/json.test.ts'
 const vocabularyGuard = 'tests/architecture/kernel-vocabulary.test.ts'
 
@@ -132,6 +141,9 @@ function semanticOffenders(file: string, roots: readonly ts.Node[]): string[] {
       const kind = semanticKindLiteral(node)
       if (kind !== null) offenders.add(`${file}: ${kind}`)
       if (isTermModuleSpecifier(node)) offenders.add(`${file}: term module '${node.text}'`)
+      if (prohibitedAuthorityStrings.has(node.text)) {
+        offenders.add(`${file}: string authority '${node.text}'`)
+      }
     }
     ts.forEachChild(node, visit)
   }
@@ -179,17 +191,199 @@ function testAuthorityOffenders(): string[] {
   return offenders.sort()
 }
 
-function exactStringLiterals(file: string): string[] {
-  const parsed = parseTypeScript(file)
-  const literals: string[] = []
+function exactStringLiteralNodes(parsed: ts.SourceFile): ts.StringLiteralLike[] {
+  const literals: ts.StringLiteralLike[] = []
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-      literals.push(node.text)
+      literals.push(node)
     }
     ts.forEachChild(node, visit)
   }
   visit(parsed)
   return literals
+}
+
+function literalSpan(node: ts.StringLiteralLike): string {
+  return `${node.pos}:${node.end}`
+}
+
+function importsNamed(
+  parsed: ts.SourceFile,
+  moduleSpecifier: string,
+  importedName: string,
+): boolean {
+  return parsed.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement)
+      || !ts.isStringLiteral(statement.moduleSpecifier)
+      || statement.moduleSpecifier.text !== moduleSpecifier
+    ) return false
+    const bindings = statement.importClause?.namedBindings
+    return bindings !== undefined
+      && ts.isNamedImports(bindings)
+      && bindings.elements.some((element) =>
+        (element.propertyName?.text ?? element.name.text) === importedName
+        && element.name.text === importedName,
+      )
+  })
+}
+
+function callNamed(node: ts.Node, name: string): node is ts.CallExpression {
+  return ts.isCallExpression(node)
+    && ts.isIdentifier(node.expression)
+    && node.expression.text === name
+}
+
+function decoderCallUsesRule(node: ts.Node, variable: string): boolean {
+  if (!callNamed(node, 'stepFromJson')) return false
+  const argument = node.arguments[0]
+  if (argument === undefined || !ts.isObjectLiteralExpression(argument)) return false
+  return argument.properties.some((property) =>
+    (
+      ts.isShorthandPropertyAssignment(property)
+      && property.name.text === variable
+    ) || (
+      ts.isPropertyAssignment(property)
+      && (
+        (ts.isIdentifier(property.name) && property.name.text === 'rule')
+        || (ts.isStringLiteral(property.name) && property.name.text === 'rule')
+      )
+      && ts.isIdentifier(property.initializer)
+      && property.initializer.text === variable
+    ),
+  )
+}
+
+function loopExecutesDecoderRejection(
+  parsed: ts.SourceFile,
+  loop: ts.ForOfStatement,
+  variable: string,
+): boolean {
+  const statement = ts.isBlock(loop.statement)
+    && loop.statement.statements.length === 1
+    ? loop.statement.statements[0]
+    : loop.statement
+  if (
+    statement === undefined
+    || !ts.isExpressionStatement(statement)
+    || !ts.isCallExpression(statement.expression)
+    || !ts.isPropertyAccessExpression(statement.expression.expression)
+    || statement.expression.expression.name.text !== 'toThrow'
+  ) return false
+  const expectCall = statement.expression.expression.expression
+  if (!callNamed(expectCall, 'expect')) return false
+  const thunk = expectCall.arguments[0]
+  const matcher = statement.expression.arguments[0]
+  return thunk !== undefined
+    && ts.isArrowFunction(thunk)
+    && !ts.isBlock(thunk.body)
+    && decoderCallUsesRule(thunk.body, variable)
+    && matcher !== undefined
+    && matcher.getText(parsed) === '/unknown rule/'
+}
+
+function declaresValueName(parsed: ts.SourceFile, name: string): boolean {
+  let found = false
+  const visit = (node: ts.Node): void => {
+    if (found) return
+    const declarationName = (
+      ts.isVariableDeclaration(node)
+      || ts.isParameter(node)
+      || ts.isFunctionDeclaration(node)
+      || ts.isFunctionExpression(node)
+      || ts.isClassDeclaration(node)
+      || ts.isClassExpression(node)
+      || ts.isEnumDeclaration(node)
+    ) ? node.name : undefined
+    if (declarationName !== undefined && ts.isIdentifier(declarationName) && declarationName.text === name) {
+      found = true
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(parsed)
+  return found
+}
+
+function decoderRejectionEvidence(): {
+  readonly permitted: ReadonlySet<string>
+  readonly errors: readonly string[]
+} {
+  const parsed = parseTypeScript(negativeCodecFixture)
+  const errors: string[] = []
+  if (!importsNamed(parsed, 'vitest', 'it') || !importsNamed(parsed, 'vitest', 'expect')) {
+    errors.push(`${negativeCodecFixture}: rejection test must import it and expect from vitest`)
+  }
+  if (!importsNamed(parsed, '../../../src/kernel/proof/json', 'stepFromJson')) {
+    errors.push(`${negativeCodecFixture}: rejection test must import the production stepFromJson`)
+  }
+  for (const importedName of ['it', 'expect', 'stepFromJson']) {
+    if (declaresValueName(parsed, importedName)) {
+      errors.push(`${negativeCodecFixture}: rejection authority shadows imported ${importedName}`)
+    }
+  }
+
+  const rejectionTests: ts.CallExpression[] = []
+  const findTest = (node: ts.Node): void => {
+    if (callNamed(node, 'it')) {
+      const title = node.arguments[0]
+      if (
+        title !== undefined
+        && ts.isStringLiteral(title)
+        && title.text === 'rejects every removed proof-rule string'
+      ) rejectionTests.push(node)
+    }
+    ts.forEachChild(node, findTest)
+  }
+  findTest(parsed)
+  if (rejectionTests.length !== 1) {
+    errors.push(`${negativeCodecFixture}: expected one exact removed-rule rejection test`)
+    return { permitted: new Set(), errors }
+  }
+
+  const callback = rejectionTests[0]!.arguments[1]
+  if (
+    callback === undefined
+    || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
+  ) {
+    errors.push(`${negativeCodecFixture}: removed-rule rejection test needs an executable callback`)
+    return { permitted: new Set(), errors }
+  }
+
+  const loops: ts.ForOfStatement[] = []
+  const findLoop = (node: ts.Node): void => {
+    if (ts.isForOfStatement(node) && ts.isVariableDeclarationList(node.initializer)) {
+      const declaration = node.initializer.declarations[0]
+      if (
+        node.initializer.declarations.length === 1
+        && declaration !== undefined
+        && ts.isIdentifier(declaration.name)
+        && declaration.name.text === 'rule'
+        && ts.isArrayLiteralExpression(node.expression)
+      ) loops.push(node)
+    }
+    ts.forEachChild(node, findLoop)
+  }
+  findLoop(callback.body)
+  if (loops.length !== 1) {
+    errors.push(`${negativeCodecFixture}: expected one for-of rejection loop over rule`)
+    return { permitted: new Set(), errors }
+  }
+
+  const loop = loops[0]!
+  const array = loop.expression as ts.ArrayLiteralExpression
+  const elements = array.elements.filter(ts.isStringLiteral)
+  const actual = elements.map((element) => element.text)
+  if (
+    elements.length !== array.elements.length
+    || JSON.stringify(actual) !== JSON.stringify(removedCodecRules)
+  ) {
+    errors.push(`${negativeCodecFixture}: rejection loop must enumerate exactly every removed codec rule`)
+  }
+  if (!loopExecutesDecoderRejection(parsed, loop, 'rule')) {
+    errors.push(`${negativeCodecFixture}: rejection loop must assert stepFromJson({ rule }) throws /unknown rule/`)
+  }
+  return { permitted: new Set(elements.map(literalSpan)), errors }
 }
 
 describe('Phase-1 kernel vocabulary conformance', () => {
@@ -213,15 +407,22 @@ describe('Phase-1 kernel vocabulary conformance', () => {
   })
 
   it('retains removed rule names only as negative codec inputs', () => {
-    const offenders: string[] = []
+    const evidence = decoderRejectionEvidence()
+    const offenders = [...evidence.errors]
     for (const file of tsFilesUnder('tests')) {
       // Execution ruling: the guard must spell the displaced names it rejects;
-      // the codec fixture may spell serialized names only to prove rejection.
-      // Neither file is a live import/export or production authority.
-      if (file === negativeCodecFixture || file === vocabularyGuard) continue
-      const literals = new Set(exactStringLiterals(file))
-      for (const rule of [...removedRuleSymbols, ...removedCodecRules]) {
-        if (literals.has(rule)) offenders.push(`${file}: ${rule}`)
+      // those declarations are test machinery, not application authority.
+      if (file === vocabularyGuard) continue
+      const parsed = parseTypeScript(file)
+      for (const literal of exactStringLiteralNodes(parsed)) {
+        if (
+          !removedTestRuleLiterals.has(literal.text)
+          || (
+            file === negativeCodecFixture
+            && evidence.permitted.has(literalSpan(literal))
+          )
+        ) continue
+        offenders.push(`${file}: ${literal.text}`)
       }
     }
     expect(offenders, offenders.join('\n')).toEqual([])
