@@ -5,7 +5,7 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyAction,
-  introducedAllocationIds,
+  applyActionWithReceipt,
   introducedNodeIds,
   replayActions,
   singleStepAction,
@@ -162,40 +162,38 @@ describe('proof actions', () => {
       diagram.regions[id] === undefined)).toEqual(['dc_1', 'dc_2'])
   })
 
-  it('captures every repeated grounding splice allocation in application-id order', () => {
+  it('captures normalized-away and surviving repeated-pin mints once in application order', () => {
     const contentBuilder = new DiagramBuilder()
-    const contentCut = contentBuilder.cut(contentBuilder.root)
-    const body = contentBuilder.ref(
-      contentCut,
-      'Body',
-      relSig([IOTA]),
-    )
-    contentBuilder.atom(contentCut, relSig([]))
-    const formal = contentBuilder.wire(contentBuilder.root, [{
-      node: body,
-      port: { kind: 'arg', index: 0 },
-    }])
+    const formal = contentBuilder.wire(contentBuilder.root, [])
     const content = mkDiagramWithBoundary(
       contentBuilder.build(),
-      [formal],
+      [formal, formal],
     )
 
     const builder = new DiagramBuilder()
-    const negative = builder.cut(builder.root)
-    const first = builder.atom(negative, relSig([IOTA]))
-    const second = builder.atom(negative, relSig([IOTA]))
-    builder.wire(negative, [{
+    const nested = builder.cut(builder.root)
+    const first = builder.atom(builder.root, relSig([IOTA, IOTA]))
+    const second = builder.atom(nested, relSig([IOTA, IOTA]))
+    const firstA = builder.wire(builder.root, [{
       node: first,
       port: { kind: 'arg', index: 0 },
     }])
-    builder.wire(negative, [{
+    const firstB = builder.wire(builder.root, [{
+      node: first,
+      port: { kind: 'arg', index: 1 },
+    }])
+    const secondA = builder.wire(builder.root, [{
       node: second,
       port: { kind: 'arg', index: 0 },
     }])
-    const relation = builder.wire(negative, [
+    const secondB = builder.wire(builder.root, [{
+      node: second,
+      port: { kind: 'arg', index: 1 },
+    }])
+    const relation = builder.wire(builder.root, [
       { node: first, port: { kind: 'head' } },
       { node: second, port: { kind: 'head' } },
-    ], relSig([IOTA]))
+    ], relSig([IOTA, IOTA]))
     const diagram = builder.build()
     const action: ProofAction = {
       label: 'ground both applications',
@@ -209,21 +207,30 @@ describe('proof actions', () => {
         },
       }],
       placements: [],
-      allocation: {
-        regions: ['r1_0'],
-        nodes: ['n0_0'],
-        wires: ['w1_0'],
-      },
     }
 
-    const result = applyAction(diagram, action, EMPTY_PROOF_CONTEXT)
-    expect(introducedAllocationIds(diagram, result)).toEqual({
-      regions: ['r1_1', 'r1_2'],
-      nodes: ['n0_1', 'n1_0', 'n0_2', 'n1_1'],
-      wires: ['w1_1', 'w1_2'],
+    const receipt = applyActionWithReceipt(
+      diagram,
+      action,
+      EMPTY_PROOF_CONTEXT,
+      'backward',
+    )
+    expect(receipt.allocation).toEqual({
+      regions: [],
+      nodes: ['identity_0', 'identity_0_0'],
+      wires: [],
     })
-    expect(introducedNodeIds(diagram, result))
-      .toEqual(['n0_1', 'n1_0', 'n0_2', 'n1_1'])
+    expect(receipt.result.nodes.identity_0).toBeUndefined()
+    expect(receipt.result.nodes.identity_0_0).toMatchObject({
+      kind: 'identity',
+      region: nested,
+    })
+    expect(introducedNodeIds(diagram, receipt.result))
+      .toEqual(['identity_0_0'])
+    expect(receipt.result.wires[firstA]).toBeDefined()
+    expect(receipt.result.wires[firstB]).toBeUndefined()
+    expect(receipt.result.wires[secondA]).toBeDefined()
+    expect(receipt.result.wires[secondB]).toBeDefined()
   })
 
   it('identifies both action and constituent step on failure', () => {

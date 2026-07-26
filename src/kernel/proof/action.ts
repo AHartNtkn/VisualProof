@@ -1,6 +1,13 @@
 import type { Diagram } from '../diagram/diagram'
 import type { NodeId, RegionId, WireId } from '../diagram/diagram'
-import type { IdReservation } from '../diagram/subgraph/freshId'
+import {
+  appendIdMintLog,
+  createIdMintRecorder,
+  extendIdReservation,
+  freezeIdMintLog,
+  type IdMintLog,
+  type IdReservation,
+} from '../diagram/subgraph/freshId'
 import { ProofError } from './error'
 import { applyStepWithReceipt } from './step'
 import type { ProofStep, StepReceipt } from './step'
@@ -25,6 +32,12 @@ export type ProofAction = {
   readonly steps: readonly ProofStep[]
   readonly placements: readonly PlacementHint[]
   readonly allocation?: ProofAllocation
+}
+
+export type ActionReceipt = {
+  readonly result: Diagram
+  /** Every graph ID minted by constituent steps, in execution order. */
+  readonly allocation: IdMintLog
 }
 
 function checkedIds(ids: unknown, field: string, namespace: string): ReadonlySet<string> {
@@ -60,39 +73,24 @@ export function singleStepAction(
   return { label, steps: [step], placements }
 }
 
-/** Every surviving allocation introduced by an action, in construction order.
- * Repeated relation splices therefore remain grouped by deterministic
- * application-id order instead of being regrouped lexically by pattern id. */
-export function introducedAllocationIds(
-  before: Diagram,
-  after: Diagram,
-): ProofAllocation {
-  return Object.freeze({
-    regions: Object.freeze(Object.keys(after.regions)
-      .filter((id) => before.regions[id] === undefined)),
-    nodes: Object.freeze(Object.keys(after.nodes)
-      .filter((id) => before.nodes[id] === undefined)),
-    wires: Object.freeze(Object.keys(after.wires)
-      .filter((id) => before.wires[id] === undefined)),
-  })
-}
-
-/** Stable action-wide placement index after every constituent step. */
+/** Stable action-wide placement targets: surviving nodes only, in final order. */
 export function introducedNodeIds(before: Diagram, after: Diagram): readonly NodeId[] {
-  return introducedAllocationIds(before, after).nodes
+  return Object.freeze(Object.keys(after.nodes)
+    .filter((id) => before.nodes[id] === undefined))
 }
 
-export function applyAction(
+export function applyActionWithReceipt(
   diagram: Diagram,
   action: ProofAction,
   ctx: ProofContext,
   orientation: 'forward' | 'backward' = 'forward',
   afterStep?: (diagram: Diagram, stepIndex: number, receipt: StepReceipt) => void,
-): Diagram {
+): ActionReceipt {
   assertProofContext(ctx)
   if (action.label.length === 0) throw new ProofError('proof action label must not be empty')
   if (action.steps.length === 0) throw new ProofError(`proof action '${action.label}' must contain at least one step`)
-  const reservation = allocationReservation(action.allocation)
+  let reservation = allocationReservation(action.allocation)
+  const allocation = createIdMintRecorder()
 
   let current = diagram
   for (const [stepIndex, step] of action.steps.entries()) {
@@ -100,6 +98,8 @@ export function applyAction(
     try {
       receipt = applyStepWithReceipt(current, step, ctx, orientation, reservation)
       current = receipt.result
+      appendIdMintLog(allocation, receipt.allocation)
+      reservation = extendIdReservation(reservation, receipt.allocation)
     } catch (error) {
       throw new ProofError(
         `step ${stepIndex} (${step.rule}) failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -125,7 +125,26 @@ export function applyAction(
     placed.add(placement.introducedNode)
   }
 
-  return current
+  return Object.freeze({
+    result: current,
+    allocation: freezeIdMintLog(allocation),
+  })
+}
+
+export function applyAction(
+  diagram: Diagram,
+  action: ProofAction,
+  ctx: ProofContext,
+  orientation: 'forward' | 'backward' = 'forward',
+  afterStep?: (diagram: Diagram, stepIndex: number, receipt: StepReceipt) => void,
+): Diagram {
+  return applyActionWithReceipt(
+    diagram,
+    action,
+    ctx,
+    orientation,
+    afterStep,
+  ).result
 }
 
 export function replayActions(

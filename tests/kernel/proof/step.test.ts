@@ -215,6 +215,56 @@ describe('normalized step receipts', () => {
     expect(receipt.interface.image(parameter)).toBe(parameter)
   })
 
+  it('backward-grounds a positive-root repeated relation and receipts its collapsed alias', () => {
+    const contentBuilder = new DiagramBuilder()
+    const repeated = contentBuilder.wire(contentBuilder.root, [])
+    const content = mkDiagramWithBoundary(
+      contentBuilder.build(),
+      [repeated, repeated],
+    )
+    const builder = new DiagramBuilder()
+    const application = builder.atom(builder.root, relSig([IOTA, IOTA]))
+    const first = builder.wire(builder.root, [{
+      node: application,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const second = builder.wire(builder.root, [{
+      node: application,
+      port: { kind: 'arg', index: 1 },
+    }])
+    const relation = builder.wire(builder.root, [{
+      node: application,
+      port: { kind: 'head' },
+    }], relSig([IOTA, IOTA]))
+    const diagram = builder.build()
+
+    const receipt = applyStepWithReceipt(
+      diagram,
+      {
+        rule: 'wireJoin',
+        input: {
+          kind: 'relation',
+          wire: relation,
+          content,
+          parameters: [],
+        },
+      },
+      EMPTY_PROOF_CONTEXT,
+      'backward',
+    )
+    const survivor = [first, second].sort()[0]!
+
+    expect(receipt.allocation).toEqual({
+      regions: [],
+      nodes: ['identity_0'],
+      wires: [],
+    })
+    expect(receipt.result.nodes.identity_0).toBeUndefined()
+    expect(receipt.interface.image(first)).toBe(survivor)
+    expect(receipt.interface.image(second)).toBe(survivor)
+    expect(receipt.interface.image(relation)).toBeUndefined()
+  })
+
   it('preserves sever boundary identities and gives no source identity to the fresh relation wire', () => {
     const builder = new DiagramBuilder()
     const body = builder.ref(builder.root, 'G', relSig([IOTA, IOTA]))

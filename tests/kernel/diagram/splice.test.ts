@@ -105,6 +105,51 @@ describe('subgraph removal and splice', () => {
     expect(spliced.wireMap.get('stub')).toBe('a')
   })
 
+  it('receipts every pre-normalization mint even when an alias is normalized away', () => {
+    const patternBuilder = new DiagramBuilder()
+    const patternCut = patternBuilder.cut(patternBuilder.root)
+    const body = patternBuilder.atom(
+      patternCut,
+      relSig([IOTA]),
+    )
+    const boundary = patternBuilder.wire(patternBuilder.root, [{
+      node: body,
+      port: { kind: 'arg', index: 0 },
+    }])
+    patternBuilder.wire(patternCut, [{
+      node: body,
+      port: { kind: 'head' },
+    }], relSig([IOTA]))
+    const pattern = mkDiagramWithBoundary(
+      patternBuilder.build(),
+      [boundary, boundary],
+    )
+    const hostDiagram = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      wires: {
+        b: { scope: 'r0', sig: IOTA, endpoints: [] },
+        a: { scope: 'r0', sig: IOTA, endpoints: [] },
+      },
+    })
+
+    const spliced = spliceSubgraphMapped(
+      hostDiagram,
+      hostDiagram.root,
+      pattern,
+      ['b', 'a'],
+    )
+
+    expect(spliced.allocation).toEqual({
+      regions: ['r1'],
+      nodes: ['n0', 'identity_0'],
+      wires: ['w1'],
+    })
+    expect(spliced.diagram.nodes.identity_0).toBeUndefined()
+    expect(spliced.diagram.nodes.n0).toBeDefined()
+    expect(spliced.diagram.wires.w1).toBeDefined()
+  })
+
   it('keeps a repeated-boundary identity for outer-scoped attachments', () => {
     const hostDiagram = mkDiagram({
       root: 'r0',

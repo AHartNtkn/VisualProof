@@ -5,7 +5,14 @@ import type { DiagramWithBoundary } from '../boundary'
 import { sigEquals, sigKey } from '../sig'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
-import { freshId, type IdReservation } from './freshId'
+import {
+  createIdMintRecorder,
+  freezeIdMintLog,
+  freshId,
+  withIdMintCapture,
+  type IdMintLog,
+  type IdReservation,
+} from './freshId'
 
 export type SpliceOptions = {
   readonly reserved?: IdReservation | undefined
@@ -13,6 +20,8 @@ export type SpliceOptions = {
 
 export type MappedSplice = {
   readonly diagram: Diagram
+  /** Every region, node, and internal wire minted before quotient normalization. */
+  readonly allocation: IdMintLog
   readonly regionMap: ReadonlyMap<RegionId, RegionId>
   readonly nodeMap: ReadonlyMap<string, string>
   /** Internal wires map to fresh wires; boundary stubs map to their surviving host attachment. */
@@ -75,6 +84,8 @@ export function spliceSubgraphMapped(
     throw new DiagramError(`expected ${pattern.boundary.length} attachments, got ${attachments.length}`)
   }
   const pd = pattern.diagram
+  const allocation = createIdMintRecorder()
+  const spliceReservation = withIdMintCapture(options.reserved, allocation)
   const boundarySet = new Set(pattern.boundary)
   for (const b of pattern.boundary) {
     if (pd.wires[b]!.scope !== pd.root) {
@@ -122,14 +133,14 @@ export function spliceSubgraphMapped(
   const regionMap = new Map<RegionId, RegionId>([[pd.root, atRegion]])
   for (const id of Object.keys(pd.regions)) {
     if (id === pd.root) continue
-    const fresh = freshId(takenRegions, id, options.reserved?.regions)
+    const fresh = freshId(takenRegions, id, spliceReservation.regions)
     takenRegions.add(fresh)
     regionMap.set(id, fresh)
   }
   const takenNodes = new Set(Object.keys(host.nodes))
   const nodeMap = new Map<string, string>()
   for (const id of Object.keys(pd.nodes)) {
-    const fresh = freshId(takenNodes, id, options.reserved?.nodes)
+    const fresh = freshId(takenNodes, id, spliceReservation.nodes)
     takenNodes.add(fresh)
     nodeMap.set(id, fresh)
   }
@@ -137,7 +148,7 @@ export function spliceSubgraphMapped(
     .filter(([, attached]) => attached.size > 1)
     .map(([stub, attached]) => {
       const position = pattern.boundary.indexOf(stub)
-      const fresh = freshId(takenNodes, `identity_${position}`, options.reserved?.nodes)
+      const fresh = freshId(takenNodes, `identity_${position}`, spliceReservation.nodes)
       takenNodes.add(fresh)
       return {
         id: fresh,
@@ -154,7 +165,7 @@ export function spliceSubgraphMapped(
   })
   for (const id of Object.keys(pd.wires)) {
     if (boundarySet.has(id)) continue
-    const fresh = freshId(takenWires, id, options.reserved?.wires)
+    const fresh = freshId(takenWires, id, spliceReservation.wires)
     takenWires.add(fresh)
     wireMap.set(id, fresh)
   }
@@ -246,6 +257,7 @@ export function spliceSubgraphMapped(
   }
   return Object.freeze({
     diagram: normalized.diagram,
+    allocation: freezeIdMintLog(allocation),
     regionMap: new Map(regionMap),
     nodeMap: new Map(nodeMap),
     wireMap: normalizedWireMap,

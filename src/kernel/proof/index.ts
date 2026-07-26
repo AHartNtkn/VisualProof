@@ -15,8 +15,18 @@ export {
 export {
   EMPTY_PROOF_CONTEXT, assertProofContext, extendRelations, registerTheorem, verifyTheory,
 } from './context'
-export type { PlacementHint, ProofAction } from './action'
-export { singleStepAction, applyAction, replayActions } from './action'
+export type {
+  ActionReceipt,
+  PlacementHint,
+  ProofAction,
+  ProofAllocation,
+} from './action'
+export {
+  applyAction,
+  applyActionWithReceipt,
+  replayActions,
+  singleStepAction,
+} from './action'
 export type { Theorem, TheoremApplication } from './theorem'
 export { checkTheorem, applyTheorem } from './theorem'
 export type { CompositionBoundaries, CompositionOptions } from './compose'

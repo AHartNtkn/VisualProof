@@ -8,7 +8,13 @@ import type {
 import { captureDiagramNormalizations } from '../diagram/diagram'
 import { isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
-import type { IdReservation } from '../diagram/subgraph/freshId'
+import {
+  createIdMintRecorder,
+  freezeIdMintLog,
+  withIdMintCapture,
+  type IdMintLog,
+  type IdReservation,
+} from '../diagram/subgraph/freshId'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../rules/doublecut'
@@ -62,6 +68,8 @@ export type WireProvenance = {
 
 export type StepReceipt = {
   readonly result: Diagram
+  /** Every graph ID minted by this step, before normalization. */
+  readonly allocation: IdMintLog
   readonly provenance: WireProvenance
   readonly interface: WireInterfaceTransport
 }
@@ -237,13 +245,15 @@ export function applyStepWithReceipt(
   reservation?: IdReservation,
 ): StepReceipt {
   assertProofContext(context)
+  const allocation = createIdMintRecorder()
+  const capturedReservation = withIdMintCapture(reservation, allocation)
   const captured = captureDiagramNormalizations(
     () => applyStepRaw(
       diagram,
       step,
       context,
       orientation,
-      reservation,
+      capturedReservation,
     ),
   )
   const result = captured.result
@@ -264,6 +274,7 @@ export function applyStepWithReceipt(
 
   return {
     result,
+    allocation: freezeIdMintLog(allocation),
     provenance: { image: provenanceImage },
     interface: { image: interfaceImage },
   }

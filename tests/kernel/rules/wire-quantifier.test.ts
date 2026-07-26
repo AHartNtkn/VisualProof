@@ -249,6 +249,52 @@ describe('relation wire sever', () => {
     })).toThrowError(/not isomorphic|same pinned content/i)
   })
 
+  it('rejects asymmetric same-signature copies with swapped formal pins', () => {
+    const builder = new DiagramBuilder()
+    const firstA = builder.ref(builder.root, 'A', relSig([IOTA]))
+    const firstB = builder.ref(builder.root, 'B', relSig([IOTA]))
+    const secondA = builder.ref(builder.root, 'A', relSig([IOTA]))
+    const secondB = builder.ref(builder.root, 'B', relSig([IOTA]))
+    const firstAPin = builder.wire(builder.root, [{
+      node: firstA,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const firstBPin = builder.wire(builder.root, [{
+      node: firstB,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const secondAPin = builder.wire(builder.root, [{
+      node: secondA,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const secondBPin = builder.wire(builder.root, [{
+      node: secondB,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const diagram = builder.build()
+    const selection = (nodes: readonly string[]) => mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes,
+      wires: [],
+    })
+
+    expect(() => applyWireSever(diagram, {
+      kind: 'relation',
+      scope: diagram.root,
+      occurrences: [
+        {
+          sel: selection([firstA, firstB]),
+          args: [firstAPin, firstBPin],
+        },
+        {
+          sel: selection([secondA, secondB]),
+          args: [secondBPin, secondAPin],
+        },
+      ],
+    })).toThrowError(/not isomorphic|same pinned content/i)
+  })
+
   it('rejects mismatched ordered formal argument signatures', () => {
     const builder = new DiagramBuilder()
     const first = builder.ref(builder.root, 'G', relSig([IOTA]))

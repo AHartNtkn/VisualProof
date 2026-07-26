@@ -13,7 +13,11 @@ import { DiagramError, mkDiagram, portKey } from '../diagram/diagram'
 import { isAncestorOrEqual, polarity } from '../diagram/regions'
 import { IOTA, relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
+import {
+  extendIdReservation,
+  freshId,
+  type IdReservation,
+} from '../diagram/subgraph/freshId'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import {
   selectionContents,
@@ -644,20 +648,11 @@ function applyRelationJoin(
     }
   })
   const applications = collectApplications(d, input.wire, relation)
-  const spliceReservation: IdReservation = {
-    regions: new Set([
-      ...Object.keys(d.regions),
-      ...(reservation?.regions ?? []),
-    ]),
-    nodes: new Set([
-      ...Object.keys(d.nodes),
-      ...(reservation?.nodes ?? []),
-    ]),
-    wires: new Set([
-      ...Object.keys(d.wires),
-      ...(reservation?.wires ?? []),
-    ]),
-  }
+  let spliceReservation: IdReservation = extendIdReservation(reservation, {
+    regions: Object.keys(d.regions),
+    nodes: Object.keys(d.nodes),
+    wires: Object.keys(d.wires),
+  })
 
   let result = d
   for (const application of applications) {
@@ -707,6 +702,10 @@ function applyRelationJoin(
       const attachment = attachments[index]!
       if (attachment !== image) attachmentImage.set(attachment, image)
     })
+    spliceReservation = extendIdReservation(
+      spliceReservation,
+      spliced.allocation,
+    )
     result = spliced.diagram
   }
 
