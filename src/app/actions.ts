@@ -21,6 +21,16 @@ export type ActionDescriptor =
   | { readonly kind: 'deiterate'; readonly label: string }
   | { readonly kind: 'relUnfold'; readonly label: string }
   | { readonly kind: 'relFold'; readonly label: string; readonly needsInput: 'relation' }
+  | {
+      readonly kind: 'relationSever'
+      readonly label: string
+      readonly needsInput: 'scope-and-occurrences'
+    }
+  | {
+      readonly kind: 'relationJoin'
+      readonly label: string
+      readonly needsInput: 'wire-content-and-parameters'
+    }
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 /**
@@ -62,6 +72,36 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   // polarity-blind. Only offered when a relation exists to fold into.
   if (hasContent && ctx.relations.size > 0) {
     out.push({ kind: 'relFold', label: 'Fold into a relation…', needsInput: 'relation' })
+  }
+  const relationSeverPolarity = backward ? 'negative' : 'positive'
+  const hasRelationSeverScope = Object.keys(d.regions).some((scope) =>
+    polarity(d, scope) === relationSeverPolarity
+    && isAncestorOrEqual(d, scope, sel.region))
+  if (hasContent && hasRelationSeverScope) {
+    out.push({
+      kind: 'relationSever',
+      label: 'Sever relation…',
+      needsInput: 'scope-and-occurrences',
+    })
+  }
+
+  if (
+    sel.nodes.length === 0
+    && sel.regions.length === 0
+    && sel.wires.length === 1
+  ) {
+    const selected = d.wires[sel.wires[0]!]
+    const relationJoinPolarity = backward ? 'positive' : 'negative'
+    if (
+      selected?.sig.kind === 'rel'
+      && polarity(d, selected.scope) === relationJoinPolarity
+    ) {
+      out.push({
+        kind: 'relationJoin',
+        label: 'Join relation content…',
+        needsInput: 'wire-content-and-parameters',
+      })
+    }
   }
 
   // single selected region: structural eliminations

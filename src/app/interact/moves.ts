@@ -1,10 +1,16 @@
-import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import type { DiagramWithBoundary } from '../../kernel/diagram/boundary'
+import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
+import type {
+  ContentOccurrence,
+  WireJoinInput,
+  WireSeverInput,
+} from '../../kernel/rules/wire-quantifier'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -101,7 +107,44 @@ export function proofConnectionStep(
   if (source.wire === target.wire) {
     throw new Error(`line '${source.wire}' is already one identity`)
   }
-  const step: ProofStep = { rule: 'wireJoin', a: source.wire, b: target.wire }
+  const step: ProofStep = {
+    rule: 'wireJoin',
+    input: { kind: 'iota', a: source.wire, b: target.wire },
+  }
+  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+  return step
+}
+
+export function relationSeverStep(
+  diagram: Diagram,
+  scope: RegionId,
+  occurrences: readonly ContentOccurrence[],
+  orientation: ProofOrientation,
+): ProofStep {
+  const input: WireSeverInput = {
+    kind: 'relation',
+    scope,
+    occurrences,
+  }
+  const step: ProofStep = { rule: 'wireSever', input }
+  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+  return step
+}
+
+export function relationJoinStep(
+  diagram: Diagram,
+  wire: WireId,
+  content: DiagramWithBoundary,
+  parameters: readonly WireId[],
+  orientation: ProofOrientation,
+): ProofStep {
+  const input: WireJoinInput = {
+    kind: 'relation',
+    wire,
+    content,
+    parameters,
+  }
+  const step: ProofStep = { rule: 'wireJoin', input }
   applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
   return step
 }
@@ -517,6 +560,10 @@ export class ProofMoveController {
             defId: name,
           }))
         }
+        return
+      case 'relationSever':
+      case 'relationJoin':
+        row(action.label, null)
         return
       case 'iterate':
       case 'citeTheorem':

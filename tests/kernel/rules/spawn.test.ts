@@ -12,6 +12,7 @@ function host() {
   const sibling = builder.cut(builder.root)
   const relationWire = builder.relWire(cut, ARITY_TWO)
   const inner = builder.cut(cut)
+  const deep = builder.cut(inner)
   return {
     diagram: builder.build(),
     root: builder.root,
@@ -19,6 +20,7 @@ function host() {
     sibling,
     relationWire,
     inner,
+    deep,
   }
 }
 
@@ -32,25 +34,16 @@ function definitions() {
   ]])
 }
 
-function truthReificationDefinition(
-  lookalike: 'none' | 'missing-witness' | 'asymmetric-material' = 'none',
-) {
+function reificationShapedDefinition(complete: boolean) {
   const body = new DiagramBuilder()
   const forward = body.cut(body.root)
-  const forwardConsequent = body.cut(forward)
+  body.cut(forward)
   const reverse = body.cut(body.root)
   const reverseConsequent = body.cut(reverse)
   const forwardWitness = body.atom(forward, relSig([]))
-  const reverseWitness = lookalike === 'missing-witness'
-    ? undefined
-    : body.atom(reverseConsequent, relSig([]))
-  if (lookalike === 'asymmetric-material') {
-    const extra = body.atom(forwardConsequent, relSig([]))
-    body.wire(forwardConsequent, [{
-      node: extra,
-      port: { kind: 'head' },
-    }], relSig([]))
-  }
+  const reverseWitness = complete
+    ? body.atom(reverseConsequent, relSig([]))
+    : undefined
   const witness = body.wire(body.root, [
     { node: forwardWitness, port: { kind: 'head' } },
     ...(reverseWitness === undefined
@@ -58,56 +51,6 @@ function truthReificationDefinition(
       : [{ node: reverseWitness, port: { kind: 'head' } } as const]),
   ], relSig([]))
   return mkDiagramWithBoundary(body.build(), [witness])
-}
-
-function capturedImplicationReification(
-  lookalike: 'none' | 'permuted-captures' | 'unused-capture' = 'none',
-) {
-  const proposition = relSig([])
-  const body = new DiagramBuilder()
-  const forward = body.cut(body.root)
-  const forwardConsequent = body.cut(forward)
-  const reverse = body.cut(body.root)
-  const reverseConsequent = body.cut(reverse)
-  const forwardMaterial = body.cut(forwardConsequent)
-  const forwardMaterialConsequent = body.cut(forwardMaterial)
-  const reverseMaterial = body.cut(reverse)
-  const reverseMaterialConsequent = body.cut(reverseMaterial)
-
-  const forwardWitness = body.atom(forward, proposition)
-  const reverseWitness = body.atom(reverseConsequent, proposition)
-  const forwardLeft = body.atom(forwardMaterial, proposition)
-  const forwardRight = body.atom(forwardMaterialConsequent, proposition)
-  const reverseLeft = body.atom(reverseMaterial, proposition)
-  const reverseRight = body.atom(reverseMaterialConsequent, proposition)
-
-  const witness = body.wire(body.root, [
-    { node: forwardWitness, port: { kind: 'head' } },
-    { node: reverseWitness, port: { kind: 'head' } },
-  ], proposition)
-  const left = body.wire(body.root, [
-    { node: forwardLeft, port: { kind: 'head' } },
-    {
-      node: lookalike === 'permuted-captures'
-        ? reverseRight
-        : reverseLeft,
-      port: { kind: 'head' },
-    },
-  ], proposition)
-  const right = body.wire(body.root, [
-    { node: forwardRight, port: { kind: 'head' } },
-    {
-      node: lookalike === 'permuted-captures'
-        ? reverseLeft
-        : reverseRight,
-      port: { kind: 'head' },
-    },
-  ], proposition)
-  const boundary = [witness, left, right]
-  if (lookalike === 'unused-capture') {
-    boundary.push(body.wire(body.root, [], proposition))
-  }
-  return mkDiagramWithBoundary(body.build(), boundary)
 }
 
 describe('Phase-1 primitive spawning', () => {
@@ -213,94 +156,44 @@ describe('Phase-1 primitive spawning', () => {
     )).not.toThrow()
   })
 
-  it('gives only exact checked reifications the full orientation/polarity matrix', () => {
+  it('uses the ordinary polarity matrix for every relation definition shape', () => {
     const fixture = host()
     const signature = relSig([relSig([])])
-    const exact = new Map([[
-      'logic/TruthReification',
-      truthReificationDefinition(),
-    ]])
+    const relationDefinitions = [
+      new Map([['logic/R', definitions().get('logic/R')!]]),
+      new Map([['logic/ReificationShape', reificationShapedDefinition(true)]]),
+      new Map([['logic/ReificationLookalike', reificationShapedDefinition(false)]]),
+    ] as const
+    const regions = [
+      { id: fixture.root, polarity: 'positive' },
+      { id: fixture.cut, polarity: 'negative' },
+      { id: fixture.inner, polarity: 'positive' },
+      { id: fixture.deep, polarity: 'negative' },
+    ] as const
 
-    for (const region of [fixture.root, fixture.cut, fixture.inner]) {
-      for (const orientation of ['forward', 'backward'] as const) {
-        expect(() => applyRefSpawn(
-          fixture.diagram,
-          region,
-          'logic/TruthReification',
-          signature,
-          exact,
-          orientation,
-        )).not.toThrow()
+    for (const relations of relationDefinitions) {
+      const [defId, definition] = [...relations][0]!
+      const expectedSig = defId === 'logic/R' ? ARITY_TWO : signature
+      expect(definition.boundary).toHaveLength(expectedSig.args.length)
+      for (const region of regions) {
+        for (const orientation of ['forward', 'backward'] as const) {
+          const allowed = orientation === 'forward'
+            ? region.polarity === 'negative'
+            : region.polarity === 'positive'
+          const spawn = () => applyRefSpawn(
+            fixture.diagram,
+            region.id,
+            defId,
+            expectedSig,
+            relations,
+            orientation,
+          )
+          if (allowed) expect(spawn).not.toThrow()
+          else expect(spawn).toThrowError(
+            new RegExp(`${region.polarity === 'positive' ? 'negative' : 'positive'} region`),
+          )
+        }
       }
-    }
-
-    expect(() => applyRefSpawn(
-      fixture.diagram,
-      fixture.root,
-      'logic/R',
-      ARITY_TWO,
-      definitions(),
-      'forward',
-    )).toThrowError(/negative region/)
-    expect(() => applyRefSpawn(
-      fixture.diagram,
-      fixture.cut,
-      'logic/R',
-      ARITY_TWO,
-      definitions(),
-      'backward',
-    )).toThrowError(/positive region/)
-  })
-
-  it.each([
-    'missing-witness',
-    'asymmetric-material',
-  ] as const)(
-    'rejects the same-signature %s lookalike at a positive scope',
-    (lookalike) => {
-      const fixture = host()
-      const malformed = new Map([[
-        'logic/TruthReification',
-        truthReificationDefinition(lookalike),
-      ]])
-
-      expect(() => applyRefSpawn(
-        fixture.diagram,
-        fixture.root,
-        'logic/TruthReification',
-        relSig([relSig([])]),
-        malformed,
-        'forward',
-      )).toThrowError(/exact reification definition/i)
-    },
-  )
-
-  it('checks ordered capture pins and rejects unused capture boundaries', () => {
-    const fixture = host()
-    const exact = capturedImplicationReification()
-    expect(() => applyRefSpawn(
-      fixture.diagram,
-      fixture.root,
-      'logic/CapturedImplication',
-      relSig(exact.boundary.map((wire) => exact.diagram.wires[wire]!.sig)),
-      new Map([['logic/CapturedImplication', exact]]),
-      'forward',
-    )).not.toThrow()
-
-    for (const lookalike of [
-      'permuted-captures',
-      'unused-capture',
-    ] as const) {
-      const malformed = capturedImplicationReification(lookalike)
-      expect(() => applyRefSpawn(
-        fixture.diagram,
-        fixture.root,
-        'logic/CapturedImplication',
-        relSig(malformed.boundary.map((wire) =>
-          malformed.diagram.wires[wire]!.sig)),
-        new Map([['logic/CapturedImplication', malformed]]),
-        'forward',
-      )).toThrowError(/exact reification definition/i)
     }
   })
 })

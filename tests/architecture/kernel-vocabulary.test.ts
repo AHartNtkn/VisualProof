@@ -43,6 +43,7 @@ const removedRuleSymbols = prohibitedSemanticSymbols.slice(5)
 const prohibitedIdentifiers = new Set([
   ...prohibitedSemanticSymbols.slice(2),
   'TERM',
+  'isExactReificationDefinition',
 ])
 
 const removedCodecRules = [
@@ -87,6 +88,7 @@ const absentAuthorityPaths = [
   'src/kernel/rules/inconsistent-cut.ts',
   'src/kernel/rules/intro.ts',
   'src/kernel/rules/port-correspondence.ts',
+  'src/kernel/rules/reification.ts',
   'src/kernel/term',
   'tests/kernel/term',
   'tests/kernel/rules/anchored-wire.test.ts',

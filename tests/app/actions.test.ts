@@ -153,6 +153,7 @@ describe('applicableActions', () => {
       'iterate',
       'deiterate',
       'relFold',
+      'relationSever',
       'citeTheorem',
     ])
   })
@@ -175,5 +176,86 @@ describe('applicableActions', () => {
       nodes: [],
       wires: [bare],
     }))).toContain('vacuousElim')
+  })
+
+  it('offers explicit relation sever and join inputs under the mirrored polarity gates', () => {
+    const builder = new DiagramBuilder()
+    const negative = builder.cut(builder.root)
+    const positiveContent = builder.ref(builder.root, 'Positive', relSig([]))
+    const negativeContent = builder.ref(negative, 'Negative', relSig([]))
+    const negativeRelation = builder.relWire(negative, relSig([]))
+    const positiveRelation = builder.relWire(builder.root, relSig([]))
+    const diagram = builder.build()
+
+    const positiveOccurrence = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [positiveContent],
+      wires: [],
+    })
+    expect(applicableActions(
+      diagram,
+      positiveOccurrence,
+      verifyTheory(tinyTheory()),
+    )).toContainEqual({
+      kind: 'relationSever',
+      label: 'Sever relation…',
+      needsInput: 'scope-and-occurrences',
+    })
+    expect(kinds(diagram, positiveOccurrence, true))
+      .not.toContain('relationSever')
+
+    const negativeOccurrence = mkSelection(diagram, {
+      region: negative,
+      regions: [],
+      nodes: [negativeContent],
+      wires: [],
+    })
+    expect(kinds(diagram, negativeOccurrence)).toContain('relationSever')
+    expect(applicableActions(
+      diagram,
+      negativeOccurrence,
+      verifyTheory(tinyTheory()),
+      true,
+    )).toContainEqual({
+      kind: 'relationSever',
+      label: 'Sever relation…',
+      needsInput: 'scope-and-occurrences',
+    })
+
+    const negativeWire = mkSelection(diagram, {
+      region: negative,
+      regions: [],
+      nodes: [],
+      wires: [negativeRelation],
+    })
+    expect(applicableActions(
+      diagram,
+      negativeWire,
+      verifyTheory(tinyTheory()),
+    )).toContainEqual({
+      kind: 'relationJoin',
+      label: 'Join relation content…',
+      needsInput: 'wire-content-and-parameters',
+    })
+    expect(kinds(diagram, negativeWire, true)).not.toContain('relationJoin')
+
+    const positiveWire = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [],
+      wires: [positiveRelation],
+    })
+    expect(kinds(diagram, positiveWire)).not.toContain('relationJoin')
+    expect(applicableActions(
+      diagram,
+      positiveWire,
+      verifyTheory(tinyTheory()),
+      true,
+    )).toContainEqual({
+      kind: 'relationJoin',
+      label: 'Join relation content…',
+      needsInput: 'wire-content-and-parameters',
+    })
   })
 })
