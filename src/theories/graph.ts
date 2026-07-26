@@ -347,5 +347,10 @@ export function finishDiagramWithBoundary(
   graph: GraphConstruction,
   boundary: readonly WireId[],
 ): DiagramWithBoundary {
-  return mkDiagramWithBoundary(finishDiagram(graph), boundary)
+  return mkDiagramWithBoundary({
+    root: graph.root,
+    regions: graph.regions,
+    nodes: graph.nodes,
+    wires: graph.wires,
+  }, boundary)
 }

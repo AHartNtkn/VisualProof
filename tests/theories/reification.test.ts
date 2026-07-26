@@ -1,8 +1,16 @@
+import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
+import type {
+  Diagram,
+  NodeId,
+  RegionId,
+  WireId,
+} from '../../src/kernel/diagram/diagram'
 import { dwbToJson } from '../../src/kernel/diagram/json'
 import { IOTA, relSig, sigKey } from '../../src/kernel/diagram/sig'
 import { verifyTheory } from '../../src/kernel/proof/context'
@@ -12,6 +20,7 @@ import {
   biconditional,
   declareWire,
   emptyGraph,
+  finishDiagram,
   finishDiagramWithBoundary,
   identity,
   implication,
@@ -65,6 +74,232 @@ function witnessAtoms(
   return definition.diagram.wires[witness]!.endpoints
     .filter((endpoint) => endpoint.port.kind === 'head')
     .map((endpoint) => endpoint.node)
+}
+
+function exactOne<T>(values: readonly T[], what: string): T {
+  expect(values, what).toHaveLength(1)
+  return values[0]!
+}
+
+function directCuts(diagram: Diagram, parent: RegionId): readonly RegionId[] {
+  return Object.entries(diagram.regions)
+    .filter(([, region]) => region.kind === 'cut' && region.parent === parent)
+    .map(([id]) => id)
+}
+
+function directNodes(diagram: Diagram, region: RegionId): readonly NodeId[] {
+  return Object.entries(diagram.nodes)
+    .filter(([, node]) => node.region === region)
+    .map(([id]) => id)
+}
+
+function scopedWires(diagram: Diagram, region: RegionId): readonly WireId[] {
+  return Object.entries(diagram.wires)
+    .filter(([, wire]) => wire.scope === region)
+    .map(([id]) => id)
+}
+
+function endpointWire(
+  diagram: Diagram,
+  node: NodeId,
+  kind: 'head' | 'arg' | 'identity',
+  index?: number,
+): WireId {
+  return exactOne(
+    Object.entries(diagram.wires)
+      .filter(([, wire]) => wire.endpoints.some((endpoint) =>
+        endpoint.node === node
+        && endpoint.port.kind === kind
+        && (
+          kind === 'head'
+          || (
+            endpoint.port.kind !== 'head'
+            && endpoint.port.index === index
+          )
+        )))
+      .map(([id]) => id),
+    `one ${kind}${index === undefined ? '' : ` ${index}`} wire for '${node}'`,
+  )
+}
+
+type ReificationSkeleton = {
+  readonly variables: readonly WireId[]
+  readonly materialSites: readonly [
+    { readonly region: RegionId; readonly excludedCuts: readonly RegionId[] },
+    { readonly region: RegionId; readonly excludedCuts: readonly RegionId[] },
+  ]
+}
+
+function assertReificationSkeleton(
+  definition: DiagramWithBoundary,
+  arity: number,
+): ReificationSkeleton {
+  const { diagram } = definition
+  const witness = definition.boundary[0]!
+  const witnessSig = diagram.wires[witness]!.sig
+  expect(witnessSig).toEqual(relSig(
+    Array.from({ length: arity }, () => IOTA),
+  ))
+
+  let body = diagram.root
+  let variables: readonly WireId[] = []
+  if (arity > 0) {
+    const universal = exactOne(
+      directCuts(diagram, diagram.root),
+      'one outer universal cut',
+    )
+    body = exactOne(
+      directCuts(diagram, universal),
+      'one positive universal body',
+    )
+    variables = scopedWires(diagram, universal)
+    expect(variables).toHaveLength(arity)
+    expect(variables.map((wire) => sigKey(diagram.wires[wire]!.sig)))
+      .toEqual(Array.from({ length: arity }, () => 'i'))
+  }
+
+  const implications = directCuts(diagram, body)
+  expect(implications, 'the two biconditional implication cuts').toHaveLength(2)
+  const witnessNodes = witnessAtoms(definition)
+  expect(witnessNodes).toHaveLength(2)
+  const forward = exactOne(
+    implications.filter((antecedent) =>
+      witnessNodes.some((node) => diagram.nodes[node]!.region === antecedent)),
+    'one P-to-S implication',
+  )
+  const forwardConsequent = exactOne(
+    directCuts(diagram, forward),
+    'one P-to-S consequent',
+  )
+  const reverse = exactOne(
+    implications.filter((antecedent) => antecedent !== forward),
+    'one S-to-P implication',
+  )
+  const reverseConsequent = exactOne(
+    directCuts(diagram, reverse).filter((candidate) =>
+      witnessNodes.some((node) => diagram.nodes[node]!.region === candidate)),
+    'one S-to-P consequent containing P',
+  )
+
+  const expectedWitnessRegions = [
+    forward,
+    reverseConsequent,
+  ].sort()
+  expect(witnessNodes.map((node) => diagram.nodes[node]!.region).sort())
+    .toEqual(expectedWitnessRegions)
+  for (const node of witnessNodes) {
+    expect(diagram.nodes[node]).toMatchObject({ kind: 'atom', sig: witnessSig })
+    expect(Array.from({ length: arity }, (_, index) =>
+      endpointWire(diagram, node, 'arg', index)))
+      .toEqual(variables)
+  }
+
+  return {
+    variables,
+    materialSites: [
+      { region: forwardConsequent, excludedCuts: [] },
+      { region: reverse, excludedCuts: [reverseConsequent] },
+    ],
+  }
+}
+
+function nodeDescriptor(
+  diagram: Diagram,
+  nodeId: NodeId,
+  labels: ReadonlyMap<WireId, string>,
+): string {
+  const node = diagram.nodes[nodeId]!
+  const label = (wire: WireId): string => {
+    const value = labels.get(wire)
+    if (value === undefined) throw new Error(`missing test label for wire '${wire}'`)
+    return value
+  }
+  if (node.kind === 'atom') {
+    const head = label(endpointWire(diagram, nodeId, 'head'))
+    const args = node.sig.args.map((_, index) =>
+      label(endpointWire(diagram, nodeId, 'arg', index)))
+    return `${head}(${args.join(',')})`
+  }
+  if (node.kind === 'identity') {
+    const args = Array.from({ length: node.arity }, (_, index) =>
+      label(endpointWire(diagram, nodeId, 'identity', index))).sort()
+    return `=(${args.join(',')})`
+  }
+  throw new Error(`unexpected ref '${nodeId}' in reified material`)
+}
+
+type MaterialExpectation = {
+  readonly captureNames: readonly string[]
+  readonly mainNames: readonly string[]
+  readonly localNames: readonly string[]
+  readonly premises: readonly string[]
+  readonly conclusions: readonly string[]
+  readonly canonicalHash: string
+}
+
+function assertInductionMaterial(
+  definition: DiagramWithBoundary,
+  expected: MaterialExpectation,
+): void {
+  const skeleton = assertReificationSkeleton(
+    definition,
+    expected.mainNames.length,
+  )
+  const baseLabels = new Map<WireId, string>()
+  definition.boundary.forEach((wire, index) => {
+    baseLabels.set(wire, index === 0 ? 'P' : expected.captureNames[index - 1]!)
+  })
+  skeleton.variables.forEach((wire, index) => {
+    baseLabels.set(wire, expected.mainNames[index]!)
+  })
+
+  for (const materialSite of skeleton.materialSites) {
+    const materialRegion = materialSite.region
+    expect(directNodes(definition.diagram, materialRegion)).toEqual([])
+    const universal = exactOne(
+      directCuts(definition.diagram, materialRegion)
+        .filter((cut) => !materialSite.excludedCuts.includes(cut)),
+      'one local universal cut in S',
+    )
+    const localVariables = scopedWires(definition.diagram, universal)
+    expect(localVariables).toHaveLength(expected.localNames.length)
+    expect(localVariables.map((wire) =>
+      sigKey(definition.diagram.wires[wire]!.sig)))
+      .toEqual(expected.localNames.map(() => 'i'))
+    const labels = new Map(baseLabels)
+    localVariables.forEach((wire, index) => {
+      labels.set(wire, expected.localNames[index]!)
+    })
+
+    const universalBody = exactOne(
+      directCuts(definition.diagram, universal),
+      'one positive local universal body',
+    )
+    const implicationCut = exactOne(
+      directCuts(definition.diagram, universalBody),
+      'one material implication',
+    )
+    const conclusionCut = exactOne(
+      directCuts(definition.diagram, implicationCut),
+      'one material conclusion',
+    )
+    expect(directCuts(definition.diagram, conclusionCut)).toEqual([])
+    expect(directNodes(definition.diagram, universal)).toEqual([])
+    expect(directNodes(definition.diagram, universalBody)).toEqual([])
+
+    const premises = directNodes(definition.diagram, implicationCut)
+      .map((node) => nodeDescriptor(definition.diagram, node, labels))
+      .sort()
+    const conclusions = directNodes(definition.diagram, conclusionCut)
+      .map((node) => nodeDescriptor(definition.diagram, node, labels))
+      .sort()
+    expect(premises).toEqual([...expected.premises].sort())
+    expect(conclusions).toEqual([...expected.conclusions].sort())
+  }
+
+  const canonical = exploreForm(definition.diagram, definition.boundary)
+  expect(createHash('sha256').update(canonical).digest('hex'))
+    .toBe(expected.canonicalHash)
 }
 
 describe('explicit grammatical relation reification', () => {
@@ -139,17 +374,80 @@ describe('explicit grammatical relation reification', () => {
       sigKey(wire.sig) === 'i'
       && binary.diagram.regions[wire.scope]?.kind === 'cut'))
       .toBe(true)
+
+    const binarySkeleton = assertReificationSkeleton(binary, 2)
+    const binaryLabels = new Map<WireId, string>([
+      [binary.boundary[0]!, 'P'],
+      [binary.boundary[1]!, 'S'],
+      [binarySkeleton.variables[0]!, 'x'],
+      [binarySkeleton.variables[1]!, 'y'],
+    ])
+    for (const site of binarySkeleton.materialSites) {
+      expect(directCuts(binary.diagram, site.region)
+        .filter((cut) => !site.excludedCuts.includes(cut))).toEqual([])
+      expect(directNodes(binary.diagram, site.region).map((node) =>
+        nodeDescriptor(binary.diagram, node, binaryLabels)))
+        .toEqual(['S(x,y)'])
+    }
+    expect(createHash('sha256')
+      .update(exploreForm(binary.diagram, binary.boundary))
+      .digest('hex'))
+      .toBe('808dc8740bba500f73b033e6973e2fe138e1f94f8fc4d036e891f6f4a9674995')
   })
 
-  it('keeps each handwritten induction witness first and only real captures after it', () => {
+  it('pins the complete canonical material of all four induction definitions', () => {
     const definitions = [
-      [rightIdentityInductionReification(), ['(i)', '(i)', '(i,i,i)']],
-      [associativityInductionReification(), ['(i)', '(i,i,i)']],
-      [successorShiftInductionReification(), ['(i)', '(i,i)', '(i,i,i)']],
-      [commutativityInductionReification(), ['(i)', '(i,i,i)']],
+      [
+        rightIdentityInductionReification(),
+        ['(i)', '(i)', '(i,i,i)'],
+        {
+          captureNames: ['zero', 'plus'],
+          mainNames: ['a'],
+          localNames: ['z', 'o'],
+          premises: ['zero(z)', 'plus(a,z,o)'],
+          conclusions: ['=(a,o)'],
+          canonicalHash: 'fed6393505522bff59af12af6815048a3ab4abec8dc1eb9529568ee43f28f954',
+        },
+      ],
+      [
+        associativityInductionReification(),
+        ['(i)', '(i,i,i)'],
+        {
+          captureNames: ['plus'],
+          mainNames: ['a'],
+          localNames: ['b', 'c', 't', 'o', 'u'],
+          premises: ['plus(a,b,t)', 'plus(t,c,o)', 'plus(b,c,u)'],
+          conclusions: ['plus(a,u,o)'],
+          canonicalHash: '3b0bd4c64e191839a14489f0ea9f133d04ea876423974b3476aa5a2679d8c27f',
+        },
+      ],
+      [
+        successorShiftInductionReification(),
+        ['(i)', '(i,i)', '(i,i,i)'],
+        {
+          captureNames: ['succ', 'plus'],
+          mainNames: ['a'],
+          localNames: ['n', 'sn', 'o', 'so'],
+          premises: ['succ(n,sn)', 'plus(a,n,o)', 'succ(o,so)'],
+          conclusions: ['plus(a,sn,so)'],
+          canonicalHash: 'abdac285ce7216036527d2b850ef4de63b42295091d0e844c001d56b48198712',
+        },
+      ],
+      [
+        commutativityInductionReification(),
+        ['(i)', '(i,i,i)'],
+        {
+          captureNames: ['plus'],
+          mainNames: ['a'],
+          localNames: ['b', 'o'],
+          premises: ['plus(a,b,o)'],
+          conclusions: ['plus(b,a,o)'],
+          canonicalHash: '76f8ad83aec3852923139c9ab4b522fee3b1dd45f5cff9e6ac1b86403432722a',
+        },
+      ],
     ] as const
 
-    for (const [definition, signatures] of definitions) {
+    for (const [definition, signatures, material] of definitions) {
       expect(definition.boundary.map((wire) =>
         sigKey(definition.diagram.wires[wire]!.sig)))
         .toEqual(signatures)
@@ -158,7 +456,35 @@ describe('explicit grammatical relation reification', () => {
         definition.diagram.wires[wire]!.scope === definition.diagram.root
         && definition.diagram.wires[wire]!.endpoints.length > 0))
         .toBe(true)
+      assertInductionMaterial(definition, material)
     }
+  })
+
+  it('preserves root-co-scoped equality between distinct boundary entries', () => {
+    let graph = emptyGraph()
+    const left = declareWire(graph, graph.root, IOTA)
+    graph = left.graph
+    const right = declareWire(graph, graph.root, IOTA)
+    graph = right.graph
+    const equality = identity(graph, graph.root, [left.value, right.value])
+    graph = equality.graph
+
+    const closed = finishDiagram(graph)
+    const open = finishDiagramWithBoundary(
+      graph,
+      [left.value, right.value],
+    )
+
+    expect(closed.nodes[equality.value]).toBeUndefined()
+    expect(Object.keys(closed.wires)).toEqual([left.value])
+    expect(open.boundary).toEqual([left.value, right.value])
+    expect(Object.keys(open.diagram.wires)).toEqual([left.value, right.value])
+    expect(open.diagram.nodes[equality.value]).toEqual({
+      kind: 'identity',
+      region: graph.root,
+      sig: IOTA,
+      arity: 2,
+    })
   })
 
   it('constructs typed refs and conditional identities directly as graph syntax', () => {
