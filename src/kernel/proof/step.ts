@@ -1,6 +1,6 @@
 import type { Term } from '../term/term'
 import type { PathSeg } from '../term/reduce'
-import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
+import type { ConversionCertificate } from '../term/certificate'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/diagram'
 import type { Sig, RelSig } from '../diagram/sig'
 import type { IdReservation } from '../diagram/subgraph/freshId'
@@ -13,7 +13,6 @@ import { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from 
 import { applyErasure, applyWireSever } from '../rules/erasure'
 import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
-import { applyInconsistentCutElim } from '../rules/inconsistent-cut'
 import { applyConversionByCertificate } from '../rules/conversion'
 import { applyCongruenceJoin } from '../rules/congruence'
 import { anchorAvailability, applyAnchoredWireSplit, applyAnchoredWireContract } from '../rules/anchored-wire'
@@ -22,7 +21,7 @@ import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
 import { applyVacuousIntro, applyVacuousElim, type VacuousBody } from '../rules/vacuous'
 import { applyBodyAttach, applyBodyDetach } from '../rules/body'
-import { applyUnfold, applyFold, type FoldTarget } from '../rules/fold'
+import { applyUnfold, applyFold } from '../rules/fold'
 import type { TheoremApplication } from './theorem'
 import { applyTheorem } from './theorem'
 import { ProofError } from './error'
@@ -47,7 +46,6 @@ export type ProofStep =
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
-  | { readonly rule: 'inconsistentCutElim'; readonly region: RegionId; readonly first: NodeId; readonly second: NodeId; readonly certificate: NormalSeparationCertificate }
   | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence; readonly attachments: Readonly<Record<string, WireId>> }
   | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence }
   | { readonly rule: 'anchoredWireSplit'; readonly wire: WireId; readonly witness: NodeId; readonly endpoints: readonly Endpoint[]; readonly target: RegionId }
@@ -160,7 +158,6 @@ function applyStepRaw(
     case 'deiteration': return applyDeiteration(d, step.sel, step.justifier, step.certificate)
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel, reservation)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
-    case 'inconsistentCutElim': return applyInconsistentCutElim(d, step.region, step.first, step.second, step.certificate)
     case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.correspondence, step.attachments, reservation)
     case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate, step.correspondence)
     case 'anchoredWireSplit': return applyAnchoredWireSplit(d, step.wire, step.witness, step.endpoints, step.target, reservation)
@@ -176,12 +173,19 @@ function applyStepRaw(
     case 'vacuousElim': return applyVacuousElim(d, step.wireId)
     case 'bodyAttach': return applyBodyAttach(d, step.wireId, step.content, step.params, orientation, reservation)
     case 'bodyDetach': return applyBodyDetach(d, step.bodyNodeId, orientation)
-    case 'unfold': return applyUnfold(d, step.nodeId, (defId) => ctx.relations.get(defId), reservation)
+    case 'unfold': return applyUnfold(d, step.nodeId, ctx.relations, reservation)
     case 'fold': {
-      const target: FoldTarget = 'wireId' in step.target
-        ? { wireId: step.target.wireId }
-        : { defId: step.target.defId, sig: step.target.sig, resolve: (defId) => ctx.relations.get(defId) }
-      return applyFold(d, step.occurrence, step.args, target, reservation)
+      if ('wireId' in step.target) {
+        throw new ProofError('fold wire targets are not supported by the ref definition store')
+      }
+      return applyFold(
+        d,
+        step.occurrence,
+        step.args,
+        step.target.defId,
+        ctx.relations,
+        reservation,
+      )
     }
   }
 }

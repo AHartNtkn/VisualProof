@@ -4,7 +4,6 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
-import { parseTerm } from '../../../src/kernel/term/parse'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 import { applyAction, replayActions } from '../../../src/kernel/proof/action'
 import { composeActions } from '../../../src/kernel/proof/compose'
@@ -19,8 +18,6 @@ import type { ProofContext, Theory } from '../../../src/kernel/proof/context'
 import { applyStep, applyStepWithReceipt, replayProof } from '../../../src/kernel/proof/step'
 import { applyTheorem, checkTheorem, type Theorem } from '../../../src/kernel/proof/theorem'
 
-const p = (s: string) => parseTerm(s)
-
 /** A small theory whose only theorem's action is a deiteration step: enough
  * to exercise nested-map hardening (regionMap, occurrence certificates)
  * without depending on any external theory file. */
@@ -28,7 +25,7 @@ function deiterationTheory(): Theory {
   const h = new DiagramBuilder()
   const c1 = h.cut(h.root)
   const inner = h.cut(c1)
-  h.termNode(inner, p('\\x. x'))
+  h.atom(inner, relSig([]))
   const target = h.cut(c1)
   const d0 = h.build()
   const sel = mkSelection(d0, { region: c1, regions: [inner], nodes: [], wires: [] })

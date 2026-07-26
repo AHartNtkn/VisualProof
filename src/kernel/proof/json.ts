@@ -2,7 +2,7 @@ import type { Term } from '../term/term'
 import { assertOpenFreePortInterface } from '../term/term'
 import { serializeTerm, deserializeTerm } from '../term/serialize'
 import type { PathSeg, ReductionStep } from '../term/reduce'
-import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
+import type { ConversionCertificate } from '../term/certificate'
 import type { Endpoint, WireId } from '../diagram/diagram'
 import { portKey } from '../diagram/diagram'
 import { parsePortKey, dwbToJson, dwbFromJson, sigToJson, sigFromJson, relSigFromJson } from '../diagram/json'
@@ -111,22 +111,6 @@ function certFromJson(v: unknown, what: string): ConversionCertificate {
   }
 }
 
-function normalSeparationToJson(certificate: NormalSeparationCertificate): unknown {
-  return {
-    firstSteps: reductionStepsToJson(certificate.firstSteps),
-    secondSteps: reductionStepsToJson(certificate.secondSteps),
-  }
-}
-
-function normalSeparationFromJson(value: unknown, what: string): NormalSeparationCertificate {
-  if (!isRecord(value)) fail(`${what} must be an object`)
-  assertOnlyKeys(value, ['firstSteps', 'secondSteps'], what)
-  return {
-    firstSteps: reductionStepsFromJson(value.firstSteps, `${what}.firstSteps`),
-    secondSteps: reductionStepsFromJson(value.secondSteps, `${what}.secondSteps`),
-  }
-}
-
 function correspondenceToJson(correspondence: PortCorrespondence): unknown {
   return {
     commonArity: correspondence.commonArity,
@@ -187,33 +171,18 @@ function occurrenceCertificateToJson(certificate: OccurrenceCertificate): unknow
     nodeMap: idMapToJson(certificate.nodeMap),
     wireMap: idMapToJson(certificate.wireMap),
     attachments: [...certificate.attachments],
-    termCertificates: [...certificate.termCertificates]
-      .map(([node, conversion]) => [node, certToJson(conversion)]),
   }
 }
 
 function occurrenceCertificateFromJson(v: unknown, what: string): OccurrenceCertificate {
   if (!isRecord(v)) fail(`${what} must be an object`)
-  assertOnlyKeys(v, [
-    'region', 'regionMap', 'nodeMap', 'wireMap', 'attachments', 'termCertificates',
-  ], what)
-  if (!Array.isArray(v.termCertificates)) fail(`${what}.termCertificates must be an array`)
-  const termCertificates = new Map<string, ConversionCertificate>()
-  for (const [index, entry] of v.termCertificates.entries()) {
-    if (!Array.isArray(entry) || entry.length !== 2) {
-      fail(`${what}.termCertificates[${index}] must be a [node, certificate] pair`)
-    }
-    const node = str(entry[0], `${what}.termCertificates[${index}][0]`)
-    if (termCertificates.has(node)) fail(`${what}.termCertificates repeats node '${node}'`)
-    termCertificates.set(node, certFromJson(entry[1], `${what}.termCertificates[${index}][1]`))
-  }
+  assertOnlyKeys(v, ['region', 'regionMap', 'nodeMap', 'wireMap', 'attachments'], what)
   return {
     region: str(v.region, `${what}.region`),
     regionMap: idMapFromJson(v.regionMap, `${what}.regionMap`),
     nodeMap: idMapFromJson(v.nodeMap, `${what}.nodeMap`),
     wireMap: idMapFromJson(v.wireMap, `${what}.wireMap`),
     attachments: strArray(v.attachments, `${what}.attachments`),
-    termCertificates,
   }
 }
 
@@ -268,14 +237,6 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, sel: selToJson(s.sel) }
     case 'doubleCutElim':
       return { rule: s.rule, region: s.region }
-    case 'inconsistentCutElim':
-      return {
-        rule: s.rule,
-        region: s.region,
-        first: s.first,
-        second: s.second,
-        certificate: normalSeparationToJson(s.certificate),
-      }
     case 'conversion':
       return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), correspondence: correspondenceToJson(s.correspondence), attachments: { ...s.attachments } }
     case 'congruenceJoin':
@@ -367,15 +328,6 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'doubleCutElim':
       assertOnlyKeys(j, ['rule', 'region'], 'doubleCutElim step')
       return { rule, region: str(j.region, 'region') }
-    case 'inconsistentCutElim':
-      assertOnlyKeys(j, ['rule', 'region', 'first', 'second', 'certificate'], 'inconsistentCutElim step')
-      return {
-        rule,
-        region: str(j.region, 'region'),
-        first: str(j.first, 'first'),
-        second: str(j.second, 'second'),
-        certificate: normalSeparationFromJson(j.certificate, 'certificate'),
-      }
     case 'conversion': {
       assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'correspondence', 'attachments'], 'conversion step')
       if (!isRecord(j.attachments)) fail('attachments must be an object')
