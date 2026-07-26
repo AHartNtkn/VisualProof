@@ -2,8 +2,9 @@
 
 Status: design draft, approved in brainstorming 2026-07-25; awaiting written-spec review.
 
-Supersedes the `2026-07-23-drawn-definitions-*` refactor (bodies + comprehension
-rules) and absorbs the standalone `2026-07-25-identity-node-design.md` primitive.
+Supersedes the `2026-07-23-drawn-definitions-*` refactor (bodies + superseded
+comprehension rules) and absorbs the standalone `2026-07-25-identity-node-design.md`
+primitive.
 This is a single coherent kernel-vocabulary redesign, not three overlapping
 deletions.
 
@@ -17,9 +18,10 @@ deletions.
 >    `relations` and kernel-verified `theorems`, neither of which is an axiom. A
 >    "postulated" relation is a **quantified relation variable**; an "assumed"
 >    property is a **hypothesis in the antecedent** of the implication a theorem
->    proves. Fixed in Section 1 (Rule 6), Section 2, and Out of Scope.
+>    proves. Fixed in Section 1 (ordinary logical inconsistency), Section 2, and
+>    Out of Scope.
 > 2. **"distinctness oracle / certificate" (Rule 6) → ordinary inconsistency.**
->    Nothing certifies distinctness without computation; disequality is a
+>    The rejected distinctness-oracle model has no computation; disequality is a
 >    hypothesis, and equality-meets-disequality is ordinary logical inconsistency —
 >    no identity-specific rule, no oracle. The λ `inconsistent-cut` deletes with λ.
 > 3. **"importable library files" → JSON theories + citation.** There is no import
@@ -32,6 +34,14 @@ deletions.
 >    determined by building the derivations — `0 ≠ succ n` and injectivity are
 >    excluded because no target proof uses them, not because they are less
 >    foundational.
+> 5. **"comprehension" and `∃P.⊤` plus equality shorthand → grammatical
+>    reification.** A relation handle for an assertion is obtained only by the
+>    explicit construction `S' := Exists P. forall x. P(x) <-> S(x)`. This
+>    construction is the current model; the earlier comprehension model is
+>    rejected. Extensionality is not grammatical.
+> 6. **"six identity-node rules" → five identity transformations.** Former Rule
+>    6 is ordinary logical inconsistency, not an identity transformation,
+>    certificate, or oracle.
 
 ## Motivation
 
@@ -84,32 +94,35 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
 - *Keep:* insertion (negative region), erasure (positive region),
   iteration/deiteration, double-cut intro/elim, `wireJoin` (gated cross-scope
   merge).
-- *Add:* the identity-node rules. Rule 6 (contradiction discharge) **dissolves**:
-  with no computation, individuals are never provably distinct except relative to a
+- *Add:* five identity transformations: degeneracy drop, co-scoped collapse,
+  same-region fusion, inherited insertion/erasure, and substitution via
+  iteration/deiteration. Former Rule 6 is ordinary logical inconsistency: with no
+  computation, individuals are never provably distinct except relative to a
   disequality **hypothesis** (an asserted `x ≠ y`), so a context asserting both an
-  equality and a disequality hypothesis is inconsistent by ordinary logic (the
-  existing cut/negation calculus) — no identity-specific contradiction rule and no
-  distinctness oracle is needed. Specific disequalities (`0 ≠ 1`) are hypotheses,
-  not axioms.
+  equality and a disequality hypothesis is inconsistent by the existing
+  cut/negation calculus. It is not an identity transformation, certificate, or
+  oracle. Specific disequalities (`0 ≠ 1`) are hypotheses, not axioms.
 - *Delete:* the entire βη/term rule family — `fusion`/`fission`, `congruence`-at-ι
-  (βη), `headstrip`, `inconsistent-cut` (βη-separation), and the comprehension /
-  `relCongruenceJoin` rules from the drawn-definitions refactor.
+  (βη), `headstrip`, `inconsistent-cut` (βη-separation), and the superseded comprehension /
+  `relCongruenceJoin` rules from the superseded drawn-definitions refactor.
 
 **Definitional unfold/fold — kept, reimplemented (NOT deleted).** Expanding or
-collapsing a named `ref` is definitional transparency, not comprehension. `unfold`
+collapsing a named `ref` is definitional transparency, not the rejected
+comprehension model. `unfold`
 splices the stored definition body onto the ref's argument wires; `fold` is the
 inverse recognition. It is an equivalence in any region, justified by the defining
 equality `D ≐ G`, and is sourced from the `ref`/definition-store — never from
-`body` nodes, comprehension, or reification. The old body-node `unfold`/`fold`
+`body` nodes, the rejected comprehension model, or reification. The old body-node `unfold`/`fold`
 fused this with second-order instantiation; the clean split separates them.
 
 **Second-order instantiation — derived, no primitive rule.** Plugging a concrete
-relation `G` into a `∀P`/`∃P` quantifier is done by **reification**: spawn a fresh
-existential `rel`-wire (the `∃P.⊤` insertion primitive), constrain it equal to `G`
-via the existential-equality construction, then wire it in with
-iteration/deiteration, join, and double-cut — all existing primitives. This is
-several to a few dozen primitive moves; in practice amortized by **cited
-theorems** (the Eq library).
+relation `G` into a `∀P`/`∃P` quantifier is done by **reification**. A relation
+handle for an assertion `S` arises only through the grammatical construction
+`S' := Exists P. forall x. P(x) <-> S(x)`. The resulting stored definition has a
+relation-typed dangling wire and can be spawned at any legal scope. Ordinary
+identity/wire and structural moves connect that witness to `G`; no primitive
+second-order instantiation is involved. This is several to a few dozen primitive
+moves; in practice it is amortized by **cited theorems** (the Eq library).
 
 **No macro system this pass.** The headed/singleton form of a predicate is just
 its reified relation (produced by the reification construction, not a feature).
@@ -155,6 +168,11 @@ Theorems are **rebuilt by citing earlier theorems**, at least up to `plusComm`
 (commutativity of addition): each theorem references the ones it depends on rather
 than reproving them.
 
+The minimal higher-order substitution demonstration is
+`existsProp : Exists X : rel(). X`. It reifies the empty assertion with the same
+grammatical construction and finishes as `Exists X. X`; it is a kernel-verified
+theorem, not a primitive instantiation.
+
 - **Standing hypotheses = exactly what the target theorems invoke.** A property is
   in the baseline iff some target proof uses it — the only criterion, and one
   settled by building the derivations, not asserted a priori. `0 ≠ succ n` and
@@ -192,7 +210,7 @@ The term model disappears, simplifying the semantics.
 - **Soundness simplifies.** The βη-dependent soundness proofs (`fusion`,
   `congruence`-βη, `headstrip`, `inconsistent-cut`) vanish with their rules; the
   remaining structural and identity-node rules are model-generic, so all-models
-  soundness is clean. New obligations: the six identity-node rules and
+  soundness is clean. New obligations: the five identity transformations and
   definitional unfold/fold-as-splice (an equivalence).
 
 ## Section 4 — Expressiveness / completeness proof
@@ -202,15 +220,17 @@ The capstone, targeting the final zero-signature logic, built on Section 3's
 
 - **Reference logic:** a conventional typed HOL with **empty first-order
   signature** — no function/constant symbols, base type ι = the bare domain,
-  higher types via the sig ladder, equality primitive, comprehension. Essentially
-  the pure theory of types. Defined independently, interpreted into the *same*
-  `Model`/`denote` from Section 3 (the interpretation is written once and shared).
+  higher types via the sig ladder and equality primitive. Its historical
+  comprehension syntax is a rejected source-language form, not target grammar.
+  Defined independently, it is interpreted into the *same* `Model`/`denote` from
+  Section 3 (the interpretation is written once and shared).
 - **Theorem:** `∀ φ, ∃ D, ∀ Model, denote D = ⟦φ⟧` — every reference-HOL formula
   has a diagram with the same interpretation.
 - **Proof shape:** a structural translation `φ ↦ D_φ` (connectives →
   cuts/juxtaposition; individual `∃/∀` → wire-scope polarity; relation `∃/∀` →
-  `rel`-wire binder; `=` → identity node; `R(x⃗)` → atom; comprehension → the
-  reification construction) plus a denotation-preservation induction
+  `rel`-wire binder; `=` → identity node; `R(x⃗)` → atom; rejected
+  source-language comprehension → the reification construction) plus a
+  denotation-preservation induction
   `denote (D_φ) = ⟦φ⟧`. No Henkin, no deductive-completeness claim — a
   language-expressiveness (translation-existence) result, so Gödel does not bite.
 - **Why it is the capstone:** it is the catch-net for the exact failure that
@@ -223,7 +243,7 @@ One coherent kernel-vocabulary redesign, then downstream in sequence:
 
 1. **Kernel vocabulary** (Section 1): land node kinds `atom`/`ref`/`identity`,
    add identity-node rules, reimplement definitional unfold/fold off the
-   def-store, delete `term`/`body`/βη rules/comprehension rules and the `Lambda`
+   def-store, delete `term`/`body`/βη rules/superseded comprehension rules and the `Lambda`
    TS layer.
 2. **Theories** (Section 2): relational frege (quantified primitives + hypotheses;
    theorems by citation up to `plusComm`) + Eq / reified-form recorded theorems.

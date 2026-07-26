@@ -5,21 +5,26 @@
 > This document predates the decision to remove the λ-term layer
 > (`2026-07-25-zero-signature-hol-redesign-design.md` governs). Corrected:
 >
-> 1. **Rule 6 "distinctness certificate / oracle / object language certifies
->    distinct" → ordinary inconsistency.** No such mechanism exists. With no
->    computation, disequality is a **hypothesis**; a context asserting both `x = y`
->    and the hypothesis `x ≠ y` is inconsistent by ordinary logic, so Rule 6
->    dissolves — no identity-specific contradiction rule, no oracle. The λ-era
+> 1. **Former Rule 6 "distinctness certificate / oracle / object language
+>    certifies distinct" → ordinary inconsistency.** No such mechanism exists.
+>    With no computation, disequality is a **hypothesis**; a context asserting both
+>    `x = y` and the hypothesis `x ≠ y` is inconsistent by ordinary logic. Former
+>    Rule 6 is not an identity transformation, certificate, or oracle. The λ-era
 >    `inconsistent-cut` deletes with λ.
 > 2. **Stale λ references** (the projection-node workaround, `congruenceJoin`,
 >    `fusion`, the `body` node) are pre-redesign context. The identity node itself
 >    is sort-agnostic and unaffected; the λ machinery named here is being deleted.
+> 3. **Relation handles through comprehension → grammatical reification.** A
+>    relation handle for an assertion is obtained only by
+>    `S' := Exists P. forall x. P(x) <-> S(x)`; the earlier comprehension model is
+>    rejected.
+> 4. **"six identity-node rules" → five identity transformations.** The five are
+>    the three normalizations, inherited insertion/erasure, and substitution.
 
 Status: design draft. Scope: the kernel primitive for equality-as-a-proposition
-and its fundamental rules. **Out of scope by instruction:** how identity nodes
-interact with the λ-term language (deferred behind a single distinctness
-interface, §Rule 6 — the object language may be replaced by a zero-signature
-higher-order language and this document must not depend on it).
+and its five identity transformations. **Out of scope by instruction:** any
+language layer beyond the zero-signature higher-order language governed by the
+redesign specification; this document does not depend on such a layer.
 
 ## Motivation
 
@@ -44,10 +49,10 @@ An **identity node** is a node with a set of ≥2 ports, each attached to a wire
 - **Homogeneous:** all attached wires share one signature `sig`. Equality is at a
   single sort — it asserts identity of whatever the attached wires carry. At ι
   that is individual equality. At a relation sort it is identity of `rel`-sorted
-  wires (reified relation handles); such handles arise only by comprehension over
-  an extension, so their identity is extensional *by construction* — there is no
-  separate intensional relation-identity, hence no extensionality axiom to state
-  and none is part of these rules.
+  wires (reified relation handles). A relation handle for an assertion `S` arises
+  only by grammatical reification: `S' := Exists P. forall x. P(x) <-> S(x)`.
+  Extensionality is not grammatical: no syntactic production expresses a separate
+  extensionality principle or an intensional relation-identity alternative.
 - **Homed** in a region `R`, like any node.
 - **Enclosure invariant unchanged.** A port is a wire endpoint, so each attached
   wire's scope must enclose `R` — automatically. This is exactly what lets the
@@ -133,13 +138,13 @@ generalizes "same wire" to "identity-linked wire."
   (inward→outward), matching the existing rule's region condition plus the
   identity's availability.
 
-**Rule 6 — contradiction from disequality (no special rule).** Distinctness of two
-individuals is not computed or certified; it is **asserted as a hypothesis** (an
-`x ≠ y`, i.e. an identity node under a negation). A context asserting both `x = y`
-and the hypothesis `x ≠ y` is inconsistent by ordinary logic — the existing
-cut/negation calculus discharges it with no identity-specific rule. So there is no
-contradiction-discharge primitive and no distinctness oracle; the λ-era
-`inconsistent-cut` (βη-separation of closed λ-terms) deletes with λ.
+**Ordinary logical inconsistency — not an identity transformation.** Former Rule
+6 is ordinary logic, not an identity rule, certificate, or oracle. Distinctness of
+two individuals is not computed or certified; it is **asserted as a hypothesis**
+(`x ≠ y`, i.e. an identity node under a negation). A context asserting both `x = y`
+and the hypothesis `x ≠ y` is inconsistent by the existing cut/negation calculus.
+The λ-era `inconsistent-cut` (βη-separation of closed λ-terms) is historical and
+deletes with λ.
 
 ## What this buys, symmetrically
 
@@ -147,7 +152,8 @@ contradiction-discharge primitive and no distinctness oracle; the λ-era
 - n-way `¬(x=y=z)`: one n-port identity node inside a cut — symmetric with the
   positive n-way (one wire, n endpoints). No chaining of degenerate nodes.
 - Uniqueness / injectivity: expressible as native content, and — unlike the
-  projection-node workaround — reasoned about by Rules 5 and 6.
+  historical projection-node workaround — reasoned about by Rule 5 and ordinary
+  logic.
 
 ## Rule inventory (summary)
 
@@ -158,4 +164,4 @@ contradiction-discharge primitive and no distinctness oracle; the λ-era
 | 3 | norm | same-region fusion (transitivity) | yes | two nodes, one region, shared wire |
 | 4 | infer | insert (neg) / erase (pos) | — | inherited structural rule |
 | 5 | infer | substitution via iteration/deiteration | — | identity dominates site; iteration direction |
-| 6 | — | *dissolved* — `x=y` meeting a disequality hypothesis is ordinary inconsistency | — | no rule; λ-era `inconsistent-cut` deletes |
+| ordinary logic | — | `x=y` meeting a disequality hypothesis is ordinary inconsistency, not an identity transformation | — | existing cut/negation calculus |
