@@ -9,7 +9,14 @@ import { RuleError } from './error'
 /** Ordinary erasure deletes any selected subgraph from a positive region.
  * Negative insertion is owned by concrete insertion rules; there is no
  * backward-erasure insertion API. */
-export function applyErasure(d: Diagram, sel: SubgraphSelection): Diagram {
+export function applyErasure(
+  d: Diagram,
+  sel: SubgraphSelection,
+  orientation: 'forward' | 'backward' = 'forward',
+): Diagram {
+  if (orientation === 'backward') {
+    throw new RuleError('backward erasure is not supported; erasure is forward-only')
+  }
   const need = 'positive'
   const have = polarity(d, sel.region)
   if (have !== need) {

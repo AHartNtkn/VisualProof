@@ -11,6 +11,7 @@ import {
   successorShiftInductionReification,
   truthReification,
 } from './reification'
+import { buildLogicalTheoremPrefix } from './logic'
 
 export function natRelation(): DiagramWithBoundary {
   const graph = emptyGraph()
@@ -18,14 +19,15 @@ export function natRelation(): DiagramWithBoundary {
 }
 
 export function buildFregeTheory(): Theory {
+  const relations: Theory['relations'] = [
+    ['truthReification', truthReification()],
+    ['rightIdentityInductionReification', rightIdentityInductionReification()],
+    ['associativityInductionReification', associativityInductionReification()],
+    ['successorShiftInductionReification', successorShiftInductionReification()],
+    ['commutativityInductionReification', commutativityInductionReification()],
+  ]
   return {
-    relations: [
-      ['truthReification', truthReification()],
-      ['rightIdentityInductionReification', rightIdentityInductionReification()],
-      ['associativityInductionReification', associativityInductionReification()],
-      ['successorShiftInductionReification', successorShiftInductionReification()],
-      ['commutativityInductionReification', commutativityInductionReification()],
-    ],
-    theorems: [],
+    relations,
+    theorems: buildLogicalTheoremPrefix(relations),
   }
 }

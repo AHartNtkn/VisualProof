@@ -120,7 +120,7 @@ function applyStepRaw(
     case 'wireJoin':
       return applyWireJoin(diagram, step.a, step.b, orientation)
     case 'erasure':
-      return applyErasure(diagram, step.sel)
+      return applyErasure(diagram, step.sel, orientation)
     case 'wireSever':
       return applyWireSever(
         diagram,

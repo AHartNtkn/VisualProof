@@ -34,6 +34,25 @@ describe('primitive replay', () => {
     ))).toBe(exploreForm(applyErasure(diagram, selection)))
   })
 
+  it('does not replay forward-only erasure backward', () => {
+    const builder = new DiagramBuilder()
+    const atom = builder.atom(builder.root, relSig([]))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [atom],
+      wires: [],
+    })
+
+    expect(() => applyStep(
+      diagram,
+      { rule: 'erasure', sel: selection },
+      EMPTY_PROOF_CONTEXT,
+      'backward',
+    )).toThrowError(/backward erasure is not supported/i)
+  })
+
   it('replays ref and atom spawning with the stored signature authority', () => {
     const definition = mkDiagramWithBoundary(
       new DiagramBuilder().build(),

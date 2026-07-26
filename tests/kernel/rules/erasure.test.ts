@@ -58,6 +58,21 @@ describe('applyErasure', () => {
     expect(() => applyErasure(diagram, selection))
       .toThrowError(/erasure requires a positive region; 'r1' is negative/)
   })
+
+  it('rejects forward-only erasure during backward replay', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.ref(builder.root, 'outside', relSig([]))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+
+    expect(() => applyErasure(diagram, selection, 'backward'))
+      .toThrowError(/backward erasure is not supported/i)
+  })
 })
 
 describe('applyWireSever', () => {

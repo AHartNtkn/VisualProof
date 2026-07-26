@@ -13,8 +13,26 @@ import type {
 } from '../../src/kernel/diagram/diagram'
 import { dwbToJson } from '../../src/kernel/diagram/json'
 import { IOTA, relSig, sigKey } from '../../src/kernel/diagram/sig'
-import { verifyTheory } from '../../src/kernel/proof/context'
+import {
+  registerTheorem,
+  verifyTheory,
+} from '../../src/kernel/proof/context'
+import {
+  replayActions,
+} from '../../src/kernel/proof/action'
+import {
+  theoremFromJson,
+  theoremToJson,
+} from '../../src/kernel/proof/json'
+import {
+  loadTheory,
+  theoryToJson,
+} from '../../src/kernel/proof/store'
 import type { ProofStep } from '../../src/kernel/proof/step'
+import {
+  checkTheorem,
+  type Theorem,
+} from '../../src/kernel/proof/theorem'
 import {
   atom,
   biconditional,
@@ -65,6 +83,21 @@ function binaryReification() {
     graph = atom(graph, region, relation, [x!, y!]).graph
   }
   return finishDiagramWithBoundary(graph, [p, source])
+}
+
+function malformedTruthReification() {
+  let graph = emptyGraph()
+  const witness = declareWire(graph, graph.root, relSig([]))
+  graph = witness.graph
+  const iff = biconditional(graph, graph.root)
+  graph = iff.graph
+  graph = atom(
+    graph,
+    iff.value.forward.antecedent,
+    witness.value,
+    [],
+  ).graph
+  return finishDiagramWithBoundary(graph, [witness.value])
 }
 
 function witnessAtoms(
@@ -528,7 +561,6 @@ describe('explicit grammatical relation reification', () => {
     const rootRecorder = new PrimitiveStepRecorder(
       rootStart,
       context,
-      'backward',
     )
     rootRecorder.record('spawn reified Truth at root', {
       rule: 'refSpawn',
@@ -565,6 +597,57 @@ describe('explicit grammatical relation reification', () => {
       region: nested,
     })
     expect(nestedRecorder.diagram.wires[nestedWitness]!.scope).toBe(nested)
+  })
+
+  it('recognizes quantified reifications with captured parameters at root', () => {
+    const theory = buildFregeTheory()
+    const context = verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    })
+    const cases = [
+      [
+        'rightIdentityInductionReification',
+        relSig([
+          relSig([IOTA]),
+          relSig([IOTA]),
+          relSig([IOTA, IOTA, IOTA]),
+        ]),
+      ],
+      [
+        'associativityInductionReification',
+        relSig([
+          relSig([IOTA]),
+          relSig([IOTA, IOTA, IOTA]),
+        ]),
+      ],
+      [
+        'successorShiftInductionReification',
+        relSig([
+          relSig([IOTA]),
+          relSig([IOTA, IOTA]),
+          relSig([IOTA, IOTA, IOTA]),
+        ]),
+      ],
+      [
+        'commutativityInductionReification',
+        relSig([
+          relSig([IOTA]),
+          relSig([IOTA, IOTA, IOTA]),
+        ]),
+      ],
+    ] as const
+
+    for (const [defId, sig] of cases) {
+      const start = new DiagramBuilder().build()
+      const recorder = new PrimitiveStepRecorder(start, context)
+      expect(() => recorder.record(`spawn ${defId} at root`, {
+        rule: 'refSpawn',
+        region: start.root,
+        defId,
+        sig,
+      })).not.toThrow()
+    }
   })
 })
 
@@ -624,6 +707,277 @@ describe('thin primitive recording and deterministic delta lookup', () => {
   })
 })
 
+function theoremByName(
+  theorems: readonly Theorem[],
+  name: string,
+): Theorem {
+  return exactOne(
+    theorems.filter((theorem) => theorem.name === name),
+    `one '${name}' theorem`,
+  )
+}
+
+describe('logical and reification theorem prefix', () => {
+  it('records the ordinary equality/disequality contradiction first', () => {
+    const theory = buildFregeTheory()
+    expect(theory.theorems.map((theorem) => theorem.name)).toEqual([
+      'ordinaryEqualityContradiction',
+      'existsProp',
+    ])
+    const theorem = theory.theorems[0]!
+    const context = verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    })
+    expect(() => checkTheorem(theorem, context)).not.toThrow()
+    expect(theorem.actions).toEqual([])
+    expect(theorem.backActions?.flatMap((action) =>
+      action.steps.map((step) => step.rule))).toEqual([
+      'doubleCutIntro',
+      'identityInsert',
+      'iteration',
+    ])
+    expect(theorem.backActions?.every((action) =>
+      action.steps.length === 1)).toBe(true)
+
+    expect(theorem.lhs.boundary).toHaveLength(2)
+    expect(theorem.rhs.boundary).toHaveLength(2)
+    for (const side of [theorem.lhs, theorem.rhs]) {
+      expect(side.boundary.map((wire) =>
+        side.diagram.wires[wire]!.sig)).toEqual([IOTA, IOTA])
+    }
+    expect(Object.keys(theorem.rhs.diagram.nodes)).toEqual([])
+    expect(directCuts(
+      theorem.rhs.diagram,
+      theorem.rhs.diagram.root,
+    )).toEqual([])
+    expect(theorem.rhs.boundary.every((wire) =>
+      theorem.rhs.diagram.wires[wire]!.endpoints.length === 0)).toBe(true)
+
+    const enclosing = exactOne(
+      directCuts(theorem.lhs.diagram, theorem.lhs.diagram.root),
+      'one enclosing contradiction cut',
+    )
+    const disequality = exactOne(
+      directCuts(theorem.lhs.diagram, enclosing),
+      'one direct disequality cut',
+    )
+    const equalityNode = exactOne(
+      directNodes(theorem.lhs.diagram, enclosing),
+      'one equality identity',
+    )
+    const disequalityNode = exactOne(
+      directNodes(theorem.lhs.diagram, disequality),
+      'one disequality identity',
+    )
+    for (const node of [equalityNode, disequalityNode]) {
+      expect(theorem.lhs.diagram.nodes[node]).toEqual({
+        kind: 'identity',
+        region: node === equalityNode ? enclosing : disequality,
+        sig: IOTA,
+        arity: 2,
+      })
+      expect([
+        endpointWire(theorem.lhs.diagram, node, 'identity', 0),
+        endpointWire(theorem.lhs.diagram, node, 'identity', 1),
+      ]).toEqual(theorem.lhs.boundary)
+    }
+  })
+
+  it('proves closed existsProp through the observable substitution trace', () => {
+    const theory = buildFregeTheory()
+    const ordinary = theoremByName(
+      theory.theorems,
+      'ordinaryEqualityContradiction',
+    )
+    const theorem = theoremByName(theory.theorems, 'existsProp')
+    const relationContext = verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    })
+    const context = registerTheorem(relationContext, ordinary)
+
+    expect(theorem.lhs.boundary).toEqual([])
+    expect(theorem.rhs.boundary).toEqual([])
+    expect(Object.keys(theorem.lhs.diagram.regions)).toEqual([
+      theorem.lhs.diagram.root,
+    ])
+    expect(Object.keys(theorem.lhs.diagram.nodes)).toEqual([])
+    expect(Object.keys(theorem.lhs.diagram.wires)).toEqual([])
+    expect(directCuts(
+      theorem.rhs.diagram,
+      theorem.rhs.diagram.root,
+    )).toEqual([])
+    const finalAtom = exactOne(
+      directNodes(theorem.rhs.diagram, theorem.rhs.diagram.root),
+      'one final proposition occurrence',
+    )
+    expect(theorem.rhs.diagram.nodes[finalAtom]).toEqual({
+      kind: 'atom',
+      region: theorem.rhs.diagram.root,
+      sig: relSig([]),
+    })
+    const finalWire = endpointWire(
+      theorem.rhs.diagram,
+      finalAtom,
+      'head',
+    )
+    expect(theorem.rhs.diagram.wires[finalWire]).toMatchObject({
+      scope: theorem.rhs.diagram.root,
+      sig: relSig([]),
+    })
+
+    expect(theorem.backActions).toBeUndefined()
+    expect(theorem.actions.every((action) =>
+      action.steps.length === 1)).toBe(true)
+    expect(theorem.actions.flatMap((action) =>
+      action.steps.map((step) => step.rule))).toEqual([
+      'refSpawn',
+      'unfold',
+      'vacuousIntro',
+      'identityInsert',
+      'iteration',
+      'erasure',
+      'erasure',
+      'doubleCutElim',
+    ])
+
+    const snapshots: Diagram[] = []
+    const replayed = replayActions(
+      theorem.lhs.diagram,
+      theorem.actions,
+      context,
+      (diagram, actionIndex, stepIndex) => {
+        expect(stepIndex).toBe(0)
+        snapshots[actionIndex] = diagram
+      },
+    )
+    expect(exploreForm(replayed)).toBe(exploreForm(theorem.rhs.diagram))
+
+    const reified = snapshots[0]!
+    const reificationRef = exactOne(
+      directNodes(reified, reified.root),
+      'one spawned truth reification',
+    )
+    expect(reified.nodes[reificationRef]).toMatchObject({
+      kind: 'ref',
+      defId: 'truthReification',
+      sig: relSig([relSig([])]),
+    })
+    const p = endpointWire(reified, reificationRef, 'arg', 0)
+    expect(reified.wires[p]).toMatchObject({
+      scope: reified.root,
+      sig: relSig([]),
+    })
+
+    const unfolded = snapshots[1]!
+    const forward = exactOne(
+      directCuts(unfolded, unfolded.root).filter((cut) =>
+        directNodes(unfolded, cut).length === 1),
+      'one P-to-True branch',
+    )
+    const inner = exactOne(
+      directCuts(unfolded, forward),
+      'one inner substitution scope',
+    )
+    const pOccurrence = exactOne(
+      directNodes(unfolded, forward),
+      'one reified P occurrence',
+    )
+    expect(endpointWire(unfolded, pOccurrence, 'head')).toBe(p)
+
+    const pending = snapshots[2]!
+    const x = exactOne(
+      scopedWires(pending, forward),
+      'one pending X wire',
+    )
+    expect(pending.wires[x]).toMatchObject({
+      scope: forward,
+      sig: relSig([]),
+      endpoints: [],
+    })
+
+    const connected = snapshots[3]!
+    const connection = exactOne(
+      directNodes(connected, forward).filter((node) =>
+        connected.nodes[node]!.kind === 'identity'),
+      'one explicit P-to-X connection',
+    )
+    expect([
+      endpointWire(connected, connection, 'identity', 0),
+      endpointWire(connected, connection, 'identity', 1),
+    ]).toEqual([p, x])
+
+    const iterated = snapshots[4]!
+    const innerX = exactOne(
+      directNodes(iterated, inner),
+      'one iterated inner X occurrence',
+    )
+    expect(iterated.nodes[innerX]).toMatchObject({
+      kind: 'atom',
+      region: inner,
+      sig: relSig([]),
+    })
+    expect(endpointWire(iterated, innerX, 'head')).toBe(x)
+
+    const replaced = snapshots[5]!
+    expect(directNodes(replaced, inner)).toEqual([])
+    expect(replaced.regions[inner]).toBeDefined()
+
+    const cleaned = snapshots[6]!
+    expect(cleaned.regions[forward]).toBeUndefined()
+    expect(cleaned.wires[x]).toBeUndefined()
+    expect(Object.values(cleaned.nodes).some((node) =>
+      node.kind === 'identity' || node.kind === 'ref')).toBe(false)
+
+    const finished = snapshots[7]!
+    expect(Object.values(finished.regions)).toEqual([{ kind: 'sheet' }])
+    expect(Object.values(finished.nodes)).toEqual([
+      expect.objectContaining({ kind: 'atom', sig: relSig([]) }),
+    ])
+    expect(Object.values(finished.wires)).toEqual([
+      expect.objectContaining({
+        scope: finished.root,
+        sig: relSig([]),
+      }),
+    ])
+  })
+
+  it('round-trips and re-verifies every theorem against its prior prefix', () => {
+    const theory = buildFregeTheory()
+    let prefix = verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    })
+    for (const theorem of theory.theorems) {
+      const restored = theoremFromJson(
+        JSON.parse(JSON.stringify(theoremToJson(theorem))),
+      )
+      expect(() => checkTheorem(restored, prefix)).not.toThrow()
+      prefix = registerTheorem(prefix, restored)
+    }
+
+    const loaded = loadTheory(
+      JSON.parse(JSON.stringify(theoryToJson(theory))),
+    )
+    expect([...loaded.ctx.theorems.keys()]).toEqual([
+      'ordinaryEqualityContradiction',
+      'existsProp',
+    ])
+
+    const forged = {
+      ...theory,
+      relations: theory.relations.map(([name, definition]) =>
+        name === 'truthReification'
+          ? [name, malformedTruthReification()] as const
+          : [name, definition] as const),
+    }
+    expect(() => loadTheory(
+      JSON.parse(JSON.stringify(theoryToJson(forged))),
+    )).toThrowError(/not an exact reification definition/i)
+  })
+})
+
 describe('theory surface exclusions', () => {
   it('exports no composite proof surface and carries no displaced vocabulary', async () => {
     const barrel = await import('../../src/theories')
@@ -648,6 +1002,7 @@ describe('theory surface exclusions', () => {
       'tactic',
       'composeActions',
       'replayProof',
+      ['identity', 'Contradiction'].join(''),
     ]
     for (const term of prohibited) expect(source).not.toContain(term)
   })

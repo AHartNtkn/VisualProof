@@ -42,6 +42,13 @@ deletions.
 > 6. **"six identity-node rules" → five identity transformations.** Former Rule
 >    6 is ordinary logical inconsistency, not an identity transformation,
 >    certificate, or oracle.
+> 7. **Reification spawn authority made explicit.** A stored definition whose
+>    checked graph is exactly `forall x. P(x) <-> S(x)`, with `P` its first
+>    relation-typed boundary, constructively guarantees its `P` witness and may
+>    therefore be spawned at every scope. Ordinary refs retain their
+>    polarity-gated assertion semantics; same-signature lookalikes do not receive
+>    this permission. Erasure remains forward-only and is rejected during
+>    backward theorem replay.
 
 ## Motivation
 
@@ -91,9 +98,10 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
 
 **Rules — keep / add / delete:**
 
-- *Keep:* insertion (negative region), erasure (positive region),
+- *Keep:* insertion (negative region), forward-only erasure (positive region),
   iteration/deiteration, double-cut intro/elim, `wireJoin` (gated cross-scope
-  merge).
+  merge). Theorem replay passes orientation to every directional rule and never
+  executes positive erasure as a backward action.
 - *Add:* five identity transformations: degeneracy drop, co-scoped collapse,
   same-region fusion, inherited insertion/erasure, and substitution via
   iteration/deiteration. Former Rule 6 is ordinary logical inconsistency: with no
@@ -119,10 +127,16 @@ fused this with second-order instantiation; the clean split separates them.
 relation `G` into a `∀P`/`∃P` quantifier is done by **reification**. A relation
 handle for an assertion `S` arises only through the grammatical construction
 `S' := Exists P. forall x. P(x) <-> S(x)`. The resulting stored definition has a
-relation-typed dangling wire and can be spawned at any legal scope. Ordinary
-identity/wire and structural moves connect that witness to `G`; no primitive
-second-order instantiation is involved. This is several to a few dozen primitive
-moves; in practice it is amortized by **cited theorems** (the Eq library).
+relation-typed dangling wire. Whenever `refSpawn` needs to bypass ordinary
+polarity, the definition store validates the exact two-sided reification graph,
+including use of every captured boundary and matching boundary-pinned `S`
+material. That checked definition constructively guarantees the fresh `P`
+witness, so this reification ref may be spawned at any scope. An ordinary ref,
+or a malformed/same-signature lookalike, retains the ordinary polarity gate.
+Identity/wire and structural moves connect the checked witness to `G`; no
+primitive second-order instantiation is involved. This is several to a few dozen
+primitive moves; in practice it is amortized by **cited theorems** (the Eq
+library).
 
 **No macro system this pass.** The headed/singleton form of a predicate is just
 its reified relation (produced by the reification construction, not a feature).
@@ -170,8 +184,11 @@ than reproving them.
 
 The minimal higher-order substitution demonstration is
 `existsProp : Exists X : rel(). X`. It reifies the empty assertion with the same
-grammatical construction and finishes as `Exists X. X`; it is a kernel-verified
-theorem, not a primitive instantiation.
+grammatical construction, connects its checked fresh witness to a pending `X`,
+iterates that connected occurrence inward, erases the inner occurrence only in a
+forward-positive scope, cleans the temporary identity/wire and biconditional
+scaffolding, and finishes as `Exists X. X`. It is a kernel-verified theorem, not a
+primitive instantiation or a backward-erasure shortcut.
 
 - **Standing hypotheses = exactly what the target theorems invoke.** A property is
   in the baseline iff some target proof uses it — the only criterion, and one

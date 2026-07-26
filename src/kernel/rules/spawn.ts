@@ -7,6 +7,7 @@ import { sigEquals, sigKey } from '../diagram/sig'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { definitionSig } from './fold'
 import { RuleError } from './error'
+import { isExactReificationDefinition } from './reification'
 
 export type SpawnOrientation = 'forward' | 'backward'
 
@@ -14,13 +15,20 @@ function requireSpawnPolarity(
   diagram: Diagram,
   region: RegionId,
   orientation: SpawnOrientation,
+  exceptionalAuthority?: () => boolean,
+  defId?: string,
 ): void {
   const need = orientation === 'forward' ? 'negative' : 'positive'
   const have = polarity(diagram, region)
-  if (have !== need) {
+  if (have !== need && !(exceptionalAuthority?.() ?? false)) {
     throw new RuleError(
       `${orientation === 'backward' ? 'backward ' : ''}spawning requires a ${need} region; `
-      + `'${region}' is ${have}`,
+      + `'${region}' is ${have}`
+      + (
+        defId === undefined
+          ? ''
+          : ` and definition '${defId}' is not an exact reification definition`
+      ),
     )
   }
 }
@@ -34,7 +42,6 @@ export function applyRefSpawn(
   orientation: SpawnOrientation = 'forward',
   reservation?: IdReservation,
 ): Diagram {
-  requireSpawnPolarity(diagram, region, orientation)
   const relation = relations.get(defId)
   if (relation === undefined) throw new RuleError(`relation '${defId}' is no longer loaded`)
   const actualSig = definitionSig(relation)
@@ -44,6 +51,13 @@ export function applyRefSpawn(
       + `to '${sigKey(actualSig)}'`,
     )
   }
+  requireSpawnPolarity(
+    diagram,
+    region,
+    orientation,
+    () => isExactReificationDefinition(relation),
+    defId,
+  )
   return spawnRefNode(diagram, region, defId, expectedSig, reservation).diagram
 }
 

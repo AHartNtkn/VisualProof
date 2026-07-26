@@ -14,6 +14,12 @@ relation wires and their properties are inline theorem hypotheses. An assertion
 macro layer, lambda/computation layer, comprehension, extensionality rule, or
 primitive second-order instantiation.
 
+When a ref spawn would otherwise violate ordinary polarity, the definition store
+checks that exact two-sided graph. Because that checked construction guarantees
+its fresh `P` witness, a reification ref may spawn at every scope; ordinary refs
+and malformed lookalikes retain ordinary polarity gates. Erasure is forward-only
+and cannot be replayed backward.
+
 **Tech stack:** TypeScript, Vitest, Playwright, existing diagram/proof kernel,
 stable theory JSON.
 
@@ -137,7 +143,8 @@ export function natRelation(): DiagramWithBoundary
 - Test reification at arities zero, one, and two.
 - Require a fresh homogeneous `rel(sig...)` witness and the exact graph
   `forall x. P(x) <-> S(x)`.
-- Spawn the same explicit reified definition at root and nested legal scopes.
+- Establish the exact structural shape that Task 4's checked definition-backed
+  spawn authority recognizes at root and nested scopes.
 - Forbid comprehension, extensionality, term/body, beta-eta, or primitive
   instantiation steps and any exported composite proof API.
 
@@ -177,8 +184,34 @@ git commit -m "feat: add explicit relation reification constructions"
 
 **Files:**
 
+- Modify:
+  `docs/superpowers/specs/2026-07-25-zero-signature-hol-redesign-design.md`
+- Modify:
+  `docs/superpowers/specs/2026-07-25-identity-node-design.md`
+- Modify this plan with the corrected authority contract.
+- Add: `src/kernel/rules/reification.ts`
+- Modify: `src/kernel/rules/spawn.ts`
+- Modify: `src/kernel/rules/erasure.ts`
+- Modify: `src/kernel/proof/step.ts`
+- Modify: `src/app/actions.ts`
+- Extend focused spawn, erasure, polarity-matrix, proof-JSON, step, theorem, and
+  action tests.
 - Add the logical/reification theorem prefix under `src/theories/`.
 - Extend: `tests/theories/reification.test.ts`
+- Modify: `tests/architecture/kernel-vocabulary.test.ts`
+
+**Authority correction:**
+
+- Preserve ordinary `refSpawn` polarity.
+- On every replay, allow `refSpawn` at any scope only when the named stored
+  definition checks as exactly `forall x. P(x) <-> S(x)`, with `P` its first
+  relation boundary, every remaining boundary used by `S`, and both copies of
+  `S` equal under ordered boundary pins.
+- Reject malformed and same-signature lookalikes. The serialized step remains
+  self-validating because replay resolves and rechecks the stored definition.
+- Pass orientation to erasure and reject every erasure in backward replay.
+- Do not introduce comprehension, arbitrary positive ref insertion, a macro, or
+  primitive second-order instantiation.
 
 **Required theorem:**
 
@@ -206,6 +239,10 @@ prefix. It must use normal logic and no identity-specific primitive.
 - Replay observes reified `P`, connection to `X`, iteration into the inner scope,
   and final cleanup.
 - JSON round-trip re-verifies.
+- Exact reification definitions spawn forward at positive root and nested scopes;
+  ordinary refs and malformed lookalikes do not.
+- Rule, step, theorem, and contextual-action regressions reject backward erasure,
+  including the two-step fabricated-existence exploit.
 - Recorded actions contain only surviving kernel steps and ordinary citations.
 - Architecture checks forbid comprehension, instantiate, extensional,
   identityContradiction, term/body, and beta-eta rule tags.
@@ -213,14 +250,34 @@ prefix. It must use normal logic and no identity-specific primitive.
 **Validation:**
 
 ```bash
-npx vitest run tests/theories/reification.test.ts
+npx vitest run \
+  tests/kernel/rules/spawn.test.ts \
+  tests/kernel/rules/erasure.test.ts \
+  tests/kernel/rules/polarity-matrix.test.ts \
+  tests/kernel/proof/json.test.ts \
+  tests/kernel/proof/step.test.ts \
+  tests/kernel/proof/theorem.test.ts \
+  tests/app/actions.test.ts \
+  tests/theories/reification.test.ts \
+  tests/architecture/kernel-vocabulary.test.ts
 npm run typecheck
 ```
 
 **Commit:**
 
 ```bash
-git add -- src/theories tests/theories/reification.test.ts
+git add -- \
+  docs/superpowers/specs/2026-07-25-zero-signature-hol-redesign-design.md \
+  docs/superpowers/specs/2026-07-25-identity-node-design.md \
+  docs/superpowers/plans/2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md \
+  src/kernel/rules/reification.ts src/kernel/rules/spawn.ts \
+  src/kernel/rules/erasure.ts src/kernel/proof/step.ts src/app/actions.ts \
+  src/theories/logic.ts src/theories/frege.ts \
+  tests/kernel/rules/spawn.test.ts tests/kernel/rules/erasure.test.ts \
+  tests/kernel/rules/polarity-matrix.test.ts tests/kernel/proof/json.test.ts \
+  tests/kernel/proof/step.test.ts tests/kernel/proof/theorem.test.ts \
+  tests/app/actions.test.ts tests/theories/reification.test.ts \
+  tests/architecture/kernel-vocabulary.test.ts
 git commit -m "feat: prove existence of a true proposition"
 ```
 
@@ -428,8 +485,9 @@ stash.
 
 - Only five structural identity transformations remain.
 - Equality plus disequality is handled by ordinary logic.
-- Reification is exactly existential assertion-to-extent construction and can be
-  spawned at any legal scope.
+- Reification is exactly the checked existential assertion-to-extent
+  construction. Only a stored definition matching that graph may bypass ordinary
+  ref polarity and spawn at every scope.
 - Extensionality and comprehension are unavailable as grammar or kernel authority.
 - `existsProp : Exists X. X` is replayable and serialized.
 - `buildFregeTheory()` verifies the logical prefix and all eight arithmetic

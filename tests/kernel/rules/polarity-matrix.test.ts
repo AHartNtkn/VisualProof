@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import type { Diagram } from '../../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
-import {
-  mkSelection,
-  type SubgraphSelection,
-} from '../../../src/kernel/diagram/subgraph/selection'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
@@ -47,14 +43,9 @@ describe('polarity matrix across depths 0–3', () => {
         expect(() => applyIdentityInsertion(diagram, region, [left, right])).not.toThrow()
         expect(() => applyErasure(diagram, selection))
           .toThrowError(/erasure requires a positive region/)
-        const legacyShape = applyErasure as unknown as (
-          d: Diagram,
-          selection: SubgraphSelection,
-          orientation: string,
-        ) => Diagram
-        expect(() => legacyShape(diagram, selection, 'backward'))
-          .toThrowError(/erasure requires a positive region/)
       }
+      expect(() => applyErasure(diagram, selection, 'backward'))
+        .toThrowError(/backward erasure is not supported; erasure is forward-only/)
     })
 
     it(`depth ${depth}: iteration and double-cut rules remain polarity-free`, () => {

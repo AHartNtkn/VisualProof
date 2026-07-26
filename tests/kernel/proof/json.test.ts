@@ -147,6 +147,16 @@ describe('step JSON', () => {
     for (const step of steps) roundTrip(step)
   })
 
+  it('rejects invented serialized reification authority on refSpawn', () => {
+    expect(() => stepFromJson({
+      rule: 'refSpawn',
+      region: 'r0',
+      defId: 'truthReification',
+      sig: relSig([relSig([])]),
+      reification: true,
+    })).toThrowError(/refSpawn step has unknown field 'reification'/i)
+  })
+
   it('omits obsolete term certificates from occurrence-certificate JSON', () => {
     const encoded = stepToJson({
       rule: 'deiteration',

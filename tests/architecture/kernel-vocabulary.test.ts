@@ -127,7 +127,6 @@ const absentAuthorityPaths = [
   'e2e/relation-workspace.spec.ts',
   'src/view/tromp.ts',
   'tests/view/tromp.test.ts',
-  'src/theories/frege.ts',
   'src/theories/lambda.ts',
   'src/theories/macros.ts',
   'tests/theories/battery.test.ts',

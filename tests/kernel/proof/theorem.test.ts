@@ -189,6 +189,41 @@ describe('checkTheorem', () => {
     expect(() => checkTheorem(destroying, EMPTY_PROOF_CONTEXT))
       .toThrowError(/boundary wire .* has no semantic image/)
   })
+
+  it('rejects a backward proof that deletes a positive goal', () => {
+    const lhs = mkDiagramWithBoundary(new DiagramBuilder().build(), [])
+    const rhsBuilder = new DiagramBuilder()
+    const atom = rhsBuilder.atom(rhsBuilder.root, PROPOSITION)
+    const wire = rhsBuilder.wire(rhsBuilder.root, [{
+      node: atom,
+      port: { kind: 'head' },
+    }], PROPOSITION)
+    const rhs = mkDiagramWithBoundary(rhsBuilder.build(), [])
+
+    expect(() => checkTheorem({
+      name: 'fabricated-existence',
+      lhs,
+      rhs,
+      actions: [],
+      backActions: [
+        action('delete the goal', {
+          rule: 'erasure',
+          sel: {
+            region: rhs.diagram.root,
+            regions: [],
+            nodes: [atom],
+            wires: [],
+          },
+        }),
+        action('delete its empty wire', {
+          rule: 'vacuousElim',
+          wireId: wire,
+        }),
+      ],
+    }, EMPTY_PROOF_CONTEXT)).toThrowError(
+      /backward erasure is not supported/i,
+    )
+  })
 })
 
 describe('applyTheorem', () => {

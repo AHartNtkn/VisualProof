@@ -24,8 +24,9 @@ export type ActionDescriptor =
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 /**
- * `backward` changes citation direction only. Structural rule gates retain
- * their physical polarity because their appliers have no orientation dual.
+ * `backward` changes citation direction and suppresses forward-only erasure.
+ * Other structural rule gates retain their physical polarity when their
+ * appliers have no orientation dual.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   assertProofContext(ctx)
@@ -33,7 +34,9 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   const pol = polarity(d, sel.region)
   const hasContent = sel.nodes.length + sel.regions.length + sel.wires.length > 0
 
-  if (hasContent && pol === 'positive') out.push({ kind: 'erase', label: 'Erase (positive region)' })
+  if (!backward && hasContent && pol === 'positive') {
+    out.push({ kind: 'erase', label: 'Erase (positive region)' })
+  }
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })

@@ -20,6 +20,11 @@
 >    rejected.
 > 4. **"six identity-node rules" → five identity transformations.** The five are
 >    the three normalizations, inherited insertion/erasure, and substitution.
+> 5. **Checked reification refs are constructively spawnable at every scope.**
+>    The definition store recognizes the exact
+>    `forall x. P(x) <-> S(x)` graph before granting this permission. Ordinary
+>    refs and malformed lookalikes remain polarity-gated, and forward-only
+>    erasure is not a backward proof action.
 
 Status: design draft. Scope: the kernel primitive for equality-as-a-proposition
 and its five identity transformations. **Out of scope by instruction:** any
@@ -51,6 +56,11 @@ An **identity node** is a node with a set of ≥2 ports, each attached to a wire
   that is individual equality. At a relation sort it is identity of `rel`-sorted
   wires (reified relation handles). A relation handle for an assertion `S` arises
   only by grammatical reification: `S' := Exists P. forall x. P(x) <-> S(x)`.
+  The stored definition must check as that exact two-sided graph with `P` as its
+  first boundary, every later boundary used by `S`, and the two copies of `S`
+  equal under ordered boundary pins.
+  This checked definition constructively guarantees `P`, so its ref may spawn at
+  every scope; this does not relax the polarity gate for ordinary refs.
   Extensionality is not grammatical: no syntactic production expresses a separate
   extensionality principle or an intensional relation-identity alternative.
 - **Homed** in a region `R`, like any node.
@@ -122,8 +132,9 @@ within a region; e.g. `¬(x=y ∧ y=z)` normalizes to a single 3-port node
 is ordinary graph content, so the existing structural rules apply to it unchanged:
 insert an identity node into a **negative** region (assert an equality — this is
 how `x≠y` and the consequent of a uniqueness statement are built); erase an
-identity node from a **positive** region (discard an equality). No identity-
-specific rule is needed here.
+identity node from a **positive** region (discard an equality) in the forward
+direction. There is no backward-erasure insertion action: theorem replay rejects
+an erasure step when replaying backward. No identity-specific rule is needed here.
 
 **Rule 5 — substitution / congruence (equals for equals).** This is the one
 genuinely new inference rule. Where an identity node asserts `x=y` and holds in a

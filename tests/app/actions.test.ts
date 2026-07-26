@@ -95,24 +95,34 @@ describe('applicableActions', () => {
     expect(actions.every((action) => action.label.length > 0)).toBe(true)
   })
 
-  it('does not invent backward erasure in a physically negative region', () => {
+  it('does not offer forward-only erasure anywhere during backward work', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const ref = builder.ref(cut, 'UnaryWitness', UNARY)
+    const negativeRef = builder.ref(cut, 'UnaryWitness', UNARY)
+    const positiveRef = builder.ref(builder.root, 'UnaryWitness', UNARY)
     const diagram = builder.build()
-    const selection = mkSelection(diagram, {
-      region: cut,
-      regions: [],
-      nodes: [ref],
-      wires: [],
-    })
-    const actions = applicableActions(
-      diagram,
-      selection,
-      verifyTheory(tinyTheory()),
-      true,
-    )
-    expect(actions.map((action) => action.kind)).not.toContain('erase')
+    for (const selection of [
+      mkSelection(diagram, {
+        region: cut,
+        regions: [],
+        nodes: [negativeRef],
+        wires: [],
+      }),
+      mkSelection(diagram, {
+        region: diagram.root,
+        regions: [],
+        nodes: [positiveRef],
+        wires: [],
+      }),
+    ]) {
+      const actions = applicableActions(
+        diagram,
+        selection,
+        verifyTheory(tinyTheory()),
+        true,
+      )
+      expect(actions.map((action) => action.kind)).not.toContain('erase')
+    }
   })
 
   it('offers only Phase-1 actions for a generic selected cut', () => {
