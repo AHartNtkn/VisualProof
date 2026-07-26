@@ -1,9 +1,7 @@
 export type { Vec2 } from './vec'
 export { vec, add, sub, scale, length, polar } from './vec'
-export type { TrompGrid, Bar, Stem, Rail } from './tromp'
-export { trompGrid } from './tromp'
-export type { NodeGeometry, NodeArc, NodeRadial } from './bend'
-export { bendGrid, atomGeometry, refGeometry, bodyGeometry, GAP_ANGLE } from './bend'
+export type { NodeGeometry, NodeArc } from './bend'
+export { atomGeometry, refGeometry, identityGeometry } from './bend'
 export type { Body, BodyKind, Engine, Leg, LegEnd, RegionCircle } from './engine'
 export {
   mkEngine, worldAnchor, portNormal, pkey, nodeGeometry, anchorOf, ascaleOf, frameBounds, frameSlots,

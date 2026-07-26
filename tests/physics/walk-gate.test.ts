@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mkEngine } from '../../src/view/engine'
 import { LayoutOptimizer } from '../../src/view/optimize'
-import { bootFixture } from '../app/boot-fixture'
-import { mkReplay } from '../../src/app/replay'
+import { identityJunctionScene } from '../fixtures/zero-signature'
 
 /**
  * THE WALK-GATE STRICT-DESCENT CONTRACT (plan Task 8, USER limit-cycle repro).
@@ -19,17 +18,14 @@ import { mkReplay } from '../../src/app/replay'
  * OTHER wires' fixed segments) = ΔE_total restricted to w's coordinates — a strict
  * descent of the whole objective, so the cycle is impossible by construction.
  *
- * Repro: drive the LayoutOptimizer on zeroIsNat@17 from the raw seed. Before the
+ * Repro: drive the LayoutOptimizer on a junction-rich raw seed. Before the
  * fix it never leaves phase-0 descent (T stays 0); after it, the descent reaches
  * rest and the 16-probe calibration completes (T becomes nonzero).
  */
 
-const bootCtx = (await bootFixture()).ctx
-
 describe('walk gate is a strict descent of the FULL energy (plan Task 8)', () => {
   it('phase-0 descent reaches rest and enters calibration (no rod-vs-separation limit cycle)', () => {
-    const r = mkReplay('zeroIsNat', bootCtx)
-    const e = mkEngine(r.diagramAt(17), r.boundaryAt(17))
+    const e = mkEngine(identityJunctionScene(), [])
     const opt = new LayoutOptimizer(0xace4)
     opt.sync(e, null)
     expect(opt.temperature, 'starts in phase-0 descent').toBe(0)

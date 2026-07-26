@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine, recomputeRegions, legPaths, settle, computeLegs } from '../../src/view/index'
-import { buildFregeTheory } from '../../src/theories/frege'
 import { hitTest, dragTarget } from '../../src/app/hittest'
+import { unaryDefinition, UNARY } from '../fixtures/zero-signature'
 
-const p = (s: string) => parseTerm(s)
 const viewport = (scale = 1) => ({ scale })
 
 describe('settled hit targets', () => {
   it('a point on an ∃ dot grabs its homed body (clicks resolve it to the wire, drags do not)', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('\\x. x'))
-    const w = h.wire(h.root, [{ node: a, port: { kind: 'output' } }])
+    const a = h.ref(h.root, 'Unary', UNARY)
+    const w = h.wire(h.root, [{ node: a, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
     const j = e.bodies.get(e.wires.get(w)!.endBodyId!)!
@@ -22,13 +20,13 @@ describe('settled hit targets', () => {
 
   it('a click on a branch junction resolves to its wire — hit-tested on the DRAWN tributary curves', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('x'))
-    const b = h.termNode(h.root, p('x'))
-    const c = h.termNode(h.root, p('x'))
+    const a = h.ref(h.root, 'A', UNARY)
+    const b = h.ref(h.root, 'B', UNARY)
+    const c = h.ref(h.root, 'C', UNARY)
     const w = h.wire(h.root, [
-      { node: a, port: { kind: 'freeVar', name: 'x' } },
-      { node: b, port: { kind: 'freeVar', name: 'x' } },
-      { node: c, port: { kind: 'freeVar', name: 'x' } },
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: b, port: { kind: 'arg', index: 0 } },
+      { node: c, port: { kind: 'arg', index: 0 } },
     ])
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
@@ -41,7 +39,7 @@ describe('settled hit targets', () => {
   })
 
   it('a click on a boundary wire (its leg near the frame slot) resolves to that wire', () => {
-    const nat = new Map(buildFregeTheory().relations).get('nat')!
+    const nat = unaryDefinition()
     const e = mkEngine(nat.diagram, nat.boundary)
     settle(e, 1200)
     const wid = nat.boundary[0]!

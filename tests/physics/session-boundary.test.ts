@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { buildFregeTheory } from '../../src/theories/frege'
-import { verifyTheory } from '../../src/kernel/proof/store'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { startSession, sideBoundary, currentSide } from '../../src/app/session'
 import { mkEngine, settle, frameBounds, frameSlots, computeLegs } from '../../src/view/index'
+import { unaryDefinition } from '../fixtures/zero-signature'
 
 describe('sideBoundary — prove-mode sides render their statement boundary', () => {
   it('an engine built for a side connects every boundary wire to a fixed frame slot (plan 24)', () => {
-    const theory = buildFregeTheory()
-    const ctx = verifyTheory(theory)
-    const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
-    const s = startSession(plusComm.lhs, plusComm.rhs, ctx)
+    const lhs = unaryDefinition()
+    const rhs = unaryDefinition()
+    const s = startSession(lhs, rhs, EMPTY_PROOF_CONTEXT)
     const boundary = sideBoundary(s, 'backward')
     expect(boundary.length).toBeGreaterThan(0)
     const e = mkEngine(currentSide(s, 'backward'), boundary)

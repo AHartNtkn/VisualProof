@@ -4,8 +4,7 @@ import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
-import { bendGrid, atomGeometry, refGeometry, bodyGeometry } from './bend'
-import { trompGrid } from './tromp'
+import { atomGeometry, identityGeometry, refGeometry } from './bend'
 import type { Disc } from './route/freespace'
 import type { CurveBC } from './route/curve'
 import type { WireNet } from './route/network'
@@ -39,7 +38,7 @@ export const FRAME_MARGIN = 6
     visible frame line exactly. */
 export const FRAME_CORNER_W = 8
 
-export type BodyKind = 'term' | 'ref' | 'atom' | 'body' | 'end' | 'anchor'
+export type BodyKind = 'ref' | 'atom' | 'identity' | 'end' | 'anchor'
 
 export type Body = {
   readonly id: string
@@ -137,41 +136,36 @@ export type Engine = {
 /** The fixed proof frame: centre + half-extent of a near-square rounded box. */
 export type StoredFrame = { readonly center: Vec2; readonly half: number }
 
-/** Local anatomy scale per node kind — atoms and terms are drawn larger so
-    their structure is legible against the wire rhythm. */
+/** Local anatomy scale per node kind. */
 export function ascaleOf(kind: BodyKind): number {
-  return kind === 'atom' ? 2.0 : kind === 'term' || kind === 'body' ? 1.4 : 1
+  return kind === 'atom' ? 2 : kind === 'identity' ? 1.4 : 1
 }
 
 export function pkey(p: Port): string {
   return portKey(p)
 }
 
-/** The geometry of a diagram node: bent Tromp grid for terms, disc for atoms,
-    named disc for refs. Moved here from the deleted scene layer. */
+/** Exact local geometry for one atom, ref, or identity node. */
 export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
   const n = d.nodes[id]
   if (n === undefined) throw new Error(`unknown node '${id}'`)
   switch (n.kind) {
-    case 'term':
-      return bendGrid(trompGrid(n.term))
     case 'atom':
       return atomGeometry(n.sig.args.length)
     case 'ref':
       return refGeometry(n.sig.args.length)
-    case 'body':
-      return bodyGeometry(n.content.boundary.length - n.sig.args.length)
+    case 'identity':
+      return identityGeometry(n.arity)
   }
 }
 
 /** World-space anchor of (geometry, centre, port). */
 export function anchorOf(geometry: NodeGeometry, center: Vec2, port: Port): Vec2 {
-  if (port.kind === 'output') return add(center, geometry.outputAnchor)
   if (port.kind === 'head') {
     if (geometry.headAnchor === null) throw new Error('geometry has no head anchor for a head port')
     return add(center, geometry.headAnchor)
   }
-  const key = port.kind === 'freeVar' ? port.name : `a${port.index}`
+  const key = portKey(port)
   const local = geometry.portAnchors[key]
   if (local === undefined) throw new Error(`geometry has no anchor for port '${portKey(port)}'`)
   return add(center, local)
@@ -404,11 +398,9 @@ export function worldAnchor(e: Engine, b: Body, key: string | null): Vec2 {
     `discR` is the padded CLEARANCE disc, not the drawing — attaching there floats
     the wire a pad-width off the rendered rim (USER report: floating attachments).
 
-    A ref discards its anatomy for a readable labelled disc drawn at DISC_R, so
-    its wire meets that drawn rim at DISC_R along the port direction. An atom's
-    ports sit on its rail rim and a term's ports sit on its drawn anatomy, so the
-    wire meets that point directly — the port anchor is already on the drawing
-    (ascale folded in). */
+    A ref uses a readable labelled disc drawn at DISC_R, so its wire meets that
+    drawn rim at DISC_R along the port direction. Atom and identity ports sit
+    on their rail rims, so their anchors already lie on the drawing. */
 export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
   const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
@@ -517,11 +509,11 @@ export function routeBounds(e: Engine): { minX: number; maxX: number; minY: numb
   return { minX: fb.minX, maxX: fb.maxX, minY: fb.minY, maxY: fb.maxY }
 }
 
-/** The inflated hard-obstacle discs for wire routing (ref/term/atom bodies). */
+/** The inflated hard-obstacle discs for wire routing. */
 export function routeObstacles(e: Engine): Disc[] {
   const out: Disc[] = []
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'term' && b.kind !== 'atom') continue
+    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'identity') continue
     out.push({ c: b.pos, r: (b.discR + ROUTE_CLEAR) * e.scale })
   }
   return out

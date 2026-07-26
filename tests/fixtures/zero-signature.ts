@@ -33,6 +33,69 @@ export function identityInCut(): Diagram {
   return builder.build()
 }
 
+/** A retained high-valence identity connected to named unary refs across a cut.
+ * The inherited root-scoped wires make the identity conditional, so canonical
+ * normalization preserves it for view and physics fixtures. */
+export function identityRefScene(): Diagram {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const identity = builder.identity(cut, IOTA, 4)
+  for (let index = 0; index < 4; index++) {
+    const ref = builder.ref(builder.root, `R${index}`, UNARY)
+    builder.wire(builder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+      { node: identity, port: { kind: 'identity', index } },
+    ])
+  }
+  return builder.build()
+}
+
+/** A deterministic scene with both a high-degree wire junction and a retained
+ * high-valence identity. It replaces theory-replay snapshots in physics tests. */
+export function identityJunctionScene(): Diagram {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const identity = builder.identity(cut, IOTA, 4)
+  const refs = Array.from(
+    { length: 6 },
+    (_, index) => builder.ref(builder.root, `J${index}`, UNARY),
+  )
+  builder.wire(builder.root, [
+    ...refs.slice(0, 3).map((node) => ({
+      node,
+      port: { kind: 'arg' as const, index: 0 },
+    })),
+    { node: identity, port: { kind: 'identity', index: 0 } },
+  ])
+  for (let index = 1; index < 4; index++) {
+    builder.wire(builder.root, [
+      { node: refs[index + 2]!, port: { kind: 'arg', index: 0 } },
+      { node: identity, port: { kind: 'identity', index } },
+    ])
+  }
+  return builder.build()
+}
+
+export function commutedBoundaryRefs(): {
+  readonly lhs: DiagramWithBoundary
+  readonly rhs: DiagramWithBoundary
+} {
+  const ternary = relSig([IOTA, IOTA, IOTA])
+  const side = (argumentAtBoundary: readonly number[]): DiagramWithBoundary => {
+    const builder = new DiagramBuilder()
+    const ref = builder.ref(builder.root, 'Ternary', ternary)
+    const boundary = argumentAtBoundary.map((index) =>
+      builder.wire(builder.root, [
+        { node: ref, port: { kind: 'arg', index } },
+      ]))
+    return mkDiagramWithBoundary(builder.build(), boundary)
+  }
+  return {
+    lhs: side([1, 0, 2]),
+    rhs: side([0, 1, 2]),
+  }
+}
+
 export function tinyTheory(): Theory {
   const relation = unaryDefinition()
   const empty = mkDiagramWithBoundary(new DiagramBuilder().build(), [])

@@ -3,11 +3,8 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkEngine } from '../../src/view/engine'
 import { recomputeRegions, resolveOverlaps, establishFrame, settleStep, wireEnergy, contentEnergy } from '../../src/view/relax'
-import { bootFixture } from '../app/boot-fixture'
-import { mkReplay } from '../../src/app/replay'
 import { LayoutOptimizer, applyLayoutSnapshot } from '../../src/view/optimize'
-
-const bootCtx = (await bootFixture()).ctx
+import { identityJunctionScene } from '../fixtures/zero-signature'
 
 /**
  * REST QUALITY (plan Task 9, USER: "whatever it stops at shouldn't be obviously
@@ -106,9 +103,8 @@ function junctionSweep(e: ReturnType<typeof mkEngine>): { restWire: number; best
 }
 
 describe('rest quality — the search crosses the junction cusp (plan Task 10)', () => {
-  it("the annealer's best on zeroIsNat@17 crosses the cusp and admits no macroscopic junction improvement", () => {
-    const r = mkReplay('zeroIsNat', bootCtx)
-    const e = mkEngine(r.diagramAt(17), r.boundaryAt(17))
+  it("the annealer's best on the identity junction scene admits no macroscopic junction improvement", () => {
+    const e = mkEngine(identityJunctionScene(), [])
     recomputeRegions(e); resolveOverlaps(e); recomputeRegions(e)
     for (let k = 0; k < 200; k++) if (!settleStep(e)) break
 
@@ -127,7 +123,7 @@ describe('rest quality — the search crosses the junction cusp (plan Task 10)',
     for (let k = 0; k < 30; k++) opt.tick(null, 0)
     const best = opt.best()!
 
-    const probe = mkEngine(r.diagramAt(17), r.boundaryAt(17))
+    const probe = mkEngine(identityJunctionScene(), [])
     applyLayoutSnapshot(probe, best)
     const bestWire = (recomputeRegions(probe), wireEnergy(probe))
 

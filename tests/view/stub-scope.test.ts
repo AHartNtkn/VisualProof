@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import { existentialStubs } from '../../src/view/wires'
-
-const p = (s: string) => parseTerm(s)
+import { UNARY } from '../fixtures/zero-signature'
 
 /**
  * The ∃ dot marks WHERE the individual is quantified — the wire's SCOPE
@@ -18,8 +16,8 @@ describe('existential stubs honor wire scope', () => {
     const b = new DiagramBuilder()
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
-    const n = b.termNode(c2, p('\\x. x'))
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }]) // scoped at ROOT
+    const n = b.ref(c2, 'Buried', UNARY)
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     return { d: b.build(), n, w, c1, c2 }
   }
 
@@ -37,13 +35,11 @@ describe('existential stubs honor wire scope', () => {
 
   it('a same-region 2-endpoint wire stays a direct leg (no via body)', () => {
     const b = new DiagramBuilder()
-    const pn = b.termNode(b.root, p('p'))
-    const qn = b.termNode(b.root, p('q'))
-    b.wire(b.root, [{ node: pn, port: { kind: 'output' } }])
-    b.wire(b.root, [{ node: qn, port: { kind: 'output' } }])
+    const pn = b.ref(b.root, 'P', UNARY)
+    const qn = b.ref(b.root, 'Q', UNARY)
     const w = b.wire(b.root, [
-      { node: pn, port: { kind: 'freeVar', name: 'p' } },
-      { node: qn, port: { kind: 'freeVar', name: 'q' } },
+      { node: pn, port: { kind: 'arg', index: 0 } },
+      { node: qn, port: { kind: 'arg', index: 0 } },
     ])
     const e = mkEngine(b.build(), [])
     expect(e.bodies.get(`j:${w}`)).toBeUndefined()
@@ -55,8 +51,8 @@ describe('existential stubs honor wire scope', () => {
 
   it('a same-region singleton ALSO carries its loose end as its own body (USER LAW: dangling ends are nodes)', () => {
     const b = new DiagramBuilder()
-    const n = b.termNode(b.root, p('\\x. x'))
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    const n = b.ref(b.root, 'Unary', UNARY)
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     const d = b.build()
     const e = mkEngine(d, [])
     const loose = e.bodies.get(`j:${w}`)
@@ -72,8 +68,7 @@ describe('zero-endpoint wires (a bare ∃) render as a lone dot', () => {
     // erasing a node can legally leave its wire with no endpoints: the bare
     // assertion that an individual exists — it must render, not crash
     const b = new DiagramBuilder()
-    const n = b.termNode(b.root, p('\\x. x'))
-    b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    b.ref(b.root, 'Unary', UNARY)
     const w = b.wire(b.root, [])
     const d = b.build()
     const e = mkEngine(d, [])

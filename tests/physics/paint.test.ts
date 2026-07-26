@@ -1,24 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
-import { buildFregeTheory } from '../../src/theories/frege'
-import { buildLambdaTheory } from '../../src/theories/lambda'
-import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, relationWireHues, highlightGroup, LIGHT, DARK } from '../../src/view/paint'
 import { computeLegs } from '../../src/view/wires'
+import {
+  identityInCut,
+  identityJunctionScene,
+  identityRefScene,
+  unaryDefinition,
+  UNARY,
+} from '../fixtures/zero-signature'
 
-const p = (s: string) => parseTerm(s)
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
-describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
-  it('emits exactly one label per ref, at the ref disc, and none over term anatomy', () => {
+describe('labels belong only to ref-node discs', () => {
+  it('emits exactly one label per ref and none over atom geometry', () => {
     const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\n. n')) // pure λ anatomy — no text of any kind
-    h.ref(h.root, 'Nat', rel(1)) // one ref disc
+    const atom = h.atom(h.root, UNARY)
+    const ref = h.ref(h.root, 'Nat', UNARY)
+    h.wire(h.root, [
+      { node: atom, port: { kind: 'arg', index: 0 } },
+      { node: ref, port: { kind: 'arg', index: 0 } },
+    ])
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
@@ -26,16 +32,16 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
     const labels = shapes.filter((s) => s.kind === 'label')
     expect(labels).toHaveLength(1)
     expect(labels[0]!.kind === 'label' && labels[0]!.text).toBe('Nat')
-    // term anatomy is present (arcs) yet carries zero text
+    // Atom geometry is present yet carries no text.
     expect(shapes.some((s) => s.kind === 'arc')).toBe(true)
   })
 
-  it('across both theories: every label sits on a ref-node disc; term anatomy emits no text and no disc', () => {
-    const sides: DiagramWithBoundary[] = []
-    for (const theory of [buildFregeTheory(), buildLambdaTheory()]) {
-      for (const [, relation] of theory.relations) sides.push(relation)
-      for (const thm of theory.theorems) { sides.push(thm.lhs); sides.push(thm.rhs) }
-    }
+  it('across zero-signature fixtures every label and named disc sits on a ref', () => {
+    const sides = [
+      unaryDefinition(),
+      { diagram: identityRefScene(), boundary: [] },
+      { diagram: identityInCut(), boundary: [] },
+    ]
     for (const side of sides) {
       const e = mkEngine(side.diagram, side.boundary)
       settle(e, 200)
@@ -52,8 +58,7 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
         const onRef = refPositions.some((pos) => Math.hypot(pos.x - l.center.x, pos.y - l.center.y) < 1e-9)
         expect(onRef, `label '${l.text}' is not on a ref disc`).toBe(true)
       }
-      // named discs (circles filled with the disc fill) are emitted only for
-      // refs — a satellite would attach one to term anatomy off a ref centre
+      // Named discs are emitted only for refs.
       const discs = shapes.filter((s) => s.kind === 'circle' && s.fill === LIGHT.discFill)
       expect(discs).toHaveLength(refPositions.length)
       for (const disc of discs) {
@@ -81,10 +86,10 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
 
 })
 
-describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, internal singletons get an exists-stub', () => {
-  it('a lone internal identity gets one exists-stub and nothing at the frame', () => {
+describe('boundary honesty: boundary wires connect inside the frame and internal singletons get an exists-stub', () => {
+  it('a lone internal ref argument gets one exists-stub and nothing at the frame', () => {
     const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x')) // its output is an internal singleton wire
+    h.ref(h.root, 'Unary', UNARY)
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
@@ -93,7 +98,7 @@ describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, i
   })
 
   it("a bundled side's boundary wires each reach a slot on the INSIDE of the frame — no shape outside it", () => {
-    const nat = new Map(buildFregeTheory().relations).get('nat')!
+    const nat = unaryDefinition()
     const e = mkEngine(nat.diagram, nat.boundary)
     settle(e, 1200)
     expect(nat.boundary.length).toBeGreaterThan(0)
@@ -131,10 +136,10 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
 
   it('two attached boundary wires: exactly one prominent origin at slot 0', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('x'))
-    const b = h.termNode(h.root, p('y'))
-    const w1 = h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'x' } }])
-    const w2 = h.wire(h.root, [{ node: b, port: { kind: 'freeVar', name: 'y' } }])
+    const a = h.ref(h.root, 'A', UNARY)
+    const b = h.ref(h.root, 'B', UNARY)
+    const w1 = h.wire(h.root, [{ node: a, port: { kind: 'arg', index: 0 } }])
+    const w2 = h.wire(h.root, [{ node: b, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [w1, w2])
     settle(e, 800)
     const shapes = paint(e, LIGHT)
@@ -149,8 +154,8 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
 
   it('one boundary wire: port 0 still carries the prominent origin', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('x'))
-    const w1 = h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'x' } }])
+    const a = h.ref(h.root, 'A', UNARY)
+    const w1 = h.wire(h.root, [{ node: a, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [w1])
     settle(e, 800)
     const shapes = paint(e, LIGHT)
@@ -162,7 +167,7 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
 
   it('no boundary wires: no pip', () => {
     const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x'))
+    h.ref(h.root, 'Unary', UNARY)
     const e = mkEngine(h.build(), [])
     settle(e, 400)
     const shapes = paint(e, LIGHT)
@@ -172,17 +177,9 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
   })
 })
 
-describe('law 5 — linework coherence: wires and lambda-anatomy share stroke and width', () => {
-  it('every wire polyline and every term-anatomy arc uses theme.wire at theme.wireW', () => {
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('\\f. \\x. f (f x)'))
-    const b = h.termNode(h.root, p('y'))
-    h.wire(h.root, [
-      { node: a, port: { kind: 'output' } },
-      { node: b, port: { kind: 'freeVar', name: 'y' } },
-    ])
-    const d = h.build()
-    const e = mkEngine(d, [])
+describe('linework coherence: individual wires and identity rails share stroke ownership', () => {
+  it('every individual wire path and identity rail uses theme.wire at theme.wireW', () => {
+    const e = mkEngine(identityJunctionScene(), [])
     settle(e, 600)
     const shapes = paint(e, LIGHT)
     // a wire leg IS its traced Hobby-chain samples
@@ -193,7 +190,7 @@ describe('law 5 — linework coherence: wires and lambda-anatomy share stroke an
       expect(s.stroke).toBe(LIGHT.wire)
       expect(s.width).toBe(LIGHT.wireW)
     }
-    // no atoms here, so ALL anatomy arcs must be the shared linework
+    // No atoms are present, so every rail is neutral shared linework.
     const arcs = shapes.filter((s) => s.kind === 'arc')
     expect(arcs.length).toBeGreaterThan(0)
     for (const s of arcs) {
@@ -230,18 +227,18 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
   })
 
   it('order 0/1/2 wires map to three distinct ladder entries (colours-as-sort)', () => {
-    // A term wire (order 0), an order-1 relation wire, and an order-2 relation
+    // An individual wire (order 0), an order-1 relation wire, and an order-2 relation
     // wire (a relation taking a relation argument): three distinct rungs.
     const h = new DiagramBuilder()
-    const t = h.termNode(h.root, p('x'))
-    const w0 = h.wire(h.root, [{ node: t, port: { kind: 'freeVar', name: 'x' } }]) // order 0 (term)
+    const individual = h.ref(h.root, 'Individual', UNARY)
+    const w0 = h.wire(h.root, [{ node: individual, port: { kind: 'arg', index: 0 } }])
     const a1 = h.atom(h.root, rel(1))
     const w1 = h.wire(h.root, [{ node: a1, port: { kind: 'head' } }], rel(1)) // order 1
     const a2 = h.atom(h.root, relSig([rel(1)]))
     const w2 = h.wire(h.root, [{ node: a2, port: { kind: 'head' } }], relSig([rel(1)])) // order 2
     const d = h.build()
     const hues = relationWireHues(d, LIGHT.relationHueLightness)
-    // term wire is NOT in the ladder map: it keeps the base wire colour (rung 0)
+    // Individual wire is not in the ladder map: it keeps the base colour.
     expect(hues.get(w0)).toBeUndefined()
     const c0 = hues.get(w0) ?? LIGHT.wire
     const c1 = hues.get(w1)!
@@ -271,11 +268,11 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
 describe('theme toggle', () => {
   it('toggling changes the emitted wire styles (colour + glow)', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('\\x. x'))
-    const b = h.termNode(h.root, p('y'))
+    const a = h.ref(h.root, 'A', UNARY)
+    const b = h.ref(h.root, 'B', UNARY)
     h.wire(h.root, [
-      { node: a, port: { kind: 'output' } },
-      { node: b, port: { kind: 'freeVar', name: 'y' } },
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: b, port: { kind: 'arg', index: 0 } },
     ])
     const e = mkEngine(h.build(), [])
     settle(e, 400)
@@ -337,7 +334,6 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
   // zoom and never painted for refs at all. The pip is a device-pixel DOT
   // (junction-dot family) on the drawn rim at port a0's angle, rotating with
   // the body; ports read clockwise from it.
-  const p2 = (s: string) => parseTerm(s)
   const build = (arity: number) => {
     const h = new DiagramBuilder()
     const ref = h.ref(h.root, 'rel', rel(arity))
@@ -370,7 +366,6 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
   it('an atom on an arity-2 relation wire carries a pip in its own stroke', () => {
     const h = new DiagramBuilder()
     const a = h.atom(h.root, rel(2)) // head + both arg ports auto-wire
-    void p2
     const e = mkEngine(h.build(), [])
     settle(e, 200)
     const b = e.bodies.get(a)!

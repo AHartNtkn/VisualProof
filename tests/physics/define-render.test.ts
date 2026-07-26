@@ -1,28 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
-import { applyFold } from '../../src/kernel/rules/fold'
-import { defineRelation } from '../../src/app/define'
 import { mkEngine, settle, paint, LIGHT, DISC_R } from '../../src/view/index'
-import { sheetBody, emptyCtx } from '../app/relationFixture'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 
-const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
-  const found = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref')
-  if (found === undefined) throw new Error('no ref node in the folded diagram')
-  return found[0]
-}
-
-describe('defineRelation — the defined relation renders its argument-order pip', () => {
-  it('a ref to the defined ARITY-2 relation draws exactly one pip on its rim', () => {
-    const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
-    const relations = new Map([['R', relation]])
-    const folded = applyFold(d, sel, [wY, wZ], { defId: 'R', sig: rel(2), resolve: (id) => relations.get(id) })
-    const ref = refNodeOf(folded)
-    const e = mkEngine(folded, [])
+describe('reference argument-order rendering', () => {
+  it('an arity-2 ref draws exactly one pip on its rim', () => {
+    const builder = new DiagramBuilder()
+    const ref = builder.ref(builder.root, 'R', rel(2))
+    const diagram = builder.build()
+    const e = mkEngine(diagram, [])
     settle(e, 400)
     const shapes = paint(e, LIGHT)
     const label = shapes.find((s) => s.kind === 'label' && s.text === 'R')!
@@ -33,7 +22,7 @@ describe('defineRelation — the defined relation renders its argument-order pip
     const pip = inkDots[0]!
     const dist = pip.kind === 'dot' ? Math.hypot(pip.center.x - c.x, pip.center.y - c.y) : 0
     expect(dist).toBeCloseTo(DISC_R, 5)
-    expect(folded.nodes[ref]).toMatchObject({ kind: 'ref', defId: 'R', sig: rel(2) })
+    expect(diagram.nodes[ref]).toMatchObject({ kind: 'ref', defId: 'R', sig: rel(2) })
   })
 
   it('a ref to an ARITY-1 relation draws no pip (a single leg needs no order mark)', () => {

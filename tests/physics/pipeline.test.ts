@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { relSig } from '../../src/kernel/diagram/sig'
 import { applyDoubleCutIntro } from '../../src/kernel/rules/doublecut'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
-
-const p = (s: string) => parseTerm(s)
+import { identityRefScene } from '../fixtures/zero-signature'
 
 /** Every numeric field of a shape must be finite (NaN would blow up the canvas). */
 function assertFinite(value: unknown): void {
@@ -17,7 +16,7 @@ function assertFinite(value: unknown): void {
 describe('the full pipeline tracks kernel edits', () => {
   it('paints before and after a rule application without carrying any layout across', () => {
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('\\x. x'))
+    const n = h.ref(h.root, 'Sentence', relSig([]))
     const d1 = h.build()
     const e1 = mkEngine(d1, [])
     settle(e1, 800)
@@ -28,7 +27,10 @@ describe('the full pipeline tracks kernel edits', () => {
     // fresh engine for the edited diagram — layout is never persisted
     const e2 = mkEngine(d2, [])
     settle(e2, 800)
-    const cutCircles = paint(e2, LIGHT).filter((s) => s.kind === 'circle' && s.stroke === LIGHT.ink)
+    const cutCircles = paint(e2, LIGHT).filter((s) =>
+      s.kind === 'circle'
+      && s.stroke === LIGHT.ink
+      && s.insetColor === LIGHT.insetColor)
     expect(cutCircles).toHaveLength(2) // the two new cuts
     const fills = cutCircles.map((c) => (c.kind === 'circle' ? c.fill : null))
     // outer cut is negative (shade fill), inner cut is positive (paper fill)
@@ -36,11 +38,8 @@ describe('the full pipeline tracks kernel edits', () => {
     expect(fills.filter((f) => f === LIGHT.paper)).toHaveLength(1)
   })
 
-  it('shapes contain no NaN under extreme aspect terms', () => {
-    const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\a. \\b. \\c. \\d. \\e. a (b (c (d e)))'))
-    const d = h.build()
-    const e = mkEngine(d, [])
+  it('shapes contain no NaN for a high-valence identity/ref scene', () => {
+    const e = mkEngine(identityRefScene(), [])
     settle(e, 800)
     for (const shape of paint(e, LIGHT)) assertFinite(shape)
   })

@@ -3,7 +3,7 @@ import { sigOrder } from '../kernel/diagram/sig'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
-import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld, resolvedFrameSlot } from './engine'
+import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, resolvedFrameSlot } from './engine'
 import { existentialStubs, legPaths } from './wires'
 
 /**
@@ -14,12 +14,10 @@ import { existentialStubs, legPaths } from './wires'
  * relational wires glowing in their order-ladder hue like their atoms).
  *
  * Laws enforced by construction and checked in paint.test.ts: text appears
- * ONLY on named discs (law 2); boundary wires exit the frame while internal
- * singletons get an ∃ stub (law 3); wires and λ-anatomy share one stroke and
- * width from the theme (law 5); a wire's colour codes the ORDER of its
- * signature (term wires the base wire colour, order-1 relations the next
- * ladder hue, order-2 the next, …) and an atom strokes in its head wire's
- * rung, with Dark glowing both (law 6).
+ * ONLY on named refs; boundary wires exit the frame while internal singletons
+ * get an ∃ stub; semantic-node rails share one theme-owned stroke and width;
+ * a relational wire's colour codes the order of its signature and an atom
+ * strokes in its head wire's rung.
  */
 
 export type Theme = {
@@ -91,8 +89,8 @@ export function referenceDisplayLabel(defId: string): string {
  * The order ladder: every relational wire is coloured by the ORDER (depth) of
  * its signature — the canonical colours-as-sort code (law 6), replacing the old
  * colours-as-names per-bubble hue. Order 1 is violet; each further order
- * steps one golden angle. Term wires (order 0) are absent from the map: they
- * keep the theme's base wire colour (ladder rung 0), so the caller reads
+ * steps one golden angle. Individual wires are absent from the map and keep
+ * the theme's base wire colour, so the caller reads
  * `hues.get(wid) ?? st.wire`. This is the single ladder authority — the app
  * (spawn option colours, proof-front hover) imports it from here.
  */
@@ -116,22 +114,12 @@ function atomHeadWires(d: Diagram): Map<NodeId, WireId> {
   return out
 }
 
-/** The disc/port outline of a body (arcs + radials) in one stroke/width/glow.
-    Shared by the base paint and the hover-group highlight; the term-only
-    output run is added by the caller. */
+/** The semantic-node rail outline in one stroke/width/glow. */
 function anatomyOutline(e: Engine, b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
   const ascale = ascaleOf(b.kind) * e.scale
   const out: Shape[] = []
   for (const a of g.arcs) {
     out.push({ kind: 'arc', center: b.pos, r: a.r * ascale, a0: a.a0 + b.theta, a1: a.a1 + b.theta, stroke, width, glow })
-  }
-  for (const r of g.radials) {
-    out.push({
-      kind: 'segment',
-      from: localToWorld(e, b, { x: Math.cos(r.angle) * r.r0, y: Math.sin(r.angle) * r.r0 }),
-      to: localToWorld(e, b, { x: Math.cos(r.angle) * r.r1, y: Math.sin(r.angle) * r.r1 }),
-      stroke, width, glow,
-    })
   }
   return out
 }
@@ -156,8 +144,8 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
   const hues = relationWireHues(e.d, st.relationHueLightness)
-  // A wire strokes in its order-ladder rung; a term wire keeps the base wire
-  // colour (rung 0). One colour, uniform along the whole wire (law 6).
+  // A relational wire strokes in its order-ladder rung; an individual wire
+  // keeps the base colour. One colour is uniform along the whole wire.
   const wireStroke = (wid: WireId): string => hues.get(wid) ?? st.wire
   const shapes: Shape[] = []
   // ≥3-leg interior junctions draw as a soap-film Steiner tree with tangential
@@ -229,17 +217,13 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
 
   for (const s of wires(e, st)) shapes.push(s) // no spread: big diagrams overflow the arg stack
 
-  // The port-order pip: nodes with two or more ORDERED ports (refs/atoms by
-  // their signature arity, bodies by their parameter count) get a filled dot on
-  // their rim at port a0/p0's angle; ports read clockwise from it (canvas
-  // y-down). Device-pixel sized like junction dots so it survives every zoom,
-  // drawn in the node's own stroke, rotating with the body. Without it a
-  // featureless rotating disc gives no way to tell which leg is which.
+  // Atom/ref argument positions are ordered by their relation signatures, so a
+  // two-or-more-argument node gets a rim pip at a:0. Identity anchors are
+  // unordered and deliberately never receive this marker.
   const pipArity = (b: Body): number => {
     const node = b.node
     if (node === null) return 0
     if (node.kind === 'ref' || node.kind === 'atom') return node.sig.args.length
-    if (node.kind === 'body') return node.content.boundary.length - node.sig.args.length
     return 0
   }
   const pipAt = (b: Body, rimR: number, fill: string): Shape => {
@@ -247,8 +231,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     return { kind: 'dot', center: { x: b.pos.x + c * rimR, y: b.pos.y + s * rimR }, rPx: PIP_R, fill }
   }
 
-  // node bodies: anatomy (shared linework / order-ladder atoms) + named discs +
-  // sealed comprehension bodies
+  // Semantic node bodies: shared-linework atoms/identities plus named refs.
   for (const b of e.bodies.values()) {
     if (b.kind === 'end' || b.kind === 'anchor') continue
     const node = b.node!
@@ -261,23 +244,13 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     }
     const g = b.geometry!
     const ascale = ascaleOf(b.kind) * e.scale
-    // an atom strokes in its head wire's order-ladder rung (colours-as-sort); a
-    // body is a sealed disc in the shared linework; terms are shared linework.
+    // An atom strokes in its head wire's order-ladder rung; identity stays
+    // neutral shared linework.
     const atomHue = node.kind === 'atom' ? (hues.get(headWireOf.get(b.id) ?? '') ?? st.wire) : null
     const stroke = atomHue ?? st.wire
     shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(stroke)))
-    if ((node.kind === 'atom' || node.kind === 'body') && pipArity(b) >= 2) {
+    if (node.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
-    }
-    if (node.kind === 'term') {
-      // the term output run stays monochrome linework (term-internal anatomy
-      // never carries a relation-wire hue — law 8)
-      if (g.exitArc !== null) {
-        shapes.push({ kind: 'arc', center: b.pos, r: g.exitArc.r * ascale, a0: g.exitArc.a0 + b.theta, a1: g.exitArc.a1 + b.theta, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
-      }
-      if (g.exitLine !== null) {
-        shapes.push({ kind: 'segment', from: localToWorld(e, b, g.exitLine[0]), to: localToWorld(e, b, g.exitLine[1]), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
-      }
     }
   }
 

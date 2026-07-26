@@ -5,8 +5,7 @@ import {
   recomputeRegions, resolveOverlaps, establishFrame, segSeparationE, wireEnergyCapture, WIREP,
 } from '../../src/view/relax'
 import type { WireSeg } from '../../src/view/relax'
-import { bootFixture } from '../app/boot-fixture'
-import { mkReplay } from '../../src/app/replay'
+import { identityJunctionScene, identityRefScene } from '../fixtures/zero-signature'
 
 /**
  * EXACTNESS OF THE SPATIAL-HASH separation (plan Task 8a). `segSeparationE` is now
@@ -14,8 +13,6 @@ import { mkReplay } from '../../src/app/replay'
  * float exactness. The all-pairs reference (kernel + loop) is INLINED here — it is
  * the oracle, not kept in src.
  */
-
-const bootCtx = (await bootFixture()).ctx
 
 /** The exact per-pair kernel (copy of relax.segPairSepE — the oracle). */
 function refPairE(A: WireSeg, B: WireSeg, R: number): number {
@@ -57,9 +54,9 @@ function mkRng(seed: number): () => number {
   return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296 }
 }
 
-function replayEngine(name: string, at: number): Engine {
-  const r = mkReplay(name, bootCtx)
-  const e = mkEngine(r.diagramAt(at), r.boundaryAt(at))
+function fixtureEngine(name: 'identity-ref' | 'identity-junction'): Engine {
+  const diagram = name === 'identity-ref' ? identityRefScene() : identityJunctionScene()
+  const e = mkEngine(diagram, [])
   recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
   return e
 }
@@ -92,10 +89,13 @@ describe('spatial-hash segSeparationE equals all-pairs (plan Task 8a)', () => {
     }
   })
 
-  it('real fixture states — settled + 50 seeded perturbations (plusComm@20, succShiftS@48)', () => {
-    for (const [name, at] of [['plusComm', 20], ['succShiftS', 48]] as const) {
-      const e = replayEngine(name, at)
-      const rng = mkRng(0xc0ffee ^ at)
+  it('zero-signature fixture states plus 50 seeded perturbations', () => {
+    for (const [name, seed] of [
+      ['identity-ref', 20],
+      ['identity-junction', 48],
+    ] as const) {
+      const e = fixtureEngine(name)
+      const rng = mkRng(0xc0ffee ^ seed)
       for (let variant = 0; variant <= 50; variant++) {
         if (variant > 0) {
           // perturb every body a little, then re-measure

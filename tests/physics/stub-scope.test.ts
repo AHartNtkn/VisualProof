@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import { settle, recomputeRegions } from '../../src/view/relax'
 import { existentialStubs } from '../../src/view/wires'
-
-const p = (s: string) => parseTerm(s)
+import { UNARY } from '../fixtures/zero-signature'
 
 describe('existential stubs honor wire scope after settling', () => {
   const build = () => {
     const b = new DiagramBuilder()
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
-    const n = b.termNode(c2, p('\\x. x'))
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    const n = b.ref(c2, 'Buried', UNARY)
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     return { d: b.build(), w, c1 }
   }
 
@@ -33,13 +31,11 @@ describe('existential stubs honor wire scope after settling', () => {
     const b = new DiagramBuilder()
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
-    const pn = b.termNode(c2, p('p'))
-    const qn = b.termNode(c2, p('q'))
-    b.wire(c2, [{ node: pn, port: { kind: 'output' } }])
-    b.wire(c2, [{ node: qn, port: { kind: 'output' } }])
+    const pn = b.ref(c2, 'P', UNARY)
+    const qn = b.ref(c2, 'Q', UNARY)
     const w = b.wire(c1, [
-      { node: pn, port: { kind: 'freeVar', name: 'p' } },
-      { node: qn, port: { kind: 'freeVar', name: 'q' } },
+      { node: pn, port: { kind: 'arg', index: 0 } },
+      { node: qn, port: { kind: 'arg', index: 0 } },
     ])
     const d = b.build()
     const e = mkEngine(d, [])

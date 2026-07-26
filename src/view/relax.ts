@@ -835,7 +835,12 @@ export function mkFrozenState(e: Engine): FrozenState {
   }
   const obstacle = new Map<string, RouteDisc>()
   for (const b of e.bodies.values()) {
-    if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') obstacle.set(b.id, { c: { x: b.pos.x, y: b.pos.y }, r: (b.discR + ROUTE_CLEAR) * sc })
+    if (b.kind === 'ref' || b.kind === 'atom' || b.kind === 'identity') {
+      obstacle.set(b.id, {
+        c: { x: b.pos.x, y: b.pos.y },
+        r: (b.discR + ROUTE_CLEAR) * sc,
+      })
+    }
   }
   const grid = buildSepGrid(segs, R)
   // one near-pair pass yields both the total and each wire's contribution.

@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import { recomputeRegions, resolveOverlaps, clampDragToFeasible } from '../../src/view/relax'
+import { UNARY } from '../fixtures/zero-signature'
 
 describe('clampDragToFeasible semantic containment', () => {
   it('keeps a root node outside a sibling cut at every drag frame', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, parseTerm('a'))
+    const a = h.ref(h.root, 'A', UNARY)
     const cut = h.cut(h.root)
-    const b = h.termNode(cut, parseTerm('b'))
-    h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'a' } }])
-    h.wire(cut, [{ node: b, port: { kind: 'freeVar', name: 'b' } }])
+    h.ref(cut, 'B', UNARY)
     const engine = mkEngine(h.build(), [])
     recomputeRegions(engine)
     resolveOverlaps(engine)

@@ -14,8 +14,7 @@ import type { Engine } from '../src/view/engine'
 import { settle, settleStep } from '../src/view/relax'
 import { paint, LIGHT, type Shape } from '../src/view/paint'
 import type { Vec2 } from '../src/view/vec'
-import { mkReplay } from '../src/app/replay'
-import { bootFixture } from '../tests/app/boot-fixture'
+import { identityRefScene } from '../tests/fixtures/zero-signature'
 
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 const OUT = '.superpowers/sdd/junction-gallery'
@@ -107,13 +106,8 @@ async function main(): Promise<void> {
   write('symmetric-4way', settled(fourWaySym()))
   // 5. rectangle 4-way (post-restructuring): terminals at a wide rectangle's corners
   write('rectangle-4way', settledPinned(fourWaySym(), [{ x: -40, y: -12 }, { x: -40, y: 12 }, { x: 40, y: -12 }, { x: 40, y: 12 }]))
-  // 6. a real mid-proof frege step with multi-attachment wires
-  const ctx = (await bootFixture()).ctx
-  const r = mkReplay('plusComm', ctx)
-  const k = Math.floor(r.actionCount / 2)
-  const eR = mkEngine(r.diagramAt(k), r.boundaryAt(k))
-  settle(eR, 4000)
-  write(`frege-plusComm-step${k}`, eR)
+  // 6. retained high-valence identity with named refs
+  write('identity-ref', settled(identityRefScene()))
   console.log('gallery complete')
 }
 main().catch((err) => { console.error(err); process.exit(1) })

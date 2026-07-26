@@ -138,7 +138,7 @@ const OCTAVES = [1, 2, 4] as const
 const octaveBase = (rng: Rng): number => OCTAVES[Math.floor(rng() * OCTAVES.length)]!
 
 const isPortBearing = (kind: BodyKind): boolean =>
-  kind === 'ref' || kind === 'term' || kind === 'atom' || kind === 'body'
+  kind === 'ref' || kind === 'atom' || kind === 'identity'
 
 /** The wire's bounding-circle radius: the greatest distance from the terminals'
     centroid to any terminal — the wire's own spatial extent. A junction lives

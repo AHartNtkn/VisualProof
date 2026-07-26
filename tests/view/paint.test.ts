@@ -9,6 +9,26 @@ import { paint, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
 import { drawShapes } from '../../src/view/canvas'
 import { computeLegs } from '../../src/view/wires'
 
+const identityScene = (identityPortByRef: readonly number[]) => {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const identity = builder.identity(cut, IOTA, identityPortByRef.length)
+  const refs = identityPortByRef.map((_, index) =>
+    builder.ref(builder.root, `R${index}`, rel(1)))
+  refs.forEach((ref, index) => {
+    builder.wire(builder.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+      {
+        node: identity,
+        port: { kind: 'identity', index: identityPortByRef[index]! },
+      },
+    ])
+  })
+  const engine = mkEngine(builder.build(), [])
+  settle(engine, 200)
+  return { engine, identity }
+}
+
 describe('authoritative content scale', () => {
   it('paint derives node size directly from Engine.scale', () => {
     const h = new DiagramBuilder()
@@ -24,6 +44,39 @@ describe('authoritative content scale', () => {
       && shape.center.y === body.pos.y
       && shape.r === 2 * DISC_R)
     expect(disc, 'rendering must read the engine-owned scale without body state').toBeDefined()
+  })
+})
+
+describe('identity paint ownership', () => {
+  it('keeps radius and canonical paint class invariant under wire permutation', () => {
+    const paintedIdentity = (permutation: readonly number[]) => {
+      const { engine, identity } = identityScene(permutation)
+      const body = engine.bodies.get(identity)!
+      const owned = paint(engine, LIGHT).filter((shape) =>
+        (shape.kind === 'arc' || shape.kind === 'label' || shape.kind === 'dot')
+        && 'center' in shape
+        && shape.center.x === body.pos.x
+        && shape.center.y === body.pos.y)
+      return {
+        radius: body.discR,
+        classes: owned.map((shape) => shape.kind),
+        rail: owned.find((shape) => shape.kind === 'arc'),
+      }
+    }
+
+    const canonical = paintedIdentity([0, 1, 2, 3])
+    const permuted = paintedIdentity([2, 0, 3, 1])
+
+    expect(permuted.radius).toBe(canonical.radius)
+    expect(permuted.classes).toEqual(canonical.classes)
+    expect(canonical.classes).toEqual(['arc'])
+    expect(permuted.rail?.kind).toBe('arc')
+    if (canonical.rail?.kind !== 'arc' || permuted.rail?.kind !== 'arc') {
+      throw new Error('identity must paint as one neutral rail')
+    }
+    expect(permuted.rail.r).toBe(canonical.rail.r)
+    expect(permuted.rail.stroke).toBe(canonical.rail.stroke)
+    expect(permuted.rail.width).toBe(canonical.rail.width)
   })
 })
 

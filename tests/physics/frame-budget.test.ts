@@ -5,8 +5,7 @@ import { settleStep, recomputeRegions, resolveOverlaps, attachLayoutSearch, WIRE
 import type { LayoutSearch } from '../../src/view/relax'
 import { layoutSnapshot } from '../../src/view/optimize'
 import type { LayoutBest } from '../../src/view/optimize'
-import { bootFixture } from '../app/boot-fixture'
-import { mkReplay } from '../../src/app/replay'
+import { identityJunctionScene, identityRefScene } from '../fixtures/zero-signature'
 
 /**
  * THE FRAME CONTRACT (USER ruling 2026-07-24): layout minimization is
@@ -18,8 +17,6 @@ import { mkReplay } from '../../src/app/replay'
  * these fixtures — the reported "insanely laggy" app.
  */
 
-const bootCtx = (await bootFixture()).ctx
-
 /** A real, minimal search: knows nothing, stays searching. An engine with
     this attached must still produce cheap frames — the frame's cost cannot
     depend on what the searcher has found. */
@@ -30,17 +27,17 @@ const emptySearch = (): LayoutSearch => ({
   searching: true,
 })
 
-function replayEngine(name: string, at: number): Engine {
-  const r = mkReplay(name, bootCtx)
-  const e = mkEngine(r.diagramAt(at), r.boundaryAt(at))
+function fixtureEngine(name: 'identity-ref' | 'identity-junction'): Engine {
+  const diagram = name === 'identity-ref' ? identityRefScene() : identityJunctionScene()
+  const e = mkEngine(diagram, [])
   recomputeRegions(e)
   resolveOverlaps(e)
   return e
 }
 
 describe('searched frames are light (async-search law)', () => {
-  it('settleStep with a search attached never runs heavy minimization (succShiftS@48)', () => {
-    const e = replayEngine('succShiftS', 48)
+  it('settleStep with a search attached never runs heavy minimization', () => {
+    const e = fixtureEngine('identity-junction')
     attachLayoutSearch(e, emptySearch())
     // first frame includes frame establishment + a full walk transition
     const t0 = performance.now()
@@ -60,7 +57,7 @@ describe('searched frames are light (async-search law)', () => {
   })
 
   it('bodies never move without a better best; with one they approach boundedly', () => {
-    const e = replayEngine('plusComm', 20)
+    const e = fixtureEngine('identity-ref')
     let best: LayoutBest | null = null
     const search: LayoutSearch = {
       sync: () => {},

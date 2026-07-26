@@ -5,8 +5,7 @@ import {
   recomputeRegions, resolveOverlaps, establishFrame, wireEnergyCapture, frozenWireEnergy,
   mkFrozenState, frozenProbe,
 } from '../../src/view/relax'
-import { bootFixture } from '../app/boot-fixture'
-import { mkReplay } from '../../src/app/replay'
+import { identityJunctionScene, identityRefScene } from '../fixtures/zero-signature'
 
 /**
  * EXACTNESS OF THE FROZEN-PROBE DELTA (plan Task 8b). `frozenProbe(fst, e, body)`
@@ -16,8 +15,6 @@ import { mkReplay } from '../../src/app/replay'
  * delta would silently change the descent direction.
  */
 
-const bootCtx = (await bootFixture()).ctx
-
 const close = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-9 * (Math.abs(b) + 1)
 
 function mkRng(seed: number): () => number {
@@ -26,18 +23,21 @@ function mkRng(seed: number): () => number {
   return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296 }
 }
 
-function replayEngine(name: string, at: number): Engine {
-  const r = mkReplay(name, bootCtx)
-  const e = mkEngine(r.diagramAt(at), r.boundaryAt(at))
+function fixtureEngine(name: 'identity-ref' | 'identity-junction'): Engine {
+  const diagram = name === 'identity-ref' ? identityRefScene() : identityJunctionScene()
+  const e = mkEngine(diagram, [])
   recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
   return e
 }
 
 describe('frozen-probe delta equals a fresh frozen eval (plan Task 8b)', () => {
-  for (const [name, at] of [['plusComm', 20], ['succShiftS', 48]] as const) {
-    it(`every body × {x,y,θ}, seeded displacements — ${name}@${at}`, () => {
-      const e = replayEngine(name, at)
-      const rng = mkRng(0xf1_02_be ^ at)
+  for (const [name, seed] of [
+    ['identity-ref', 20],
+    ['identity-junction', 48],
+  ] as const) {
+    it(`every body × {x,y,θ}, seeded displacements — ${name}`, () => {
+      const e = fixtureEngine(name)
+      const rng = mkRng(0xf1_02_be ^ seed)
       const sc = e.scale
       for (let variant = 0; variant < 4; variant++) {
         if (variant > 0) {

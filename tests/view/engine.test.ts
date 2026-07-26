@@ -1,31 +1,42 @@
 import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { requiredPorts } from '../../src/kernel/diagram/diagram'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
-import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, type FrameBounds } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
-
-const p = (s: string) => parseTerm(s)
+import { unaryDefinition, UNARY } from '../fixtures/zero-signature'
 
 const nat = () => {
-  const b = new Map(buildFregeTheory().relations).get('nat')!
-  return { d: b.diagram, boundary: b.boundary }
+  const definition = unaryDefinition()
+  return { d: definition.diagram, boundary: definition.boundary }
+}
+
+const threeNodeDiagram = () => {
+  const builder = new DiagramBuilder()
+  const atom = builder.atom(builder.root, UNARY)
+  const ref = builder.ref(builder.root, 'Unary', UNARY)
+  const cut = builder.cut(builder.root)
+  const identity = builder.identity(cut, IOTA, 2)
+  builder.wire(builder.root, [
+    { node: atom, port: { kind: 'arg', index: 0 } },
+    { node: identity, port: { kind: 'identity', index: 0 } },
+  ])
+  builder.wire(builder.root, [
+    { node: ref, port: { kind: 'arg', index: 0 } },
+    { node: identity, port: { kind: 'identity', index: 1 } },
+  ])
+  return builder.build()
 }
 
 describe('mkEngine', () => {
   it('creates exactly one body per diagram node', () => {
-    const h = new DiagramBuilder()
-    h.termNode(h.root, p('\\x. x'))
-    h.ref(h.root, 'Nat', rel(1))
-    const d = h.build()
+    const d = threeNodeDiagram()
     const e = mkEngine(d, [])
-    const nodeBodies = [...e.bodies.values()].filter((b) => b.kind !== 'end')
-    expect(nodeBodies).toHaveLength(2)
+    const nodeBodies = [...e.bodies.values()].filter((b) => b.node !== null)
+    expect(nodeBodies).toHaveLength(3)
     expect(new Set(nodeBodies.map((b) => b.id))).toEqual(new Set(Object.keys(d.nodes)))
   })
 
@@ -40,11 +51,10 @@ describe('mkEngine', () => {
     for (const r of refs) expect(r.discR).toBeCloseTo(DISC_R + 1.5, 10)
   })
 
-  it('law 4: every ref/atom port is bound by exactly one wire leg (PLAN 22: wire binds own connectivity)', () => {
-    const { d, boundary } = nat()
-    const e = mkEngine(d, boundary)
+  it('every atom/ref/identity port is bound by exactly one wire bind', () => {
+    const d = threeNodeDiagram()
+    const e = mkEngine(d, [])
     for (const [id, node] of Object.entries(d.nodes)) {
-      if (node.kind === 'term') continue // term outputs may exit; law 4 is about refs/atoms
       for (const port of requiredPorts(node)) {
         let count = 0
         for (const w of e.wires.values()) {
@@ -84,8 +94,8 @@ describe('mkEngine', () => {
 
   it('builds one junction topology over an attached port and every repeated boundary incidence', () => {
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('\\x. x'))
-    const shared = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const n = h.ref(h.root, 'Unary', UNARY)
+    const shared = h.wire(h.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [shared, shared])
     const w = e.wires.get(shared)!
     expect(w.slots).toEqual([0, 1])
@@ -98,27 +108,29 @@ describe('mkEngine', () => {
 
   it('worldAnchor rotates the local anchor about the body centre by theta', () => {
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('\\x. x'))
+    const n = h.atom(h.root, UNARY)
     const d = h.build()
     const e = mkEngine(d, [])
     const b = e.bodies.get(n)!
     b.pos = { x: 10, y: -3 }
     b.theta = 0
-    const a0 = worldAnchor(e, b, 'out')
+    const a0 = worldAnchor(e, b, 'a:0')
     b.theta = Math.PI / 2
-    const a1 = worldAnchor(e, b, 'out')
+    const a1 = worldAnchor(e, b, 'a:0')
     // rotating the frame by +90° maps a local (lx,ly) to (-ly, lx) around pos
     const lx = a0.x - 10, ly = a0.y - -3
     expect(a1.x).toBeCloseTo(10 - ly, 9)
     expect(a1.y).toBeCloseTo(-3 + lx, 9)
     // the port normal tracks theta too
-    expect(portNormal(b, 'out', { x: 100, y: -3 })).toBeCloseTo(Math.atan2(0, 1) + Math.PI / 2, 9)
+    const local = b.localAnchor.get('a:0')!
+    expect(portNormal(b, 'a:0', { x: 100, y: -3 }))
+      .toBeCloseTo(Math.atan2(local.y, local.x) + Math.PI / 2, 9)
 
     // Engine.scale is the sole content-scale authority: bodies carry only
     // natural geometry, and world geometry reads the engine on every call.
     b.theta = 0
     e.scale = 2
-    const a2 = worldAnchor(e, b, 'out')
+    const a2 = worldAnchor(e, b, 'a:0')
     expect(a2.x - b.pos.x).toBeCloseTo(2 * (a0.x - b.pos.x), 9)
     expect(a2.y - b.pos.y).toBeCloseTo(2 * (a0.y - b.pos.y), 9)
   })

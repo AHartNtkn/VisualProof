@@ -2,18 +2,17 @@ import { it, expect } from 'vitest'
 import { mkEngine } from '../../src/view/engine'
 import { recomputeRegions } from '../../src/view/relax'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { parseTerm } from '../../src/kernel/term/parse'
+import { UNARY } from '../fixtures/zero-signature'
 
 // deterministic pseudo-random for reproducibility
 let seed = 12345
 const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff }
 
 it('property: region circles enclose all content tightly and reproducibly', () => {
-  const p = (s: string) => parseTerm(s)
   for (let trial = 0; trial < 40; trial++) {
     const h = new DiagramBuilder()
     const n = 2 + Math.floor(rnd() * 8)
-    for (let i = 0; i < n; i++) h.termNode(h.root, p('\\x. x'))
+    for (let i = 0; i < n; i++) h.ref(h.root, `R${i}`, UNARY)
     const e = mkEngine(h.build(), [])
     // every body counts: nodes AND the loose-end ∃ bodies their outputs carry
     const ids = [...e.bodies.keys()]

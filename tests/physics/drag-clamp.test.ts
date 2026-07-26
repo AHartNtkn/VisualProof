@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { recomputeRegions, clampDragToFeasible, settle } from '../../src/view/relax'
-
-const p = (s: string) => parseTerm(s)
+import { UNARY } from '../fixtures/zero-signature'
 
 /** The worst overshoot of any content item (node disc or region circle) past the
     frame wall — >0 ⇒ something is outside the border. */
@@ -34,11 +32,13 @@ describe('clampDragToFeasible — HARD SEMANTIC CONTAINMENT (USER LAW: a drag ca
     // fully inside the frame — the border is a hard wall on cuts identically.
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
-    const a = h.termNode(cut, p('a'))
-    const b2 = h.termNode(cut, p('bb'))
-    const outer = h.termNode(h.root, p('c')) // gives the frame some content to size against
-    h.wire(cut, [{ node: a, port: { kind: 'freeVar', name: 'a' } }, { node: b2, port: { kind: 'freeVar', name: 'bb' } }])
-    h.wire(h.root, [{ node: outer, port: { kind: 'freeVar', name: 'c' } }])
+    const a = h.ref(cut, 'A', UNARY)
+    const b2 = h.ref(cut, 'B', UNARY)
+    h.ref(h.root, 'Outer', UNARY)
+    h.wire(cut, [
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: b2, port: { kind: 'arg', index: 0 } },
+    ])
     const e = mkEngine(h.build(), [])
     settle(e, 200) // establishes the fixed frame and a legal rest
     // settled: no cut escapes

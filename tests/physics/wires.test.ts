@@ -1,16 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle, recomputeRegions } from '../../src/view/relax'
 import { computeLegs } from '../../src/view/wires'
-
-const p = (s: string) => parseTerm(s)
+import { commutedBoundaryRefs, UNARY } from '../fixtures/zero-signature'
 
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
-
-
+const commuted = commutedBoundaryRefs()
 
 describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (plan 24)', () => {
   // The reset ruling: a simple boundary wire must be a single smooth curve from
@@ -18,8 +14,8 @@ describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (pl
   // exit body, no dot, no exterior connector). The slot is a fixed terminal.
   it('one interior port → one leg whose far end sits on the inner frame edge, no body', () => {
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('x'))
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'x' } }])
+    const n = h.ref(h.root, 'Unary', UNARY)
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [w])
     settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
     // no exit body anywhere (the reset's "there's an edge node for some reason") —
@@ -45,11 +41,8 @@ describe('boundary slots are order-faithful: leg i ends at slot i, and cannot sw
   // for boundary index i, clockwise from the pip) on the FIXED frame. No matter
   // where the bodies are dragged, boundary wire i's leg terminates at slot i —
   // the assignment is the boundary index, structurally, so exits cannot swap.
-  const thy = buildFregeTheory()
-  const plusComm = thy.theorems.find((t) => t.name === 'plusComm')!
-
   it('a 3-boundary diagram: leg i ends at fixed slot i for every layout in a wild sweep', () => {
-    const { diagram, boundary } = plusComm.lhs
+    const { diagram, boundary } = commuted.lhs
     expect(boundary.length).toBe(3)
     const e = mkEngine(diagram, boundary)
     settle(e, 1200) // establishes the fixed frame + slots
@@ -85,24 +78,21 @@ describe('boundary slots are order-faithful: leg i ends at slot i, and cannot sw
   })
 })
 
-describe('plusComm acid test: the crossing is visible in the boundary-order wiring', () => {
+describe('commuted boundary fixture: only the boundary-to-port wiring differs', () => {
   // The user report: "there is no way to distinguish the left-hand side and the
-  // right-hand side of plusComm." With canonical slots the two sides draw their
+  // right-hand side of the commuted boundary. With canonical slots the two sides draw their
   // boundary wires at the SAME fixed perimeter positions but into DIFFERENT plus
   // ports — lhs is Plus(a,b,o), rhs is Plus(b,a,o) — so slot 0 and slot 1 swap
   // which argument of the plus disc they feed. That swap is the theorem, and it
   // is now visible: the slot->plus-arg correspondence differs between the sides.
-  const thy = buildFregeTheory()
-  const plusComm = thy.theorems.find((t) => t.name === 'plusComm')!
-
   it('both sides draw their exits at the SAME canonical slots, so only the wiring differs', () => {
-    const pos = (dwb: typeof plusComm.lhs) => {
+    const pos = (dwb: typeof commuted.lhs) => {
       const e = mkEngine(dwb.diagram, dwb.boundary)
       settle(e, 1200)
       const fb = frameBounds(e)!
       return { points: frameSlots(fb, dwb.boundary.length).map((s) => s.point), center: fb.center }
     }
-    const lhs = pos(plusComm.lhs), rhs = pos(plusComm.rhs)
+    const lhs = pos(commuted.lhs), rhs = pos(commuted.rhs)
     // slot geometry is a pure function of the frame + count, so both sides (3
     // boundary wires each) place slots in the same canonical clockwise sequence
     // around their own frame centre; the ONLY difference is which plus port each

@@ -8,6 +8,7 @@ import type { Vec2 } from '../../src/view/vec'
 import { mkFreeSpace, route } from '../../src/view/route/freespace'
 import { edgeCurvePts, rodCost } from '../../src/view/route/curve'
 import { computeLegs } from '../../src/view/wires'
+import { identityJunctionScene, identityRefScene } from '../fixtures/zero-signature'
 
 /**
  * THE ROD-ENERGY LAW (USER ruling 2026-07-24: "the minimal energy curves
@@ -237,19 +238,19 @@ describe('family conformance (coverage artifact): the drawn legs ARE Hobby cubic
 })
 
 describe('envelope probe evaluator (frozen corridors)', () => {
-  it('frozen eval equals the exact energy at the captured base (real replay scenes)', async () => {
+  it('frozen eval equals exact energy at captured zero-signature fixture states', async () => {
     const { wireEnergyCapture, frozenWireEnergy } = await import('../../src/view/relax')
-    const { bootFixture } = await import('../app/boot-fixture')
-    const { mkReplay } = await import('../../src/app/replay')
-    const ctx = (await bootFixture()).ctx
-    for (const [nm, at] of [['plusComm', 20], ['succShiftS', 48]] as const) {
-      const r = mkReplay(nm, ctx)
-      const e = mkEngine(r.diagramAt(at), r.boundaryAt(at))
+    for (const [name, diagram] of [
+      ['identity-ref', identityRefScene()],
+      ['identity-junction', identityJunctionScene()],
+    ] as const) {
+      const e = mkEngine(diagram, [])
       recomputeRegions(e)
       resolveOverlaps(e)
       const cap = wireEnergyCapture(e)
       const frozen = frozenWireEnergy(e, cap.edges)
-      expect(Math.abs(frozen - cap.E), `${nm}@${at}: frozen != exact at base`).toBeLessThan(1e-9 * (Math.abs(cap.E) + 1))
+      expect(Math.abs(frozen - cap.E), `${name}: frozen != exact at base`)
+        .toBeLessThan(1e-9 * (Math.abs(cap.E) + 1))
     }
   })
 })

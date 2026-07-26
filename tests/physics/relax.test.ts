@@ -1,29 +1,27 @@
 import { describe, it, expect } from 'vitest'
 import type { WireId } from '../../src/kernel/diagram/diagram'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
-import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { buildFregeTheory } from '../../src/theories/frege'
+import { relSig } from '../../src/kernel/diagram/sig'
 import { carryOver, mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame, recomputeRegions, resolveOverlaps, establishFrame } from '../../src/view/relax'
-import { mkReplay } from '../../src/app/replay'
-import { bootFixture } from '../app/boot-fixture'
+import {
+  commutedBoundaryRefs,
+  identityJunctionScene,
+  identityRefScene,
+  unaryDefinition,
+  UNARY,
+} from '../fixtures/zero-signature'
 
-const idp = (s: string) => parseTerm(s)
-
-const bootCtx = (await bootFixture()).ctx
-const plusCommThm = bootCtx.theorems.get('plusComm')!
-
-const theory = buildFregeTheory()
-const natRelation = new Map(theory.relations).get('nat')!
-const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
-const succShiftS = theory.theorems.find((t) => t.name === 'succShiftS')!
+const sentence = relSig([])
+const commuted = commutedBoundaryRefs()
+const unary = unaryDefinition()
 
 const cases: [string, Diagram, readonly WireId[]][] = [
-  ['plusComm.rhs', plusComm.rhs.diagram, plusComm.rhs.boundary],
-  ['natBody', natRelation.diagram, natRelation.boundary],
-  ['succShiftS.rhs', succShiftS.rhs.diagram, succShiftS.rhs.boundary],
+  ['commuted.rhs', commuted.rhs.diagram, commuted.rhs.boundary],
+  ['unaryDefinition', unary.diagram, unary.boundary],
+  ['identityJunction', identityJunctionScene(), []],
 ]
 
 // Every READ-ONLY law assertion below (containment, disc-in-frame, port facing, no
@@ -112,21 +110,21 @@ describe('settle stops at a proven fixed point (plan-24 perf — no wasted budge
   // worklist over the same state and again moves nothing: it is a proven fixed point,
   // and stopping there is identical to burning the whole budget. `settle` now takes
   // `ticks` as a CAP and returns the ticks actually run.
-  const twoTerms = (): { d: Diagram; b: readonly WireId[] } => {
+  const twoNodes = (): { d: Diagram; b: readonly WireId[] } => {
     const h = new DiagramBuilder()
-    h.termNode(h.root, idp('\\x. x'))
-    h.termNode(h.root, idp('\\x. \\y. x'))
+    h.ref(h.root, 'A', sentence)
+    h.ref(h.root, 'B', sentence)
     return { d: h.build(), b: [] }
   }
   const snap = (e: Engine): number[] => [...e.bodies.values()].flatMap((b) => [b.pos.x, b.pos.y, b.theta])
 
   it('a settling diagram stops far short of the cap and rests exactly there', () => {
-    const { d, b } = twoTerms()
+    const { d, b } = twoNodes()
     const e = mkEngine(d, b)
     const cap = 20000
     const used = settle(e, cap)
     expect(used, `settle burned the whole ${cap}-tick budget — the fixed-point stop never fired`).toBeLessThan(cap)
-    expect(used, 'two floating terms rest quickly; a large tick count means the stop is late').toBeLessThan(500)
+    expect(used, 'two floating nodes rest quickly; a large tick count means the stop is late').toBeLessThan(500)
     // proven fixed point: 50 further sweeps must change NOTHING (bit-identical)
     const s0 = snap(e)
     for (let i = 0; i < 50; i++) settleStep(e)
@@ -137,7 +135,7 @@ describe('settle stops at a proven fixed point (plan-24 perf — no wasted budge
   })
 
   it('re-settling an already-settled diagram stops after a single sweep', () => {
-    const { d, b } = twoTerms()
+    const { d, b } = twoNodes()
     const e = mkEngine(d, b)
     settle(e, 20000)
     const again = settle(e, 20000)
@@ -149,7 +147,7 @@ describe('settle stops at a proven fixed point (plan-24 perf — no wasted budge
     // (recomputeRegions + resolveOverlaps + establishFrame; the branch re-seed is a
     // no-op here — no boundary Steiner wires), then a FIXED settleStep loop with no
     // early stop, then the same trailing projection.
-    const { d, b } = twoTerms()
+    const { d, b } = twoNodes()
     const N = 4000
     const ref = mkEngine(d, b)
     recomputeRegions(ref); resolveOverlaps(ref); establishFrame(ref)
@@ -185,7 +183,7 @@ describe('law 1 — containment: no two region circles ever intersect', () => {
     const h = new DiagramBuilder()
     for (let c = 0; c < 10; c++) {
       const cut = h.cut(h.root)
-      for (let i = 0; i < 3; i++) h.termNode(cut, idp('\\x. x'))
+      for (let i = 0; i < 3; i++) h.ref(cut, `R${c}-${i}`, sentence)
     }
     const e = mkEngine(h.build(), [])
     settle(e, 1100)
@@ -230,7 +228,8 @@ describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => 
       settle(e, 300)
       const f = e.frame!
       const half0 = f.half
-      const node = [...e.bodies.values()].find((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')!
+      const node = [...e.bodies.values()].find((b) =>
+        b.kind === 'ref' || b.kind === 'atom' || b.kind === 'identity')!
       // a wild cursor target far outside every edge, in all four diagonal directions
       for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
         const clamped = clampDragToFeasible(e, node, { x: f.center.x + sx * 1e4, y: f.center.y + sy * 1e4 })
@@ -247,16 +246,19 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // direction (one uniform Engine.scale) so it FILLS the border instead of
   // rendering tiny or overflowing. The seed path (app seedProject): proof-wide
   // frame, then applyContentScale sizes THIS step.
-  const r = mkReplay(plusCommThm.name, bootCtx)
-  const steps = Array.from({ length: r.actionCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundaryAt(k) }))
+  const steps = [
+    unaryDefinition(),
+    { diagram: identityRefScene(), boundary: [] },
+  ]
   // one fixed proof-wide frame, established once (as enterReplay does)
-  const probe = mkEngine(r.diagramAt(0), r.boundaryAt(0))
+  const probe = mkEngine(steps[0]!.diagram, steps[0]!.boundary)
   establishProofFrame(probe, steps)
   const frame = probe.frame!
 
   // build a step through the app seed path and settle it
   const seedStep = (k: number, ticks: number): Engine => {
-    const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
+    const step = steps[k]!
+    const e = mkEngine(step.diagram, step.boundary)
     e.frame = frame
     seedProject(e)
     settle(e, ticks)
@@ -275,9 +277,9 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   }
 
   // A SMALL step (few nodes) must fill the fixed border, not render tiny. Measured
-  // occupancy 0.74–0.96 across plusComm steps; pinned ≥ 0.6 with margin. It also
+  // Occupancy must remain substantial across sparse and identity-rich steps. It
   // must not spill past the border.
-  for (const k of [0, r.actionCount]) {
+  for (const k of [0, steps.length - 1]) {
     it(`small step ${k} fills the border (occupancy in band) and stays inside`, () => {
       const e = seedStep(k, 700)
       const occ = contentHalf(e) / frame.half
@@ -289,17 +291,17 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
 
   it('one sparse→dense lifecycle keeps the frame exact and uniformly scales content in both directions', () => {
     const sparseBuilder = new DiagramBuilder()
-    sparseBuilder.termNode(sparseBuilder.root, idp('x'))
+    sparseBuilder.ref(sparseBuilder.root, 'Stable', sentence)
     const sparse = mkEngine(sparseBuilder.build(), [])
     seedProject(sparse)
     const frameSnapshot = JSON.stringify(sparse.frame)
     const lifecycleFrame = sparse.frame!
 
     const denseBuilder = new DiagramBuilder()
-    denseBuilder.termNode(denseBuilder.root, idp('x')) // n0 survives the rewrite
+    denseBuilder.ref(denseBuilder.root, 'Stable', sentence) // n0 survives the rewrite
     for (let c = 0; c < 8; c++) {
       const cut = denseBuilder.cut(denseBuilder.root)
-      for (let i = 0; i < 6; i++) denseBuilder.termNode(cut, idp('\\x. x'))
+      for (let i = 0; i < 6; i++) denseBuilder.ref(cut, `D${c}-${i}`, sentence)
     }
     const dense = mkEngine(denseBuilder.build(), [])
     carryOver(sparse, dense)
@@ -326,13 +328,13 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
 
   it('uniform scaling and carry-over preserve Steiner branch geometry', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, idp('x'))
-    const b = h.termNode(h.root, idp('x'))
-    const c = h.termNode(h.root, idp('x'))
+    const a = h.ref(h.root, 'A', UNARY)
+    const b = h.ref(h.root, 'B', UNARY)
+    const c = h.ref(h.root, 'C', UNARY)
     const wire = h.wire(h.root, [
-      { node: a, port: { kind: 'freeVar', name: 'x' } },
-      { node: b, port: { kind: 'freeVar', name: 'x' } },
-      { node: c, port: { kind: 'freeVar', name: 'x' } },
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: b, port: { kind: 'arg', index: 0 } },
+      { node: c, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = h.build()
     const first = mkEngine(diagram, [])
@@ -371,8 +373,8 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
 
 describe('settleStep — deterministic incremental relaxation', () => {
   it('same diagram, same steps, identical layout (seedless determinism)', () => {
-    const d = natRelation.diagram
-    const boundary = natRelation.boundary
+    const d = unary.diagram
+    const boundary = unary.boundary
     const a = mkEngine(d, boundary)
     const b = mkEngine(d, boundary)
     for (let i = 0; i < 200; i++) {
@@ -389,9 +391,9 @@ describe('settleStep — deterministic incremental relaxation', () => {
 describe('settleStep — drag pin', () => {
   it('holds a pinned body at the cursor while neighbours relax legally around it', () => {
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, idp('\\x. x'))
-    const b = h.termNode(h.root, idp('\\x. x'))
-    const c = h.termNode(h.root, idp('\\x. x'))
+    const a = h.ref(h.root, 'A', sentence)
+    const b = h.ref(h.root, 'B', sentence)
+    const c = h.ref(h.root, 'C', sentence)
     void b; void c
     const e = mkEngine(h.build(), [])
     const pinPos = { x: 40, y: 40 }
@@ -415,9 +417,9 @@ describe('settleStep — drag pin', () => {
     // repulsion (1/d²) at A, so exclusion visibly changes A's one-step motion.
     const build = () => {
       const h = new DiagramBuilder()
-      const a = h.termNode(h.root, idp('\\x. x'))
-      const b = h.termNode(h.root, idp('\\x. x'))
-      const c = h.termNode(h.root, idp('\\x. x'))
+      const a = h.ref(h.root, 'A', sentence)
+      const b = h.ref(h.root, 'B', sentence)
+      const c = h.ref(h.root, 'C', sentence)
       const e = mkEngine(h.build(), [])
       e.bodies.get(a)!.pos = { x: 100, y: 0 }
       e.bodies.get(b)!.pos = { x: 0, y: 5 }
@@ -443,12 +445,12 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
     // oscillate/diverge — total per-window movement of the free bodies must
     // trend down, not up.
     const h = new DiagramBuilder()
-    const a = h.termNode(h.root, idp('\\x. x'))
-    const b = h.termNode(h.root, idp('q'))
-    const c = h.termNode(h.root, idp('\\f. \\x. f (f x)'))
+    const a = h.ref(h.root, 'A', UNARY)
+    const b = h.ref(h.root, 'B', UNARY)
+    const c = h.ref(h.root, 'C', UNARY)
     h.wire(h.root, [
-      { node: a, port: { kind: 'output' } },
-      { node: b, port: { kind: 'freeVar', name: 'q' } },
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: b, port: { kind: 'arg', index: 0 } },
     ])
     void c
     const e = mkEngine(h.build(), [])
@@ -487,11 +489,11 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
   })
 })
 
-describe('two floating terms settle (no vibration limit cycle)', () => {
-  it('two unconnected term nodes on the sheet come to rest', () => {
+describe('two floating nodes settle (no vibration limit cycle)', () => {
+  it('two unconnected ref nodes on the sheet come to rest', () => {
     const h = new DiagramBuilder()
-    h.termNode(h.root, idp('\\x. x'))
-    h.termNode(h.root, idp('\\x. \\y. x'))
+    h.ref(h.root, 'A', sentence)
+    h.ref(h.root, 'B', sentence)
     const d = h.build()
     const e = mkEngine(d, [])
     // long free run: track recent movement; it must decay to (near) zero
