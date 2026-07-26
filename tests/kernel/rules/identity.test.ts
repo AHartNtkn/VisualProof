@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { Diagram, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
@@ -627,12 +628,17 @@ describe('Rule 6: structural identity contradiction', () => {
       .toThrowError(/directly in enclosing cut/)
   })
 
-  it('requires an enclosing cut and exposes no old oracle contract', () => {
+  it('requires an enclosing cut and exposes no old oracle module or barrel contract', () => {
     const host = contradictionHost()
+    const oldOracleModule = new URL(
+      '../../../src/kernel/rules/inconsistent-cut.ts',
+      import.meta.url,
+    )
 
     expect(() => applyIdentityContradiction(host.diagram, host.diagram.root, host.evidence))
       .toThrowError(/requires a cut/)
     expect(applyIdentityContradiction.length).toBe(3)
     expect('applyInconsistentCutElim' in publicRules).toBe(false)
+    expect(existsSync(oldOracleModule)).toBe(false)
   })
 })
