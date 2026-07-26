@@ -57,6 +57,23 @@ deletions.
 >    occurrence created by identity-retargeted iteration; the original witness
 >    and unused biconditional branch are erased. Removing that iteration, or the
 >    whole substitution segment, no longer reaches the theorem RHS.
+> 10. **Sever/join corrected to strongest sound form; reification-spawn authority
+>     (item 7) superseded.** The wire-quantifier rule pair (severing = ∃-intro,
+>     wireJoin = ∀-elim) had been specified at atomic content only — witness or
+>     instantiation target restricted to an atom-of-another-wire. That restriction
+>     was a design error under the standing edict that every rule be the strongest
+>     sound version (soundness = full models): at ι the atomic forms ARE strongest
+>     (zero signature: wires are the only nameable individuals), but at rel sorts
+>     drawn content also names values, so the atomic restriction was an
+>     unnecessary weakening. The earlier "underivability of reification"
+>     analysis was correct mathematics about the weakened fragment only — its
+>     symptom (prestructure-soundness) was the proof of the under-strength design,
+>     not a proof that an axiom/spawn mechanism is required. With the corrected
+>     rules the reification figure `∃P(P↔G)` is DERIVABLE (~6 moves, any G), so
+>     item 7's def-store spawn authority and its recognizer are superseded and
+>     removed: no spawn-anywhere permission, no checked-graph validation, no
+>     polarity bypass. `existsProp` (item 9) remains a theorem; its derivation
+>     route becomes the corrected-sever route.
 
 ## Motivation
 
@@ -108,9 +125,10 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
 
 - *Keep:* forward insertion (negative region), backward physical insertion
   (positive region), forward-only erasure (positive region),
-  iteration/deiteration, double-cut intro/elim, `wireJoin` (gated cross-scope
-  merge). Theorem replay passes orientation to every directional rule, uses the
-  dual insertion gate, and never executes positive erasure as a backward action.
+  iteration/deiteration, double-cut intro/elim, and the wire-quantifier pair
+  `wireJoin`/severing — **restated at strongest sound form below**. Theorem
+  replay passes orientation to every directional rule, uses the dual insertion
+  gate, and never executes positive erasure as a backward action.
 - *Add:* five identity transformations: degeneracy drop, co-scoped collapse,
   same-region fusion, inherited insertion/erasure, and substitution via
   iteration/deiteration. Former Rule 6 is ordinary logical inconsistency: with no
@@ -123,6 +141,45 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
   (βη), `headstrip`, `inconsistent-cut` (βη-separation), and the superseded comprehension /
   `relCongruenceJoin` rules from the superseded drawn-definitions refactor.
 
+**The wire-quantifier rule pair, at strongest sound form.** A wire IS a
+quantifier (scope + parity). Exactly two rules create and destroy quantifiers,
+and per the standing edict each is stated at the strongest version sound in the
+intended (full) semantics:
+
+- **Severing (∃-introduction).** Choose a fresh wire `Q` of sort `rel(σ⃗)` scoped
+  at a positive region `t` (forward; negative backward). Select any set of
+  disjoint exact copies of one content `G` (boundary sorts σ⃗) anywhere in `t`'s
+  subtree — mixed parities allowed. Replace each copy by an atom `Q(x⃗)` on that
+  copy's boundary wires. **Gates:** all selected occurrences are copies of the
+  same `G` with the same ambient parameter wires; every parameter wire's scope
+  encloses `t`; enclosure holds for `Q` (automatic: sites lie under `t`).
+  **Soundness:** witness `Q := ⟦G⟧` — each new atom evaluates exactly as the copy
+  it replaced. The previously specified sever is the single-atom instance
+  (`G` = one atom-of-`w`, parameter `w`, gate `scope(w) ⊇ t` now explicit).
+- **`wireJoin` (∀-elimination).** A negatively-scoped (forward; positive
+  backward) rel-wire all of whose endpoints are applied positions (rel-slots of
+  atoms) grounds to any content `G` of matching boundary, spliced at each atom;
+  the emptied wire is removed. Parameter gate: `G`'s ambient wires are in scope
+  at the dying wire's scope. The previously specified `wireJoin` is the
+  single-atom instance. Endpoints at non-applied positions (argument slots of
+  higher atoms, identity-node ports) require a wire, not content — ground those
+  through a derived reification wire instead.
+- **At ι the atomic forms are already strongest** (zero signature: no content
+  denotes an individual, so wires are the only witnesses/targets); the corrected
+  statements change nothing at ι. Occurrence-matching uses the existing exact
+  matcher (load-bearing for citation); grounding uses the existing splicer
+  (used by unfold). One rule pair, one mechanism; the strength that full
+  semantics licenses enters here and only here.
+
+**Consequences (all derivable, nothing spawned):** `∀P∃Q(Q↔P)` is a theorem
+(double-cut intro, insert bare `P`, build the two scrolls by insert+iterate,
+sever the two atom-copies onto fresh `Q`). The reification figure `∃P(P↔G)` is a
+theorem for every drawn `G` (build `(G→G)∧(G→G)` by insert+iterate, sever one
+copy per scroll onto fresh `P` — ~6 moves, `G` never deconstructed). Closure
+statements (`∀R∀S∃Q(Q ≐ R∧S)` etc.) derive the same way. No hypotheses in
+theorem statements, no axiom figures, no spawn authority, no def-store coupling,
+no recognizer beyond the ordinary matcher.
+
 **Definitional unfold/fold — kept, reimplemented (NOT deleted).** Expanding or
 collapsing a named `ref` is definitional transparency, not the rejected
 comprehension model. `unfold`
@@ -132,20 +189,18 @@ equality `D ≐ G`, and is sourced from the `ref`/definition-store — never fro
 `body` nodes, the rejected comprehension model, or reification. The old body-node `unfold`/`fold`
 fused this with second-order instantiation; the clean split separates them.
 
-**Second-order instantiation — derived, no primitive rule.** Plugging a concrete
-relation `G` into a `∀P`/`∃P` quantifier is done by **reification**. A relation
-handle for an assertion `S` arises only through the grammatical construction
-`S' := Exists P. forall x. P(x) <-> S(x)`. The resulting stored definition has a
-relation-typed dangling wire. Whenever `refSpawn` needs to bypass ordinary
-polarity, the definition store validates the exact two-sided reification graph,
-including use of every captured boundary and matching boundary-pinned `S`
-material. That checked definition constructively guarantees the fresh `P`
-witness, so this reification ref may be spawned at any scope. An ordinary ref,
-or a malformed/same-signature lookalike, retains the ordinary polarity gate.
-Identity/wire and structural moves connect the checked witness to `G`; no
-primitive second-order instantiation is involved. This is several to a few dozen
-primitive moves; in practice it is amortized by **cited theorems** (the Eq
-library).
+**Second-order instantiation — the wire-quantifier pair itself; no spawn
+authority (supersedes changelog item 7).** Instantiating a `∀P` with concrete
+content `G` IS strongest-form `wireJoin` (ground `P := G` at its applied
+endpoints). Generalizing content to an `∃Q` IS strongest-form severing. Where a
+relation *handle* is needed (an argument slot of a higher atom, an identity-node
+port — positions that take a wire, not content), derive the reification figure
+`∃P(P↔G)` as a theorem (see Consequences above) and use its wire. The
+grammatical construction `S' := ∃P ∀x(P(x) ↔ S(x))` remains the shape of that
+figure, but it is derived, never spawned: there is no polarity bypass, no
+checked-graph validation in the definition store, and no spawn-anywhere
+permission for any ref — every ref keeps the ordinary gates. In practice
+multi-move sequences are amortized by **cited theorems** (the Eq library).
 
 **No macro system this pass.** The headed/singleton form of a predicate is just
 its reified relation (produced by the reification construction, not a feature).
@@ -250,8 +305,13 @@ The term model disappears, simplifying the semantics.
 - **Soundness simplifies.** The βη-dependent soundness proofs (`fusion`,
   `congruence`-βη, `headstrip`, `inconsistent-cut`) vanish with their rules; the
   remaining structural and identity-node rules are model-generic, so all-models
-  soundness is clean. New obligations: the five identity transformations and
-  definitional unfold/fold-as-splice (an equivalence).
+  soundness is clean. New obligations: the five identity transformations,
+  definitional unfold/fold-as-splice (an equivalence), and the strongest-form
+  wire-quantifier pair — severing (witness `Q := ⟦G⟧`) and grounding join
+  (instantiation `P := ⟦G⟧`). These two are the only rules whose soundness uses
+  fullness of the higher-type domains (⟦G⟧ must inhabit them); every other rule
+  is prestructure-generic. Their proofs are where Section 3's full function
+  spaces earn their keep.
 
 ## Section 4 — Expressiveness / completeness proof
 
