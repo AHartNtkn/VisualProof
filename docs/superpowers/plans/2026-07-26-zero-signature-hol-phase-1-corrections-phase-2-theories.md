@@ -47,8 +47,12 @@ diagram/proof kernel, stable theory JSON.
   severing, never spawned through special definition authority.
 - Identity ports remain semantically orderless in matching, canonicalization,
   labeling, serialization, and rendering.
-- Follow TDD, explicit-path staging, one validated commit per task, `tsc` plus
-  focused test gates, and preserve all user scratch/stash material.
+- Follow TDD, explicit-path staging, and one focused-test-validated commit per
+  task. Tasks 4B–4D are one compile migration barrier: Task 4B's sole durable
+  step shapes intentionally invalidate the app and theorem consumers owned by
+  Tasks 4C and 4D, so `tsc` is barrier-wide and must return green at Task 4D.
+  Do not add a compatibility shape, cast, alias, or temporary authority to make
+  an intermediate commit typecheck. Preserve all user scratch/stash material.
 - Phase 3 Lean semantics and Phase 4 expressiveness remain out of scope.
 
 ---
@@ -597,7 +601,17 @@ npx vitest run \
 npm run typecheck
 ```
 
-Expected: PASS.
+Expected: the focused tests PASS. At this intermediate barrier point,
+`npm run typecheck` must fail only on the displaced wire-step consumers owned
+by Tasks 4C and 4D:
+
+```text
+src/app/interact/moves.ts
+src/theories/logic.ts
+```
+
+Any kernel/proof/test type error is a Task 4B failure. Do not repair either
+named consumer here and do not reintroduce the old step shape.
 
 - [ ] **Step 11: Commit**
 
@@ -730,7 +744,10 @@ npx vitest run \
 npm run typecheck
 ```
 
-Expected: PASS.
+Expected: the focused tests PASS. With the app consumer migrated here,
+`npm run typecheck` must now fail only on the displaced relation-wire proof in
+`src/theories/logic.ts`, which Task 4D re-derives. Any other type error is a
+Task 4C failure; do not add a compatibility shape for the remaining theorem.
 
 - [ ] **Step 7: Audit absence and commit**
 
