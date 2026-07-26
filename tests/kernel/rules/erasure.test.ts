@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { applyErasure, applyWireSever } from '../../../src/kernel/rules/erasure'
+import { applyErasure } from '../../../src/kernel/rules/erasure'
+import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
 
 describe('applyErasure', () => {
   it('removes a selection from a positive region', () => {
@@ -86,9 +87,11 @@ describe('applyWireSever', () => {
     ])
     const diagram = builder.build()
 
-    const severed = applyWireSever(diagram, wire, [
-      { node: first, port: { kind: 'arg', index: 0 } },
-    ])
+    const severed = applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: first, port: { kind: 'arg', index: 0 } }],
+    })
 
     expect(severed.wires[wire]!.endpoints).toEqual([
       { node: first, port: { kind: 'arg', index: 0 } },
@@ -112,9 +115,11 @@ describe('applyWireSever', () => {
     ])
     const diagram = builder.build()
 
-    const severed = applyWireSever(diagram, wire, [
-      { node: first, port: { kind: 'arg', index: 0 } },
-    ])
+    const severed = applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: first, port: { kind: 'arg', index: 0 } }],
+    })
     const fresh = Object.keys(severed.wires).find((id) => diagram.wires[id] === undefined)!
 
     expect(severed.wires[fresh]!.scope).toBe(positive)
@@ -130,7 +135,11 @@ describe('applyWireSever', () => {
     ])
     const diagram = builder.build()
 
-    expect(() => applyWireSever(diagram, wire, []))
+    expect(() => applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [],
+    }))
       .toThrowError(/severing a wire requires a positive scope; 'r1' is negative/)
   })
 
@@ -142,8 +151,10 @@ describe('applyWireSever', () => {
     ])
     const diagram = builder.build()
 
-    expect(() => applyWireSever(diagram, wire, [
-      { node: 'ghost', port: { kind: 'arg', index: 0 } },
-    ])).toThrowError(/'ghost'.*is not an endpoint of wire 'w0'/)
+    expect(() => applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: 'ghost', port: { kind: 'arg', index: 0 } }],
+    })).toThrowError(/'ghost'.*is not an endpoint of wire 'w0'/)
   })
 })

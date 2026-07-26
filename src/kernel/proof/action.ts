@@ -60,12 +60,26 @@ export function singleStepAction(
   return { label, steps: [step], placements }
 }
 
-/** Stable action-wide placement index: all nodes introduced by every constituent
-    step, ordered only after the complete action has been applied. */
+/** Every surviving allocation introduced by an action, in construction order.
+ * Repeated relation splices therefore remain grouped by deterministic
+ * application-id order instead of being regrouped lexically by pattern id. */
+export function introducedAllocationIds(
+  before: Diagram,
+  after: Diagram,
+): ProofAllocation {
+  return Object.freeze({
+    regions: Object.freeze(Object.keys(after.regions)
+      .filter((id) => before.regions[id] === undefined)),
+    nodes: Object.freeze(Object.keys(after.nodes)
+      .filter((id) => before.nodes[id] === undefined)),
+    wires: Object.freeze(Object.keys(after.wires)
+      .filter((id) => before.wires[id] === undefined)),
+  })
+}
+
+/** Stable action-wide placement index after every constituent step. */
 export function introducedNodeIds(before: Diagram, after: Diagram): readonly NodeId[] {
-  return Object.keys(after.nodes)
-    .filter((id) => before.nodes[id] === undefined)
-    .sort()
+  return introducedAllocationIds(before, after).nodes
 }
 
 export function applyAction(

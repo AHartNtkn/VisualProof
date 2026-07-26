@@ -1,7 +1,6 @@
 import type {
   Diagram,
   DiagramNormalization,
-  Endpoint,
   NodeId,
   RegionId,
   WireId,
@@ -13,7 +12,7 @@ import type { IdReservation } from '../diagram/subgraph/freshId'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../rules/doublecut'
-import { applyErasure, applyWireSever } from '../rules/erasure'
+import { applyErasure } from '../rules/erasure'
 import { applyFold, applyUnfold } from '../rules/fold'
 import { applyIdentityInsertion } from '../rules/identity'
 import {
@@ -23,7 +22,12 @@ import {
 } from '../rules/iteration'
 import { applyRefSpawn, applyAtomSpawn } from '../rules/spawn'
 import { applyVacuousElim, applyVacuousIntro } from '../rules/vacuous'
-import { applyWireJoin } from '../rules/wire-join'
+import {
+  applyWireJoin,
+  applyWireSever,
+  type WireJoinInput,
+  type WireSeverInput,
+} from '../rules/wire-quantifier'
 import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
 import { applyTheorem, type TheoremApplication } from './theorem'
@@ -33,9 +37,9 @@ export type ProofStep =
   | { readonly rule: 'refSpawn'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }
   | { readonly rule: 'atomSpawn'; readonly region: RegionId; readonly wire: WireId }
   | { readonly rule: 'identityInsert'; readonly region: RegionId; readonly wires: readonly WireId[] }
-  | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
+  | { readonly rule: 'wireJoin'; readonly input: WireJoinInput }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
-  | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
+  | { readonly rule: 'wireSever'; readonly input: WireSeverInput }
   | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId; readonly retargets: readonly IdentityRetarget[] }
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate; readonly retargets: readonly IdentityRetarget[] }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
@@ -119,14 +123,18 @@ function applyStepRaw(
         reservation,
       )
     case 'wireJoin':
-      return applyWireJoin(diagram, step.a, step.b, orientation)
+      return applyWireJoin(
+        diagram,
+        step.input,
+        orientation,
+        reservation,
+      )
     case 'erasure':
       return applyErasure(diagram, step.sel, orientation)
     case 'wireSever':
       return applyWireSever(
         diagram,
-        step.wire,
-        step.keep,
+        step.input,
         orientation,
         reservation,
       )
@@ -193,14 +201,14 @@ function joinedRepresentative(
   step: ProofStep,
   wire: WireId,
 ): WireId {
-  if (step.rule !== 'wireJoin') return wire
-  const a = diagram.wires[step.a]
-  const b = diagram.wires[step.b]
+  if (step.rule !== 'wireJoin' || step.input.kind !== 'iota') return wire
+  const a = diagram.wires[step.input.a]
+  const b = diagram.wires[step.input.b]
   if (a === undefined || b === undefined) return wire
   const retained = isAncestorOrEqual(diagram, a.scope, b.scope)
-    ? step.a
-    : step.b
-  return wire === step.a || wire === step.b ? retained : wire
+    ? step.input.a
+    : step.input.b
+  return wire === step.input.a || wire === step.input.b ? retained : wire
 }
 
 function composeNormalizationWireImage(

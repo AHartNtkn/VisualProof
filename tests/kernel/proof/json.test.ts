@@ -106,16 +106,48 @@ describe('action allocation JSON', () => {
 
 describe('step JSON', () => {
   it('round-trips every final Phase-1 primitive', () => {
+    const contentBuilder = new DiagramBuilder()
+    const contentBoundary = contentBuilder.wire(contentBuilder.root, [])
+    const content = mkDiagramWithBoundary(
+      contentBuilder.build(),
+      [contentBoundary],
+    )
     const steps: ProofStep[] = [
       { rule: 'refSpawn', region: 'r1', defId: 'nat', sig: relSig([IOTA]) },
       { rule: 'atomSpawn', region: 'r1', wire: 'w0' },
       { rule: 'identityInsert', region: 'r1', wires: ['w0', 'w1'] },
-      { rule: 'wireJoin', a: 'w0', b: 'w1' },
+      {
+        rule: 'wireJoin',
+        input: { kind: 'iota', a: 'w0', b: 'w1' },
+      },
+      {
+        rule: 'wireJoin',
+        input: {
+          kind: 'relation',
+          wire: 'w0',
+          content,
+          parameters: ['w1'],
+        },
+      },
       { rule: 'erasure', sel: selection },
       {
         rule: 'wireSever',
-        wire: 'w0',
-        keep: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+        input: {
+          kind: 'iota',
+          wire: 'w0',
+          keep: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+        },
+      },
+      {
+        rule: 'wireSever',
+        input: {
+          kind: 'relation',
+          scope: 'r0',
+          occurrences: [{
+            sel: selection,
+            args: ['w0'],
+          }],
+        },
       },
       { rule: 'iteration', sel: selection, target: 'r1', retargets },
       {
@@ -155,6 +187,48 @@ describe('step JSON', () => {
       sig: relSig([relSig([])]),
       reification: true,
     })).toThrowError(/refSpawn step has unknown field 'reification'/i)
+  })
+
+  it('strictly rejects displaced wire shapes and malformed content occurrences', () => {
+    expect(() => stepFromJson({
+      rule: 'wireJoin',
+      a: 'w0',
+      b: 'w1',
+    })).toThrowError(/wireJoin step has unknown field 'a'/i)
+    expect(() => stepFromJson({
+      rule: 'wireSever',
+      wire: 'w0',
+      keep: [],
+    })).toThrowError(/wireSever step has unknown field 'wire'/i)
+    expect(() => stepFromJson({
+      rule: 'wireJoin',
+      input: {
+        kind: 'iota',
+        a: 'w0',
+        b: 'w1',
+        wire: 'legacy',
+      },
+    })).toThrowError(/wireJoin iota input has unknown field 'wire'/i)
+    expect(() => stepFromJson({
+      rule: 'wireSever',
+      input: {
+        kind: 'relation',
+        scope: 'r0',
+        occurrences: [{
+          sel: selection,
+          args: ['w0'],
+          extra: true,
+        }],
+      },
+    })).toThrowError(/occurrences\[0\].*unknown field 'extra'/i)
+    expect(() => stepFromJson({
+      rule: 'wireSever',
+      input: {
+        kind: 'relation',
+        scope: 'r0',
+        occurrences: [{ sel: selection, args: 'w0' }],
+      },
+    })).toThrowError(/occurrences\[0\].args must be an array/i)
   })
 
   it('omits obsolete term certificates from occurrence-certificate JSON', () => {

@@ -1,46 +1,51 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
-import { RuleError } from '../../../src/kernel/rules/error'
-import { applyWireJoin } from '../../../src/kernel/rules/wire-join'
+import { applyWireJoin } from '../../../src/kernel/rules/wire-quantifier'
 
-describe('wire join: structural and signature gates', () => {
-  it('refuses an iota wire and a rel(iota) wire, naming both signatures', () => {
-    const builder = new DiagramBuilder()
-    const cut = builder.cut(builder.root)
-    const individual = builder.wire(cut, [], IOTA)
-    const relation = builder.wire(cut, [], relSig([IOTA]))
-    const diagram = builder.build()
-
-    expect(() => applyWireJoin(diagram, individual, relation))
-      .toThrowError(/cannot join wires of different signatures: 'i' vs '\(i\)'/)
-    expect(() => applyWireJoin(diagram, relation, individual)).toThrow(RuleError)
-  })
-
-  it('refuses structurally distinct relational signatures', () => {
-    const builder = new DiagramBuilder()
-    const cut = builder.cut(builder.root)
-    const unary = builder.wire(cut, [], relSig([IOTA]))
-    const binary = builder.wire(cut, [], relSig([IOTA, IOTA]))
-    const diagram = builder.build()
-
-    expect(() => applyWireJoin(diagram, unary, binary))
-      .toThrowError(/cannot join wires of different signatures: '\(i\)' vs '\(i,i\)'/)
-  })
-
-  it('checks signatures before scope comparability', () => {
+describe('iota wire join', () => {
+  it('requires comparable scopes', () => {
     const builder = new DiagramBuilder()
     const firstCut = builder.cut(builder.root)
     const secondCut = builder.cut(builder.root)
-    const individual = builder.wire(firstCut, [], IOTA)
-    const relation = builder.wire(secondCut, [], relSig([IOTA]))
+    const first = builder.wire(firstCut, [])
+    const second = builder.wire(secondCut, [])
     const diagram = builder.build()
 
-    expect(() => applyWireJoin(diagram, individual, relation))
-      .toThrowError(/cannot join wires of different signatures/)
+    expect(() => applyWireJoin(diagram, {
+      kind: 'iota',
+      a: first,
+      b: second,
+    })).toThrowError(/incomparable scopes/)
   })
 
-  it('merges comparable exact-signature wires and re-normalizes affected identity content', () => {
+  it('requires negative inner scope forward and positive inner scope backward', () => {
+    const builder = new DiagramBuilder()
+    const negative = builder.cut(builder.root)
+    const positive = builder.cut(negative)
+    const outer = builder.wire(builder.root, [])
+    const negativeInner = builder.wire(negative, [])
+    const positiveInner = builder.wire(positive, [])
+    const diagram = builder.build()
+
+    expect(() => applyWireJoin(diagram, {
+      kind: 'iota',
+      a: outer,
+      b: negativeInner,
+    })).not.toThrow()
+    expect(() => applyWireJoin(diagram, {
+      kind: 'iota',
+      a: outer,
+      b: positiveInner,
+    })).toThrowError(/inner wire's scope to be negative/)
+    expect(() => applyWireJoin(diagram, {
+      kind: 'iota',
+      a: outer,
+      b: positiveInner,
+    }, 'backward')).not.toThrow()
+  })
+
+  it('retains the outer wire and re-normalizes affected identity content', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const identity = builder.identity(cut, IOTA, 2)
@@ -57,7 +62,11 @@ describe('wire join: structural and signature gates', () => {
     const diagram = builder.build()
     expect(diagram.nodes[identity]).toBeDefined()
 
-    const joined = applyWireJoin(diagram, outer, inner)
+    const joined = applyWireJoin(diagram, {
+      kind: 'iota',
+      a: outer,
+      b: inner,
+    })
 
     expect(joined.wires[outer]).toBeDefined()
     expect(joined.wires[inner]).toBeUndefined()

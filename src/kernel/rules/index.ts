@@ -1,7 +1,15 @@
 export { RuleError } from './error'
-export { applyWireJoin } from './wire-join'
+export {
+  applyWireJoin,
+  applyWireSever,
+} from './wire-quantifier'
+export type {
+  ContentOccurrence,
+  WireJoinInput,
+  WireSeverInput,
+} from './wire-quantifier'
 export { applyRefSpawn, applyAtomSpawn } from './spawn'
-export { applyErasure, applyWireSever } from './erasure'
+export { applyErasure } from './erasure'
 export type { DeiterationEvidence, IdentityRetarget } from './iteration'
 export {
   applyIteration,

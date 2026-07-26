@@ -11,6 +11,11 @@ import {
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { IdentityRetarget } from '../rules/iteration'
+import type {
+  ContentOccurrence,
+  WireJoinInput,
+  WireSeverInput,
+} from '../rules/wire-quantifier'
 import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { ProofStep } from './step'
 import type { Theorem, TheoremApplication } from './theorem'
@@ -89,6 +94,131 @@ function endpointFromJson(value: unknown, what: string): Endpoint {
   return {
     node: str(value.node, `${what}.node`),
     port: parsePortKey(str(value.port, `${what}.port`)),
+  }
+}
+
+function contentOccurrenceToJson(
+  occurrence: ContentOccurrence,
+): unknown {
+  return {
+    sel: selectionToJson(occurrence.sel),
+    args: [...occurrence.args],
+  }
+}
+
+function contentOccurrenceFromJson(
+  value: unknown,
+  what: string,
+): ContentOccurrence {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['sel', 'args'], what)
+  return {
+    sel: selectionFromJson(value.sel, `${what}.sel`),
+    args: strArray(value.args, `${what}.args`),
+  }
+}
+
+function wireSeverInputToJson(input: WireSeverInput): unknown {
+  switch (input.kind) {
+    case 'iota':
+      return {
+        kind: input.kind,
+        wire: input.wire,
+        keep: input.keep.map(endpointToJson),
+      }
+    case 'relation':
+      return {
+        kind: input.kind,
+        scope: input.scope,
+        occurrences: input.occurrences.map(contentOccurrenceToJson),
+      }
+  }
+}
+
+function wireSeverInputFromJson(value: unknown): WireSeverInput {
+  if (!isRecord(value)) fail('wireSever input must be an object')
+  const kind = str(value.kind, 'wireSever input.kind')
+  switch (kind) {
+    case 'iota':
+      assertOnlyKeys(
+        value,
+        ['kind', 'wire', 'keep'],
+        'wireSever iota input',
+      )
+      if (!Array.isArray(value.keep)) {
+        fail('wireSever iota input.keep must be an array')
+      }
+      return {
+        kind,
+        wire: str(value.wire, 'wireSever input.wire'),
+        keep: value.keep.map((endpoint, index) =>
+          endpointFromJson(endpoint, `wireSever input.keep[${index}]`)),
+      }
+    case 'relation':
+      assertOnlyKeys(
+        value,
+        ['kind', 'scope', 'occurrences'],
+        'wireSever relation input',
+      )
+      if (!Array.isArray(value.occurrences)) {
+        fail('wireSever relation input.occurrences must be an array')
+      }
+      return {
+        kind,
+        scope: str(value.scope, 'wireSever input.scope'),
+        occurrences: value.occurrences.map((occurrence, index) =>
+          contentOccurrenceFromJson(
+            occurrence,
+            `wireSever input.occurrences[${index}]`,
+          )),
+      }
+    default:
+      fail("wireSever input.kind must be 'iota'|'relation'")
+  }
+}
+
+function wireJoinInputToJson(input: WireJoinInput): unknown {
+  switch (input.kind) {
+    case 'iota':
+      return { kind: input.kind, a: input.a, b: input.b }
+    case 'relation':
+      return {
+        kind: input.kind,
+        wire: input.wire,
+        content: dwbToJson(input.content),
+        parameters: [...input.parameters],
+      }
+  }
+}
+
+function wireJoinInputFromJson(value: unknown): WireJoinInput {
+  if (!isRecord(value)) fail('wireJoin input must be an object')
+  const kind = str(value.kind, 'wireJoin input.kind')
+  switch (kind) {
+    case 'iota':
+      assertOnlyKeys(value, ['kind', 'a', 'b'], 'wireJoin iota input')
+      return {
+        kind,
+        a: str(value.a, 'wireJoin input.a'),
+        b: str(value.b, 'wireJoin input.b'),
+      }
+    case 'relation':
+      assertOnlyKeys(
+        value,
+        ['kind', 'wire', 'content', 'parameters'],
+        'wireJoin relation input',
+      )
+      return {
+        kind,
+        wire: str(value.wire, 'wireJoin input.wire'),
+        content: dwbFromJson(value.content, 'wireJoin input.content'),
+        parameters: strArray(
+          value.parameters,
+          'wireJoin input.parameters',
+        ),
+      }
+    default:
+      fail("wireJoin input.kind must be 'iota'|'relation'")
   }
 }
 
@@ -207,14 +337,16 @@ export function stepToJson(step: ProofStep): unknown {
         wires: [...step.wires],
       }
     case 'wireJoin':
-      return { rule: step.rule, a: step.a, b: step.b }
+      return {
+        rule: step.rule,
+        input: wireJoinInputToJson(step.input),
+      }
     case 'erasure':
       return { rule: step.rule, sel: selectionToJson(step.sel) }
     case 'wireSever':
       return {
         rule: step.rule,
-        wire: step.wire,
-        keep: step.keep.map(endpointToJson),
+        input: wireSeverInputToJson(step.input),
       }
     case 'iteration':
       return {
@@ -289,20 +421,14 @@ export function stepFromJson(value: unknown): ProofStep {
         wires: strArray(value.wires, 'wires'),
       }
     case 'wireJoin':
-      assertOnlyKeys(value, ['rule', 'a', 'b'], 'wireJoin step')
-      return { rule, a: str(value.a, 'a'), b: str(value.b, 'b') }
+      assertOnlyKeys(value, ['rule', 'input'], 'wireJoin step')
+      return { rule, input: wireJoinInputFromJson(value.input) }
     case 'erasure':
       assertOnlyKeys(value, ['rule', 'sel'], 'erasure step')
       return { rule, sel: selectionFromJson(value.sel, 'sel') }
     case 'wireSever':
-      assertOnlyKeys(value, ['rule', 'wire', 'keep'], 'wireSever step')
-      if (!Array.isArray(value.keep)) fail('keep must be an array')
-      return {
-        rule,
-        wire: str(value.wire, 'wire'),
-        keep: value.keep.map((endpoint, index) =>
-          endpointFromJson(endpoint, `keep[${index}]`)),
-      }
+      assertOnlyKeys(value, ['rule', 'input'], 'wireSever step')
+      return { rule, input: wireSeverInputFromJson(value.input) }
     case 'iteration':
       assertOnlyKeys(
         value,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -11,6 +12,10 @@ import {
   applyIteration,
   findDeiterationEvidence,
 } from '../../../src/kernel/rules/iteration'
+import {
+  applyWireJoin,
+  applyWireSever,
+} from '../../../src/kernel/rules/wire-quantifier'
 
 function nested(depth: number) {
   const builder = new DiagramBuilder()
@@ -71,6 +76,55 @@ describe('polarity matrix across depths 0–3', () => {
 
       expect(() => applyIteration(diagram, selection, region)).not.toThrow()
       expect(() => applyDoubleCutIntro(diagram, selection)).not.toThrow()
+    })
+
+    it(`depth ${depth}: relation quantifiers use complementary sever/join polarity`, () => {
+      const builder = new DiagramBuilder()
+      let region = builder.root
+      for (let index = 0; index < depth; index++) region = builder.cut(region)
+      const relation = builder.relWire(region, relSig([]))
+      const diagram = builder.build()
+      const content = mkDiagramWithBoundary(new DiagramBuilder().build(), [])
+      const sever = () => applyWireSever(diagram, {
+        kind: 'relation',
+        scope: region,
+        occurrences: [{
+          sel: { region, regions: [], nodes: [], wires: [] },
+          args: [],
+        }],
+      })
+      const severBackward = () => applyWireSever(diagram, {
+        kind: 'relation',
+        scope: region,
+        occurrences: [{
+          sel: { region, regions: [], nodes: [], wires: [] },
+          args: [],
+        }],
+      }, 'backward')
+      const join = () => applyWireJoin(diagram, {
+        kind: 'relation',
+        wire: relation,
+        content,
+        parameters: [],
+      })
+      const joinBackward = () => applyWireJoin(diagram, {
+        kind: 'relation',
+        wire: relation,
+        content,
+        parameters: [],
+      }, 'backward')
+
+      if (positive) {
+        expect(sever).not.toThrow()
+        expect(severBackward).toThrow()
+        expect(join).toThrow()
+        expect(joinBackward).not.toThrow()
+      } else {
+        expect(sever).toThrow()
+        expect(severBackward).not.toThrow()
+        expect(join).not.toThrow()
+        expect(joinBackward).toThrow()
+      }
     })
   }
 })

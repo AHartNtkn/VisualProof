@@ -5,6 +5,8 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyAction,
+  introducedAllocationIds,
+  introducedNodeIds,
   replayActions,
   singleStepAction,
   type ProofAction,
@@ -158,6 +160,70 @@ describe('proof actions', () => {
     )
     expect(Object.keys(result.regions).filter((id) =>
       diagram.regions[id] === undefined)).toEqual(['dc_1', 'dc_2'])
+  })
+
+  it('captures every repeated grounding splice allocation in application-id order', () => {
+    const contentBuilder = new DiagramBuilder()
+    const contentCut = contentBuilder.cut(contentBuilder.root)
+    const body = contentBuilder.ref(
+      contentCut,
+      'Body',
+      relSig([IOTA]),
+    )
+    contentBuilder.atom(contentCut, relSig([]))
+    const formal = contentBuilder.wire(contentBuilder.root, [{
+      node: body,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const content = mkDiagramWithBoundary(
+      contentBuilder.build(),
+      [formal],
+    )
+
+    const builder = new DiagramBuilder()
+    const negative = builder.cut(builder.root)
+    const first = builder.atom(negative, relSig([IOTA]))
+    const second = builder.atom(negative, relSig([IOTA]))
+    builder.wire(negative, [{
+      node: first,
+      port: { kind: 'arg', index: 0 },
+    }])
+    builder.wire(negative, [{
+      node: second,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const relation = builder.wire(negative, [
+      { node: first, port: { kind: 'head' } },
+      { node: second, port: { kind: 'head' } },
+    ], relSig([IOTA]))
+    const diagram = builder.build()
+    const action: ProofAction = {
+      label: 'ground both applications',
+      steps: [{
+        rule: 'wireJoin',
+        input: {
+          kind: 'relation',
+          wire: relation,
+          content,
+          parameters: [],
+        },
+      }],
+      placements: [],
+      allocation: {
+        regions: ['r1_0'],
+        nodes: ['n0_0'],
+        wires: ['w1_0'],
+      },
+    }
+
+    const result = applyAction(diagram, action, EMPTY_PROOF_CONTEXT)
+    expect(introducedAllocationIds(diagram, result)).toEqual({
+      regions: ['r1_1', 'r1_2'],
+      nodes: ['n0_1', 'n1_0', 'n0_2', 'n1_1'],
+      wires: ['w1_1', 'w1_2'],
+    })
+    expect(introducedNodeIds(diagram, result))
+      .toEqual(['n0_1', 'n1_0', 'n0_2', 'n1_1'])
   })
 
   it('identifies both action and constituent step on failure', () => {

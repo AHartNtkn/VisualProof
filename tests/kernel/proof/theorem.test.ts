@@ -123,6 +123,66 @@ describe('checkTheorem', () => {
     expect(() => checkTheorem(loaded, EMPTY_PROOF_CONTEXT)).not.toThrow()
   })
 
+  it('replays strongest-form relation grounding while preserving theorem boundaries', () => {
+    const contentBuilder = new DiagramBuilder()
+    const body = contentBuilder.ref(
+      contentBuilder.root,
+      'G',
+      relSig([IOTA, IOTA]),
+    )
+    const formalStub = contentBuilder.wire(contentBuilder.root, [{
+      node: body,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const parameterStub = contentBuilder.wire(contentBuilder.root, [{
+      node: body,
+      port: { kind: 'arg', index: 1 },
+    }])
+    const content = mkDiagramWithBoundary(
+      contentBuilder.build(),
+      [formalStub, parameterStub],
+    )
+    const builder = new DiagramBuilder()
+    const negative = builder.cut(builder.root)
+    const application = builder.atom(negative, relSig([IOTA]))
+    const argument = builder.wire(builder.root, [{
+      node: application,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const relation = builder.wire(negative, [{
+      node: application,
+      port: { kind: 'head' },
+    }], relSig([IOTA]))
+    const parameter = builder.wire(builder.root, [])
+    const lhsDiagram = builder.build()
+    const grounding: ProofAction = {
+      label: 'ground relation',
+      steps: [{
+        rule: 'wireJoin',
+        input: {
+          kind: 'relation',
+          wire: relation,
+          content,
+          parameters: [parameter],
+        },
+      }],
+      placements: [],
+    }
+    const rhsDiagram = applyAction(
+      lhsDiagram,
+      grounding,
+      EMPTY_PROOF_CONTEXT,
+    )
+    const theorem: Theorem = {
+      name: 'grounding-replay',
+      lhs: mkDiagramWithBoundary(lhsDiagram, [argument, parameter]),
+      rhs: mkDiagramWithBoundary(rhsDiagram, [argument, parameter]),
+      actions: [grounding],
+    }
+
+    expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
+  })
+
   it('pins ordered boundary correspondence', () => {
     const side = (swap: boolean) => {
       const builder = new DiagramBuilder()
