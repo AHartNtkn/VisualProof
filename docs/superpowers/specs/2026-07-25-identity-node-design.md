@@ -14,10 +14,9 @@
 > 2. **Stale λ references** (the projection-node workaround, `congruenceJoin`,
 >    `fusion`, the `body` node) are pre-redesign context. The identity node itself
 >    is sort-agnostic and unaffected; the λ machinery named here is being deleted.
-> 3. **Relation handles through comprehension → grammatical reification.** A
->    relation handle for an assertion is obtained only by
->    `S' := Exists P. forall x. P(x) <-> S(x)`; the earlier comprehension model is
->    rejected.
+> 3. **Relation handles through comprehension — rejected.** The earlier
+>    comprehension model is rejected. Current relation-handle derivation is
+>    specified solely by item 7, governed by umbrella correction-log item 10.
 > 4. **"six identity-node rules" → five identity transformations.** The five are
 >    the three normalizations, inherited insertion/erasure, and substitution.
 > 5. **[Superseded by umbrella correction-log item 10] Checked reification refs
