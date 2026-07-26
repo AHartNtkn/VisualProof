@@ -26,6 +26,12 @@ deletions.
 >    mechanism. Libraries load as whole JSON theories (as the removed `frege.json`
 >    did); reuse is **theorem-to-theorem citation**; library management is out of
 >    scope.
+> 4. **Peano-scope line reframed.** "not full Peano" implied a foundational
+>    judgment that was never made. Replaced with the real criterion: standing
+>    hypotheses are exactly those the target theorems (up to `plusComm`) invoke,
+>    determined by building the derivations — `0 ≠ succ n` and injectivity are
+>    excluded because no target proof uses them, not because they are less
+>    foundational.
 
 ## Motivation
 
@@ -149,9 +155,15 @@ Theorems are **rebuilt by citing earlier theorems**, at least up to `plusComm`
 (commutativity of addition): each theorem references the ones it depends on rather
 than reproving them.
 
-- **Deliberately out:** `0 ≠ succ n` and `succ`-injectivity as standing hypotheses
-  — added to a theorem's antecedent only if it needs them. The goal is
-  demonstrating how a theory is assembled, not exhaustive arithmetic.
+- **Standing hypotheses = exactly what the target theorems invoke.** A property is
+  in the baseline iff some target proof uses it — the only criterion, and one
+  settled by building the derivations, not asserted a priori. `0 ≠ succ n` and
+  `succ`-injectivity are not invoked anywhere up to `plusComm` (the inductive
+  proofs build `succ` up — never stripping it, where injectivity would enter, and
+  never splitting zero-vs-successor, where `0 ≠ succ n` would), so they are not in
+  the baseline; if a derivation turns out to need one, it moves into that theorem's
+  antecedent. The point is demonstrating how a theory is assembled, not exhaustive
+  arithmetic.
 
 Two intended features: (1) both `zero`-uniqueness and `succ`-single-valuedness are
 equalities in a consequent — `identity` nodes inside cuts — so the rebuilt frege is
