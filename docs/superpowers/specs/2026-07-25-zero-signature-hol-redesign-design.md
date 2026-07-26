@@ -7,6 +7,26 @@ rules) and absorbs the standalone `2026-07-25-identity-node-design.md` primitive
 This is a single coherent kernel-vocabulary redesign, not three overlapping
 deletions.
 
+> ## ⚠ CORRECTION LOG — 2026-07-25 grounding pass
+>
+> This spec originally named mechanisms that do not exist in the system; a
+> grounding pass replaced each with the real construct.
+>
+> 1. **"axiom / axiom set / postulate / assume" → quantified primitives +
+>    hypotheses.** There is no axiom mechanism — a theory holds only interpreted
+>    `relations` and kernel-verified `theorems`, neither of which is an axiom. A
+>    "postulated" relation is a **quantified relation variable**; an "assumed"
+>    property is a **hypothesis in the antecedent** of the implication a theorem
+>    proves. Fixed in Section 1 (Rule 6), Section 2, and Out of Scope.
+> 2. **"distinctness oracle / certificate" (Rule 6) → ordinary inconsistency.**
+>    Nothing certifies distinctness without computation; disequality is a
+>    hypothesis, and equality-meets-disequality is ordinary logical inconsistency —
+>    no identity-specific rule, no oracle. The λ `inconsistent-cut` deletes with λ.
+> 3. **"importable library files" → JSON theories + citation.** There is no import
+>    mechanism. Libraries load as whole JSON theories (as the removed `frege.json`
+>    did); reuse is **theorem-to-theorem citation**; library management is out of
+>    scope.
+
 ## Motivation
 
 Two findings drove this:
@@ -58,11 +78,13 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
 - *Keep:* insertion (negative region), erasure (positive region),
   iteration/deiteration, double-cut intro/elim, `wireJoin` (gated cross-scope
   merge).
-- *Add:* the six identity-node rules. Rule 6 (contradiction discharge) is
-  **simplified**: with no computation, individuals are never provably distinct
-  except by an asserted disequality axiom, so there is no object-language
-  distinctness oracle — a negated identity is inconsistent only against an
-  asserted equality, and specific disequalities (`0 ≠ 1`) are theory axioms.
+- *Add:* the identity-node rules. Rule 6 (contradiction discharge) **dissolves**:
+  with no computation, individuals are never provably distinct except relative to a
+  disequality **hypothesis** (an asserted `x ≠ y`), so a context asserting both an
+  equality and a disequality hypothesis is inconsistent by ordinary logic (the
+  existing cut/negation calculus) — no identity-specific contradiction rule and no
+  distinctness oracle is needed. Specific disequalities (`0 ≠ 1`) are hypotheses,
+  not axioms.
 - *Delete:* the entire βη/term rule family — `fusion`/`fission`, `congruence`-at-ι
   (βη), `headstrip`, `inconsistent-cut` (βη-separation), and the comprehension /
   `relCongruenceJoin` rules from the drawn-definitions refactor.
@@ -85,9 +107,11 @@ theorems** (the Eq library).
 
 **No macro system this pass.** The headed/singleton form of a predicate is just
 its reified relation (produced by the reification construction, not a feature).
-The assertion-form ↔ reified-form pairing and the Eq library are **importable
-library files** (`.ts` or successor) — documented, demoed constructions living
-alongside the theories, not kernel machinery. Nothing macro-like is built.
+The assertion-form ↔ reified-form pairing and the Eq lemmas are ordinary recorded
+**theorems and definitions**, reused by **theorem-to-theorem citation** — documented,
+demoed constructions living alongside the theories, not kernel machinery. They load
+as part of a whole JSON theory (as the removed `frege.json` did); there is no import
+mechanism and library management is out of scope. Nothing macro-like is built.
 
 **Semantics (Lean):** covered in Section 3.
 
@@ -95,32 +119,46 @@ alongside the theories, not kernel machinery. Nothing macro-like is built.
 
 The existing frege corpus is Church-numeral λ-encoding and dies with the term
 layer. It is rebuilt relationally, and doubles as the theory-construction demo.
-Not full Peano-as-raw-axioms: postulate the relations and assume only their
-essential properties, then use the surviving **Frege ℕ definition** (the
-second-order "every hereditary property containing zero" definition — relational,
-so it survives intact).
 
-- **`zero`** — postulated predicate `rel(ι)`. Axioms: existence `∃x zero(x)`;
-  **uniqueness** `∀x∀y(zero(x) ∧ zero(y) → x=y)`.
-- **`succ`** — postulated relation `rel(ι,ι)`. Axioms: **functionality** — total
-  `∀x∃y succ(x,y)` and single-valued
-  `∀x∀y∀y'(succ(x,y) ∧ succ(x,y') → y=y')`.
-- **Frege ℕ** — kept as a `ref` definition, now referencing the postulated
-  `zero`/`succ`. The theory bundles the `zero`/`succ` assumptions with this
-  definition as its axiom set; proofs about ℕ unfold the definition and draw on
-  those assumptions.
-- **`plus`** — defined separately as a relation with its own defining/functional
-  assumptions.
-- **Deliberately out:** `0 ≠ succ n` and `succ`-injectivity as standing axioms —
-  pulled in only if a specific theorem needs them. The goal is demonstrating how a
-  theory is assembled, not exhaustive arithmetic.
+**There is no axiom mechanism.** A "postulated" relation is a **quantified relation
+variable**, and an "assumed" property is a **hypothesis in the antecedent** of the
+implication a theorem proves. Concretely, every arithmetic theorem has the shape
+`∀(primitives)( hypotheses → conclusion )` — the primitive relations universally
+quantified (`rel`-wires in a negative region), their assumed properties sitting in
+the antecedent, and the whole thing a valid implication carrying a kernel-verified
+derivation like any theorem. The theory is a hypothesis bundle discharged into each
+implication's antecedent, not a set of asserted axioms. The surviving **Frege ℕ
+definition** (the second-order "every hereditary property containing zero"
+definition — relational, so it survives intact) is stated relative to the primitive
+variables.
 
-Two intended features of this axiom set: (1) both `zero`-uniqueness and
-`succ`-single-valuedness are equalities in a consequent — `identity` nodes inside
-cuts — so the rebuilt frege is the first real exercise of the identity node and
-the natural conservativity/expressiveness target; (2) it demonstrates theory
-construction from postulates + assumed properties. The Eq library and the
-assertion-form/reified-form constructions ride along as the importable demo files.
+The primitives and their assumed properties (each an ordinary sub-diagram, used as
+a hypothesis):
+
+- **`zero`** — a `rel(ι)` variable. Assumed: existence `∃x zero(x)`; **uniqueness**
+  `∀x∀y(zero(x) ∧ zero(y) → x=y)`.
+- **`succ`** — a `rel(ι,ι)` variable. Assumed: **functionality** — total
+  `∀x∃y succ(x,y)` and single-valued `∀x∀y∀y'(succ(x,y) ∧ succ(x,y') → y=y')`.
+- **Frege ℕ** — a `ref` definition whose body references the `zero`/`succ`
+  variables. Proofs about ℕ unfold the definition and draw on the `zero`/`succ`
+  hypotheses carried in the theorem's antecedent.
+- **`plus`** — a further definition/relation with its own defining and functional
+  properties assumed the same way.
+
+Theorems are **rebuilt by citing earlier theorems**, at least up to `plusComm`
+(commutativity of addition): each theorem references the ones it depends on rather
+than reproving them.
+
+- **Deliberately out:** `0 ≠ succ n` and `succ`-injectivity as standing hypotheses
+  — added to a theorem's antecedent only if it needs them. The goal is
+  demonstrating how a theory is assembled, not exhaustive arithmetic.
+
+Two intended features: (1) both `zero`-uniqueness and `succ`-single-valuedness are
+equalities in a consequent — `identity` nodes inside cuts — so the rebuilt frege is
+the first real exercise of the identity node and the natural
+conservativity/expressiveness target; (2) it demonstrates theory construction from
+quantified primitives + hypotheses. The Eq lemmas and assertion-form/reified-form
+constructions ride along as recorded theorems reused by citation.
 
 ## Section 3 — Lean semantics rewrite
 
@@ -175,8 +213,8 @@ One coherent kernel-vocabulary redesign, then downstream in sequence:
    add identity-node rules, reimplement definitional unfold/fold off the
    def-store, delete `term`/`body`/βη rules/comprehension rules and the `Lambda`
    TS layer.
-2. **Theories** (Section 2): relational frege + importable Eq / reified-form
-   library files.
+2. **Theories** (Section 2): relational frege (quantified primitives + hypotheses;
+   theorems by citation up to `plusComm`) + Eq / reified-form recorded theorems.
 3. **Lean semantics** (Section 3): `Model`, `identity` item, all-models validity,
    soundness for the new rule set; delete the `Lambda` Lean subtree.
 4. **Expressiveness proof** (Section 4): reference HOL + translation + denotation
@@ -189,6 +227,8 @@ One coherent kernel-vocabulary redesign, then downstream in sequence:
 - **Deductive completeness / Henkin models.** Impossible against all-models
   semantics (Gödel); would require a general-model layer. Not pursued; the
   completeness effort is expressiveness only.
-- **Full Peano.** `0 ≠ succ n` and `succ`-injectivity are not standing axioms.
-- **Macro system.** No macro machinery; library constructions are importable
-  files.
+- **Full Peano.** `0 ≠ succ n` and `succ`-injectivity are not standing hypotheses.
+- **Macro system.** No macro machinery; library constructions are recorded
+  theorems reused by citation.
+- **Library management.** Loading or organizing JSON theories beyond the existing
+  whole-theory JSON load (as the removed `frege.json`) is out of scope.

@@ -1,5 +1,20 @@
 # Identity node — fundamental rules
 
+> ## ⚠ CORRECTION LOG — 2026-07-25 grounding pass
+>
+> This document predates the decision to remove the λ-term layer
+> (`2026-07-25-zero-signature-hol-redesign-design.md` governs). Corrected:
+>
+> 1. **Rule 6 "distinctness certificate / oracle / object language certifies
+>    distinct" → ordinary inconsistency.** No such mechanism exists. With no
+>    computation, disequality is a **hypothesis**; a context asserting both `x = y`
+>    and the hypothesis `x ≠ y` is inconsistent by ordinary logic, so Rule 6
+>    dissolves — no identity-specific contradiction rule, no oracle. The λ-era
+>    `inconsistent-cut` deletes with λ.
+> 2. **Stale λ references** (the projection-node workaround, `congruenceJoin`,
+>    `fusion`, the `body` node) are pre-redesign context. The identity node itself
+>    is sort-agnostic and unaffected; the λ machinery named here is being deleted.
+
 Status: design draft. Scope: the kernel primitive for equality-as-a-proposition
 and its fundamental rules. **Out of scope by instruction:** how identity nodes
 interact with the λ-term language (deferred behind a single distinctness
@@ -13,13 +28,13 @@ wire (two ports on one line of identity). A shared wire asserts identity
 **unconditionally** — it is global to the wire. Consequently equality cannot
 appear negated or conditional (under a cut): `x≠y`, uniqueness
 `∀x∀y(Px ∧ Py → x=y)`, and injectivity are not expressible as first-class
-content. The only current workaround — a term node whose term is a bare
-projection variable — abuses the term language and is asymmetric (n-way needs
+content. The only workaround before this redesign — a term node whose term is a
+bare projection variable — abused the term language and was asymmetric (n-way needs
 n−1 chained nodes) and unsupported by the rule layer.
 
 The fix is a first-class **identity node**: the reified form equality takes when
 it cannot collapse to a shared wire. It is a generalization of the existing
-loose-end/dangling body node (a node hosting wire endpoints at a scope different
+loose-end/dangling-wire node (a node hosting wire endpoints at a scope different
 from where the wires are quantified) to multiple connection points.
 
 ## The primitive
@@ -62,9 +77,8 @@ The existing `wireJoin` (merge two wires of different scopes) keeps its role and
 its directional polarity gate: merging across a negation is sound only one way,
 so it stays an inference step, not a silent normalization. The identity node does
 not remove that gate; it adds the option of *leaving the equality unmerged* as a
-node when it is conditional. `congruenceJoin` ("functionality of equality":
-βη-equal term nodes have equal outputs) is object-language-specific and is left
-untouched by this document.
+node when it is conditional. (`congruenceJoin`, the βη "functionality of equality"
+over term nodes, is deleted with the λ-term layer — see the redesign spec.)
 
 ## Normalization rules (eager, silent, applied before anything is shown)
 
@@ -78,8 +92,8 @@ than two *distinct* wires asserts ⊤. Delete it. (`x=x ≡ ⊤`.)
 wire's scope equals the node's own region `R`, merge all attached wires into one
 wire and delete the node.
 - Soundness: this is the one-point rule `∃x∃y(x=y ∧ Φ) ≡ ∃x Φ[y:=x]` and its dual
-  `∀x∀y(x=y → Φ) ≡ ∀x Φ[y:=x]` — valid in both polarities, matching the existing
-  fusion rule ("equational, any region").
+  `∀x∀y(x=y → Φ) ≡ ∀x Φ[y:=x]` — valid in both polarities (the standard one-point
+  rule; the λ-era `fusion` rule that also did this deletes with λ).
 - This is precisely why **same-scope identity nodes vanish**. If some attached
   wire is quantified strictly outside `R` (its scope is a strict ancestor of `R`,
   i.e. ≥1 cut lies between), the equality is conditional and the node is
@@ -119,18 +133,13 @@ generalizes "same wire" to "identity-linked wire."
   (inward→outward), matching the existing rule's region condition plus the
   identity's availability.
 
-**Rule 6 — contradiction discharge (interface to the object language).** A
-**negated** identity node asserting equality of two individuals that the object
-language certifies **distinct** makes its enclosing cut inconsistent; the cut is
-eliminated (it denotes ⊤ in the surrounding positive context). This is the
-generalization of the current `inconsistent-cut` rule from closed λ-terms to
-open individual identity.
-- The *distinctness certificate* is supplied by the object language and is **not
-  designed here.** Today it is βη-separation of closed λ-terms (the existing
-  `inconsistent-cut` machinery, restricted to `freePorts.length === 0`). Under a
-  zero-signature higher-order language it is that language's disequality. This
-  rule's *shape* is fixed; its distinctness oracle is the single, deliberately
-  deferred, seam with the object layer.
+**Rule 6 — contradiction from disequality (no special rule).** Distinctness of two
+individuals is not computed or certified; it is **asserted as a hypothesis** (an
+`x ≠ y`, i.e. an identity node under a negation). A context asserting both `x = y`
+and the hypothesis `x ≠ y` is inconsistent by ordinary logic — the existing
+cut/negation calculus discharges it with no identity-specific rule. So there is no
+contradiction-discharge primitive and no distinctness oracle; the λ-era
+`inconsistent-cut` (βη-separation of closed λ-terms) deletes with λ.
 
 ## What this buys, symmetrically
 
@@ -149,4 +158,4 @@ open individual identity.
 | 3 | norm | same-region fusion (transitivity) | yes | two nodes, one region, shared wire |
 | 4 | infer | insert (neg) / erase (pos) | — | inherited structural rule |
 | 5 | infer | substitution via iteration/deiteration | — | identity dominates site; iteration direction |
-| 6 | infer | contradiction discharge on negated identity | — | object-language distinctness certificate (deferred) |
+| 6 | — | *dissolved* — `x=y` meeting a disequality hypothesis is ordinary inconsistency | — | no rule; λ-era `inconsistent-cut` deletes |
