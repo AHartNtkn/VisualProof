@@ -1,8 +1,6 @@
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram'
 import {
-  DiagramError,
-  mkDiagramNormalized,
-  withoutDiagramNormalizationCapture,
+  validateRawDiagram,
 } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
@@ -86,19 +84,15 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
     attachments.push(hostWireId)
   }
 
-  const normalized = withoutDiagramNormalizationCapture(() =>
-    mkDiagramNormalized({ root, regions, nodes, wires }),
-  )
-  const normalizedBoundary = boundary.map((wireId) => {
-    const image = normalized.wireImage.get(wireId)
-    if (image === undefined) {
-      throw new DiagramError(
-        `normalization removed extracted boundary wire '${wireId}' without a surviving image`,
-      )
-    }
-    return image
-  })
-  const pattern = mkDiagramWithBoundary(normalized.diagram, normalizedBoundary)
+  /*
+   * A selected conditional identity is moved to the detached pattern root,
+   * where ordinary diagram normalization would mistake its boundary stubs for
+   * locally scoped wires and collapse them. Bounded extraction must retain
+   * that explicit equality evidence: only a later splice knows the host scopes
+   * that decide whether the identity survives or normalizes to a shared wire.
+   */
+  const boundedDiagram = validateRawDiagram({ root, regions, nodes, wires })
+  const pattern = mkDiagramWithBoundary(boundedDiagram, boundary)
   return Object.freeze({
     pattern,
     attachments: Object.freeze(attachments),

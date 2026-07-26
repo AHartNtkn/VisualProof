@@ -1,5 +1,16 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import * as ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import type { DiagramNode } from '../../src/kernel/diagram/diagram'
@@ -62,6 +73,71 @@ const removedTestRuleLiterals = new Set<string>([
 
 const negativeCodecFixture = 'tests/kernel/proof/json.test.ts'
 const vocabularyGuard = 'tests/architecture/kernel-vocabulary.test.ts'
+
+const absentAuthorityPaths = [
+  'src/kernel/diagram/canonical/shape.ts',
+  'src/kernel/diagram/canonical/matchkey.ts',
+  'src/kernel/rules/anchored-wire.ts',
+  'src/kernel/rules/body.ts',
+  'src/kernel/rules/congruence.ts',
+  'src/kernel/rules/conversion.ts',
+  'src/kernel/rules/fusion.ts',
+  'src/kernel/rules/headstrip.ts',
+  'src/kernel/rules/inconsistent-cut.ts',
+  'src/kernel/rules/intro.ts',
+  'src/kernel/rules/port-correspondence.ts',
+  'src/kernel/term',
+  'tests/kernel/term',
+  'tests/kernel/rules/anchored-wire.test.ts',
+  'tests/kernel/rules/body.test.ts',
+  'tests/kernel/rules/congruence.test.ts',
+  'tests/kernel/rules/conversion.test.ts',
+  'tests/kernel/rules/fusion.test.ts',
+  'tests/kernel/rules/headstrip.test.ts',
+  'tests/kernel/rules/inconsistent-cut.test.ts',
+  'tests/kernel/rules/intro.test.ts',
+  'tests/kernel/rules/port-correspondence.test.ts',
+  'tests/kernel/rules/uniqueness-representability.test.ts',
+  'tests/kernel/formal/correspondence.test.ts',
+  'tests/kernel/formal/highlevel-alias-parity.test.ts',
+  'src/app/abstraction-matches.ts',
+  'src/app/tactics.ts',
+  'src/app/relation-transactions.ts',
+  'src/app/relation-workspace.ts',
+  'src/app/relation-workspace-draft.ts',
+  'src/app/interact/closed-term-intro.ts',
+  'src/app/interact/comprehension-macros.ts',
+  'src/app/interact/fission.ts',
+  'src/interaction/named-relation.ts',
+  'tests/app/abstraction-interaction.test.ts',
+  'tests/app/abstraction-matches.test.ts',
+  'tests/app/closed-term-intro.test.ts',
+  'tests/app/comprehension-macros.test.ts',
+  'tests/app/fission-interaction.test.ts',
+  'tests/app/relation-transactions.test.ts',
+  'tests/app/relation-workspace-dependencies.test.ts',
+  'tests/app/relation-workspace-draft.test.ts',
+  'tests/app/relation-workspace.test.ts',
+  'tests/app/tactics.test.ts',
+  'tests/interaction/named-relation.test.ts',
+  'app/test/relation-workspace.html',
+  'app/test/relation-workspace.ts',
+  'e2e/abstraction.spec.ts',
+  'e2e/relation-workspace.spec.ts',
+  'src/view/tromp.ts',
+  'tests/view/tromp.test.ts',
+  'src/theories/frege.ts',
+  'src/theories/lambda.ts',
+  'src/theories/macros.ts',
+  'tests/theories/battery.test.ts',
+  'tests/theories/frege.test.ts',
+  'tests/theories/lambda.test.ts',
+  'tests/theories/macros.test.ts',
+  'scripts/emit-theories.ts',
+  'tests/scripts/emit-theories.test.ts',
+  'examples/frege.json',
+  'examples/lambda.json',
+] as const
 
 function tsFilesUnder(dir: string): string[] {
   const files: string[] = []
@@ -151,14 +227,22 @@ function semanticOffenders(file: string, roots: readonly ts.Node[]): string[] {
   return [...offenders].sort()
 }
 
-function productionOffenders(): string[] {
+function productionOffenders(
+  roots: readonly string[] = ['src', 'scripts'],
+): string[] {
   const offenders: string[] = []
-  for (const file of tsFilesUnder('src')) {
-    if (/(^|\/)term(?:\/|\.ts$)/.test(file)) offenders.push(`${file}: term module path`)
-    const parsed = parseTypeScript(file)
-    offenders.push(...semanticOffenders(file, parsed.statements))
+  for (const root of roots) {
+    for (const file of tsFilesUnder(root)) {
+      if (/(^|\/)term(?:\/|\.ts$)/.test(file)) offenders.push(`${file}: term module path`)
+      const parsed = parseTypeScript(file)
+      offenders.push(...semanticOffenders(file, parsed.statements))
+    }
   }
   return offenders.sort()
+}
+
+function absentPathOffenders(paths: readonly string[]): string[] {
+  return paths.filter((path) => existsSync(path)).sort()
 }
 
 function hasExportModifier(statement: ts.Statement): boolean {
@@ -404,14 +488,45 @@ describe('Phase-1 kernel vocabulary conformance', () => {
     expect(sortedNodeKinds).toEqual(['atom', 'identity', 'ref'])
   })
 
-  it('physically removes both displaced term module trees', () => {
-    expect(existsSync('src/kernel/term')).toBe(false)
-    expect(existsSync('tests/kernel/term')).toBe(false)
+  it('physically removes every displaced Phase-1 authority', () => {
+    expect(absentPathOffenders(absentAuthorityPaths)).toEqual([])
   })
 
-  it('keeps prohibited semantic symbols out of production TypeScript authority', () => {
+  it('keeps prohibited semantic symbols out of src and executable script authority', () => {
     const offenders = productionOffenders()
     expect(offenders, offenders.join('\n')).toEqual([])
+  })
+
+  it('detects and clears a legacy authority mutation under executable scripts', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'vpa-kernel-vocabulary-'))
+    const script = join(scratch, 'scripts', 'legacy.ts')
+    mkdirSync(dirname(script), { recursive: true })
+    try {
+      writeFileSync(script, 'export function applyFusion(): void {};\n')
+      expect(productionOffenders([join(scratch, 'scripts')])).toContain(
+        `${script}: applyFusion`,
+      )
+
+      writeFileSync(script, "export const nodeKind = 'identity';\n")
+      expect(productionOffenders([join(scratch, 'scripts')])).toEqual([])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('detects and clears a resurrected absent-path mutation', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'vpa-kernel-absence-'))
+    const resurrected = join(scratch, 'src', 'kernel', 'rules', 'fusion.ts')
+    mkdirSync(dirname(resurrected), { recursive: true })
+    try {
+      writeFileSync(resurrected, 'export {}\n')
+      expect(absentPathOffenders([resurrected])).toEqual([resurrected])
+
+      unlinkSync(resurrected)
+      expect(absentPathOffenders([resurrected])).toEqual([])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
   })
 
   it('keeps prohibited semantic symbols out of test imports and exports', () => {

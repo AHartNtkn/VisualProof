@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import type { Diagram, NodeId, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
+import {
+  mkDiagram,
+  type Diagram,
+  type NodeId,
+  type RegionId,
+  type WireId,
+} from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig, type RelSig, type Sig } from '../../../src/kernel/diagram/sig'
@@ -60,8 +66,56 @@ function refHost(defId: string, sig: RelSig, negative = false): RefHost {
   return { diagram: builder.build(), ref, region, args, carriers }
 }
 
+function outerScopedRefHost(defId: string, sig: RelSig, negative: boolean): RefHost {
+  const builder = new DiagramBuilder()
+  const outerCut = builder.cut(builder.root)
+  const region = negative ? outerCut : builder.cut(outerCut)
+  const ref = builder.ref(region, defId, sig)
+  const carriers: NodeId[] = []
+  const args = sig.args.map((argSig, index) => {
+    const carrier = builder.ref(builder.root, `OuterCarrier${index}`, relSig([argSig]))
+    carriers.push(carrier)
+    return builder.wire(builder.root, [
+      { node: ref, port: { kind: 'arg', index } },
+      { node: carrier, port: { kind: 'arg', index: 0 } },
+    ], argSig)
+  })
+  return { diagram: builder.build(), ref, region, args, carriers }
+}
+
 function copiedNodes(before: Diagram, after: Diagram): NodeId[] {
   return Object.keys(after.nodes).filter((id) => before.nodes[id] === undefined)
+}
+
+function reverseIdentityIncidences(diagram: Diagram, identity: NodeId): Diagram {
+  const node = diagram.nodes[identity]
+  if (node === undefined || node.kind !== 'identity') {
+    throw new Error(`fixture node '${identity}' is not an identity`)
+  }
+  return mkDiagram({
+    root: diagram.root,
+    regions: { ...diagram.regions },
+    nodes: { ...diagram.nodes },
+    wires: Object.fromEntries(
+      Object.entries(diagram.wires).map(([wireId, wire]) => [
+        wireId,
+        {
+          scope: wire.scope,
+          sig: wire.sig,
+          endpoints: wire.endpoints.map((endpoint) =>
+            endpoint.node === identity && endpoint.port.kind === 'identity'
+              ? {
+                  node: endpoint.node,
+                  port: {
+                    kind: 'identity' as const,
+                    index: node.arity - endpoint.port.index - 1,
+                  },
+                }
+              : endpoint),
+        },
+      ]),
+    ),
+  })
 }
 
 function selectionOf(diagram: Diagram, region: RegionId, nodes: readonly NodeId[]) {
@@ -141,6 +195,47 @@ describe('definition-store unfolding', () => {
     expect(wireAt(folded, foldedRef[0], { kind: 'arg', index: 0 }))
       .toBe(wireAt(folded, foldedRef[0], { kind: 'arg', index: 1 }))
   })
+
+  for (const negative of [false, true]) {
+    it(`round-trips a repeated boundary onto distinct outer-scoped arguments in a ${
+      negative ? 'negative' : 'positive'
+    } region`, () => {
+      const definition = atomDefinition([IOTA], true)
+      const store = definitions(['Repeated', definition])
+      const host = outerScopedRefHost(
+        'Repeated',
+        definitionSig(definition),
+        negative,
+      )
+      const unfolded = applyUnfold(host.diagram, host.ref, store)
+      const copied = copiedNodes(host.diagram, unfolded)
+      const identity = copied.find((id) => unfolded.nodes[id]!.kind === 'identity')
+      const occurrence = selectionOf(unfolded, host.region, copied)
+
+      expect(identity).toBeDefined()
+      expect(host.args[0]).not.toBe(host.args[1])
+
+      const folded = applyFold(
+        unfolded,
+        occurrence,
+        host.args,
+        'Repeated',
+        store,
+      )
+      const permuted = reverseIdentityIncidences(unfolded, identity!)
+      const permutedOccurrence = selectionOf(permuted, host.region, copied)
+      const foldedPermuted = applyFold(
+        permuted,
+        permutedOccurrence,
+        host.args,
+        'Repeated',
+        store,
+      )
+
+      expect(exploreForm(folded)).toBe(exploreForm(host.diagram))
+      expect(exploreForm(foldedPermuted)).toBe(exploreForm(folded))
+    })
+  }
 
   it('refuses missing definitions, wrong arity, wrong nested signatures, and atoms', () => {
     const unary = atomDefinition()

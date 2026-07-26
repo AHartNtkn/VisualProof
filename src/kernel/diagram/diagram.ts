@@ -148,9 +148,10 @@ function fail(message: string): never {
 }
 
 /**
- * Validate and freeze a graph without normalizing it. This is exported only
- * for the canonical identity owner; public construction goes through
- * mkDiagramNormalized/mkDiagram.
+ * Validate and freeze a graph without normalizing it. The identity canonicalizer
+ * uses this between rewrites, and bounded extraction uses it to preserve
+ * equality evidence whose host scopes are temporarily outside the pattern.
+ * Ordinary public construction goes through mkDiagramNormalized/mkDiagram.
  */
 export function validateRawDiagram(raw: Diagram): Diagram {
   const rootId = raw.root

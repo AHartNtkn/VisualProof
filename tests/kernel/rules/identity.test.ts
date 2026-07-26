@@ -257,6 +257,69 @@ describe('Rule 4: inherited identity insertion and ordinary erasure', () => {
 })
 
 describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
+  it('round-trips an explicit conditional identity independent of incidence indices', () => {
+    const roundTrip = (swap: boolean) => {
+      const builder = new DiagramBuilder()
+      const ancestor = builder.cut(builder.root)
+      const target = builder.cut(ancestor)
+      const identity = builder.identity(ancestor, IOTA, 2)
+      const atom = builder.atom(ancestor, relSig([IOTA]))
+      const left = builder.wire(builder.root, [
+        { node: identity, port: { kind: 'identity', index: swap ? 1 : 0 } },
+        { node: atom, port: { kind: 'arg', index: 0 } },
+      ])
+      const right = builder.wire(builder.root, [
+        { node: identity, port: { kind: 'identity', index: swap ? 0 : 1 } },
+      ])
+      const diagram = builder.build()
+      const selection = mkSelection(diagram, {
+        region: ancestor,
+        regions: [],
+        nodes: [identity, atom],
+        wires: [],
+      })
+
+      const iterated = applyIteration(diagram, selection, target)
+      const copiedNodes = Object.entries(iterated.nodes)
+        .filter(([id, node]) =>
+          id !== identity
+          && id !== atom
+          && node.region === target)
+        .map(([id]) => id)
+      const copySelection = mkSelection(iterated, {
+        region: target,
+        regions: [],
+        nodes: copiedNodes,
+        wires: [],
+      })
+      const extracted = extractSubgraph(iterated, copySelection)
+      expect(extracted.attachments).toContain(left)
+      expect(extracted.attachments).toContain(right)
+
+      const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+      const restored = applyDeiteration(
+        iterated,
+        copySelection,
+        evidence.justifier,
+        evidence.certificate,
+      )
+      return {
+        source: exploreForm(diagram),
+        iterated: exploreForm(iterated),
+        extracted: exploreForm(
+          extracted.pattern.diagram,
+          extracted.pattern.boundary,
+        ),
+        restored: exploreForm(restored),
+      }
+    }
+
+    const ordinary = roundTrip(false)
+    const permuted = roundTrip(true)
+    expect(ordinary.restored).toBe(ordinary.source)
+    expect(permuted).toEqual(ordinary)
+  })
+
   it('retargets exactly the named atom argument from an outer wire to an equal wire', () => {
     const host = substitutionHost()
 

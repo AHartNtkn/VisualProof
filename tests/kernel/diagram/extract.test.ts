@@ -78,7 +78,7 @@ describe('extractSubgraph', () => {
     expect(value.diagram.nodes[value.inner]?.region).toBe(value.cut)
   })
 
-  it('transports collapsed identity stubs into a repeated boundary', () => {
+  it('preserves a selected conditional identity across distinct bounded attachments', () => {
     const diagram = mkDiagram({
       root: 'r0',
       regions: {
@@ -108,8 +108,17 @@ describe('extractSubgraph', () => {
       wires: [],
     }))
 
-    expect(extraction.pattern.diagram.nodes).toEqual({})
-    expect(extraction.pattern.boundary[0]).toBe(extraction.pattern.boundary[1])
+    expect(extraction.pattern.diagram.nodes.eq).toEqual({
+      kind: 'identity',
+      region: extraction.pattern.diagram.root,
+      sig: IOTA,
+      arity: 2,
+    })
+    expect(extraction.pattern.boundary[0]).not.toBe(extraction.pattern.boundary[1])
+    expect(extraction.pattern.diagram.wires[extraction.pattern.boundary[0]!]!.endpoints)
+      .toEqual([{ node: 'eq', port: { kind: 'identity', index: 0 } }])
+    expect(extraction.pattern.diagram.wires[extraction.pattern.boundary[1]!]!.endpoints)
+      .toEqual([{ node: 'eq', port: { kind: 'identity', index: 1 } }])
     expect(extraction.attachments).toEqual(['a', 'b'])
   })
 })

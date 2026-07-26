@@ -45,11 +45,12 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
 
 /**
  * Insert a pattern into a host region. Its ordered boundary incidences are
- * glued to the index-aligned host attachments. When several incidences expose
- * the SAME pattern wire, gluing identifies their host wires: this is the
- * pushout of the two interfaces, not repeated copying of the same endpoints.
- * The quotient keeps the outermost attachment scope and a deterministic
- * survivor id, then copies each boundary stub's endpoints exactly once.
+ * connected to the index-aligned host attachments. When several incidences
+ * expose the same pattern wire but land on distinct host wires, splice creates
+ * one local identity node at the application region. Canonical normalization
+ * then collapses that identity only when its host attachments are co-scoped;
+ * otherwise the explicit conditional equality remains. Each boundary stub's
+ * endpoints are copied exactly once onto its first ordered attachment.
  * Boundary stubs are intrinsically scoped at the pattern root by
  * DiagramWithBoundary construction. The assertion below is defensive: the
  * connection seam cannot honor any other scope. Pattern content gets
