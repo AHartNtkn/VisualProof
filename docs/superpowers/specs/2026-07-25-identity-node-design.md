@@ -20,15 +20,19 @@
 >    rejected.
 > 4. **"six identity-node rules" → five identity transformations.** The five are
 >    the three normalizations, inherited insertion/erasure, and substitution.
-> 5. **Checked reification refs are constructively spawnable at every scope.**
->    The definition store recognizes the exact
->    `forall x. P(x) <-> S(x)` graph before granting this permission. Ordinary
->    refs and malformed lookalikes remain polarity-gated, and forward-only
->    erasure is not a backward proof action.
+> 5. **[Superseded by umbrella correction-log item 10] Checked reification refs
+>    were constructively spawnable at every scope.** The definition-store
+>    recognition and special permission described by this historical item are
+>    superseded; no current ref bypasses ordinary polarity.
 > 6. **Identity insertion replay uses the dual gate.** Physical insertion is
 >    permitted in negative regions forward and positive regions backward.
 >    Backward insertion in a negative region is rejected rather than accepted as
 >    a forward-shaped checker shortcut.
+> 7. **[Current; governed by umbrella correction-log item 10] Relation handles
+>    are sever-derived, and refs have ordinary polarity.** Relation handles remain
+>    wires of one homogeneous `rel` sort. A handle for content `G` is derived by
+>    strongest-form severing as `Exists P. forall x. P(x) <-> G(x)`. No ref has
+>    special spawn authority; every ref obeys ordinary polarity.
 
 Status: design draft. Scope: the kernel primitive for equality-as-a-proposition
 and its five identity transformations. **Out of scope by instruction:** any
@@ -59,12 +63,9 @@ An **identity node** is a node with a set of ≥2 ports, each attached to a wire
   single sort — it asserts identity of whatever the attached wires carry. At ι
   that is individual equality. At a relation sort it is identity of `rel`-sorted
   wires (reified relation handles). A relation handle for an assertion `S` arises
-  only by grammatical reification: `S' := Exists P. forall x. P(x) <-> S(x)`.
-  The stored definition must check as that exact two-sided graph with `P` as its
-  first boundary, every later boundary used by `S`, and the two copies of `S`
-  equal under ordered boundary pins.
-  This checked definition constructively guarantees `P`, so its ref may spawn at
-  every scope; this does not relax the polarity gate for ordinary refs.
+  only by strongest-form severing: `S' := Exists P. forall x. P(x) <-> S(x)`.
+  Relation handles remain wires of one homogeneous `rel` sort, and every ref
+  obeys ordinary polarity; no ref has special spawn authority.
   Extensionality is not grammatical: no syntactic production expresses a separate
   extensionality principle or an intensional relation-identity alternative.
 - **Homed** in a region `R`, like any node.
