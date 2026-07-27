@@ -5,6 +5,16 @@ declare global {
     __vpaDebug?: {
       nodeCount(): number
       status(): string
+      replay(): {
+        mode: string
+        k: number
+        n: number
+        meetingIndex: number
+        endpointKind: 'lhs' | 'meet' | 'rhs' | 'state'
+        label: string
+        bodies: number
+        foldedRefs: string[]
+      }
       interaction(): {
         selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]
         pins: string[]
@@ -67,6 +77,36 @@ test('the committed Frege theory loads through the ordinary library path', async
   await library.getByRole('button', { name: '▸ frege.json', exact: true }).click()
   await expect(library).toContainText('existsProp')
   await expect(library).toContainText('plusComm')
+})
+
+test('zeroIsNat replay reaches the declared RHS with its folded nat reference', async ({ page, theoryFiles }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  const library = page.locator('#library')
+  await page.locator('#open-file-input').setInputFiles(theoryFiles.frege)
+  await library.getByRole('button', { name: '▸ frege.json', exact: true }).click()
+  await library.locator('.vpa-lib-detail').filter({ hasText: 'zeroIsNat' }).evaluate((row) => {
+    const nodes = [...row.childNodes]
+    const name = nodes.findIndex((node) => node.nodeType === Node.TEXT_NODE
+      && node.textContent?.includes('zeroIsNat'))
+    const replay = nodes.slice(name + 1).find((node): node is HTMLButtonElement =>
+      node instanceof HTMLButtonElement && node.textContent === '▶ Replay')
+    replay?.click()
+  })
+  await expect(page.locator('#status')).toContainText('LHS')
+
+  const rail = page.locator('.vpa-temporal-rail')
+  const box = await rail.boundingBox()
+  expect(box).not.toBeNull()
+  await page.mouse.click(box!.x + box!.width - 1, box!.y + box!.height / 2)
+
+  await expect(page.locator('#status')).toContainText('RHS')
+  expect(await page.evaluate(() => window.__vpaDebug!.replay())).toMatchObject({
+    mode: 'replay',
+    endpointKind: 'rhs',
+    foldedRefs: expect.arrayContaining(['nat']),
+  })
 })
 
 test('the keyboard map exposes the surviving structural shortcuts', async ({ page }) => {

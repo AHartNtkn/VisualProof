@@ -22,7 +22,7 @@ import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
-import { seedActionHistoryPlacements } from './proof-placement'
+import { seedActionHistoryPlacements, seedReplayPlacements } from './proof-placement'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
 import { defineRelation, inferFoldArgs } from './define'
@@ -757,13 +757,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     carryOver(prevEngine, next)
     seedProject(next)
     engine = next
-    seedActionHistoryPlacements(
-      engine,
-      replay.diagramAt(0),
-      replay.actions.slice(0, replayK),
-      ctx,
-      'forward',
-    )
+    seedReplayPlacements(engine, replay, replayK, ctx)
     interaction.reconcileDiagram()
     kernelSel = null
     pending = null
@@ -948,7 +942,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
     if (mode === 'replay' && replay !== null) {
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
-      statusDiv.textContent = `[REPLAY] action ${replayK}/${replay.actionCount} — ${rule}`
+      const landmarks = [
+        ...(replayK === 0 ? ['LHS'] : []),
+        ...(replayK === replay.meetingIndex ? ['MEET'] : []),
+        ...(replayK === replay.actionCount ? ['RHS'] : []),
+      ]
+      statusDiv.textContent = `[REPLAY] action ${replayK}/${replay.actionCount}`
+        + ` · ${landmarks.join(' · ') || 'STATE'} — ${rule}`
     } else {
       const direction = proofDirection()
       const head = mode === 'edit' ? 'EDIT' : `PROVE · ${direction?.toUpperCase() ?? 'UNKNOWN'}`
@@ -1712,13 +1712,36 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       feedback(): FeedbackState {
         return feedback.snapshot()
       },
-      replay(): { mode: string; k: number; n: number; label: string; bodies: number } {
+      replay(): {
+        mode: string
+        k: number
+        n: number
+        meetingIndex: number
+        endpointKind: 'lhs' | 'meet' | 'rhs' | 'state'
+        label: string
+        bodies: number
+        foldedRefs: string[]
+      } {
+        const endpointKind = replay === null
+          ? 'state'
+          : replayK === 0
+            ? 'lhs'
+            : replayK === replay.actionCount
+              ? 'rhs'
+              : replayK === replay.meetingIndex
+                ? 'meet'
+                : 'state'
         return {
           mode,
           k: replayK,
           n: replay?.actionCount ?? 0,
+          meetingIndex: replay?.meetingIndex ?? 0,
+          endpointKind,
           label: replay === null ? '' : replayK === 0 ? '(start)' : replay.labelAt(replayK),
           bodies: engine.bodies.size,
+          foldedRefs: [...new Set(Object.values(displayed.nodes)
+            .filter((node) => node.kind === 'ref')
+            .map((node) => node.defId))],
         }
       },
       proof(): null | { kind: 'track'; direction: TrackDirection } | { kind: 'dual'; side: 'forward' | 'backward' } {
