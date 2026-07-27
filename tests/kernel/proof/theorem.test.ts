@@ -535,6 +535,7 @@ describe('applyTheorem', () => {
     const host = new DiagramBuilder()
     const relation = host.relWire(host.root, relSig([IOTA]))
     const argument = host.wire(host.root, [])
+    const otherArgument = host.wire(host.root, [])
     const diagram = host.build()
     const emptySelection = {
       region: diagram.root,
@@ -574,9 +575,11 @@ describe('applyTheorem', () => {
       'forward',
     )).toThrowError(/not an occurrence/)
 
+    const repeated = new DiagramBuilder()
+    const repeatedCapture = repeated.wire(repeated.root, [])
     const repeatedSide = mkDiagramWithBoundary(
-      aliasSide.diagram,
-      [first, first],
+      repeated.build(),
+      [repeatedCapture, repeatedCapture],
     )
     const repeatedTheorem: Theorem = {
       name: 'repeated-capture',
@@ -587,7 +590,7 @@ describe('applyTheorem', () => {
     expect(() => applyCertified(
       diagram,
       repeatedTheorem,
-      { sel: emptySelection, args: [argument, second] },
+      { sel: emptySelection, args: [argument, otherArgument] },
       'forward',
     )).toThrowError(/not an occurrence/)
   })
