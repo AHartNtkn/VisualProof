@@ -76,6 +76,16 @@ describe('brush selection reducer', () => {
     expect(isHitSelected(finished.selected, { kind: 'wire', id: 'b' })).toBe(false)
   })
 
+  it('appends a re-highlighted formal at the end of the one selection order', () => {
+    const first: Hit = { kind: 'wire', id: 'first' }
+    const second: Hit = { kind: 'wire', id: 'second' }
+    const selected = [first, nodeA, second]
+    const withoutFirst = click(selected, first)
+
+    expect(withoutFirst).toEqual([nodeA, second])
+    expect(click(withoutFirst, first)).toEqual([nodeA, second, first])
+  })
+
   it('ignores move and end events when no brush stroke is active', () => {
     const initial = createBrushState([nodeA])
     expect(reduceBrush(initial, { kind: 'move', hit: nodeB })).toBe(initial)

@@ -1,38 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { joinWires } from '../../src/app/edit'
+import type { Hit } from '../../src/app/hittest'
 import {
   ConnectionDragController,
-  prepareMembraneContent,
+  prepareSelectedOccurrence,
   type ConnectionGesture,
   type PendingRelationState,
 } from '../../src/app/interact/connection'
-import {
-  membraneCrossingHits,
-  preparedMembrane,
-  type PreparedMembrane,
-} from '../../src/app/hittest'
+import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Diagram, NodeId, WireId } from '../../src/kernel/diagram/diagram'
+import type { NodeId, WireId } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
-import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
-import { applyDoubleCutIntro } from '../../src/kernel/rules/doublecut'
-import { applyStep } from '../../src/kernel/proof/step'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { applyStep } from '../../src/kernel/proof/step'
 import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
-import type { PointerSample } from '../../src/app/interact/viewport'
 import { UNARY } from '../fixtures/zero-signature'
 
-function sample(point: Vec2): PointerSample {
+type SelectionState = { hits: readonly Hit[] }
+
+function sample(point: Vec2, hit: Hit | null = null): PointerSample {
   return {
     pointerId: 1,
     button: 0,
     client: point,
     screen: point,
     world: point,
-    hit: null,
+    hit,
     shiftKey: false,
     ctrlKey: false,
     altKey: false,
@@ -40,53 +35,36 @@ function sample(point: Vec2): PointerSample {
   }
 }
 
-function wrapNode(diagram: Diagram, node: NodeId): {
-  readonly diagram: Diagram
-  readonly membrane: PreparedMembrane
-} {
-  const wrapped = applyDoubleCutIntro(diagram, mkSelection(diagram, {
-    region: diagram.nodes[node]!.region,
-    regions: [],
-    nodes: [node],
-    wires: [],
-  }))
-  const inner = wrapped.nodes[node]!.region
-  const outer = wrapped.regions[inner]!.kind === 'cut'
-    ? wrapped.regions[inner]!.parent
-    : ''
-  return { diagram: wrapped, membrane: preparedMembrane(wrapped, outer)! }
+function nodeHit(id: NodeId): Hit {
+  return { kind: 'node', id }
 }
 
-function placeMembrane(
+function wireHit(id: WireId): Hit {
+  return { kind: 'wire', id }
+}
+
+function controller(
   engine: Engine,
-  membrane: PreparedMembrane,
-  center: Vec2,
-): void {
-  engine.regions.set(membrane.outer, {
-    center,
-    radius: 30,
-    support: [],
+  selection: SelectionState,
+  gestures: ConnectionGesture[],
+  refusals: string[] = [],
+  commit?: (gesture: ConnectionGesture) => boolean,
+): ConnectionDragController {
+  return new ConnectionDragController({
+    active: () => true,
+    engine: () => engine,
+    viewScale: () => 1,
+    theme: () => LIGHT,
+    relationSelection: {
+      selection: () => selection.hits,
+      setSelection: (hits) => { selection.hits = hits },
+    },
+    commit: (gesture) => {
+      gestures.push(gesture)
+      return commit?.(gesture) ?? true
+    },
+    refuse: (text) => { refusals.push(text) },
   })
-  engine.regions.set(membrane.inner, {
-    center,
-    radius: 18,
-    support: [],
-  })
-  for (const node of membrane.selection.nodes) engine.bodies.get(node)!.pos = center
-}
-
-function membranePoint(engine: Engine, membrane: PreparedMembrane): Vec2 {
-  const circle = engine.regions.get(membrane.outer)!
-  return vec(circle.center.x, circle.center.y - circle.radius)
-}
-
-function crossingPoint(
-  engine: Engine,
-  membrane: PreparedMembrane,
-  wire: WireId,
-): Vec2 {
-  return membraneCrossingHits(engine).find((hit) =>
-    hit.key.membrane === membrane.outer && hit.key.wire === wire)!.at
 }
 
 function pendingLooseEnd(pending: PendingRelationState): Vec2 {
@@ -94,81 +72,24 @@ function pendingLooseEnd(pending: PendingRelationState): Vec2 {
 }
 
 function pendingBodyPoint(
-  engine: Engine,
+  drag: ConnectionDragController,
   pending: PendingRelationState,
 ): Vec2 {
-  const points = pending.contacts.map((contact) => {
-    const circle = engine.regions.get(contact.membrane.outer)!
-    return vec(
-      circle.center.x + contact.radial.x * circle.radius,
-      circle.center.y + contact.radial.y * circle.radius,
-    )
-  })
-  if (points.length === 1) {
-    return vec(
-      points[0]!.x + pending.contacts[0]!.radial.x * 22,
-      points[0]!.y + pending.contacts[0]!.radial.y * 22,
-    )
-  }
-  return vec(
-    points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    points.reduce((sum, point) => sum + point.y, 0) / points.length,
-  )
+  const loose = pendingLooseEnd(pending)
+  return drag.overlay()
+    .filter((shape) => shape.kind === 'circle')
+    .map((shape) => shape.center)
+    .find((point) => point.x !== loose.x || point.y !== loose.y)!
 }
 
-function controller(
-  engine: Engine,
-  gestures: ConnectionGesture[],
-  refusals: string[] = [],
-): ConnectionDragController {
-  return new ConnectionDragController({
-    active: () => true,
-    engine: () => engine,
-    viewScale: () => 1,
-    theme: () => LIGHT,
-    relationGestures: true,
-    commit: (gesture) => {
-      gestures.push(gesture)
-      return true
-    },
-    refuse: (text) => { refusals.push(text) },
-  })
-}
-
-describe('structural connection commit', () => {
-  it('identifies two homogeneous wires without term interpretation', () => {
+describe('ordered selected occurrence projection', () => {
+  it('uses region/node hits for extent and relative wire-hit order for formals', () => {
     const builder = new DiagramBuilder()
-    const left = builder.wire(builder.root, [])
-    const right = builder.wire(builder.root, [])
-    const joined = joinWires(builder.build(), [right, left])
-    expect(Object.keys(joined.wires)).toEqual([left])
-  })
-
-  it('keeps the existing physical wire-to-wire drag as one wire gesture', () => {
-    const builder = new DiagramBuilder()
-    const left = builder.wire(builder.root, [])
-    const right = builder.wire(builder.root, [])
-    const engine = mkEngine(builder.build(), [])
-    engine.bodies.get(`j:${left}`)!.pos = vec(-30, 0)
-    engine.bodies.get(`j:${right}`)!.pos = vec(30, 0)
-    const gestures: ConnectionGesture[] = []
-    const drag = controller(engine, gestures)
-    const claim = drag.claim(sample(vec(-30, 0)))!
-    claim.move(sample(vec(30, 0)))
-    claim.release(sample(vec(30, 0)), true)
-    expect(gestures).toEqual([{
-      kind: 'wire',
-      source: { wire: left, endpoint: null },
-      target: { wire: right, endpoint: null },
-    }])
-  })
-})
-
-describe('prepared membrane extraction', () => {
-  it('puts tapped crossings first in tap order and leaves untapped crossings as parameters', () => {
-    const builder = new DiagramBuilder()
-    const ternary = relSig([IOTA, IOTA, IOTA])
-    const content = builder.ref(builder.root, 'Triple', ternary)
+    const content = builder.ref(
+      builder.root,
+      'TernaryBody',
+      relSig([IOTA, IOTA, IOTA]),
+    )
     const first = builder.wire(builder.root, [{
       node: content,
       port: { kind: 'arg', index: 0 },
@@ -181,16 +102,25 @@ describe('prepared membrane extraction', () => {
       node: content,
       port: { kind: 'arg', index: 2 },
     }])
-    const wrapped = wrapNode(builder.build(), content)
-    const prepared = prepareMembraneContent(wrapped.diagram, wrapped.membrane, [
-      { membrane: wrapped.membrane.outer, wire: second },
-      { membrane: wrapped.membrane.outer, wire: first },
+    const diagram = builder.build()
+    const prepared = prepareSelectedOccurrence(diagram, [
+      wireHit(second),
+      nodeHit(content),
+      wireHit(first),
     ])
-    const extracted = extractSubgraph(wrapped.diagram, wrapped.membrane.selection)
+    const extracted = extractSubgraph(diagram, prepared.occurrence.sel)
     const stub = (wire: WireId): WireId =>
       extracted.pattern.boundary[extracted.attachments.indexOf(wire)]!
 
-    expect(prepared.occurrence.args).toEqual([second, first])
+    expect(prepared.occurrence).toEqual({
+      sel: expect.objectContaining({
+        region: diagram.root,
+        regions: [],
+        nodes: [content],
+        wires: [],
+      }),
+      args: [second, first],
+    })
     expect(prepared.content.boundary).toEqual([
       stub(second),
       stub(first),
@@ -199,46 +129,56 @@ describe('prepared membrane extraction', () => {
     expect(prepared.parameters).toEqual([parameter])
   })
 
-  it('keeps a nullary tap prefix empty and emits every crossing as a parameter', () => {
+  it('supports nullary selection and rejects a formal outside the selected extent', () => {
     const builder = new DiagramBuilder()
-    const content = builder.ref(builder.root, 'Unary', UNARY)
-    const parameter = builder.wire(builder.root, [{
-      node: content,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const wrapped = wrapNode(builder.build(), content)
-    const prepared = prepareMembraneContent(wrapped.diagram, wrapped.membrane, [])
-    expect(prepared.occurrence.args).toEqual([])
-    expect(prepared.parameters).toEqual([parameter])
-    expect(prepared.content.boundary).toHaveLength(1)
+    const content = builder.ref(builder.root, 'TruthBody', relSig([]))
+    const outside = builder.wire(builder.root, [])
+    const diagram = builder.build()
+
+    expect(prepareSelectedOccurrence(diagram, [nodeHit(content)]))
+      .toMatchObject({
+        occurrence: { args: [] },
+        content: { boundary: [] },
+        parameters: [],
+      })
+    expect(() => prepareSelectedOccurrence(diagram, [
+      nodeHit(content),
+      wireHit(outside),
+    ])).toThrowError(/selected formal wire .* does not cross the selected extent/)
   })
 })
 
-describe('relation wire gestures', () => {
-  it('makes every issued claim closure inert after controller cancellation', () => {
+describe('relation wire gestures from one ordered selection', () => {
+  it('keeps ordinary iota wire-to-wire dragging unchanged', () => {
     const builder = new DiagramBuilder()
-    const content = builder.ref(builder.root, 'UnaryBody', UNARY)
-    const formal = builder.wire(builder.root, [{
-      node: content,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const wrapped = wrapNode(builder.build(), content)
-    const engine = mkEngine(wrapped.diagram, [])
-    placeMembrane(engine, wrapped.membrane, vec(0, 0))
-    engine.bodies.get(`j:${formal}`)!.pos = vec(0, 70)
+    const negative = builder.cut(builder.root)
+    const left = builder.wire(negative, [])
+    const right = builder.wire(negative, [])
+    const engine = mkEngine(builder.build(), [])
+    const leftPoint = engine.bodies.get(`j:${left}`)!.pos
+    const rightPoint = engine.bodies.get(`j:${right}`)!.pos
     const gestures: ConnectionGesture[] = []
-    const drag = controller(engine, gestures)
-    const point = crossingPoint(engine, wrapped.membrane, formal)
-    const claim = drag.claim(sample(point))!
+    const drag = new ConnectionDragController({
+      active: () => true,
+      engine: () => engine,
+      viewScale: () => 1,
+      theme: () => LIGHT,
+      commit: (gesture) => { gestures.push(gesture); return true },
+      refuse: () => undefined,
+    })
 
-    drag.cancel()
-    claim.release(sample(point), false)
+    const claim = drag.claim(sample(leftPoint, wireHit(left)))!
+    claim.move(sample(rightPoint, wireHit(right)))
+    claim.release(sample(rightPoint, wireHit(right)), true)
 
-    expect(drag.overlay()).toEqual([])
-    expect(gestures).toEqual([])
+    expect(gestures).toEqual([{
+      kind: 'wire',
+      source: { wire: left, endpoint: null },
+      target: { wire: right, endpoint: null },
+    }])
   })
 
-  it('grounds an existing relation wire through one membrane drop using only that membrane taps', () => {
+  it('grounds onto a physically hit selected extent and consumes selection on success', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
     const application = builder.atom(negative, UNARY)
@@ -251,21 +191,22 @@ describe('relation wire gestures', () => {
       node: application,
       port: { kind: 'head' },
     }], UNARY)
-    const wrapped = wrapNode(builder.build(), content)
-    const engine = mkEngine(wrapped.diagram, [])
-    placeMembrane(engine, wrapped.membrane, vec(0, 0))
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
     engine.bodies.get(application)!.pos = vec(-70, 0)
-    engine.bodies.get(`j:${relation}`)!.pos = vec(-90, 0)
+    engine.bodies.get(content)!.pos = vec(30, 0)
+    engine.bodies.get(`j:${relation}`)!.pos = vec(-100, 0)
+    const selection: SelectionState = {
+      hits: [wireHit(formal), nodeHit(content)],
+    }
     const gestures: ConnectionGesture[] = []
-    const drag = controller(engine, gestures)
-
-    const tap = drag.claim(sample(crossingPoint(engine, wrapped.membrane, formal)))!
-    tap.release(sample(crossingPoint(engine, wrapped.membrane, formal)), false)
+    const drag = controller(engine, selection, gestures)
     const source = engine.bodies.get(`j:${relation}`)!.pos
-    const claim = drag.claim(sample(source))!
-    const target = membranePoint(engine, wrapped.membrane)
-    claim.move(sample(target))
-    claim.release(sample(target), true)
+    const target = engine.bodies.get(content)!.pos
+
+    const claim = drag.claim(sample(source, wireHit(relation)))!
+    claim.move(sample(target, nodeHit(content)))
+    claim.release(sample(target, nodeHit(content)), true)
 
     expect(gestures).toHaveLength(1)
     expect(gestures[0]).toMatchObject({
@@ -279,9 +220,10 @@ describe('relation wire gestures', () => {
     expect(gestures[0]!.kind === 'relationJoin'
       ? gestures[0]!.input.content.boundary
       : []).toHaveLength(1)
+    expect(selection.hits).toEqual([])
   })
 
-  it('sends an invalid grounding drop to the kernel and preserves its refusal', () => {
+  it('sends invalid grounding to the kernel and retains the prepared selection', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
     const application = builder.atom(negative, UNARY)
@@ -294,23 +236,24 @@ describe('relation wire gestures', () => {
       node: application,
       port: { kind: 'head' },
     }], UNARY)
-    const wrapped = wrapNode(builder.build(), content)
-    const engine = mkEngine(wrapped.diagram, [])
-    placeMembrane(engine, wrapped.membrane, vec(0, 0))
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
     engine.bodies.get(application)!.pos = vec(-70, 0)
-    engine.bodies.get(`j:${relation}`)!.pos = vec(-90, 0)
+    engine.bodies.get(content)!.pos = vec(30, 0)
+    engine.bodies.get(`j:${relation}`)!.pos = vec(-100, 0)
+    const selection: SelectionState = { hits: [nodeHit(content)] }
     const refusals: string[] = []
-    const drag = new ConnectionDragController({
-      active: () => true,
-      engine: () => engine,
-      viewScale: () => 1,
-      theme: () => LIGHT,
-      relationGestures: true,
-      commit: (gesture) => {
+    const gestures: ConnectionGesture[] = []
+    const drag = controller(
+      engine,
+      selection,
+      gestures,
+      refusals,
+      (gesture) => {
         if (gesture.kind !== 'relationJoin') return false
         try {
           applyStep(
-            wrapped.diagram,
+            diagram,
             { rule: 'wireJoin', input: gesture.input },
             EMPTY_PROOF_CONTEXT,
             'forward',
@@ -321,22 +264,47 @@ describe('relation wire gestures', () => {
           return false
         }
       },
-      refuse: (text) => { refusals.push(text) },
-    })
-
+    )
     const source = engine.bodies.get(`j:${relation}`)!.pos
-    const claim = drag.claim(sample(source))!
-    const target = membranePoint(engine, wrapped.membrane)
-    claim.move(sample(target))
-    claim.release(sample(target), true)
+    const target = engine.bodies.get(content)!.pos
+
+    const claim = drag.claim(sample(source, wireHit(relation)))!
+    claim.move(sample(target, nodeHit(content)))
+    claim.release(sample(target, nodeHit(content)), true)
 
     expect(refusals).toEqual([
       'relation grounding boundary suffix has 0 positions; parameter count is 1',
     ])
+    expect(selection.hits).toEqual([nodeHit(content)])
     expect(drag.pendingState).toBeNull()
   })
 
-  it('records endpoint contact, wire-body branches, and loose-end scope before one sever commit', () => {
+  it('refuses an invalid founding selection without creating pending state', () => {
+    const builder = new DiagramBuilder()
+    const content = builder.ref(builder.root, 'TruthBody', relSig([]))
+    const outside = builder.wire(builder.root, [])
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.bodies.get(content)!.pos = vec(0, 0)
+    const selection: SelectionState = {
+      hits: [nodeHit(content), wireHit(outside)],
+    }
+    const refusals: string[] = []
+    const drag = controller(engine, selection, [], refusals)
+
+    expect(() => {
+      const founding = drag.claim(sample(vec(0, 0), nodeHit(content)))!
+      founding.move(sample(vec(0, 80)))
+      founding.release(sample(vec(0, 80)), true)
+    }).not.toThrow()
+    expect(refusals).toEqual([
+      `selected formal wire '${outside}' does not cross the selected extent`,
+    ])
+    expect(drag.pendingState).toBeNull()
+    expect(selection.hits).toEqual([nodeHit(content), wireHit(outside)])
+  })
+
+  it('records one selected occurrence per founding/body drag and loose-end scope at commit', () => {
     const builder = new DiagramBuilder()
     const nodes = [
       builder.ref(builder.root, 'UnaryBody', UNARY),
@@ -347,184 +315,88 @@ describe('relation wire gestures', () => {
       node,
       port: { kind: 'arg', index: 0 },
     }]))
-    let diagram = builder.build()
-    const membranes: PreparedMembrane[] = []
-    for (const node of nodes) {
-      const wrapped = wrapNode(diagram, node)
-      diagram = wrapped.diagram
-      membranes.push(preparedMembrane(diagram, wrapped.membrane.outer)!)
-    }
+    const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     const centers = [vec(-80, 0), vec(0, 0), vec(80, 0)]
-    membranes.forEach((membrane, index) =>
-      placeMembrane(engine, membrane, centers[index]!))
-    formals.forEach((wire, index) => {
-      engine.bodies.get(`j:${wire}`)!.pos = vec(centers[index]!.x, 70)
+    nodes.forEach((node, index) => {
+      engine.bodies.get(node)!.pos = centers[index]!
+      engine.bodies.get(`j:${formals[index]!}`)!.pos = vec(centers[index]!.x, 60)
     })
+    const selection: SelectionState = {
+      hits: [nodeHit(nodes[0]!), wireHit(formals[0]!)],
+    }
     const gestures: ConnectionGesture[] = []
-    const refusals: string[] = []
-    const drag = controller(engine, gestures, refusals)
-    for (let index = 0; index < 2; index++) {
-      const point = crossingPoint(engine, membranes[index]!, formals[index]!)
-      const tap = drag.claim(sample(point))!
-      tap.release(sample(point), false)
+    const drag = controller(engine, selection, gestures)
+
+    const founding = drag.claim(sample(centers[0]!, nodeHit(nodes[0]!)))!
+    founding.move(sample(vec(-80, 80)))
+    founding.release(sample(vec(-80, 80)), true)
+    expect(selection.hits).toEqual([])
+    expect(drag.pendingState?.occurrences).toHaveLength(1)
+
+    for (let index = 1; index < nodes.length; index++) {
+      selection.hits = [
+        wireHit(formals[index]!),
+        nodeHit(nodes[index]!),
+      ]
+      const body = pendingBodyPoint(drag, drag.pendingState!)
+      const branch = drag.claim(sample(body))!
+      branch.move(sample(centers[index]!, nodeHit(nodes[index]!)))
+      branch.release(sample(centers[index]!, nodeHit(nodes[index]!)), true)
+      expect(selection.hits).toEqual([])
     }
 
-    const first = drag.claim(sample(membranePoint(engine, membranes[0]!)))!
-    const secondPoint = membranePoint(engine, membranes[1]!)
-    first.move(sample(secondPoint))
-    first.release(sample(secondPoint), true)
-    expect(drag.pendingState).not.toBeNull()
-    expect(Object.keys(drag.pendingState!.diagram.wires)).toHaveLength(
-      Object.keys(diagram.wires).length + 1,
-    )
-    expect(drag.pendingState!.engine.d).toBe(drag.pendingState!.diagram)
-    expect('looseEnd' in drag.pendingState!).toBe(false)
-    expect('bodyPoint' in drag.pendingState!).toBe(false)
-
-    const lateCrossing = crossingPoint(engine, membranes[0]!, formals[0]!)
-    const lateTap = drag.claim(sample(lateCrossing))!
-    lateTap.release(sample(lateCrossing), false)
-    expect(refusals).toEqual([
-      'tap formal crossings before the membrane contact',
-    ])
-    expect(drag.pendingState!.occurrences[0]!.args).toEqual([formals[0]])
-
-    const thirdCrossing = crossingPoint(engine, membranes[2]!, formals[2]!)
-    const thirdTap = drag.claim(sample(thirdCrossing))!
-    thirdTap.release(sample(thirdCrossing), false)
-    const branch = drag.claim(sample(pendingBodyPoint(engine, drag.pendingState!)))!
-    const thirdPoint = membranePoint(engine, membranes[2]!)
-    branch.move(sample(thirdPoint))
-    branch.release(sample(thirdPoint), true)
-    expect(drag.pendingState!.occurrences).toHaveLength(3)
-
-    const loose = drag.claim(sample(pendingLooseEnd(drag.pendingState!)))!
-    const scopePoint = vec(0, 100)
+    const pending = drag.pendingState!
+    const loosePoint = pendingLooseEnd(pending)
+    const loose = drag.claim(sample(loosePoint))!
+    const scopePoint = vec(0, 120)
     loose.move(sample(scopePoint))
     loose.release(sample(scopePoint), true)
 
-    expect(gestures).toHaveLength(1)
-    expect(gestures[0]).toEqual({
+    expect(gestures).toEqual([{
       kind: 'relationSever',
       input: {
         kind: 'relation',
         scope: diagram.root,
-        occurrences: membranes.map((membrane, index) => ({
-          sel: membrane.selection,
+        occurrences: nodes.map((node, index) => ({
+          sel: prepareSelectedOccurrence(diagram, [
+            nodeHit(node),
+            wireHit(formals[index]!),
+          ]).occurrence.sel,
           args: [formals[index]!],
         })),
       },
-    })
-    expect(drag.pendingState).toBeNull()
-  })
-
-  it('routes kernel refusal through spring-back and cancel deletes a pending legal wire', () => {
-    const builder = new DiagramBuilder()
-    const content = builder.ref(builder.root, 'UnaryBody', UNARY)
-    const formal = builder.wire(builder.root, [{
-      node: content,
-      port: { kind: 'arg', index: 0 },
     }])
-    const wrapped = wrapNode(builder.build(), content)
-    const engine = mkEngine(wrapped.diagram, [])
-    placeMembrane(engine, wrapped.membrane, vec(0, 0))
-    engine.bodies.get(`j:${formal}`)!.pos = vec(0, 70)
-    const refusals: string[] = []
-    const scopeAtCommit: string[] = []
-    const bodyHomeAtCommit: string[] = []
-    let drag!: ConnectionDragController
-    drag = new ConnectionDragController({
-      active: () => true,
-      engine: () => engine,
-      viewScale: () => 1,
-      theme: () => LIGHT,
-      relationGestures: true,
-      commit: (gesture) => {
-        if (gesture.kind === 'relationSever') {
-          const pending = drag.pendingState!
-          scopeAtCommit.push(pending.diagram.wires[pending.wire]!.scope)
-          bodyHomeAtCommit.push(
-            pending.engine.bodies.get(pending.looseEndBody)!.region,
-          )
-        }
-        try {
-          const step = gesture.kind === 'relationSever'
-            ? { rule: 'wireSever' as const, input: gesture.input }
-            : gesture.kind === 'relationJoin'
-              ? { rule: 'wireJoin' as const, input: gesture.input }
-              : {
-                  rule: 'wireJoin' as const,
-                  input: {
-                    kind: 'iota' as const,
-                    a: gesture.source.wire,
-                    b: gesture.target.wire,
-                  },
-                }
-          applyStep(wrapped.diagram, step, EMPTY_PROOF_CONTEXT, 'backward')
-          return true
-        } catch (error) {
-          refusals.push(error instanceof Error ? error.message : String(error))
-          return false
-        }
-      },
-      refuse: (text) => { refusals.push(text) },
-    })
-    const tapPoint = crossingPoint(engine, wrapped.membrane, formal)
-    const tap = drag.claim(sample(tapPoint))!
-    tap.release(sample(tapPoint), false)
-    const found = drag.claim(sample(membranePoint(engine, wrapped.membrane)))!
-    found.release(sample(membranePoint(engine, wrapped.membrane)), false)
-    const loose = drag.claim(sample(pendingLooseEnd(drag.pendingState!)))!
-    const finish = vec(10, 10)
-    loose.move(sample(finish))
-    loose.release(sample(finish), true)
-    expect(refusals.join('\n')).toMatch(/requires a negative scope/)
-    expect(scopeAtCommit).toEqual([wrapped.membrane.inner])
-    expect(bodyHomeAtCommit).toEqual([wrapped.membrane.inner])
-    expect(drag.pendingState).toBeNull()
-
-    const again = drag.claim(sample(membranePoint(engine, wrapped.membrane)))!
-    again.release(sample(membranePoint(engine, wrapped.membrane)), false)
-    expect(drag.pendingState).not.toBeNull()
-    expect(drag.pendingState!.occurrences).toHaveLength(1)
-    expect(drag.pendingState!.occurrences[0]!.args).toEqual([formal])
-    drag.cancel()
     expect(drag.pendingState).toBeNull()
   })
 
-  it('lets the kernel refuse explicitly touched occurrences that are not copies', () => {
+  it('lets the kernel refuse mismatched explicit occurrences and springs the loose end back', () => {
     const builder = new DiagramBuilder()
-    const firstNode = builder.ref(builder.root, 'FirstBody', UNARY)
-    const secondNode = builder.ref(builder.root, 'DifferentBody', UNARY)
+    const first = builder.ref(builder.root, 'FirstBody', UNARY)
+    const second = builder.ref(builder.root, 'DifferentBody', UNARY)
     const firstFormal = builder.wire(builder.root, [{
-      node: firstNode,
+      node: first,
       port: { kind: 'arg', index: 0 },
     }])
     const secondFormal = builder.wire(builder.root, [{
-      node: secondNode,
+      node: second,
       port: { kind: 'arg', index: 0 },
     }])
-    let diagram = builder.build()
-    const firstWrapped = wrapNode(diagram, firstNode)
-    diagram = firstWrapped.diagram
-    const secondWrapped = wrapNode(diagram, secondNode)
-    diagram = secondWrapped.diagram
-    const first = preparedMembrane(diagram, firstWrapped.membrane.outer)!
-    const second = preparedMembrane(diagram, secondWrapped.membrane.outer)!
+    const diagram = builder.build()
     const engine = mkEngine(diagram, [])
-    placeMembrane(engine, first, vec(-50, 0))
-    placeMembrane(engine, second, vec(50, 0))
-    engine.bodies.get(`j:${firstFormal}`)!.pos = vec(-50, 70)
-    engine.bodies.get(`j:${secondFormal}`)!.pos = vec(50, 70)
+    engine.bodies.get(first)!.pos = vec(-50, 0)
+    engine.bodies.get(second)!.pos = vec(50, 0)
+    const selection: SelectionState = {
+      hits: [nodeHit(first), wireHit(firstFormal)],
+    }
+    const gestures: ConnectionGesture[] = []
     const refusals: string[] = []
-    const drag = new ConnectionDragController({
-      active: () => true,
-      engine: () => engine,
-      viewScale: () => 1,
-      theme: () => LIGHT,
-      relationGestures: true,
-      commit: (gesture) => {
+    const drag = controller(
+      engine,
+      selection,
+      gestures,
+      refusals,
+      (gesture) => {
         if (gesture.kind !== 'relationSever') return false
         try {
           applyStep(
@@ -539,97 +411,47 @@ describe('relation wire gestures', () => {
           return false
         }
       },
-      refuse: (text) => { refusals.push(text) },
-    })
-    for (const [membrane, wire] of [
-      [first, firstFormal],
-      [second, secondFormal],
-    ] as const) {
-      const point = crossingPoint(engine, membrane, wire)
-      const tap = drag.claim(sample(point))!
-      tap.release(sample(point), false)
-    }
-    const found = drag.claim(sample(membranePoint(engine, first)))!
-    const secondPoint = membranePoint(engine, second)
-    found.move(sample(secondPoint))
-    found.release(sample(secondPoint), true)
-    const loose = drag.claim(sample(pendingLooseEnd(drag.pendingState!)))!
-    const scope = vec(0, 100)
-    loose.move(sample(scope))
-    loose.release(sample(scope), true)
+    )
+    const founding = drag.claim(sample(vec(-50, 0), nodeHit(first)))!
+    founding.move(sample(vec(-50, 80)))
+    founding.release(sample(vec(-50, 80)), true)
+    selection.hits = [wireHit(secondFormal), nodeHit(second)]
+    const branch = drag.claim(sample(pendingBodyPoint(drag, drag.pendingState!)))!
+    branch.move(sample(vec(50, 0), nodeHit(second)))
+    branch.release(sample(vec(50, 0), nodeHit(second)), true)
+    const before = pendingLooseEnd(drag.pendingState!)
+    const loose = drag.claim(sample(before))!
+    loose.move(sample(vec(0, 120)))
+    loose.release(sample(vec(0, 120)), true)
 
     expect(refusals).toEqual([
       'occurrences are not isomorphic under the same pinned content',
     ])
+    expect(drag.pendingState).not.toBeNull()
+    expect(pendingLooseEnd(drag.pendingState!)).toEqual(before)
+
+    drag.cancel()
     expect(drag.pendingState).toBeNull()
   })
 
-  it('derives pending overlay, hits, and commit from live membrane and loose-end geometry', () => {
+  it('derives contact geometry from the live selected node owner', () => {
     const builder = new DiagramBuilder()
-    const firstNode = builder.ref(builder.root, 'NullaryBody', relSig([]))
-    const secondNode = builder.ref(builder.root, 'NullaryBody', relSig([]))
-    let diagram = builder.build()
-    const firstWrapped = wrapNode(diagram, firstNode)
-    diagram = firstWrapped.diagram
-    const secondWrapped = wrapNode(diagram, secondNode)
-    diagram = secondWrapped.diagram
-    const first = preparedMembrane(diagram, firstWrapped.membrane.outer)!
-    const second = preparedMembrane(diagram, secondWrapped.membrane.outer)!
+    const content = builder.ref(builder.root, 'TruthBody', relSig([]))
+    const diagram = builder.build()
     const engine = mkEngine(diagram, [])
-    placeMembrane(engine, first, vec(-100, 0))
-    placeMembrane(engine, second, vec(200, 0))
-    const gestures: ConnectionGesture[] = []
-    const drag = controller(engine, gestures)
+    engine.bodies.get(content)!.pos = vec(-100, 0)
+    const selection: SelectionState = { hits: [nodeHit(content)] }
+    const drag = controller(engine, selection, [])
+    const founding = drag.claim(sample(vec(-100, 0), nodeHit(content)))!
+    founding.move(sample(vec(-100, 80)))
+    founding.release(sample(vec(-100, 80)), true)
+    const oldBody = pendingBodyPoint(drag, drag.pendingState!)
 
-    const firstPoint = membranePoint(engine, first)
-    const found = drag.claim(sample(firstPoint))!
-    found.release(sample(firstPoint), false)
-    const oldBodyPoint = vec(-100, -52)
+    engine.bodies.get(content)!.pos = vec(80, 50)
+    const movedBody = pendingBodyPoint(drag, drag.pendingState!)
 
-    engine.regions.set(first.outer, {
-      center: vec(50, 60),
-      radius: 45,
-      support: [],
-    })
-    engine.regions.set(first.inner, {
-      center: vec(50, 60),
-      radius: 26,
-      support: [],
-    })
-    const pending = drag.pendingState!
-    const movedLooseEnd = vec(125, 115)
-    pending.engine.bodies.get(pending.looseEndBody)!.pos = movedLooseEnd
-    const movedBodyPoint = vec(50, -7)
-
-    const overlayCenters = drag.overlay()
-      .filter((shape) => shape.kind === 'circle')
-      .map((shape) => shape.center)
-    expect(overlayCenters).toContainEqual(movedBodyPoint)
-    expect(overlayCenters).toContainEqual(movedLooseEnd)
-    expect(drag.claim(sample(oldBodyPoint))).toBeNull()
-
-    const branch = drag.claim(sample(movedBodyPoint))
-    expect(branch).not.toBeNull()
-    const secondPoint = membranePoint(engine, second)
-    branch!.move(sample(secondPoint))
-    branch!.release(sample(secondPoint), true)
-
-    const loose = drag.claim(sample(movedLooseEnd))
-    expect(loose).not.toBeNull()
-    const scope = vec(350, 180)
-    loose!.move(sample(scope))
-    loose!.release(sample(scope), true)
-
-    expect(gestures).toEqual([{
-      kind: 'relationSever',
-      input: {
-        kind: 'relation',
-        scope: diagram.root,
-        occurrences: [
-          { sel: first.selection, args: [] },
-          { sel: second.selection, args: [] },
-        ],
-      },
-    }])
+    expect(movedBody).not.toEqual(oldBody)
+    expect(drag.claim(sample(oldBody))).toBeNull()
+    expect(drag.claim(sample(movedBody))).not.toBeNull()
   })
 })

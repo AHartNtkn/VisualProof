@@ -1,21 +1,28 @@
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
-import type { Diagram, Endpoint, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type {
+  Diagram,
+  Endpoint,
+  NodeId,
+  RegionId,
+  WireId,
+} from '../../kernel/diagram/diagram'
 import { relSig } from '../../kernel/diagram/sig'
 import { extractSubgraph } from '../../kernel/diagram/subgraph/extract'
-import type { ContentOccurrence, WireJoinInput, WireSeverInput } from '../../kernel/rules/wire-quantifier'
+import type {
+  ContentOccurrence,
+  WireJoinInput,
+  WireSeverInput,
+} from '../../kernel/rules/wire-quantifier'
 import { carryOver, mkEngine, pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import { computeLegs, existentialStubs, legPaths } from '../../view/wires'
 import { addRelationWire } from '../edit'
 import {
-  connectionHitTest,
-  membraneCrossingHits,
+  buildSelection,
   pendingWireHitTest,
-  type ConnectionHit,
-  type MembraneCrossingKey,
+  type Hit,
   type PendingWireGeometry,
-  type PreparedMembrane,
   type WireManipulationHit,
   wireManipulationHitTest,
 } from '../hittest'
@@ -41,15 +48,32 @@ export type ConnectionGesture =
       readonly input: Extract<WireSeverInput, { readonly kind: 'relation' }>
     }
 
-export type PreparedMembraneContent = {
+export type PreparedOccurrence = {
   readonly occurrence: ContentOccurrence
   readonly content: DiagramWithBoundary
   readonly parameters: readonly WireId[]
 }
 
-export type PendingMembraneContact = {
-  readonly membrane: PreparedMembrane
+type ExtentHit = Extract<Hit, { readonly kind: 'node' | 'region' }>
+
+type NodeAnchor = {
+  readonly kind: 'node'
+  readonly id: NodeId
+  readonly offset: Vec2
+  readonly direction: Vec2
+}
+
+type RegionAnchor = {
+  readonly kind: 'region'
+  readonly id: RegionId
   readonly radial: Vec2
+}
+
+type ContactAnchor = NodeAnchor | RegionAnchor
+
+export type PendingOccurrenceContact = {
+  readonly hit: ExtentHit
+  readonly anchor: ContactAnchor
 }
 
 export type PendingRelationState = {
@@ -57,8 +81,13 @@ export type PendingRelationState = {
   readonly engine: Engine
   readonly wire: WireId
   readonly looseEndBody: string
-  readonly contacts: readonly PendingMembraneContact[]
+  readonly contacts: readonly PendingOccurrenceContact[]
   readonly occurrences: readonly ContentOccurrence[]
+}
+
+export type RelationSelectionAuthority = {
+  readonly selection: () => readonly Hit[]
+  readonly setSelection: (hits: readonly Hit[]) => void
 }
 
 export type ConnectionDragOptions = {
@@ -66,9 +95,15 @@ export type ConnectionDragOptions = {
   readonly engine: () => Engine
   readonly viewScale: () => number
   readonly theme: () => Theme
-  readonly relationGestures?: boolean
+  /** Present only on proof surfaces; construction keeps the iota gesture only. */
+  readonly relationSelection?: RelationSelectionAuthority
   readonly commit: (gesture: ConnectionGesture, pointer: Vec2) => boolean
   readonly refuse: (text: string, pointer: Vec2) => void
+}
+
+type PreparedTarget = {
+  readonly hit: ExtentHit
+  readonly prepared: PreparedOccurrence
 }
 
 type WirePreview = {
@@ -77,25 +112,84 @@ type WirePreview = {
   readonly from: Vec2
   at: Vec2
   target: ConnectionEnd | null
-  membrane: PreparedMembrane | null
+  occurrence: PreparedTarget | null
+  occurrenceError: string | null
 }
 
-type MembranePreview = {
-  readonly kind: 'membrane'
-  readonly source: PreparedMembrane
+type FoundingPreview = {
+  readonly kind: 'founding'
   readonly from: Vec2
   at: Vec2
-  target: PreparedMembrane | null
 }
 
 type PendingPreview = {
   readonly kind: 'pendingBody' | 'pendingLoose'
   readonly from: Vec2
   at: Vec2
-  target: ConnectionHit | null
+  target: PreparedTarget | null
+  targetError: string | null
 }
 
-type ConnectionPreview = WirePreview | MembranePreview | PendingPreview
+type ConnectionPreview = WirePreview | FoundingPreview | PendingPreview
+
+function sameHit(left: Hit, right: Hit): boolean {
+  return left.kind === right.kind && left.id === right.id
+}
+
+/**
+ * Project the one ordered editor selection into the durable kernel operands.
+ * Region/node hits own extent. Wire hits own formal membership and order.
+ * Every unselected touching attachment remains an ambient parameter.
+ */
+export function prepareSelectedOccurrence(
+  diagram: Diagram,
+  hits: readonly Hit[],
+): PreparedOccurrence {
+  const extentHits = hits.filter(
+    (hit): hit is ExtentHit => hit.kind === 'node' || hit.kind === 'region',
+  )
+  if (extentHits.length === 0) {
+    throw new Error('highlight at least one region or node for the occurrence extent')
+  }
+  const formalWires = hits
+    .filter((hit): hit is Extract<Hit, { readonly kind: 'wire' }> =>
+      hit.kind === 'wire')
+    .map((hit) => hit.id)
+  if (new Set(formalWires).size !== formalWires.length) {
+    throw new Error('the ordered occurrence selection repeats a formal wire')
+  }
+
+  const sel = buildSelection(diagram, extentHits)
+  const extracted = extractSubgraph(diagram, sel)
+  const stubByAttachment = new Map<WireId, WireId>()
+  extracted.attachments.forEach((attachment, index) => {
+    stubByAttachment.set(attachment, extracted.pattern.boundary[index]!)
+  })
+  const formalBoundary = formalWires.map((wire) => {
+    const stub = stubByAttachment.get(wire)
+    if (stub === undefined) {
+      throw new Error(`selected formal wire '${wire}' does not cross the selected extent`)
+    }
+    return stub
+  })
+  const selectedFormals = new Set(formalWires)
+  const parameters = extracted.attachments.filter(
+    (wire) => !selectedFormals.has(wire),
+  )
+  const parameterBoundary = parameters.map((wire) => stubByAttachment.get(wire)!)
+
+  return Object.freeze({
+    occurrence: Object.freeze({
+      sel,
+      args: Object.freeze(formalWires),
+    }),
+    content: mkDiagramWithBoundary(
+      extracted.pattern.diagram,
+      [...formalBoundary, ...parameterBoundary],
+    ),
+    parameters: Object.freeze(parameters),
+  })
+}
 
 function wireEnd(hit: WireManipulationHit): ConnectionEnd {
   return {
@@ -107,15 +201,31 @@ function wireEnd(hit: WireManipulationHit): ConnectionEnd {
 function wireShapes(engine: Engine, wire: WireId, stroke: string, width: number): Shape[] {
   const out: Shape[] = []
   for (const path of legPaths(engine)) {
-    if (path.wid === wire) out.push({ kind: 'polyline', pts: path.pts, stroke, width, glow: null })
+    if (path.wid === wire) {
+      out.push({ kind: 'polyline', pts: path.pts, stroke, width, glow: null })
+    }
   }
   for (const stub of existentialStubs(engine)) {
-    if (stub.wid === wire) out.push({ kind: 'segment', from: stub.from, to: stub.to, stroke, width, glow: null })
+    if (stub.wid === wire) {
+      out.push({
+        kind: 'segment',
+        from: stub.from,
+        to: stub.to,
+        stroke,
+        width,
+        glow: null,
+      })
+    }
   }
   return out
 }
 
-function targetShapes(engine: Engine, target: ConnectionEnd, stroke: string, width: number): Shape[] {
+function wireTargetShapes(
+  engine: Engine,
+  target: ConnectionEnd,
+  stroke: string,
+  width: number,
+): Shape[] {
   if (target.endpoint === null) return wireShapes(engine, target.wire, stroke, width)
   const key = pkey(target.endpoint.port)
   return computeLegs(engine)
@@ -123,24 +233,44 @@ function targetShapes(engine: Engine, target: ConnectionEnd, stroke: string, wid
       (leg.from.body === target.endpoint!.node && leg.from.key === key)
       || (leg.to.body === target.endpoint!.node && leg.to.key === key)
     ))
-    .map(({ pts }): Shape => ({ kind: 'polyline', pts, stroke, width, glow: null }))
+    .map(({ pts }): Shape => ({
+      kind: 'polyline',
+      pts,
+      stroke,
+      width,
+      glow: null,
+    }))
 }
 
-function membraneShape(
+function occurrenceTargetShapes(
   engine: Engine,
-  membrane: PreparedMembrane,
+  target: PreparedTarget,
   stroke: string,
   width: number,
-  fill: string | null = null,
 ): Shape[] {
-  const circle = engine.regions.get(membrane.outer)
-  return circle === undefined
+  if (target.hit.kind === 'node') {
+    const body = engine.bodies.get(target.hit.id)
+    return body === undefined
+      ? []
+      : [{
+          kind: 'circle',
+          center: body.pos,
+          r: body.discR * engine.scale,
+          fill: null,
+          stroke,
+          width,
+          insetColor: null,
+          glow: null,
+        }]
+  }
+  const region = engine.regions.get(target.hit.id)
+  return region === undefined
     ? []
     : [{
         kind: 'circle',
-        center: circle.center,
-        r: circle.radius,
-        fill,
+        center: region.center,
+        r: region.radius,
+        fill: null,
         stroke,
         width,
         insetColor: null,
@@ -148,44 +278,64 @@ function membraneShape(
       }]
 }
 
-function membraneRadialAnchor(
-  engine: Engine,
-  membrane: PreparedMembrane,
-  at: Vec2,
-): Vec2 {
-  const circle = engine.regions.get(membrane.outer)
-  if (circle === undefined) {
-    throw new Error(`prepared membrane '${membrane.outer}' has no live geometry`)
-  }
-  const dx = at.x - circle.center.x
-  const dy = at.y - circle.center.y
-  const distance = Math.hypot(dx, dy)
-  return distance === 0
-    ? Object.freeze({ x: 1, y: 0 })
-    : Object.freeze({ x: dx / distance, y: dy / distance })
+function unit(vector: Vec2): Vec2 {
+  const length = Math.hypot(vector.x, vector.y)
+  return length === 0
+    ? { x: 1, y: 0 }
+    : { x: vector.x / length, y: vector.y / length }
 }
 
-function membraneContactPoint(
-  engine: Engine,
-  contact: PendingMembraneContact,
-): Vec2 {
-  const circle = engine.regions.get(contact.membrane.outer)
-  if (circle === undefined) {
-    throw new Error(
-      `prepared membrane '${contact.membrane.outer}' has no live geometry`,
-    )
+function contactAnchor(engine: Engine, hit: ExtentHit, at: Vec2): ContactAnchor {
+  if (hit.kind === 'node') {
+    const body = engine.bodies.get(hit.id)
+    if (body === undefined) throw new Error(`selected node '${hit.id}' has no live geometry`)
+    const offset = { x: at.x - body.pos.x, y: at.y - body.pos.y }
+    return Object.freeze({
+      kind: 'node',
+      id: hit.id,
+      offset: Object.freeze(offset),
+      direction: Object.freeze(unit(offset)),
+    })
   }
+  const region = engine.regions.get(hit.id)
+  if (region === undefined) throw new Error(`selected region '${hit.id}' has no live geometry`)
+  return Object.freeze({
+    kind: 'region',
+    id: hit.id,
+    radial: Object.freeze(unit({
+      x: at.x - region.center.x,
+      y: at.y - region.center.y,
+    })),
+  })
+}
+
+function contactPoint(engine: Engine, contact: PendingOccurrenceContact): Vec2 {
+  const anchor = contact.anchor
+  if (anchor.kind === 'node') {
+    const body = engine.bodies.get(anchor.id)
+    if (body === undefined) throw new Error(`selected node '${anchor.id}' has no live geometry`)
+    return {
+      x: body.pos.x + anchor.offset.x,
+      y: body.pos.y + anchor.offset.y,
+    }
+  }
+  const region = engine.regions.get(anchor.id)
+  if (region === undefined) throw new Error(`selected region '${anchor.id}' has no live geometry`)
   return {
-    x: circle.center.x + contact.radial.x * circle.radius,
-    y: circle.center.y + contact.radial.y * circle.radius,
+    x: region.center.x + anchor.radial.x * region.radius,
+    y: region.center.y + anchor.radial.y * region.radius,
   }
+}
+
+function contactDirection(contact: PendingOccurrenceContact): Vec2 {
+  return contact.anchor.kind === 'node'
+    ? contact.anchor.direction
+    : contact.anchor.radial
 }
 
 function pendingLooseEnd(pending: PendingRelationState): Vec2 {
   const body = pending.engine.bodies.get(pending.looseEndBody)
-  if (body === undefined) {
-    throw new Error(`pending wire '${pending.wire}' has no loose-end body`)
-  }
+  if (body === undefined) throw new Error(`pending wire '${pending.wire}' has no loose-end body`)
   return body.pos
 }
 
@@ -193,12 +343,30 @@ type ResolvedPendingGeometry = PendingWireGeometry & {
   readonly bodyPoint: Vec2
 }
 
+function pendingBodyPoint(
+  points: readonly Vec2[],
+  contacts: readonly PendingOccurrenceContact[],
+): Vec2 {
+  if (contacts.length === 1) {
+    const point = points[0]!
+    const direction = contactDirection(contacts[0]!)
+    return {
+      x: point.x + direction.x * 22,
+      y: point.y + direction.y * 22,
+    }
+  }
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  }
+}
+
 function pendingGeometry(
   pending: PendingRelationState,
   engine: Engine,
 ): ResolvedPendingGeometry {
   const contactPoints = pending.contacts.map((contact) =>
-    membraneContactPoint(engine, contact))
+    contactPoint(engine, contact))
   const bodyPoint = pendingBodyPoint(contactPoints, pending.contacts)
   const looseEnd = pendingLooseEnd(pending)
   return {
@@ -212,112 +380,65 @@ function pendingGeometry(
   }
 }
 
-function pendingBodyPoint(
-  points: readonly Vec2[],
-  contacts: readonly PendingMembraneContact[],
-): Vec2 {
-  if (contacts.length === 1) {
-    const contact = contacts[0]!
-    const point = points[0]!
-    return {
-      x: point.x + contact.radial.x * 22,
-      y: point.y + contact.radial.y * 22,
-    }
+function containingRegion(engine: Engine, point: Vec2): RegionId {
+  let best: { readonly id: RegionId; readonly radius: number } | null = null
+  for (const [id, region] of engine.regions) {
+    if (engine.d.regions[id]?.kind === 'sheet') continue
+    if (
+      Math.hypot(point.x - region.center.x, point.y - region.center.y) <= region.radius
+      && (best === null || region.radius < best.radius)
+    ) best = { id, radius: region.radius }
   }
-  return {
-    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
-  }
+  return best?.id ?? engine.d.root
 }
 
-/**
- * Convert the exact contents of a prepared membrane to the kernel's bounded
- * representation. Crossing taps form the formal prefix in event order; every
- * untapped crossing remains in the extracted canonical order as an ambient
- * parameter suffix.
- */
-export function prepareMembraneContent(
-  diagram: Diagram,
-  membrane: PreparedMembrane,
-  taps: readonly MembraneCrossingKey[],
-): PreparedMembraneContent {
-  const extracted = extractSubgraph(diagram, membrane.selection)
-  const stubByAttachment = new Map<WireId, WireId>()
-  extracted.attachments.forEach((attachment, index) => {
-    stubByAttachment.set(attachment, extracted.pattern.boundary[index]!)
-  })
-  const formalBoundary = taps.map((tap, index) => {
-    if (tap.membrane !== membrane.outer) {
-      throw new Error(
-        `formal crossing ${index} belongs to membrane '${tap.membrane}', `
-        + `not '${membrane.outer}'`,
-      )
-    }
-    const stub = stubByAttachment.get(tap.wire)
-    if (stub === undefined) {
-      throw new Error(
-        `formal crossing ${index} wire '${tap.wire}' does not touch `
-        + `membrane '${membrane.outer}'`,
-      )
-    }
-    return stub
-  })
-  const tapped = new Set(taps.map((tap) => tap.wire))
-  const parameters = extracted.attachments.filter((wire) => !tapped.has(wire))
-  const parameterBoundary = parameters.map((wire) => stubByAttachment.get(wire)!)
-  return Object.freeze({
-    occurrence: Object.freeze({
-      sel: membrane.selection,
-      args: Object.freeze(taps.map((tap) => tap.wire)),
-    }),
-    content: mkDiagramWithBoundary(
-      extracted.pattern.diagram,
-      [...formalBoundary, ...parameterBoundary],
-    ),
-    parameters: Object.freeze(parameters),
-  })
-}
-
-/**
- * One physical connection grammar for edit and proof modes. Proof mode enables
- * prepared-membrane crossings and pending relation wires; construction mode
- * consumes only the unchanged wire-to-wire branch.
- */
+/** Shared connection grammar. Proof mode adds selection-consuming relation
+ * targets and one pending fresh relation wire; construction mode retains only
+ * ordinary wire-to-wire manipulation. */
 export class ConnectionDragController {
   readonly #options: ConnectionDragOptions
-  readonly #taps = new Map<RegionId, MembraneCrossingKey[]>()
   #preview: ConnectionPreview | null = null
   #pending: PendingRelationState | null = null
   #claimEpoch = 0
 
-  constructor(options: ConnectionDragOptions) { this.#options = options }
+  constructor(options: ConnectionDragOptions) {
+    this.#options = options
+  }
 
-  get pendingState(): PendingRelationState | null { return this.#pending }
+  get pendingState(): PendingRelationState | null {
+    return this.#pending
+  }
+
   get hasPendingInteraction(): boolean {
-    return this.#pending !== null || this.#preview !== null || this.#taps.size > 0
+    return this.#pending !== null || this.#preview !== null
   }
 
   claim(sample: PointerSample): PointerClaim | null {
-    if (!this.#options.active() || sample.button !== 0 || sample.shiftKey || sample.ctrlKey) return null
-    const engine = this.#options.engine()
+    if (
+      !this.#options.active()
+      || sample.button !== 0
+      || sample.shiftKey
+      || sample.ctrlKey
+    ) return null
     const viewport = { scale: this.#options.viewScale() }
 
-    if (this.#options.relationGestures === true) {
-      const pendingClaim = this.#claimPending(sample, viewport.scale)
-      if (pendingClaim !== null) return this.#issueClaim(pendingClaim)
-      const relationHit = connectionHitTest(engine, sample.world, viewport)
-      if (relationHit?.kind === 'crossing') {
-        return this.#issueClaim(this.#claimCrossing(relationHit.key))
-      }
-      if (this.#pending !== null) return null
-      if (relationHit?.kind === 'membrane') {
-        return this.#issueClaim(
-          this.#claimMembrane(sample, relationHit.membrane, relationHit.at),
-        )
-      }
+    const pendingClaim = this.#claimPending(sample, viewport.scale)
+    if (pendingClaim !== null) return this.#issueClaim(pendingClaim)
+    if (this.#pending !== null) return null
+
+    const founding = this.#inspectPreparedTarget(sample)
+    if (founding.error !== null) {
+      return this.#issueClaim(this.#claimInvalidFounding(founding.error))
+    }
+    if (founding.target !== null) {
+      return this.#issueClaim(this.#claimFounding(sample, founding.target))
     }
 
-    const hit = wireManipulationHitTest(engine, sample.world, viewport)
+    const hit = wireManipulationHitTest(
+      this.#options.engine(),
+      sample.world,
+      viewport,
+    )
     if (hit === null) return null
     const preview: WirePreview = {
       kind: 'wire',
@@ -325,7 +446,8 @@ export class ConnectionDragController {
       from: sample.world,
       at: sample.world,
       target: null,
-      membrane: null,
+      occurrence: null,
+      occurrenceError: null,
     }
     this.#preview = preview
     return this.#issueClaim({
@@ -333,19 +455,13 @@ export class ConnectionDragController {
       blocksPassiveRelaxation: true,
       move: (next) => {
         preview.at = next.world
-        if (this.#options.relationGestures === true) {
-          const target = connectionHitTest(
-            this.#options.engine(),
-            next.world,
-            { scale: this.#options.viewScale() },
-          )
-          if (target?.kind === 'membrane') {
-            preview.target = null
-            preview.membrane = target.membrane
-            return
-          }
+        const occurrence = this.#inspectPreparedTarget(next)
+        preview.occurrence = occurrence.target
+        preview.occurrenceError = occurrence.error
+        if (occurrence.target !== null || occurrence.error !== null) {
+          preview.target = null
+          return
         }
-        preview.membrane = null
         const target = wireManipulationHitTest(
           this.#options.engine(),
           next.world,
@@ -356,13 +472,21 @@ export class ConnectionDragController {
       release: (next, moved) => {
         this.#preview = null
         if (!moved) return
-        if (preview.membrane !== null) {
+        const occurrence = this.#inspectPreparedTarget(next)
+        if (occurrence.error !== null) {
+          this.#options.refuse(occurrence.error, next.client)
+          return
+        }
+        if (occurrence.target !== null) {
           const sourceWire = this.#options.engine().d.wires[preview.source.wire]
           if (sourceWire?.sig.kind !== 'rel') {
-            this.#options.refuse('only a relation wire can land on prepared content', next.client)
+            this.#options.refuse(
+              'only a relation wire can land on selected relation content',
+              next.client,
+            )
             return
           }
-          const prepared = this.#prepare(preview.membrane)
+          const prepared = occurrence.target.prepared
           const committed = this.#options.commit({
             kind: 'relationJoin',
             input: {
@@ -372,20 +496,30 @@ export class ConnectionDragController {
               parameters: prepared.parameters,
             },
           }, next.client)
-          if (committed) this.#clearTaps()
+          if (committed) this.#options.relationSelection?.setSelection([])
           return
         }
-        if (preview.target === null) {
-          this.#options.refuse('release on a line endpoint, another line, or prepared membrane', next.client)
+        const target = wireManipulationHitTest(
+          this.#options.engine(),
+          next.world,
+          { scale: this.#options.viewScale() },
+        )
+        if (target === null) {
+          this.#options.refuse(
+            'release on a line endpoint, another line, or selected relation content',
+            next.client,
+          )
           return
         }
         this.#options.commit({
           kind: 'wire',
           source: preview.source,
-          target: preview.target,
+          target: wireEnd(target),
         }, next.client)
       },
-      cancel: () => { this.#preview = null },
+      cancel: () => {
+        this.#preview = null
+      },
     })
   }
 
@@ -393,23 +527,6 @@ export class ConnectionDragController {
     const engine = this.#options.engine()
     const color = this.#options.theme().interaction.valid
     const out: Shape[] = []
-    for (const keys of this.#taps.values()) {
-      for (const key of keys) {
-        const crossing = membraneCrossingHits(engine).find((hit) =>
-          hit.key.membrane === key.membrane && hit.key.wire === key.wire)
-        if (crossing === undefined) continue
-        out.push({
-          kind: 'circle',
-          center: crossing.at,
-          r: 4 / this.#options.viewScale(),
-          fill: color,
-          stroke: color,
-          width: 1.4,
-          insetColor: null,
-          glow: null,
-        })
-      }
-    }
     const pending = this.#pending
     if (pending !== null) {
       const geometry = pendingGeometry(pending, engine)
@@ -447,14 +564,17 @@ export class ConnectionDragController {
     })
     if (preview.kind === 'wire') {
       if (preview.target !== null) {
-        out.push(...targetShapes(engine, preview.target, color, 3.2))
-      } else if (preview.membrane !== null) {
-        out.push(...membraneShape(engine, preview.membrane, color, 3.2))
+        out.push(...wireTargetShapes(engine, preview.target, color, 3.2))
+      } else if (preview.occurrence !== null) {
+        out.push(...occurrenceTargetShapes(
+          engine,
+          preview.occurrence,
+          color,
+          3.2,
+        ))
       }
-    } else if (preview.kind === 'membrane' && preview.target !== null) {
-      out.push(...membraneShape(engine, preview.target, color, 3.2))
-    } else if (preview.kind !== 'membrane' && preview.target?.kind === 'membrane') {
-      out.push(...membraneShape(engine, preview.target.membrane, color, 3.2))
+    } else if (preview.kind === 'pendingBody' && preview.target !== null) {
+      out.push(...occurrenceTargetShapes(engine, preview.target, color, 3.2))
     }
     return out
   }
@@ -463,7 +583,260 @@ export class ConnectionDragController {
     this.#claimEpoch++
     this.#preview = null
     this.#pending = null
-    this.#clearTaps()
+  }
+
+  #inspectPreparedTarget(sample: PointerSample): {
+    readonly target: PreparedTarget | null
+    readonly error: string | null
+  } {
+    const authority = this.#options.relationSelection
+    const hit = sample.hit
+    if (
+      authority === undefined
+      || hit === null
+      || (hit.kind !== 'node' && hit.kind !== 'region')
+      || !authority.selection().some((candidate) => sameHit(candidate, hit))
+    ) return { target: null, error: null }
+    try {
+      return {
+        target: {
+          hit,
+          prepared: prepareSelectedOccurrence(
+            this.#options.engine().d,
+            authority.selection(),
+          ),
+        },
+        error: null,
+      }
+    } catch (error) {
+      return {
+        target: null,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  #claimFounding(
+    sample: PointerSample,
+    target: PreparedTarget,
+  ): PointerClaim {
+    let started = false
+    const begin = (at: Vec2): void => {
+      if (started) return
+      this.#startPending(target, sample.world, at)
+      this.#options.relationSelection!.setSelection([])
+      this.#preview = {
+        kind: 'founding',
+        from: sample.world,
+        at,
+      }
+      started = true
+    }
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: true,
+      move: (next) => {
+        begin(next.world)
+        const preview = this.#preview
+        if (preview?.kind === 'founding') preview.at = next.world
+        this.#setPendingLooseEnd(next.world)
+      },
+      release: (next, moved) => {
+        if (moved) {
+          begin(next.world)
+          this.#setPendingLooseEnd(next.world)
+        }
+        this.#preview = null
+      },
+      cancel: () => {
+        this.#preview = null
+        if (started) this.#pending = null
+      },
+    }
+  }
+
+  #claimInvalidFounding(message: string): PointerClaim {
+    let refused = false
+    const refuse = (sample: PointerSample): void => {
+      if (refused) return
+      refused = true
+      this.#options.refuse(message, sample.client)
+    }
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: true,
+      move: refuse,
+      release: (sample, moved) => {
+        if (moved) refuse(sample)
+      },
+      cancel: () => undefined,
+    }
+  }
+
+  #claimPending(sample: PointerSample, viewScale: number): PointerClaim | null {
+    const pending = this.#pending
+    if (pending === null) return null
+    const geometry = pendingGeometry(pending, this.#options.engine())
+    const hit = pendingWireHitTest(
+      geometry,
+      sample.world,
+      { scale: viewScale },
+    )
+    if (hit === null) return null
+    const kind = hit.kind === 'pendingLooseEnd'
+      ? 'pendingLoose' as const
+      : 'pendingBody' as const
+    const from = kind === 'pendingLoose'
+      ? geometry.looseEnd
+      : geometry.bodyPoint
+    const preview: PendingPreview = {
+      kind,
+      from,
+      at: sample.world,
+      target: null,
+      targetError: null,
+    }
+    this.#preview = preview
+    return {
+      still: 'claim',
+      blocksPassiveRelaxation: true,
+      move: (next) => {
+        preview.at = next.world
+        if (kind === 'pendingBody') {
+          const inspected = this.#inspectPreparedTarget(next)
+          preview.target = inspected.target
+          preview.targetError = inspected.error
+        }
+      },
+      release: (next, moved) => {
+        this.#preview = null
+        if (!moved) return
+        if (kind === 'pendingBody') {
+          const inspected = this.#inspectPreparedTarget(next)
+          if (inspected.error !== null) {
+            this.#options.refuse(inspected.error, next.client)
+            return
+          }
+          if (inspected.target === null) {
+            this.#options.refuse(
+              'release a relation-wire branch on a physically hit selected extent',
+              next.client,
+            )
+            return
+          }
+          this.#appendPendingContact(
+            inspected.target,
+            next.world,
+          )
+          this.#options.relationSelection!.setSelection([])
+          return
+        }
+        this.#finishPending(
+          containingRegion(this.#options.engine(), next.world),
+          next.world,
+          next.client,
+        )
+      },
+      cancel: () => {
+        this.#preview = null
+      },
+    }
+  }
+
+  #startPending(
+    first: PreparedTarget,
+    contactAt: Vec2,
+    looseEnd: Vec2,
+  ): void {
+    const engine = this.#options.engine()
+    const sig = relSig(first.prepared.occurrence.args.map(
+      (wire) => engine.d.wires[wire]!.sig,
+    ))
+    const added = addRelationWire(
+      engine.d,
+      first.prepared.occurrence.sel.region,
+      sig,
+    )
+    const pendingEngine = mkEngine(added.diagram, [])
+    carryOver(engine, pendingEngine)
+    const looseEndBody = `j:${added.wire}`
+    const looseBody = pendingEngine.bodies.get(looseEndBody)
+    if (looseBody === undefined) {
+      throw new Error(`pending wire '${added.wire}' has no loose-end body`)
+    }
+    looseBody.pos = { ...looseEnd }
+    const contact = Object.freeze({
+      hit: first.hit,
+      anchor: contactAnchor(engine, first.hit, contactAt),
+    })
+    this.#pending = Object.freeze({
+      diagram: added.diagram,
+      engine: pendingEngine,
+      wire: added.wire,
+      looseEndBody,
+      contacts: Object.freeze([contact]),
+      occurrences: Object.freeze([first.prepared.occurrence]),
+    })
+  }
+
+  #appendPendingContact(target: PreparedTarget, at: Vec2): void {
+    const pending = this.#pending
+    if (pending === null) throw new Error('no pending relation wire to branch')
+    const contact = Object.freeze({
+      hit: target.hit,
+      anchor: contactAnchor(this.#options.engine(), target.hit, at),
+    })
+    this.#pending = Object.freeze({
+      ...pending,
+      contacts: Object.freeze([...pending.contacts, contact]),
+      occurrences: Object.freeze([
+        ...pending.occurrences,
+        target.prepared.occurrence,
+      ]),
+    })
+  }
+
+  #setPendingLooseEnd(at: Vec2): void {
+    const pending = this.#pending
+    if (pending === null) return
+    const body = pending.engine.bodies.get(pending.looseEndBody)
+    if (body !== undefined) body.pos = { ...at }
+  }
+
+  #finishPending(scope: RegionId, looseEnd: Vec2, pointer: Vec2): void {
+    const pending = this.#pending
+    if (pending === null) throw new Error('no pending relation wire to finish')
+    const relation = pending.diagram.wires[pending.wire]
+    if (relation?.sig.kind !== 'rel') {
+      throw new Error(`pending wire '${pending.wire}' is not relational`)
+    }
+    const rehomed = addRelationWire(this.#options.engine().d, scope, relation.sig)
+    const pendingEngine = mkEngine(rehomed.diagram, [])
+    carryOver(pending.engine, pendingEngine)
+    const looseEndBody = `j:${rehomed.wire}`
+    const looseBody = pendingEngine.bodies.get(looseEndBody)
+    if (looseBody === undefined) {
+      throw new Error(`pending wire '${rehomed.wire}' has no loose-end body`)
+    }
+    looseBody.pos = { ...looseEnd }
+    const attempt = Object.freeze({
+      ...pending,
+      diagram: rehomed.diagram,
+      engine: pendingEngine,
+      wire: rehomed.wire,
+      looseEndBody,
+    })
+    this.#pending = attempt
+    const authoritative = attempt.diagram.wires[attempt.wire]!
+    const committed = this.#options.commit({
+      kind: 'relationSever',
+      input: {
+        kind: 'relation',
+        scope: authoritative.scope,
+        occurrences: attempt.occurrences,
+      },
+    }, pointer)
+    this.#pending = committed ? null : pending
   }
 
   #issueClaim(claim: PointerClaim): PointerClaim {
@@ -492,243 +865,4 @@ export class ConnectionDragController {
       },
     }
   }
-
-  #claimCrossing(key: MembraneCrossingKey): PointerClaim {
-    return {
-      still: 'claim',
-      blocksPassiveRelaxation: true,
-      move: () => undefined,
-      release: (sample, moved) => {
-        if (moved) return
-        if (this.#pending?.contacts.some(
-          (contact) => contact.membrane.outer === key.membrane,
-        ) === true) {
-          this.#options.refuse('tap formal crossings before the membrane contact', sample.client)
-          return
-        }
-        const taps = this.#taps.get(key.membrane) ?? []
-        this.#taps.set(key.membrane, [...taps, key])
-      },
-      cancel: () => undefined,
-    }
-  }
-
-  #claimMembrane(
-    sample: PointerSample,
-    source: PreparedMembrane,
-    at: Vec2,
-  ): PointerClaim {
-    this.#startPending(source, at)
-    const preview: MembranePreview = {
-      kind: 'membrane',
-      source,
-      from: at,
-      at: sample.world,
-      target: null,
-    }
-    this.#preview = preview
-    return {
-      still: 'claim',
-      blocksPassiveRelaxation: true,
-      move: (next) => {
-        preview.at = next.world
-        const target = connectionHitTest(
-          this.#options.engine(),
-          next.world,
-          { scale: this.#options.viewScale() },
-        )
-        preview.target = target?.kind === 'membrane' ? target.membrane : null
-      },
-      release: (next, moved) => {
-        this.#preview = null
-        const target = connectionHitTest(
-          this.#options.engine(),
-          next.world,
-          { scale: this.#options.viewScale() },
-        )
-        if (!moved) return
-        if (target?.kind === 'membrane') {
-          this.#appendPendingContact(target.membrane, target.at)
-          return
-        }
-        this.#options.refuse(
-          'release a relation endpoint on a prepared membrane; use its loose end for scope',
-          next.client,
-        )
-      },
-      cancel: () => {
-        this.#preview = null
-        this.#pending = null
-      },
-    }
-  }
-
-  #claimPending(sample: PointerSample, viewScale: number): PointerClaim | null {
-    const pending = this.#pending
-    if (pending === null) return null
-    const geometry = pendingGeometry(pending, this.#options.engine())
-    const hit = pendingWireHitTest(
-      geometry,
-      sample.world,
-      { scale: viewScale },
-    )
-    if (hit === null) return null
-    const kind = hit.kind === 'pendingLooseEnd'
-      ? 'pendingLoose' as const
-      : 'pendingBody' as const
-    const from = kind === 'pendingLoose' ? geometry.looseEnd : geometry.bodyPoint
-    const preview: PendingPreview = {
-      kind,
-      from,
-      at: sample.world,
-      target: null,
-    }
-    this.#preview = preview
-    return {
-      still: 'claim',
-      blocksPassiveRelaxation: true,
-      move: (next) => {
-        preview.at = next.world
-        preview.target = connectionHitTest(
-          this.#options.engine(),
-          next.world,
-          { scale: this.#options.viewScale() },
-        )
-      },
-      release: (next, moved) => {
-        this.#preview = null
-        if (!moved) return
-        const target = connectionHitTest(
-          this.#options.engine(),
-          next.world,
-          { scale: this.#options.viewScale() },
-        )
-        if (kind === 'pendingBody') {
-          if (target?.kind !== 'membrane') {
-            this.#options.refuse('release a relation-wire branch on a prepared membrane', next.client)
-            return
-          }
-          this.#appendPendingContact(target.membrane, target.at)
-          return
-        }
-        const scope = this.#scopeOf(target)
-        if (scope === null) {
-          this.#options.refuse('release the loose relation end into a region', next.client)
-          return
-        }
-        this.#finishPending(scope, next.world, next.client)
-      },
-      cancel: () => { this.#preview = null },
-    }
-  }
-
-  #startPending(first: PreparedMembrane, at: Vec2): void {
-    const engine = this.#options.engine()
-    const firstPrepared = this.#prepare(first)
-    const parent = engine.d.regions[first.outer]
-    if (parent === undefined || parent.kind === 'sheet') {
-      throw new Error(`prepared membrane '${first.outer}' has no enclosing scope`)
-    }
-    const sig = relSig(firstPrepared.occurrence.args.map((wire) => engine.d.wires[wire]!.sig))
-    const added = addRelationWire(engine.d, parent.parent, sig)
-    const pendingEngine = mkEngine(added.diagram, [])
-    carryOver(engine, pendingEngine)
-    const contact = Object.freeze({
-      membrane: first,
-      radial: membraneRadialAnchor(engine, first, at),
-    })
-    const contacts = Object.freeze([contact])
-    const bodyPoint = pendingBodyPoint(
-      contacts.map((candidate) => membraneContactPoint(engine, candidate)),
-      contacts,
-    )
-    const looseEndBody = `j:${added.wire}`
-    const looseBody = pendingEngine.bodies.get(looseEndBody)
-    if (looseBody === undefined) {
-      throw new Error(`pending wire '${added.wire}' has no loose-end body`)
-    }
-    looseBody.pos = {
-      x: bodyPoint.x,
-      y: bodyPoint.y + 36 / this.#options.viewScale(),
-    }
-    this.#pending = Object.freeze({
-      diagram: added.diagram,
-      engine: pendingEngine,
-      wire: added.wire,
-      looseEndBody,
-      contacts,
-      occurrences: Object.freeze([firstPrepared.occurrence]),
-    })
-  }
-
-  #appendPendingContact(membrane: PreparedMembrane, at: Vec2): void {
-    const pending = this.#pending
-    if (pending === null) throw new Error('no pending relation wire to branch')
-    const contact = Object.freeze({
-      membrane,
-      radial: membraneRadialAnchor(this.#options.engine(), membrane, at),
-    })
-    const contacts = Object.freeze([...pending.contacts, contact])
-    this.#pending = Object.freeze({
-      ...pending,
-      contacts,
-      occurrences: Object.freeze([
-        ...pending.occurrences,
-        this.#prepare(membrane).occurrence,
-      ]),
-    })
-  }
-
-  #prepare(membrane: PreparedMembrane): PreparedMembraneContent {
-    return prepareMembraneContent(
-      this.#options.engine().d,
-      membrane,
-      this.#taps.get(membrane.outer) ?? [],
-    )
-  }
-
-  #scopeOf(hit: ConnectionHit | null): RegionId | null {
-    if (hit === null) return null
-    if (hit.kind === 'region') return hit.region
-    if (hit.kind === 'membrane') return hit.membrane.outer
-    return null
-  }
-
-  #finishPending(scope: RegionId, looseEnd: Vec2, pointer: Vec2): void {
-    const pending = this.#pending
-    if (pending === null) throw new Error('no pending relation wire to finish')
-    const relation = pending.diagram.wires[pending.wire]
-    if (relation?.sig.kind !== 'rel') {
-      throw new Error(`pending wire '${pending.wire}' is not relational`)
-    }
-    const rehomed = addRelationWire(this.#options.engine().d, scope, relation.sig)
-    const pendingEngine = mkEngine(rehomed.diagram, [])
-    carryOver(pending.engine, pendingEngine)
-    const looseEndBody = `j:${rehomed.wire}`
-    const looseBody = pendingEngine.bodies.get(looseEndBody)
-    if (looseBody === undefined) {
-      throw new Error(`pending wire '${rehomed.wire}' has no loose-end body`)
-    }
-    looseBody.pos = { ...looseEnd }
-    this.#pending = Object.freeze({
-      ...pending,
-      diagram: rehomed.diagram,
-      engine: pendingEngine,
-      wire: rehomed.wire,
-      looseEndBody,
-    })
-    const authoritative = this.#pending.diagram.wires[this.#pending.wire]!
-    const committed = this.#options.commit({
-      kind: 'relationSever',
-      input: {
-        kind: 'relation',
-        scope: authoritative.scope,
-        occurrences: this.#pending.occurrences,
-      },
-    }, pointer)
-    this.#pending = null
-    if (committed) this.#clearTaps()
-  }
-
-  #clearTaps(): void { this.#taps.clear() }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applicableActions } from '../../src/app/actions'
-import { preparedMembrane } from '../../src/app/hittest'
+import type { Hit } from '../../src/app/hittest'
 import {
   ProofMoveController,
   proofConnectionStep,
@@ -10,7 +10,6 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
-import { applyDoubleCutIntro } from '../../src/kernel/rules/doublecut'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec } from '../../src/view/vec'
@@ -74,33 +73,17 @@ describe('proof move vocabulary', () => {
     const builder = new DiagramBuilder()
     const content = builder.ref(builder.root, 'NullaryBody', relSig([]))
     const diagram = builder.build()
-    const wrapped = applyDoubleCutIntro(diagram, mkSelection(diagram, {
-      region: diagram.root,
-      regions: [],
-      nodes: [content],
-      wires: [],
-    }))
-    const inner = wrapped.nodes[content]!.region
-    const outer = wrapped.regions[inner]!.kind === 'cut'
-      ? wrapped.regions[inner]!.parent
-      : ''
-    const membrane = preparedMembrane(wrapped, outer)!
-    const engine = mkEngine(wrapped, [])
+    const engine = mkEngine(diagram, [])
     engine.bodies.get(content)!.pos = vec(0, 0)
-    engine.regions.set(membrane.inner, {
-      center: vec(0, 0), radius: 18, support: [],
-    })
-    engine.regions.set(membrane.outer, {
-      center: vec(0, 0), radius: 30, support: [],
-    })
-    const point = vec(0, -30)
+    let selection: readonly Hit[] = [{ kind: 'node', id: content }]
+    const point = vec(0, 0)
     const pointer: PointerSample = {
       pointerId: 1,
       button: 0,
       client: point,
       screen: point,
       world: point,
-      hit: null,
+      hit: { kind: 'node', id: content },
       shiftKey: false,
       ctrlKey: false,
       altKey: false,
@@ -109,11 +92,11 @@ describe('proof move vocabulary', () => {
     const moves = new ProofMoveController({
       host: { ownerDocument: {} } as unknown as HTMLElement,
       active: () => true,
-      diagram: () => wrapped,
+      diagram: () => diagram,
       engine: () => engine,
       viewScale: () => 1,
-      selection: () => [],
-      setSelection: () => undefined,
+      selection: () => selection,
+      setSelection: (hits) => { selection = hits },
       context: () => EMPTY_PROOF_CONTEXT,
       orientation: () => 'forward',
       apply: () => undefined,
@@ -123,7 +106,9 @@ describe('proof move vocabulary', () => {
       openSpawn: () => undefined,
     })
     const claim = moves.claim(pointer)!
-    claim.release(pointer, false)
+    const loosePoint = { ...pointer, world: vec(0, 80), client: vec(0, 80) }
+    claim.move(loosePoint)
+    claim.release(loosePoint, true)
     const escape = {
       key: 'Escape',
       shiftKey: false,

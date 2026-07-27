@@ -165,7 +165,10 @@ export class ProofMoveController {
       engine: options.engine,
       viewScale: options.viewScale,
       theme: options.theme,
-      relationGestures: true,
+      relationSelection: {
+        selection: options.selection,
+        setSelection: options.setSelection,
+      },
       commit: (gesture, pointer) => {
         this.#lastPointer = pointer
         switch (gesture.kind) {

@@ -641,14 +641,17 @@ git commit -m "fix: strengthen relation wire quantifiers"
 - Modify: `src/kernel/rules/spawn.ts`
 - Modify: `src/app/actions.ts`
 - Modify: `src/app/hittest.ts`
+- Modify: `src/app/interact/brush.ts`
 - Modify: `src/app/interact/connection.ts`
 - Modify: `src/app/interact/construct.ts`
 - Modify: `src/app/interact/moves.ts`
 - Modify: `tests/kernel/rules/spawn.test.ts`
 - Modify: `tests/app/actions.test.ts`
+- Modify: `tests/app/brush.test.ts`
 - Modify: `tests/app/hittest.test.ts`
 - Modify: `tests/app/connection.test.ts`
 - Modify: `tests/app/moves.test.ts`
+- Modify: `tests/app/viewport-proof-moves.test.ts`
 - Modify: `tests/architecture/kernel-vocabulary.test.ts`
 - Modify: `tests/architecture/interaction-ownership.test.ts`
 
@@ -658,11 +661,15 @@ git commit -m "fix: strengthen relation wire quantifiers"
   Task 4B.
 - Produces uniformly polarity-gated ref spawning and a zero-new-gesture
   interaction domain for Task 4B's durable relation steps.
-- `hittest.ts` owns physical hit identity. `connection.ts` owns the ephemeral
-  pending relation wire and translates explicit contacts into durable inputs.
+- `InteractiveViewport`'s single ordered `Hit[]` owns transient designation.
+  Region/node hits form occurrence extent; wire hits form the ordered formal
+  boundary by their relative position in that same array.
+- `hittest.ts` owns stable physical node/region/wire and pending-wire hit
+  identity. `connection.ts` projects prepared selections, owns the ephemeral
+  pending relation wire, and translates explicit contacts into durable inputs.
   The kernel remains the sole semantic validator.
 
-- [ ] **Step 1: Write spawn-authority RED tests**
+- [x] **Step 1: Write spawn-authority RED tests**
 
 Change spawn tests to require every ref to use the ordinary matrix:
 
@@ -676,27 +683,34 @@ and nested negative scopes receive no exception. Add an architecture absence
 check for `src/kernel/rules/reification.ts` and
 `isExactReificationDefinition`.
 
-- [ ] **Step 2: Write physical-interaction RED tests**
+- [x] **Step 2: Write physical-interaction RED tests**
 
 Require the existing `IOTA` wire-to-wire drag to remain unchanged. Require
-relation quantifiers to widen those physical hit domains without adding menus,
-pickers, selection modes, searches, or a new gesture:
+relation quantifiers to consume the existing ordered highlight sequence without
+adding menus, pickers, selection modes, searches, or a new gesture:
 
-- an exact occurrence is prepared with the existing double-cut wrap;
-- the real outer membrane ring is its sole landing target;
-- tapping physical wire crossings records formal arguments in tap order;
-- untapped crossings are ambient parameters, including the nullary case;
-- an existing relation wire dropped on the membrane emits relation
-  `wireJoin`;
-- a fresh pending relation wire records membrane contacts, branches from its
-  body, and commits relation `wireSever` only when its loose end lands in a
-  region.
+- region/node highlights define one occurrence extent;
+- wire highlights define formals in their relative highlight order;
+- region/node and wire highlights may be interleaved;
+- unhighlighting and re-highlighting a wire moves it to the end;
+- unhighlighted crossing wires are ambient parameters, including the nullary
+  case;
+- no double cut, membrane, crossing-tap ledger, or other diagram content
+  records editor intent;
+- an existing relation wire dropped onto a physically hit selected extent emits
+  relation `wireJoin`;
+- dragging from a selected extent starts one fresh pending relation wire;
+- after preparing another occurrence, dragging from the pending wire body onto
+  its physically hit selected extent appends that occurrence;
+- relation `wireSever` commits only when the loose end lands in a region, whose
+  identity supplies the scope.
 
-Add RED coverage for stable crossing/membrane/wire-part hit identities, exact
-extraction, pending-wire abort, kernel-refusal spring-back, mismatched explicitly
-touched occurrences, and absence of the displaced menu vocabulary.
+Add RED coverage for exact interleaved projection, stable selected-hit and
+pending-wire-part identities, selection consumption, pending-wire abort,
+kernel-refusal spring-back, mismatched explicitly touched occurrences, and
+absence of the displaced menu and membrane vocabulary.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 npx vitest run \
@@ -709,43 +723,72 @@ npx vitest run \
   tests/architecture/interaction-ownership.test.ts
 ```
 
-Expected: FAIL on the reification spawn exception, missing prepared-membrane hit
-grammar and pending connection state, and retained relation menu descriptors.
+Expected for the selection correction: FAIL because `hittest.ts` and
+`connection.ts` still require prepared membranes and a separate crossing-tap
+ledger, and `ProofMoveController` does not supply its ordered selection to the
+connection authority.
 
-- [ ] **Step 4: Remove the special ref authority**
+- [x] **Step 4: Remove the special ref authority**
 
 Delete `src/kernel/rules/reification.ts`. Remove its import and exceptional
 callback from `spawn.ts`; `applyRefSpawn` must call the ordinary polarity gate
 with no definition-sensitive branch or diagnostic. Remove every recognizer test
 fixture and replace it with ordinary polarity coverage.
 
-- [ ] **Step 5: Implement the physical relation-wire domain**
+- [x] **Step 5: Implement the physical relation-wire domain**
 
-Recognize only an erasable outer double cut as a prepared membrane. Its exact
-occurrence selection contains every direct child region, node, and directly
-scoped wire of the inner cut. Compute eligible crossing points from that
-selection's touching wires and the shared painted wire paths; crossing identity
-is stable `{ membrane, wire }`, independent of route samples.
+Add one projection from the ordered selection:
 
-For grounding, reorder the extracted bounded diagram so tapped crossings form
-the formal prefix and untapped crossings retain deterministic extracted order
-as the parameter suffix. Commit the exact relation `wireJoin` input on the
-existing wire-drop release.
+```ts
+export type PreparedOccurrence = {
+  readonly occurrence: ContentOccurrence
+  readonly content: DiagramWithBoundary
+  readonly parameters: readonly WireId[]
+}
+
+export function prepareSelectedOccurrence(
+  diagram: Diagram,
+  hits: readonly Hit[],
+): PreparedOccurrence
+```
+
+Filter region/node hits, preserving their identities, and build the exact
+`SubgraphSelection` extent from them. Filter wire hits in their relative array
+order and require each to be one of that extent's touching attachments. Reorder
+the extracted bounded diagram as selected-formal stubs followed by every
+unselected attachment in deterministic extracted order. The latter host wires
+are the parameters. Do not maintain a second order or tap store.
+
+`ConnectionDragController` receives the proof surface's live `selection()` and
+`setSelection()` callbacks only when relation gestures are enabled. A prepared
+occurrence is a legal physical target only when the pointer's concrete
+region/node hit is one of its extent hits.
+
+For grounding, commit the exact relation `wireJoin` input on existing
+relation-wire drop and clear the prepared selection only after success.
 
 For abstraction, retain a legal endpoint-free relational wire in ephemeral
-connection state. Initial and branched membrane contacts append explicit
-`ContentOccurrence`s. The pending loose-end release supplies the exact region
-scope and is the sole relation `wireSever` commit. Abort deletes the pending
-wire; a kernel refusal clears it and restores the pregesture tap state.
+connection state. Dragging from a selected extent records the first explicit
+`ContentOccurrence`; later pending-wire-body drops record later prepared
+occurrences. Store each physical contact by stable selected hit identity and
+derive overlay geometry from the current engine. Each successful contact
+consumes its prepared selection. The pending loose-end release supplies the
+exact region scope and is the sole relation `wireSever` commit. Escape deletes
+the pending wire. Kernel refusal must use the existing refusal/spring-back path
+without changing the durable diagram.
 
-- [ ] **Step 6: Delete competing application paths**
+Delete `PreparedMembrane`, membrane-crossing hit types/functions, membrane
+previews, the per-membrane tap map, and every double-cut-dependent interaction
+path.
+
+- [x] **Step 6: Delete competing application paths**
 
 Remove relation join/sever action descriptors, discovery, menu rows, picker
 markers, and standalone checked constructors. Direct relation-wire-to-relation-
 wire dragging still reaches the unchanged kernel `IOTA` gate and is refused.
 Do not enumerate or infer occurrences and do not prevalidate semantic matches.
 
-- [ ] **Step 7: Run focused proof/application gates**
+- [x] **Step 7: Run focused proof/application gates**
 
 ```bash
 npx vitest run \
@@ -756,9 +799,11 @@ npx vitest run \
   tests/kernel/proof/action.test.ts \
   tests/kernel/proof/theorem.test.ts \
   tests/app/actions.test.ts \
+  tests/app/brush.test.ts \
   tests/app/hittest.test.ts \
   tests/app/connection.test.ts \
   tests/app/moves.test.ts \
+  tests/app/viewport-proof-moves.test.ts \
   tests/architecture/kernel-vocabulary.test.ts \
   tests/architecture/interaction-ownership.test.ts
 npm run typecheck
@@ -768,26 +813,28 @@ Expected: all focused tests and typecheck PASS, except that in-progress protecte
 Task 4D files may temporarily be the sole typecheck failures. No compatibility
 shape is permitted for those theory consumers.
 
-- [ ] **Step 8: Audit absence and commit the interaction correction**
+- [x] **Step 8: Audit absence and commit the interaction correction**
 
 ```bash
 rg -n \
-  "relationJoinStep|relationSeverStep|wire-content-and-parameters|scope-and-occurrences" \
-  src/app tests/app tests/architecture
+  "PreparedMembrane|prepareMembraneContent|membraneCrossing|PendingMembrane|crossing tap|relationJoinStep|relationSeverStep|wire-content-and-parameters|scope-and-occurrences" \
+  src/app tests/app tests/architecture \
+  docs/superpowers/plans/2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md
 git diff --check
 git add -- \
-  src/app/actions.ts src/app/hittest.ts \
-  src/app/interact/connection.ts src/app/interact/construct.ts \
-  src/app/interact/moves.ts \
-  tests/app/actions.test.ts tests/app/hittest.test.ts \
+  src/app/hittest.ts src/app/interact/connection.ts src/app/interact/moves.ts \
+  tests/app/brush.test.ts tests/app/hittest.test.ts \
   tests/app/connection.test.ts tests/app/moves.test.ts \
+  tests/app/viewport-proof-moves.test.ts \
   tests/architecture/interaction-ownership.test.ts \
+  docs/superpowers/plans/2026-07-26-task-4c-gesture-correction-fix-round-1.md \
   docs/superpowers/plans/2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md
-git commit -m "fix: ground relation quantifiers through wire gestures"
+git commit -m "fix: designate relation occurrences through selection"
 ```
 
-Expected `rg`: no displaced programmatic input path. Negative tests may name
-the removed behavior; production action and move sources may not retain it.
+Expected `rg`: no displaced programmatic input path or membrane authority.
+Negative tests and the explicit deletion/audit instructions above may name
+rejected behavior; no executable authority may retain it.
 
 ### Task 4D: Re-derive reification and existsProp through severing
 

@@ -48,6 +48,11 @@ function displacedRelationInputViolations(
     /discoverRelationOccurrences/,
     /findRelationOccurrences/,
     /inferRelationOccurrences/,
+    /PreparedMembrane/,
+    /prepareMembraneContent/,
+    /membraneCrossing/,
+    /PendingMembrane/,
+    /crossing tap/i,
   ] as const
   for (const { path, source } of sources) {
     for (const pattern of globallyDisplaced) {
@@ -174,6 +179,16 @@ describe('production interaction ownership', () => {
     expect(appIndexSource).not.toMatch(
       /ConnectionDragController|ProofMoveController|relationJoin|relationSever/,
     )
+  })
+
+  it('keeps occurrence designation in the one ordered selection ledger', () => {
+    const brushSource = readFileSync('src/app/interact/brush.ts', 'utf8')
+    expect(connectionSource).toContain('prepareSelectedOccurrence')
+    expect(connectionSource).toContain('relationSelection')
+    expect(movesSource).toContain('selection: options.selection')
+    expect(movesSource).toContain('setSelection: options.setSelection')
+    expect(brushSource).toContain('[...selected, hit]')
+    expect(displacedRelationInputViolations(productionAppSources)).toEqual([])
   })
 
   it('detects a competing relation input path anywhere in the production app surface', () => {
