@@ -1,6 +1,6 @@
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
-import { IOTA } from '../kernel/diagram/sig'
+import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
@@ -12,13 +12,19 @@ import {
   directNodes,
   endpointWire,
   exactOne,
+  nodeWithHead,
   relationWire,
   rightIdentityCarrierContent,
   scopedWires,
 } from './arithmetic-support'
 import {
+  atom,
+  declareWire,
   emptyGraph,
   finishDiagramWithBoundary,
+  identity,
+  implication,
+  quantifierScope,
 } from './graph'
 import {
   PrimitiveStepRecorder,
@@ -27,6 +33,113 @@ import {
   onlyNewWire,
 } from './record'
 import type { ArithmeticStatements } from './statements'
+
+function exactHypothesesContent() {
+  let graph = emptyGraph()
+  const zero = declareWire(graph, graph.root, UNARY)
+  graph = zero.graph
+  const successor = declareWire(graph, graph.root, BINARY)
+  graph = successor.graph
+  const plus = declareWire(graph, graph.root, TERNARY)
+  graph = plus.graph
+
+  const uniqueVariables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA],
+  )
+  graph = uniqueVariables.graph
+  const [firstZero, secondZero] = uniqueVariables.value.variables
+  const uniqueClaim = implication(graph, uniqueVariables.value.body)
+  graph = uniqueClaim.graph
+  graph = atom(
+    graph,
+    uniqueClaim.value.antecedent,
+    zero.value,
+    [firstZero!],
+  ).graph
+  graph = atom(
+    graph,
+    uniqueClaim.value.antecedent,
+    zero.value,
+    [secondZero!],
+  ).graph
+  graph = identity(
+    graph,
+    uniqueClaim.value.consequent,
+    [firstZero!, secondZero!],
+  ).graph
+
+  const baseVariables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA],
+  )
+  graph = baseVariables.graph
+  const [baseZero, baseRight] = baseVariables.value.variables
+  const baseClaim = implication(graph, baseVariables.value.body)
+  graph = baseClaim.graph
+  graph = atom(
+    graph,
+    baseClaim.value.antecedent,
+    zero.value,
+    [baseZero!],
+  ).graph
+  graph = atom(
+    graph,
+    baseClaim.value.consequent,
+    plus.value,
+    [baseZero!, baseRight!, baseRight!],
+  ).graph
+
+  const stepVariables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA, IOTA],
+  )
+  graph = stepVariables.graph
+  const [
+    left,
+    right,
+    output,
+    leftSuccessor,
+    outputSuccessor,
+  ] = stepVariables.value.variables
+  const stepClaim = implication(graph, stepVariables.value.body)
+  graph = stepClaim.graph
+  graph = atom(
+    graph,
+    stepClaim.value.antecedent,
+    plus.value,
+    [left!, right!, output!],
+  ).graph
+  graph = atom(
+    graph,
+    stepClaim.value.antecedent,
+    successor.value,
+    [left!, leftSuccessor!],
+  ).graph
+  graph = atom(
+    graph,
+    stepClaim.value.antecedent,
+    successor.value,
+    [output!, outputSuccessor!],
+  ).graph
+  graph = atom(
+    graph,
+    stepClaim.value.consequent,
+    plus.value,
+    [leftSuccessor!, right!, outputSuccessor!],
+  ).graph
+
+  return finishDiagramWithBoundary(
+    graph,
+    [zero.value, successor.value, plus.value],
+  )
+}
 
 function boundaryIndex(
   diagram: Parameters<typeof extractSubgraph>[0],
@@ -164,49 +277,91 @@ export function rightIdentityCarrierInductive(
   }
 
   before = forward.diagram
-  forward.record('spawn carrier-support zero anchor', {
-    rule: 'atomSpawn',
-    region: forwardHypotheses,
-    wire: forwardZero,
+  forward.record('introduce exact carrier hypotheses handle', {
+    rule: 'vacuousIntro',
+    scope: forwardHypotheses,
+    sig: relSig([]),
   })
-  const zeroAnchor = onlyNewNode(before, forward.diagram, forwardHypotheses)
-  const anchorZero = endpointWire(forward.diagram, zeroAnchor, 'arg', 0)
-  before = forward.diagram
-  forward.record('spawn carrier-support successor anchor', {
-    rule: 'atomSpawn',
-    region: forwardHypotheses,
-    wire: forwardSuccessor,
-  })
-  const successorAnchor = onlyNewNode(
+  const exactHypotheses = onlyNewWire(
     before,
     forward.diagram,
     forwardHypotheses,
   )
-  const anchorSuccessor = endpointWire(
-    forward.diagram,
-    successorAnchor,
-    'arg',
-    1,
-  )
-  forward.record('attach carrier-support successor input', {
+  forward.record('assert exact carrier hypotheses handle', {
+    rule: 'atomSpawn',
+    region: forwardHypotheses,
+    wire: exactHypotheses,
+  })
+  forward.record('ground exact zeroUnique, plusBase, and plusStep', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
-      a: anchorZero,
-      b: endpointWire(forward.diagram, successorAnchor, 'arg', 0),
+      kind: 'relation',
+      wire: exactHypotheses,
+      content: exactHypothesesContent(),
+      parameters: [forwardZero, forwardSuccessor, forwardPlus],
     },
   })
-  spawnForwardAtom(
-    'carrier-support addition-base anchor',
-    forwardHypotheses,
-    forwardPlus,
-    [anchorZero, anchorZero, anchorZero],
+
+  before = forward.diagram
+  forward.record('open forward carrier base scope', {
+    rule: 'doubleCutIntro',
+    sel: {
+      region: forwardConclusion,
+      regions: [],
+      nodes: [],
+      wires: [],
+    },
+  })
+  const forwardBase = onlyNewCut(
+    before,
+    forward.diagram,
+    forwardConclusion,
+  )
+  const forwardBaseBody = exactOne(
+    directCuts(forward.diagram, forwardBase),
+    'forward carrier base body',
+  )
+  before = forward.diagram
+  forward.record('introduce forward carrier base value', {
+    rule: 'vacuousIntro',
+    scope: forwardBase,
+    sig: IOTA,
+  })
+  const forwardBaseValue = onlyNewWire(
+    before,
+    forward.diagram,
+    forwardBase,
+  )
+  before = forward.diagram
+  forward.record('open forward carrier base implication', {
+    rule: 'doubleCutIntro',
+    sel: {
+      region: forwardBaseBody,
+      regions: [],
+      nodes: [],
+      wires: [],
+    },
+  })
+  const forwardBaseAntecedent = onlyNewCut(
+    before,
+    forward.diagram,
+    forwardBaseBody,
+  )
+  exactOne(
+    directCuts(forward.diagram, forwardBaseAntecedent),
+    'forward empty carrier base consequent',
   )
   spawnForwardAtom(
-    'carrier-support addition-step anchor',
-    forwardHypotheses,
+    'forward carrier base Zero residue',
+    forwardBaseAntecedent,
+    forwardZero,
+    [forwardBaseValue],
+  )
+  spawnForwardAtom(
+    'forward carrier base plusBase residue',
+    forwardBaseAntecedent,
     forwardPlus,
-    [anchorSuccessor, anchorZero, anchorSuccessor],
+    [forwardBaseValue, forwardBaseValue, forwardBaseValue],
   )
 
   before = forward.diagram
@@ -375,73 +530,43 @@ export function rightIdentityCarrierInductive(
     'reviewed carrier-support hypotheses',
   )
   const hypothesisChildren = directCuts(backward.diagram, hypotheses)
-  const [
-    conclusion,
-    zeroUnique,
-    successorTotal,
-    successorFunctional,
-    additionBase,
-    additionStep,
-    additionFunctional,
-  ] = hypothesisChildren
-  if (
-    conclusion === undefined
-    || zeroUnique === undefined
-    || successorTotal === undefined
-    || successorFunctional === undefined
-    || additionBase === undefined
-    || additionStep === undefined
-    || additionFunctional === undefined
-  ) throw new Error('missing carrier-support primitive structure')
   const zero = relationWire(backward.diagram, primitiveScope, UNARY)
   const successor = relationWire(backward.diagram, primitiveScope, BINARY)
   const plus = relationWire(backward.diagram, primitiveScope, TERNARY)
-  const standingZero = exactOne(
-    directNodes(backward.diagram, hypotheses).filter((node) =>
+  const conclusion = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 0),
+    'carrier-support conclusion',
+  )
+  const binaryHypotheses = hypothesisChildren.filter((region) =>
+    scopedWires(backward.diagram, region).length === 2)
+  const zeroPremiseCount = (region: RegionId) => {
+    const body = exactOne(
+      directCuts(backward.diagram, region),
+      'binary hypothesis body',
+    )
+    const antecedent = exactOne(
+      directCuts(backward.diagram, body),
+      'binary hypothesis antecedent',
+    )
+    return directNodes(backward.diagram, antecedent).filter((node) =>
       backward.diagram.nodes[node]!.kind === 'atom'
-      && endpointWire(backward.diagram, node, 'head') === zero),
-    'standing carrier-support zero',
-  )
-  const standingZeroValue = endpointWire(
-    backward.diagram,
-    standingZero,
-    'arg',
-    0,
-  )
-
-  const additionBaseBody = exactOne(
-    directCuts(backward.diagram, additionBase),
-    'carrier-support addition-base body',
-  )
-  const additionBaseAntecedent = exactOne(
-    directCuts(backward.diagram, additionBaseBody),
-    'carrier-support addition-base antecedent',
-  )
-  const additionBaseZero = exactOne(
-    directNodes(backward.diagram, additionBaseAntecedent).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === zero),
-    'carrier-support addition-base Zero',
-  )
-  for (const variable of scopedWires(backward.diagram, additionBase)) {
-    backward.record('specialize carrier-support addition base', {
-      rule: 'wireJoin',
-      input: { kind: 'iota', a: standingZeroValue, b: variable },
-    })
+      && endpointWire(backward.diagram, node, 'head') === zero)
+      .length
   }
-  deiterateNode(
-    backward,
-    'discharge carrier-support addition-base Zero',
-    additionBaseAntecedent,
-    additionBaseZero,
+  const zeroUnique = exactOne(
+    binaryHypotheses.filter((region) => zeroPremiseCount(region) === 2),
+    'zeroUnique hypothesis',
   )
-  backward.record('expose carrier-support addition-base anchor', {
-    rule: 'doubleCutElim',
-    region: additionBaseAntecedent,
-  })
-  backward.record('finish carrier-support addition-base specialization', {
-    rule: 'doubleCutElim',
-    region: additionBase,
-  })
+  const additionBase = exactOne(
+    binaryHypotheses.filter((region) => zeroPremiseCount(region) === 1),
+    'plusBase hypothesis',
+  )
+  const additionStep = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 5),
+    'plusStep hypothesis',
+  )
 
   const supportConditions = directCuts(backward.diagram, conclusion)
   const baseCondition = exactOne(
@@ -540,12 +665,6 @@ export function rightIdentityCarrierInductive(
     return identity
   }
 
-  const baseIdentity = deriveZeroIdentity(
-    baseConditionAntecedent,
-    standingZeroValue,
-    baseValue,
-    'carrier-base',
-  )
   const baseEScope = exactOne(
     directCuts(backward.diagram, baseConditionConsequent),
     'carrier-support base E scope',
@@ -578,10 +697,71 @@ export function rightIdentityCarrierInductive(
   )
   const baseLocalIdentity = deriveZeroIdentity(
     baseEAntecedent,
-    standingZeroValue,
+    baseValue,
     baseLocalZero,
     'carrier-base local',
   )
+
+  before = backward.diagram
+  backward.record('copy plusBase into carrier-base local case', {
+    rule: 'iteration',
+    sel: {
+      region: hypotheses,
+      regions: [additionBase],
+      nodes: [],
+      wires: [],
+    },
+    target: baseConditionAntecedent,
+    retargets: [],
+  })
+  const copiedBaseScope = onlyNewCut(
+    before,
+    backward.diagram,
+    baseConditionAntecedent,
+  )
+  const copiedBaseBody = exactOne(
+    directCuts(backward.diagram, copiedBaseScope),
+    'copied carrier-base plusBase body',
+  )
+  const copiedBaseAntecedent = exactOne(
+    directCuts(backward.diagram, copiedBaseBody),
+    'copied carrier-base plusBase antecedent',
+  )
+  const copiedBaseConsequent = exactOne(
+    directCuts(backward.diagram, copiedBaseAntecedent),
+    'copied carrier-base plusBase consequent',
+  )
+  const copiedBaseZeroNode = nodeWithHead(
+    backward.diagram,
+    copiedBaseAntecedent,
+    zero,
+  )
+  const copiedBasePlus = nodeWithHead(
+    backward.diagram,
+    copiedBaseConsequent,
+    plus,
+  )
+  for (const variable of scopedWires(backward.diagram, copiedBaseScope)) {
+    backward.record('specialize carrier-base plusBase at supplied zero', {
+      rule: 'wireJoin',
+      input: { kind: 'iota', a: baseValue, b: variable },
+    })
+  }
+  deiterateNode(
+    backward,
+    'discharge copied carrier-base plusBase Zero',
+    copiedBaseAntecedent,
+    copiedBaseZeroNode,
+  )
+  backward.record('expose copied carrier-base plusBase result', {
+    rule: 'doubleCutElim',
+    region: copiedBaseAntecedent,
+  })
+  backward.record('finish carrier-base plusBase specialization', {
+    rule: 'doubleCutElim',
+    region: copiedBaseScope,
+  })
+
   {
     const selection = {
       region: baseEAntecedent,
@@ -596,7 +776,7 @@ export function rightIdentityCarrierInductive(
         baseLocalZero,
       ),
       identity: baseLocalIdentity,
-      from: standingZeroValue,
+      from: baseValue,
       to: baseLocalZero,
     }] as const
     const evidence = findDeiterationEvidence(
@@ -622,19 +802,13 @@ export function rightIdentityCarrierInductive(
     } as const
     const retargets = [
       {
-        boundary: boundaryIndex(backward.diagram, selection, baseValue),
-        identity: baseIdentity,
-        from: standingZeroValue,
-        to: baseValue,
-      },
-      {
         boundary: boundaryIndex(
           backward.diagram,
           selection,
           baseLocalZero,
         ),
         identity: baseLocalIdentity,
-        from: standingZeroValue,
+        from: baseValue,
         to: baseLocalZero,
       },
     ] as const
@@ -674,7 +848,7 @@ export function rightIdentityCarrierInductive(
         nodes: [],
         wires: [],
       },
-      args: [standingZeroValue, baseLocalZero],
+      args: [baseValue, baseLocalZero],
     },
   })
   backward.record('remove carrier-base local zero binder', {
@@ -685,66 +859,8 @@ export function rightIdentityCarrierInductive(
     rule: 'doubleCutElim',
     region: baseEScope,
   })
-  {
-    const selection = {
-      region: baseConditionAntecedent,
-      regions: [],
-      nodes: [baseZero],
-      wires: [],
-    } as const
-    const retargets = [{
-      boundary: boundaryIndex(backward.diagram, selection, baseValue),
-      identity: baseIdentity,
-      from: standingZeroValue,
-      to: baseValue,
-    }] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge carrier-support base Zero', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
-    })
-  }
-  backward.record('copy carrier-base equality into consequent', {
-    rule: 'iteration',
-    sel: {
-      region: baseConditionAntecedent,
-      regions: [],
-      nodes: [baseIdentity],
-      wires: [],
-    },
-    target: baseConditionConsequent,
-    retargets: [],
-  })
-  backward.record('close carrier-support base equality implication', {
-    rule: 'theorem',
-    name: 'ordinaryEqualityContradiction',
-    direction: 'reverse',
-    at: {
-      sel: {
-        region: baseConditionBody,
-        regions: [baseConditionAntecedent],
-        nodes: [],
-        wires: [],
-      },
-      args: [standingZeroValue, baseValue],
-    },
-  })
-  backward.record('remove carrier-support base binder', {
-    rule: 'vacuousElim',
-    wireId: baseValue,
-  })
-  backward.record('eliminate proved carrier-support base', {
-    rule: 'doubleCutElim',
-    region: baseCondition,
-  })
+  void baseZero
+  void copiedBasePlus
 
   const closureBody = exactOne(
     directCuts(backward.diagram, closureCondition),
@@ -992,218 +1108,6 @@ export function rightIdentityCarrierInductive(
   void successorLocalZeroNode
   void copiedPredecessorPlus
   void copiedStepResult
-
-  const uniqueBody = exactOne(
-    directCuts(backward.diagram, zeroUnique),
-    'remaining carrier-support zero-uniqueness body',
-  )
-  const uniqueAntecedent = exactOne(
-    directCuts(backward.diagram, uniqueBody),
-    'remaining carrier-support zero-uniqueness antecedent',
-  )
-  const uniquePremises = directNodes(backward.diagram, uniqueAntecedent)
-  for (const variable of scopedWires(backward.diagram, zeroUnique)) {
-    backward.record('collapse zero-uniqueness variable to anchor', {
-      rule: 'wireJoin',
-      input: { kind: 'iota', a: standingZeroValue, b: variable },
-    })
-  }
-  for (const node of uniquePremises) {
-    deiterateNode(
-      backward,
-      'discharge collapsed zero-uniqueness premise',
-      uniqueAntecedent,
-      node,
-    )
-  }
-  backward.record('remove collapsed zero-uniqueness implication', {
-    rule: 'doubleCutElim',
-    region: uniqueAntecedent,
-  })
-  backward.record('remove collapsed zero-uniqueness quantifier', {
-    rule: 'doubleCutElim',
-    region: zeroUnique,
-  })
-
-  const totalBody = exactOne(
-    directCuts(backward.diagram, successorTotal),
-    'remaining carrier-support successor-totality body',
-  )
-  const totalSuccessor = exactOne(
-    directNodes(backward.diagram, totalBody),
-    'remaining carrier-support total successor',
-  )
-  backward.record('collapse successor-totality input to anchor', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: standingZeroValue,
-      b: endpointWire(backward.diagram, totalSuccessor, 'arg', 0),
-    },
-  })
-  backward.record('expose carrier-support successor anchor', {
-    rule: 'doubleCutElim',
-    region: successorTotal,
-  })
-  const successorAnchorOutput = endpointWire(
-    backward.diagram,
-    totalSuccessor,
-    'arg',
-    1,
-  )
-
-  const functionalSuccessorBody = exactOne(
-    directCuts(backward.diagram, successorFunctional),
-    'remaining carrier-support functional-successor body',
-  )
-  const functionalSuccessorAntecedent = exactOne(
-    directCuts(backward.diagram, functionalSuccessorBody),
-    'remaining carrier-support functional-successor antecedent',
-  )
-  const functionalSuccessors = directNodes(
-    backward.diagram,
-    functionalSuccessorAntecedent,
-  )
-  const functionalSuccessorInput = endpointWire(
-    backward.diagram,
-    functionalSuccessors[0]!,
-    'arg',
-    0,
-  )
-  for (const variable of scopedWires(backward.diagram, successorFunctional)) {
-    backward.record('collapse functional-successor variable to anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: variable === functionalSuccessorInput
-          ? standingZeroValue
-          : successorAnchorOutput,
-        b: variable,
-      },
-    })
-  }
-  for (const node of functionalSuccessors) {
-    deiterateNode(
-      backward,
-      'discharge collapsed functional-successor premise',
-      functionalSuccessorAntecedent,
-      node,
-    )
-  }
-  backward.record('remove collapsed functional-successor implication', {
-    rule: 'doubleCutElim',
-    region: functionalSuccessorAntecedent,
-  })
-  backward.record('remove collapsed functional-successor quantifier', {
-    rule: 'doubleCutElim',
-    region: successorFunctional,
-  })
-
-  const originalStepBody = exactOne(
-    directCuts(backward.diagram, additionStep),
-    'remaining carrier-support addition-step body',
-  )
-  const originalStepAntecedent = exactOne(
-    directCuts(backward.diagram, originalStepBody),
-    'remaining carrier-support addition-step antecedent',
-  )
-  const originalStepPremises = directNodes(
-    backward.diagram,
-    originalStepAntecedent,
-  )
-  const originalStepPlus = exactOne(
-    originalStepPremises.filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === plus),
-    'remaining carrier-support addition-step Plus',
-  )
-  const originalStepSuccessors = originalStepPremises.filter((node) =>
-    endpointWire(backward.diagram, node, 'head') === successor)
-  const originalStepLeft = endpointWire(
-    backward.diagram,
-    originalStepPlus,
-    'arg',
-    0,
-  )
-  const originalStepRight = endpointWire(
-    backward.diagram,
-    originalStepPlus,
-    'arg',
-    1,
-  )
-  const originalStepOutput = endpointWire(
-    backward.diagram,
-    originalStepPlus,
-    'arg',
-    2,
-  )
-  for (const variable of scopedWires(backward.diagram, additionStep)) {
-    const successorVariable = originalStepSuccessors.some((node) =>
-      endpointWire(backward.diagram, node, 'arg', 1) === variable)
-    const zeroVariable = variable === originalStepLeft
-      || variable === originalStepRight
-      || variable === originalStepOutput
-    backward.record('collapse addition-step variable to anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: successorVariable && !zeroVariable
-          ? successorAnchorOutput
-          : standingZeroValue,
-        b: variable,
-      },
-    })
-  }
-  for (const node of [originalStepPlus, ...originalStepSuccessors]) {
-    deiterateNode(
-      backward,
-      'discharge collapsed addition-step premise',
-      originalStepAntecedent,
-      node,
-    )
-  }
-  backward.record('expose carrier-support addition-step anchor', {
-    rule: 'doubleCutElim',
-    region: originalStepAntecedent,
-  })
-  backward.record('finish collapsed carrier-support addition-step', {
-    rule: 'doubleCutElim',
-    region: additionStep,
-  })
-
-  const functionalAdditionBody = exactOne(
-    directCuts(backward.diagram, additionFunctional),
-    'remaining carrier-support functional-addition body',
-  )
-  const functionalAdditionAntecedent = exactOne(
-    directCuts(backward.diagram, functionalAdditionBody),
-    'remaining carrier-support functional-addition antecedent',
-  )
-  const functionalAdditionPremises = directNodes(
-    backward.diagram,
-    functionalAdditionAntecedent,
-  )
-  for (const variable of scopedWires(backward.diagram, additionFunctional)) {
-    backward.record('collapse functional-addition variable to anchor', {
-      rule: 'wireJoin',
-      input: { kind: 'iota', a: standingZeroValue, b: variable },
-    })
-  }
-  for (const node of functionalAdditionPremises) {
-    deiterateNode(
-      backward,
-      'discharge collapsed functional-addition premise',
-      functionalAdditionAntecedent,
-      node,
-    )
-  }
-  backward.record('remove collapsed functional-addition implication', {
-    rule: 'doubleCutElim',
-    region: functionalAdditionAntecedent,
-  })
-  backward.record('remove collapsed functional-addition quantifier', {
-    rule: 'doubleCutElim',
-    region: additionFunctional,
-  })
 
   return {
     name: 'rightIdentityCarrierInductive',

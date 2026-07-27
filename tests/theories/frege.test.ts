@@ -33,9 +33,13 @@ import type { ProofStep } from '../../src/kernel/proof/step'
 import { buildFregeTheory } from '../../src/theories'
 import { buildArithmeticBase } from '../../src/theories/arithmetic-base'
 import {
+  buildArithmeticAssociativityTheorems,
+} from '../../src/theories/arithmetic-assoc'
+import {
   buildNaturalBaseTheorems,
 } from '../../src/theories/arithmetic-naturals'
 import { buildOneTheorem } from '../../src/theories/arithmetic-one'
+import { buildRightUnitTheorem } from '../../src/theories/arithmetic-right'
 import {
   BINARY,
   UNARY,
@@ -84,6 +88,43 @@ const BASE_NATURAL_CONTRACTS = {
 const BASE_NATURAL_NAMES = Object.keys(
   BASE_NATURAL_CONTRACTS,
 ) as readonly (keyof typeof BASE_NATURAL_CONTRACTS)[]
+
+const RIGHT_ASSOC_CONTRACTS = {
+  rightIdentityCarrierInductive: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: ['zeroUnique', 'plusBase', 'plusStep'],
+  },
+  plusRightUnit: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: ['zeroUnique', 'plusBase', 'plusStep', 'plusSingleValued'],
+  },
+  associativityCarrierBase: {
+    primitives: ['zero', 'plus'],
+    hypotheses: ['plusBase', 'plusSingleValued'],
+  },
+  associativityCarrierHereditary: {
+    primitives: ['successor', 'plus'],
+    hypotheses: ['successorTotal', 'plusStep', 'plusSingleValued'],
+  },
+  plusAssoc: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: [
+      'successorTotal',
+      'plusBase',
+      'plusStep',
+      'plusSingleValued',
+    ],
+  },
+} as const satisfies Readonly<
+  Partial<Record<ArithmeticStatementName, {
+    readonly primitives: readonly ('zero' | 'successor' | 'plus')[]
+    readonly hypotheses: readonly HypothesisName[]
+  }>>
+>
+
+const RIGHT_ASSOC_NAMES = Object.keys(
+  RIGHT_ASSOC_CONTRACTS,
+) as readonly (keyof typeof RIGHT_ASSOC_CONTRACTS)[]
 
 const HYPOTHESIS_ACTION_TERMS: Readonly<
   Record<HypothesisName, readonly string[]>
@@ -145,6 +186,44 @@ function buildBaseNaturalTheory(): Theory {
   return {
     relations,
     theorems: [...logical, ...base, ...naturals, ...one],
+  }
+}
+
+function buildThroughAssociativityTheory(): Theory {
+  const relations: Theory['relations'] = [['nat', natRelation()]]
+  const statements = buildArithmeticStatements()
+  const logical = buildLogicalTheoremPrefix(relations)
+  const base = buildArithmeticBase(relations, logical, statements)
+  const naturals = buildNaturalBaseTheorems(
+    relations,
+    [...logical, ...base],
+    statements,
+  )
+  const one = buildOneTheorem(
+    relations,
+    [...logical, ...base, ...naturals],
+    statements,
+  )
+  const right = buildRightUnitTheorem(
+    relations,
+    [...logical, ...base, ...naturals, ...one],
+    statements,
+  )
+  const associativity = buildArithmeticAssociativityTheorems(
+    relations,
+    [...logical, ...base, ...naturals, ...one, ...right],
+    statements,
+  )
+  return {
+    relations,
+    theorems: [
+      ...logical,
+      ...base,
+      ...naturals,
+      ...one,
+      ...right,
+      ...associativity,
+    ],
   }
 }
 
@@ -233,6 +312,57 @@ function theoremShell(diagram: Diagram) {
   }
 }
 
+function structuralHypothesisRegion(
+  theorem: Theorem,
+  hypothesis: HypothesisName,
+): RegionId {
+  const diagram = theorem.rhs.diagram
+  const shell = theoremShell(diagram)
+  const hypothesisRegions = directCuts(diagram, shell.antecedent)
+    .filter((region) => region !== shell.conclusion)
+  const quantifiedArity: Readonly<
+    Partial<Record<HypothesisName, number>>
+  > = {
+    zeroUnique: 2,
+    successorTotal: 1,
+    plusBase: 2,
+    plusStep: 5,
+    plusSingleValued: 4,
+  }
+  const arity = quantifiedArity[hypothesis]
+  if (arity === undefined) {
+    throw new Error(`unsupported structural hypothesis '${hypothesis}'`)
+  }
+  const arityMatches = hypothesisRegions.filter((region) =>
+    scopedWires(diagram, region).length === arity)
+  if (hypothesis !== 'zeroUnique' && hypothesis !== 'plusBase') {
+    return exactOne(arityMatches, `${hypothesis} hypothesis`)
+  }
+
+  const zero = relationWire(diagram, shell.primitiveScope, UNARY)
+  return exactOne(
+    arityMatches.filter((region) => {
+      const body = exactOne(
+        directCuts(diagram, region),
+        `${hypothesis} universal body`,
+      )
+      const antecedent = exactOne(
+        directCuts(diagram, body),
+        `${hypothesis} antecedent`,
+      )
+      const zeroPremiseCount = directNodes(diagram, antecedent)
+        .filter((node) =>
+          diagram.nodes[node]!.kind === 'atom'
+          && endpointWire(diagram, node, 'head') === zero)
+        .length
+      return zeroPremiseCount === (
+        hypothesis === 'zeroUnique' ? 2 : 1
+      )
+    }),
+    `${hypothesis} hypothesis`,
+  )
+}
+
 function universalClaimParts(
   diagram: Diagram,
   conclusion: RegionId,
@@ -318,6 +448,14 @@ describe('relational Frege arithmetic proofs', () => {
     }
   })
 
+  it('declares the exact right-unit and associativity proof contracts', () => {
+    for (const name of RIGHT_ASSOC_NAMES) {
+      expect(ARITHMETIC_CONTRACTS[name]).toEqual(
+        RIGHT_ASSOC_CONTRACTS[name],
+      )
+    }
+  })
+
   it('does not encode a fixed conclusion-plus-six statement shape', () => {
     const modules = [
       'arithmetic-base.ts',
@@ -333,6 +471,25 @@ describe('relational Frege arithmetic proofs', () => {
       .join('\n')
 
     expect(source).not.toContain('conclusion plus six')
+  })
+
+  it('does not preserve the displaced Task 3 hypothesis bundle parser', () => {
+    const modules = [
+      'arithmetic-right-carrier.ts',
+      'arithmetic-right.ts',
+      'arithmetic-assoc-base.ts',
+      'arithmetic-assoc-carrier.ts',
+      'arithmetic-assoc.ts',
+    ]
+    const directory = fileURLToPath(
+      new URL('../../src/theories', import.meta.url),
+    )
+    const source = modules
+      .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
+      .join('\n')
+
+    expect(source).not.toContain('standingHypothesesContent')
+    expect(source).not.toContain('missing carrier-support primitive structure')
   })
 
   it('classifies Nat hereditary children independently of region storage order', () => {
@@ -776,6 +933,93 @@ describe('relational Frege arithmetic proofs', () => {
     )
   })
 
+  it('makes every selected right-unit and associativity premise causal', () => {
+    const original = buildThroughAssociativityTheory()
+    const theory = {
+      ...original,
+      theorems: original.theorems.map((theorem) => ({
+        ...theorem,
+        actions: theorem.actions.map((action, index) => ({
+          ...action,
+          label: `forward diagnostic ${index}`,
+        })),
+        ...(theorem.backActions === undefined
+          ? {}
+          : {
+              backActions: theorem.backActions.map((action, index) => ({
+                ...action,
+                label: `backward diagnostic ${index}`,
+              })),
+            }),
+      })),
+    }
+
+    for (const name of RIGHT_ASSOC_NAMES) {
+      const theoremIndex = theory.theorems.findIndex(
+        (candidate) => candidate.name === name,
+      )
+      const theorem = theory.theorems[theoremIndex]!
+      const context = verifyTheory({
+        relations: theory.relations,
+        theorems: theory.theorems.slice(0, theoremIndex),
+      })
+      const traces = [
+        ...traceProofHalf(theorem, context, 'forward'),
+        ...traceProofHalf(theorem, context, 'backward'),
+      ]
+      for (const hypothesis of RIGHT_ASSOC_CONTRACTS[name].hypotheses) {
+        const region = structuralHypothesisRegion(theorem, hypothesis)
+        const source = {
+          region: theoremShell(theorem.rhs.diagram).antecedent,
+          regions: [region],
+          nodes: [],
+          wires: [],
+        } as const
+        const provenance = traces.filter(({ step }) =>
+          (
+            step.rule === 'iteration'
+            && sameSelection(step.sel, source)
+          )
+          || (
+            step.rule === 'deiteration'
+            && sameSelection(step.justifier, source)
+          ))
+        expect(
+          provenance.length,
+          `${name} structural provenance for ${hypothesis}`,
+        ).toBeGreaterThan(0)
+        for (const trace of provenance) {
+          if (trace.step.rule === 'deiteration') {
+            assertCertifiedDeiteration(trace, source)
+          }
+        }
+        const weakened = {
+          ...theorem,
+          rhs: {
+            ...theorem.rhs,
+            diagram: removeSubgraph(theorem.rhs.diagram, {
+              region: source.region,
+              regions: [region],
+              nodes: [],
+              wires: [],
+            }),
+          },
+        }
+
+        expect(
+          () => verifyTheory({
+            relations: theory.relations,
+            theorems: [
+              ...theory.theorems.slice(0, theoremIndex),
+              weakened,
+            ],
+          }),
+          `${name} without ${hypothesis}`,
+        ).toThrow()
+      }
+    }
+  })
+
   it('records closed carrier support theorems before their consumers', () => {
     const theory = buildFregeTheory()
     const statements = buildArithmeticStatements()
@@ -807,7 +1051,7 @@ describe('relational Frege arithmetic proofs', () => {
   })
 
   it('makes representative carrier support citation indispensable', () => {
-    const theory = buildFregeTheory()
+    const theory = buildThroughAssociativityTheory()
     expect(() => verifyTheory({
       relations: theory.relations,
       theorems: theory.theorems.filter(
@@ -840,7 +1084,7 @@ describe('relational Frege arithmetic proofs', () => {
   })
 
   it('uses both associativity support citations causally', () => {
-    const theory = buildFregeTheory()
+    const theory = buildThroughAssociativityTheory()
     const consumerIndex = theory.theorems.findIndex(
       ({ name }) => name === 'plusAssoc',
     )
@@ -876,7 +1120,7 @@ describe('relational Frege arithmetic proofs', () => {
   })
 
   it('makes the carrier hereditary arithmetic hypothesis indispensable', () => {
-    const theory = buildFregeTheory()
+    const theory = buildThroughAssociativityTheory()
     const supportIndex = theory.theorems.findIndex(
       ({ name }) => name === 'rightIdentityCarrierInductive',
     )
@@ -920,6 +1164,80 @@ describe('relational Frege arithmetic proofs', () => {
         weakened,
       ],
     })).toThrow()
+  })
+
+  it('reuses the supplied right-carrier successor edge in both step positions', () => {
+    const theory = buildThroughAssociativityTheory()
+    const theoremIndex = theory.theorems.findIndex(
+      ({ name }) => name === 'rightIdentityCarrierInductive',
+    )
+    const theorem = theory.theorems[theoremIndex]!
+    const context = verifyTheory({
+      relations: theory.relations,
+      theorems: theory.theorems.slice(0, theoremIndex),
+    })
+    const diagram = theorem.rhs.diagram
+    const shell = theoremShell(diagram)
+    const successor = relationWire(
+      diagram,
+      shell.primitiveScope,
+      BINARY,
+    )
+    const closure = exactOne(
+      directCuts(diagram, shell.conclusion).filter((region) =>
+        scopedWires(diagram, region).length === 2),
+      'right-carrier closure',
+    )
+    const closureBody = exactOne(
+      directCuts(diagram, closure),
+      'right-carrier closure body',
+    )
+    const closureAntecedent = exactOne(
+      directCuts(diagram, closureBody),
+      'right-carrier closure antecedent',
+    )
+    const suppliedSuccessor = nodeSelection(
+      diagram,
+      nodeWithHead(diagram, closureAntecedent, successor),
+    )
+    const uses = traceProofHalf(theorem, context, 'backward')
+      .filter(({ before, step }) => {
+        if (
+          step.rule !== 'deiteration'
+          || step.sel.nodes.length !== 1
+        ) return false
+        const [node] = step.sel.nodes
+        return before.nodes[node!]?.kind === 'atom'
+          && endpointWire(before, node!, 'head')
+            === relationWire(
+              before,
+              theoremShell(before).primitiveScope,
+              BINARY,
+            )
+      })
+    expect(uses).toHaveLength(2)
+    const direct = exactOne(
+      uses.filter(({ step }) =>
+        step.rule === 'deiteration'
+        && sameSelection(step.justifier, suppliedSuccessor)),
+      'direct supplied-successor use',
+    )
+    if (direct.step.rule !== 'deiteration') {
+      throw new Error('expected direct successor deiteration')
+    }
+    const indirect = exactOne(
+      uses.filter((trace) => trace !== direct),
+      'transitive supplied-successor use',
+    )
+    if (indirect.step.rule !== 'deiteration') {
+      throw new Error('expected transitive successor deiteration')
+    }
+    expect(
+      sameSelection(indirect.step.justifier, direct.step.sel),
+      indirect.diagnostic,
+    ).toBe(true)
+    assertCertifiedDeiteration(indirect, direct.step.sel)
+    assertCertifiedDeiteration(direct, suppliedSuccessor)
   })
 
   it('replays every arithmetic step against exactly its preceding prefix', () => {
@@ -970,7 +1288,7 @@ describe('relational Frege arithmetic proofs', () => {
   })
 
   it('uses both associativity Nat premises causally', () => {
-    const theory = buildFregeTheory()
+    const theory = buildThroughAssociativityTheory()
     const theoremIndex = theory.theorems.findIndex(
       ({ name }) => name === 'plusAssoc',
     )

@@ -42,6 +42,37 @@ import {
 } from './arithmetic-assoc-carrier'
 import type { ArithmeticStatements } from './statements'
 
+function plusBaseContent() {
+  let graph = emptyGraph()
+  const zero = declareWire(graph, graph.root, UNARY)
+  graph = zero.graph
+  const plus = declareWire(graph, graph.root, TERNARY)
+  graph = plus.graph
+  const variables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA],
+  )
+  graph = variables.graph
+  const [zeroValue, right] = variables.value.variables
+  const claim = implication(graph, variables.value.body)
+  graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    zero.value,
+    [zeroValue!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.consequent,
+    plus.value,
+    [zeroValue!, right!, right!],
+  ).graph
+  return finishDiagramWithBoundary(graph, [zero.value, plus.value])
+}
+
 function associativityTransportContent() {
   let graph = emptyGraph()
   const formal = declareWire(graph, graph.root, IOTA)
@@ -129,22 +160,49 @@ function plusAssoc(
       scopedWires(publicForward.diagram, region).length === 0),
     'public support conclusion',
   )
-  const publicZero = relationWire(
+  let publicBefore = publicForward.diagram
+  publicForward.record('introduce public zero relation', {
+    rule: 'vacuousIntro',
+    scope: publicPrimitiveScope,
+    sig: UNARY,
+  })
+  const publicZero = onlyNewWire(
+    publicBefore,
     publicForward.diagram,
     publicPrimitiveScope,
-    UNARY,
-  )
-  const publicSuccessor = relationWire(
-    publicForward.diagram,
-    publicPrimitiveScope,
-    BINARY,
   )
   const publicPlus = relationWire(
     publicForward.diagram,
     publicPrimitiveScope,
     TERNARY,
   )
-  let publicBefore = publicForward.diagram
+  publicBefore = publicForward.diagram
+  publicForward.record('introduce plusBase hypothesis handle', {
+    rule: 'vacuousIntro',
+    scope: publicHypotheses,
+    sig: relSig([]),
+  })
+  const plusBase = onlyNewWire(
+    publicBefore,
+    publicForward.diagram,
+    publicHypotheses,
+  )
+  publicForward.record('assert plusBase hypothesis handle', {
+    rule: 'atomSpawn',
+    region: publicHypotheses,
+    wire: plusBase,
+  })
+  publicForward.record('ground exact plusBase hypothesis', {
+    rule: 'wireJoin',
+    input: {
+      kind: 'relation',
+      wire: plusBase,
+      content: plusBaseContent(),
+      parameters: [publicZero, publicPlus],
+    },
+  })
+
+  publicBefore = publicForward.diagram
   publicForward.record('cite exact carrier base in positive conclusion', {
     rule: 'theorem',
     name: 'associativityCarrierBase',
@@ -184,11 +242,6 @@ function plusAssoc(
       UNARY,
     ],
     [
-      publicSuccessor,
-      relationWire(publicForward.diagram, citedBaseScope, BINARY),
-      BINARY,
-    ],
-    [
       publicPlus,
       relationWire(publicForward.diagram, citedBaseScope, TERNARY),
       TERNARY,
@@ -204,24 +257,6 @@ function plusAssoc(
       },
     })
   }
-  const publicStandingZero = exactOne(
-    directNodes(publicForward.diagram, publicHypotheses).filter((node) =>
-      endpointWire(publicForward.diagram, node, 'head') === publicZero),
-    'public standing Zero',
-  )
-  const citedStandingZero = exactOne(
-    directNodes(publicForward.diagram, citedBaseHypotheses).filter((node) =>
-      endpointWire(publicForward.diagram, node, 'head') === publicZero),
-    'cited standing Zero',
-  )
-  publicForward.record('specialize cited base standing Zero', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: endpointWire(publicForward.diagram, publicStandingZero, 'arg', 0),
-      b: endpointWire(publicForward.diagram, citedStandingZero, 'arg', 0),
-    },
-  })
   for (const citedHypothesis of directCuts(
     publicForward.diagram,
     citedBaseHypotheses,
@@ -238,26 +273,6 @@ function plusAssoc(
       4096,
     )
     publicForward.record('discharge cited base standing hypothesis', {
-      rule: 'deiteration',
-      sel,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets: [],
-    })
-  }
-  {
-    const sel = {
-      region: citedBaseHypotheses,
-      regions: [],
-      nodes: [citedStandingZero],
-      wires: [],
-    } as const
-    const evidence = findDeiterationEvidence(
-      publicForward.diagram,
-      sel,
-      4096,
-    )
-    publicForward.record('discharge cited base standing Zero', {
       rule: 'deiteration',
       sel,
       justifier: evidence.justifier,
@@ -660,23 +675,32 @@ function plusAssoc(
         scopedWires(publicBackward.diagram, region).length === scopedCount),
       name + ' direct result',
     )
-    for (const [outer, inner, signature] of [
-      [
-        backwardZero,
-        relationWire(publicBackward.diagram, scope, UNARY),
-        UNARY,
-      ],
-      [
-        backwardSuccessor,
-        relationWire(publicBackward.diagram, scope, BINARY),
-        BINARY,
-      ],
-      [
-        backwardPlus,
-        relationWire(publicBackward.diagram, scope, TERNARY),
-        TERNARY,
-      ],
-    ] as const) {
+    const primitiveSpecializations = name === 'associativityCarrierBase'
+      ? [
+          [
+            backwardZero,
+            relationWire(publicBackward.diagram, scope, UNARY),
+            UNARY,
+          ],
+          [
+            backwardPlus,
+            relationWire(publicBackward.diagram, scope, TERNARY),
+            TERNARY,
+          ],
+        ] as const
+      : [
+          [
+            backwardSuccessor,
+            relationWire(publicBackward.diagram, scope, BINARY),
+            BINARY,
+          ],
+          [
+            backwardPlus,
+            relationWire(publicBackward.diagram, scope, TERNARY),
+            TERNARY,
+          ],
+        ] as const
+    for (const [outer, inner, signature] of primitiveSpecializations) {
       publicBackward.record('specialize ' + name + ' primitive', {
         rule: 'wireJoin',
         input: {
@@ -687,34 +711,6 @@ function plusAssoc(
         },
       })
     }
-    const outerStandingZero = exactOne(
-      directNodes(publicBackward.diagram, backwardHypotheses).filter((node) =>
-        endpointWire(publicBackward.diagram, node, 'head') === backwardZero),
-      'outer standing Zero',
-    )
-    const innerStandingZero = exactOne(
-      directNodes(publicBackward.diagram, citedHypotheses).filter((node) =>
-        endpointWire(publicBackward.diagram, node, 'head') === backwardZero),
-      name + ' standing Zero',
-    )
-    publicBackward.record('specialize ' + name + ' standing Zero', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: endpointWire(
-          publicBackward.diagram,
-          outerStandingZero,
-          'arg',
-          0,
-        ),
-        b: endpointWire(
-          publicBackward.diagram,
-          innerStandingZero,
-          'arg',
-          0,
-        ),
-      },
-    })
     for (const citedHypothesis of directCuts(
       publicBackward.diagram,
       citedHypotheses,
@@ -731,26 +727,6 @@ function plusAssoc(
         4096,
       )
       publicBackward.record('discharge ' + name + ' hypothesis', {
-        rule: 'deiteration',
-        sel,
-        justifier: evidence.justifier,
-        certificate: evidence.certificate,
-        retargets: [],
-      })
-    }
-    {
-      const sel = {
-        region: citedHypotheses,
-        regions: [],
-        nodes: [innerStandingZero],
-        wires: [],
-      } as const
-      const evidence = findDeiterationEvidence(
-        publicBackward.diagram,
-        sel,
-        4096,
-      )
-      publicBackward.record('discharge ' + name + ' standing Zero', {
         rule: 'deiteration',
         sel,
         justifier: evidence.justifier,
@@ -1171,10 +1147,11 @@ function plusAssoc(
     rule: 'doubleCutElim',
     region: leftTransport,
   })
-  const publicAdditionFunctional = directCuts(
-    publicBackward.diagram,
-    backwardHypotheses,
-  )[6]!
+  const publicAdditionFunctional = exactOne(
+    directCuts(publicBackward.diagram, backwardHypotheses).filter((region) =>
+      scopedWires(publicBackward.diagram, region).length === 4),
+    'public plusSingleValued hypothesis',
+  )
   backwardBefore = publicBackward.diagram
   publicBackward.record('copy addition functionality for transport output', {
     rule: 'iteration',
@@ -1192,28 +1169,6 @@ function plusAssoc(
     publicBackward.diagram,
     backwardClaimAntecedent,
   )
-  const copiedOutputFunctionalVariables = scopedWires(
-    publicBackward.diagram,
-    copiedOutputFunctional,
-  )
-  if (copiedOutputFunctionalVariables.length !== 4) {
-    throw new Error('expected four output-functionality variables')
-  }
-  for (const [label, outer, inner] of [
-    ['left', firstSum, copiedOutputFunctionalVariables[0]!],
-    ['right', third, copiedOutputFunctionalVariables[1]!],
-    ['public output', publicOutput, copiedOutputFunctionalVariables[2]!],
-    ['transport output', transportOutput, copiedOutputFunctionalVariables[3]!],
-  ] as const) {
-    publicBackward.record('specialize output functionality ' + label, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: outer,
-        b: inner,
-      },
-    })
-  }
   const copiedOutputFunctionalBody = exactOne(
     directCuts(publicBackward.diagram, copiedOutputFunctional),
     'output functionality body',
@@ -1233,6 +1188,57 @@ function plusAssoc(
     endpointWire(publicBackward.diagram, node, 'head') === backwardPlus)
   if (copiedOutputFunctionalPremises.length !== 2) {
     throw new Error('expected two output-functionality premises')
+  }
+  const [
+    copiedOutputFunctionalFirst,
+    copiedOutputFunctionalSecond,
+  ] = copiedOutputFunctionalPremises
+  for (const [label, outer, inner] of [
+    [
+      'left',
+      firstSum,
+      endpointWire(
+        publicBackward.diagram,
+        copiedOutputFunctionalFirst!,
+        'arg',
+        0,
+      ),
+    ],
+    [
+      'right',
+      third,
+      endpointWire(
+        publicBackward.diagram,
+        copiedOutputFunctionalFirst!,
+        'arg',
+        1,
+      ),
+    ],
+    [
+      'public output',
+      publicOutput,
+      endpointWire(
+        publicBackward.diagram,
+        copiedOutputFunctionalFirst!,
+        'arg',
+        2,
+      ),
+    ],
+    [
+      'transport output',
+      transportOutput,
+      endpointWire(
+        publicBackward.diagram,
+        copiedOutputFunctionalSecond!,
+        'arg',
+        2,
+      ),
+    ],
+  ] as const) {
+    publicBackward.record('specialize output functionality ' + label, {
+      rule: 'wireJoin',
+      input: { kind: 'iota', a: outer, b: inner },
+    })
   }
   for (const premise of copiedOutputFunctionalPremises) {
     publicBackward.record(

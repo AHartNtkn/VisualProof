@@ -3,7 +3,6 @@ import type { Theorem } from '../kernel/proof/theorem'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import {
-  BINARY,
   TERNARY,
   UNARY,
   deiterationSelectionStep,
@@ -15,9 +14,13 @@ import {
   scopedWires,
 } from './arithmetic-support'
 import {
+  atom,
   declareWire,
   emptyGraph,
   finishDiagramWithBoundary,
+  identity,
+  implication,
+  quantifierScope,
 } from './graph'
 import {
   PrimitiveStepRecorder,
@@ -25,28 +28,71 @@ import {
   onlyNewNode,
   onlyNewWire,
 } from './record'
-import {
-  drawStandingHypotheses,
-  type ArithmeticStatements,
-} from './statements'
+import type { ArithmeticStatements } from './statements'
 
-function standingHypothesesContent() {
+function exactHypothesesContent() {
   let graph = emptyGraph()
   const zero = declareWire(graph, graph.root, UNARY)
   graph = zero.graph
-  const successor = declareWire(graph, graph.root, BINARY)
-  graph = successor.graph
   const plus = declareWire(graph, graph.root, TERNARY)
   graph = plus.graph
-  graph = drawStandingHypotheses(graph, graph.root, {
-    zero: zero.value,
-    successor: successor.value,
-    plus: plus.value,
-  })
-  return finishDiagramWithBoundary(
+
+  const baseVariables = quantifierScope(
     graph,
-    [zero.value, successor.value, plus.value],
+    graph.root,
+    'forall',
+    [IOTA, IOTA],
   )
+  graph = baseVariables.graph
+  const [zeroValue, right] = baseVariables.value.variables
+  const baseClaim = implication(graph, baseVariables.value.body)
+  graph = baseClaim.graph
+  graph = atom(
+    graph,
+    baseClaim.value.antecedent,
+    zero.value,
+    [zeroValue!],
+  ).graph
+  graph = atom(
+    graph,
+    baseClaim.value.consequent,
+    plus.value,
+    [zeroValue!, right!, right!],
+  ).graph
+
+  const functionalVariables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  graph = functionalVariables.graph
+  const [left, functionalRight, first, second] =
+    functionalVariables.value.variables
+  const functionalClaim = implication(
+    graph,
+    functionalVariables.value.body,
+  )
+  graph = functionalClaim.graph
+  graph = atom(
+    graph,
+    functionalClaim.value.antecedent,
+    plus.value,
+    [left!, functionalRight!, first!],
+  ).graph
+  graph = atom(
+    graph,
+    functionalClaim.value.antecedent,
+    plus.value,
+    [left!, functionalRight!, second!],
+  ).graph
+  graph = identity(
+    graph,
+    functionalClaim.value.consequent,
+    [first!, second!],
+  ).graph
+
+  return finishDiagramWithBoundary(graph, [zero.value, plus.value])
 }
 
 export function associativityCarrierBase(
@@ -72,7 +118,6 @@ export function associativityCarrierBase(
   const relationsWires: string[] = []
   for (const [label, sig] of [
     ['zero', UNARY],
-    ['successor', BINARY],
     ['addition', TERNARY],
   ] as const) {
     before = forward.diagram
@@ -85,7 +130,7 @@ export function associativityCarrierBase(
       onlyNewWire(before, forward.diagram, forwardPrimitiveScope),
     )
   }
-  const [forwardZero, forwardSuccessor, forwardPlus] = relationsWires
+  const [forwardZero, forwardPlus] = relationsWires
   before = forward.diagram
   forward.record('open base-support standing implication', {
     rule: 'doubleCutIntro',
@@ -123,8 +168,8 @@ export function associativityCarrierBase(
     input: {
       kind: 'relation',
       wire: temporaryHypotheses,
-      content: standingHypothesesContent(),
-      parameters: [forwardZero!, forwardSuccessor!, forwardPlus!],
+      content: exactHypothesesContent(),
+      parameters: [forwardZero!, forwardPlus!],
     },
   })
   before = forward.diagram
@@ -363,7 +408,11 @@ export function associativityCarrierBase(
       b: baseTotalityOutput,
     },
   })
-  const additionBase = directCuts(backward.diagram, hypotheses)[4]!
+  const additionBase = exactOne(
+    directCuts(backward.diagram, hypotheses).filter((region) =>
+      scopedWires(backward.diagram, region).length === 2),
+    'plusBase hypothesis',
+  )
   before = backward.diagram
   backward.record('copy addition base into inline carrier base', {
     rule: 'iteration',
@@ -606,7 +655,11 @@ export function associativityCarrierBase(
     baseTransportInnerSum,
     'inline-base inner',
   )
-  const additionFunctional = directCuts(backward.diagram, hypotheses)[6]!
+  const additionFunctional = exactOne(
+    directCuts(backward.diagram, hypotheses).filter((region) =>
+      scopedWires(backward.diagram, region).length === 4),
+    'plusSingleValued hypothesis',
+  )
   before = backward.diagram
   backward.record('copy addition functionality into inline base transport', {
     rule: 'iteration',

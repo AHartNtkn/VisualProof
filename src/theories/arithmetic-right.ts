@@ -1,4 +1,4 @@
-import { IOTA } from '../kernel/diagram/sig'
+import { IOTA, relSig } from '../kernel/diagram/sig'
 import type {
   NodeId,
   RegionId,
@@ -26,18 +26,58 @@ import {
   scopedWires,
 } from './arithmetic-support'
 import {
+  atom,
+  declareWire,
   emptyGraph,
   finishDiagramWithBoundary,
+  identity,
+  implication,
+  quantifierScope,
 } from './graph'
 import {
   PrimitiveStepRecorder,
   onlyNewCut,
   onlyNewNode,
+  onlyNewWire,
 } from './record'
 import {
   rightIdentityCarrierInductive,
 } from './arithmetic-right-carrier'
 import type { ArithmeticStatements } from './statements'
+
+function plusSingleValuedContent() {
+  let graph = emptyGraph()
+  const plus = declareWire(graph, graph.root, TERNARY)
+  graph = plus.graph
+  const variables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  graph = variables.graph
+  const [left, right, first, second] = variables.value.variables
+  const claim = implication(graph, variables.value.body)
+  graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus.value,
+    [left!, right!, first!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus.value,
+    [left!, right!, second!],
+  ).graph
+  graph = identity(
+    graph,
+    claim.value.consequent,
+    [first!, second!],
+  ).graph
+  return finishDiagramWithBoundary(graph, [plus.value])
+}
 
 function deiterateNode(
   recorder: PrimitiveStepRecorder,
@@ -133,6 +173,31 @@ function plusRightUnit(
   )
 
   let before = forward.diagram
+  forward.record('introduce plusSingleValued hypothesis handle', {
+    rule: 'vacuousIntro',
+    scope: forwardHypotheses,
+    sig: relSig([]),
+  })
+  const plusSingleValued = onlyNewWire(
+    before,
+    forward.diagram,
+    forwardHypotheses,
+  )
+  forward.record('assert plusSingleValued hypothesis handle', {
+    rule: 'atomSpawn',
+    region: forwardHypotheses,
+    wire: plusSingleValued,
+  })
+  forward.record('ground exact plusSingleValued hypothesis', {
+    rule: 'wireJoin',
+    input: {
+      kind: 'relation',
+      wire: plusSingleValued,
+      content: plusSingleValuedContent(),
+      parameters: [forwardPlus],
+    },
+  })
+
   forward.record('open right-unit claim scope and body', {
     rule: 'doubleCutIntro',
     sel: {
@@ -313,11 +378,16 @@ function plusRightUnit(
     'reviewed standing hypotheses',
   )
   const hypothesisChildren = directCuts(backward.diagram, hypotheses)
-  const conclusion = hypothesisChildren[0]
-  const additionFunctional = hypothesisChildren[6]
-  if (conclusion === undefined || additionFunctional === undefined) {
-    throw new Error('missing reviewed right-unit structure')
-  }
+  const conclusion = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 0),
+    'reviewed right-unit conclusion',
+  )
+  const additionFunctional = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 4),
+    'reviewed plusSingleValued hypothesis',
+  )
   const claimScope = exactOne(
     directCuts(backward.diagram, conclusion),
     'reviewed claim scope',
@@ -415,29 +485,6 @@ function plusRightUnit(
     })
   }
 
-  const standingZero = exactOne(
-    directNodes(backward.diagram, hypotheses).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === reviewedZero),
-    'reviewed standing Zero',
-  )
-  const citedStandingZero = exactOne(
-    directNodes(backward.diagram, citedHypotheses).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === reviewedZero),
-    'cited standing Zero',
-  )
-  backward.record('specialize cited standing-zero witness', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: endpointWire(backward.diagram, standingZero, 'arg', 0),
-      b: endpointWire(
-        backward.diagram,
-        citedStandingZero,
-        'arg',
-        0,
-      ),
-    },
-  })
   for (const citedHypothesis of directCuts(
     backward.diagram,
     citedHypotheses,
@@ -461,12 +508,6 @@ function plusRightUnit(
       retargets: [],
     })
   }
-  deiterateNode(
-    backward,
-    'discharge cited standing Zero',
-    citedHypotheses,
-    citedStandingZero,
-  )
   backward.record('expose cited carrier-support conclusion', {
     rule: 'doubleCutElim',
     region: citedHypotheses,

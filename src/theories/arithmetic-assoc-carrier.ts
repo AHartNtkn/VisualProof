@@ -18,9 +18,13 @@ import {
   scopedWires,
 } from './arithmetic-support'
 import {
+  atom,
   declareWire,
   emptyGraph,
   finishDiagramWithBoundary,
+  identity,
+  implication,
+  quantifierScope,
 } from './graph'
 import {
   PrimitiveStepRecorder,
@@ -28,30 +32,109 @@ import {
   onlyNewNode,
   onlyNewWire,
 } from './record'
-import {
-  drawStandingHypotheses,
-  type ArithmeticStatements,
-  type PrimitiveRelations,
-} from './statements'
+import type { ArithmeticStatements } from './statements'
 
-function standingHypothesesContent() {
+function exactHypothesesContent() {
   let graph = emptyGraph()
-  const zero = declareWire(graph, graph.root, UNARY)
-  graph = zero.graph
   const successor = declareWire(graph, graph.root, BINARY)
   graph = successor.graph
   const plus = declareWire(graph, graph.root, TERNARY)
   graph = plus.graph
-  const primitives: PrimitiveRelations = {
-    zero: zero.value,
-    successor: successor.value,
-    plus: plus.value,
-  }
-  graph = drawStandingHypotheses(graph, graph.root, primitives)
-  return finishDiagramWithBoundary(
+
+  const totalVariables = quantifierScope(
     graph,
-    [zero.value, successor.value, plus.value],
+    graph.root,
+    'forall',
+    [IOTA],
   )
+  graph = totalVariables.graph
+  const totalOutput = declareWire(
+    graph,
+    totalVariables.value.body,
+    IOTA,
+  )
+  graph = totalOutput.graph
+  graph = atom(
+    graph,
+    totalVariables.value.body,
+    successor.value,
+    [totalVariables.value.variables[0]!, totalOutput.value],
+  ).graph
+
+  const stepVariables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA, IOTA],
+  )
+  graph = stepVariables.graph
+  const [
+    left,
+    right,
+    output,
+    leftSuccessor,
+    outputSuccessor,
+  ] = stepVariables.value.variables
+  const stepClaim = implication(graph, stepVariables.value.body)
+  graph = stepClaim.graph
+  graph = atom(
+    graph,
+    stepClaim.value.antecedent,
+    plus.value,
+    [left!, right!, output!],
+  ).graph
+  graph = atom(
+    graph,
+    stepClaim.value.antecedent,
+    successor.value,
+    [left!, leftSuccessor!],
+  ).graph
+  graph = atom(
+    graph,
+    stepClaim.value.antecedent,
+    successor.value,
+    [output!, outputSuccessor!],
+  ).graph
+  graph = atom(
+    graph,
+    stepClaim.value.consequent,
+    plus.value,
+    [leftSuccessor!, right!, outputSuccessor!],
+  ).graph
+
+  const functionalVariables = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  graph = functionalVariables.graph
+  const [functionalLeft, functionalRight, first, second] =
+    functionalVariables.value.variables
+  const functionalClaim = implication(
+    graph,
+    functionalVariables.value.body,
+  )
+  graph = functionalClaim.graph
+  graph = atom(
+    graph,
+    functionalClaim.value.antecedent,
+    plus.value,
+    [functionalLeft!, functionalRight!, first!],
+  ).graph
+  graph = atom(
+    graph,
+    functionalClaim.value.antecedent,
+    plus.value,
+    [functionalLeft!, functionalRight!, second!],
+  ).graph
+  graph = identity(
+    graph,
+    functionalClaim.value.consequent,
+    [first!, second!],
+  ).graph
+
+  return finishDiagramWithBoundary(graph, [successor.value, plus.value])
 }
 export function associativityCarrierHereditary(
   statements: ArithmeticStatements,
@@ -79,14 +162,6 @@ export function associativityCarrierHereditary(
     directCuts(forward.diagram, primitiveScope),
     'helper primitive universal body',
   )
-
-  before = forward.diagram
-  forward.record('introduce helper-local zero relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: UNARY,
-  })
-  const zero = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
   forward.record('introduce helper-local successor relation', {
@@ -147,8 +222,8 @@ export function associativityCarrierHereditary(
     input: {
       kind: 'relation',
       wire: temporaryHypotheses,
-      content: standingHypothesesContent(),
-      parameters: [zero, successor, plus],
+      content: exactHypothesesContent(),
+      parameters: [successor, plus],
     },
   })
 
@@ -488,24 +563,25 @@ export function associativityCarrierHereditary(
     backward.diagram,
     reviewedHypotheses,
   )
-  if (reviewedChildren.length !== 7) {
-    throw new Error(
-      `expected helper conclusion plus six hypotheses, found ${reviewedChildren.length}`,
-    )
-  }
-  const [
-    reviewedConclusion,
-    ,
-    reviewedSuccessorTotal,
-    ,
-    ,
-    reviewedAdditionStep,
-    reviewedAdditionFunctional,
-  ] = reviewedChildren
-  relationWire(
-    backward.diagram,
-    reviewedPrimitiveScope,
-    UNARY,
+  const reviewedConclusion = exactOne(
+    reviewedChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 0),
+    'reviewed helper conclusion',
+  )
+  const reviewedSuccessorTotal = exactOne(
+    reviewedChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 1),
+    'reviewed successorTotal hypothesis',
+  )
+  const reviewedAdditionStep = exactOne(
+    reviewedChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 5),
+    'reviewed plusStep hypothesis',
+  )
+  const reviewedAdditionFunctional = exactOne(
+    reviewedChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 4),
+    'reviewed plusSingleValued hypothesis',
   )
   const reviewedPlus = relationWire(
     backward.diagram,
@@ -518,7 +594,7 @@ export function associativityCarrierHereditary(
     BINARY,
   )
   const helperClosure = exactOne(
-    directCuts(backward.diagram, reviewedConclusion!),
+    directCuts(backward.diagram, reviewedConclusion),
     'reviewed helper carrier closure',
   )
   const helperClosureBody = exactOne(
@@ -1022,18 +1098,30 @@ export function associativityCarrierHereditary(
     'transport first addition step',
   )
 
-  const transportFunctionality = copySpecializedScope(
-    reviewedHypotheses,
-    reviewedAdditionFunctional!,
+  before = backward.diagram
+  backward.record('copy transport first-sum functionality', {
+    rule: 'iteration',
+    sel: {
+      region: reviewedHypotheses,
+      regions: [reviewedAdditionFunctional],
+      nodes: [],
+      wires: [],
+    },
+    target: successorTransportAntecedent,
+    retargets: [],
+  })
+  const transportFunctionalityScope = onlyNewCut(
+    before,
+    backward.diagram,
     successorTransportAntecedent,
-    [
-      helperClosureSuccessor!,
-      transportRight!,
-      transportSuccessorSum,
-      transportFirstSum!,
-    ],
-    'transport first-sum functionality',
   )
+  const transportFunctionality = {
+    scope: transportFunctionalityScope,
+    body: exactOne(
+      directCuts(backward.diagram, transportFunctionalityScope),
+      'transport first-sum functionality body',
+    ),
+  }
   const transportFunctionalityAntecedent = exactOne(
     directCuts(backward.diagram, transportFunctionality.body),
     'transport first-sum functionality antecedent',
@@ -1042,6 +1130,66 @@ export function associativityCarrierHereditary(
     directCuts(backward.diagram, transportFunctionalityAntecedent),
     'transport first-sum functionality consequent',
   )
+  const transportFunctionalityPluses = directNodes(
+    backward.diagram,
+    transportFunctionalityAntecedent,
+  ).filter((node) =>
+    backward.diagram.nodes[node]!.kind === 'atom'
+    && endpointWire(backward.diagram, node, 'head') === reviewedPlus)
+  if (transportFunctionalityPluses.length !== 2) {
+    throw new Error('expected two transport functionality premises')
+  }
+  const [
+    transportFunctionalityFirst,
+    transportFunctionalitySecond,
+  ] = transportFunctionalityPluses
+  for (const [label, outer, inner] of [
+    [
+      'left',
+      helperClosureSuccessor!,
+      endpointWire(
+        backward.diagram,
+        transportFunctionalityFirst!,
+        'arg',
+        0,
+      ),
+    ],
+    [
+      'right',
+      transportRight!,
+      endpointWire(
+        backward.diagram,
+        transportFunctionalityFirst!,
+        'arg',
+        1,
+      ),
+    ],
+    [
+      'derived output',
+      transportSuccessorSum,
+      endpointWire(
+        backward.diagram,
+        transportFunctionalityFirst!,
+        'arg',
+        2,
+      ),
+    ],
+    [
+      'supplied output',
+      transportFirstSum!,
+      endpointWire(
+        backward.diagram,
+        transportFunctionalitySecond!,
+        'arg',
+        2,
+      ),
+    ],
+  ] as const) {
+    backward.record(`specialize transport functionality ${label}`, {
+      rule: 'wireJoin',
+      input: { kind: 'iota', a: outer, b: inner },
+    })
+  }
   for (const premise of directNodes(
     backward.diagram,
     transportFunctionalityAntecedent,
