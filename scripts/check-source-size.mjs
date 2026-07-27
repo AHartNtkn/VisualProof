@@ -5,10 +5,14 @@ const MAX_LINES = 3000
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
   '.lake',
+  '.superpowers',
+  'archive',
   'build',
   'coverage',
   'dist',
+  'examples',
   'node_modules',
+  'scratchpad',
 ])
 
 function physicalLineCount(text) {

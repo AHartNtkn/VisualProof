@@ -1,4 +1,4 @@
-namespace VisualProof.Diagram
+namespace VisualProof.Data.Finite
 
 /-- A constructive equivalence used for finite diagram carriers. -/
 structure FiniteEquiv (alpha beta : Type) where
@@ -78,7 +78,7 @@ theorem injective (equivalence : FiniteEquiv alpha beta) :
 
 end FiniteEquiv
 
-end VisualProof.Diagram
+end VisualProof.Data.Finite
 
 namespace VisualProof.Data.Finite
 
@@ -276,7 +276,7 @@ theorem indexOf?_unique_of_nodup [DecidableEq α] {xs : List α}
 
 end VisualProof.Data.Finite
 
-namespace VisualProof.Diagram.FiniteEquiv
+namespace VisualProof.Data.Finite.FiniteEquiv
 
 open VisualProof.Data.Finite
 
@@ -363,7 +363,7 @@ theorem restrictLists_spec [DecidableEq alpha] [DecidableEq beta]
       mem_iff index) = equivalence (source.get index) :=
   restrictIndex_spec equivalence source target mem_iff index
 
-end VisualProof.Diagram.FiniteEquiv
+end VisualProof.Data.Finite.FiniteEquiv
 
 namespace VisualProof.Data.Finite
 
