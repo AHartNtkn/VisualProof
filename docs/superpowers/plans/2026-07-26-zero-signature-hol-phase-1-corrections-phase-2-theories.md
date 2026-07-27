@@ -1139,26 +1139,30 @@ list, not an exact theorem inventory or suffix. Add ordinary recorded support
 theorems before their consumers wherever a coherent intermediate carrier fact
 materially improves or enables proof composition.
 
-**Proof obligations:**
+**Semantic obligations:**
 
-- `plusLeftUnit`: base and plus single-valuedness.
-- `zeroIsNat`: unfold parameterized Nat and establish its base.
-- `succNat`: unfold/fold Nat and establish hereditary closure.
-- `oneIsNat`: cite `zeroIsNat` and `succNat`.
-- `plusRightUnit`, `plusAssoc`, and `succShiftS`: Nat induction with their explicit
-  reified predicates.
-- `plusComm`: Nat induction citing unit and successor-shift results as needed.
-- Factor nontrivial carrier base/hereditary obligations into explicit closed,
-  recorded support theorems when citation is the clearer or structurally legal
-  composition boundary. Support theorems are normal `Theory.theorems` entries,
-  never private helpers, hidden proof authorities, refs, macros, or kernel rules.
-  Do not create mechanical helpers for trivial finishing steps.
-- Every second-order substitution uses the corrected wire-quantifier pair:
-  ground a universally scoped relation wire to exact carrier content with
-  strongest-form relation `wireJoin`; derive a relation handle only when a
-  higher-order argument/identity port grammatically requires one, using the
-  recorded sever-based reification theorem. No ref spawn, definition-store
-  recognizer, or capture-connection workaround is permitted.
+- Each required theorem proves its exact closed statement from
+  `buildArithmeticStatements()`.
+- No particular proof method, action topology, carrier representation,
+  primitive-rule inventory, or citation graph is part of the theorem contract.
+- Factor nontrivial intermediate facts into explicit closed, recorded support
+  theorems when they materially improve or enable proof composition. Support
+  theorems are normal `Theory.theorems` entries, never private helpers, hidden
+  proof authorities, refs, macros, or kernel rules. Do not create mechanical
+  helpers for trivial finishing steps.
+- Every proof must use only the surviving kernel rules. No ref spawn,
+  definition-store recognizer, capture-connection workaround, macro, tactic, or
+  primitive second-order-instantiation authority is permitted.
+
+**Current implementation evidence (non-normative):**
+
+- The checked implementation derives the unit, Nat closure, associativity,
+  successor-shift, and commutativity results with unfold/fold, ordinary theorem
+  citation, Nat induction, and corrected relation `wireJoin`.
+- Five closed carrier support theorems provide the composition boundaries that
+  the implemented proof replay requires. Their presence and causal use are
+  evidence for this implementation, not restrictions on another kernel-valid
+  proof of the same public statements.
 
 **Tests:**
 
@@ -1169,6 +1173,8 @@ materially improves or enables proof composition.
 - The eight required historical names occur as an ordered subsequence; tests
   must not encode them as an exact suffix or prohibit additional support
   theorems.
+- Tests must not require exact primitive-rule inventories, carrier-grounding
+  counts, or a fixed citation topology.
 - `plusComm` concludes the crossed `Plus(b,a,o)` atom.
 - No deleted rule tag or lambda-era node kind occurs.
 - Removing a genuinely used hypothesis from representative induction proofs

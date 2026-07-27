@@ -10,11 +10,7 @@ import {
 import { replayActions } from '../../src/kernel/proof/action'
 import { buildFregeTheory } from '../../src/theories'
 import {
-  associativityCarrierContent,
-  commutativityCarrierContent,
   directCuts,
-  rightIdentityCarrierContent,
-  successorShiftCarrierContent,
 } from '../../src/theories/arithmetic-support'
 import { buildArithmeticStatements } from '../../src/theories/statements'
 
@@ -301,59 +297,6 @@ describe('relational Frege arithmetic proofs', () => {
     }
   })
 
-  it('grounds each Nat property directly to its exact induction carrier', () => {
-    const theory = buildFregeTheory()
-    const expectedCarrier = [
-      ['plusRightUnit', rightIdentityCarrierContent(), 2, 1],
-      ['plusAssoc', associativityCarrierContent(), 1, 2],
-      ['succShiftS', successorShiftCarrierContent(), 2, 1],
-      ['plusComm', commutativityCarrierContent(), 2, 1],
-    ] as const
-
-    for (const [
-      theoremName,
-      carrier,
-      captureCount,
-      groundingCount,
-    ] of expectedCarrier) {
-      const theorem = theory.theorems.find(
-        ({ name }) => name === theoremName,
-      )
-      expect(theorem, `theorem '${theoremName}'`).toBeDefined()
-      const proven = theorem!
-      const steps = [
-        ...proven.actions,
-        ...(proven.backActions ?? []),
-      ].flatMap((action) => action.steps)
-      const carrierGroundings = steps.filter((step) =>
-        step.rule === 'wireJoin'
-        && step.input.kind === 'relation'
-        && exploreForm(
-          step.input.content.diagram,
-          step.input.content.boundary,
-        ) === exploreForm(carrier.diagram, carrier.boundary))
-      expect(carrierGroundings).toHaveLength(groundingCount)
-      for (const grounding of carrierGroundings) {
-        expect(
-          grounding.rule === 'wireJoin'
-          && grounding.input.kind === 'relation'
-            ? grounding.input.parameters
-            : [],
-        ).toHaveLength(captureCount)
-      }
-      const rules = new Set(steps.map((step) => step.rule))
-      for (const required of [
-        'unfold',
-        'iteration',
-        'wireJoin',
-        'deiteration',
-        'doubleCutElim',
-      ]) {
-        expect(rules.has(required as typeof steps[number]['rule'])).toBe(true)
-      }
-    }
-  })
-
   it('uses both associativity Nat premises causally', () => {
     const theory = buildFregeTheory()
     const theoremIndex = theory.theorems.findIndex(
@@ -363,47 +306,6 @@ describe('relational Frege arithmetic proofs', () => {
     const natPremises = Object.entries(theorem.rhs.diagram.nodes)
       .filter(([, node]) => node.kind === 'ref' && node.defId === 'nat')
     expect(natPremises).toHaveLength(2)
-    const natNodeIds = new Set(natPremises.map(([nodeId]) => nodeId))
-    const natUnfoldIds = (theorem.backActions ?? [])
-      .flatMap((action) => action.steps)
-      .filter((step) =>
-        step.rule === 'unfold' && natNodeIds.has(step.nodeId))
-      .map((step) => step.rule === 'unfold' ? step.nodeId : '')
-    expect(new Set(natUnfoldIds)).toEqual(natNodeIds)
-
-    const carrierForm = exploreForm(
-      associativityCarrierContent().diagram,
-      associativityCarrierContent().boundary,
-    )
-    const groundingActionIndexes = (theorem.backActions ?? [])
-      .map((action, index) => action.steps.some((step) =>
-        step.rule === 'wireJoin'
-        && step.input.kind === 'relation'
-        && exploreForm(
-          step.input.content.diagram,
-          step.input.content.boundary,
-        ) === carrierForm)
-        ? index
-        : -1)
-      .filter((index) => index >= 0)
-    expect(groundingActionIndexes).toHaveLength(2)
-
-    for (const removedIndex of groundingActionIndexes) {
-      const withoutGrounding = {
-        ...theorem,
-        backActions: (theorem.backActions ?? []).filter(
-          (_action, index) => index !== removedIndex,
-        ),
-      }
-      expect(() => verifyTheory({
-        relations: theory.relations,
-        theorems: [
-          ...theory.theorems.slice(0, theoremIndex),
-          withoutGrounding,
-        ],
-      })).toThrow()
-    }
-
     for (const [nodeId, node] of natPremises) {
       const weakened = {
         ...theorem,
@@ -436,74 +338,25 @@ describe('relational Frege arithmetic proofs', () => {
     const natPremises = Object.entries(theorem.rhs.diagram.nodes)
       .filter(([, node]) => node.kind === 'ref' && node.defId === 'nat')
     expect(natPremises).toHaveLength(1)
-    const natNodeId = natPremises[0]![0]
-    const unfoldIds = (theorem.backActions ?? [])
-      .flatMap((action) => action.steps)
-      .filter((step) => step.rule === 'unfold')
-      .map((step) => step.rule === 'unfold' ? step.nodeId : '')
-    expect(unfoldIds).toContain(natNodeId)
-
-    const carrierForm = exploreForm(
-      successorShiftCarrierContent().diagram,
-      successorShiftCarrierContent().boundary,
-    )
-    const groundingActionIndexes = (theorem.backActions ?? [])
-      .map((action, index) => action.steps.some((step) =>
-        step.rule === 'wireJoin'
-        && step.input.kind === 'relation'
-        && exploreForm(
-          step.input.content.diagram,
-          step.input.content.boundary,
-        ) === carrierForm
-        && step.input.parameters.length === 2)
-        ? index
-        : -1)
-      .filter((index) => index >= 0)
-    expect(groundingActionIndexes).toHaveLength(1)
-
-    const withoutGrounding = {
+    const [natNodeId, natNode] = natPremises[0]!
+    const withoutNatPremise = {
       ...theorem,
-      backActions: (theorem.backActions ?? []).filter(
-        (_action, index) => index !== groundingActionIndexes[0],
-      ),
+      rhs: {
+        ...theorem.rhs,
+        diagram: removeSubgraph(theorem.rhs.diagram, {
+          region: natNode.region,
+          regions: [],
+          nodes: [natNodeId],
+          wires: [],
+        }),
+      },
     }
     expect(() => verifyTheory({
       relations: theory.relations,
       theorems: [
         ...theory.theorems.slice(0, theoremIndex),
-        withoutGrounding,
+        withoutNatPremise,
       ],
     })).toThrow()
-  })
-
-  it('uses the required earlier arithmetic results as causal citations', () => {
-    const theory = buildFregeTheory()
-    const citations = (theoremName: string): ReadonlySet<string> => {
-      const theorem = theory.theorems.find(({ name }) => name === theoremName)
-      expect(theorem, `theorem '${theoremName}'`).toBeDefined()
-      return new Set([
-        ...theorem!.actions,
-        ...(theorem!.backActions ?? []),
-      ].flatMap((action) => action.steps)
-        .filter((step) => step.rule === 'theorem')
-        .map((step) => step.name))
-    }
-
-    for (const required of ['zeroIsNat', 'succNat']) {
-      expect(citations('oneIsNat')).toContain(required)
-    }
-    expect(citations('plusComm')).toContain(
-      'commutativityCarrierInductive',
-    )
-    for (const required of [
-      'plusLeftUnit',
-      'rightIdentityCarrierInductive',
-      'plusRightUnit',
-      'successorShiftCarrierInductive',
-      'succShiftS',
-    ]) {
-      expect(citations('commutativityCarrierInductive'))
-        .toContain(required)
-    }
   })
 })
