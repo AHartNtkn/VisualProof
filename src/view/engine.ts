@@ -133,6 +133,14 @@ export type Engine = {
   tick: number
 }
 
+/** Optional source→target graph identity for carrying view state across renamed
+    but canonically corresponding replay representations. */
+export type LayoutIdentity = {
+  readonly regions: ReadonlyMap<RegionId, RegionId>
+  readonly nodes: ReadonlyMap<NodeId, NodeId>
+  readonly wires: ReadonlyMap<WireId, WireId>
+}
+
 /** The fixed proof frame: centre + half-extent of a near-square rounded box. */
 export type StoredFrame = { readonly center: Vec2; readonly half: number }
 
@@ -326,16 +334,20 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
 }
 
 /**
- * Transplant the layout state of every body shared between two engines. When a
- * new engine is built for the next diagram in a replay, bodies whose id survives
- * (nodes keyed by NodeId, wire-owned END bodies by `j:<wireId>` for an ∃ tip or
- * `x:<wireId>` for a ∀ via) keep their pos/theta so the layout glides from
- * where it was rather than re-seeding from the spiral.
+ * Transplant the layout state of every corresponding body between two engines.
+ * Raw IDs are the default correspondence; replay may supply canonical view
+ * identity for an exact endpoint whose graph IDs differ from the computed proof
+ * form. Nodes, region anchors, and wire-owned `j:`/`x:` END bodies keep their
+ * pos/theta so the layout glides rather than re-seeding from the spiral.
  * Bodies present only in `next` keep their deterministic mkEngine seeds. Vec2 is
  * treated as an immutable value here, matching relax.ts's replace-not-mutate
  * discipline, so copying the reference cannot alias `prev` into `next`'s motion.
  */
-export function carryOver(prev: Engine, next: Engine): void {
+export function carryOver(
+  prev: Engine,
+  next: Engine,
+  identity?: LayoutIdentity,
+): void {
   // The border NEVER resizes for the diagram's lifetime (USER RULING 2026-07-06):
   // a rewrite keeps the SAME frame — content reflows inside the unchanged box, the
   // box is not recomputed. Carrying prev.frame makes `establishFrame` a no-op on the
@@ -355,9 +367,26 @@ export function carryOver(prev: Engine, next: Engine): void {
   next.slotShift = prev.slotShift
   const c = prev.frame === null ? { x: 0, y: 0 } : prev.frame.center
   const denorm = (p: Vec2, sc: number): Vec2 => ({ x: c.x + (p.x - c.x) / sc, y: c.y + (p.y - c.y) / sc })
-  for (const [id, nb] of next.bodies) {
-    const pb = prev.bodies.get(id)
-    if (pb === undefined) continue
+  const mappedBodyId = (id: string): string | undefined => {
+    if (identity === undefined) return id
+    if (prev.d.nodes[id] !== undefined) return identity.nodes.get(id)
+    for (const prefix of ['j:', 'x:'] as const) {
+      if (id.startsWith(prefix)) {
+        const wire = identity.wires.get(id.slice(prefix.length))
+        return wire === undefined ? undefined : `${prefix}${wire}`
+      }
+    }
+    if (id.startsWith('anchor:')) {
+      const region = identity.regions.get(id.slice('anchor:'.length))
+      return region === undefined ? undefined : `anchor:${region}`
+    }
+    return undefined
+  }
+  for (const [id, pb] of prev.bodies) {
+    const targetId = mappedBodyId(id)
+    if (targetId === undefined) continue
+    const nb = next.bodies.get(targetId)
+    if (nb === undefined) continue
     nb.pos = denorm(pb.pos, prev.scale)
     nb.theta = pb.theta
   }
@@ -366,11 +395,66 @@ export function carryOver(prev: Engine, next: Engine): void {
   // carried. The router re-solves from the carried state; nothing re-derives.
   const sig = (v: WireView): string =>
     [...v.binds.map((b) => `${b.body}:${b.key}`), v.endBodyId === null ? '-' : 'end', `slots:${v.slots.join(',')}`].join('|')
-  for (const [wid, nv] of next.wires) {
-    const pv = prev.wires.get(wid)
-    if (pv === undefined || sig(pv) !== sig(nv)) continue
+  const terminalImage = (
+    from: WireView,
+    to: WireView,
+  ): readonly number[] | null => {
+    const fromHasEnd = from.endBodyId !== null
+    const toHasEnd = to.endBodyId !== null
+    if (
+      fromHasEnd !== toHasEnd
+      || from.slots.length !== to.slots.length
+      || from.slots.some((slot, index) => slot !== to.slots[index])
+    ) {
+      return null
+    }
+    const image: number[] = []
+    const used = new Set<number>()
+    for (const bind of from.binds) {
+      const body = identity!.nodes.get(bind.body)
+      if (body === undefined) return null
+      const target = to.binds.findIndex((candidate, index) =>
+        !used.has(index)
+        && candidate.body === body
+        && candidate.key === bind.key)
+      if (target < 0) return null
+      used.add(target)
+      image.push(target)
+    }
+    if (used.size !== to.binds.length) return null
+    for (let index = 0; index < from.slots.length; index++) {
+      image.push(to.binds.length + index)
+    }
+    if (fromHasEnd) {
+      image.push(to.binds.length + to.slots.length)
+    }
+    return image
+  }
+  for (const [wid, pv] of prev.wires) {
+    const targetWire = identity === undefined ? wid : identity.wires.get(wid)
+    if (targetWire === undefined) continue
+    const nv = next.wires.get(targetWire)
+    if (nv === undefined) continue
+    if (identity === undefined) {
+      if (sig(pv) !== sig(nv)) continue
+      nv.net.junctions = pv.net.junctions.map((p) => denorm(p, prev.scale))
+      nv.net.edges = pv.net.edges.map(([u, v]) => [u, v])
+      continue
+    }
+    const terminalMap = terminalImage(pv, nv)
+    if (terminalMap === null) continue
+    const fromTerminalCount = terminalMap.length
+    const toTerminalCount = nv.binds.length + nv.slots.length
+      + (nv.endBodyId === null ? 0 : 1)
+    const vertexImage = (vertex: number): number =>
+      vertex < fromTerminalCount
+        ? terminalMap[vertex]!
+        : toTerminalCount + vertex - fromTerminalCount
     nv.net.junctions = pv.net.junctions.map((p) => denorm(p, prev.scale))
-    nv.net.edges = pv.net.edges.map(([u, v]) => [u, v])
+    nv.net.edges = pv.net.edges.map(([u, v]) => [
+      vertexImage(u),
+      vertexImage(v),
+    ])
   }
 }
 

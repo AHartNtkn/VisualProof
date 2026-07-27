@@ -18,6 +18,7 @@ export function seedActionHistoryPlacements(
   activeActions: readonly ProofAction[],
   ctx: ProofContext,
   orientation: 'forward' | 'backward',
+  nodeImage?: ReadonlyMap<string, string>,
 ): void {
   assertProofContext(ctx)
   const placements = new Map<string, Vec2>()
@@ -39,7 +40,9 @@ export function seedActionHistoryPlacements(
       if (node !== undefined) placements.set(node, { x: placement.x, y: placement.y })
     }
   }
-  for (const [node, at] of placements) seedBodyPlacement(engine, node, at)
+  for (const [node, at] of placements) {
+    seedBodyPlacement(engine, nodeImage?.get(node) ?? node, at)
+  }
 }
 
 /**
@@ -67,6 +70,7 @@ export function seedReplayPlacements(
       transitions.map(({ action }) => action),
       ctx,
       'forward',
+      replay.displayIsoAt(cursor)?.nodes,
     )
     return
   }

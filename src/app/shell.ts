@@ -749,12 +749,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const gotoReplayStep = (k: number): void => {
     if (replay === null) return
     interaction.cancelActiveGesture()
+    const previousReplayK = replayK
     replayK = Math.max(0, Math.min(replay.actionCount, k))
     const prevEngine = engine
     displayed = replay.diagramAt(replayK)
     const next = mkEngine(displayed, replay.boundaryAt(replayK))
     if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
-    carryOver(prevEngine, next)
+    carryOver(
+      prevEngine,
+      next,
+      replay.layoutIdentityBetween(previousReplayK, replayK) ?? undefined,
+    )
     seedProject(next)
     engine = next
     seedReplayPlacements(engine, replay, replayK, ctx)

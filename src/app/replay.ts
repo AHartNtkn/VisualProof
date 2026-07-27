@@ -1,5 +1,9 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
-import { exploreForm } from '../kernel/diagram/canonical/explore'
+import {
+  exploreForm,
+  exploreIso,
+  type DiagramIso,
+} from '../kernel/diagram/canonical/explore'
 import { transportBoundary } from '../kernel/proof/step'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
@@ -27,6 +31,9 @@ export type ReplayTransition = {
   readonly orientation: 'forward' | 'backward'
 }
 
+/** Partial view-identity map from one displayed replay state to another. */
+export type ReplayLayoutIdentity = DiagramIso
+
 export type Replay = {
   readonly actionCount: number
   readonly meetingIndex: number
@@ -39,6 +46,10 @@ export type Replay = {
   labelAt(k: number): string
   stepsAt(k: number): readonly ProofStep[]
   boundaryAt(k: number): readonly WireId[]
+  /** Computed proof representation → displayed exact-endpoint representation. */
+  displayIsoAt(k: number): DiagramIso | null
+  /** Displayed source IDs → displayed target IDs through proof-ID continuity. */
+  layoutIdentityBetween(from: number, to: number): ReplayLayoutIdentity | null
 }
 
 export function mkReplay(name: string, ctx: ProofContext): Replay {
@@ -109,15 +120,51 @@ export function mkReplay(name: string, ctx: ProofContext): Replay {
   const actions = Object.freeze(transitions.map(({ action }) => action))
   const meetingIndex = thm.actions.length
   const n = transitions.length
-  const displayStates = [...forward.states, ...backwardDisplayStates]
-  const displayBoundaries = [...forward.boundaries, ...backwardDisplayBoundaries]
+  const proofStates = Object.freeze([...forward.states, ...backwardDisplayStates])
+  const proofBoundaries = Object.freeze([...forward.boundaries, ...backwardDisplayBoundaries])
+  const displayStates = [...proofStates]
+  const displayBoundaries = [...proofBoundaries]
+  const displayIsos: Array<DiagramIso | null> = Array.from(
+    { length: n + 1 },
+    () => null,
+  )
   if (meetingIndex === n) {
+    const iso = exploreIso(
+      proofStates[n]!,
+      thm.rhs.diagram,
+      proofBoundaries[n]!,
+      thm.rhs.boundary,
+    )
+    if (iso === null) {
+      throw new Error(`verified theorem replay '${name}' has no view isomorphism to its exact RHS`)
+    }
+    displayIsos[n] = iso
     displayStates[n] = thm.rhs.diagram
     displayBoundaries[n] = thm.rhs.boundary
   }
   const states = Object.freeze(displayStates)
   const boundaries = Object.freeze(displayBoundaries)
   const inRange = (k: number): boolean => Number.isInteger(k) && k >= 0 && k <= n
+  const requireInRange = (k: number): void => {
+    if (!inRange(k)) throw new Error(`replay step ${k} is out of range [0, ${n}]`)
+  }
+  const invert = (image: ReadonlyMap<string, string>): ReadonlyMap<string, string> =>
+    new Map([...image].map(([from, to]) => [to, from]))
+  const compose = (
+    fromIds: readonly string[],
+    toRecord: Readonly<Record<string, unknown>>,
+    fromImage: ReadonlyMap<string, string> | null,
+    toImage: ReadonlyMap<string, string> | null,
+  ): ReadonlyMap<string, string> => {
+    const fromInverse = fromImage === null ? null : invert(fromImage)
+    const result = new Map<string, string>()
+    for (const displayedFrom of fromIds) {
+      const proofId = fromInverse?.get(displayedFrom) ?? displayedFrom
+      if (toRecord[proofId] === undefined) continue
+      result.set(displayedFrom, toImage?.get(proofId) ?? proofId)
+    }
+    return result
+  }
 
   return {
     actionCount: n,
@@ -125,22 +172,55 @@ export function mkReplay(name: string, ctx: ProofContext): Replay {
     actions,
     transitions,
     diagramAt(k: number): Diagram {
-      if (!inRange(k)) throw new Error(`replay step ${k} is out of range [0, ${n}]`)
+      requireInRange(k)
       return states[k]!
     },
     boundaryAt(k: number): readonly WireId[] {
-      if (!inRange(k)) throw new Error(`replay step ${k} is out of range [0, ${n}]`)
+      requireInRange(k)
       return boundaries[k]!
     },
     labelAt(k: number): string {
-      if (!inRange(k)) throw new Error(`replay step ${k} is out of range [0, ${n}]`)
+      requireInRange(k)
       if (k === 0) return ''
       const transition = transitions[k - 1]!
       return `${transition.half} · ${transition.action.label}`
     },
     stepsAt(k: number): readonly ProofStep[] {
-      if (!inRange(k)) throw new Error(`replay action ${k} is out of range [0, ${n}]`)
+      requireInRange(k)
       return k === 0 ? [] : transitions[k - 1]!.action.steps
+    },
+    displayIsoAt(k: number): DiagramIso | null {
+      requireInRange(k)
+      return displayIsos[k]!
+    },
+    layoutIdentityBetween(from: number, to: number): ReplayLayoutIdentity | null {
+      requireInRange(from)
+      requireInRange(to)
+      const fromIso = displayIsos[from]
+      const toIso = displayIsos[to]
+      if (fromIso === null && toIso === null) return null
+      const fromDisplayed = states[from]!
+      const toProof = proofStates[to]!
+      return {
+        regions: compose(
+          Object.keys(fromDisplayed.regions),
+          toProof.regions,
+          fromIso?.regions ?? null,
+          toIso?.regions ?? null,
+        ),
+        nodes: compose(
+          Object.keys(fromDisplayed.nodes),
+          toProof.nodes,
+          fromIso?.nodes ?? null,
+          toIso?.nodes ?? null,
+        ),
+        wires: compose(
+          Object.keys(fromDisplayed.wires),
+          toProof.wires,
+          fromIso?.wires ?? null,
+          toIso?.wires ?? null,
+        ),
+      }
     },
   }
 }
