@@ -3,7 +3,7 @@ import { DiagramError, validateRawDiagram } from './diagram'
 
 /**
  * A diagram plus an ordered list of boundary wires. One concept, three roles
- * (spec §2.2): rule-statement sides, comprehension instances, and named-
+ * (spec §2.2): rule-statement sides, exact content occurrences, and named-
  * relation definition bodies. A relation is exactly a diagram with a boundary;
  * its arity is the boundary length. Boundary entries are ordered PORT
  * INCIDENCES, not a set of wires: repeated ids mean that several boundary

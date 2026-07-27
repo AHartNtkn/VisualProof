@@ -97,8 +97,8 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
  * proof is NEVER inlined): rewrite a verified occurrence of one theorem side
  * into the other. Forward (lhs→rhs) is sound at POSITIVE regions, reverse
  * (rhs→lhs) at NEGATIVE regions, by monotonicity. The occurrence is checked
- * exactly — extract, reorder its boundary by args, compare pinned
- * fingerprints — the same machinery as comprehension abstraction.
+ * exactly — extract, reorder its boundary by args, and compare pinned
+ * fingerprints through the ordinary exact-occurrence matcher.
  */
 export function applyTheorem(
   d: Diagram,

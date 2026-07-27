@@ -5,7 +5,7 @@ import { dwbToJson, dwbFromJson } from '../diagram/json'
 import { theoremToJson, theoremFromJson } from './json'
 
 /**
- * A theory: named relations (comprehensions) and theorems in registration
+ * A theory: named relation definitions and theorems in registration
  * order — later theorems may cite earlier ones by name. Semantic content only
  * (layer separation: no layout, no physics, ever).
  */
