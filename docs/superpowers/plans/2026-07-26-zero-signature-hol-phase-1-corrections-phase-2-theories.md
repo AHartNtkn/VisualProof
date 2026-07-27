@@ -28,9 +28,9 @@ diagram/proof kernel, stable theory JSON.
 
 ## Global Constraints
 
-- Tasks 4A–4D are a strict correction barrier: complete and validate all four
+- Tasks 4A–4E are a strict correction barrier: complete and validate all five
   before any further work on Task 5 or later.
-- Phase-2 kernel changes are prohibited. Tasks 4A–4D are the complete authorized
+- Phase-2 kernel changes are prohibited. Tasks 4A–4E are the complete authorized
   Phase-1 correction scope.
 - Severing and `wireJoin` are one sort-aware quantifier rule pair, each stated at
   the strongest form sound in full models.
@@ -919,6 +919,71 @@ git add -- \
   tests/theories/reification.test.ts \
   tests/theories/wire-quantifier-reification.test.ts
 git commit -m "feat: derive reification through severing"
+```
+
+### Task 4E: Permit ordinary citation of capture-only theorem sides
+
+**Files:**
+
+- Modify: `src/kernel/proof/theorem.ts`
+- Modify: `tests/kernel/proof/theorem.test.ts`
+- Add:
+  `docs/superpowers/specs/2026-07-26-theorem-capture-citation-correction.md`
+
+**Correction boundary:**
+
+The reification theorems produced by Task 4D have only ordered ambient captures
+on their left-hand sides. An endpoint-free boundary capture is not a touching
+attachment of an empty selected occurrence. Ordinary theorem citation must
+therefore build the candidate boundary from both existing authorities:
+
+- selected content and its touching wires come from `sel`;
+- every ordered theorem boundary position gets its host wire from `args`.
+
+For an endpoint-bearing theorem boundary position, the argument must remain a
+touching attachment. For an endpoint-free theorem boundary position, the
+argument supplies an ambient candidate stub even when it is not a touching
+attachment. Reuse candidate stubs by actual host-wire identity so the pinned
+canonical comparison refuses both diagonalizing distinct theorem captures and
+splitting a repeated theorem capture. The existing splice remains
+authoritative for host existence, signatures, scope, and connection.
+
+Do not change `TheoremApplication`, proof steps, proof JSON, logical rules,
+wire-quantifier rules, applications, or theory proof construction.
+
+**TDD and validation:**
+
+- [x] Prove a capture-only left side can be cited at an empty selection and
+  that its right-side content attaches to the supplied host captures.
+- [x] Refuse missing, signature-swapped, out-of-scope, diagonalized, and split
+  capture arguments.
+- [x] Preserve existing incident-boundary, exact-occurrence, and polarity
+  behavior.
+- [x] Run:
+
+```bash
+npx vitest run \
+  tests/kernel/proof/theorem.test.ts \
+  tests/kernel/proof/step.test.ts \
+  tests/kernel/proof/action.test.ts \
+  tests/kernel/proof/compose.test.ts \
+  tests/kernel/proof/json.test.ts \
+  tests/kernel/proof/store.test.ts \
+  tests/kernel/proof/endtoend.test.ts \
+  --config vitest.config.ts
+npm run typecheck
+git diff --check
+```
+
+**Commit:**
+
+```bash
+git add -- \
+  docs/superpowers/specs/2026-07-26-theorem-capture-citation-correction.md \
+  docs/superpowers/plans/2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md \
+  src/kernel/proof/theorem.ts \
+  tests/kernel/proof/theorem.test.ts
+git commit -m "fix: cite theorems with ambient captures"
 ```
 
 ### Task 5: Define relational naturals and closed arithmetic statements

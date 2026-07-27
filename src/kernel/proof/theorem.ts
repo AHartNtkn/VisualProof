@@ -1,10 +1,12 @@
 import type { Diagram, WireId } from '../diagram/diagram'
 import { polarity } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
+import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import type { IdReservation } from '../diagram/subgraph/freshId'
+import { freshId } from '../diagram/subgraph/freshId'
 import { exploreForm } from '../diagram/canonical/explore'
 import { RuleError } from '../rules/error'
 import type { ProofContext } from './context'
@@ -144,16 +146,58 @@ function applyVerifiedTheorem(
       throw new RuleError(`attachment wire '${attachment}' is not used by any theorem argument position`)
     }
   }
-  // Positional arguments may repeat only when the theorem side has the same
-  // intrinsic boundary alias. Repeating an argument for two distinct theorem
-  // identities changes the pinned incidence form and is refused by this exact
-  // comparison; theorem-call diagonalization is deliberately not inferred.
-  const reordered = at.args.map((a) => {
-    const j = attachments.indexOf(a)
-    if (j === -1) throw new RuleError(`argument wire '${a}' is not an attachment wire of the selection`)
-    return pattern.boundary[j]!
+  /*
+   * Build the complete candidate boundary seen at the application site.
+   *
+   * A theorem-side boundary wire with endpoints is incident to selected
+   * content, so its host argument must be one of extraction's touching
+   * attachments. An endpoint-free theorem-side boundary wire is instead an
+   * ambient capture: the ordered theorem argument supplies its host identity
+   * directly even though the empty wire cannot appear in extraction.
+   *
+   * Reuse one candidate stub per host wire, including an extracted stub when
+   * the same host wire is also a touching attachment. This makes exploreForm
+   * check the actual alias relation at the call site: distinct theorem
+   * identities cannot be diagonalized onto one host wire, and a repeated
+   * theorem identity cannot be split across different host wires.
+   */
+  const candidateWires = { ...pattern.diagram.wires }
+  const takenCandidateWires = new Set(Object.keys(candidateWires))
+  const detachedCaptureStubs = new Map<WireId, WireId>()
+  const candidateBoundary = from.boundary.map((sourceBoundary, index) => {
+    const argument = at.args[index]!
+    const hostWire = d.wires[argument]
+    if (hostWire === undefined) {
+      throw new RuleError(`argument wire '${argument}' does not exist`)
+    }
+    const attachmentIndex = attachments.indexOf(argument)
+    if (attachmentIndex !== -1) return pattern.boundary[attachmentIndex]!
+
+    const sourceWire = from.diagram.wires[sourceBoundary]!
+    if (sourceWire.endpoints.length !== 0) {
+      throw new RuleError(`argument wire '${argument}' is not an attachment wire of the selection`)
+    }
+    const existing = detachedCaptureStubs.get(argument)
+    if (existing !== undefined) return existing
+
+    const stub = freshId(takenCandidateWires, `capture${index}`)
+    takenCandidateWires.add(stub)
+    candidateWires[stub] = {
+      scope: pattern.diagram.root,
+      sig: hostWire.sig,
+      endpoints: [],
+    }
+    detachedCaptureStubs.set(argument, stub)
+    return stub
   })
-  if (exploreForm(pattern.diagram, reordered) !== exploreForm(from.diagram, from.boundary)) {
+  const candidate = mkDiagramWithBoundary(
+    {
+      ...pattern.diagram,
+      wires: candidateWires,
+    },
+    candidateBoundary,
+  )
+  if (exploreForm(candidate.diagram, candidate.boundary) !== exploreForm(from.diagram, from.boundary)) {
     throw new RuleError(
       `the selection is not an occurrence of theorem '${thm.name}' ${direction === 'forward' ? 'left' : 'right'}-hand side`,
     )

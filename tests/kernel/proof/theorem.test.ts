@@ -58,6 +58,59 @@ function dropQ(): Theorem {
   }
 }
 
+function introduceCapturedApplication(): Theorem {
+  const builder = new DiagramBuilder()
+  const relation = builder.relWire(builder.root, relSig([IOTA]))
+  const argument = builder.wire(builder.root, [])
+  const lhsDiagram = builder.build()
+  const lhs = mkDiagramWithBoundary(lhsDiagram, [relation, argument])
+
+  const wrap = action('open a negative application region', {
+    rule: 'doubleCutIntro',
+    sel: {
+      region: lhsDiagram.root,
+      regions: [],
+      nodes: [],
+      wires: [],
+    },
+  })
+  const wrapped = applyAction(lhsDiagram, wrap, EMPTY_PROOF_CONTEXT)
+  const outer = Object.entries(wrapped.regions)
+    .find(([, region]) =>
+      region.kind === 'cut'
+      && region.parent === wrapped.root)?.[0]
+  if (outer === undefined) throw new Error('missing outer double-cut region')
+
+  const spawn = action('apply the captured relation', {
+    rule: 'atomSpawn',
+    region: outer,
+    wire: relation,
+  })
+  const spawned = applyAction(wrapped, spawn, EMPTY_PROOF_CONTEXT)
+  const localArgument = Object.entries(spawned.wires)
+    .find(([id, wire]) =>
+      id !== argument
+      && wire.scope === outer
+      && wire.sig.kind === 'iota')?.[0]
+  if (localArgument === undefined) throw new Error('missing local application argument')
+
+  const connect = action('supply the captured argument', {
+    rule: 'wireJoin',
+    input: {
+      kind: 'iota',
+      a: argument,
+      b: localArgument,
+    },
+  })
+  const rhsDiagram = applyAction(spawned, connect, EMPTY_PROOF_CONTEXT)
+  return {
+    name: 'introduce-captured-application',
+    lhs,
+    rhs: mkDiagramWithBoundary(rhsDiagram, [relation, argument]),
+    actions: [wrap, spawn, connect],
+  }
+}
+
 function applyCertified(
   diagram: Parameters<typeof applyTheorem>[0],
   theorem: Theorem,
@@ -443,6 +496,126 @@ describe('applyTheorem', () => {
     expect(caught).toBeInstanceOf(RuleError)
     expect((caught as Error).message)
       .toMatch(/reverse requires a negative region/)
+  })
+
+  it('cites a capture-only theorem side using ordered host arguments', () => {
+    const theorem = introduceCapturedApplication()
+    expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
+
+    const host = new DiagramBuilder()
+    const relation = host.relWire(host.root, relSig([IOTA]))
+    const argument = host.wire(host.root, [])
+    const diagram = host.build()
+    const result = applyCertified(
+      diagram,
+      theorem,
+      {
+        sel: {
+          region: diagram.root,
+          regions: [],
+          nodes: [],
+          wires: [],
+        },
+        args: [relation, argument],
+      },
+      'forward',
+    )
+
+    const application = Object.values(result.nodes)
+      .find((node) => node.kind === 'atom')
+    expect(application?.kind).toBe('atom')
+    expect(result.wires[relation]?.endpoints)
+      .toContainEqual(expect.objectContaining({ port: { kind: 'head' } }))
+    expect(result.wires[argument]?.endpoints)
+      .toContainEqual(expect.objectContaining({ port: { kind: 'arg', index: 0 } }))
+  })
+
+  it('refuses invalid capture-only theorem arguments without diagonalizing', () => {
+    const theorem = introduceCapturedApplication()
+    const host = new DiagramBuilder()
+    const relation = host.relWire(host.root, relSig([IOTA]))
+    const argument = host.wire(host.root, [])
+    const diagram = host.build()
+    const emptySelection = {
+      region: diagram.root,
+      regions: [],
+      nodes: [],
+      wires: [],
+    } as const
+
+    expect(() => applyCertified(
+      diagram,
+      theorem,
+      { sel: emptySelection, args: [relation] },
+      'forward',
+    )).toThrowError(/2 boundary positions but 1 arguments/)
+
+    expect(() => applyCertified(
+      diagram,
+      theorem,
+      { sel: emptySelection, args: [argument, relation] },
+      'forward',
+    )).toThrowError(/not an occurrence|cannot land/)
+
+    const aliases = new DiagramBuilder()
+    const first = aliases.wire(aliases.root, [])
+    const second = aliases.wire(aliases.root, [])
+    const aliasSide = mkDiagramWithBoundary(aliases.build(), [first, second])
+    const aliasTheorem: Theorem = {
+      name: 'distinct-captures',
+      lhs: aliasSide,
+      rhs: aliasSide,
+      actions: [],
+    }
+    expect(() => applyCertified(
+      diagram,
+      aliasTheorem,
+      { sel: emptySelection, args: [argument, argument] },
+      'forward',
+    )).toThrowError(/not an occurrence/)
+
+    const repeatedSide = mkDiagramWithBoundary(
+      aliasSide.diagram,
+      [first, first],
+    )
+    const repeatedTheorem: Theorem = {
+      name: 'repeated-capture',
+      lhs: repeatedSide,
+      rhs: repeatedSide,
+      actions: [],
+    }
+    expect(() => applyCertified(
+      diagram,
+      repeatedTheorem,
+      { sel: emptySelection, args: [argument, second] },
+      'forward',
+    )).toThrowError(/not an occurrence/)
+  })
+
+  it('refuses capture arguments whose scope does not enclose the application region', () => {
+    const theorem = introduceCapturedApplication()
+    const host = new DiagramBuilder()
+    const left = host.cut(host.root)
+    const outer = host.cut(host.root)
+    const right = host.cut(outer)
+    const relation = host.relWire(left, relSig([IOTA]))
+    const argument = host.wire(host.root, [])
+    const diagram = host.build()
+
+    expect(() => applyCertified(
+      diagram,
+      theorem,
+      {
+        sel: {
+          region: right,
+          regions: [],
+          nodes: [],
+          wires: [],
+        },
+        args: [relation, argument],
+      },
+      'forward',
+    )).toThrowError(/does not enclose splice region/)
   })
 })
 
