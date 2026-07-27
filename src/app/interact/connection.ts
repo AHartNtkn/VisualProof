@@ -49,7 +49,7 @@ export type PreparedMembraneContent = {
 
 export type PendingMembraneContact = {
   readonly membrane: PreparedMembrane
-  readonly at: Vec2
+  readonly radial: Vec2
 }
 
 export type PendingRelationState = {
@@ -59,8 +59,6 @@ export type PendingRelationState = {
   readonly looseEndBody: string
   readonly contacts: readonly PendingMembraneContact[]
   readonly occurrences: readonly ContentOccurrence[]
-  readonly looseEnd: Vec2
-  readonly bodyPoint: Vec2
 }
 
 export type ConnectionDragOptions = {
@@ -150,38 +148,85 @@ function membraneShape(
       }]
 }
 
-function membraneCenter(engine: Engine, membrane: PreparedMembrane): Vec2 {
-  return engine.regions.get(membrane.outer)?.center ?? { x: 0, y: 0 }
+function membraneRadialAnchor(
+  engine: Engine,
+  membrane: PreparedMembrane,
+  at: Vec2,
+): Vec2 {
+  const circle = engine.regions.get(membrane.outer)
+  if (circle === undefined) {
+    throw new Error(`prepared membrane '${membrane.outer}' has no live geometry`)
+  }
+  const dx = at.x - circle.center.x
+  const dy = at.y - circle.center.y
+  const distance = Math.hypot(dx, dy)
+  return distance === 0
+    ? Object.freeze({ x: 1, y: 0 })
+    : Object.freeze({ x: dx / distance, y: dy / distance })
 }
 
-function pendingGeometry(pending: PendingRelationState): PendingWireGeometry {
+function membraneContactPoint(
+  engine: Engine,
+  contact: PendingMembraneContact,
+): Vec2 {
+  const circle = engine.regions.get(contact.membrane.outer)
+  if (circle === undefined) {
+    throw new Error(
+      `prepared membrane '${contact.membrane.outer}' has no live geometry`,
+    )
+  }
+  return {
+    x: circle.center.x + contact.radial.x * circle.radius,
+    y: circle.center.y + contact.radial.y * circle.radius,
+  }
+}
+
+function pendingLooseEnd(pending: PendingRelationState): Vec2 {
+  const body = pending.engine.bodies.get(pending.looseEndBody)
+  if (body === undefined) {
+    throw new Error(`pending wire '${pending.wire}' has no loose-end body`)
+  }
+  return body.pos
+}
+
+type ResolvedPendingGeometry = PendingWireGeometry & {
+  readonly bodyPoint: Vec2
+}
+
+function pendingGeometry(
+  pending: PendingRelationState,
+  engine: Engine,
+): ResolvedPendingGeometry {
+  const contactPoints = pending.contacts.map((contact) =>
+    membraneContactPoint(engine, contact))
+  const bodyPoint = pendingBodyPoint(contactPoints, pending.contacts)
+  const looseEnd = pendingLooseEnd(pending)
   return {
     wire: pending.wire,
     bodyPaths: [
-      ...pending.contacts.map((contact) => [contact.at, pending.bodyPoint]),
-      [pending.bodyPoint, pending.looseEnd],
+      ...contactPoints.map((contact) => [contact, bodyPoint]),
+      [bodyPoint, looseEnd],
     ],
-    looseEnd: pending.looseEnd,
+    looseEnd,
+    bodyPoint,
   }
 }
 
 function pendingBodyPoint(
-  engine: Engine,
+  points: readonly Vec2[],
   contacts: readonly PendingMembraneContact[],
 ): Vec2 {
   if (contacts.length === 1) {
     const contact = contacts[0]!
-    const center = membraneCenter(engine, contact.membrane)
-    const dx = contact.at.x - center.x
-    const dy = contact.at.y - center.y
-    const length = Math.hypot(dx, dy)
-    const ux = length === 0 ? 1 : dx / length
-    const uy = length === 0 ? 0 : dy / length
-    return { x: contact.at.x + ux * 22, y: contact.at.y + uy * 22 }
+    const point = points[0]!
+    return {
+      x: point.x + contact.radial.x * 22,
+      y: point.y + contact.radial.y * 22,
+    }
   }
   return {
-    x: contacts.reduce((sum, contact) => sum + contact.at.x, 0) / contacts.length,
-    y: contacts.reduce((sum, contact) => sum + contact.at.y, 0) / contacts.length,
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
   }
 }
 
@@ -243,6 +288,7 @@ export class ConnectionDragController {
   readonly #taps = new Map<RegionId, MembraneCrossingKey[]>()
   #preview: ConnectionPreview | null = null
   #pending: PendingRelationState | null = null
+  #claimEpoch = 0
 
   constructor(options: ConnectionDragOptions) { this.#options = options }
 
@@ -258,12 +304,16 @@ export class ConnectionDragController {
 
     if (this.#options.relationGestures === true) {
       const pendingClaim = this.#claimPending(sample, viewport.scale)
-      if (pendingClaim !== null) return pendingClaim
+      if (pendingClaim !== null) return this.#issueClaim(pendingClaim)
       const relationHit = connectionHitTest(engine, sample.world, viewport)
-      if (relationHit?.kind === 'crossing') return this.#claimCrossing(relationHit.key)
+      if (relationHit?.kind === 'crossing') {
+        return this.#issueClaim(this.#claimCrossing(relationHit.key))
+      }
       if (this.#pending !== null) return null
       if (relationHit?.kind === 'membrane') {
-        return this.#claimMembrane(sample, relationHit.membrane)
+        return this.#issueClaim(
+          this.#claimMembrane(sample, relationHit.membrane, relationHit.at),
+        )
       }
     }
 
@@ -278,7 +328,7 @@ export class ConnectionDragController {
       membrane: null,
     }
     this.#preview = preview
-    return {
+    return this.#issueClaim({
       still: 'selection',
       blocksPassiveRelaxation: true,
       move: (next) => {
@@ -336,7 +386,7 @@ export class ConnectionDragController {
         }, next.client)
       },
       cancel: () => { this.#preview = null },
-    }
+    })
   }
 
   overlay(): readonly Shape[] {
@@ -362,7 +412,8 @@ export class ConnectionDragController {
     }
     const pending = this.#pending
     if (pending !== null) {
-      for (const path of pendingGeometry(pending).bodyPaths) {
+      const geometry = pendingGeometry(pending, engine)
+      for (const path of geometry.bodyPaths) {
         out.push({
           kind: 'polyline',
           pts: path,
@@ -371,7 +422,7 @@ export class ConnectionDragController {
           glow: null,
         })
       }
-      for (const point of [pending.bodyPoint, pending.looseEnd]) {
+      for (const point of [geometry.bodyPoint, geometry.looseEnd]) {
         out.push({
           kind: 'circle',
           center: point,
@@ -409,9 +460,37 @@ export class ConnectionDragController {
   }
 
   cancel(): void {
+    this.#claimEpoch++
     this.#preview = null
     this.#pending = null
     this.#clearTaps()
+  }
+
+  #issueClaim(claim: PointerClaim): PointerClaim {
+    const epoch = ++this.#claimEpoch
+    const current = (): boolean => this.#claimEpoch === epoch
+    const retire = (): boolean => {
+      if (!current()) return false
+      this.#claimEpoch++
+      return true
+    }
+    return {
+      still: claim.still,
+      blocksPassiveRelaxation: claim.blocksPassiveRelaxation,
+      ...(claim.relaxationPins === undefined ? {} : {
+        relaxationPins: (): readonly string[] =>
+          current() ? claim.relaxationPins!() : [],
+      }),
+      move: (sample) => {
+        if (current()) claim.move(sample)
+      },
+      release: (sample, moved) => {
+        if (retire()) claim.release(sample, moved)
+      },
+      cancel: () => {
+        if (retire()) claim.cancel()
+      },
+    }
   }
 
   #claimCrossing(key: MembraneCrossingKey): PointerClaim {
@@ -434,12 +513,16 @@ export class ConnectionDragController {
     }
   }
 
-  #claimMembrane(sample: PointerSample, source: PreparedMembrane): PointerClaim {
-    this.#startPending(source, sample.world)
+  #claimMembrane(
+    sample: PointerSample,
+    source: PreparedMembrane,
+    at: Vec2,
+  ): PointerClaim {
+    this.#startPending(source, at)
     const preview: MembranePreview = {
       kind: 'membrane',
       source,
-      from: sample.world,
+      from: at,
       at: sample.world,
       target: null,
     }
@@ -483,8 +566,9 @@ export class ConnectionDragController {
   #claimPending(sample: PointerSample, viewScale: number): PointerClaim | null {
     const pending = this.#pending
     if (pending === null) return null
+    const geometry = pendingGeometry(pending, this.#options.engine())
     const hit = pendingWireHitTest(
-      pendingGeometry(pending),
+      geometry,
       sample.world,
       { scale: viewScale },
     )
@@ -492,7 +576,7 @@ export class ConnectionDragController {
     const kind = hit.kind === 'pendingLooseEnd'
       ? 'pendingLoose' as const
       : 'pendingBody' as const
-    const from = kind === 'pendingLoose' ? pending.looseEnd : pending.bodyPoint
+    const from = kind === 'pendingLoose' ? geometry.looseEnd : geometry.bodyPoint
     const preview: PendingPreview = {
       kind,
       from,
@@ -549,9 +633,15 @@ export class ConnectionDragController {
     const added = addRelationWire(engine.d, parent.parent, sig)
     const pendingEngine = mkEngine(added.diagram, [])
     carryOver(engine, pendingEngine)
-    const contact = Object.freeze({ membrane: first, at: Object.freeze({ ...at }) })
+    const contact = Object.freeze({
+      membrane: first,
+      radial: membraneRadialAnchor(engine, first, at),
+    })
     const contacts = Object.freeze([contact])
-    const bodyPoint = pendingBodyPoint(engine, contacts)
+    const bodyPoint = pendingBodyPoint(
+      contacts.map((candidate) => membraneContactPoint(engine, candidate)),
+      contacts,
+    )
     const looseEndBody = `j:${added.wire}`
     const looseBody = pendingEngine.bodies.get(looseEndBody)
     if (looseBody === undefined) {
@@ -568,8 +658,6 @@ export class ConnectionDragController {
       looseEndBody,
       contacts,
       occurrences: Object.freeze([firstPrepared.occurrence]),
-      bodyPoint: Object.freeze(bodyPoint),
-      looseEnd: looseBody.pos,
     })
   }
 
@@ -578,7 +666,7 @@ export class ConnectionDragController {
     if (pending === null) throw new Error('no pending relation wire to branch')
     const contact = Object.freeze({
       membrane,
-      at: Object.freeze({ ...at }),
+      radial: membraneRadialAnchor(this.#options.engine(), membrane, at),
     })
     const contacts = Object.freeze([...pending.contacts, contact])
     this.#pending = Object.freeze({
@@ -588,7 +676,6 @@ export class ConnectionDragController {
         ...pending.occurrences,
         this.#prepare(membrane).occurrence,
       ]),
-      bodyPoint: Object.freeze(pendingBodyPoint(this.#options.engine(), contacts)),
     })
   }
 
@@ -629,7 +716,6 @@ export class ConnectionDragController {
       engine: pendingEngine,
       wire: rehomed.wire,
       looseEndBody,
-      looseEnd: looseBody.pos,
     })
     const authoritative = this.#pending.diagram.wires[this.#pending.wire]!
     const committed = this.#options.commit({

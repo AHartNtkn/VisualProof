@@ -4,6 +4,7 @@ import {
   ConnectionDragController,
   prepareMembraneContent,
   type ConnectionGesture,
+  type PendingRelationState,
 } from '../../src/app/interact/connection'
 import {
   membraneCrossingHits,
@@ -86,6 +87,33 @@ function crossingPoint(
 ): Vec2 {
   return membraneCrossingHits(engine).find((hit) =>
     hit.key.membrane === membrane.outer && hit.key.wire === wire)!.at
+}
+
+function pendingLooseEnd(pending: PendingRelationState): Vec2 {
+  return pending.engine.bodies.get(pending.looseEndBody)!.pos
+}
+
+function pendingBodyPoint(
+  engine: Engine,
+  pending: PendingRelationState,
+): Vec2 {
+  const points = pending.contacts.map((contact) => {
+    const circle = engine.regions.get(contact.membrane.outer)!
+    return vec(
+      circle.center.x + contact.radial.x * circle.radius,
+      circle.center.y + contact.radial.y * circle.radius,
+    )
+  })
+  if (points.length === 1) {
+    return vec(
+      points[0]!.x + pending.contacts[0]!.radial.x * 22,
+      points[0]!.y + pending.contacts[0]!.radial.y * 22,
+    )
+  }
+  return vec(
+    points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  )
 }
 
 function controller(
@@ -187,6 +215,29 @@ describe('prepared membrane extraction', () => {
 })
 
 describe('relation wire gestures', () => {
+  it('makes every issued claim closure inert after controller cancellation', () => {
+    const builder = new DiagramBuilder()
+    const content = builder.ref(builder.root, 'UnaryBody', UNARY)
+    const formal = builder.wire(builder.root, [{
+      node: content,
+      port: { kind: 'arg', index: 0 },
+    }])
+    const wrapped = wrapNode(builder.build(), content)
+    const engine = mkEngine(wrapped.diagram, [])
+    placeMembrane(engine, wrapped.membrane, vec(0, 0))
+    engine.bodies.get(`j:${formal}`)!.pos = vec(0, 70)
+    const gestures: ConnectionGesture[] = []
+    const drag = controller(engine, gestures)
+    const point = crossingPoint(engine, wrapped.membrane, formal)
+    const claim = drag.claim(sample(point))!
+
+    drag.cancel()
+    claim.release(sample(point), false)
+
+    expect(drag.overlay()).toEqual([])
+    expect(gestures).toEqual([])
+  })
+
   it('grounds an existing relation wire through one membrane drop using only that membrane taps', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
@@ -328,9 +379,8 @@ describe('relation wire gestures', () => {
       Object.keys(diagram.wires).length + 1,
     )
     expect(drag.pendingState!.engine.d).toBe(drag.pendingState!.diagram)
-    expect(drag.pendingState!.engine.bodies.get(
-      drag.pendingState!.looseEndBody,
-    )!.pos).toBe(drag.pendingState!.looseEnd)
+    expect('looseEnd' in drag.pendingState!).toBe(false)
+    expect('bodyPoint' in drag.pendingState!).toBe(false)
 
     const lateCrossing = crossingPoint(engine, membranes[0]!, formals[0]!)
     const lateTap = drag.claim(sample(lateCrossing))!
@@ -343,13 +393,13 @@ describe('relation wire gestures', () => {
     const thirdCrossing = crossingPoint(engine, membranes[2]!, formals[2]!)
     const thirdTap = drag.claim(sample(thirdCrossing))!
     thirdTap.release(sample(thirdCrossing), false)
-    const branch = drag.claim(sample(drag.pendingState!.bodyPoint))!
+    const branch = drag.claim(sample(pendingBodyPoint(engine, drag.pendingState!)))!
     const thirdPoint = membranePoint(engine, membranes[2]!)
     branch.move(sample(thirdPoint))
     branch.release(sample(thirdPoint), true)
     expect(drag.pendingState!.occurrences).toHaveLength(3)
 
-    const loose = drag.claim(sample(drag.pendingState!.looseEnd))!
+    const loose = drag.claim(sample(pendingLooseEnd(drag.pendingState!)))!
     const scopePoint = vec(0, 100)
     loose.move(sample(scopePoint))
     loose.release(sample(scopePoint), true)
@@ -425,7 +475,7 @@ describe('relation wire gestures', () => {
     tap.release(sample(tapPoint), false)
     const found = drag.claim(sample(membranePoint(engine, wrapped.membrane)))!
     found.release(sample(membranePoint(engine, wrapped.membrane)), false)
-    const loose = drag.claim(sample(drag.pendingState!.looseEnd))!
+    const loose = drag.claim(sample(pendingLooseEnd(drag.pendingState!)))!
     const finish = vec(10, 10)
     loose.move(sample(finish))
     loose.release(sample(finish), true)
@@ -503,7 +553,7 @@ describe('relation wire gestures', () => {
     const secondPoint = membranePoint(engine, second)
     found.move(sample(secondPoint))
     found.release(sample(secondPoint), true)
-    const loose = drag.claim(sample(drag.pendingState!.looseEnd))!
+    const loose = drag.claim(sample(pendingLooseEnd(drag.pendingState!)))!
     const scope = vec(0, 100)
     loose.move(sample(scope))
     loose.release(sample(scope), true)
@@ -512,5 +562,74 @@ describe('relation wire gestures', () => {
       'occurrences are not isomorphic under the same pinned content',
     ])
     expect(drag.pendingState).toBeNull()
+  })
+
+  it('derives pending overlay, hits, and commit from live membrane and loose-end geometry', () => {
+    const builder = new DiagramBuilder()
+    const firstNode = builder.ref(builder.root, 'NullaryBody', relSig([]))
+    const secondNode = builder.ref(builder.root, 'NullaryBody', relSig([]))
+    let diagram = builder.build()
+    const firstWrapped = wrapNode(diagram, firstNode)
+    diagram = firstWrapped.diagram
+    const secondWrapped = wrapNode(diagram, secondNode)
+    diagram = secondWrapped.diagram
+    const first = preparedMembrane(diagram, firstWrapped.membrane.outer)!
+    const second = preparedMembrane(diagram, secondWrapped.membrane.outer)!
+    const engine = mkEngine(diagram, [])
+    placeMembrane(engine, first, vec(-100, 0))
+    placeMembrane(engine, second, vec(200, 0))
+    const gestures: ConnectionGesture[] = []
+    const drag = controller(engine, gestures)
+
+    const firstPoint = membranePoint(engine, first)
+    const found = drag.claim(sample(firstPoint))!
+    found.release(sample(firstPoint), false)
+    const oldBodyPoint = vec(-100, -52)
+
+    engine.regions.set(first.outer, {
+      center: vec(50, 60),
+      radius: 45,
+      support: [],
+    })
+    engine.regions.set(first.inner, {
+      center: vec(50, 60),
+      radius: 26,
+      support: [],
+    })
+    const pending = drag.pendingState!
+    const movedLooseEnd = vec(125, 115)
+    pending.engine.bodies.get(pending.looseEndBody)!.pos = movedLooseEnd
+    const movedBodyPoint = vec(50, -7)
+
+    const overlayCenters = drag.overlay()
+      .filter((shape) => shape.kind === 'circle')
+      .map((shape) => shape.center)
+    expect(overlayCenters).toContainEqual(movedBodyPoint)
+    expect(overlayCenters).toContainEqual(movedLooseEnd)
+    expect(drag.claim(sample(oldBodyPoint))).toBeNull()
+
+    const branch = drag.claim(sample(movedBodyPoint))
+    expect(branch).not.toBeNull()
+    const secondPoint = membranePoint(engine, second)
+    branch!.move(sample(secondPoint))
+    branch!.release(sample(secondPoint), true)
+
+    const loose = drag.claim(sample(movedLooseEnd))
+    expect(loose).not.toBeNull()
+    const scope = vec(350, 180)
+    loose!.move(sample(scope))
+    loose!.release(sample(scope), true)
+
+    expect(gestures).toEqual([{
+      kind: 'relationSever',
+      input: {
+        kind: 'relation',
+        scope: diagram.root,
+        occurrences: [
+          { sel: first.selection, args: [] },
+          { sel: second.selection, args: [] },
+        ],
+      },
+    }])
   })
 })

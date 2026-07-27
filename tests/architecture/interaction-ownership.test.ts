@@ -1,11 +1,71 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const shellSource = readFileSync('src/app/shell.ts', 'utf8')
 const viewportSource = readFileSync('src/app/interact/viewport.ts', 'utf8')
 const constructSource = readFileSync('src/app/interact/construct.ts', 'utf8')
 const spawnSource = readFileSync('src/app/interact/spawn.ts', 'utf8')
+const connectionSource = readFileSync('src/app/interact/connection.ts', 'utf8')
 const movesSource = readFileSync('src/app/interact/moves.ts', 'utf8')
+const appIndexSource = readFileSync('src/app/index.ts', 'utf8')
+
+function productionTypeScriptFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const path = join(directory, entry.name)
+      return entry.isDirectory()
+        ? productionTypeScriptFiles(path)
+        : entry.isFile() && entry.name.endsWith('.ts') ? [path] : []
+    })
+    .sort()
+}
+
+type ProductionSource = {
+  readonly path: string
+  readonly source: string
+}
+
+const productionAppSources: readonly ProductionSource[] =
+  productionTypeScriptFiles('src/app').map((path) => ({
+    path,
+    source: readFileSync(path, 'utf8'),
+  }))
+
+function displacedRelationInputViolations(
+  sources: readonly ProductionSource[],
+): string[] {
+  const violations: string[] = []
+  const globallyDisplaced = [
+    /relationJoinStep/,
+    /relationSeverStep/,
+    /wire-content-and-parameters/,
+    /scope-and-occurrences/,
+    /Join relation content/,
+    /Sever relation/,
+    /relationOccurrencePicker/,
+    /relationOccurrenceCandidates/,
+    /discoverRelationOccurrences/,
+    /findRelationOccurrences/,
+    /inferRelationOccurrences/,
+  ] as const
+  for (const { path, source } of sources) {
+    for (const pattern of globallyDisplaced) {
+      if (pattern.test(source)) violations.push(`${path}: ${pattern.source}`)
+    }
+    if (path !== 'src/app/interact/connection.ts') {
+      for (const kind of ['relationJoin', 'relationSever']) {
+        if (new RegExp(`kind:\\s*['"]${kind}['"]`).test(source)) {
+          violations.push(`${path}: ${kind} gesture discriminator`)
+        }
+      }
+      if (/kind:\s*['"]relation['"]/.test(source)) {
+        violations.push(`${path}: relation durable-input discriminator`)
+      }
+    }
+  }
+  return violations
+}
 
 const canvasInteractionEvents = [
   'pointerdown', 'pointermove', 'pointerup', 'pointercancel',
@@ -96,5 +156,39 @@ describe('production interaction ownership', () => {
       expect(actionsSource + movesSource, `retains displaced relation input path ${displaced}`)
         .not.toContain(displaced)
     }
+    expect(displacedRelationInputViolations(productionAppSources)).toEqual([])
+    for (const kind of ['relationJoin', 'relationSever']) {
+      expect(
+        connectionSource.match(new RegExp(`kind:\\s*['"]${kind}['"]`, 'g')),
+        `connection must contain only its ${kind} union variant and emission`,
+      ).toHaveLength(2)
+      expect(
+        movesSource.match(new RegExp(`case\\s+['"]${kind}['"]`, 'g')),
+        `moves must contain exactly one ${kind} durable-step branch`,
+      ).toHaveLength(1)
+    }
+    expect(
+      connectionSource.match(/kind:\s*['"]relation['"]/g),
+      'connection must exclusively own two relation input types and two emissions',
+    ).toHaveLength(4)
+    expect(appIndexSource).not.toMatch(
+      /ConnectionDragController|ProofMoveController|relationJoin|relationSever/,
+    )
+  })
+
+  it('detects a competing relation input path anywhere in the production app surface', () => {
+    expect(displacedRelationInputViolations([{
+      path: 'src/app/interact/competing.ts',
+      source: `
+        export type Competing = { kind: 'relationJoin' }
+        export function relationSeverStep() {
+          return { rule: 'wireSever', input: { kind: 'relation' } }
+        }
+      `,
+    }])).toEqual([
+      'src/app/interact/competing.ts: relationSeverStep',
+      'src/app/interact/competing.ts: relationJoin gesture discriminator',
+      'src/app/interact/competing.ts: relation durable-input discriminator',
+    ])
   })
 })

@@ -490,7 +490,8 @@ export class InteractiveViewport {
     const target = event.target
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return
     if (this.#opts.inputAllowed?.() === false) { event.preventDefault(); return }
-    const consumed = this.#opts.keyDown({
+    const escapePointer = event.key === 'Escape' && this.#pointer !== null
+    const handled = this.#opts.keyDown({
       key: event.key,
       shiftKey: event.shiftKey,
       ctrlKey: event.ctrlKey,
@@ -498,7 +499,8 @@ export class InteractiveViewport {
       metaKey: event.metaKey,
       repeat: event.repeat,
     })
-    if (consumed) event.preventDefault()
+    if (escapePointer) this.#cancelPointer(true)
+    if (handled || escapePointer) event.preventDefault()
   }
 
   #wheel = (event: WheelEvent): void => {
