@@ -181,9 +181,13 @@ describe('production interaction ownership', () => {
     )
   })
 
-  it('keeps occurrence designation in the one ordered selection ledger', () => {
+  it('keeps structural occurrence designation in the one ordered selection ledger', () => {
     const brushSource = readFileSync('src/app/interact/brush.ts', 'utf8')
-    expect(connectionSource).toContain('prepareSelectedOccurrence')
+    expect(connectionSource).toContain('prepareSelectedOccurrences')
+    expect(connectionSource).not.toMatch(
+      /export function prepareSelectedOccurrence\s*\(/,
+    )
+    expect(connectionSource).not.toContain('setSelection([])')
     expect(connectionSource).toContain('relationSelection')
     expect(movesSource).toContain('selection: options.selection')
     expect(movesSource).toContain('setSelection: options.setSelection')

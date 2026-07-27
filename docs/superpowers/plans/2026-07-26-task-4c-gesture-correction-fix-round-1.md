@@ -2,9 +2,10 @@
 
 > **Superseded interaction model:** This completed review-round plan records the
 > rejected prepared-membrane implementation and is retained only as historical
-> execution evidence. Commit `3dafc6b` establishes the current model: one
-> transient ordered highlight sequence designates region/node extent and
-> relative wire-argument order. The normative replacement is Task 4C in
+> execution evidence. Commit `05ced71` establishes the current model: one
+> transient ordered highlight sequence supplies extent and relative
+> wire-argument order, a deterministic largest-pattern parse partitions extent,
+> and explicit wire contacts select parsed occurrences. The normative replacement is Task 4C in
 > `2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

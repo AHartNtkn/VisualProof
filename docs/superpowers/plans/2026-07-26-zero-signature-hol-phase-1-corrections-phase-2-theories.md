@@ -662,8 +662,10 @@ git commit -m "fix: strengthen relation wire quantifiers"
 - Produces uniformly polarity-gated ref spawning and a zero-new-gesture
   interaction domain for Task 4B's durable relation steps.
 - `InteractiveViewport`'s single ordered `Hit[]` owns transient designation.
-  Region/node hits form occurrence extent; wire hits form the ordered formal
-  boundary by their relative position in that same array.
+  Region/node hits contribute extent; selected cut boundaries deterministically
+  partition that extent into maximal structural occurrences; wire hits form each
+  occurrence's ordered formal boundary by their relative position in that same
+  array.
 - `hittest.ts` owns stable physical node/region/wire and pending-wire hit
   identity. `connection.ts` projects prepared selections, owns the ephemeral
   pending relation wire, and translates explicit contacts into durable inputs.
@@ -689,26 +691,35 @@ Require the existing `IOTA` wire-to-wire drag to remain unchanged. Require
 relation quantifiers to consume the existing ordered highlight sequence without
 adding menus, pickers, selection modes, searches, or a new gesture:
 
-- region/node highlights define one occurrence extent;
+- region/node highlights contribute extent;
 - wire highlights define formals in their relative highlight order;
 - region/node and wire highlights may be interleaved;
 - unhighlighting and re-highlighting a wire moves it to the end;
 - unhighlighted crossing wires are ambient parameters, including the nullary
   case;
+- selected items in the same region always form one occurrence;
+- a highlighted cut boundary joins extent across it, while an unhighlighted cut
+  boundary splits occurrences;
+- the parser produces maximal structural occurrences; contact timing never
+  partitions or batches the selection;
 - no double cut, membrane, crossing-tap ledger, or other diagram content
   records editor intent;
-- an existing relation wire dropped onto a physically hit selected extent emits
-  relation `wireJoin`;
+- an existing relation wire dropped onto a physically hit parsed occurrence
+  emits relation `wireJoin` and consumes only that occurrence;
 - dragging from a selected extent starts one fresh pending relation wire;
-- after preparing another occurrence, dragging from the pending wire body onto
-  its physically hit selected extent appends that occurrence;
+- dragging from the pending wire body onto another physically hit parsed
+  occurrence appends it without rebuilding the selection;
+- a repeated contact on the same occurrence refuses, and highlighted
+  occurrences never contacted remain selected;
 - relation `wireSever` commits only when the loose end lands in a region, whose
   identity supplies the scope.
 
-Add RED coverage for exact interleaved projection, stable selected-hit and
-pending-wire-part identities, selection consumption, pending-wire abort,
-kernel-refusal spring-back, mismatched explicitly touched occurrences, and
-absence of the displaced menu and membrane vocabulary.
+Add RED coverage for exact interleaved projection, same-region merging,
+unhighlighted-cut splitting, highlighted-boundary joining, global argument
+order, stable selected-hit and pending-wire-part identities, selective
+consumption, duplicate-contact refusal, pending-wire abort, kernel-refusal
+spring-back, mismatched explicitly touched occurrences, and absence of the
+displaced menu and membrane vocabulary.
 
 - [x] **Step 3: Run RED**
 
@@ -723,9 +734,9 @@ npx vitest run \
   tests/architecture/interaction-ownership.test.ts
 ```
 
-Expected for the selection correction: FAIL because `hittest.ts` and
-`connection.ts` still require prepared membranes and a separate crossing-tap
-ledger, and `ProofMoveController` does not supply its ordered selection to the
+Expected for the selection correction: FAIL until `connection.ts` parses the
+single ordered selection structurally, contacts consume exact parsed
+occurrences, and `ProofMoveController` supplies its ordered selection to the
 connection authority.
 
 - [x] **Step 4: Remove the special ref authority**
@@ -744,38 +755,47 @@ export type PreparedOccurrence = {
   readonly occurrence: ContentOccurrence
   readonly content: DiagramWithBoundary
   readonly parameters: readonly WireId[]
+  readonly extentHits: readonly ExtentHit[]
+  readonly selectedHits: readonly Hit[]
 }
 
-export function prepareSelectedOccurrence(
+export function prepareSelectedOccurrences(
   diagram: Diagram,
   hits: readonly Hit[],
-): PreparedOccurrence
+): readonly PreparedOccurrence[]
 ```
 
-Filter region/node hits, preserving their identities, and build the exact
-`SubgraphSelection` extent from them. Filter wire hits in their relative array
-order and require each to be one of that extent's touching attachments. Reorder
-the extracted bounded diagram as selected-formal stubs followed by every
-unselected attachment in deterministic extracted order. The latter host wires
-are the parameters. Do not maintain a second order or tap store.
+Filter region/node hits while preserving their identities. Partition them into
+maximal structural components: items in the same region merge; selected cut
+boundaries connect their inside and outside cells; unselected cut boundaries
+split. Normalize each component to one exact `SubgraphSelection`; do not
+prevalidate cross-component disjointness. Filter the one global wire-hit order onto every component
+whose extracted boundary it crosses. Reorder each bounded diagram as
+selected-formal stubs followed by every unselected attachment in deterministic
+extracted order; the latter host wires are parameters. A selected wire that
+crosses no parsed occurrence refuses. Do not maintain a second order, tap store,
+contact batch, or alternate parser.
 
 `ConnectionDragController` receives the proof surface's live `selection()` and
 `setSelection()` callbacks only when relation gestures are enabled. A prepared
 occurrence is a legal physical target only when the pointer's concrete
-region/node hit is one of its extent hits.
+region/node hit identifies that parsed extent.
 
 For grounding, commit the exact relation `wireJoin` input on existing
-relation-wire drop and clear the prepared selection only after success.
+relation-wire drop and consume only the contacted occurrence after success;
+other parsed occurrences remain highlighted.
 
 For abstraction, retain a legal endpoint-free relational wire in ephemeral
 connection state. Dragging from a selected extent records the first explicit
 `ContentOccurrence`; later pending-wire-body drops record later prepared
 occurrences. Store each physical contact by stable selected hit identity and
 derive overlay geometry from the current engine. Each successful contact
-consumes its prepared selection. The pending loose-end release supplies the
-exact region scope and is the sole relation `wireSever` commit. Escape deletes
-the pending wire. Kernel refusal must use the existing refusal/spring-back path
-without changing the durable diagram.
+selectively consumes its parsed occurrence, leaving every uncontacted component
+in the same ordered selection. A second contact on one consumed occurrence
+refuses from the pending contact ledger. The pending loose-end release supplies
+the exact region scope and is the sole relation `wireSever` commit. Escape
+deletes the pending wire. Kernel refusal must use the existing
+refusal/spring-back path without changing the durable diagram.
 
 Delete `PreparedMembrane`, membrane-crossing hit types/functions, membrane
 previews, the per-membrane tap map, and every double-cut-dependent interaction
@@ -786,7 +806,9 @@ path.
 Remove relation join/sever action descriptors, discovery, menu rows, picker
 markers, and standalone checked constructors. Direct relation-wire-to-relation-
 wire dragging still reaches the unchanged kernel `IOTA` gate and is refused.
-Do not enumerate or infer occurrences and do not prevalidate semantic matches.
+Do not search for, offer, suggest, or automatically select occurrences. The
+deterministic largest-pattern parser is the sole structural partition authority;
+it does not prevalidate semantic matches.
 
 - [x] **Step 7: Run focused proof/application gates**
 

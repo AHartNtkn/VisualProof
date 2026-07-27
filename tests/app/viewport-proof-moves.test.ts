@@ -226,14 +226,17 @@ function groundingFixture(
 ): {
   readonly harness: GestureHarness
   readonly content: NodeId
+  readonly untouched: NodeId
   readonly formal: WireId | null
   readonly relation: WireId
 } {
   const builder = new DiagramBuilder()
   const negative = builder.cut(builder.root)
+  const separated = builder.cut(negative)
   const sig = arity === 0 ? relSig([]) : UNARY
   const application = builder.atom(negative, sig)
   const content = builder.ref(negative, 'GroundBody', sig)
+  const untouched = builder.ref(separated, 'UntouchedBody', relSig([]))
   const formal = arity === 0
     ? null
     : builder.wire(negative, [
@@ -253,10 +256,12 @@ function groundingFixture(
   })
   engine.bodies.get(application)!.pos = vec(120, 200)
   engine.bodies.get(content)!.pos = vec(300, 200)
+  engine.bodies.get(untouched)!.pos = vec(440, 200)
   engine.bodies.get(`j:${relation}`)!.pos = vec(80, 200)
   return {
     harness: createHarness(diagram, engine, orientation),
     content,
+    untouched,
     formal,
     relation,
   }
@@ -265,15 +270,15 @@ function groundingFixture(
 function severFixture(count: number): {
   readonly harness: GestureHarness
   readonly scope: RegionId
+  readonly regions: readonly RegionId[]
   readonly nodes: readonly NodeId[]
   readonly points: readonly Vec2[]
 } {
   const builder = new DiagramBuilder()
   const scope = builder.root
-  const nodes = Array.from(
-    { length: count },
-    () => builder.ref(scope, 'NullaryBody', relSig([])),
-  )
+  const regions = Array.from({ length: count }, () => builder.cut(scope))
+  const nodes = regions.map((region) =>
+    builder.ref(region, 'NullaryBody', relSig([])))
   const diagram = builder.build()
   const engine = mkEngine(diagram, [])
   const points = nodes.map((node, index) => {
@@ -284,15 +289,16 @@ function severFixture(count: number): {
   return {
     harness: createHarness(diagram, engine),
     scope,
+    regions,
     nodes,
     points,
   }
 }
 
-function nestedRegionSeverFixture(): {
+function nestedStructuralSeverFixture(): {
   readonly harness: GestureHarness
   readonly scope: RegionId
-  readonly extents: readonly [RegionId, RegionId]
+  readonly nodes: readonly [NodeId, NodeId]
   readonly points: readonly [Vec2, Vec2]
   readonly looseScopePoint: Vec2
 } {
@@ -301,6 +307,8 @@ function nestedRegionSeverFixture(): {
   const scope = builder.cut(negative)
   const first = builder.cut(scope)
   const second = builder.cut(scope)
+  const firstNode = builder.ref(first, 'NullaryBody', relSig([]))
+  const secondNode = builder.ref(second, 'NullaryBody', relSig([]))
   const diagram = builder.build()
   const engine = mkEngine(diagram, [])
   engine.regions.set(negative, {
@@ -323,10 +331,12 @@ function nestedRegionSeverFixture(): {
     radius: 45,
     support: [],
   })
+  engine.bodies.get(firstNode)!.pos = vec(300, 230)
+  engine.bodies.get(secondNode)!.pos = vec(500, 230)
   return {
     harness: createHarness(diagram, engine),
     scope,
-    extents: [first, second],
+    nodes: [firstNode, secondNode],
     points: [vec(300, 230), vec(500, 230)],
     looseScopePoint: vec(400, 400),
   }
@@ -334,12 +344,17 @@ function nestedRegionSeverFixture(): {
 
 describe('Viewport → ProofMoveController ordered-selection gestures', () => {
   it('commits grounding from a prepared node selection without a diagram marker', () => {
-    const { harness, content, relation } = groundingFixture(0)
+    const { harness, content, untouched, relation } = groundingFixture(0)
     const contentPoint = harness.engine.bodies.get(content)!.pos
+    const untouchedPoint = harness.engine.bodies.get(untouched)!.pos
     const source = harness.engine.bodies.get(`j:${relation}`)!.pos
 
+    click(harness, untouchedPoint)
     click(harness, contentPoint)
-    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: content }])
+    expect(selectionIds(harness)).toEqual([
+      { kind: 'node', id: untouched },
+      { kind: 'node', id: content },
+    ])
     drag(harness, source, contentPoint)
 
     expect(harness.refusals).toEqual([])
@@ -353,7 +368,7 @@ describe('Viewport → ProofMoveController ordered-selection gestures', () => {
         content: { boundary: [] },
       },
     })
-    expect(selectionIds(harness)).toEqual([])
+    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: untouched }])
   })
 
   it('routes an invalid grounding through the kernel and keeps the selection', () => {
@@ -372,17 +387,26 @@ describe('Viewport → ProofMoveController ordered-selection gestures', () => {
     expect(selectionIds(harness)).toEqual([{ kind: 'node', id: content }])
   })
 
-  it('founds, branches, and scopes one sever from separately prepared selections', () => {
-    const { harness, scope, nodes, points } = severFixture(2)
+  it('founds, branches, and scopes one sever from one structurally partitioned selection', () => {
+    const { harness, scope, nodes, points } = severFixture(3)
     click(harness, points[0]!)
-    drag(harness, points[0]!, vec(230, 340))
-    expect(selectionIds(harness)).toEqual([])
-
     click(harness, points[1]!)
+    click(harness, points[2]!)
+    expect(selectionIds(harness)).toEqual([
+      { kind: 'node', id: nodes[0] },
+      { kind: 'node', id: nodes[1] },
+      { kind: 'node', id: nodes[2] },
+    ])
+    drag(harness, points[0]!, vec(230, 340))
+    expect(selectionIds(harness)).toEqual([
+      { kind: 'node', id: nodes[1] },
+      { kind: 'node', id: nodes[2] },
+    ])
+
     const [body, loose] = [...pendingPoints(harness)]
       .sort((left, right) => left.y - right.y)
     drag(harness, body!, points[1]!)
-    expect(selectionIds(harness)).toEqual([])
+    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: nodes[2] }])
 
     const currentLoose = pendingPoints(harness)
       .find((point) => point.x === loose!.x && point.y === loose!.y)!
@@ -401,22 +425,26 @@ describe('Viewport → ProofMoveController ordered-selection gestures', () => {
         ],
       },
     })
+    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: nodes[2] }])
   })
 
-  it('uses selected regions as contacts and the smallest containing region as sever scope', () => {
+  it('uses structurally split node occurrences and the smallest containing region as sever scope', () => {
     const {
       harness,
       scope,
-      extents,
+      nodes,
       points,
       looseScopePoint,
-    } = nestedRegionSeverFixture()
+    } = nestedStructuralSeverFixture()
 
     click(harness, points[0])
-    expect(selectionIds(harness)).toEqual([{ kind: 'region', id: extents[0] }])
+    click(harness, points[1])
+    expect(selectionIds(harness)).toEqual([
+      { kind: 'node', id: nodes[0] },
+      { kind: 'node', id: nodes[1] },
+    ])
     drag(harness, points[0], vec(300, 320))
 
-    click(harness, points[1])
     const [body, loose] = [...pendingPoints(harness)]
       .sort((left, right) => left.y - right.y)
     drag(harness, body!, points[1])
@@ -430,8 +458,8 @@ describe('Viewport → ProofMoveController ordered-selection gestures', () => {
         kind: 'relation',
         scope,
         occurrences: [
-          { sel: { region: scope, regions: [extents[0]] }, args: [] },
-          { sel: { region: scope, regions: [extents[1]] }, args: [] },
+          { sel: { nodes: [nodes[0]] }, args: [] },
+          { sel: { nodes: [nodes[1]] }, args: [] },
         ],
       },
     })

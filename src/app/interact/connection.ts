@@ -52,9 +52,11 @@ export type PreparedOccurrence = {
   readonly occurrence: ContentOccurrence
   readonly content: DiagramWithBoundary
   readonly parameters: readonly WireId[]
+  readonly extentHits: readonly ExtentHit[]
+  readonly selectedHits: readonly Hit[]
 }
 
-type ExtentHit = Extract<Hit, { readonly kind: 'node' | 'region' }>
+export type ExtentHit = Extract<Hit, { readonly kind: 'node' | 'region' }>
 
 type NodeAnchor = {
   readonly kind: 'node'
@@ -74,6 +76,7 @@ type ContactAnchor = NodeAnchor | RegionAnchor
 export type PendingOccurrenceContact = {
   readonly hit: ExtentHit
   readonly anchor: ContactAnchor
+  readonly extentHits: readonly ExtentHit[]
 }
 
 export type PendingRelationState = {
@@ -136,59 +139,183 @@ function sameHit(left: Hit, right: Hit): boolean {
   return left.kind === right.kind && left.id === right.id
 }
 
+function regionDepth(diagram: Diagram, id: RegionId): number {
+  let depth = 0
+  let current = id
+  for (;;) {
+    const region = diagram.regions[current]!
+    if (region.kind === 'sheet') return depth
+    depth++
+    current = region.parent
+  }
+}
+
+function regionDescendsFrom(
+  diagram: Diagram,
+  descendant: RegionId,
+  ancestor: RegionId,
+): boolean {
+  let current = descendant
+  for (;;) {
+    if (current === ancestor) return true
+    const region = diagram.regions[current]!
+    if (region.kind === 'sheet') return false
+    current = region.parent
+  }
+}
+
+function extentRegion(diagram: Diagram, hit: ExtentHit): RegionId {
+  if (hit.kind === 'node') return diagram.nodes[hit.id]!.region
+  const region = diagram.regions[hit.id]!
+  if (region.kind === 'sheet') throw new Error('the sheet cannot define occurrence extent')
+  return region.parent
+}
+
+function extentInsideRegion(
+  diagram: Diagram,
+  hit: ExtentHit,
+  region: RegionId,
+): boolean {
+  return hit.kind === 'node'
+    ? regionDescendsFrom(diagram, diagram.nodes[hit.id]!.region, region)
+    : regionDescendsFrom(diagram, hit.id, region)
+}
+
 /**
- * Project the one ordered editor selection into the durable kernel operands.
- * Region/node hits own extent. Wire hits own formal membership and order.
- * Every unselected touching attachment remains an ambient parameter.
+ * Parse the one ordered editor selection into maximal structural occurrences.
+ * Selected cut boundaries join their inside and outside region-tree cells;
+ * unselected boundaries split them. Wire hits are then projected, in their
+ * global order, onto every occurrence boundary they cross.
  */
-export function prepareSelectedOccurrence(
+export function prepareSelectedOccurrences(
   diagram: Diagram,
   hits: readonly Hit[],
-): PreparedOccurrence {
+): readonly PreparedOccurrence[] {
   const extentHits = hits.filter(
     (hit): hit is ExtentHit => hit.kind === 'node' || hit.kind === 'region',
   )
   if (extentHits.length === 0) {
     throw new Error('highlight at least one region or node for the occurrence extent')
   }
-  const formalWires = hits
+  const formalHits = hits
     .filter((hit): hit is Extract<Hit, { readonly kind: 'wire' }> =>
       hit.kind === 'wire')
-    .map((hit) => hit.id)
+  const formalWires = formalHits.map((hit) => hit.id)
   if (new Set(formalWires).size !== formalWires.length) {
     throw new Error('the ordered occurrence selection repeats a formal wire')
   }
 
-  const sel = buildSelection(diagram, extentHits)
-  const extracted = extractSubgraph(diagram, sel)
-  const stubByAttachment = new Map<WireId, WireId>()
-  extracted.attachments.forEach((attachment, index) => {
-    stubByAttachment.set(attachment, extracted.pattern.boundary[index]!)
-  })
-  const formalBoundary = formalWires.map((wire) => {
-    const stub = stubByAttachment.get(wire)
-    if (stub === undefined) {
-      throw new Error(`selected formal wire '${wire}' does not cross the selected extent`)
+  const parent = new Map<RegionId, RegionId>()
+  const find = (id: RegionId): RegionId => {
+    const prior = parent.get(id)
+    if (prior === undefined) {
+      parent.set(id, id)
+      return id
     }
-    return stub
-  })
-  const selectedFormals = new Set(formalWires)
-  const parameters = extracted.attachments.filter(
-    (wire) => !selectedFormals.has(wire),
-  )
-  const parameterBoundary = parameters.map((wire) => stubByAttachment.get(wire)!)
+    if (prior === id) return id
+    const root = find(prior)
+    parent.set(id, root)
+    return root
+  }
+  const union = (left: RegionId, right: RegionId): void => {
+    const a = find(left)
+    const b = find(right)
+    if (a === b) return
+    const [shallower, deeper] = regionDepth(diagram, a) <= regionDepth(diagram, b)
+      ? [a, b]
+      : [b, a]
+    parent.set(deeper, shallower)
+  }
+  for (const hit of extentHits) find(extentRegion(diagram, hit))
+  const selectedRegions = extentHits
+    .filter((hit): hit is Extract<ExtentHit, { readonly kind: 'region' }> =>
+      hit.kind === 'region')
+  for (const { id } of selectedRegions) {
+    const region = diagram.regions[id]!
+    if (region.kind === 'sheet') throw new Error('the sheet cannot define occurrence extent')
+    union(region.parent, id)
+  }
+  const groups = new Map<RegionId, ExtentHit[]>()
+  for (const hit of extentHits) {
+    const root = find(extentRegion(diagram, hit))
+    const group = groups.get(root)
+    if (group === undefined) groups.set(root, [hit])
+    else group.push(hit)
+  }
 
-  return Object.freeze({
-    occurrence: Object.freeze({
-      sel,
-      args: Object.freeze(formalWires),
-    }),
-    content: mkDiagramWithBoundary(
-      extracted.pattern.diagram,
-      [...formalBoundary, ...parameterBoundary],
-    ),
-    parameters: Object.freeze(parameters),
+  const assignedFormals = new Set<WireId>()
+  const prepared = [...groups.values()].map((group): PreparedOccurrence => {
+    const top = group
+      .map((hit) => extentRegion(diagram, hit))
+      .reduce((best, region) =>
+        regionDepth(diagram, region) < regionDepth(diagram, best) ? region : best)
+    const groupRegions = group
+      .filter((hit): hit is Extract<ExtentHit, { readonly kind: 'region' }> =>
+        hit.kind === 'region')
+    const topRegions = groupRegions.filter((candidate) => {
+      const region = diagram.regions[candidate.id]!
+      if (region.kind === 'sheet') return false
+      if (region.parent !== top) return false
+      return !groupRegions.some((other) =>
+        other.id !== candidate.id
+        && regionDescendsFrom(diagram, candidate.id, other.id))
+    })
+    const coveredByTopRegion = (hit: ExtentHit): boolean =>
+      topRegions.some((region) => extentInsideRegion(diagram, hit, region.id))
+    const directExtent: ExtentHit[] = [
+      ...topRegions,
+      ...group.filter((hit) =>
+        hit.kind === 'node'
+        && diagram.nodes[hit.id]!.region === top
+        && !coveredByTopRegion(hit)),
+    ]
+    const sel = buildSelection(diagram, directExtent)
+    const extracted = extractSubgraph(diagram, sel)
+    const stubByAttachment = new Map<WireId, WireId>()
+    extracted.attachments.forEach((attachment, index) => {
+      stubByAttachment.set(attachment, extracted.pattern.boundary[index]!)
+    })
+    const occurrenceFormalHits = formalHits.filter(
+      ({ id }) => stubByAttachment.has(id),
+    )
+    const occurrenceFormals = occurrenceFormalHits.map(({ id }) => id)
+    for (const wire of occurrenceFormals) assignedFormals.add(wire)
+    const formalBoundary = occurrenceFormals.map(
+      (wire) => stubByAttachment.get(wire)!,
+    )
+    const selectedFormals = new Set(occurrenceFormals)
+    const parameters = extracted.attachments.filter(
+      (wire) => !selectedFormals.has(wire),
+    )
+    const parameterBoundary = parameters.map(
+      (wire) => stubByAttachment.get(wire)!,
+    )
+    const groupHitSet = new Set(group)
+    const selectedHits = hits.filter((hit) =>
+      (hit.kind === 'wire' && stubByAttachment.has(hit.id))
+      || (hit.kind !== 'wire' && groupHitSet.has(hit)))
+
+    return Object.freeze({
+      occurrence: Object.freeze({
+        sel,
+        args: Object.freeze(occurrenceFormals),
+      }),
+      content: mkDiagramWithBoundary(
+        extracted.pattern.diagram,
+        [...formalBoundary, ...parameterBoundary],
+      ),
+      parameters: Object.freeze(parameters),
+      extentHits: Object.freeze([...group]),
+      selectedHits: Object.freeze(selectedHits),
+    })
   })
+  const unassigned = formalWires.find((wire) => !assignedFormals.has(wire))
+  if (unassigned !== undefined) {
+    throw new Error(
+      `selected formal wire '${unassigned}' does not cross any selected occurrence`,
+    )
+  }
+  return Object.freeze(prepared)
 }
 
 function wireEnd(hit: WireManipulationHit): ConnectionEnd {
@@ -487,6 +614,7 @@ export class ConnectionDragController {
             return
           }
           const prepared = occurrence.target.prepared
+          const remainingSelection = this.#selectionAfterConsuming(prepared)
           const committed = this.#options.commit({
             kind: 'relationJoin',
             input: {
@@ -496,7 +624,9 @@ export class ConnectionDragController {
               parameters: prepared.parameters,
             },
           }, next.client)
-          if (committed) this.#options.relationSelection?.setSelection([])
+          if (committed) {
+            this.#options.relationSelection?.setSelection(remainingSelection)
+          }
           return
         }
         const target = wireManipulationHitTest(
@@ -595,16 +725,29 @@ export class ConnectionDragController {
       authority === undefined
       || hit === null
       || (hit.kind !== 'node' && hit.kind !== 'region')
-      || !authority.selection().some((candidate) => sameHit(candidate, hit))
     ) return { target: null, error: null }
+    if (this.#pending?.contacts.some((contact) =>
+      contact.extentHits.some((candidate) => sameHit(candidate, hit)))) {
+      return {
+        target: null,
+        error: 'that occurrence is already contacted by the pending relation wire',
+      }
+    }
+    if (!authority.selection().some((candidate) => sameHit(candidate, hit))) {
+      return { target: null, error: null }
+    }
     try {
+      const occurrences = prepareSelectedOccurrences(
+        this.#options.engine().d,
+        authority.selection(),
+      )
+      const prepared = occurrences.find((candidate) =>
+        candidate.extentHits.some((extent) => sameHit(extent, hit)))
+      if (prepared === undefined) return { target: null, error: null }
       return {
         target: {
           hit,
-          prepared: prepareSelectedOccurrence(
-            this.#options.engine().d,
-            authority.selection(),
-          ),
+          prepared,
         },
         error: null,
       }
@@ -624,7 +767,7 @@ export class ConnectionDragController {
     const begin = (at: Vec2): void => {
       if (started) return
       this.#startPending(target, sample.world, at)
-      this.#options.relationSelection!.setSelection([])
+      this.#consumePreparedOccurrence(target.prepared)
       this.#preview = {
         kind: 'founding',
         from: sample.world,
@@ -728,7 +871,7 @@ export class ConnectionDragController {
             inspected.target,
             next.world,
           )
-          this.#options.relationSelection!.setSelection([])
+          this.#consumePreparedOccurrence(inspected.target.prepared)
           return
         }
         this.#finishPending(
@@ -768,6 +911,7 @@ export class ConnectionDragController {
     const contact = Object.freeze({
       hit: first.hit,
       anchor: contactAnchor(engine, first.hit, contactAt),
+      extentHits: first.prepared.extentHits,
     })
     this.#pending = Object.freeze({
       diagram: added.diagram,
@@ -785,6 +929,7 @@ export class ConnectionDragController {
     const contact = Object.freeze({
       hit: target.hit,
       anchor: contactAnchor(this.#options.engine(), target.hit, at),
+      extentHits: target.prepared.extentHits,
     })
     this.#pending = Object.freeze({
       ...pending,
@@ -801,6 +946,37 @@ export class ConnectionDragController {
     if (pending === null) return
     const body = pending.engine.bodies.get(pending.looseEndBody)
     if (body !== undefined) body.pos = { ...at }
+  }
+
+  #consumePreparedOccurrence(consumed: PreparedOccurrence): void {
+    const authority = this.#options.relationSelection
+    if (authority === undefined) return
+    authority.setSelection(this.#selectionAfterConsuming(consumed))
+  }
+
+  #selectionAfterConsuming(consumed: PreparedOccurrence): readonly Hit[] {
+    const authority = this.#options.relationSelection
+    if (authority === undefined) return []
+    const selection = authority.selection()
+    const occurrences = prepareSelectedOccurrences(
+      this.#options.engine().d,
+      selection,
+    )
+    const sameOccurrence = (candidate: PreparedOccurrence): boolean =>
+      candidate.extentHits.length === consumed.extentHits.length
+      && candidate.extentHits.every((hit) =>
+        consumed.extentHits.some((other) => sameHit(hit, other)))
+    const remaining = occurrences.filter((candidate) => !sameOccurrence(candidate))
+    return selection.filter((hit) => {
+      if (hit.kind !== 'wire') {
+        return !consumed.extentHits.some((candidate) => sameHit(candidate, hit))
+      }
+      if (!consumed.selectedHits.some((candidate) => sameHit(candidate, hit))) {
+        return true
+      }
+      return remaining.some((candidate) =>
+        candidate.selectedHits.some((selected) => sameHit(selected, hit)))
+    })
   }
 
   #finishPending(scope: RegionId, looseEnd: Vec2, pointer: Vec2): void {
@@ -828,6 +1004,8 @@ export class ConnectionDragController {
     })
     this.#pending = attempt
     const authoritative = attempt.diagram.wires[attempt.wire]!
+    const remainingSelection =
+      this.#options.relationSelection?.selection() ?? []
     const committed = this.#options.commit({
       kind: 'relationSever',
       input: {
@@ -837,6 +1015,9 @@ export class ConnectionDragController {
       },
     }, pointer)
     this.#pending = committed ? null : pending
+    if (committed) {
+      this.#options.relationSelection?.setSelection(remainingSelection)
+    }
   }
 
   #issueClaim(claim: PointerClaim): PointerClaim {
