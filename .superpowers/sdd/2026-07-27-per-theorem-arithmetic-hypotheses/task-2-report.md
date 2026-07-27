@@ -213,3 +213,55 @@ counts:
 
 Fix commit: a separate follow-up commit with subject
 `fix: validate arithmetic proof dependencies`.
+
+## Review fix round 2
+
+Replaced label-selected action ablation with positive structural proof
+provenance checks. Production code was unchanged.
+
+The causal test first rewrites every forward and backward action label to an
+unrelated nonempty diagnostic string. It then:
+
+- identifies `plusBase` and `plusSingleValued` as the exact two-wire and
+  four-wire quantified outer hypothesis regions and proves their iteration
+  selections are those regions with the left-unit claim antecedent as target;
+- identifies each `zeroExists` as the outer `Zero(z)` occurrence and proves
+  the relevant deiteration justifier is that ancestor occurrence;
+- identifies `successorTotal` structurally by its quantified successor atom
+  and proves its exact iteration selection and target;
+- identifies the explicit `Nat[Zero,Succ](n)` reference by its ordered
+  primitive arguments and its shared `n` wire with `Succ(n,s)`, then proves
+  that exact occurrence is iterated into the claim consequent;
+- identifies the explicit `Succ(n,s)` claim atom and proves its deiteration
+  justifier and occurrence certificate map the selected copy to that exact
+  ancestor occurrence.
+
+Every deiteration assertion validates the supplied certificate with
+`checkOccurrenceCertificate()` and reconstructs its certified justifier with
+`occurrenceToSelection()`. Labels are used only in assertion diagnostics.
+
+Red before the structural replacement, after labels were rewritten:
+
+```text
+× makes every selected base and natural-number premise causal in its proof
+  → plusLeftUnit dependency for plusBase:
+    expected -1 to be greater than or equal to 0
+
+Test Files  1 failed (1)
+Tests       1 failed | 14 skipped (15)
+```
+
+Green after:
+
+```text
+npx vitest run tests/theories/frege.test.ts \
+  -t "declares the exact|does not encode|classifies Nat hereditary|uses only selected|makes every selected base and natural-number premise"
+
+Test Files  1 passed (1)
+Tests       5 passed | 10 skipped (15)
+```
+
+`git diff --check`: PASS.
+
+Fix commit: a separate follow-up commit with subject
+`test: verify arithmetic premise provenance`.

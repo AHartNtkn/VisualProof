@@ -2,16 +2,34 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
-import { removeSubgraph } from '../../src/kernel/diagram/subgraph/splice'
+import type {
+  Diagram,
+  RegionId,
+} from '../../src/kernel/diagram/diagram'
+import { isAncestorOrEqual } from '../../src/kernel/diagram/regions'
 import {
-  checkTheorem,
-} from '../../src/kernel/proof/theorem'
+  checkOccurrenceCertificate,
+} from '../../src/kernel/diagram/subgraph/occurrence-certificate'
+import {
+  occurrenceToSelection,
+} from '../../src/kernel/diagram/subgraph/occurrence'
+import type {
+  SubgraphSelection,
+} from '../../src/kernel/diagram/subgraph/selection'
+import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
+import { removeSubgraph } from '../../src/kernel/diagram/subgraph/splice'
+import type { Theorem } from '../../src/kernel/proof/theorem'
 import {
   registerTheorem,
   verifyTheory,
+  type ProofContext,
   type Theory,
 } from '../../src/kernel/proof/context'
-import { replayActions } from '../../src/kernel/proof/action'
+import {
+  applyAction,
+  replayActions,
+} from '../../src/kernel/proof/action'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { buildFregeTheory } from '../../src/theories'
 import { buildArithmeticBase } from '../../src/theories/arithmetic-base'
 import {
@@ -19,8 +37,15 @@ import {
 } from '../../src/theories/arithmetic-naturals'
 import { buildOneTheorem } from '../../src/theories/arithmetic-one'
 import {
+  BINARY,
+  UNARY,
   directCuts,
+  directNodes,
+  endpointWire,
+  exactOne,
   natHereditaryParts,
+  nodeWithHead,
+  relationWire,
   scopedWires,
 } from '../../src/theories/arithmetic-support'
 import { buildLogicalTheoremPrefix } from '../../src/theories/logic'
@@ -121,6 +146,167 @@ function buildBaseNaturalTheory(): Theory {
     relations,
     theorems: [...logical, ...base, ...naturals, ...one],
   }
+}
+
+type ProofTrace = {
+  readonly before: Diagram
+  readonly step: ProofStep
+  readonly diagnostic: string
+}
+
+function traceProofHalf(
+  theorem: Theorem,
+  context: ProofContext,
+  half: 'forward' | 'backward',
+): readonly ProofTrace[] {
+  const actions = half === 'forward'
+    ? theorem.actions
+    : (theorem.backActions ?? [])
+  let diagram = half === 'forward'
+    ? theorem.lhs.diagram
+    : theorem.rhs.diagram
+  const traces: ProofTrace[] = []
+  for (const action of actions) {
+    if (action.steps.length !== 1) {
+      throw new Error(
+        `${theorem.name} ${half} action '${action.label}' is not primitive`,
+      )
+    }
+    traces.push({
+      before: diagram,
+      step: action.steps[0]!,
+      diagnostic: action.label,
+    })
+    diagram = applyAction(diagram, action, context, half)
+  }
+  return traces
+}
+
+function sameIds(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  const sortedLeft = [...left].sort()
+  const sortedRight = [...right].sort()
+  return sortedLeft.length === sortedRight.length
+    && sortedLeft.every((id, index) => id === sortedRight[index])
+}
+
+function sameSelection(
+  left: SubgraphSelection,
+  right: SubgraphSelection,
+): boolean {
+  return left.region === right.region
+    && sameIds(left.regions, right.regions)
+    && sameIds(left.nodes, right.nodes)
+    && sameIds(left.wires, right.wires)
+}
+
+function theoremShell(diagram: Diagram) {
+  const primitiveScope = exactOne(
+    directCuts(diagram, diagram.root),
+    'primitive scope',
+  )
+  const primitiveBody = exactOne(
+    directCuts(diagram, primitiveScope),
+    'primitive body',
+  )
+  const antecedent = exactOne(
+    directCuts(diagram, primitiveBody),
+    'theorem antecedent',
+  )
+  const children = directCuts(diagram, antecedent)
+  const refBearing = children.filter((region) =>
+    directNodes(diagram, region).some((node) =>
+      diagram.nodes[node]!.kind === 'ref'))
+  const conclusion = exactOne(
+    refBearing.length > 0
+      ? refBearing
+      : children.filter((region) =>
+          scopedWires(diagram, region).length === 0),
+    'theorem conclusion',
+  )
+  return {
+    primitiveScope,
+    antecedent,
+    conclusion,
+  }
+}
+
+function universalClaimParts(
+  diagram: Diagram,
+  conclusion: RegionId,
+) {
+  const scope = exactOne(
+    directCuts(diagram, conclusion),
+    'claim universal scope',
+  )
+  const body = exactOne(
+    directCuts(diagram, scope),
+    'claim universal body',
+  )
+  const antecedent = exactOne(
+    directCuts(diagram, body),
+    'claim antecedent',
+  )
+  const consequent = exactOne(
+    directCuts(diagram, antecedent),
+    'claim consequent',
+  )
+  return { scope, antecedent, consequent }
+}
+
+function nodeSelection(
+  diagram: Diagram,
+  node: string,
+): SubgraphSelection {
+  return {
+    region: diagram.nodes[node]!.region,
+    regions: [],
+    nodes: [node],
+    wires: [],
+  }
+}
+
+function assertCertifiedDeiteration(
+  trace: ProofTrace,
+  expectedJustifier: SubgraphSelection,
+): void {
+  if (trace.step.rule !== 'deiteration') {
+    throw new Error(
+      `expected deiteration, found ${trace.step.rule} (${trace.diagnostic})`,
+    )
+  }
+  expect(
+    sameSelection(trace.step.justifier, expectedJustifier),
+    trace.diagnostic,
+  ).toBe(true)
+  expect(
+    isAncestorOrEqual(
+      trace.before,
+      trace.step.justifier.region,
+      trace.step.sel.region,
+    ),
+    trace.diagnostic,
+  ).toBe(true)
+  const { pattern } = extractSubgraph(trace.before, trace.step.sel)
+  expect(
+    checkOccurrenceCertificate(
+      trace.before,
+      pattern,
+      trace.step.certificate,
+    ),
+    trace.diagnostic,
+  ).toEqual({ ok: true })
+  const certifiedJustifier = occurrenceToSelection(
+    trace.before,
+    pattern,
+    trace.step.certificate,
+  )
+  expect(
+    sameSelection(certifiedJustifier, expectedJustifier),
+    trace.diagnostic,
+  ).toBe(true)
 }
 
 describe('relational Frege arithmetic proofs', () => {
@@ -285,90 +471,309 @@ describe('relational Frege arithmetic proofs', () => {
   })
 
   it('makes every selected base and natural-number premise causal in its proof', () => {
-    const theory = buildBaseNaturalTheory()
-    const dependencies = [
-      {
-        theorem: 'plusLeftUnit',
-        premise: 'plusBase',
-        half: 'backActions',
-        label: 'copy plusBase into left-unit antecedent',
-        rule: 'iteration',
-      },
-      {
-        theorem: 'plusLeftUnit',
-        premise: 'plusSingleValued',
-        half: 'backActions',
-        label: 'copy plusSingleValued into left-unit antecedent',
-        rule: 'iteration',
-      },
-      {
-        theorem: 'zeroIsNat',
-        premise: 'zeroExists',
-        half: 'backActions',
-        label: 'discharge Nat base zero premise',
-        rule: 'deiteration',
-      },
-      {
-        theorem: 'succNat',
-        premise: 'Nat(n)',
-        half: 'actions',
-        label: 'iterate explicit predecessor Nat into conclusion',
-        rule: 'iteration',
-      },
-      {
-        theorem: 'succNat',
-        premise: 'Succ(n,s)',
-        half: 'actions',
-        label: 'discharge copied supplied-successor premise',
-        rule: 'deiteration',
-      },
-      {
-        theorem: 'oneIsNat',
-        premise: 'zeroExists',
-        half: 'backActions',
-        label: 'discharge Nat base zero premise',
-        rule: 'deiteration',
-      },
-      {
-        theorem: 'oneIsNat',
-        premise: 'successorTotal',
-        half: 'backActions',
-        label: 'copy successorTotal for the zero witness',
-        rule: 'iteration',
-      },
-    ] as const
-
-    for (const dependency of dependencies) {
+    const original = buildBaseNaturalTheory()
+    const theory = {
+      ...original,
+      theorems: original.theorems.map((theorem) => ({
+        ...theorem,
+        actions: theorem.actions.map((action, index) => ({
+          ...action,
+          label: `forward diagnostic ${index}`,
+        })),
+        ...(theorem.backActions === undefined
+          ? {}
+          : {
+              backActions: theorem.backActions.map((action, index) => ({
+                ...action,
+                label: `backward diagnostic ${index}`,
+              })),
+            }),
+      })),
+    }
+    const theoremContext = (name: string) => {
       const theoremIndex = theory.theorems.findIndex(
-        ({ name }) => name === dependency.theorem,
+        (theorem) => theorem.name === name,
       )
       const theorem = theory.theorems[theoremIndex]!
-      const actions = theorem[dependency.half] ?? []
-      const actionIndex = actions.findIndex(
-        (action) => action.label === dependency.label,
-      )
-      expect(
-        actionIndex,
-        `${dependency.theorem} dependency for ${dependency.premise}`,
-      ).toBeGreaterThanOrEqual(0)
-      expect(actions[actionIndex]!.steps).toHaveLength(1)
-      expect(actions[actionIndex]!.steps[0]!.rule).toBe(dependency.rule)
-      const withoutDependency = {
-        ...theorem,
-        [dependency.half]: actions.filter(
-          (_action, index) => index !== actionIndex,
-        ),
+      return {
+        theorem,
+        context: verifyTheory({
+          relations: theory.relations,
+          theorems: theory.theorems.slice(0, theoremIndex),
+        }),
       }
-      const context = verifyTheory({
-        relations: theory.relations,
-        theorems: theory.theorems.slice(0, theoremIndex),
-      })
-
-      expect(
-        () => checkTheorem(withoutDependency, context),
-        `${dependency.theorem} without proof use of ${dependency.premise}`,
-      ).toThrow()
     }
+
+    const assertIteration = (
+      traces: readonly ProofTrace[],
+      source: SubgraphSelection,
+      target: RegionId,
+      premise: string,
+    ) => {
+      const trace = exactOne(
+        traces.filter(({ step }) =>
+          step.rule === 'iteration'
+          && sameSelection(step.sel, source)),
+        `iteration of ${premise}`,
+      )
+      if (trace.step.rule !== 'iteration') {
+        throw new Error(`expected iteration of ${premise}`)
+      }
+      expect(trace.step.target, trace.diagnostic).toBe(target)
+      expect(
+        isAncestorOrEqual(
+          trace.before,
+          trace.step.sel.region,
+          trace.step.target,
+        ),
+        trace.diagnostic,
+      ).toBe(true)
+    }
+
+    const plus = theoremContext('plusLeftUnit')
+    const plusDiagram = plus.theorem.rhs.diagram
+    const plusShell = theoremShell(plusDiagram)
+    const plusChildren = directCuts(plusDiagram, plusShell.antecedent)
+    const plusBase = exactOne(
+      plusChildren.filter((region) =>
+        scopedWires(plusDiagram, region).length === 2),
+      'plusBase hypothesis',
+    )
+    const plusSingleValued = exactOne(
+      plusChildren.filter((region) =>
+        scopedWires(plusDiagram, region).length === 4),
+      'plusSingleValued hypothesis',
+    )
+    const plusClaim = universalClaimParts(
+      plusDiagram,
+      plusShell.conclusion,
+    )
+    const plusTraces = traceProofHalf(
+      plus.theorem,
+      plus.context,
+      'backward',
+    )
+    assertIteration(
+      plusTraces,
+      {
+        region: plusShell.antecedent,
+        regions: [plusBase],
+        nodes: [],
+        wires: [],
+      },
+      plusClaim.antecedent,
+      'plusBase',
+    )
+    assertIteration(
+      plusTraces,
+      {
+        region: plusShell.antecedent,
+        regions: [plusSingleValued],
+        nodes: [],
+        wires: [],
+      },
+      plusClaim.antecedent,
+      'plusSingleValued',
+    )
+
+    for (const theoremName of ['zeroIsNat', 'oneIsNat']) {
+      const zeroDependency = theoremContext(theoremName)
+      const diagram = zeroDependency.theorem.rhs.diagram
+      const shell = theoremShell(diagram)
+      const zero = relationWire(diagram, shell.primitiveScope, UNARY)
+      const zeroOccurrence = nodeSelection(
+        diagram,
+        nodeWithHead(diagram, shell.antecedent, zero),
+      )
+      const traces = traceProofHalf(
+        zeroDependency.theorem,
+        zeroDependency.context,
+        'backward',
+      )
+      const deiteration = exactOne(
+        traces.filter(({ step }) =>
+          step.rule === 'deiteration'
+          && sameSelection(step.justifier, zeroOccurrence)),
+        `${theoremName} zeroExists deiteration`,
+      )
+      assertCertifiedDeiteration(deiteration, zeroOccurrence)
+    }
+
+    const one = theoremContext('oneIsNat')
+    const oneDiagram = one.theorem.rhs.diagram
+    const oneShell = theoremShell(oneDiagram)
+    const successor = relationWire(
+      oneDiagram,
+      oneShell.primitiveScope,
+      BINARY,
+    )
+    const successorTotal = exactOne(
+      directCuts(oneDiagram, oneShell.antecedent).filter((region) => {
+        if (scopedWires(oneDiagram, region).length !== 1) return false
+        const body = exactOne(
+          directCuts(oneDiagram, region),
+          'successorTotal body',
+        )
+        return directNodes(oneDiagram, body).some((node) =>
+          endpointWire(oneDiagram, node, 'head') === successor)
+      }),
+      'successorTotal hypothesis',
+    )
+    assertIteration(
+      traceProofHalf(one.theorem, one.context, 'backward'),
+      {
+        region: oneShell.antecedent,
+        regions: [successorTotal],
+        nodes: [],
+        wires: [],
+      },
+      oneShell.antecedent,
+      'successorTotal',
+    )
+
+    const succ = theoremContext('succNat')
+    const succDiagram = succ.theorem.rhs.diagram
+    const succShell = theoremShell(succDiagram)
+    const succClaim = universalClaimParts(
+      succDiagram,
+      succShell.conclusion,
+    )
+    const succRelation = relationWire(
+      succDiagram,
+      succShell.primitiveScope,
+      BINARY,
+    )
+    const statementNat = exactOne(
+      directNodes(succDiagram, succClaim.antecedent).filter((node) => {
+        const value = succDiagram.nodes[node]!
+        return value.kind === 'ref' && value.defId === 'nat'
+      }),
+      'explicit Nat(n) statement premise',
+    )
+    const statementSuccessor = nodeWithHead(
+      succDiagram,
+      succClaim.antecedent,
+      succRelation,
+    )
+    const statementZeroRelation = relationWire(
+      succDiagram,
+      succShell.primitiveScope,
+      UNARY,
+    )
+    expect(endpointWire(succDiagram, statementNat, 'arg', 0))
+      .toBe(statementZeroRelation)
+    expect(endpointWire(succDiagram, statementNat, 'arg', 1))
+      .toBe(succRelation)
+    const statementPredecessor = endpointWire(
+      succDiagram,
+      statementNat,
+      'arg',
+      2,
+    )
+    expect(endpointWire(succDiagram, statementSuccessor, 'arg', 0))
+      .toBe(statementPredecessor)
+    expect(succDiagram.wires[statementPredecessor]!.scope)
+      .toBe(succClaim.scope)
+    expect(
+      succDiagram.wires[
+        endpointWire(succDiagram, statementSuccessor, 'arg', 1)
+      ]!.scope,
+    ).toBe(succClaim.scope)
+    const succTraces = traceProofHalf(
+      succ.theorem,
+      succ.context,
+      'forward',
+    )
+    const natIteration = exactOne(
+      succTraces.filter(({ before, step }) => {
+        if (step.rule !== 'iteration' || step.sel.nodes.length !== 1) {
+          return false
+        }
+        const shell = theoremShell(before)
+        const claim = universalClaimParts(before, shell.conclusion)
+        const nodeId = step.sel.nodes[0]!
+        const node = before.nodes[nodeId]
+        if (
+          node?.kind !== 'ref'
+          || node.defId !== 'nat'
+          || step.sel.region !== claim.antecedent
+        ) return false
+        const zero = relationWire(before, shell.primitiveScope, UNARY)
+        const successor = relationWire(before, shell.primitiveScope, BINARY)
+        const successorPremise = nodeWithHead(
+          before,
+          claim.antecedent,
+          successor,
+        )
+        return endpointWire(before, nodeId, 'arg', 0) === zero
+          && endpointWire(before, nodeId, 'arg', 1) === successor
+          && endpointWire(before, nodeId, 'arg', 2)
+            === endpointWire(before, successorPremise, 'arg', 0)
+      }),
+      'iteration of explicit Nat(n) premise',
+    )
+    if (natIteration.step.rule !== 'iteration') {
+      throw new Error('expected Nat(n) iteration')
+    }
+    const natIterationShell = theoremShell(natIteration.before)
+    const natIterationClaim = universalClaimParts(
+      natIteration.before,
+      natIterationShell.conclusion,
+    )
+    expect(
+      natIteration.step.sel.region,
+      natIteration.diagnostic,
+    ).toBe(natIterationClaim.antecedent)
+    expect(
+      natIteration.step.target,
+      natIteration.diagnostic,
+    ).toBe(natIterationClaim.consequent)
+    expect(
+      isAncestorOrEqual(
+        natIteration.before,
+        natIteration.step.sel.region,
+        natIteration.step.target,
+      ),
+      natIteration.diagnostic,
+    ).toBe(true)
+
+    const successorDeiteration = exactOne(
+      succTraces.filter(({ before, step }) => {
+        if (step.rule !== 'deiteration') return false
+        const shell = theoremShell(before)
+        const claim = universalClaimParts(before, shell.conclusion)
+        const relation = relationWire(before, shell.primitiveScope, BINARY)
+        const premise = nodeWithHead(before, claim.antecedent, relation)
+        const occurrence = nodeSelection(before, premise)
+        return sameSelection(step.justifier, occurrence)
+      }),
+      'deiteration justified by explicit Succ(n,s) premise',
+    )
+    if (successorDeiteration.step.rule !== 'deiteration') {
+      throw new Error('expected Succ(n,s) deiteration')
+    }
+    const successorShell = theoremShell(successorDeiteration.before)
+    const successorClaim = universalClaimParts(
+      successorDeiteration.before,
+      successorShell.conclusion,
+    )
+    const replayedSuccessor = relationWire(
+      successorDeiteration.before,
+      successorShell.primitiveScope,
+      BINARY,
+    )
+    const successorOccurrence = nodeSelection(
+      successorDeiteration.before,
+      nodeWithHead(
+        successorDeiteration.before,
+        successorClaim.antecedent,
+        replayedSuccessor,
+      ),
+    )
+    assertCertifiedDeiteration(
+      successorDeiteration,
+      successorOccurrence,
+    )
   })
 
   it('records closed carrier support theorems before their consumers', () => {
