@@ -413,10 +413,16 @@ export function carryOver(
     for (const bind of from.binds) {
       const body = identity!.nodes.get(bind.body)
       if (body === undefined) return null
+      const sourceNode = prev.d.nodes[bind.body]
+      const targetNode = next.d.nodes[body]
+      if (sourceNode === undefined || targetNode?.kind !== sourceNode.kind) return null
       const target = to.binds.findIndex((candidate, index) =>
         !used.has(index)
         && candidate.body === body
-        && candidate.key === bind.key)
+        // Atom/ref port positions are semantic. Identity incidence indices are
+        // storage-only: the enclosing source/target wire mapping plus the
+        // mapped identity node is the complete canonical correspondence.
+        && (sourceNode.kind === 'identity' || candidate.key === bind.key))
       if (target < 0) return null
       used.add(target)
       image.push(target)

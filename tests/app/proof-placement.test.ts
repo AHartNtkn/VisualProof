@@ -14,6 +14,7 @@ function renamed(
   diagram: Diagram,
   prefix: string,
   reversedWire?: string,
+  swapIdentityIncidences = false,
 ): Diagram {
   const region = (id: string): string => `${prefix}region_${id}`
   const node = (id: string): string => `${prefix}node_${id}`
@@ -37,10 +38,18 @@ function renamed(
         scope: region(value.scope),
         endpoints: (id === reversedWire
           ? [...value.endpoints].reverse()
-          : value.endpoints).map((endpoint) => ({
-          ...endpoint,
-          node: node(endpoint.node),
-        })),
+          : value.endpoints).map((endpoint) => {
+          const sourceNode = diagram.nodes[endpoint.node]!
+          const port = swapIdentityIncidences
+            && sourceNode.kind === 'identity'
+            && endpoint.port.kind === 'identity'
+            ? {
+                kind: 'identity' as const,
+                index: sourceNode.arity - 1 - endpoint.port.index,
+              }
+            : endpoint.port
+          return { ...endpoint, node: node(endpoint.node), port }
+        }),
       },
     ])),
   })
@@ -123,7 +132,7 @@ describe('replay placement reconstruction', () => {
     )
     const base = verifyTheory(tinyTheory())
     const computed = applyAction(lhsDiagram, action, base, 'forward')
-    const rhsDiagram = renamed(computed, 'rhs_', sharedWire)
+    const rhsDiagram = renamed(computed, 'rhs_', sharedWire, true)
     const ctx = registerTheorem(base, {
       name: 'RenamedPlacedRhs',
       lhs: mkDiagramWithBoundary(lhsDiagram, [boundaryWire]),
@@ -174,6 +183,13 @@ describe('replay placement reconstruction', () => {
       replay.diagramAt(replay.actionCount),
       replay.boundaryAt(replay.actionCount),
     )
+    const sourceIdentityBind = previous.wires.get(sharedWire)!.binds
+      .find((bind) => bind.body === existing[2])!
+    const displayedIdentity = layoutIdentity.nodes.get(existing[2]!)!
+    const targetIdentityBind = exactRhs.wires.get(displayedWire)!.binds
+      .find((bind) => bind.body === displayedIdentity)!
+    expect(sourceIdentityBind.key).not.toBe(targetIdentityBind.key)
+
     carryOver(previous, exactRhs, layoutIdentity)
     seedReplayPlacements(exactRhs, replay, replay.actionCount, ctx)
 
