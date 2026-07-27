@@ -17,7 +17,7 @@ const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
 const TERNARY = relSig([IOTA, IOTA, IOTA])
 
-type PrimitiveRelations = {
+export type PrimitiveRelations = {
   readonly zero: WireId
   readonly successor: WireId
   readonly plus: WireId
@@ -28,9 +28,14 @@ export type ArithmeticStatementName =
   | 'zeroIsNat'
   | 'succNat'
   | 'oneIsNat'
+  | 'rightIdentityCarrierInductive'
   | 'plusRightUnit'
+  | 'associativityCarrierBase'
+  | 'associativityCarrierHereditary'
   | 'plusAssoc'
+  | 'successorShiftCarrierInductive'
   | 'succShiftS'
+  | 'commutativityCarrierInductive'
   | 'plusComm'
 
 export type ArithmeticStatements = Readonly<
@@ -51,7 +56,7 @@ function drawNat(
   ).graph
 }
 
-function drawStandingHypotheses(
+export function drawStandingHypotheses(
   initial: GraphConstruction,
   region: RegionId,
   primitives: PrimitiveRelations,
@@ -248,7 +253,7 @@ function drawStandingHypotheses(
   return graph
 }
 
-function closedStatement(
+export function closedStatement(
   drawConclusion: (
     graph: GraphConstruction,
     region: RegionId,
@@ -355,6 +360,369 @@ function plusRightUnitStatement(): DiagramWithBoundary {
       claim.value.consequent,
       [output!, addend!],
     ).graph
+  })
+}
+
+type UnaryCarrierDrawer = (
+  graph: GraphConstruction,
+  region: RegionId,
+  formal: WireId,
+  primitives: PrimitiveRelations,
+  captures: readonly WireId[],
+) => GraphConstruction
+
+function drawAdditionTotality(
+  initial: GraphConstruction,
+  region: RegionId,
+  formal: WireId,
+  plus: WireId,
+): GraphConstruction {
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA])
+  const right = quantified.value.variables[0]!
+  const output = declareWire(
+    quantified.graph,
+    quantified.value.body,
+    IOTA,
+  )
+  return atom(
+    output.graph,
+    quantified.value.body,
+    plus,
+    [formal, right, output.value],
+  ).graph
+}
+
+function drawRightIdentityCarrier(
+  initial: GraphConstruction,
+  region: RegionId,
+  formal: WireId,
+  primitives: PrimitiveRelations,
+): GraphConstruction {
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA])
+  const zeroValue = quantified.value.variables[0]!
+  const claim = implication(quantified.graph, quantified.value.body)
+  let graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    primitives.zero,
+    [zeroValue],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    primitives.plus,
+    [formal, zeroValue, formal],
+  ).graph
+}
+
+function drawAssociativityCarrier(
+  initial: GraphConstruction,
+  region: RegionId,
+  formal: WireId,
+  primitives: PrimitiveRelations,
+): GraphConstruction {
+  let graph = drawAdditionTotality(
+    initial,
+    region,
+    formal,
+    primitives.plus,
+  )
+  const quantified = quantifierScope(
+    graph,
+    region,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  const [right, third, firstSum, innerSum] =
+    quantified.value.variables
+  const claim = implication(quantified.graph, quantified.value.body)
+  graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    primitives.plus,
+    [formal, right!, firstSum!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    primitives.plus,
+    [right!, third!, innerSum!],
+  ).graph
+  const output = declareWire(graph, claim.value.consequent, IOTA)
+  graph = output.graph
+  graph = atom(
+    graph,
+    claim.value.consequent,
+    primitives.plus,
+    [firstSum!, third!, output.value],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    primitives.plus,
+    [formal, innerSum!, output.value],
+  ).graph
+}
+
+function drawSuccessorShiftCarrier(
+  initial: GraphConstruction,
+  region: RegionId,
+  formal: WireId,
+  primitives: PrimitiveRelations,
+): GraphConstruction {
+  let graph = drawAdditionTotality(
+    initial,
+    region,
+    formal,
+    primitives.plus,
+  )
+  const quantified = quantifierScope(
+    graph,
+    region,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  const [right, rightSuccessor, output, outputSuccessor] =
+    quantified.value.variables
+  const claim = implication(quantified.graph, quantified.value.body)
+  graph = atom(
+    claim.graph,
+    claim.value.antecedent,
+    primitives.successor,
+    [right!, rightSuccessor!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    primitives.plus,
+    [formal, right!, output!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    primitives.successor,
+    [output!, outputSuccessor!],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    primitives.plus,
+    [formal, rightSuccessor!, outputSuccessor!],
+  ).graph
+}
+
+function drawCommutativityCarrier(
+  initial: GraphConstruction,
+  region: RegionId,
+  formal: WireId,
+  primitives: PrimitiveRelations,
+  captures: readonly WireId[],
+): GraphConstruction {
+  const fixedRight = captures[0]
+  if (fixedRight === undefined || captures.length !== 1) {
+    throw new Error('commutativity carrier requires one fixed right addend')
+  }
+  let graph = drawAdditionTotality(
+    initial,
+    region,
+    formal,
+    primitives.plus,
+  )
+  const quantified = quantifierScope(graph, region, 'forall', [IOTA])
+  const output = quantified.value.variables[0]!
+  const claim = implication(quantified.graph, quantified.value.body)
+  graph = atom(
+    claim.graph,
+    claim.value.antecedent,
+    primitives.plus,
+    [formal, fixedRight, output],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    primitives.plus,
+    [fixedRight, formal, output],
+  ).graph
+}
+
+function drawCarrierInductivity(
+  initial: GraphConstruction,
+  region: RegionId,
+  primitives: PrimitiveRelations,
+  drawCarrier: UnaryCarrierDrawer,
+  captures: readonly WireId[] = [],
+): GraphConstruction {
+  const base = quantifierScope(initial, region, 'forall', [IOTA])
+  const zeroValue = base.value.variables[0]!
+  const baseClaim = implication(base.graph, base.value.body)
+  let graph = baseClaim.graph
+  graph = atom(
+    graph,
+    baseClaim.value.antecedent,
+    primitives.zero,
+    [zeroValue],
+  ).graph
+  graph = drawCarrier(
+    graph,
+    baseClaim.value.consequent,
+    zeroValue,
+    primitives,
+    captures,
+  )
+
+  const closure = quantifierScope(
+    graph,
+    region,
+    'forall',
+    [IOTA, IOTA],
+  )
+  const [predecessor, successorValue] = closure.value.variables
+  const closureClaim = implication(closure.graph, closure.value.body)
+  graph = closureClaim.graph
+  graph = drawCarrier(
+    graph,
+    closureClaim.value.antecedent,
+    predecessor!,
+    primitives,
+    captures,
+  )
+  graph = atom(
+    graph,
+    closureClaim.value.antecedent,
+    primitives.successor,
+    [predecessor!, successorValue!],
+  ).graph
+  return drawCarrier(
+    graph,
+    closureClaim.value.consequent,
+    successorValue!,
+    primitives,
+    captures,
+  )
+}
+
+function drawCarrierBase(
+  initial: GraphConstruction,
+  region: RegionId,
+  primitives: PrimitiveRelations,
+  drawCarrier: UnaryCarrierDrawer,
+  captures: readonly WireId[] = [],
+): GraphConstruction {
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA])
+  const zeroValue = quantified.value.variables[0]!
+  const claim = implication(quantified.graph, quantified.value.body)
+  let graph = atom(
+    claim.graph,
+    claim.value.antecedent,
+    primitives.zero,
+    [zeroValue],
+  ).graph
+  return drawCarrier(
+    graph,
+    claim.value.consequent,
+    zeroValue,
+    primitives,
+    captures,
+  )
+}
+
+function drawCarrierHeredity(
+  initial: GraphConstruction,
+  region: RegionId,
+  primitives: PrimitiveRelations,
+  drawCarrier: UnaryCarrierDrawer,
+  captures: readonly WireId[] = [],
+): GraphConstruction {
+  const closure = quantifierScope(
+    initial,
+    region,
+    'forall',
+    [IOTA, IOTA],
+  )
+  const [predecessor, successorValue] = closure.value.variables
+  const closureClaim = implication(closure.graph, closure.value.body)
+  let graph = drawCarrier(
+    closureClaim.graph,
+    closureClaim.value.antecedent,
+    predecessor!,
+    primitives,
+    captures,
+  )
+  graph = atom(
+    graph,
+    closureClaim.value.antecedent,
+    primitives.successor,
+    [predecessor!, successorValue!],
+  ).graph
+  return drawCarrier(
+    graph,
+    closureClaim.value.consequent,
+    successorValue!,
+    primitives,
+    captures,
+  )
+}
+
+function rightIdentityCarrierInductiveStatement(): DiagramWithBoundary {
+  return closedStatement((initial, region, primitives) =>
+    drawCarrierInductivity(
+      initial,
+      region,
+      primitives,
+      drawRightIdentityCarrier,
+    ))
+}
+
+function associativityCarrierHereditaryStatement(): DiagramWithBoundary {
+  return closedStatement((initial, region, primitives) =>
+    drawCarrierHeredity(
+      initial,
+      region,
+      primitives,
+      drawAssociativityCarrier,
+    ))
+}
+
+function associativityCarrierBaseStatement(): DiagramWithBoundary {
+  return closedStatement((initial, region, primitives) =>
+    drawCarrierBase(
+      initial,
+      region,
+      primitives,
+      drawAssociativityCarrier,
+    ))
+}
+
+function successorShiftCarrierInductiveStatement(): DiagramWithBoundary {
+  return closedStatement((initial, region, primitives) =>
+    drawCarrierInductivity(
+      initial,
+      region,
+      primitives,
+      drawSuccessorShiftCarrier,
+    ))
+}
+
+function commutativityCarrierInductiveStatement(): DiagramWithBoundary {
+  return closedStatement((initial, region, primitives) => {
+    const quantified = quantifierScope(initial, region, 'forall', [IOTA])
+    const fixedRight = quantified.value.variables[0]!
+    const claim = implication(quantified.graph, quantified.value.body)
+    const graph = drawNat(
+      claim.graph,
+      claim.value.antecedent,
+      primitives,
+      fixedRight,
+    )
+    return drawCarrierInductivity(
+      graph,
+      claim.value.consequent,
+      primitives,
+      drawCommutativityCarrier,
+      [fixedRight],
+    )
   })
 }
 
@@ -598,9 +966,19 @@ export function buildArithmeticStatements(): ArithmeticStatements {
     zeroIsNat: zeroIsNatStatement(),
     succNat: successorNatStatement(),
     oneIsNat: oneIsNatStatement(),
+    rightIdentityCarrierInductive:
+      rightIdentityCarrierInductiveStatement(),
     plusRightUnit: plusRightUnitStatement(),
+    associativityCarrierBase:
+      associativityCarrierBaseStatement(),
+    associativityCarrierHereditary:
+      associativityCarrierHereditaryStatement(),
     plusAssoc: plusAssociativityStatement(),
+    successorShiftCarrierInductive:
+      successorShiftCarrierInductiveStatement(),
     succShiftS: successorShiftStatement(),
+    commutativityCarrierInductive:
+      commutativityCarrierInductiveStatement(),
     plusComm: plusCommutativityStatement(),
   })
 }

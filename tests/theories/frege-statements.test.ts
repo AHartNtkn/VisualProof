@@ -454,7 +454,7 @@ describe('relational Frege natural numbers', () => {
 })
 
 describe('closed relational arithmetic statements', () => {
-  const expectedNames: readonly ArithmeticStatementName[] = [
+  const historicalNames: readonly ArithmeticStatementName[] = [
     'plusLeftUnit',
     'zeroIsNat',
     'succNat',
@@ -464,13 +464,41 @@ describe('closed relational arithmetic statements', () => {
     'succShiftS',
     'plusComm',
   ]
+  const supportNames: readonly ArithmeticStatementName[] = [
+    'rightIdentityCarrierInductive',
+    'associativityCarrierBase',
+    'associativityCarrierHereditary',
+    'successorShiftCarrierInductive',
+    'commutativityCarrierInductive',
+  ]
+  const requiredNames: readonly ArithmeticStatementName[] = [
+    'plusLeftUnit',
+    'zeroIsNat',
+    'succNat',
+    'oneIsNat',
+    'rightIdentityCarrierInductive',
+    'plusRightUnit',
+    'associativityCarrierBase',
+    'associativityCarrierHereditary',
+    'plusAssoc',
+    'successorShiftCarrierInductive',
+    'succShiftS',
+    'commutativityCarrierInductive',
+    'plusComm',
+  ]
   const statements = buildArithmeticStatements()
 
-  it('constructs all eight propositions independently with seven inline hypotheses', () => {
-    expect(Object.keys(statements)).toEqual(expectedNames)
-    expect(new Set(Object.values(statements)).size).toBe(8)
+  it('constructs historical and support propositions in one authoritative registry', () => {
+    const names = Object.keys(statements) as ArithmeticStatementName[]
+    let precedingIndex = -1
+    for (const name of requiredNames) {
+      const index = names.indexOf(name)
+      expect(index, `statement '${name}'`).toBeGreaterThan(precedingIndex)
+      precedingIndex = index
+    }
+    expect(new Set(Object.values(statements)).size).toBe(names.length)
     const primitiveWires = new Set<object>()
-    for (const name of expectedNames) {
+    for (const name of names) {
       const skeleton = assertStatementSkeleton(statements[name])
       assertStandingHypotheses(skeleton)
       primitiveWires.add(
@@ -483,7 +511,9 @@ describe('closed relational arithmetic statements', () => {
         skeleton.proposition.diagram.wires[skeleton.plus]!,
       )
     }
-    expect(primitiveWires.size).toBe(24)
+    expect(primitiveWires.size).toBe(names.length * 3)
+    expect(historicalNames).toHaveLength(8)
+    expect(supportNames).toHaveLength(5)
   })
 
   it('states plusLeftUnit without a Nat guard', () => {

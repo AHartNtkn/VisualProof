@@ -848,10 +848,10 @@ describe('recorded general relation reification', () => {
 })
 
 describe('logical dependency prefix', () => {
-  it('registers only ordinary relations and the exact ordered theorem prefix', () => {
+  it('registers only ordinary relations and the exact ordered logical prefix', () => {
     const theory = buildFregeTheory()
     expect(theory.relations.map(([name]) => name)).toEqual(['nat'])
-    expect(theory.theorems.map((theorem) => theorem.name)).toEqual([
+    expect(theory.theorems.slice(0, 8).map((theorem) => theorem.name)).toEqual([
       'ordinaryEqualityContradiction',
       'relationIdentityReification',
       'truthReification',

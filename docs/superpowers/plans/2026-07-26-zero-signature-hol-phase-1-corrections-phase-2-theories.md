@@ -1123,7 +1123,7 @@ git commit -m "feat: define closed relational arithmetic statements"
 - Add proof modules under `src/theories/`.
 - Add: `tests/theories/frege.test.ts`
 
-**Dependency order:**
+**Required dependency order (minimum public subsequence):**
 
 1. `plusLeftUnit`
 2. `zeroIsNat`
@@ -1134,7 +1134,10 @@ git commit -m "feat: define closed relational arithmetic statements"
 7. `succShiftS`
 8. `plusComm`
 
-The logical/reification prefix precedes these eight.
+The logical/reification prefix precedes these eight. This is a minimum ordered
+list, not an exact theorem inventory or suffix. Add ordinary recorded support
+theorems before their consumers wherever a coherent intermediate carrier fact
+materially improves or enables proof composition.
 
 **Proof obligations:**
 
@@ -1145,6 +1148,11 @@ The logical/reification prefix precedes these eight.
 - `plusRightUnit`, `plusAssoc`, and `succShiftS`: Nat induction with their explicit
   reified predicates.
 - `plusComm`: Nat induction citing unit and successor-shift results as needed.
+- Factor nontrivial carrier base/hereditary obligations into explicit closed,
+  recorded support theorems when citation is the clearer or structurally legal
+  composition boundary. Support theorems are normal `Theory.theorems` entries,
+  never private helpers, hidden proof authorities, refs, macros, or kernel rules.
+  Do not create mechanical helpers for trivial finishing steps.
 - Every second-order substitution uses the corrected wire-quantifier pair:
   ground a universally scoped relation wire to exact carrier content with
   strongest-form relation `wireJoin`; derive a relation handle only when a
@@ -1155,13 +1163,18 @@ The logical/reification prefix precedes these eight.
 **Tests:**
 
 - `verifyTheory(buildFregeTheory())` succeeds.
-- Every arithmetic theorem is closed and includes its own primitives and seven
-  inline hypotheses.
+- Every required arithmetic theorem and support theorem is closed over its
+  primitive relations and carries its explicit hypotheses.
 - Every action replays; citations target preceding theorems.
+- The eight required historical names occur as an ordered subsequence; tests
+  must not encode them as an exact suffix or prohibit additional support
+  theorems.
 - `plusComm` concludes the crossed `Plus(b,a,o)` atom.
 - No deleted rule tag or lambda-era node kind occurs.
 - Removing a genuinely used hypothesis from representative induction proofs
   makes verification fail.
+- Removing a genuinely cited carrier support theorem or its citation from a
+  representative induction consumer makes verification fail.
 
 **Validation:**
 
