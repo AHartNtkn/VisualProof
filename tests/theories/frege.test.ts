@@ -126,6 +126,60 @@ const RIGHT_ASSOC_NAMES = Object.keys(
   RIGHT_ASSOC_CONTRACTS,
 ) as readonly (keyof typeof RIGHT_ASSOC_CONTRACTS)[]
 
+const SHIFT_COMM_CONTRACTS = {
+  successorShiftCarrierInductive: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: [
+      'successorTotal',
+      'successorSingleValued',
+      'plusBase',
+      'plusStep',
+      'plusSingleValued',
+    ],
+  },
+  succShiftS: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: [
+      'successorTotal',
+      'successorSingleValued',
+      'plusBase',
+      'plusStep',
+      'plusSingleValued',
+    ],
+  },
+  commutativityCarrierInductive: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: [
+      'zeroUnique',
+      'successorTotal',
+      'successorSingleValued',
+      'plusBase',
+      'plusStep',
+      'plusSingleValued',
+    ],
+  },
+  plusComm: {
+    primitives: ['zero', 'successor', 'plus'],
+    hypotheses: [
+      'zeroUnique',
+      'successorTotal',
+      'successorSingleValued',
+      'plusBase',
+      'plusStep',
+      'plusSingleValued',
+    ],
+  },
+} as const satisfies Readonly<
+  Partial<Record<ArithmeticStatementName, {
+    readonly primitives: readonly ('zero' | 'successor' | 'plus')[]
+    readonly hypotheses: readonly HypothesisName[]
+  }>>
+>
+
+const SHIFT_COMM_NAMES = Object.keys(
+  SHIFT_COMM_CONTRACTS,
+) as readonly (keyof typeof SHIFT_COMM_CONTRACTS)[]
+
 const HYPOTHESIS_ACTION_TERMS: Readonly<
   Record<HypothesisName, readonly string[]>
 > = {
@@ -229,6 +283,7 @@ function buildThroughAssociativityTheory(): Theory {
 
 type ProofTrace = {
   readonly before: Diagram
+  readonly after: Diagram
   readonly step: ProofStep
   readonly diagnostic: string
 }
@@ -251,12 +306,14 @@ function traceProofHalf(
         `${theorem.name} ${half} action '${action.label}' is not primitive`,
       )
     }
+    const after = applyAction(diagram, action, context, half)
     traces.push({
       before: diagram,
+      after,
       step: action.steps[0]!,
       diagnostic: action.label,
     })
-    diagram = applyAction(diagram, action, context, half)
+    diagram = after
   }
   return traces
 }
@@ -325,6 +382,7 @@ function structuralHypothesisRegion(
   > = {
     zeroUnique: 2,
     successorTotal: 1,
+    successorSingleValued: 3,
     plusBase: 2,
     plusStep: 5,
     plusSingleValued: 4,
@@ -439,6 +497,85 @@ function assertCertifiedDeiteration(
   ).toBe(true)
 }
 
+function selectionKey(selection: SubgraphSelection): string {
+  return JSON.stringify([
+    selection.region,
+    [...selection.regions].sort(),
+    [...selection.nodes].sort(),
+    [...selection.wires].sort(),
+  ])
+}
+
+function iterationCopySelection(
+  trace: ProofTrace,
+): SubgraphSelection | null {
+  if (trace.step.rule !== 'iteration') return null
+  const target = trace.step.target
+  const regions = Object.entries(trace.after.regions)
+    .filter(([id, region]) =>
+      trace.before.regions[id] === undefined
+      && region.kind === 'cut'
+      && region.parent === target)
+    .map(([id]) => id)
+  const nodes = Object.entries(trace.after.nodes)
+    .filter(([id, node]) =>
+      trace.before.nodes[id] === undefined
+      && node.region === target)
+    .map(([id]) => id)
+  const wires = Object.entries(trace.after.wires)
+    .filter(([id, wire]) =>
+      trace.before.wires[id] === undefined
+      && wire.scope === target
+      && wire.endpoints.length === 0)
+    .map(([id]) => id)
+  return {
+    region: target,
+    regions,
+    nodes,
+    wires,
+  }
+}
+
+function assertStructuralProvenanceChain(
+  traces: readonly ProofTrace[],
+  source: SubgraphSelection,
+  premise: string,
+): void {
+  const reachable = new Set([selectionKey(source)])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const trace of traces) {
+      if (trace.step.rule === 'iteration') {
+        if (!reachable.has(selectionKey(trace.step.sel))) continue
+        const copy = iterationCopySelection(trace)
+        if (copy === null) continue
+        const key = selectionKey(copy)
+        if (!reachable.has(key)) {
+          reachable.add(key)
+          changed = true
+        }
+        continue
+      }
+      if (
+        trace.step.rule === 'deiteration'
+        && reachable.has(selectionKey(trace.step.justifier))
+      ) {
+        assertCertifiedDeiteration(trace, trace.step.justifier)
+        const key = selectionKey(trace.step.sel)
+        if (!reachable.has(key)) {
+          reachable.add(key)
+          changed = true
+        }
+      }
+    }
+  }
+  expect(
+    reachable.size,
+    `${premise} transitive structural provenance`,
+  ).toBeGreaterThan(1)
+}
+
 describe('relational Frege arithmetic proofs', () => {
   it('declares the exact base and natural-number proof contracts', () => {
     for (const name of BASE_NATURAL_NAMES) {
@@ -452,6 +589,17 @@ describe('relational Frege arithmetic proofs', () => {
     for (const name of RIGHT_ASSOC_NAMES) {
       expect(ARITHMETIC_CONTRACTS[name]).toEqual(
         RIGHT_ASSOC_CONTRACTS[name],
+      )
+    }
+  })
+
+  it('declares the exact successor-shift and commutativity contracts without zero existence', () => {
+    for (const name of SHIFT_COMM_NAMES) {
+      expect(ARITHMETIC_CONTRACTS[name]).toEqual(
+        SHIFT_COMM_CONTRACTS[name],
+      )
+      expect(ARITHMETIC_CONTRACTS[name].hypotheses).not.toContain(
+        'zeroExists',
       )
     }
   })
@@ -1006,6 +1154,56 @@ describe('relational Frege arithmetic proofs', () => {
           },
         }
 
+        expect(
+          () => verifyTheory({
+            relations: theory.relations,
+            theorems: [
+              ...theory.theorems.slice(0, theoremIndex),
+              weakened,
+            ],
+          }),
+          `${name} without ${hypothesis}`,
+        ).toThrow()
+      }
+    }
+  })
+
+  it('makes every exact successor-shift and commutativity premise causally and transitively certified', () => {
+    const theory = buildFregeTheory()
+
+    for (const name of SHIFT_COMM_NAMES) {
+      const theoremIndex = theory.theorems.findIndex(
+        (candidate) => candidate.name === name,
+      )
+      const theorem = theory.theorems[theoremIndex]!
+      const context = verifyTheory({
+        relations: theory.relations,
+        theorems: theory.theorems.slice(0, theoremIndex),
+      })
+      const traces = [
+        ...traceProofHalf(theorem, context, 'forward'),
+        ...traceProofHalf(theorem, context, 'backward'),
+      ]
+      for (const hypothesis of SHIFT_COMM_CONTRACTS[name].hypotheses) {
+        const region = structuralHypothesisRegion(theorem, hypothesis)
+        const source = {
+          region: theoremShell(theorem.rhs.diagram).antecedent,
+          regions: [region],
+          nodes: [],
+          wires: [],
+        } as const
+        assertStructuralProvenanceChain(
+          traces,
+          source,
+          `${name} ${hypothesis}`,
+        )
+        const weakened = {
+          ...theorem,
+          rhs: {
+            ...theorem.rhs,
+            diagram: removeSubgraph(theorem.rhs.diagram, source),
+          },
+        }
         expect(
           () => verifyTheory({
             relations: theory.relations,

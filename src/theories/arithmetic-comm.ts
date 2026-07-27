@@ -493,24 +493,6 @@ function plusComm(
       },
     })
   }
-  const outerStandingZero = exactOne(
-    directNodes(backward.diagram, backwardHypotheses).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === backwardZero),
-    'outer standing Zero',
-  )
-  const citedStandingZero = exactOne(
-    directNodes(backward.diagram, citedHypotheses).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === backwardZero),
-    'cited standing Zero',
-  )
-  backward.record('specialize cited standing Zero', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: endpointWire(backward.diagram, outerStandingZero, 'arg', 0),
-      b: endpointWire(backward.diagram, citedStandingZero, 'arg', 0),
-    },
-  })
   for (const citedHypothesis of directCuts(
     backward.diagram,
     citedHypotheses,
@@ -534,12 +516,6 @@ function plusComm(
       retargets: [],
     })
   }
-  deiterateNode(
-    backward,
-    'discharge cited standing Zero',
-    citedHypotheses,
-    citedStandingZero,
-  )
   backward.record('expose cited support conclusion', {
     rule: 'doubleCutElim',
     region: citedHypotheses,

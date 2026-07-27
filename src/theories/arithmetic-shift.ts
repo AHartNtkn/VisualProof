@@ -345,11 +345,16 @@ function succShiftS(
     'reviewed standing hypotheses',
   )
   const hypothesisChildren = directCuts(backward.diagram, hypotheses)
-  const conclusion = hypothesisChildren[0]
-  const additionFunctional = hypothesisChildren[6]
-  if (conclusion === undefined || additionFunctional === undefined) {
-    throw new Error('missing reviewed successor-shift structure')
-  }
+  const conclusion = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 0),
+    'reviewed successor-shift conclusion',
+  )
+  const additionFunctional = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 4),
+    'reviewed plusSingleValued hypothesis',
+  )
   const claimScope = exactOne(
     directCuts(backward.diagram, conclusion),
     'reviewed claim scope',
@@ -452,29 +457,6 @@ function succShiftS(
     })
   }
 
-  const standingZero = exactOne(
-    directNodes(backward.diagram, hypotheses).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === reviewedZero),
-    'reviewed standing Zero',
-  )
-  const citedStandingZero = exactOne(
-    directNodes(backward.diagram, citedHypotheses).filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === reviewedZero),
-    'cited standing Zero',
-  )
-  backward.record('specialize cited standing-zero witness', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: endpointWire(backward.diagram, standingZero, 'arg', 0),
-      b: endpointWire(
-        backward.diagram,
-        citedStandingZero,
-        'arg',
-        0,
-      ),
-    },
-  })
   for (const citedHypothesis of directCuts(
     backward.diagram,
     citedHypotheses,
@@ -498,12 +480,6 @@ function succShiftS(
       retargets: [],
     })
   }
-  deiterateNode(
-    backward,
-    'discharge cited standing Zero',
-    citedHypotheses,
-    citedStandingZero,
-  )
   backward.record('expose cited carrier-support conclusion', {
     rule: 'doubleCutElim',
     region: citedHypotheses,
@@ -656,10 +632,11 @@ function succShiftS(
     region: inheritedTotality,
   })
 
-  const successorTotal = hypothesisChildren[2]
-  if (successorTotal === undefined) {
-    throw new Error('missing reviewed successor totality')
-  }
+  const successorTotal = exactOne(
+    hypothesisChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 1),
+    'reviewed successorTotal hypothesis',
+  )
   before = backward.diagram
   backward.record('copy successor totality into claim', {
     rule: 'iteration',
