@@ -74,6 +74,18 @@ deletions.
 >     removed: no spawn-anywhere permission, no checked-graph validation, no
 >     polarity bypass. `existsProp` (item 9) remains a theorem; its derivation
 >     route becomes the corrected-sever route.
+> 11. **Occurrence designation is editor selection state, never diagram content.**
+>     Two proposed interaction designs are invalid and rejected: menu rows for the
+>     sever/join actions (menus are banned for proof actions), and the
+>     "membrane" design — wrapping an occurrence in a double cut to mark its
+>     extent, with taps on the cut's wire crossings to order arguments. The
+>     membrane used a proof move to carry editor intent, violating the standing
+>     layer-separation law (no layer borrows another's vocabulary; marking what
+>     the user intends to operate on must not change the diagram or proof
+>     history). Its claimed precedent was also false: Define-relation assigns
+>     canonical structural order and rejects manual boundary ordering. The
+>     correct model is in Section 1 under "Interaction: designating an
+>     occurrence."
 
 ## Motivation
 
@@ -179,6 +191,29 @@ copy per scroll onto fresh `P` — ~6 moves, `G` never deconstructed). Closure
 statements (`∀R∀S∃Q(Q ≐ R∧S)` etc.) derive the same way. No hypotheses in
 theorem statements, no axiom figures, no spawn authority, no def-store coupling,
 no recognizer beyond the ordinary matcher.
+
+**Interaction: designating an occurrence (for sever/join).** Telling the editor
+which content to abstract or ground to, and in what argument order, is transient
+selection state. It never adds cuts, nodes, or wires to the diagram, and it never
+opens a menu. The rules:
+
+- **Highlight order is the argument order.** The selection the user builds by
+  highlighting is an ordered sequence (it already is — hits append in event
+  order). Highlight the occurrence's content, then highlight its boundary wires
+  in the order they should serve as formal arguments: the first highlighted
+  boundary wire is argument 0, the next is argument 1, and so on. Boundary wires
+  left unhighlighted are ambient parameters. Unhighlighting removes a wire from
+  the sequence; highlighting it again appends it at the end.
+- **The wire drag consumes the prepared selection.** Severing: draw the fresh
+  wire contacting the selected occurrences (endpoint drag, then branch drags);
+  dropping its loose end commits, and where the loose end rests is the wire's
+  scope. Grounding: drag the quantified wire onto the selected occurrence;
+  release commits.
+- **The committed step is the durable record.** The proof step stores the
+  occurrence extent and the ordered argument wires; the selection state is
+  discarded. The kernel validates at commit — copies of one content, coherent
+  parameters, polarity — and an invalid drop is refused (spring-back). The
+  matcher only validates; it never finds, offers, or orders anything.
 
 **Definitional unfold/fold — kept, reimplemented (NOT deleted).** Expanding or
 collapsing a named `ref` is definitional transparency, not the rejected
