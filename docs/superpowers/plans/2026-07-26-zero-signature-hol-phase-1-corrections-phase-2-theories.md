@@ -1074,23 +1074,26 @@ nat  : rel(rel(iota), rel(iota,iota), iota)
 Only `nat` is an interpreted arithmetic definition. `zero`, `succ`, and `plus`
 are theorem-local universally quantified relation wires.
 
-Every arithmetic theorem independently contains these inline hypotheses:
+Each arithmetic theorem quantifies only the primitive relations it uses and
+contains only the inline hypotheses invoked by its derivation. Do not add plus
+totality or a universal assumption bundle. Hypotheses remain explicit diagram
+formulas, never refs.
 
-1. `Exists z. Zero(z)`.
-2. `Zero(z) and Zero(z') -> z = z'`.
-3. `forall n. Exists s. Succ(n,s)`.
-4. `Succ(n,s) and Succ(n,s') -> s = s'`.
-5. `Zero(z) -> Plus(z,b,b)`.
-6. `Plus(a,b,c) and Succ(a,a') and Succ(c,c') -> Plus(a',b,c')`.
-7. `Plus(a,b,c) and Plus(a,b,c') -> c = c'`.
-
-Do not add plus totality. Each theorem is the closed graph:
-
-```text
-forall zero,succ,plus. standing hypotheses -> theorem-specific conclusion
-```
-
-The hypotheses are duplicated inline, not hidden behind a ref or bundle.
+| theorem | primitives | hypotheses |
+| --- | --- | --- |
+| `plusLeftUnit` | zero, plus | plusBase, plusSingleValued |
+| `zeroIsNat` | zero, successor | zeroExists |
+| `succNat` | zero, successor | none |
+| `oneIsNat` | zero, successor | zeroExists, successorTotal |
+| `rightIdentityCarrierInductive` | zero, successor, plus | zeroUnique, plusBase, plusStep |
+| `plusRightUnit` | zero, successor, plus | zeroUnique, plusBase, plusStep, plusSingleValued |
+| `associativityCarrierBase` | zero, plus | plusBase, plusSingleValued |
+| `associativityCarrierHereditary` | successor, plus | successorTotal, plusStep, plusSingleValued |
+| `plusAssoc` | zero, successor, plus | successorTotal, plusBase, plusStep, plusSingleValued |
+| `successorShiftCarrierInductive` | zero, successor, plus | successorTotal, successorSingleValued, plusBase, plusStep, plusSingleValued |
+| `succShiftS` | zero, successor, plus | successorTotal, successorSingleValued, plusBase, plusStep, plusSingleValued |
+| `commutativityCarrierInductive` | zero, successor, plus | zeroUnique, successorTotal, successorSingleValued, plusBase, plusStep, plusSingleValued |
+| `plusComm` | zero, successor, plus | zeroUnique, successorTotal, successorSingleValued, plusBase, plusStep, plusSingleValued |
 
 **Statement requirements:**
 
