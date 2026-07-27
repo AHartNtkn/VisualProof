@@ -595,7 +595,6 @@ type ProvenanceBranch = {
   readonly regions: Set<string>
   readonly nodes: Set<string>
   readonly wires: Set<string>
-  readonly origins: Set<string>
   copied: boolean
   specialized: boolean
   certified: boolean
@@ -619,7 +618,6 @@ function provenanceBranch(
       ...contents.internalWires,
       ...contents.touchingWires,
     ]),
-    origins: new Set([selectionKey(half, state, selection)]),
     copied: false,
     specialized: false,
     certified: false,
@@ -635,7 +633,6 @@ function cloneBranch(branch: ProvenanceBranch): ProvenanceBranch {
     regions: new Set(branch.regions),
     nodes: new Set(branch.nodes),
     wires: new Set(branch.wires),
-    origins: new Set(branch.origins),
     copied: branch.copied,
     specialized: branch.specialized,
     certified: branch.certified,

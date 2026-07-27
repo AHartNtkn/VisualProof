@@ -79,9 +79,9 @@ export function addCut(d: Diagram, sel: SubgraphSelection): { diagram: Diagram; 
 /**
  * Introduce a fresh endpoint-free relational wire of sort `sig`, scoped at
  * `scope`. A relational wire IS the second-order existential variable (the old
- * "bubble"): atoms attach their head to it, and a body node witnesses it. An
- * endpoint-free relational wire is a vacuous existential, deletable by vacuous
- * elimination — the construction-level counterpart of applyVacuousIntro.
+ * "bubble"), and atoms attach their head to it. An endpoint-free relational
+ * wire is a vacuous existential, deletable by vacuous elimination — the
+ * construction-level counterpart of applyVacuousIntro.
  */
 export function addRelationWire(d: Diagram, scope: RegionId, sig: RelSig): { diagram: Diagram; wire: WireId } {
   if (d.regions[scope] === undefined) throw new Error(`unknown region '${scope}'`)
