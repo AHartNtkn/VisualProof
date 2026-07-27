@@ -206,10 +206,14 @@ opens a menu. The rules:
   unhighlighted are ambient parameters. Unhighlighting removes an item;
   highlighting it again appends it at the end. There are no phases and no second
   highlight layer.
-- **The wire drag consumes the prepared selection.** Severing: draw the fresh
-  wire contacting the selected occurrences (endpoint drag, then branch drags);
-  dropping its loose end commits, and where the loose end rests is the wire's
-  scope. Grounding: drag the quantified wire onto the selected occurrence;
+- **The wire drag consumes what it touches.** Severing: draw the fresh wire
+  contacting occurrences (endpoint drag, then branch drags); dropping its loose
+  end commits, and where the loose end rests is the wire's scope. A sever's
+  occurrence set is exactly the highlighted extents that wire contacts — contact
+  count is the grouping: one wire touching two copies makes one existential
+  referenced at both sites; two wires touching one copy each make two
+  existentials. A highlighted extent the wire never touches stays highlighted,
+  unconsumed. Grounding: drag the quantified wire onto the selected occurrence;
   release commits.
 - **The committed step is the durable record.** The proof step stores the
   occurrence extent and the ordered argument wires; the selection state is
