@@ -5,7 +5,6 @@ import type {
 } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import {
-  registerTheorem,
   verifyTheory,
   type Theory,
 } from '../kernel/proof/context'
@@ -22,8 +21,15 @@ import {
   PrimitiveStepRecorder,
   onlyNewCut,
   onlyNewNode,
-  onlyNewWire,
 } from './record'
+import {
+  associativityInductionReification,
+  commutativityInductionReification,
+  relationIdentityReification,
+  rightIdentityInductionReification,
+  successorShiftInductionReification,
+  truthReification,
+} from './reification'
 
 const PROPOSITION = relSig([])
 
@@ -139,36 +145,31 @@ function ordinaryEqualityContradiction(
 
 function existsProp(
   relations: Theory['relations'],
-  ordinary: Theorem,
+  prior: readonly Theorem[],
 ): Theorem {
   const blankGraph = emptyGraph()
   const lhs = finishDiagramWithBoundary(blankGraph, [])
-  const relationContext = verifyTheory({ relations, theorems: [] })
-  const context = registerTheorem(relationContext, ordinary)
+  const context = verifyTheory({ relations, theorems: prior })
   const recorder = new PrimitiveStepRecorder(lhs.diagram, context)
 
   let before = recorder.diagram
-  recorder.record('reify blank as fresh P iff True', {
-    rule: 'refSpawn',
-    region: recorder.diagram.root,
-    defId: 'truthReification',
-    sig: relSig([PROPOSITION]),
+  recorder.record('cite truth reification at the blank sheet', {
+    rule: 'theorem',
+    name: 'truthReification',
+    direction: 'forward',
+    at: {
+      sel: {
+        region: recorder.diagram.root,
+        regions: [],
+        nodes: [],
+        wires: [],
+      },
+      args: [],
+    },
   })
-  const reification = onlyNewNode(
-    before,
-    recorder.diagram,
-    recorder.diagram.root,
-  )
-  const p = onlyNewWire(
-    before,
-    recorder.diagram,
-    recorder.diagram.root,
-  )
-
-  recorder.record('expose P iff True', {
-    rule: 'unfold',
-    nodeId: reification,
-  })
+  const citedWires = Object.keys(recorder.diagram.wires)
+    .filter((wire) => before.wires[wire] === undefined)
+  exactlyOne(citedWires, 'truth-reification witness')
   const rootBranches = directCuts(recorder.diagram, recorder.diagram.root)
   const forward = exactlyOne(
     rootBranches.filter((region) =>
@@ -183,61 +184,23 @@ function existsProp(
     directCuts(recorder.diagram, reverse),
     'inner witness scope',
   )
-  const originalWitness = exactlyOne(
+  exactlyOne(
     directNodes(recorder.diagram, reverseInner),
-    'original witness occurrence',
+    'truth-reification witness occurrence',
   )
 
-  before = recorder.diagram
-  recorder.record('introduce pending proposition X in witness branch', {
-    rule: 'vacuousIntro',
-    scope: reverse,
-    sig: PROPOSITION,
-  })
-  const x = onlyNewWire(before, recorder.diagram, reverse)
-
-  before = recorder.diagram
-  recorder.record('connect reified P to pending X', {
-    rule: 'identityInsert',
-    region: reverse,
-    wires: [p, x],
-  })
-  const connection = onlyNewNode(before, recorder.diagram, reverse)
-
-  recorder.record('iterate witness occurrence as X', {
-    rule: 'iteration',
-    sel: {
-      region: reverseInner,
-      regions: [],
-      nodes: [originalWitness],
-      wires: [],
-    },
-    target: reverseInner,
-    retargets: [{
-      boundary: 0,
-      identity: connection,
-      from: p,
-      to: x,
-    }],
-  })
-
-  recorder.record('discharge P-to-X connection', {
-    rule: 'wireJoin',
-    a: p,
-    b: x,
-  })
-  recorder.record('expose original and substituted witnesses', {
-    rule: 'doubleCutElim',
-    region: reverse,
-  })
-  recorder.record('remove unused branch and original witness', {
+  recorder.record('erase the vacuous P-to-True implication', {
     rule: 'erasure',
     sel: {
       region: recorder.diagram.root,
       regions: [forward],
-      nodes: [originalWitness],
+      nodes: [],
       wires: [],
     },
+  })
+  recorder.record('eliminate the remaining True-to-P double cut', {
+    rule: 'doubleCutElim',
+    region: reverse,
   })
 
   let target = emptyGraph()
@@ -258,9 +221,17 @@ export function buildLogicalTheoremPrefix(
   relations: Theory['relations'],
 ): readonly Theorem[] {
   const ordinary = ordinaryEqualityContradiction(relations)
-  const relationContext = verifyTheory({ relations, theorems: [] })
-  const ordinaryContext = registerTheorem(relationContext, ordinary)
-  const existence = existsProp(relations, ordinary)
-  registerTheorem(ordinaryContext, existence)
-  return Object.freeze([ordinary, existence])
+  const prefix = [
+    ordinary,
+    relationIdentityReification(),
+    truthReification(),
+    rightIdentityInductionReification(),
+    associativityInductionReification(),
+    successorShiftInductionReification(),
+    commutativityInductionReification(),
+  ]
+  const existence = existsProp(relations, prefix)
+  const completed = [...prefix, existence]
+  verifyTheory({ relations, theorems: completed })
+  return Object.freeze(completed)
 }

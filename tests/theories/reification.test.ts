@@ -1,34 +1,25 @@
-import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
+import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import type {
   Diagram,
   NodeId,
   RegionId,
   WireId,
 } from '../../src/kernel/diagram/diagram'
-import { dwbToJson } from '../../src/kernel/diagram/json'
-import { IOTA, relSig, sigKey } from '../../src/kernel/diagram/sig'
+import { polarity } from '../../src/kernel/diagram/regions'
+import { IOTA, relSig, sigKey, type Sig } from '../../src/kernel/diagram/sig'
 import {
   registerTheorem,
   verifyTheory,
 } from '../../src/kernel/proof/context'
-import {
-  replayActions,
-} from '../../src/kernel/proof/action'
+import { applyActionWithReceipt } from '../../src/kernel/proof/action'
 import {
   theoremFromJson,
   theoremToJson,
 } from '../../src/kernel/proof/json'
-import {
-  loadTheory,
-  theoryToJson,
-} from '../../src/kernel/proof/store'
-import type { ProofStep } from '../../src/kernel/proof/step'
 import {
   checkTheorem,
   type Theorem,
@@ -38,54 +29,155 @@ import {
   biconditional,
   declareWire,
   emptyGraph,
-  finishDiagram,
   finishDiagramWithBoundary,
   identity,
   implication,
   quantifierScope,
-  ref,
+  type GraphConstruction,
 } from '../../src/theories/graph'
-import {
-  PrimitiveStepRecorder,
-  onlyNewCut,
-  onlyNewNode,
-  onlyNewWire,
-} from '../../src/theories/record'
+import { buildFregeTheory } from '../../src/theories'
 import {
   associativityInductionReification,
   commutativityInductionReification,
+  relationIdentityReification,
   rightIdentityInductionReification,
   successorShiftInductionReification,
   truthReification,
 } from '../../src/theories/reification'
-import { buildFregeTheory } from '../../src/theories'
 
-function binaryReification() {
-  let graph = emptyGraph()
-  const pResult = declareWire(graph, graph.root, relSig([IOTA, IOTA]))
-  graph = pResult.graph
-  const p = pResult.value
-  const sourceResult = declareWire(graph, graph.root, relSig([IOTA, IOTA]))
-  graph = sourceResult.graph
-  const source = sourceResult.value
-  const quantified = quantifierScope(graph, graph.root, 'forall', [IOTA, IOTA])
-  graph = quantified.graph
-  const [x, y] = quantified.value.variables
-  const iff = biconditional(graph, quantified.value.body)
-  graph = iff.graph
+const UNARY = relSig([IOTA])
+const BINARY = relSig([IOTA, IOTA])
+const TERNARY = relSig([IOTA, IOTA, IOTA])
 
-  for (const [region, relation] of [
-    [iff.value.forward.antecedent, p],
-    [iff.value.forward.consequent, source],
-    [iff.value.reverse.antecedent, source],
-    [iff.value.reverse.consequent, p],
-  ] as const) {
-    graph = atom(graph, region, relation, [x!, y!]).graph
-  }
-  return finishDiagramWithBoundary(graph, [p, source])
+function exactlyOne<T>(values: readonly T[], what: string): T {
+  expect(values, what).toHaveLength(1)
+  return values[0]!
 }
 
-function malformedTruthReification() {
+function endpointWire(
+  diagram: Diagram,
+  node: NodeId,
+  kind: 'head' | 'arg',
+  index?: number,
+): WireId {
+  return exactlyOne(
+    Object.entries(diagram.wires)
+      .filter(([, wire]) => wire.endpoints.some((endpoint) =>
+        endpoint.node === node
+        && endpoint.port.kind === kind
+        && (
+          kind === 'head'
+          || (
+            endpoint.port.kind === 'arg'
+            && endpoint.port.index === index
+          )
+        )))
+      .map(([id]) => id),
+    `one ${kind} wire for '${node}'`,
+  )
+}
+
+function captureOnly(signatures: readonly Sig[]): DiagramWithBoundary {
+  let graph = emptyGraph()
+  const boundary: WireId[] = []
+  for (const signature of signatures) {
+    const capture = declareWire(graph, graph.root, signature)
+    graph = capture.graph
+    boundary.push(capture.value)
+  }
+  return finishDiagramWithBoundary(graph, boundary)
+}
+
+type UnaryMaterial = (
+  graph: GraphConstruction,
+  region: RegionId,
+  variable: WireId,
+  captures: readonly WireId[],
+) => GraphConstruction
+
+function unaryReificationFigure(
+  captureSignatures: readonly Sig[],
+  drawMaterial: UnaryMaterial,
+): DiagramWithBoundary {
+  let graph = emptyGraph()
+  const captures: WireId[] = []
+  for (const signature of captureSignatures) {
+    const capture = declareWire(graph, graph.root, signature)
+    graph = capture.graph
+    captures.push(capture.value)
+  }
+  const witness = declareWire(graph, graph.root, UNARY)
+  graph = witness.graph
+  const universal = quantifierScope(graph, graph.root, 'forall', [IOTA])
+  graph = universal.graph
+  const variable = universal.value.variables[0]!
+  const iff = biconditional(graph, universal.value.body)
+  graph = iff.graph
+  graph = atom(
+    graph,
+    iff.value.forward.antecedent,
+    witness.value,
+    [variable],
+  ).graph
+  graph = drawMaterial(
+    graph,
+    iff.value.forward.consequent,
+    variable,
+    captures,
+  )
+  graph = drawMaterial(
+    graph,
+    iff.value.reverse.antecedent,
+    variable,
+    captures,
+  )
+  graph = atom(
+    graph,
+    iff.value.reverse.consequent,
+    witness.value,
+    [variable],
+  ).graph
+  return finishDiagramWithBoundary(graph, captures)
+}
+
+function relationIdentityFigure(): DiagramWithBoundary {
+  let graph = emptyGraph()
+  const relationUniversal = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [UNARY],
+  )
+  graph = relationUniversal.graph
+  const source = relationUniversal.value.variables[0]!
+  const witness = declareWire(
+    graph,
+    relationUniversal.value.body,
+    UNARY,
+  )
+  graph = witness.graph
+  const individualUniversal = quantifierScope(
+    graph,
+    relationUniversal.value.body,
+    'forall',
+    [IOTA],
+  )
+  graph = individualUniversal.graph
+  const variable = individualUniversal.value.variables[0]!
+  const iff = biconditional(graph, individualUniversal.value.body)
+  graph = iff.graph
+  for (const [region, relation] of [
+    [iff.value.forward.antecedent, witness.value],
+    [iff.value.forward.consequent, source],
+    [iff.value.reverse.antecedent, source],
+    [iff.value.reverse.consequent, witness.value],
+  ] as const) {
+    graph = atom(graph, region, relation, [variable]).graph
+  }
+  return finishDiagramWithBoundary(graph, [])
+}
+
+function truthFigure(): DiagramWithBoundary {
   let graph = emptyGraph()
   const witness = declareWire(graph, graph.root, relSig([]))
   graph = witness.graph
@@ -97,976 +189,450 @@ function malformedTruthReification() {
     witness.value,
     [],
   ).graph
-  return finishDiagramWithBoundary(graph, [witness.value])
+  graph = atom(
+    graph,
+    iff.value.reverse.consequent,
+    witness.value,
+    [],
+  ).graph
+  return finishDiagramWithBoundary(graph, [])
 }
 
-function witnessAtoms(
-  definition: ReturnType<typeof truthReification>,
-): readonly string[] {
-  const witness = definition.boundary[0]!
-  return definition.diagram.wires[witness]!.endpoints
-    .filter((endpoint) => endpoint.port.kind === 'head')
-    .map((endpoint) => endpoint.node)
+function rightIdentityMaterial(
+  initial: GraphConstruction,
+  region: RegionId,
+  inductionVariable: WireId,
+  captures: readonly WireId[],
+): GraphConstruction {
+  const [zero, plus] = captures
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA, IOTA])
+  const [zeroValue, output] = quantified.value.variables
+  const claim = implication(quantified.graph, quantified.value.body)
+  let graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    zero!,
+    [zeroValue!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus!,
+    [inductionVariable, zeroValue!, output!],
+  ).graph
+  return identity(
+    graph,
+    claim.value.consequent,
+    [output!, inductionVariable],
+  ).graph
 }
 
-function exactOne<T>(values: readonly T[], what: string): T {
-  expect(values, what).toHaveLength(1)
-  return values[0]!
-}
-
-function directCuts(diagram: Diagram, parent: RegionId): readonly RegionId[] {
-  return Object.entries(diagram.regions)
-    .filter(([, region]) => region.kind === 'cut' && region.parent === parent)
-    .map(([id]) => id)
-}
-
-function directNodes(diagram: Diagram, region: RegionId): readonly NodeId[] {
-  return Object.entries(diagram.nodes)
-    .filter(([, node]) => node.region === region)
-    .map(([id]) => id)
-}
-
-function scopedWires(diagram: Diagram, region: RegionId): readonly WireId[] {
-  return Object.entries(diagram.wires)
-    .filter(([, wire]) => wire.scope === region)
-    .map(([id]) => id)
-}
-
-function endpointWire(
-  diagram: Diagram,
-  node: NodeId,
-  kind: 'head' | 'arg' | 'identity',
-  index?: number,
-): WireId {
-  return exactOne(
-    Object.entries(diagram.wires)
-      .filter(([, wire]) => wire.endpoints.some((endpoint) =>
-        endpoint.node === node
-        && endpoint.port.kind === kind
-        && (
-          kind === 'head'
-          || (
-            endpoint.port.kind !== 'head'
-            && endpoint.port.index === index
-          )
-        )))
-      .map(([id]) => id),
-    `one ${kind}${index === undefined ? '' : ` ${index}`} wire for '${node}'`,
+function associativityMaterial(
+  initial: GraphConstruction,
+  region: RegionId,
+  inductionVariable: WireId,
+  captures: readonly WireId[],
+): GraphConstruction {
+  const plus = captures[0]!
+  const quantified = quantifierScope(
+    initial,
+    region,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA, IOTA],
   )
+  const [right, third, firstSum, output, innerSum] =
+    quantified.value.variables
+  const claim = implication(quantified.graph, quantified.value.body)
+  let graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus,
+    [inductionVariable, right!, firstSum!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus,
+    [firstSum!, third!, output!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus,
+    [right!, third!, innerSum!],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    plus,
+    [inductionVariable, innerSum!, output!],
+  ).graph
 }
 
-type ReificationSkeleton = {
-  readonly variables: readonly WireId[]
-  readonly materialSites: readonly [
-    { readonly region: RegionId; readonly excludedCuts: readonly RegionId[] },
-    { readonly region: RegionId; readonly excludedCuts: readonly RegionId[] },
-  ]
-}
-
-function assertReificationSkeleton(
-  definition: DiagramWithBoundary,
-  arity: number,
-): ReificationSkeleton {
-  const { diagram } = definition
-  const witness = definition.boundary[0]!
-  const witnessSig = diagram.wires[witness]!.sig
-  expect(witnessSig).toEqual(relSig(
-    Array.from({ length: arity }, () => IOTA),
-  ))
-
-  let body = diagram.root
-  let variables: readonly WireId[] = []
-  if (arity > 0) {
-    const universal = exactOne(
-      directCuts(diagram, diagram.root),
-      'one outer universal cut',
-    )
-    body = exactOne(
-      directCuts(diagram, universal),
-      'one positive universal body',
-    )
-    variables = scopedWires(diagram, universal)
-    expect(variables).toHaveLength(arity)
-    expect(variables.map((wire) => sigKey(diagram.wires[wire]!.sig)))
-      .toEqual(Array.from({ length: arity }, () => 'i'))
-  }
-
-  const implications = directCuts(diagram, body)
-  expect(implications, 'the two biconditional implication cuts').toHaveLength(2)
-  const witnessNodes = witnessAtoms(definition)
-  expect(witnessNodes).toHaveLength(2)
-  const forward = exactOne(
-    implications.filter((antecedent) =>
-      witnessNodes.some((node) => diagram.nodes[node]!.region === antecedent)),
-    'one P-to-S implication',
+function successorShiftMaterial(
+  initial: GraphConstruction,
+  region: RegionId,
+  inductionVariable: WireId,
+  captures: readonly WireId[],
+): GraphConstruction {
+  const [successor, plus] = captures
+  const quantified = quantifierScope(
+    initial,
+    region,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
   )
-  const forwardConsequent = exactOne(
-    directCuts(diagram, forward),
-    'one P-to-S consequent',
-  )
-  const reverse = exactOne(
-    implications.filter((antecedent) => antecedent !== forward),
-    'one S-to-P implication',
-  )
-  const reverseConsequent = exactOne(
-    directCuts(diagram, reverse).filter((candidate) =>
-      witnessNodes.some((node) => diagram.nodes[node]!.region === candidate)),
-    'one S-to-P consequent containing P',
-  )
-
-  const expectedWitnessRegions = [
-    forward,
-    reverseConsequent,
-  ].sort()
-  expect(witnessNodes.map((node) => diagram.nodes[node]!.region).sort())
-    .toEqual(expectedWitnessRegions)
-  for (const node of witnessNodes) {
-    expect(diagram.nodes[node]).toMatchObject({ kind: 'atom', sig: witnessSig })
-    expect(Array.from({ length: arity }, (_, index) =>
-      endpointWire(diagram, node, 'arg', index)))
-      .toEqual(variables)
-  }
-
-  return {
-    variables,
-    materialSites: [
-      { region: forwardConsequent, excludedCuts: [] },
-      { region: reverse, excludedCuts: [reverseConsequent] },
-    ],
-  }
+  const [right, rightSuccessor, output, outputSuccessor] =
+    quantified.value.variables
+  const claim = implication(quantified.graph, quantified.value.body)
+  let graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    successor!,
+    [right!, rightSuccessor!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus!,
+    [inductionVariable, right!, output!],
+  ).graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    successor!,
+    [output!, outputSuccessor!],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    plus!,
+    [inductionVariable, rightSuccessor!, outputSuccessor!],
+  ).graph
 }
 
-function nodeDescriptor(
-  diagram: Diagram,
-  nodeId: NodeId,
-  labels: ReadonlyMap<WireId, string>,
-): string {
-  const node = diagram.nodes[nodeId]!
-  const label = (wire: WireId): string => {
-    const value = labels.get(wire)
-    if (value === undefined) throw new Error(`missing test label for wire '${wire}'`)
-    return value
-  }
-  if (node.kind === 'atom') {
-    const head = label(endpointWire(diagram, nodeId, 'head'))
-    const args = node.sig.args.map((_, index) =>
-      label(endpointWire(diagram, nodeId, 'arg', index)))
-    return `${head}(${args.join(',')})`
-  }
-  if (node.kind === 'identity') {
-    const args = Array.from({ length: node.arity }, (_, index) =>
-      label(endpointWire(diagram, nodeId, 'identity', index))).sort()
-    return `=(${args.join(',')})`
-  }
-  throw new Error(`unexpected ref '${nodeId}' in reified material`)
+function commutativityMaterial(
+  initial: GraphConstruction,
+  region: RegionId,
+  inductionVariable: WireId,
+  captures: readonly WireId[],
+): GraphConstruction {
+  const plus = captures[0]!
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA, IOTA])
+  const [right, output] = quantified.value.variables
+  const claim = implication(quantified.graph, quantified.value.body)
+  let graph = claim.graph
+  graph = atom(
+    graph,
+    claim.value.antecedent,
+    plus,
+    [inductionVariable, right!, output!],
+  ).graph
+  return atom(
+    graph,
+    claim.value.consequent,
+    plus,
+    [right!, inductionVariable, output!],
+  ).graph
 }
 
-type MaterialExpectation = {
-  readonly captureNames: readonly string[]
-  readonly mainNames: readonly string[]
-  readonly localNames: readonly string[]
-  readonly premises: readonly string[]
-  readonly conclusions: readonly string[]
-  readonly canonicalHash: string
+type ReificationCase = {
+  readonly name: string
+  readonly make: () => Theorem
+  readonly captureSignatures: readonly Sig[]
+  readonly rhs: () => DiagramWithBoundary
 }
 
-function assertInductionMaterial(
-  definition: DiagramWithBoundary,
-  expected: MaterialExpectation,
-): void {
-  const skeleton = assertReificationSkeleton(
-    definition,
-    expected.mainNames.length,
-  )
-  const baseLabels = new Map<WireId, string>()
-  definition.boundary.forEach((wire, index) => {
-    baseLabels.set(wire, index === 0 ? 'P' : expected.captureNames[index - 1]!)
-  })
-  skeleton.variables.forEach((wire, index) => {
-    baseLabels.set(wire, expected.mainNames[index]!)
-  })
+const reificationCases: readonly ReificationCase[] = [
+  {
+    name: 'relationIdentityReification',
+    make: relationIdentityReification,
+    captureSignatures: [],
+    rhs: relationIdentityFigure,
+  },
+  {
+    name: 'truthReification',
+    make: truthReification,
+    captureSignatures: [],
+    rhs: truthFigure,
+  },
+  {
+    name: 'rightIdentityInductionReification',
+    make: rightIdentityInductionReification,
+    captureSignatures: [UNARY, TERNARY],
+    rhs: () => unaryReificationFigure(
+      [UNARY, TERNARY],
+      rightIdentityMaterial,
+    ),
+  },
+  {
+    name: 'associativityInductionReification',
+    make: associativityInductionReification,
+    captureSignatures: [TERNARY],
+    rhs: () => unaryReificationFigure(
+      [TERNARY],
+      associativityMaterial,
+    ),
+  },
+  {
+    name: 'successorShiftInductionReification',
+    make: successorShiftInductionReification,
+    captureSignatures: [BINARY, TERNARY],
+    rhs: () => unaryReificationFigure(
+      [BINARY, TERNARY],
+      successorShiftMaterial,
+    ),
+  },
+  {
+    name: 'commutativityInductionReification',
+    make: commutativityInductionReification,
+    captureSignatures: [TERNARY],
+    rhs: () => unaryReificationFigure(
+      [TERNARY],
+      commutativityMaterial,
+    ),
+  },
+]
 
-  for (const materialSite of skeleton.materialSites) {
-    const materialRegion = materialSite.region
-    expect(directNodes(definition.diagram, materialRegion)).toEqual([])
-    const universal = exactOne(
-      directCuts(definition.diagram, materialRegion)
-        .filter((cut) => !materialSite.excludedCuts.includes(cut)),
-      'one local universal cut in S',
-    )
-    const localVariables = scopedWires(definition.diagram, universal)
-    expect(localVariables).toHaveLength(expected.localNames.length)
-    expect(localVariables.map((wire) =>
-      sigKey(definition.diagram.wires[wire]!.sig)))
-      .toEqual(expected.localNames.map(() => 'i'))
-    const labels = new Map(baseLabels)
-    localVariables.forEach((wire, index) => {
-      labels.set(wire, expected.localNames[index]!)
-    })
-
-    const universalBody = exactOne(
-      directCuts(definition.diagram, universal),
-      'one positive local universal body',
-    )
-    const implicationCut = exactOne(
-      directCuts(definition.diagram, universalBody),
-      'one material implication',
-    )
-    const conclusionCut = exactOne(
-      directCuts(definition.diagram, implicationCut),
-      'one material conclusion',
-    )
-    expect(directCuts(definition.diagram, conclusionCut)).toEqual([])
-    expect(directNodes(definition.diagram, universal)).toEqual([])
-    expect(directNodes(definition.diagram, universalBody)).toEqual([])
-
-    const premises = directNodes(definition.diagram, implicationCut)
-      .map((node) => nodeDescriptor(definition.diagram, node, labels))
-      .sort()
-    const conclusions = directNodes(definition.diagram, conclusionCut)
-      .map((node) => nodeDescriptor(definition.diagram, node, labels))
-      .sort()
-    expect(premises).toEqual([...expected.premises].sort())
-    expect(conclusions).toEqual([...expected.conclusions].sort())
-  }
-
-  const canonical = exploreForm(definition.diagram, definition.boundary)
-  expect(createHash('sha256').update(canonical).digest('hex'))
-    .toBe(expected.canonicalHash)
+function flattenedRules(theorem: Theorem): readonly string[] {
+  return theorem.actions.flatMap((action) =>
+    action.steps.map((step) => step.rule))
 }
-
-describe('explicit grammatical relation reification', () => {
-  it('constructs nullary Truth deterministically with canonical JSON', () => {
-    const first = truthReification()
-    const second = truthReification()
-
-    expect(dwbToJson(first)).toEqual(dwbToJson(second))
-    expect(exploreForm(first.diagram, first.boundary))
-      .toBe(exploreForm(second.diagram, second.boundary))
-    expect(dwbToJson(first)).toEqual({
-      diagram: {
-        root: 'r0',
-        regions: {
-          r0: { kind: 'sheet' },
-          r1: { kind: 'cut', parent: 'r0' },
-          r2: { kind: 'cut', parent: 'r1' },
-          r3: { kind: 'cut', parent: 'r0' },
-          r4: { kind: 'cut', parent: 'r3' },
-        },
-        nodes: {
-          n0: { kind: 'atom', region: 'r1', sig: { kind: 'rel', args: [] } },
-          n1: { kind: 'atom', region: 'r4', sig: { kind: 'rel', args: [] } },
-        },
-        wires: {
-          w0: {
-            scope: 'r0',
-            sig: { kind: 'rel', args: [] },
-            endpoints: [
-              { node: 'n0', port: 'hd' },
-              { node: 'n1', port: 'hd' },
-            ],
-          },
-        },
-      },
-      boundary: ['w0'],
-    })
-  })
-
-  it('reifies arities zero, one, and two with a homogeneous witness', () => {
-    const definitions = [
-      truthReification(),
-      rightIdentityInductionReification(),
-      binaryReification(),
-    ] as const
-
-    definitions.forEach((definition, arity) => {
-      const witness = definition.boundary[0]!
-      const sig = definition.diagram.wires[witness]!.sig
-      expect(sig.kind).toBe('rel')
-      expect(sigKey(sig)).toBe(sigKey(relSig(
-        Array.from({ length: arity }, () => IOTA),
-      )))
-      const atoms = witnessAtoms(definition)
-      expect(atoms).toHaveLength(2)
-      for (const node of atoms) {
-        expect(definition.diagram.nodes[node]).toMatchObject({
-          kind: 'atom',
-          sig,
-        })
-      }
-    })
-
-    const binary = definitions[2]
-    expect(binary.boundary.map((wire) =>
-      sigKey(binary.diagram.wires[wire]!.sig)))
-      .toEqual(['(i,i)', '(i,i)'])
-    const quantifiedIndividuals = Object.entries(binary.diagram.wires)
-      .filter(([wire]) => !binary.boundary.includes(wire))
-    expect(quantifiedIndividuals).toHaveLength(2)
-    expect(quantifiedIndividuals.every(([, wire]) =>
-      sigKey(wire.sig) === 'i'
-      && binary.diagram.regions[wire.scope]?.kind === 'cut'))
-      .toBe(true)
-
-    const binarySkeleton = assertReificationSkeleton(binary, 2)
-    const binaryLabels = new Map<WireId, string>([
-      [binary.boundary[0]!, 'P'],
-      [binary.boundary[1]!, 'S'],
-      [binarySkeleton.variables[0]!, 'x'],
-      [binarySkeleton.variables[1]!, 'y'],
-    ])
-    for (const site of binarySkeleton.materialSites) {
-      expect(directCuts(binary.diagram, site.region)
-        .filter((cut) => !site.excludedCuts.includes(cut))).toEqual([])
-      expect(directNodes(binary.diagram, site.region).map((node) =>
-        nodeDescriptor(binary.diagram, node, binaryLabels)))
-        .toEqual(['S(x,y)'])
-    }
-    expect(createHash('sha256')
-      .update(exploreForm(binary.diagram, binary.boundary))
-      .digest('hex'))
-      .toBe('808dc8740bba500f73b033e6973e2fe138e1f94f8fc4d036e891f6f4a9674995')
-  })
-
-  it('pins the complete canonical material of all four induction definitions', () => {
-    const definitions = [
-      [
-        rightIdentityInductionReification(),
-        ['(i)', '(i)', '(i,i,i)'],
-        {
-          captureNames: ['zero', 'plus'],
-          mainNames: ['a'],
-          localNames: ['z', 'o'],
-          premises: ['zero(z)', 'plus(a,z,o)'],
-          conclusions: ['=(a,o)'],
-          canonicalHash: 'fed6393505522bff59af12af6815048a3ab4abec8dc1eb9529568ee43f28f954',
-        },
-      ],
-      [
-        associativityInductionReification(),
-        ['(i)', '(i,i,i)'],
-        {
-          captureNames: ['plus'],
-          mainNames: ['a'],
-          localNames: ['b', 'c', 't', 'o', 'u'],
-          premises: ['plus(a,b,t)', 'plus(t,c,o)', 'plus(b,c,u)'],
-          conclusions: ['plus(a,u,o)'],
-          canonicalHash: '3b0bd4c64e191839a14489f0ea9f133d04ea876423974b3476aa5a2679d8c27f',
-        },
-      ],
-      [
-        successorShiftInductionReification(),
-        ['(i)', '(i,i)', '(i,i,i)'],
-        {
-          captureNames: ['succ', 'plus'],
-          mainNames: ['a'],
-          localNames: ['n', 'sn', 'o', 'so'],
-          premises: ['succ(n,sn)', 'plus(a,n,o)', 'succ(o,so)'],
-          conclusions: ['plus(a,sn,so)'],
-          canonicalHash: 'abdac285ce7216036527d2b850ef4de63b42295091d0e844c001d56b48198712',
-        },
-      ],
-      [
-        commutativityInductionReification(),
-        ['(i)', '(i,i,i)'],
-        {
-          captureNames: ['plus'],
-          mainNames: ['a'],
-          localNames: ['b', 'o'],
-          premises: ['plus(a,b,o)'],
-          conclusions: ['plus(b,a,o)'],
-          canonicalHash: '76f8ad83aec3852923139c9ab4b522fee3b1dd45f5cff9e6ac1b86403432722a',
-        },
-      ],
-    ] as const
-
-    for (const [definition, signatures, material] of definitions) {
-      expect(definition.boundary.map((wire) =>
-        sigKey(definition.diagram.wires[wire]!.sig)))
-        .toEqual(signatures)
-      expect(witnessAtoms(definition)).toHaveLength(2)
-      expect(definition.boundary.every((wire) =>
-        definition.diagram.wires[wire]!.scope === definition.diagram.root
-        && definition.diagram.wires[wire]!.endpoints.length > 0))
-        .toBe(true)
-      assertInductionMaterial(definition, material)
-    }
-  })
-
-  it('preserves root-co-scoped equality between distinct boundary entries', () => {
-    let graph = emptyGraph()
-    const left = declareWire(graph, graph.root, IOTA)
-    graph = left.graph
-    const right = declareWire(graph, graph.root, IOTA)
-    graph = right.graph
-    const equality = identity(graph, graph.root, [left.value, right.value])
-    graph = equality.graph
-
-    const closed = finishDiagram(graph)
-    const open = finishDiagramWithBoundary(
-      graph,
-      [left.value, right.value],
-    )
-
-    expect(closed.nodes[equality.value]).toBeUndefined()
-    expect(Object.keys(closed.wires)).toEqual([left.value])
-    expect(open.boundary).toEqual([left.value, right.value])
-    expect(Object.keys(open.diagram.wires)).toEqual([left.value, right.value])
-    expect(open.diagram.nodes[equality.value]).toEqual({
-      kind: 'identity',
-      region: graph.root,
-      sig: IOTA,
-      arity: 2,
-    })
-  })
-
-  it('constructs typed refs and conditional identities directly as graph syntax', () => {
-    let graph = emptyGraph()
-    const left = declareWire(graph, graph.root, IOTA)
-    graph = left.graph
-    const right = declareWire(graph, graph.root, IOTA)
-    graph = right.graph
-    const claim = implication(graph, graph.root)
-    graph = claim.graph
-    graph = ref(
-      graph,
-      claim.value.antecedent,
-      'binarySource',
-      [left.value, right.value],
-    ).graph
-    graph = identity(
-      graph,
-      claim.value.consequent,
-      [left.value, right.value],
-    ).graph
-    const definition = finishDiagramWithBoundary(
-      graph,
-      [left.value, right.value],
-    )
-
-    expect(Object.values(definition.diagram.nodes).map((node) => node.kind))
-      .toEqual(['ref', 'identity'])
-    expect(Object.values(definition.diagram.nodes)[0]).toMatchObject({
-      kind: 'ref',
-      sig: relSig([IOTA, IOTA]),
-    })
-  })
-
-  it('spawns the same explicit definition at root and a nested legal scope', () => {
-    const theory = buildFregeTheory()
-    const context = verifyTheory(theory)
-    const expectedSig = relSig([relSig([])])
-
-    const rootStart = new DiagramBuilder().build()
-    const rootRecorder = new PrimitiveStepRecorder(
-      rootStart,
-      context,
-    )
-    rootRecorder.record('spawn reified Truth at root', {
-      rule: 'refSpawn',
-      region: rootStart.root,
-      defId: 'truthReification',
-      sig: expectedSig,
-    })
-    const rootRef = onlyNewNode(rootStart, rootRecorder.diagram, rootStart.root)
-    const rootWitness = onlyNewWire(rootStart, rootRecorder.diagram, rootStart.root)
-    expect(rootRecorder.diagram.nodes[rootRef]).toMatchObject({
-      kind: 'ref',
-      defId: 'truthReification',
-    })
-    expect(sigKey(rootRecorder.diagram.wires[rootWitness]!.sig)).toBe('()')
-
-    const nestedBuilder = new DiagramBuilder()
-    const nested = nestedBuilder.cut(nestedBuilder.root)
-    const nestedStart = nestedBuilder.build()
-    const nestedRecorder = new PrimitiveStepRecorder(nestedStart, context)
-    nestedRecorder.record('spawn reified Truth in negative scope', {
-      rule: 'refSpawn',
-      region: nested,
-      defId: 'truthReification',
-      sig: expectedSig,
-    })
-    const nestedRef = onlyNewNode(nestedStart, nestedRecorder.diagram, nested)
-    const nestedWitness = onlyNewWire(
-      nestedStart,
-      nestedRecorder.diagram,
-      nested,
-    )
-    expect(nestedRecorder.diagram.nodes[nestedRef]).toMatchObject({
-      kind: 'ref',
-      region: nested,
-    })
-    expect(nestedRecorder.diagram.wires[nestedWitness]!.scope).toBe(nested)
-  })
-
-  it('recognizes quantified reifications with captured parameters at root', () => {
-    const theory = buildFregeTheory()
-    const context = verifyTheory({
-      relations: theory.relations,
-      theorems: [],
-    })
-    const cases = [
-      [
-        'rightIdentityInductionReification',
-        relSig([
-          relSig([IOTA]),
-          relSig([IOTA]),
-          relSig([IOTA, IOTA, IOTA]),
-        ]),
-      ],
-      [
-        'associativityInductionReification',
-        relSig([
-          relSig([IOTA]),
-          relSig([IOTA, IOTA, IOTA]),
-        ]),
-      ],
-      [
-        'successorShiftInductionReification',
-        relSig([
-          relSig([IOTA]),
-          relSig([IOTA, IOTA]),
-          relSig([IOTA, IOTA, IOTA]),
-        ]),
-      ],
-      [
-        'commutativityInductionReification',
-        relSig([
-          relSig([IOTA]),
-          relSig([IOTA, IOTA, IOTA]),
-        ]),
-      ],
-    ] as const
-
-    for (const [defId, sig] of cases) {
-      const start = new DiagramBuilder().build()
-      const recorder = new PrimitiveStepRecorder(start, context)
-      expect(() => recorder.record(`spawn ${defId} at root`, {
-        rule: 'refSpawn',
-        region: start.root,
-        defId,
-        sig,
-      })).not.toThrow()
-    }
-  })
-})
-
-describe('thin primitive recording and deterministic delta lookup', () => {
-  it('applies and records exactly one existing ProofStep per call', () => {
-    const builder = new DiagramBuilder()
-    const cut = builder.cut(builder.root)
-    const relation = builder.relWire(builder.root, relSig([]))
-    const before = builder.build()
-    const recorder = new PrimitiveStepRecorder(
-      before,
-      verifyTheory(buildFregeTheory()),
-    )
-    const step: ProofStep = { rule: 'atomSpawn', region: cut, wire: relation }
-
-    recorder.record('spawn one nullary atom', step)
-
-    expect(recorder.actions).toEqual([{
-      label: 'spawn one nullary atom',
-      steps: [step],
-      placements: [],
-    }])
-    expect(onlyNewNode(before, recorder.diagram, cut)).toBe('n')
-    expect(() => onlyNewNode(recorder.diagram, recorder.diagram, cut))
-      .toThrowError(/expected exactly one new node.*found 0/i)
-  })
-
-  it('cardinality-checks new wires and cuts instead of selecting the first match', () => {
-    const builder = new DiagramBuilder()
-    const cut = builder.cut(builder.root)
-    const before = builder.build()
-    const recorder = new PrimitiveStepRecorder(
-      before,
-      verifyTheory(buildFregeTheory()),
-    )
-    recorder.record('introduce one individual', {
-      rule: 'vacuousIntro',
-      scope: cut,
-      sig: IOTA,
-    })
-    expect(onlyNewWire(before, recorder.diagram, cut)).toBe('r1_vac')
-
-    const beforeCuts = recorder.diagram
-    recorder.record('introduce a double cut', {
-      rule: 'doubleCutIntro',
-      sel: {
-        region: cut,
-        regions: [],
-        nodes: [],
-        wires: [],
-      },
-    })
-    const outer = onlyNewCut(beforeCuts, recorder.diagram, cut)
-    expect(onlyNewCut(beforeCuts, recorder.diagram, outer)).toMatch(/^dc/)
-    expect(() => onlyNewCut(beforeCuts, recorder.diagram))
-      .toThrowError(/expected exactly one new cut.*found 2/i)
-  })
-})
 
 function theoremByName(
   theorems: readonly Theorem[],
   name: string,
 ): Theorem {
-  return exactOne(
+  return exactlyOne(
     theorems.filter((theorem) => theorem.name === name),
-    `one '${name}' theorem`,
+    `theorem '${name}'`,
   )
 }
 
-describe('logical and reification theorem prefix', () => {
-  it('records the ordinary equality/disequality contradiction first', () => {
+describe('recorded general relation reification', () => {
+  it('records the exact closed identity, blank truth, and captured carrier statements', () => {
+    for (const testCase of reificationCases) {
+      const theorem = testCase.make()
+      const expectedLhs = captureOnly(testCase.captureSignatures)
+      const expectedRhs = testCase.rhs()
+
+      expect(theorem.name).toBe(testCase.name)
+      expect(exploreForm(theorem.lhs.diagram, theorem.lhs.boundary))
+        .toBe(exploreForm(expectedLhs.diagram, expectedLhs.boundary))
+      expect(exploreForm(theorem.rhs.diagram, theorem.rhs.boundary))
+        .toBe(exploreForm(expectedRhs.diagram, expectedRhs.boundary))
+      expect(theorem.lhs.boundary.map((wire) =>
+        sigKey(theorem.lhs.diagram.wires[wire]!.sig)))
+        .toEqual(testCase.captureSignatures.map(sigKey))
+      expect(theorem.rhs.boundary.map((wire) =>
+        sigKey(theorem.rhs.diagram.wires[wire]!.sig)))
+        .toEqual(testCase.captureSignatures.map(sigKey))
+    }
+  })
+
+  it('replays every reification without definitions, refs, or privileged spawn', () => {
+    const context = verifyTheory({ relations: [], theorems: [] })
+    for (const testCase of reificationCases) {
+      const theorem = testCase.make()
+      expect(() => checkTheorem(theorem, context)).not.toThrow()
+      expect(flattenedRules(theorem)).not.toContain('refSpawn')
+      expect(flattenedRules(theorem)).not.toContain('unfold')
+      expect(flattenedRules(theorem)).not.toContain('fold')
+      expect([
+        ...Object.values(theorem.lhs.diagram.nodes),
+        ...Object.values(theorem.rhs.diagram.nodes),
+      ].every((node) => node.kind !== 'ref')).toBe(true)
+      expect(theorem.actions.every((action) =>
+        action.steps.length === 1)).toBe(true)
+    }
+  })
+
+  it('gets each fresh witness from its one strongest-form sever', () => {
+    const context = verifyTheory({ relations: [], theorems: [] })
+    for (const testCase of reificationCases) {
+      const theorem = testCase.make()
+      let diagram = theorem.lhs.diagram
+      const severWires: WireId[] = []
+
+      for (const action of theorem.actions) {
+        const receipt = applyActionWithReceipt(diagram, action, context)
+        const step = action.steps[0]!
+        if (step.rule === 'wireSever' && step.input.kind === 'relation') {
+          const created = receipt.allocation.wires.filter((wire) =>
+            receipt.result.wires[wire]?.sig.kind === 'rel')
+          expect(created).toHaveLength(1)
+          severWires.push(created[0]!)
+        }
+        diagram = receipt.result
+      }
+
+      const witness = exactlyOne(severWires, `${theorem.name} sever witness`)
+      expect(diagram.wires[witness]).toBeDefined()
+      expect(diagram.wires[witness]!.endpoints).toHaveLength(2)
+      expect(diagram.wires[witness]!.endpoints.every((endpoint) =>
+        endpoint.port.kind === 'head'
+        && diagram.nodes[endpoint.node]?.kind === 'atom')).toBe(true)
+      expect(theorem.lhs.boundary).not.toContain(witness)
+      expect(theorem.rhs.boundary).not.toContain(witness)
+    }
+  })
+
+  it('makes the sever action indispensable in every reification proof', () => {
+    const context = verifyTheory({ relations: [], theorems: [] })
+    for (const testCase of reificationCases) {
+      const theorem = testCase.make()
+      const severIndexes = theorem.actions
+        .map((action, index) =>
+          action.steps[0]?.rule === 'wireSever' ? index : -1)
+        .filter((index) => index >= 0)
+      expect(severIndexes).toHaveLength(1)
+      for (const severIndex of severIndexes) {
+        expect(() => checkTheorem({
+          ...theorem,
+          actions: theorem.actions.filter((_, index) => index !== severIndex),
+        }, context)).toThrowError(
+          /proof does not arrive at the stated right-hand side/i,
+        )
+      }
+    }
+  })
+
+  it('round-trips every standalone reification theorem and re-verifies it', () => {
+    const context = verifyTheory({ relations: [], theorems: [] })
+    for (const testCase of reificationCases) {
+      const restored = theoremFromJson(JSON.parse(JSON.stringify(
+        theoremToJson(testCase.make()),
+      )))
+      expect(() => checkTheorem(restored, context)).not.toThrow()
+    }
+  })
+})
+
+describe('logical dependency prefix', () => {
+  it('registers only ordinary relations and the exact ordered theorem prefix', () => {
     const theory = buildFregeTheory()
+    expect(theory.relations.map(([name]) => name)).toEqual(['nat'])
     expect(theory.theorems.map((theorem) => theorem.name)).toEqual([
       'ordinaryEqualityContradiction',
+      'relationIdentityReification',
+      'truthReification',
+      'rightIdentityInductionReification',
+      'associativityInductionReification',
+      'successorShiftInductionReification',
+      'commutativityInductionReification',
       'existsProp',
     ])
-    const theorem = theory.theorems[0]!
-    const context = verifyTheory({
-      relations: theory.relations,
-      theorems: [],
-    })
-    expect(() => checkTheorem(theorem, context)).not.toThrow()
-    expect(theorem.actions.flatMap((action) =>
-      action.steps.map((step) => step.rule))).toEqual([
-      'doubleCutIntro',
-      'identityInsert',
-      'iteration',
-    ])
-    expect(theorem.actions.every((action) =>
-      action.steps.length === 1)).toBe(true)
-    expect(theorem.backActions).toBeUndefined()
-
-    expect(theorem.lhs.boundary).toHaveLength(2)
-    expect(theorem.rhs.boundary).toHaveLength(2)
-    for (const side of [theorem.lhs, theorem.rhs]) {
-      expect(side.boundary.map((wire) =>
-        side.diagram.wires[wire]!.sig)).toEqual([IOTA, IOTA])
-    }
-    expect(Object.keys(theorem.lhs.diagram.nodes)).toEqual([])
-    expect(directCuts(
-      theorem.lhs.diagram,
-      theorem.lhs.diagram.root,
-    )).toEqual([])
-    expect(theorem.lhs.boundary.every((wire) =>
-      theorem.lhs.diagram.wires[wire]!.endpoints.length === 0)).toBe(true)
-
-    const enclosing = exactOne(
-      directCuts(theorem.rhs.diagram, theorem.rhs.diagram.root),
-      'one enclosing contradiction cut',
-    )
-    const disequality = exactOne(
-      directCuts(theorem.rhs.diagram, enclosing),
-      'one direct disequality cut',
-    )
-    const equalityNode = exactOne(
-      directNodes(theorem.rhs.diagram, enclosing),
-      'one equality identity',
-    )
-    const disequalityNode = exactOne(
-      directNodes(theorem.rhs.diagram, disequality),
-      'one disequality identity',
-    )
-    for (const node of [equalityNode, disequalityNode]) {
-      expect(theorem.rhs.diagram.nodes[node]).toEqual({
-        kind: 'identity',
-        region: node === equalityNode ? enclosing : disequality,
-        sig: IOTA,
-        arity: 2,
-      })
-      expect([
-        endpointWire(theorem.rhs.diagram, node, 'identity', 0),
-        endpointWire(theorem.rhs.diagram, node, 'identity', 1),
-      ]).toEqual(theorem.rhs.boundary)
-    }
+    expect(() => verifyTheory(theory)).not.toThrow()
   })
 
-  it('proves closed existsProp through the observable substitution trace', () => {
-    const theory = buildFregeTheory()
-    const ordinary = theoremByName(
-      theory.theorems,
-      'ordinaryEqualityContradiction',
-    )
-    const theorem = theoremByName(theory.theorems, 'existsProp')
-    const relationContext = verifyTheory({
-      relations: theory.relations,
-      theorems: [],
-    })
-    const context = registerTheorem(relationContext, ordinary)
-
-    expect(theorem.lhs.boundary).toEqual([])
-    expect(theorem.rhs.boundary).toEqual([])
-    expect(Object.keys(theorem.lhs.diagram.regions)).toEqual([
-      theorem.lhs.diagram.root,
-    ])
-    expect(Object.keys(theorem.lhs.diagram.nodes)).toEqual([])
-    expect(Object.keys(theorem.lhs.diagram.wires)).toEqual([])
-    expect(directCuts(
-      theorem.rhs.diagram,
-      theorem.rhs.diagram.root,
-    )).toEqual([])
-    const finalAtom = exactOne(
-      directNodes(theorem.rhs.diagram, theorem.rhs.diagram.root),
-      'one final proposition occurrence',
-    )
-    expect(theorem.rhs.diagram.nodes[finalAtom]).toEqual({
-      kind: 'atom',
-      region: theorem.rhs.diagram.root,
-      sig: relSig([]),
-    })
-    const finalWire = endpointWire(
-      theorem.rhs.diagram,
-      finalAtom,
-      'head',
-    )
-    expect(theorem.rhs.diagram.wires[finalWire]).toMatchObject({
-      scope: theorem.rhs.diagram.root,
-      sig: relSig([]),
-    })
-
-    expect(theorem.backActions).toBeUndefined()
-    expect(theorem.actions.every((action) =>
-      action.steps.length === 1)).toBe(true)
-    expect(theorem.actions.flatMap((action) =>
-      action.steps.map((step) => step.rule))).toEqual([
-      'refSpawn',
-      'unfold',
-      'vacuousIntro',
-      'identityInsert',
-      'iteration',
-      'wireJoin',
-      'doubleCutElim',
-      'erasure',
-    ])
-
-    const snapshots: Diagram[] = []
-    const replayed = replayActions(
-      theorem.lhs.diagram,
-      theorem.actions,
-      context,
-      (diagram, actionIndex, stepIndex) => {
-        expect(stepIndex).toBe(0)
-        snapshots[actionIndex] = diagram
-      },
-    )
-    expect(exploreForm(replayed)).toBe(exploreForm(theorem.rhs.diagram))
-
-    const reified = snapshots[0]!
-    const reificationRef = exactOne(
-      directNodes(reified, reified.root),
-      'one spawned truth reification',
-    )
-    expect(reified.nodes[reificationRef]).toMatchObject({
-      kind: 'ref',
-      defId: 'truthReification',
-      sig: relSig([relSig([])]),
-    })
-    const p = endpointWire(reified, reificationRef, 'arg', 0)
-    expect(reified.wires[p]).toMatchObject({
-      scope: reified.root,
-      sig: relSig([]),
-    })
-
-    const unfolded = snapshots[1]!
-    const forward = exactOne(
-      directCuts(unfolded, unfolded.root).filter((cut) =>
-        directNodes(unfolded, cut).length === 1),
-      'one P-to-True branch',
-    )
-    const reverse = exactOne(
-      directCuts(unfolded, unfolded.root).filter((cut) =>
-        cut !== forward),
-      'one True-to-P branch',
-    )
-    const reverseInner = exactOne(
-      directCuts(unfolded, reverse),
-      'one inner witness scope',
-    )
-    const pOccurrence = exactOne(
-      directNodes(unfolded, forward),
-      'one reified P occurrence',
-    )
-    expect(endpointWire(unfolded, pOccurrence, 'head')).toBe(p)
-    const originalWitness = exactOne(
-      directNodes(unfolded, reverseInner),
-      'one original witness occurrence',
-    )
-    expect(endpointWire(unfolded, originalWitness, 'head')).toBe(p)
-
-    const pending = snapshots[2]!
-    const x = exactOne(
-      scopedWires(pending, reverse),
-      'one pending X wire',
-    )
-    expect(pending.wires[x]).toMatchObject({
-      scope: reverse,
-      sig: relSig([]),
-      endpoints: [],
-    })
-
-    const connected = snapshots[3]!
-    const connection = exactOne(
-      directNodes(connected, reverse).filter((node) =>
-        connected.nodes[node]!.kind === 'identity'),
-      'one explicit P-to-X connection',
-    )
-    expect([
-      endpointWire(connected, connection, 'identity', 0),
-      endpointWire(connected, connection, 'identity', 1),
-    ]).toEqual([p, x])
-
-    const iterated = snapshots[4]!
-    const innerX = exactOne(
-      directNodes(iterated, reverseInner).filter((node) =>
-        node !== originalWitness),
-      'one iteration-created X occurrence',
-    )
-    expect(iterated.nodes[innerX]).toMatchObject({
-      kind: 'atom',
-      region: reverseInner,
-      sig: relSig([]),
-    })
-    expect(endpointWire(iterated, innerX, 'head')).toBe(x)
-
-    const discharged = snapshots[5]!
-    expect(discharged.wires[x]).toBeUndefined()
-    expect(discharged.nodes[connection]).toBeUndefined()
-    expect(discharged.nodes[innerX]).toBeDefined()
-    expect(endpointWire(discharged, innerX, 'head')).toBe(p)
-
-    const exposed = snapshots[6]!
-    expect(exposed.regions[reverse]).toBeUndefined()
-    expect(exposed.nodes[originalWitness]).toMatchObject({
-      kind: 'atom',
-      region: exposed.root,
-    })
-    expect(exposed.nodes[innerX]).toMatchObject({
-      kind: 'atom',
-      region: exposed.root,
-    })
-
-    const finished = snapshots[7]!
-    expect(finished.regions[forward]).toBeUndefined()
-    expect(finished.nodes[originalWitness]).toBeUndefined()
-    expect(finished.nodes[innerX]).toMatchObject({
-      kind: 'atom',
-      region: finished.root,
-      sig: relSig([]),
-    })
-    expect(endpointWire(finished, innerX, 'head')).toBe(p)
-    expect(Object.values(finished.regions)).toEqual([{ kind: 'sheet' }])
-    expect(Object.keys(finished.nodes)).toEqual([innerX])
-    expect(Object.values(finished.wires)).toEqual([
-      expect.objectContaining({
-        scope: finished.root,
-        sig: relSig([]),
-      }),
-    ])
-  })
-
-  it('requires the substitution segment to reach existsProp', () => {
-    const theory = buildFregeTheory()
-    const ordinary = theoremByName(
-      theory.theorems,
-      'ordinaryEqualityContradiction',
-    )
-    const theorem = theoremByName(theory.theorems, 'existsProp')
-    const context = registerTheorem(verifyTheory({
-      relations: theory.relations,
-      theorems: [],
-    }), ordinary)
-    const iterationIndex = theorem.actions.findIndex((action) =>
-      action.steps.length === 1
-      && action.steps[0]?.rule === 'iteration')
-    expect(iterationIndex).toBeGreaterThanOrEqual(0)
-
-    const ablatedActions = theorem.actions.filter((_, index) =>
-      index !== iterationIndex)
-    const ablatedResult = replayActions(
-      theorem.lhs.diagram,
-      ablatedActions,
-      context,
-    )
-    expect(Object.keys(ablatedResult.nodes)).toEqual([])
-    expect(Object.values(ablatedResult.wires).every((wire) =>
-      wire.endpoints.length === 0)).toBe(true)
-    expect(exploreForm(ablatedResult))
-      .not.toBe(exploreForm(theorem.rhs.diagram))
-    expect(() => checkTheorem({
-      ...theorem,
-      actions: ablatedActions,
-    }, context)).toThrowError(
-      /proof does not arrive at the stated right-hand side/i,
-    )
-
-    const shortcutActions = theorem.actions.filter((action) =>
-      action.steps[0]?.rule === 'refSpawn'
-      || action.steps[0]?.rule === 'unfold'
-      || action.steps[0]?.rule === 'doubleCutElim'
-      || action.steps[0]?.rule === 'erasure')
-    expect(shortcutActions.flatMap((action) =>
-      action.steps.map((step) => step.rule))).toEqual([
-      'refSpawn',
-      'unfold',
-      'doubleCutElim',
-      'erasure',
-    ])
-    const shortcutResult = replayActions(
-      theorem.lhs.diagram,
-      shortcutActions,
-      context,
-    )
-    expect(Object.keys(shortcutResult.nodes)).toEqual([])
-    expect(exploreForm(shortcutResult))
-      .not.toBe(exploreForm(theorem.rhs.diagram))
-    expect(() => checkTheorem({
-      ...theorem,
-      actions: shortcutActions,
-    }, context)).toThrowError(
-      /proof does not arrive at the stated right-hand side/i,
-    )
-  })
-
-  it('round-trips and re-verifies every theorem against its prior prefix', () => {
+  it('round-trips and verifies every theorem against exactly its prior prefix', () => {
     const theory = buildFregeTheory()
     let prefix = verifyTheory({
       relations: theory.relations,
       theorems: [],
     })
     for (const theorem of theory.theorems) {
-      const restored = theoremFromJson(
-        JSON.parse(JSON.stringify(theoremToJson(theorem))),
-      )
+      const restored = theoremFromJson(JSON.parse(JSON.stringify(
+        theoremToJson(theorem),
+      )))
       expect(() => checkTheorem(restored, prefix)).not.toThrow()
       prefix = registerTheorem(prefix, restored)
     }
+  })
 
-    const loaded = loadTheory(
-      JSON.parse(JSON.stringify(theoryToJson(theory))),
-    )
-    expect([...loaded.ctx.theorems.keys()]).toEqual([
-      'ordinaryEqualityContradiction',
-      'existsProp',
+  it('derives existsProp from blank by citing sever-derived truth', () => {
+    const theory = buildFregeTheory()
+    const exists = theoremByName(theory.theorems, 'existsProp')
+    expect(exists.lhs.boundary).toEqual([])
+    expect(exists.rhs.boundary).toEqual([])
+    expect(flattenedRules(exists)).toEqual([
+      'theorem',
+      'erasure',
+      'doubleCutElim',
     ])
+    expect(exists.actions[0]!.steps[0]).toMatchObject({
+      rule: 'theorem',
+      name: 'truthReification',
+      direction: 'forward',
+      at: {
+        sel: {
+          region: exists.lhs.diagram.root,
+          regions: [],
+          nodes: [],
+          wires: [],
+        },
+        args: [],
+      },
+    })
 
-    const forged = {
-      ...theory,
-      relations: theory.relations.map(([name, definition]) =>
-        name === 'truthReification'
-          ? [name, malformedTruthReification()] as const
-          : [name, definition] as const),
+    let context = verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    })
+    for (const theorem of theory.theorems) {
+      if (theorem.name === 'existsProp') break
+      context = registerTheorem(context, theorem)
     }
-    expect(() => loadTheory(
-      JSON.parse(JSON.stringify(theoryToJson(forged))),
-    )).toThrowError(/not an exact reification definition/i)
+
+    let diagram = exists.lhs.diagram
+    const cited = applyActionWithReceipt(
+      diagram,
+      exists.actions[0]!,
+      context,
+    )
+    const citedWitness = exactlyOne(
+      cited.allocation.wires.filter((wire) =>
+        cited.result.wires[wire]?.sig.kind === 'rel'),
+      'truth-citation witness',
+    )
+    diagram = cited.result
+    for (const action of exists.actions.slice(1)) {
+      diagram = applyActionWithReceipt(diagram, action, context).result
+    }
+
+    expect(Object.values(diagram.regions)).toEqual([{ kind: 'sheet' }])
+    const finalAtom = exactlyOne(
+      Object.entries(diagram.nodes),
+      'one final proposition atom',
+    )
+    expect(finalAtom[1]).toMatchObject({
+      kind: 'atom',
+      region: diagram.root,
+      sig: relSig([]),
+    })
+    expect(endpointWire(diagram, finalAtom[0], 'head')).toBe(citedWitness)
+    expect(diagram.wires[citedWitness]).toMatchObject({
+      scope: diagram.root,
+      sig: relSig([]),
+    })
+    expect(() => checkTheorem(exists, context)).not.toThrow()
+  })
+
+  it('requires both the truth citation and its ordinary cleanup', () => {
+    const theory = buildFregeTheory()
+    const exists = theoremByName(theory.theorems, 'existsProp')
+    let context = verifyTheory({
+      relations: theory.relations,
+      theorems: [],
+    })
+    for (const theorem of theory.theorems) {
+      if (theorem.name === 'existsProp') break
+      context = registerTheorem(context, theorem)
+    }
+    exists.actions.forEach((_, removed) => {
+      expect(() => checkTheorem({
+        ...exists,
+        actions: exists.actions.filter((__, index) => index !== removed),
+      }, context)).toThrow()
+    })
   })
 })
 
 describe('theory surface exclusions', () => {
-  it('exports no composite proof surface and carries no displaced vocabulary', async () => {
+  it('exports no composite proof API and contains no displaced authority', async () => {
     const barrel = await import('../../src/theories')
     expect(Object.keys(barrel).sort()).toEqual([
       'buildFregeTheory',
@@ -1079,6 +645,9 @@ describe('theory surface exclusions', () => {
       .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
       .join('\n')
     const prohibited = [
+      'refSpawn',
+      'isExactReificationDefinition',
+      'exact reification definition',
       'compre' + 'hension',
       'exten' + 'sional',
       "kind: 'te" + "rm'",
@@ -1092,5 +661,32 @@ describe('theory surface exclusions', () => {
       ['identity', 'Contradiction'].join(''),
     ]
     for (const term of prohibited) expect(source).not.toContain(term)
+  })
+
+  it('keeps every theorem boundary root-scoped and ordered', () => {
+    for (const theorem of buildFregeTheory().theorems) {
+      for (const side of [theorem.lhs, theorem.rhs]) {
+        expect(side.boundary.every((wire) =>
+          side.diagram.wires[wire]!.scope === side.diagram.root)).toBe(true)
+      }
+    }
+  })
+
+  it('keeps sever witnesses existential rather than universally scoped', () => {
+    const context = verifyTheory({ relations: [], theorems: [] })
+    for (const testCase of reificationCases) {
+      const theorem = testCase.make()
+      let diagram = theorem.lhs.diagram
+      let severCount = 0
+      for (const action of theorem.actions) {
+        const step = action.steps[0]!
+        if (step.rule === 'wireSever' && step.input.kind === 'relation') {
+          severCount += 1
+          expect(polarity(diagram, step.input.scope)).toBe('positive')
+        }
+        diagram = applyActionWithReceipt(diagram, action, context).result
+      }
+      expect(severCount).toBe(1)
+    }
   })
 })
