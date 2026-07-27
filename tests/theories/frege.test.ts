@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { removeSubgraph } from '../../src/kernel/diagram/subgraph/splice'
 import {
+  checkTheorem,
+} from '../../src/kernel/proof/theorem'
+import {
   registerTheorem,
   verifyTheory,
   type Theory,
@@ -17,7 +20,7 @@ import {
 import { buildOneTheorem } from '../../src/theories/arithmetic-one'
 import {
   directCuts,
-  directNodes,
+  natHereditaryParts,
   scopedWires,
 } from '../../src/theories/arithmetic-support'
 import { buildLogicalTheoremPrefix } from '../../src/theories/logic'
@@ -146,6 +149,55 @@ describe('relational Frege arithmetic proofs', () => {
     expect(source).not.toContain('conclusion plus six')
   })
 
+  it('classifies Nat hereditary children independently of region storage order', () => {
+    const theory = buildBaseNaturalTheory()
+    const theoremIndex = theory.theorems.findIndex(
+      ({ name }) => name === 'succNat',
+    )
+    const theorem = theory.theorems[theoremIndex]!
+    const context = verifyTheory({
+      relations: theory.relations,
+      theorems: theory.theorems.slice(0, theoremIndex),
+    })
+    const meeting = replayActions(
+      theorem.lhs.diagram,
+      theorem.actions,
+      context,
+    )
+    const hereditaryCandidates = Object.keys(meeting.regions).filter(
+      (region) => {
+        const counts = directCuts(meeting, region)
+          .map((child) => scopedWires(meeting, child).length)
+          .sort()
+        return counts.join(',') === '0,1,2'
+      },
+    )
+    expect(hereditaryCandidates).toHaveLength(1)
+    const hereditary = hereditaryCandidates[0]!
+    const children = directCuts(meeting, hereditary)
+    const childSet = new Set(children)
+    const rotatedChildren = [children[1]!, children[2]!, children[0]!]
+    const regionEntries = Object.entries(meeting.regions)
+    const firstChildIndex = regionEntries.findIndex(([id]) =>
+      childSet.has(id))
+    const reorderedEntries = [
+      ...regionEntries.slice(0, firstChildIndex),
+      ...rotatedChildren.map((id) =>
+        [id, meeting.regions[id]!] as const),
+      ...regionEntries.slice(firstChildIndex).filter(([id]) =>
+        !childSet.has(id)),
+    ]
+    const reordered = {
+      ...meeting,
+      regions: Object.fromEntries(reorderedEntries),
+    }
+
+    const parts = natHereditaryParts(reordered, hereditary)
+    expect(scopedWires(reordered, parts.inherited).length).toBe(0)
+    expect(scopedWires(reordered, parts.baseCondition).length).toBe(1)
+    expect(scopedWires(reordered, parts.closureCondition).length).toBe(2)
+  })
+
   it('has no obsolete induction-statement or ref-spawn proof path', () => {
     const directory = fileURLToPath(
       new URL('../../src/theories', import.meta.url),
@@ -232,65 +284,90 @@ describe('relational Frege arithmetic proofs', () => {
     }
   })
 
-  it('makes every selected base and natural-number hypothesis causal', () => {
+  it('makes every selected base and natural-number premise causal in its proof', () => {
     const theory = buildBaseNaturalTheory()
+    const dependencies = [
+      {
+        theorem: 'plusLeftUnit',
+        premise: 'plusBase',
+        half: 'backActions',
+        label: 'copy plusBase into left-unit antecedent',
+        rule: 'iteration',
+      },
+      {
+        theorem: 'plusLeftUnit',
+        premise: 'plusSingleValued',
+        half: 'backActions',
+        label: 'copy plusSingleValued into left-unit antecedent',
+        rule: 'iteration',
+      },
+      {
+        theorem: 'zeroIsNat',
+        premise: 'zeroExists',
+        half: 'backActions',
+        label: 'discharge Nat base zero premise',
+        rule: 'deiteration',
+      },
+      {
+        theorem: 'succNat',
+        premise: 'Nat(n)',
+        half: 'actions',
+        label: 'iterate explicit predecessor Nat into conclusion',
+        rule: 'iteration',
+      },
+      {
+        theorem: 'succNat',
+        premise: 'Succ(n,s)',
+        half: 'actions',
+        label: 'discharge copied supplied-successor premise',
+        rule: 'deiteration',
+      },
+      {
+        theorem: 'oneIsNat',
+        premise: 'zeroExists',
+        half: 'backActions',
+        label: 'discharge Nat base zero premise',
+        rule: 'deiteration',
+      },
+      {
+        theorem: 'oneIsNat',
+        premise: 'successorTotal',
+        half: 'backActions',
+        label: 'copy successorTotal for the zero witness',
+        rule: 'iteration',
+      },
+    ] as const
 
-    for (const name of BASE_NATURAL_NAMES) {
+    for (const dependency of dependencies) {
       const theoremIndex = theory.theorems.findIndex(
-        (candidate) => candidate.name === name,
+        ({ name }) => name === dependency.theorem,
       )
       const theorem = theory.theorems[theoremIndex]!
-      const primitiveScope = directCuts(
-        theorem.rhs.diagram,
-        theorem.rhs.diagram.root,
-      )[0]!
-      const primitiveBody = directCuts(
-        theorem.rhs.diagram,
-        primitiveScope,
-      )[0]!
-      const antecedent = directCuts(
-        theorem.rhs.diagram,
-        primitiveBody,
-      )[0]!
-      const quantifiedHypotheses = directCuts(
-        theorem.rhs.diagram,
-        antecedent,
-      ).slice(1)
-      let quantifiedIndex = 0
-
-      for (const hypothesis of BASE_NATURAL_CONTRACTS[name].hypotheses) {
-        const removal = hypothesis === 'zeroExists'
-          ? {
-              region: antecedent,
-              regions: [],
-              nodes: directNodes(theorem.rhs.diagram, antecedent),
-              wires: scopedWires(theorem.rhs.diagram, antecedent),
-            }
-          : {
-              region: antecedent,
-              regions: [quantifiedHypotheses[quantifiedIndex++]!],
-              nodes: [],
-              wires: [],
-            }
-        const weakened = {
-          ...theorem,
-          rhs: {
-            ...theorem.rhs,
-            diagram: removeSubgraph(theorem.rhs.diagram, removal),
-          },
-        }
-
-        expect(
-          () => verifyTheory({
-            relations: theory.relations,
-            theorems: [
-              ...theory.theorems.slice(0, theoremIndex),
-              weakened,
-            ],
-          }),
-          `${name} without ${hypothesis}`,
-        ).toThrow()
+      const actions = theorem[dependency.half] ?? []
+      const actionIndex = actions.findIndex(
+        (action) => action.label === dependency.label,
+      )
+      expect(
+        actionIndex,
+        `${dependency.theorem} dependency for ${dependency.premise}`,
+      ).toBeGreaterThanOrEqual(0)
+      expect(actions[actionIndex]!.steps).toHaveLength(1)
+      expect(actions[actionIndex]!.steps[0]!.rule).toBe(dependency.rule)
+      const withoutDependency = {
+        ...theorem,
+        [dependency.half]: actions.filter(
+          (_action, index) => index !== actionIndex,
+        ),
       }
+      const context = verifyTheory({
+        relations: theory.relations,
+        theorems: theory.theorems.slice(0, theoremIndex),
+      })
+
+      expect(
+        () => checkTheorem(withoutDependency, context),
+        `${dependency.theorem} without proof use of ${dependency.premise}`,
+      ).toThrow()
     }
   })
 

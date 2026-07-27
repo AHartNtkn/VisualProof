@@ -20,6 +20,7 @@ import {
   endpointWire,
   exactOne,
   introducedContentSelection,
+  natHereditaryParts,
   nodeWithHead,
   relationWire,
   scopedWires,
@@ -310,16 +311,10 @@ function buildZeroBackward(
     directCuts(backward.diagram, propertyBody),
     'unfolded hereditary antecedent',
   )
-  const [inherited, baseCondition, closureCondition] =
-    directCuts(backward.diagram, unfoldedHereditary)
-  if (
-    inherited === undefined
-    || baseCondition === undefined
-    || closureCondition === undefined
-    || directCuts(backward.diagram, unfoldedHereditary).length !== 3
-  ) {
-    throw new Error('unexpected unfolded Nat condition layout')
-  }
+  const { baseCondition } = natHereditaryParts(
+    backward.diagram,
+    unfoldedHereditary,
+  )
 
   before = backward.diagram
   backward.record('copy Nat base condition for specialization', {
@@ -374,7 +369,6 @@ function buildZeroBackward(
     region: specializedBaseCondition,
   })
 
-  void closureCondition
   return { recorder: backward }
 }
 
@@ -416,19 +410,17 @@ function meetingParts(
     directCuts(diagram, propertyBody),
     'unfolded hereditary antecedent',
   )
-  const children = directCuts(diagram, hereditary)
-  if (children.length !== 3) {
-    throw new Error(
-      `expected inherited result plus full base and closure conditions, found ${children.length}`,
-    )
-  }
-  const [inherited, baseCondition, closureCondition] = children
+  const {
+    inherited,
+    baseCondition,
+    closureCondition,
+  } = natHereditaryParts(diagram, hereditary)
   return {
     propertyScope,
     hereditary,
-    inherited: inherited!,
-    baseCondition: baseCondition!,
-    closureCondition: closureCondition!,
+    inherited,
+    baseCondition,
+    closureCondition,
   }
 }
 

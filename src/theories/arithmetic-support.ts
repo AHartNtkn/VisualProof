@@ -308,6 +308,36 @@ export function exactOne<T>(
   return values[0]!
 }
 
+export type NatHereditaryParts = {
+  readonly inherited: RegionId
+  readonly baseCondition: RegionId
+  readonly closureCondition: RegionId
+}
+
+export function natHereditaryParts(
+  diagram: Diagram,
+  hereditary: RegionId,
+): NatHereditaryParts {
+  const children = directCuts(diagram, hereditary)
+  return {
+    inherited: exactOne(
+      children.filter((region) =>
+        scopedWires(diagram, region).length === 0),
+      'inherited result',
+    ),
+    baseCondition: exactOne(
+      children.filter((region) =>
+        scopedWires(diagram, region).length === 1),
+      'Nat base condition',
+    ),
+    closureCondition: exactOne(
+      children.filter((region) =>
+        scopedWires(diagram, region).length === 2),
+      'Nat closure condition',
+    ),
+  }
+}
+
 export function endpointWire(
   diagram: Diagram,
   nodeId: NodeId,

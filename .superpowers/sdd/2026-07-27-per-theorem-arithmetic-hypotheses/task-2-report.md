@@ -125,3 +125,91 @@ without editing prohibited later proof modules. Task 2 itself is green and
 verified; the remaining runtime failure is the intentional Task-3+
 fixed-blanket parser in `arithmetic-right-carrier.ts`, and typecheck contains
 only the explicitly allowed later-task removed-helper imports.
+
+## Review fix round 1
+
+Resolved all findings from `task-2-review.md`.
+
+### Semantic Nat child ownership
+
+Added `natHereditaryParts()` in
+`src/theories/arithmetic-support.ts`. It classifies the inherited result, base
+condition, and closure condition by their invariant scoped-wire counts
+(`0`, `1`, and `2`) rather than `directCuts()` object-entry order.
+
+Migrated all Task-2 consumers to that single classifier:
+
+- `buildZeroBackward` in `src/theories/arithmetic-naturals.ts`
+- `meetingParts` in `src/theories/arithmetic-naturals.ts`
+- `buildBackward` in `src/theories/arithmetic-one.ts`
+
+The new regression replays the real `succNat` forward proof, rotates the three
+hereditary region entries to `[base, closure, inherited]`, and proves that all
+three roles remain correctly classified.
+
+Red before the classifier:
+
+```text
+× classifies Nat hereditary children independently of region storage order
+  → natHereditaryParts is not a function
+
+Test Files  1 failed (1)
+Tests       1 failed | 1 passed | 13 skipped (15)
+```
+
+Green after migration:
+
+```text
+Test Files  1 passed (1)
+Tests       2 passed | 13 skipped (15)
+```
+
+### Causal proof dependency validation
+
+Replaced RHS-only premise deletion with action ablation against unchanged
+theorem endpoints and the exact preceding proof context. The test removes one
+load-bearing specialization, iteration, or deiteration action and requires
+`checkTheorem()` to fail for each of:
+
+- `plusLeftUnit`: `plusBase`
+- `plusLeftUnit`: `plusSingleValued`
+- `zeroIsNat`: `zeroExists`
+- `succNat`: explicit `Nat(n)` claim premise
+- `succNat`: explicit `Succ(n,s)` claim premise
+- `oneIsNat`: `zeroExists`
+- `oneIsNat`: `successorTotal`
+
+The causal test was already green when first introduced, establishing that the
+production proofs had real dependencies; the defect was solely the previous
+endpoint-mismatch test's inability to prove those dependencies.
+
+### Fix-round validation
+
+Task-2 focused validation:
+
+```text
+npx vitest run tests/theories/frege.test.ts \
+  -t "declares the exact|does not encode|classifies Nat hereditary|uses only selected|makes every selected base and natural-number premise"
+
+Test Files  1 passed (1)
+Tests       5 passed | 10 skipped (15)
+```
+
+Direct production-prefix verification remains green with the exact action
+counts:
+
+```json
+[
+  {"name":"plusLeftUnit","forward":24,"backward":15},
+  {"name":"zeroIsNat","forward":15,"backward":7},
+  {"name":"succNat","forward":25,"backward":1},
+  {"name":"oneIsNat","forward":22,"backward":18}
+]
+```
+
+- `git diff --check`: PASS
+- `npm run typecheck`: only the three permitted later-task removed-helper
+  import errors remain
+
+Fix commit: a separate follow-up commit with subject
+`fix: validate arithmetic proof dependencies`.

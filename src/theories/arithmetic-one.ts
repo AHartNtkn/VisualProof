@@ -27,6 +27,7 @@ import {
   directNodes,
   endpointWire,
   exactOne,
+  natHereditaryParts,
   nodeWithHead,
   relationWire,
   scopedWires,
@@ -551,22 +552,11 @@ function buildBackward(
     scopedWires(backward.diagram, propertyScope),
     'unfolded property',
   )
-  const hereditaryChildren = directCuts(backward.diagram, hereditary)
-  const inherited = exactOne(
-    hereditaryChildren.filter((region) =>
-      scopedWires(backward.diagram, region).length === 0),
-    'inherited result',
-  )
-  const baseCondition = exactOne(
-    hereditaryChildren.filter((region) =>
-      scopedWires(backward.diagram, region).length === 1),
-    'Nat base condition',
-  )
-  const closureCondition = exactOne(
-    hereditaryChildren.filter((region) =>
-      scopedWires(backward.diagram, region).length === 2),
-    'Nat closure condition',
-  )
+  const {
+    inherited,
+    baseCondition,
+    closureCondition,
+  } = natHereditaryParts(backward.diagram, hereditary)
 
   before = backward.diagram
   backward.record('copy Nat base condition for specialization', {
