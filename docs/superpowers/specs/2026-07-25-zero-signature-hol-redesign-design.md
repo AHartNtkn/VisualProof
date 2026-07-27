@@ -197,23 +197,24 @@ which content to abstract or ground to, and in what argument order, is transient
 selection state. It never adds cuts, nodes, or wires to the diagram, and it never
 opens a menu. The rules:
 
-- **One highlight pass; hit type separates the roles; wire order is the argument
-  order.** The selection is one ordered sequence (it already is — hits append in
-  event order). Highlighted regions/nodes define the occurrence's extent;
-  highlighted wires are the formal arguments, the first highlighted wire being
-  argument 0, the next argument 1, and so on. Interleaving is free — only the
-  relative order among wire hits carries meaning. Boundary wires left
+- **One ordered selection; hit type separates the roles.** The selection is one
+  ordered sequence (it already is — hits append in event order). Highlighted
+  regions/nodes contribute extent; highlighted wires are formal arguments, in
+  their relative highlight order (argument 0 first). Boundary wires left
   unhighlighted are ambient parameters. Unhighlighting removes an item;
-  highlighting it again appends it at the end. There are no phases and no second
-  highlight layer.
-- **The wire drag consumes what it touches.** Severing: draw the fresh wire
-  contacting occurrences (endpoint drag, then branch drags); dropping its loose
-  end commits, and where the loose end rests is the wire's scope. A sever's
-  occurrence set is exactly the highlighted extents that wire contacts — contact
-  count is the grouping: one wire touching two copies makes one existential
-  referenced at both sites; two wires touching one copy each make two
-  existentials. A highlighted extent the wire never touches stays highlighted,
-  unconsumed. Grounding: drag the quantified wire onto the selected occurrence;
+  highlighting it again appends it at the end. No phases, no second highlight
+  layer, no menus.
+- **A wire contact closes an occurrence.** Severing: draw the fresh wire; each
+  contact (endpoint drag, then branch drags) closes one occurrence whose extent
+  is everything highlighted since the previous contact, with that batch's wire
+  hits, in order, as its arguments. The interleaving of highlights and contacts
+  is therefore the partition — it distinguishes one occurrence spanning several
+  highlighted pieces (highlight all, one contact: from `A ∧ A`, `∃p. p`) from
+  several occurrences of one content (highlight, contact, highlight, contact:
+  `∃p. p∧p`). A contact on an empty batch refuses; an occurrence's extent is
+  pinned at its contact; later selection changes affect only the open batch.
+  Dropping the loose end commits, and where it rests is the wire's scope.
+  Grounding: highlight the one occurrence, drag the quantified wire onto it;
   release commits.
 - **The committed step is the durable record.** The proof step stores the
   occurrence extent and the ordered argument wires; the selection state is
