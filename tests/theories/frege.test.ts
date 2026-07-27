@@ -16,6 +16,9 @@ import {
 import type {
   SubgraphSelection,
 } from '../../src/kernel/diagram/subgraph/selection'
+import {
+  selectionContents,
+} from '../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { removeSubgraph } from '../../src/kernel/diagram/subgraph/splice'
 import type { Theorem } from '../../src/kernel/proof/theorem'
@@ -29,7 +32,10 @@ import {
   applyAction,
   replayActions,
 } from '../../src/kernel/proof/action'
-import type { ProofStep } from '../../src/kernel/proof/step'
+import type {
+  ProofStep,
+  StepReceipt,
+} from '../../src/kernel/proof/step'
 import { buildFregeTheory } from '../../src/theories'
 import { buildArithmeticBase } from '../../src/theories/arithmetic-base'
 import {
@@ -42,6 +48,7 @@ import { buildOneTheorem } from '../../src/theories/arithmetic-one'
 import { buildRightUnitTheorem } from '../../src/theories/arithmetic-right'
 import {
   BINARY,
+  TERNARY,
   UNARY,
   directCuts,
   directNodes,
@@ -282,9 +289,12 @@ function buildThroughAssociativityTheory(): Theory {
 }
 
 type ProofTrace = {
+  readonly half: 'forward' | 'backward'
+  readonly state: number
   readonly before: Diagram
   readonly after: Diagram
   readonly step: ProofStep
+  readonly receipt: StepReceipt
   readonly diagnostic: string
 }
 
@@ -300,17 +310,32 @@ function traceProofHalf(
     ? theorem.lhs.diagram
     : theorem.rhs.diagram
   const traces: ProofTrace[] = []
-  for (const action of actions) {
+  for (const [state, action] of actions.entries()) {
     if (action.steps.length !== 1) {
       throw new Error(
         `${theorem.name} ${half} action '${action.label}' is not primitive`,
       )
     }
-    const after = applyAction(diagram, action, context, half)
+    let receipt: StepReceipt | undefined
+    const after = applyAction(
+      diagram,
+      action,
+      context,
+      half,
+      (_next, _stepIndex, stepReceipt) => {
+        receipt = stepReceipt
+      },
+    )
+    if (receipt === undefined) {
+      throw new Error(`${theorem.name} ${half} action has no receipt`)
+    }
     traces.push({
+      half,
+      state,
       before: diagram,
       after,
       step: action.steps[0]!,
+      receipt,
       diagnostic: action.label,
     })
     diagram = after
@@ -456,6 +481,28 @@ function nodeSelection(
   }
 }
 
+function natSelection(
+  diagram: Diagram,
+  region: RegionId,
+  zero: string,
+  successor: string,
+  individual: string,
+  label: string,
+): SubgraphSelection {
+  const node = exactOne(
+    directNodes(diagram, region).filter((nodeId) => {
+      const node = diagram.nodes[nodeId]!
+      return node.kind === 'ref'
+        && node.defId === 'nat'
+        && endpointWire(diagram, nodeId, 'arg', 0) === zero
+        && endpointWire(diagram, nodeId, 'arg', 1) === successor
+        && endpointWire(diagram, nodeId, 'arg', 2) === individual
+    }),
+    label,
+  )
+  return nodeSelection(diagram, node)
+}
+
 function assertCertifiedDeiteration(
   trace: ProofTrace,
   expectedJustifier: SubgraphSelection,
@@ -497,8 +544,14 @@ function assertCertifiedDeiteration(
   ).toBe(true)
 }
 
-function selectionKey(selection: SubgraphSelection): string {
+function selectionKey(
+  half: ProofTrace['half'],
+  state: number,
+  selection: SubgraphSelection,
+): string {
   return JSON.stringify([
+    half,
+    state,
     selection.region,
     [...selection.regions].sort(),
     [...selection.nodes].sort(),
@@ -536,44 +589,239 @@ function iterationCopySelection(
   }
 }
 
+type ProvenanceBranch = {
+  readonly half: ProofTrace['half']
+  state: number
+  readonly regions: Set<string>
+  readonly nodes: Set<string>
+  readonly wires: Set<string>
+  readonly origins: Set<string>
+  copied: boolean
+  specialized: boolean
+  certified: boolean
+  used: boolean
+  unfolded: boolean
+}
+
+function provenanceBranch(
+  diagram: Diagram,
+  selection: SubgraphSelection,
+  half: ProofTrace['half'],
+  state: number,
+): ProvenanceBranch {
+  const contents = selectionContents(diagram, selection)
+  return {
+    half,
+    state,
+    regions: new Set(contents.allRegions),
+    nodes: new Set(contents.allNodes),
+    wires: new Set([
+      ...contents.internalWires,
+      ...contents.touchingWires,
+    ]),
+    origins: new Set([selectionKey(half, state, selection)]),
+    copied: false,
+    specialized: false,
+    certified: false,
+    used: false,
+    unfolded: false,
+  }
+}
+
+function cloneBranch(branch: ProvenanceBranch): ProvenanceBranch {
+  return {
+    half: branch.half,
+    state: branch.state,
+    regions: new Set(branch.regions),
+    nodes: new Set(branch.nodes),
+    wires: new Set(branch.wires),
+    origins: new Set(branch.origins),
+    copied: branch.copied,
+    specialized: branch.specialized,
+    certified: branch.certified,
+    used: branch.used,
+    unfolded: branch.unfolded,
+  }
+}
+
+function branchOverlapsSelection(
+  branch: ProvenanceBranch,
+  diagram: Diagram,
+  selection: SubgraphSelection,
+): boolean {
+  const contents = selectionContents(diagram, selection)
+  if ([...contents.allRegions].some((id) => branch.regions.has(id))) {
+    return true
+  }
+  if ([...contents.allNodes].some((id) => branch.nodes.has(id))) {
+    return true
+  }
+  if (contents.allRegions.size > 0 || contents.allNodes.size > 0) {
+    return false
+  }
+  return [
+    ...contents.internalWires,
+    ...contents.touchingWires,
+  ].some((id) => branch.wires.has(id))
+}
+
+function carryBranch(
+  branch: ProvenanceBranch,
+  trace: ProofTrace,
+): ProvenanceBranch {
+  const carried = cloneBranch(branch)
+  carried.regions.clear()
+  carried.nodes.clear()
+  carried.wires.clear()
+  for (const id of branch.regions) {
+    if (trace.after.regions[id] !== undefined) carried.regions.add(id)
+  }
+  for (const id of branch.nodes) {
+    if (trace.after.nodes[id] !== undefined) carried.nodes.add(id)
+  }
+  for (const id of branch.wires) {
+    const image = trace.receipt.interface.image(id)
+    if (image !== undefined && trace.after.wires[image] !== undefined) {
+      carried.wires.add(image)
+    }
+  }
+  carried.state = trace.state + 1
+  return carried
+}
+
+function branchSurvives(branch: ProvenanceBranch, diagram: Diagram): boolean {
+  return [...branch.regions].some((id) => diagram.regions[id] !== undefined)
+    || [...branch.nodes].some((id) => diagram.nodes[id] !== undefined)
+}
+
+function wireJoinTouches(
+  branch: ProvenanceBranch,
+  step: Extract<ProofStep, { readonly rule: 'wireJoin' }>,
+): boolean {
+  return step.input.kind === 'iota'
+    ? branch.wires.has(step.input.a) || branch.wires.has(step.input.b)
+    : branch.wires.has(step.input.wire)
+}
+
 function assertStructuralProvenanceChain(
   traces: readonly ProofTrace[],
   source: SubgraphSelection,
   premise: string,
+  forwardMeeting?: Diagram,
 ): void {
-  const reachable = new Set([selectionKey(source)])
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const trace of traces) {
-      if (trace.step.rule === 'iteration') {
-        if (!reachable.has(selectionKey(trace.step.sel))) continue
-        const copy = iterationCopySelection(trace)
-        if (copy === null) continue
-        const key = selectionKey(copy)
-        if (!reachable.has(key)) {
-          reachable.add(key)
-          changed = true
-        }
-        continue
+  if (
+    traces.length === 0
+    || traces[0]!.half !== 'backward'
+    || traces[0]!.state !== 0
+    || traces.some(({ half }) => half !== 'backward')
+  ) {
+    throw new Error(`${premise} provenance must begin at backward state 0`)
+  }
+  let branches = [
+    provenanceBranch(traces[0]!.before, source, 'backward', 0),
+  ]
+
+  for (const trace of traces) {
+    const next: ProvenanceBranch[] = []
+    for (const branch of branches) {
+      if (branch.half !== trace.half || branch.state !== trace.state) {
+        throw new Error(
+          `${premise} provenance branch crossed a proof-half/state boundary`,
+        )
       }
+      const selected = (
+        trace.step.rule === 'iteration'
+        || trace.step.rule === 'deiteration'
+      )
+        ? branchOverlapsSelection(branch, trace.before, trace.step.sel)
+        : false
+      const justifies = trace.step.rule === 'deiteration'
+        && branchOverlapsSelection(
+          branch,
+          trace.before,
+          trace.step.justifier,
+        )
+      const unfolds = trace.step.rule === 'unfold'
+        && branch.nodes.has(trace.step.nodeId)
+
+      const carried = carryBranch(branch, trace)
       if (
-        trace.step.rule === 'deiteration'
-        && reachable.has(selectionKey(trace.step.justifier))
+        trace.step.rule === 'wireJoin'
+        && wireJoinTouches(branch, trace.step)
       ) {
+        carried.specialized = true
+      }
+      if (trace.step.rule === 'deiteration' && (selected || justifies)) {
         assertCertifiedDeiteration(trace, trace.step.justifier)
-        const key = selectionKey(trace.step.sel)
-        if (!reachable.has(key)) {
-          reachable.add(key)
-          changed = true
+        carried.certified = true
+        if (justifies) carried.used = true
+      }
+      if (unfolds) {
+        carried.unfolded = true
+        carried.specialized = true
+        for (const id of Object.keys(trace.after.regions)) {
+          if (trace.before.regions[id] === undefined) carried.regions.add(id)
+        }
+        for (const id of Object.keys(trace.after.nodes)) {
+          if (trace.before.nodes[id] === undefined) carried.nodes.add(id)
+        }
+        for (const id of Object.keys(trace.after.wires)) {
+          if (trace.before.wires[id] === undefined) carried.wires.add(id)
+        }
+      }
+      next.push(carried)
+
+      if (trace.step.rule === 'iteration' && selected) {
+        const copy = iterationCopySelection(trace)
+        if (copy !== null) {
+          const copied = provenanceBranch(
+            trace.after,
+            copy,
+            trace.half,
+            trace.state + 1,
+          )
+          copied.copied = true
+          next.push(copied)
         }
       }
     }
+    branches = next
   }
+
+  const backwardMeeting = traces.at(-1)!.after
+  if (
+    forwardMeeting !== undefined
+    && exploreForm(backwardMeeting) !== exploreForm(forwardMeeting)
+  ) {
+    throw new Error(`${premise} proof halves do not share a meeting state`)
+  }
+  const successful = branches.some((branch) =>
+    branch.used
+    || (
+      (branch.copied || branch.unfolded)
+      && branch.specialized
+      && branch.certified
+    )
+    || (
+      (branch.copied || branch.unfolded)
+      && branch.specialized
+      && forwardMeeting !== undefined
+      && branchSurvives(branch, backwardMeeting)
+    ))
   expect(
-    reachable.size,
-    `${premise} transitive structural provenance`,
-  ).toBeGreaterThan(1)
+    successful,
+    `${premise} transitive structural provenance ${
+      JSON.stringify(branches.map((branch) => ({
+        copied: branch.copied,
+        specialized: branch.specialized,
+        certified: branch.certified,
+        used: branch.used,
+        unfolded: branch.unfolded,
+        survivingRegions: branch.regions.size,
+        survivingNodes: branch.nodes.size,
+      })))
+    }`,
+  ).toBe(true)
 }
 
 describe('relational Frege arithmetic proofs', () => {
@@ -1180,10 +1428,10 @@ describe('relational Frege arithmetic proofs', () => {
         relations: theory.relations,
         theorems: theory.theorems.slice(0, theoremIndex),
       })
-      const traces = [
-        ...traceProofHalf(theorem, context, 'forward'),
-        ...traceProofHalf(theorem, context, 'backward'),
-      ]
+      const forwardTraces = traceProofHalf(theorem, context, 'forward')
+      const backwardTraces = traceProofHalf(theorem, context, 'backward')
+      const forwardMeeting = forwardTraces.at(-1)?.after
+        ?? theorem.lhs.diagram
       for (const hypothesis of SHIFT_COMM_CONTRACTS[name].hypotheses) {
         const region = structuralHypothesisRegion(theorem, hypothesis)
         const source = {
@@ -1192,11 +1440,36 @@ describe('relational Frege arithmetic proofs', () => {
           nodes: [],
           wires: [],
         } as const
+        expect(
+          selectionKey('forward', 0, source),
+          `${name} ${hypothesis} proof-half namespace`,
+        ).not.toBe(selectionKey('backward', 0, source))
+        expect(
+          selectionKey('backward', 0, source),
+          `${name} ${hypothesis} state namespace`,
+        ).not.toBe(selectionKey('backward', 1, source))
         assertStructuralProvenanceChain(
-          traces,
+          backwardTraces,
           source,
           `${name} ${hypothesis}`,
+          forwardMeeting,
         )
+        if (
+          name === 'successorShiftCarrierInductive'
+          && hypothesis === 'plusBase'
+        ) {
+          const copyIndex = backwardTraces.findIndex(({ step }) =>
+            step.rule === 'iteration'
+            && sameSelection(step.sel, source))
+          expect(copyIndex).toBeGreaterThan(-1)
+          expect(
+            () => assertStructuralProvenanceChain(
+              backwardTraces.slice(0, copyIndex + 1),
+              source,
+              'unused plusBase copy',
+            ),
+          ).toThrow()
+        }
         const weakened = {
           ...theorem,
           rhs: {
@@ -1517,34 +1790,90 @@ describe('relational Frege arithmetic proofs', () => {
     }
   })
 
-  it('uses the commutativity-support Nat premise causally', () => {
+  it('uses every commutativity Nat premise through its structural proof path', () => {
     const theory = buildFregeTheory()
-    const theoremIndex = theory.theorems.findIndex(
-      ({ name }) => name === 'commutativityCarrierInductive',
-    )
-    const theorem = theory.theorems[theoremIndex]!
-    const natPremises = Object.entries(theorem.rhs.diagram.nodes)
-      .filter(([, node]) => node.kind === 'ref' && node.defId === 'nat')
-    expect(natPremises).toHaveLength(1)
-    const [natNodeId, natNode] = natPremises[0]!
-    const withoutNatPremise = {
-      ...theorem,
-      rhs: {
-        ...theorem.rhs,
-        diagram: removeSubgraph(theorem.rhs.diagram, {
-          region: natNode.region,
-          regions: [],
-          nodes: [natNodeId],
-          wires: [],
-        }),
-      },
+
+    for (const name of [
+      'commutativityCarrierInductive',
+      'plusComm',
+    ] as const) {
+      const theoremIndex = theory.theorems.findIndex(
+        (candidate) => candidate.name === name,
+      )
+      const theorem = theory.theorems[theoremIndex]!
+      const context = verifyTheory({
+        relations: theory.relations,
+        theorems: theory.theorems.slice(0, theoremIndex),
+      })
+      const diagram = theorem.rhs.diagram
+      const shell = theoremShell(diagram)
+      const claim = universalClaimParts(diagram, shell.conclusion)
+      const zero = relationWire(diagram, shell.primitiveScope, UNARY)
+      const successor = relationWire(
+        diagram,
+        shell.primitiveScope,
+        BINARY,
+      )
+      const sources = name === 'commutativityCarrierInductive'
+        ? [
+            natSelection(
+              diagram,
+              claim.antecedent,
+              zero,
+              successor,
+              exactOne(
+                scopedWires(diagram, claim.scope),
+                'commutativity-support fixed right',
+              ),
+              'commutativity-support Nat(b)',
+            ),
+          ]
+        : (() => {
+            const plus = relationWire(
+              diagram,
+              shell.primitiveScope,
+              TERNARY,
+            )
+            const publicPlus = exactOne(
+              directNodes(diagram, claim.antecedent).filter((node) =>
+                diagram.nodes[node]!.kind === 'atom'
+                && endpointWire(diagram, node, 'head') === plus),
+              'public Plus(a,b,o)',
+            )
+            const left = endpointWire(diagram, publicPlus, 'arg', 0)
+            const right = endpointWire(diagram, publicPlus, 'arg', 1)
+            return [
+              natSelection(
+                diagram,
+                claim.antecedent,
+                zero,
+                successor,
+                left,
+                'public Nat(a)',
+              ),
+              natSelection(
+                diagram,
+                claim.antecedent,
+                zero,
+                successor,
+                right,
+                'public Nat(b)',
+              ),
+            ]
+          })()
+      const forwardTraces = traceProofHalf(theorem, context, 'forward')
+      const backwardTraces = traceProofHalf(theorem, context, 'backward')
+      const forwardMeeting = forwardTraces.at(-1)?.after
+        ?? theorem.lhs.diagram
+
+      for (const [index, source] of sources.entries()) {
+        assertStructuralProvenanceChain(
+          backwardTraces,
+          source,
+          `${name} Nat premise ${index}`,
+          forwardMeeting,
+        )
+      }
     }
-    expect(() => verifyTheory({
-      relations: theory.relations,
-      theorems: [
-        ...theory.theorems.slice(0, theoremIndex),
-        withoutNatPremise,
-      ],
-    })).toThrow()
   })
 })
