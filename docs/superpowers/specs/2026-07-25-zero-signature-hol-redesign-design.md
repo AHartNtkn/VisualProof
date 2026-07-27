@@ -204,18 +204,29 @@ opens a menu. The rules:
   unhighlighted are ambient parameters. Unhighlighting removes an item;
   highlighting it again appends it at the end. No phases, no second highlight
   layer, no menus.
-- **A wire contact closes an occurrence.** Severing: draw the fresh wire; each
-  contact (endpoint drag, then branch drags) closes one occurrence whose extent
-  is everything highlighted since the previous contact, with that batch's wire
-  hits, in order, as its arguments. The interleaving of highlights and contacts
-  is therefore the partition — it distinguishes one occurrence spanning several
-  highlighted pieces (highlight all, one contact: from `A ∧ A`, `∃p. p`) from
-  several occurrences of one content (highlight, contact, highlight, contact:
-  `∃p. p∧p`). A contact on an empty batch refuses; an occurrence's extent is
-  pinned at its contact; later selection changes affect only the open batch.
-  Dropping the loose end commits, and where it rests is the wire's scope.
-  Grounding: highlight the one occurrence, drag the quantified wire onto it;
-  release commits.
+- **Interleaving is free; the partition is structural (largest pattern).** Two
+  highlighted items belong to one occurrence iff the region-tree path between
+  them crosses only highlighted cut boundaries. Same region → one occurrence,
+  always (so unhighlighted content sitting between highlighted pieces does not
+  split them); an unhighlighted cut boundary splits. Nothing is searched or
+  proposed — this is a fixed parsing convention, the same species as canonical
+  boundary order in Define-relation. Each occurrence's arguments are its wire
+  hits in their global highlight order, corresponded position-wise across
+  occurrences.
+- **Contacts pick which occurrences a wire consumes.** Severing: draw the fresh
+  wire contacting occurrences (endpoint drag, then branch drags; a second
+  contact on the same occurrence refuses); dropping the loose end commits, and
+  where it rests is the wire's scope. Occurrences never contacted stay
+  highlighted, unconsumed. Grounding: drag the quantified wire onto the one
+  highlighted occurrence; release commits.
+- **Same-region multiplicity is derived, not drawn.** One region cannot hold two
+  occurrences of one sever (largest-pattern merges them); no power is lost:
+  `∃p.p∧p` comes from `∃p.p` by iterating the atom, and same-region copies
+  collapse by deiteration before severing. The one case this does not cover —
+  same-region copies on differing formal wires, `G(x)∧G(y) → ∃Q.Q(x)∧Q(y)` —
+  derives via the reification theorem `∃Q(Q ≐ G)` plus the biconditional swap
+  at each occurrence, then erasure of the spent constraint; more moves,
+  amortized by citation, nothing unreachable.
 - **The committed step is the durable record.** The proof step stores the
   occurrence extent and the ordered argument wires; the selection state is
   discarded. The kernel validates at commit — copies of one content, coherent
