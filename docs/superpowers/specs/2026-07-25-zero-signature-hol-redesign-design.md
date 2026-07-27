@@ -197,13 +197,15 @@ which content to abstract or ground to, and in what argument order, is transient
 selection state. It never adds cuts, nodes, or wires to the diagram, and it never
 opens a menu. The rules:
 
-- **Highlight order is the argument order.** The selection the user builds by
-  highlighting is an ordered sequence (it already is — hits append in event
-  order). Highlight the occurrence's content, then highlight its boundary wires
-  in the order they should serve as formal arguments: the first highlighted
-  boundary wire is argument 0, the next is argument 1, and so on. Boundary wires
-  left unhighlighted are ambient parameters. Unhighlighting removes a wire from
-  the sequence; highlighting it again appends it at the end.
+- **One highlight pass; hit type separates the roles; wire order is the argument
+  order.** The selection is one ordered sequence (it already is — hits append in
+  event order). Highlighted regions/nodes define the occurrence's extent;
+  highlighted wires are the formal arguments, the first highlighted wire being
+  argument 0, the next argument 1, and so on. Interleaving is free — only the
+  relative order among wire hits carries meaning. Boundary wires left
+  unhighlighted are ambient parameters. Unhighlighting removes an item;
+  highlighting it again appends it at the end. There are no phases and no second
+  highlight layer.
 - **The wire drag consumes the prepared selection.** Severing: draw the fresh
   wire contacting the selected occurrences (endpoint drag, then branch drags);
   dropping its loose end commits, and where the loose end rests is the wire's
