@@ -16,7 +16,6 @@ import {
   declareWire,
   emptyGraph,
   finishDiagramWithBoundary,
-  identity,
   implication,
   quantifierScope,
   type GraphConstruction,
@@ -580,53 +579,80 @@ export function truthReification(): Theorem {
   })
 }
 
-function drawRightIdentityAssertion(
+function drawRightIdentityCarrier(
   initial: GraphConstruction,
   region: RegionId,
   inductionVariable: WireId,
   captures: readonly WireId[],
 ): GraphConstruction {
   const [zero, plus] = captures
-  const quantified = quantifierScope(initial, region, 'forall', [IOTA, IOTA])
-  const [zeroValue, output] = quantified.value.variables
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA])
+  const zeroValue = quantified.value.variables[0]!
   const claim = implication(quantified.graph, quantified.value.body)
   let graph = claim.graph
   graph = atom(
     graph,
     claim.value.antecedent,
     zero!,
-    [zeroValue!],
+    [zeroValue],
   ).graph
-  graph = atom(
-    graph,
-    claim.value.antecedent,
-    plus!,
-    [inductionVariable, zeroValue!, output!],
-  ).graph
-  return identity(
+  return atom(
     graph,
     claim.value.consequent,
-    [output!, inductionVariable],
+    plus!,
+    [inductionVariable, zeroValue, inductionVariable],
   ).graph
 }
 
-function drawAssociativityAssertion(
+function drawAdditionTotality(
+  initial: GraphConstruction,
+  region: RegionId,
+  inductionVariable: WireId,
+  plus: WireId,
+): GraphConstruction {
+  const quantified = quantifierScope(
+    initial,
+    region,
+    'forall',
+    [IOTA],
+  )
+  const right = quantified.value.variables[0]!
+  const output = declareWire(
+    quantified.graph,
+    quantified.value.body,
+    IOTA,
+  )
+  return atom(
+    output.graph,
+    quantified.value.body,
+    plus,
+    [inductionVariable, right, output.value],
+  ).graph
+}
+
+function drawAssociativityCarrier(
   initial: GraphConstruction,
   region: RegionId,
   inductionVariable: WireId,
   captures: readonly WireId[],
 ): GraphConstruction {
   const plus = captures[0]!
-  const quantified = quantifierScope(
+  let graph = drawAdditionTotality(
     initial,
     region,
-    'forall',
-    [IOTA, IOTA, IOTA, IOTA, IOTA],
+    inductionVariable,
+    plus,
   )
-  const [right, third, firstSum, output, innerSum] =
+  const quantified = quantifierScope(
+    graph,
+    region,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  const [right, third, firstSum, innerSum] =
     quantified.value.variables
   const claim = implication(quantified.graph, quantified.value.body)
-  let graph = claim.graph
+  graph = claim.graph
   graph = atom(
     graph,
     claim.value.antecedent,
@@ -637,31 +663,39 @@ function drawAssociativityAssertion(
     graph,
     claim.value.antecedent,
     plus,
-    [firstSum!, third!, output!],
+    [right!, third!, innerSum!],
   ).graph
+  const output = declareWire(graph, claim.value.consequent, IOTA)
+  graph = output.graph
   graph = atom(
     graph,
-    claim.value.antecedent,
+    claim.value.consequent,
     plus,
-    [right!, third!, innerSum!],
+    [firstSum!, third!, output.value],
   ).graph
   return atom(
     graph,
     claim.value.consequent,
     plus,
-    [inductionVariable, innerSum!, output!],
+    [inductionVariable, innerSum!, output.value],
   ).graph
 }
 
-function drawSuccessorShiftAssertion(
+function drawSuccessorShiftCarrier(
   initial: GraphConstruction,
   region: RegionId,
   inductionVariable: WireId,
   captures: readonly WireId[],
 ): GraphConstruction {
   const [successor, plus] = captures
-  const quantified = quantifierScope(
+  const withTotality = drawAdditionTotality(
     initial,
+    region,
+    inductionVariable,
+    plus!,
+  )
+  const quantified = quantifierScope(
+    withTotality,
     region,
     'forall',
     [IOTA, IOTA, IOTA, IOTA],
@@ -696,28 +730,39 @@ function drawSuccessorShiftAssertion(
   ).graph
 }
 
-function drawCommutativityAssertion(
+function drawCommutativityCarrier(
   initial: GraphConstruction,
   region: RegionId,
   inductionVariable: WireId,
   captures: readonly WireId[],
 ): GraphConstruction {
-  const plus = captures[0]!
-  const quantified = quantifierScope(initial, region, 'forall', [IOTA, IOTA])
-  const [right, output] = quantified.value.variables
+  const [plus, right] = captures
+  const withTotality = drawAdditionTotality(
+    initial,
+    region,
+    inductionVariable,
+    plus!,
+  )
+  const quantified = quantifierScope(
+    withTotality,
+    region,
+    'forall',
+    [IOTA],
+  )
+  const output = quantified.value.variables[0]!
   const claim = implication(quantified.graph, quantified.value.body)
   let graph = claim.graph
   graph = atom(
     graph,
     claim.value.antecedent,
-    plus,
-    [inductionVariable, right!, output!],
+    plus!,
+    [inductionVariable, right!, output],
   ).graph
   return atom(
     graph,
     claim.value.consequent,
-    plus,
-    [right!, inductionVariable, output!],
+    plus!,
+    [right!, inductionVariable, output],
   ).graph
 }
 
@@ -725,7 +770,7 @@ export function rightIdentityInductionReification(): Theorem {
   return recordedUnaryReification(
     'rightIdentityInductionReification',
     [UNARY, TERNARY],
-    drawRightIdentityAssertion,
+    drawRightIdentityCarrier,
   )
 }
 
@@ -733,7 +778,7 @@ export function associativityInductionReification(): Theorem {
   return recordedUnaryReification(
     'associativityInductionReification',
     [TERNARY],
-    drawAssociativityAssertion,
+    drawAssociativityCarrier,
   )
 }
 
@@ -741,14 +786,14 @@ export function successorShiftInductionReification(): Theorem {
   return recordedUnaryReification(
     'successorShiftInductionReification',
     [BINARY, TERNARY],
-    drawSuccessorShiftAssertion,
+    drawSuccessorShiftCarrier,
   )
 }
 
 export function commutativityInductionReification(): Theorem {
   return recordedUnaryReification(
     'commutativityInductionReification',
-    [TERNARY],
-    drawCommutativityAssertion,
+    [TERNARY, IOTA],
+    drawCommutativityCarrier,
   )
 }

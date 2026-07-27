@@ -30,7 +30,6 @@ import {
   declareWire,
   emptyGraph,
   finishDiagramWithBoundary,
-  identity,
   implication,
   quantifierScope,
   type GraphConstruction,
@@ -74,6 +73,134 @@ function endpointWire(
         )))
       .map(([id]) => id),
     `one ${kind} wire for '${node}'`,
+  )
+}
+
+function directCuts(
+  diagram: Diagram,
+  parent: RegionId,
+): readonly RegionId[] {
+  return Object.entries(diagram.regions)
+    .filter(([, region]) =>
+      region.kind === 'cut' && region.parent === parent)
+    .map(([id]) => id)
+}
+
+function directNodes(
+  diagram: Diagram,
+  region: RegionId,
+): readonly NodeId[] {
+  return Object.entries(diagram.nodes)
+    .filter(([, node]) => node.region === region)
+    .map(([id]) => id)
+}
+
+function scopedWires(
+  diagram: Diagram,
+  region: RegionId,
+): readonly WireId[] {
+  return Object.entries(diagram.wires)
+    .filter(([, wire]) => wire.scope === region)
+    .map(([id]) => id)
+}
+
+function atomDescriptors(
+  diagram: Diagram,
+  region: RegionId,
+  labels: ReadonlyMap<WireId, string>,
+): readonly string[] {
+  return directNodes(diagram, region).map((node) => {
+    const item = diagram.nodes[node]!
+    expect(item.kind).toBe('atom')
+    if (item.kind !== 'atom') throw new Error('expected atom')
+    const head = labels.get(endpointWire(diagram, node, 'head'))
+    const args = item.sig.args.map((_, index) =>
+      labels.get(endpointWire(diagram, node, 'arg', index)))
+    expect(head).toBeDefined()
+    expect(args.every((argument) => argument !== undefined)).toBe(true)
+    return `${head}(${args.join(',')})`
+  }).sort()
+}
+
+function explicitMaterial(theorem: Theorem): DiagramWithBoundary {
+  const grounding = exactlyOne(
+    theorem.actions.flatMap((action) => action.steps)
+      .filter((step) =>
+        step.rule === 'wireJoin'
+        && step.input.kind === 'relation'),
+    `${theorem.name} explicit material grounding`,
+  )
+  if (grounding.rule !== 'wireJoin' || grounding.input.kind !== 'relation') {
+    throw new Error('expected strongest-form relation grounding')
+  }
+  return grounding.input.content
+}
+
+function assertAdditionTotality(
+  material: DiagramWithBoundary,
+  formal: WireId,
+  plus: WireId,
+): RegionId {
+  const diagram = material.diagram
+  const totality = exactlyOne(
+    directCuts(diagram, diagram.root)
+      .map((scope) => ({
+        scope,
+        body: exactlyOne(
+          directCuts(diagram, scope),
+          'universal body',
+        ),
+      }))
+      .filter(({ scope, body }) =>
+        scopedWires(diagram, scope).length === 1
+        && scopedWires(diagram, body).length === 1
+        && directNodes(diagram, body).length === 1),
+    'addition-totality universal',
+  )
+  const right = exactlyOne(
+    scopedWires(diagram, totality.scope),
+    'totality input',
+  )
+  const output = exactlyOne(
+    scopedWires(diagram, totality.body),
+    'existential totality output',
+  )
+  expect(atomDescriptors(diagram, totality.body, new Map([
+    [formal, 'a'],
+    [plus, 'plus'],
+    [right, 'b'],
+    [output, 't'],
+  ]))).toEqual(['plus(a,b,t)'])
+  return totality.scope
+}
+
+function implicationRegions(
+  diagram: Diagram,
+  region: RegionId,
+): {
+  readonly antecedent: RegionId
+  readonly consequent: RegionId
+} {
+  const antecedent = exactlyOne(
+    directCuts(diagram, region),
+    'implication antecedent',
+  )
+  return {
+    antecedent,
+    consequent: exactlyOne(
+      directCuts(diagram, antecedent),
+      'implication consequent',
+    ),
+  }
+}
+
+function universalBody(
+  diagram: Diagram,
+  scope: RegionId,
+): RegionId {
+  return exactlyOne(
+    directCuts(diagram, scope),
+    'universal body',
   )
 }
 
@@ -205,26 +332,47 @@ function rightIdentityMaterial(
   captures: readonly WireId[],
 ): GraphConstruction {
   const [zero, plus] = captures
-  const quantified = quantifierScope(initial, region, 'forall', [IOTA, IOTA])
-  const [zeroValue, output] = quantified.value.variables
+  const quantified = quantifierScope(initial, region, 'forall', [IOTA])
+  const zeroValue = quantified.value.variables[0]!
   const claim = implication(quantified.graph, quantified.value.body)
   let graph = claim.graph
   graph = atom(
     graph,
     claim.value.antecedent,
     zero!,
-    [zeroValue!],
+    [zeroValue],
   ).graph
-  graph = atom(
-    graph,
-    claim.value.antecedent,
-    plus!,
-    [inductionVariable, zeroValue!, output!],
-  ).graph
-  return identity(
+  return atom(
     graph,
     claim.value.consequent,
-    [output!, inductionVariable],
+    plus!,
+    [inductionVariable, zeroValue, inductionVariable],
+  ).graph
+}
+
+function additionTotalityMaterial(
+  initial: GraphConstruction,
+  region: RegionId,
+  inductionVariable: WireId,
+  plus: WireId,
+): GraphConstruction {
+  const quantified = quantifierScope(
+    initial,
+    region,
+    'forall',
+    [IOTA],
+  )
+  const right = quantified.value.variables[0]!
+  const output = declareWire(
+    quantified.graph,
+    quantified.value.body,
+    IOTA,
+  )
+  return atom(
+    output.graph,
+    quantified.value.body,
+    plus,
+    [inductionVariable, right, output.value],
   ).graph
 }
 
@@ -235,16 +383,22 @@ function associativityMaterial(
   captures: readonly WireId[],
 ): GraphConstruction {
   const plus = captures[0]!
-  const quantified = quantifierScope(
+  let graph = additionTotalityMaterial(
     initial,
     region,
-    'forall',
-    [IOTA, IOTA, IOTA, IOTA, IOTA],
+    inductionVariable,
+    plus,
   )
-  const [right, third, firstSum, output, innerSum] =
+  const quantified = quantifierScope(
+    graph,
+    region,
+    'forall',
+    [IOTA, IOTA, IOTA, IOTA],
+  )
+  const [right, third, firstSum, innerSum] =
     quantified.value.variables
   const claim = implication(quantified.graph, quantified.value.body)
-  let graph = claim.graph
+  graph = claim.graph
   graph = atom(
     graph,
     claim.value.antecedent,
@@ -255,19 +409,21 @@ function associativityMaterial(
     graph,
     claim.value.antecedent,
     plus,
-    [firstSum!, third!, output!],
+    [right!, third!, innerSum!],
   ).graph
+  const output = declareWire(graph, claim.value.consequent, IOTA)
+  graph = output.graph
   graph = atom(
     graph,
-    claim.value.antecedent,
+    claim.value.consequent,
     plus,
-    [right!, third!, innerSum!],
+    [firstSum!, third!, output.value],
   ).graph
   return atom(
     graph,
     claim.value.consequent,
     plus,
-    [inductionVariable, innerSum!, output!],
+    [inductionVariable, innerSum!, output.value],
   ).graph
 }
 
@@ -278,8 +434,14 @@ function successorShiftMaterial(
   captures: readonly WireId[],
 ): GraphConstruction {
   const [successor, plus] = captures
-  const quantified = quantifierScope(
+  const withTotality = additionTotalityMaterial(
     initial,
+    region,
+    inductionVariable,
+    plus!,
+  )
+  const quantified = quantifierScope(
+    withTotality,
     region,
     'forall',
     [IOTA, IOTA, IOTA, IOTA],
@@ -320,22 +482,33 @@ function commutativityMaterial(
   inductionVariable: WireId,
   captures: readonly WireId[],
 ): GraphConstruction {
-  const plus = captures[0]!
-  const quantified = quantifierScope(initial, region, 'forall', [IOTA, IOTA])
-  const [right, output] = quantified.value.variables
+  const [plus, right] = captures
+  const withTotality = additionTotalityMaterial(
+    initial,
+    region,
+    inductionVariable,
+    plus!,
+  )
+  const quantified = quantifierScope(
+    withTotality,
+    region,
+    'forall',
+    [IOTA],
+  )
+  const output = quantified.value.variables[0]!
   const claim = implication(quantified.graph, quantified.value.body)
   let graph = claim.graph
   graph = atom(
     graph,
     claim.value.antecedent,
-    plus,
-    [inductionVariable, right!, output!],
+    plus!,
+    [inductionVariable, right!, output],
   ).graph
   return atom(
     graph,
     claim.value.consequent,
-    plus,
-    [right!, inductionVariable, output!],
+    plus!,
+    [right!, inductionVariable, output],
   ).graph
 }
 
@@ -389,9 +562,9 @@ const reificationCases: readonly ReificationCase[] = [
   {
     name: 'commutativityInductionReification',
     make: commutativityInductionReification,
-    captureSignatures: [TERNARY],
+    captureSignatures: [TERNARY, IOTA],
     rhs: () => unaryReificationFigure(
-      [TERNARY],
+      [TERNARY, IOTA],
       commutativityMaterial,
     ),
   },
@@ -431,6 +604,169 @@ describe('recorded general relation reification', () => {
         sigKey(theorem.rhs.diagram.wires[wire]!.sig)))
         .toEqual(testCase.captureSignatures.map(sigKey))
     }
+  })
+
+  it('grounds the exact proof-valid carrier material and witness scopes', () => {
+    const right = explicitMaterial(rightIdentityInductionReification())
+    const [rightFormal, zero, rightPlus] = right.boundary
+    const rightScope = exactlyOne(
+      directCuts(right.diagram, right.diagram.root),
+      'right-identity universal',
+    )
+    const zeroValue = exactlyOne(
+      scopedWires(right.diagram, rightScope),
+      'universally quantified zero value',
+    )
+    const rightClaim = implicationRegions(
+      right.diagram,
+      universalBody(right.diagram, rightScope),
+    )
+    const rightLabels = new Map<WireId, string>([
+      [rightFormal!, 'a'],
+      [zero!, 'zero'],
+      [rightPlus!, 'plus'],
+      [zeroValue, 'z'],
+    ])
+    expect(atomDescriptors(
+      right.diagram,
+      rightClaim.antecedent,
+      rightLabels,
+    )).toEqual(['zero(z)'])
+    expect(atomDescriptors(
+      right.diagram,
+      rightClaim.consequent,
+      rightLabels,
+    )).toEqual(['plus(a,z,a)'])
+    expect(scopedWires(right.diagram, rightClaim.consequent)).toEqual([])
+
+    const associativity = explicitMaterial(
+      associativityInductionReification(),
+    )
+    const [assocFormal, assocPlus] = associativity.boundary
+    const assocTotality = assertAdditionTotality(
+      associativity,
+      assocFormal!,
+      assocPlus!,
+    )
+    const assocTransport = exactlyOne(
+      directCuts(associativity.diagram, associativity.diagram.root)
+        .filter((scope) => scope !== assocTotality),
+      'associativity transport universal',
+    )
+    const [b, c, t, u] = scopedWires(
+      associativity.diagram,
+      assocTransport,
+    )
+    expect([b, c, t, u].every((wire) => wire !== undefined)).toBe(true)
+    const assocClaim = implicationRegions(
+      associativity.diagram,
+      universalBody(associativity.diagram, assocTransport),
+    )
+    const v = exactlyOne(
+      scopedWires(associativity.diagram, assocClaim.consequent),
+      'proof-local associativity transport witness',
+    )
+    const assocLabels = new Map<WireId, string>([
+      [assocFormal!, 'a'],
+      [assocPlus!, 'plus'],
+      [b!, 'b'],
+      [c!, 'c'],
+      [t!, 't'],
+      [u!, 'u'],
+      [v, 'v'],
+    ])
+    expect(atomDescriptors(
+      associativity.diagram,
+      assocClaim.antecedent,
+      assocLabels,
+    )).toEqual(['plus(a,b,t)', 'plus(b,c,u)'])
+    expect(atomDescriptors(
+      associativity.diagram,
+      assocClaim.consequent,
+      assocLabels,
+    )).toEqual(['plus(a,u,v)', 'plus(t,c,v)'])
+
+    const shift = explicitMaterial(successorShiftInductionReification())
+    const [shiftFormal, successor, shiftPlus] = shift.boundary
+    const shiftTotality = assertAdditionTotality(
+      shift,
+      shiftFormal!,
+      shiftPlus!,
+    )
+    const shiftUniversal = exactlyOne(
+      directCuts(shift.diagram, shift.diagram.root)
+        .filter((scope) => scope !== shiftTotality),
+      'successor-shift universal',
+    )
+    const [b0, sb, t0, st] = scopedWires(shift.diagram, shiftUniversal)
+    expect([b0, sb, t0, st].every((wire) => wire !== undefined)).toBe(true)
+    const shiftClaim = implicationRegions(
+      shift.diagram,
+      universalBody(shift.diagram, shiftUniversal),
+    )
+    const shiftLabels = new Map<WireId, string>([
+      [shiftFormal!, 'a'],
+      [successor!, 'succ'],
+      [shiftPlus!, 'plus'],
+      [b0!, 'b'],
+      [sb!, 'sb'],
+      [t0!, 't'],
+      [st!, 'st'],
+    ])
+    expect(atomDescriptors(
+      shift.diagram,
+      shiftClaim.antecedent,
+      shiftLabels,
+    )).toEqual(['plus(a,b,t)', 'succ(b,sb)', 'succ(t,st)'])
+    expect(atomDescriptors(
+      shift.diagram,
+      shiftClaim.consequent,
+      shiftLabels,
+    )).toEqual(['plus(a,sb,st)'])
+    expect(scopedWires(shift.diagram, shiftClaim.consequent)).toEqual([])
+
+    const commutativity = explicitMaterial(
+      commutativityInductionReification(),
+    )
+    const [commFormal, commPlus, fixedRight] = commutativity.boundary
+    const commTotality = assertAdditionTotality(
+      commutativity,
+      commFormal!,
+      commPlus!,
+    )
+    const commUniversal = exactlyOne(
+      directCuts(commutativity.diagram, commutativity.diagram.root)
+        .filter((scope) => scope !== commTotality),
+      'fixed-addend commutativity universal',
+    )
+    const output = exactlyOne(
+      scopedWires(commutativity.diagram, commUniversal),
+      'commutativity output',
+    )
+    const commClaim = implicationRegions(
+      commutativity.diagram,
+      universalBody(commutativity.diagram, commUniversal),
+    )
+    const commLabels = new Map<WireId, string>([
+      [commFormal!, 'a'],
+      [commPlus!, 'plus'],
+      [fixedRight!, 'r'],
+      [output, 'o'],
+    ])
+    expect(atomDescriptors(
+      commutativity.diagram,
+      commClaim.antecedent,
+      commLabels,
+    )).toEqual(['plus(a,r,o)'])
+    expect(atomDescriptors(
+      commutativity.diagram,
+      commClaim.consequent,
+      commLabels,
+    )).toEqual(['plus(r,a,o)'])
+    expect(scopedWires(
+      commutativity.diagram,
+      commClaim.consequent,
+    )).toEqual([])
   })
 
   it('replays every reification without definitions, refs, or privileged spawn', () => {
