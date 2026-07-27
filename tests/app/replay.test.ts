@@ -58,6 +58,34 @@ function twoSidedFixture() {
   }
 }
 
+function allForwardCanonicalFixture() {
+  const lhsDiagram = new DiagramBuilder().build()
+  const lhs = mkDiagramWithBoundary(lhsDiagram, [])
+  const action = singleStepAction('open from lhs', {
+    rule: 'doubleCutIntro',
+    sel: mkSelection(lhsDiagram, {
+      region: lhsDiagram.root, regions: [], nodes: [], wires: [],
+    }),
+  })
+  const rhsBuilder = new DiagramBuilder()
+  const outer = rhsBuilder.cut(rhsBuilder.root)
+  rhsBuilder.cut(outer)
+  const rhs = mkDiagramWithBoundary(rhsBuilder.build(), [])
+  const base = verifyTheory(tinyTheory())
+  const ctx = registerTheorem(base, {
+    name: 'AllForwardCanonical',
+    lhs,
+    rhs,
+    actions: [action],
+  })
+  const theorem = ctx.theorems.get('AllForwardCanonical')!
+  return {
+    ctx,
+    theorem,
+    computed: applyAction(theorem.lhs.diagram, theorem.actions[0]!, ctx, 'forward'),
+  }
+}
+
 describe('structural replay', () => {
   it('exposes action labels, steps, diagrams, and transported boundaries', () => {
     const { ctx } = replayFixture()
@@ -94,6 +122,26 @@ describe('structural replay', () => {
       ])
     expect(replay.transitions[1]!.action).toBe(theorem.backActions![0])
     expect(replay.transitions[1]!.appliedFrom).toBe(theorem.rhs.diagram)
+  })
+
+  it('uses the exact declared RHS as the shared meet/RHS representative for an all-forward proof', () => {
+    const { ctx, theorem, computed } = allForwardCanonicalFixture()
+    const replay = mkReplay(theorem.name, ctx)
+
+    expect(computed).not.toBe(theorem.rhs.diagram)
+    expect(exploreForm(computed, theorem.lhs.boundary))
+      .toBe(exploreForm(theorem.rhs.diagram, theorem.rhs.boundary))
+    expect(replay.meetingIndex).toBe(replay.actionCount)
+    expect(replay.actionCount).toBe(1)
+    expect(replay.transitions).toHaveLength(1)
+    expect(replay.transitions[0]).toMatchObject({
+      half: 'forward',
+      action: theorem.actions[0],
+      appliedFrom: theorem.lhs.diagram,
+      orientation: 'forward',
+    })
+    expect(replay.diagramAt(replay.actionCount)).toBe(theorem.rhs.diagram)
+    expect(replay.boundaryAt(replay.actionCount)).toBe(theorem.rhs.boundary)
   })
 
   it('ends zeroIsNat at its declared RHS with the folded nat reference visible', () => {

@@ -8,8 +8,10 @@ import { applyAction, type ProofAction } from '../kernel/proof/action'
 
 /**
  * A scrubber over both halves of a verified theorem's recorded derivation.
- * Position zero is the exact declared lhs, meetingIndex is the verified meeting
- * form, and actionCount is the exact declared rhs.
+ * Position zero is the exact declared lhs unless all landmarks coincide;
+ * meetingIndex is the verified meeting form, and actionCount is always the
+ * exact declared rhs. At a shared meeting/RHS index, exact RHS representation
+ * takes precedence over the canonically equivalent computed meeting object.
  *
  * Nothing here is a re-verification: the theorem was checked when it entered the
  * context. Replay re-runs each half from its declared endpoint with its recorded
@@ -104,11 +106,17 @@ export function mkReplay(name: string, ctx: ProofContext): Replay {
     ...forward.transitions,
     ...backward.transitions.slice().reverse(),
   ])
-  const states = Object.freeze([...forward.states, ...backwardDisplayStates])
-  const boundaries = Object.freeze([...forward.boundaries, ...backwardDisplayBoundaries])
   const actions = Object.freeze(transitions.map(({ action }) => action))
   const meetingIndex = thm.actions.length
   const n = transitions.length
+  const displayStates = [...forward.states, ...backwardDisplayStates]
+  const displayBoundaries = [...forward.boundaries, ...backwardDisplayBoundaries]
+  if (meetingIndex === n) {
+    displayStates[n] = thm.rhs.diagram
+    displayBoundaries[n] = thm.rhs.boundary
+  }
+  const states = Object.freeze(displayStates)
+  const boundaries = Object.freeze(displayBoundaries)
   const inRange = (k: number): boolean => Number.isInteger(k) && k >= 0 && k <= n
 
   return {
