@@ -1,4 +1,9 @@
-import { relSig } from '../kernel/diagram/sig'
+import type {
+  NodeId,
+  RegionId,
+  WireId,
+} from '../kernel/diagram/diagram'
+import { IOTA, relSig } from '../kernel/diagram/sig'
 import {
   registerTheorem,
   verifyTheory,
@@ -7,43 +12,155 @@ import {
 } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
+  atom,
+  declareWire,
+  emptyGraph,
+  finishDiagramWithBoundary,
+  implication,
+  quantifierScope,
+} from './graph'
+import {
   BINARY,
-  TERNARY,
   UNARY,
-  deiterationSelectionStep,
   deiterationStep,
   directCuts,
   directNodes,
   endpointWire,
   exactOne,
-  introducedContentSelection,
   nodeWithHead,
-  relationApplicationContent,
   relationWire,
   scopedWires,
 } from './arithmetic-support'
-import {
-  emptyGraph,
-  finishDiagramWithBoundary,
-} from './graph'
 import {
   PrimitiveStepRecorder,
   onlyNewCut,
   onlyNewNode,
   onlyNewWire,
 } from './record'
-import { natRelation } from './naturals'
 import type { ArithmeticStatements } from './statements'
 
-function oneIsNat(
-  statements: ArithmeticStatements,
-  context: ProofContext,
-): Theorem {
+function exactHypothesesContent() {
+  let graph = emptyGraph()
+  const zero = declareWire(graph, graph.root, UNARY)
+  graph = zero.graph
+  const successor = declareWire(graph, graph.root, BINARY)
+  graph = successor.graph
+
+  const zeroValue = declareWire(graph, graph.root, IOTA)
+  graph = zeroValue.graph
+  graph = atom(graph, graph.root, zero.value, [zeroValue.value]).graph
+
+  const total = quantifierScope(graph, graph.root, 'forall', [IOTA])
+  graph = total.graph
+  const totalOutput = declareWire(graph, total.value.body, IOTA)
+  graph = totalOutput.graph
+  graph = atom(
+    graph,
+    total.value.body,
+    successor.value,
+    [total.value.variables[0]!, totalOutput.value],
+  ).graph
+
+  return finishDiagramWithBoundary(
+    graph,
+    [zero.value, successor.value],
+  )
+}
+
+function hereditaryConditionsContent() {
+  let graph = emptyGraph()
+  const zero = declareWire(graph, graph.root, UNARY)
+  graph = zero.graph
+  const successor = declareWire(graph, graph.root, BINARY)
+  graph = successor.graph
+  const property = declareWire(graph, graph.root, UNARY)
+  graph = property.graph
+
+  const base = quantifierScope(graph, graph.root, 'forall', [IOTA])
+  graph = base.graph
+  const baseClaim = implication(graph, base.value.body)
+  graph = baseClaim.graph
+  graph = atom(
+    graph,
+    baseClaim.value.antecedent,
+    zero.value,
+    [base.value.variables[0]!],
+  ).graph
+  graph = atom(
+    graph,
+    baseClaim.value.consequent,
+    property.value,
+    [base.value.variables[0]!],
+  ).graph
+
+  const closure = quantifierScope(
+    graph,
+    graph.root,
+    'forall',
+    [IOTA, IOTA],
+  )
+  graph = closure.graph
+  const [predecessor, successorValue] = closure.value.variables
+  const closureClaim = implication(graph, closure.value.body)
+  graph = closureClaim.graph
+  graph = atom(
+    graph,
+    closureClaim.value.antecedent,
+    property.value,
+    [predecessor!],
+  ).graph
+  graph = atom(
+    graph,
+    closureClaim.value.antecedent,
+    successor.value,
+    [predecessor!, successorValue!],
+  ).graph
+  graph = atom(
+    graph,
+    closureClaim.value.consequent,
+    property.value,
+    [successorValue!],
+  ).graph
+
+  return finishDiagramWithBoundary(
+    graph,
+    [zero.value, successor.value, property.value],
+  )
+}
+
+function spawnAttached(
+  recorder: PrimitiveStepRecorder,
+  region: RegionId,
+  head: WireId,
+  args: readonly WireId[],
+  label: string,
+): NodeId {
+  const before = recorder.diagram
+  recorder.record(`insert ${label}`, {
+    rule: 'atomSpawn',
+    region,
+    wire: head,
+  })
+  const node = onlyNewNode(before, recorder.diagram, region)
+  args.forEach((wire, index) => {
+    recorder.record(`attach ${label} argument ${index}`, {
+      rule: 'wireJoin',
+      input: {
+        kind: 'iota',
+        a: wire,
+        b: endpointWire(recorder.diagram, node, 'arg', index),
+      },
+    })
+  })
+  return node
+}
+
+function buildForward(context: ProofContext) {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
   const forward = new PrimitiveStepRecorder(lhs.diagram, context)
-
   let before = forward.diagram
-  forward.record('open primitive universal scope', {
+
+  forward.record('open zero/successor primitive universal scope', {
     rule: 'doubleCutIntro',
     sel: {
       region: forward.diagram.root,
@@ -59,7 +176,7 @@ function oneIsNat(
   )
   const primitiveBody = exactOne(
     directCuts(forward.diagram, primitiveScope),
-    'primitive universal body',
+    'primitive body',
   )
 
   before = forward.diagram
@@ -79,15 +196,7 @@ function oneIsNat(
   const successor = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
-  forward.record('introduce theorem-local addition relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: TERNARY,
-  })
-  const plus = onlyNewWire(before, forward.diagram, primitiveScope)
-
-  before = forward.diagram
-  forward.record('open standing-hypothesis implication', {
+  forward.record('open exact-hypothesis implication', {
     rule: 'doubleCutIntro',
     sel: {
       region: primitiveBody,
@@ -96,1115 +205,525 @@ function oneIsNat(
       wires: [],
     },
   })
-  const hypotheses = onlyNewCut(before, forward.diagram, primitiveBody)
+  const antecedent = onlyNewCut(before, forward.diagram, primitiveBody)
   const conclusion = exactOne(
-    directCuts(forward.diagram, hypotheses),
+    directCuts(forward.diagram, antecedent),
     'theorem conclusion',
   )
 
   before = forward.diagram
-  forward.record('insert zero anchor', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: zero,
+  forward.record('introduce temporary exact hypotheses handle', {
+    rule: 'vacuousIntro',
+    scope: antecedent,
+    sig: relSig([]),
   })
-  const zeroAnchor = onlyNewNode(before, forward.diagram, hypotheses)
-  const anchorZeroValue = endpointWire(
+  const temporaryHypotheses = onlyNewWire(
+    before,
+    forward.diagram,
+    antecedent,
+  )
+  forward.record('assert temporary exact hypotheses handle', {
+    rule: 'atomSpawn',
+    region: antecedent,
+    wire: temporaryHypotheses,
+  })
+  forward.record('ground exact zeroExists and successorTotal hypotheses', {
+    rule: 'wireJoin',
+    input: {
+      kind: 'relation',
+      wire: temporaryHypotheses,
+      content: exactHypothesesContent(),
+      parameters: [zero, successor],
+    },
+  })
+
+  const zeroAnchor = nodeWithHead(forward.diagram, antecedent, zero)
+  const zeroValue = endpointWire(
     forward.diagram,
     zeroAnchor,
     'arg',
     0,
   )
-
-  before = forward.diagram
-  forward.record('insert successor anchor', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: successor,
-  })
-  const successorAnchor = onlyNewNode(
-    before,
-    forward.diagram,
-    hypotheses,
-  )
-  const anchorSuccessorInput = endpointWire(
-    forward.diagram,
-    successorAnchor,
-    'arg',
-    0,
-  )
-  const anchorSuccessorValue = endpointWire(
-    forward.diagram,
-    successorAnchor,
-    'arg',
-    1,
-  )
-  forward.record('attach successor anchor to zero', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: anchorZeroValue,
-      b: anchorSuccessorInput,
-    },
-  })
-
-  before = forward.diagram
-  forward.record('insert addition-base anchor', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: plus,
-  })
-  const baseAnchor = onlyNewNode(before, forward.diagram, hypotheses)
-  for (let index = 0; index < 3; index += 1) {
-    forward.record(`attach addition-base argument ${index} to zero`, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: anchorZeroValue,
-        b: endpointWire(forward.diagram, baseAnchor, 'arg', index),
-      },
-    })
-  }
-
-  before = forward.diagram
-  forward.record('insert addition-step anchor', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: plus,
-  })
-  const stepAnchor = onlyNewNode(before, forward.diagram, hypotheses)
-  forward.record('attach stepped left argument to successor', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: anchorSuccessorValue,
-      b: endpointWire(forward.diagram, stepAnchor, 'arg', 0),
-    },
-  })
-  forward.record('attach stepped right argument to zero', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: anchorZeroValue,
-      b: endpointWire(forward.diagram, stepAnchor, 'arg', 1),
-    },
-  })
-  forward.record('attach stepped output to successor', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: anchorSuccessorValue,
-      b: endpointWire(forward.diagram, stepAnchor, 'arg', 2),
-    },
-  })
-
-  before = forward.diagram
-  forward.record('insert cited zero witness', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: zero,
-  })
-  const citedZero = onlyNewNode(before, forward.diagram, hypotheses)
-  const zeroValue = endpointWire(forward.diagram, citedZero, 'arg', 0)
-
-  before = forward.diagram
-  forward.record('introduce temporary zero-Nat proposition', {
-    rule: 'vacuousIntro',
-    scope: hypotheses,
-    sig: relSig([]),
-  })
-  const temporaryZeroNat = onlyNewWire(
-    before,
-    forward.diagram,
-    hypotheses,
-  )
-  before = forward.diagram
-  forward.record('insert temporary zero-Nat assertion', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: temporaryZeroNat,
-  })
-  onlyNewNode(before, forward.diagram, hypotheses)
-  before = forward.diagram
-  forward.record('ground zero Nat on the supplied primitives', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryZeroNat,
-      content: natRelation(),
-      parameters: [zero, successor, zeroValue],
-    },
-  })
-  const zeroNatMaterial = introducedContentSelection(
-    before,
-    forward.diagram,
-    hypotheses,
-  )
-  before = forward.diagram
-  forward.record('fold the grounded zero Nat result', {
-    rule: 'fold',
-    occurrence: zeroNatMaterial,
-    args: [zero, successor, zeroValue],
-    defId: 'nat',
-  })
-  onlyNewNode(before, forward.diagram, hypotheses)
-
-  before = forward.diagram
-  forward.record('insert cited successor witness', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: successor,
-  })
-  const citedSuccessor = onlyNewNode(
-    before,
-    forward.diagram,
-    hypotheses,
-  )
-  const successorInput = endpointWire(
-    forward.diagram,
-    citedSuccessor,
-    'arg',
-    0,
+  const successorAnchor = spawnAttached(
+    forward,
+    antecedent,
+    successor,
+    [zeroValue],
+    'specialized successor-totality witness',
   )
   const successorValue = endpointWire(
     forward.diagram,
-    citedSuccessor,
+    successorAnchor,
     'arg',
     1,
   )
-  forward.record('attach cited successor input to cited zero', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: zeroValue,
-      b: successorInput,
+
+  forward.record('iterate zero witness into one-is-Nat conclusion', {
+    rule: 'iteration',
+    sel: {
+      region: antecedent,
+      regions: [],
+      nodes: [zeroAnchor],
+      wires: [],
     },
+    target: conclusion,
+    retargets: [],
+  })
+  forward.record('iterate successor witness into one-is-Nat conclusion', {
+    rule: 'iteration',
+    sel: {
+      region: antecedent,
+      regions: [],
+      nodes: [successorAnchor],
+      wires: [],
+    },
+    target: conclusion,
+    retargets: [],
   })
 
   before = forward.diagram
-  forward.record('introduce temporary successor-Nat proposition', {
-    rule: 'vacuousIntro',
-    scope: hypotheses,
-    sig: relSig([]),
+  forward.record('open arbitrary-property universal scope', {
+    rule: 'doubleCutIntro',
+    sel: {
+      region: conclusion,
+      regions: [],
+      nodes: [],
+      wires: [],
+    },
   })
-  const temporarySuccessorNat = onlyNewWire(
+  const propertyScope = onlyNewCut(
     before,
     forward.diagram,
-    hypotheses,
+    conclusion,
   )
+  const propertyBody = exactOne(
+    directCuts(forward.diagram, propertyScope),
+    'property body',
+  )
+
   before = forward.diagram
-  forward.record('insert temporary successor-Nat assertion', {
-    rule: 'atomSpawn',
-    region: hypotheses,
-    wire: temporarySuccessorNat,
+  forward.record('introduce arbitrary hereditary property', {
+    rule: 'vacuousIntro',
+    scope: propertyScope,
+    sig: UNARY,
   })
-  onlyNewNode(before, forward.diagram, hypotheses)
+  const property = onlyNewWire(
+    before,
+    forward.diagram,
+    propertyScope,
+  )
+
   before = forward.diagram
-  forward.record('ground successor Nat on the supplied primitives', {
+  forward.record('open Nat hereditary implication', {
+    rule: 'doubleCutIntro',
+    sel: {
+      region: propertyBody,
+      regions: [],
+      nodes: [],
+      wires: [],
+    },
+  })
+  const hereditary = onlyNewCut(
+    before,
+    forward.diagram,
+    propertyBody,
+  )
+  const inherited = exactOne(
+    directCuts(forward.diagram, hereditary),
+    'Nat inherited result',
+  )
+
+  before = forward.diagram
+  forward.record('introduce temporary hereditary-conditions handle', {
+    rule: 'vacuousIntro',
+    scope: hereditary,
+    sig: relSig([]),
+  })
+  const temporaryConditions = onlyNewWire(
+    before,
+    forward.diagram,
+    hereditary,
+  )
+  forward.record('assert temporary hereditary-conditions handle', {
+    rule: 'atomSpawn',
+    region: hereditary,
+    wire: temporaryConditions,
+  })
+  forward.record('ground exact Nat base and closure conditions', {
     rule: 'wireJoin',
     input: {
       kind: 'relation',
-      wire: temporarySuccessorNat,
-      content: natRelation(),
-      parameters: [zero, successor, successorValue],
+      wire: temporaryConditions,
+      content: hereditaryConditionsContent(),
+      parameters: [zero, successor, property],
     },
   })
-  const successorNatMaterial = introducedContentSelection(
-    before,
-    forward.diagram,
-    hypotheses,
+
+  const propertyAtZero = spawnAttached(
+    forward,
+    hereditary,
+    property,
+    [zeroValue],
+    'property consequence at zero',
   )
-  before = forward.diagram
-  forward.record('fold the grounded successor Nat result', {
-    rule: 'fold',
-    occurrence: successorNatMaterial,
-    args: [zero, successor, successorValue],
-    defId: 'nat',
+  const propertyAtSuccessor = spawnAttached(
+    forward,
+    hereditary,
+    property,
+    [successorValue],
+    'property consequence at successor',
+  )
+  forward.record('iterate successor property to Nat candidate', {
+    rule: 'iteration',
+    sel: {
+      region: hereditary,
+      regions: [],
+      nodes: [propertyAtSuccessor],
+      wires: [],
+    },
+    target: inherited,
+    retargets: [],
   })
-  const successorNat = onlyNewNode(
-    before,
-    forward.diagram,
-    hypotheses,
-  )
 
-  for (const [label, node] of [
-    ['zero evidence', citedZero],
-    ['successor evidence', citedSuccessor],
-    ['successor Nat evidence', successorNat],
-  ] as const) {
-    forward.record(`iterate ${label} into one-is-Nat conclusion`, {
-      rule: 'iteration',
-      sel: {
-        region: hypotheses,
-        regions: [],
-        nodes: [node],
-        wires: [],
-      },
-      target: conclusion,
-      retargets: [],
-    })
+  return {
+    lhs,
+    recorder: forward,
+    propertyAtZero,
   }
+}
 
-  const rhs = statements.oneIsNat
+function buildBackward(
+  rhs: ReturnType<typeof finishDiagramWithBoundary>,
+  context: ProofContext,
+) {
   const backward = new PrimitiveStepRecorder(
     rhs.diagram,
     context,
     'backward',
   )
-  const reviewedPrimitiveScope = exactOne(
+  const primitiveScope = exactOne(
     directCuts(backward.diagram, backward.diagram.root),
     'reviewed primitive scope',
   )
-  const reviewedPrimitiveBody = exactOne(
-    directCuts(backward.diagram, reviewedPrimitiveScope),
+  const primitiveBody = exactOne(
+    directCuts(backward.diagram, primitiveScope),
     'reviewed primitive body',
   )
-  const reviewedHypotheses = exactOne(
-    directCuts(backward.diagram, reviewedPrimitiveBody),
-    'reviewed standing-hypothesis antecedent',
+  const antecedent = exactOne(
+    directCuts(backward.diagram, primitiveBody),
+    'reviewed theorem antecedent',
   )
-  const reviewedChildren = directCuts(
-    backward.diagram,
-    reviewedHypotheses,
+  const antecedentChildren = directCuts(backward.diagram, antecedent)
+  const totalityScope = exactOne(
+    antecedentChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 1),
+    'successorTotal scope',
   )
-  if (reviewedChildren.length !== 7) {
-    throw new Error(
-      `expected reviewed conclusion plus six hypotheses, found ${reviewedChildren.length}`,
-    )
-  }
-  const [
-    reviewedConclusion,
-    zeroUnique,
-    successorTotal,
-    successorFunctional,
-    additionBase,
-    additionStep,
-    additionFunctional,
-  ] = reviewedChildren
-  const reviewedZero = relationWire(
-    backward.diagram,
-    reviewedPrimitiveScope,
-    UNARY,
+  const conclusion = exactOne(
+    antecedentChildren.filter((region) => region !== totalityScope),
+    'reviewed conclusion',
   )
-  const reviewedSuccessor = relationWire(
+  const zero = relationWire(backward.diagram, primitiveScope, UNARY)
+  const successor = relationWire(
     backward.diagram,
-    reviewedPrimitiveScope,
+    primitiveScope,
     BINARY,
   )
-  const reviewedPlus = relationWire(
+  const zeroAnchor = nodeWithHead(backward.diagram, antecedent, zero)
+  const zeroValue = endpointWire(
     backward.diagram,
-    reviewedPrimitiveScope,
-    TERNARY,
-  )
-  const existingZero = nodeWithHead(
-    backward.diagram,
-    reviewedHypotheses,
-    reviewedZero,
-  )
-  const existingZeroWire = endpointWire(
-    backward.diagram,
-    existingZero,
+    zeroAnchor,
     'arg',
     0,
   )
-
-  before = backward.diagram
-  backward.record('cite zeroIsNat into one-is-Nat hypotheses', {
-    rule: 'theorem',
-    name: 'zeroIsNat',
-    direction: 'forward',
-    at: {
-      sel: {
-        region: reviewedHypotheses,
-        regions: [],
-        nodes: [],
-        wires: [],
-      },
-      args: [],
-    },
-  })
-  const zeroCitationScope = onlyNewCut(
-    before,
+  const conclusionZero = nodeWithHead(
     backward.diagram,
-    reviewedHypotheses,
+    conclusion,
+    zero,
   )
-  const zeroCitationBody = exactOne(
-    directCuts(backward.diagram, zeroCitationScope),
-    'zero citation primitive body',
-  )
-  const zeroCitationAntecedent = exactOne(
-    directCuts(backward.diagram, zeroCitationBody),
-    'zero citation antecedent',
-  )
-  const zeroCitationChildren = directCuts(
+  const conclusionSuccessor = nodeWithHead(
     backward.diagram,
-    zeroCitationAntecedent,
+    conclusion,
+    successor,
   )
-  if (zeroCitationChildren.length !== 7) {
-    throw new Error(
-      `expected zero citation conclusion plus six hypotheses, found ${zeroCitationChildren.length}`,
-    )
-  }
-  const [zeroCitationConclusion, ...zeroCitationHypotheses] =
-    zeroCitationChildren
-  const citedZeroRelation = relationWire(
-    backward.diagram,
-    zeroCitationScope,
-    UNARY,
-  )
-  const citedSuccessorRelation = relationWire(
-    backward.diagram,
-    zeroCitationScope,
-    BINARY,
-  )
-  const citedPlusRelation = relationWire(
-    backward.diagram,
-    zeroCitationScope,
-    TERNARY,
-  )
-  const zeroCitationConclusionNodes = directNodes(
-    backward.diagram,
-    zeroCitationConclusion!,
-  )
-  const extractedZero = exactOne(
-    zeroCitationConclusionNodes.filter((node) =>
-      backward.diagram.nodes[node]!.kind === 'atom'),
-    'cited zero conclusion atom',
-  )
-  const citedZeroNat = exactOne(
-    zeroCitationConclusionNodes.filter((node) =>
+  const conclusionNat = exactOne(
+    directNodes(backward.diagram, conclusion).filter((node) =>
       backward.diagram.nodes[node]!.kind === 'ref'),
-    'cited zero conclusion Nat',
-  )
-  const extractedZeroValue = endpointWire(
-    backward.diagram,
-    extractedZero,
-    'arg',
-    0,
-  )
-  backward.record('unfold the cited zero Nat result', {
-    rule: 'unfold',
-    nodeId: citedZeroNat,
-  })
-  for (const [label, outer, inner, signature] of [
-    ['zero', reviewedZero, citedZeroRelation, UNARY],
-    ['successor', reviewedSuccessor, citedSuccessorRelation, BINARY],
-    ['addition', reviewedPlus, citedPlusRelation, TERNARY],
-  ] as const) {
-    backward.record(`ground cited ${label} primitive`, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
-        content: relationApplicationContent(signature),
-        parameters: [outer],
-      },
-    })
-  }
-  const citedZeroNatScope = exactOne(
-    directCuts(backward.diagram, zeroCitationConclusion!),
-    'grounded cited-zero Nat scope',
-  )
-  before = backward.diagram
-  backward.record('fold the grounded cited zero Nat result', {
-    rule: 'fold',
-    occurrence: {
-      region: zeroCitationConclusion!,
-      regions: [citedZeroNatScope],
-      nodes: [],
-      wires: [],
-    },
-    args: [reviewedZero, reviewedSuccessor, extractedZeroValue],
-    defId: 'nat',
-  })
-  const extractedZeroNat = onlyNewNode(
-    before,
-    backward.diagram,
-    zeroCitationConclusion!,
-  )
-  const zeroCitationExisting = nodeWithHead(
-    backward.diagram,
-    zeroCitationAntecedent,
-    reviewedZero,
-  )
-  const zeroCitationExistingWire = endpointWire(
-    backward.diagram,
-    zeroCitationExisting,
-    'arg',
-    0,
-  )
-  backward.record(
-    'remove cited existential-zero hypothesis',
-    deiterationSelectionStep(backward.diagram, {
-      region: zeroCitationAntecedent,
-      regions: [],
-      nodes: [zeroCitationExisting],
-      wires: [zeroCitationExistingWire],
-    }),
-  )
-  for (const citedHypothesis of zeroCitationHypotheses) {
-    backward.record(
-      'remove copied zeroIsNat standing hypothesis',
-      deiterationSelectionStep(backward.diagram, {
-        region: zeroCitationAntecedent,
-        regions: [citedHypothesis],
-        nodes: [],
-        wires: [],
-      }),
-    )
-  }
-  backward.record('expose cited zeroIsNat conclusion', {
-    rule: 'doubleCutElim',
-    region: zeroCitationAntecedent,
-  })
-  backward.record('remove cited zeroIsNat primitive scope', {
-    rule: 'doubleCutElim',
-    region: zeroCitationScope,
-  })
-
-  before = backward.diagram
-  backward.record('cite succNat into one-is-Nat hypotheses', {
-    rule: 'theorem',
-    name: 'succNat',
-    direction: 'forward',
-    at: {
-      sel: {
-        region: reviewedHypotheses,
-        regions: [],
-        nodes: [],
-        wires: [],
-      },
-      args: [],
-    },
-  })
-  const successorCitationScope = onlyNewCut(
-    before,
-    backward.diagram,
-    reviewedHypotheses,
-  )
-  const successorCitationBody = exactOne(
-    directCuts(backward.diagram, successorCitationScope),
-    'successor citation primitive body',
-  )
-  const successorCitationAntecedent = exactOne(
-    directCuts(backward.diagram, successorCitationBody),
-    'successor citation antecedent',
-  )
-  const successorCitationChildren = directCuts(
-    backward.diagram,
-    successorCitationAntecedent,
-  )
-  if (successorCitationChildren.length !== 7) {
-    throw new Error(
-      `expected successor citation conclusion plus six hypotheses, found ${successorCitationChildren.length}`,
-    )
-  }
-  const [successorCitationConclusion, ...successorCitationHypotheses] =
-    successorCitationChildren
-  const citedRuleScope = exactOne(
-    directCuts(backward.diagram, successorCitationConclusion!),
-    'cited successor-closure universal scope',
-  )
-  const citedRuleBody = exactOne(
-    directCuts(backward.diagram, citedRuleScope),
-    'cited successor-closure universal body',
-  )
-  const citedRuleAntecedent = exactOne(
-    directCuts(backward.diagram, citedRuleBody),
-    'cited successor-closure antecedent',
-  )
-  const citedRuleConsequent = exactOne(
-    directCuts(backward.diagram, citedRuleAntecedent),
-    'cited successor-closure consequent',
-  )
-  const citedSuccessorZero = relationWire(
-    backward.diagram,
-    successorCitationScope,
-    UNARY,
-  )
-  const citedSuccessorSuccessor = relationWire(
-    backward.diagram,
-    successorCitationScope,
-    BINARY,
-  )
-  const citedSuccessorPlus = relationWire(
-    backward.diagram,
-    successorCitationScope,
-    TERNARY,
-  )
-  const citedRulePremisesBeforeGrounding = directNodes(
-    backward.diagram,
-    citedRuleAntecedent,
-  )
-  const citedRuleNatPremiseBeforeGrounding = exactOne(
-    citedRulePremisesBeforeGrounding.filter((node) =>
-      backward.diagram.nodes[node]!.kind === 'ref'),
-    'ungrounded cited successor rule Nat premise',
-  )
-  const citedRuleNatResultBeforeGrounding = exactOne(
-    directNodes(backward.diagram, citedRuleConsequent)
-      .filter((node) => backward.diagram.nodes[node]!.kind === 'ref'),
-    'ungrounded cited successor rule Nat result',
-  )
-  const citedRulePredecessorNatValue = endpointWire(
-    backward.diagram,
-    citedRuleNatPremiseBeforeGrounding,
-    'arg',
-    2,
-  )
-  const citedRuleSuccessorNatValue = endpointWire(
-    backward.diagram,
-    citedRuleNatResultBeforeGrounding,
-    'arg',
-    2,
-  )
-  before = backward.diagram
-  backward.record('unfold the cited successor-rule Nat premise', {
-    rule: 'unfold',
-    nodeId: citedRuleNatPremiseBeforeGrounding,
-  })
-  const citedPremiseNatScope = onlyNewCut(
-    before,
-    backward.diagram,
-    citedRuleAntecedent,
-  )
-  before = backward.diagram
-  backward.record('unfold the cited successor-rule Nat result', {
-    rule: 'unfold',
-    nodeId: citedRuleNatResultBeforeGrounding,
-  })
-  const citedResultNatScope = onlyNewCut(
-    before,
-    backward.diagram,
-    citedRuleConsequent,
+    'one-is-Nat conclusion ref',
   )
 
-  for (const [label, outer, inner, signature] of [
-    ['zero', reviewedZero, citedSuccessorZero, UNARY],
-    ['successor', reviewedSuccessor, citedSuccessorSuccessor, BINARY],
-    ['addition', reviewedPlus, citedSuccessorPlus, TERNARY],
-  ] as const) {
-    backward.record(`ground succNat ${label} primitive`, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
-        content: relationApplicationContent(signature),
-        parameters: [outer],
-      },
-    })
-  }
-  before = backward.diagram
-  backward.record('fold the grounded cited successor-rule Nat premise', {
-    rule: 'fold',
-    occurrence: {
-      region: citedRuleAntecedent,
-      regions: [citedPremiseNatScope],
-      nodes: [],
-      wires: [],
+  backward.record('identify conclusion zero with zeroExists witness', {
+    rule: 'wireJoin',
+    input: {
+      kind: 'iota',
+      a: zeroValue,
+      b: endpointWire(
+        backward.diagram,
+        conclusionZero,
+        'arg',
+        0,
+      ),
     },
-    args: [
-      reviewedZero,
-      reviewedSuccessor,
-      citedRulePredecessorNatValue,
-    ],
-    defId: 'nat',
-  })
-  const citedRuleNatPremise = onlyNewNode(
-    before,
-    backward.diagram,
-    citedRuleAntecedent,
-  )
-  before = backward.diagram
-  backward.record('fold the grounded cited successor-rule Nat result', {
-    rule: 'fold',
-    occurrence: {
-      region: citedRuleConsequent,
-      regions: [citedResultNatScope],
-      nodes: [],
-      wires: [],
-    },
-    args: [
-      reviewedZero,
-      reviewedSuccessor,
-      citedRuleSuccessorNatValue,
-    ],
-    defId: 'nat',
-  })
-  const citedRuleNatResult = onlyNewNode(
-    before,
-    backward.diagram,
-    citedRuleConsequent,
-  )
-  const successorCitationExisting = nodeWithHead(
-    backward.diagram,
-    successorCitationAntecedent,
-    reviewedZero,
-  )
-  const successorCitationExistingWire = endpointWire(
-    backward.diagram,
-    successorCitationExisting,
-    'arg',
-    0,
-  )
-  const citedRuleSuccessorPremise = nodeWithHead(
-    backward.diagram,
-    citedRuleAntecedent,
-    reviewedSuccessor,
-  )
-  backward.record(
-    'remove cited succNat existential-zero hypothesis',
-    deiterationSelectionStep(backward.diagram, {
-      region: successorCitationAntecedent,
-      regions: [],
-      nodes: [successorCitationExisting],
-      wires: [successorCitationExistingWire],
-    }),
-  )
-  for (const citedHypothesis of successorCitationHypotheses) {
-    backward.record(
-      'remove copied succNat standing hypothesis',
-      deiterationSelectionStep(backward.diagram, {
-        region: successorCitationAntecedent,
-        regions: [citedHypothesis],
-        nodes: [],
-        wires: [],
-      }),
-    )
-  }
-  backward.record('expose cited succNat conclusion', {
-    rule: 'doubleCutElim',
-    region: successorCitationAntecedent,
-  })
-  backward.record('remove cited succNat primitive scope', {
-    rule: 'doubleCutElim',
-    region: successorCitationScope,
   })
 
-  before = backward.diagram
-  backward.record('copy successor totality for the cited zero', {
+  let before = backward.diagram
+  backward.record('copy successorTotal for the zero witness', {
     rule: 'iteration',
     sel: {
-      region: reviewedHypotheses,
-      regions: [successorTotal!],
+      region: antecedent,
+      regions: [totalityScope],
       nodes: [],
       wires: [],
     },
-    target: reviewedHypotheses,
+    target: antecedent,
     retargets: [],
   })
-  const copiedTotalityScope = onlyNewCut(
+  const copiedTotality = onlyNewCut(
     before,
     backward.diagram,
-    reviewedHypotheses,
+    antecedent,
   )
   const copiedTotalityBody = exactOne(
-    directCuts(backward.diagram, copiedTotalityScope),
-    'copied successor-totality body',
+    directCuts(backward.diagram, copiedTotality),
+    'copied successorTotal body',
   )
   const derivedSuccessor = nodeWithHead(
     backward.diagram,
     copiedTotalityBody,
-    reviewedSuccessor,
+    successor,
   )
-  backward.record('specialize successor totality at cited zero', {
+  backward.record('specialize successorTotal at the zero witness', {
     rule: 'wireJoin',
     input: {
       kind: 'iota',
-      a: extractedZeroValue,
-      b: endpointWire(backward.diagram, derivedSuccessor, 'arg', 0),
+      a: zeroValue,
+      b: endpointWire(
+        backward.diagram,
+        derivedSuccessor,
+        'arg',
+        0,
+      ),
     },
   })
-  const extractedSuccessorValue = endpointWire(
+  const successorValue = endpointWire(
     backward.diagram,
     derivedSuccessor,
     'arg',
     1,
   )
-  backward.record('expose successor of cited zero', {
+  backward.record('expose successorTotal witness', {
     rule: 'doubleCutElim',
-    region: copiedTotalityScope,
+    region: copiedTotality,
+  })
+  backward.record('identify conclusion successor with totality witness', {
+    rule: 'wireJoin',
+    input: {
+      kind: 'iota',
+      a: successorValue,
+      b: endpointWire(
+        backward.diagram,
+        conclusionSuccessor,
+        'arg',
+        1,
+      ),
+    },
   })
 
-  const citedRulePredecessor = endpointWire(
+  before = backward.diagram
+  backward.record('unfold one-is-Nat conclusion', {
+    rule: 'unfold',
+    nodeId: conclusionNat,
+  })
+  const propertyScope = onlyNewCut(
+    before,
     backward.diagram,
-    citedRuleSuccessorPremise,
-    'arg',
-    0,
+    conclusion,
   )
-  for (const variable of scopedWires(backward.diagram, citedRuleScope)) {
-    const target = variable === citedRulePredecessor
-      ? extractedZeroValue
-      : extractedSuccessorValue
-    backward.record('specialize cited successor-closure rule', {
+  const propertyBody = exactOne(
+    directCuts(backward.diagram, propertyScope),
+    'unfolded property body',
+  )
+  const hereditary = exactOne(
+    directCuts(backward.diagram, propertyBody),
+    'unfolded hereditary antecedent',
+  )
+  const property = exactOne(
+    scopedWires(backward.diagram, propertyScope),
+    'unfolded property',
+  )
+  const hereditaryChildren = directCuts(backward.diagram, hereditary)
+  const inherited = exactOne(
+    hereditaryChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 0),
+    'inherited result',
+  )
+  const baseCondition = exactOne(
+    hereditaryChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 1),
+    'Nat base condition',
+  )
+  const closureCondition = exactOne(
+    hereditaryChildren.filter((region) =>
+      scopedWires(backward.diagram, region).length === 2),
+    'Nat closure condition',
+  )
+
+  before = backward.diagram
+  backward.record('copy Nat base condition for specialization', {
+    rule: 'iteration',
+    sel: {
+      region: hereditary,
+      regions: [baseCondition],
+      nodes: [],
+      wires: [],
+    },
+    target: hereditary,
+    retargets: [],
+  })
+  const copiedBase = onlyNewCut(
+    before,
+    backward.diagram,
+    hereditary,
+  )
+  const copiedBaseBody = exactOne(
+    directCuts(backward.diagram, copiedBase),
+    'copied base body',
+  )
+  const copiedBaseAntecedent = exactOne(
+    directCuts(backward.diagram, copiedBaseBody),
+    'copied base antecedent',
+  )
+  const copiedBaseZero = nodeWithHead(
+    backward.diagram,
+    copiedBaseAntecedent,
+    zero,
+  )
+  for (const variable of scopedWires(backward.diagram, copiedBase)) {
+    backward.record('specialize Nat base at zero witness', {
       rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: target,
-        b: variable,
-      },
+      input: { kind: 'iota', a: zeroValue, b: variable },
     })
   }
   backward.record(
-    'discharge cited predecessor Nat premise',
+    'discharge Nat base zero premise',
     deiterationStep(
       backward.diagram,
-      citedRuleAntecedent,
-      citedRuleNatPremise,
+      copiedBaseAntecedent,
+      copiedBaseZero,
+    ),
+  )
+  backward.record('expose Nat base consequence', {
+    rule: 'doubleCutElim',
+    region: copiedBaseAntecedent,
+  })
+  backward.record('finish Nat base specialization', {
+    rule: 'doubleCutElim',
+    region: copiedBase,
+  })
+  const propertyAtZero = nodeWithHead(
+    backward.diagram,
+    hereditary,
+    property,
+  )
+
+  before = backward.diagram
+  backward.record('copy Nat closure condition for specialization', {
+    rule: 'iteration',
+    sel: {
+      region: hereditary,
+      regions: [closureCondition],
+      nodes: [],
+      wires: [],
+    },
+    target: hereditary,
+    retargets: [],
+  })
+  const copiedClosure = onlyNewCut(
+    before,
+    backward.diagram,
+    hereditary,
+  )
+  const copiedClosureBody = exactOne(
+    directCuts(backward.diagram, copiedClosure),
+    'copied closure body',
+  )
+  const copiedClosureAntecedent = exactOne(
+    directCuts(backward.diagram, copiedClosureBody),
+    'copied closure antecedent',
+  )
+  const copiedPropertyPremise = nodeWithHead(
+    backward.diagram,
+    copiedClosureAntecedent,
+    property,
+  )
+  const copiedSuccessorPremise = nodeWithHead(
+    backward.diagram,
+    copiedClosureAntecedent,
+    successor,
+  )
+  const copiedSuccessorInput = endpointWire(
+    backward.diagram,
+    copiedSuccessorPremise,
+    'arg',
+    0,
+  )
+  for (const variable of scopedWires(backward.diagram, copiedClosure)) {
+    const target = variable === copiedSuccessorInput
+      ? zeroValue
+      : successorValue
+    backward.record('specialize Nat closure at zero successor', {
+      rule: 'wireJoin',
+      input: { kind: 'iota', a: target, b: variable },
+    })
+  }
+  backward.record(
+    'discharge Nat closure property premise',
+    deiterationStep(
+      backward.diagram,
+      copiedClosureAntecedent,
+      copiedPropertyPremise,
     ),
   )
   backward.record(
-    'discharge cited successor premise',
+    'discharge Nat closure successor premise',
     deiterationStep(
       backward.diagram,
-      citedRuleAntecedent,
-      citedRuleSuccessorPremise,
+      copiedClosureAntecedent,
+      copiedSuccessorPremise,
     ),
   )
-  backward.record('expose cited successor Nat result', {
+  backward.record('expose Nat closure consequence', {
     rule: 'doubleCutElim',
-    region: citedRuleAntecedent,
+    region: copiedClosureAntecedent,
   })
-  backward.record('finish cited successor-closure specialization', {
+  backward.record('finish Nat closure specialization', {
     rule: 'doubleCutElim',
-    region: citedRuleScope,
+    region: copiedClosure,
   })
+
   if (
-    backward.diagram.nodes[extractedZeroNat] === undefined
-    || backward.diagram.nodes[citedRuleNatResult] === undefined
+    backward.diagram.nodes[propertyAtZero] === undefined
+    || directNodes(backward.diagram, inherited).length !== 1
   ) {
-    throw new Error('cited Nat evidence disappeared')
+    throw new Error('Nat specialization lost required property evidence')
   }
 
-  const conclusionNodes = directNodes(
-    backward.diagram,
-    reviewedConclusion!,
-  )
-  const conclusionZero = nodeWithHead(
-    backward.diagram,
-    reviewedConclusion!,
-    reviewedZero,
-  )
-  const conclusionSuccessor = nodeWithHead(
-    backward.diagram,
-    reviewedConclusion!,
-    reviewedSuccessor,
-  )
-  const conclusionNat = exactOne(
-    conclusionNodes.filter((node) =>
-      backward.diagram.nodes[node]!.kind === 'ref'),
-    'one-is-Nat conclusion Nat',
-  )
-  backward.record('identify reviewed zero witness with cited zero', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: extractedZeroValue,
-      b: endpointWire(backward.diagram, conclusionZero, 'arg', 0),
-    },
-  })
-  backward.record('identify reviewed successor witness with cited result', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: extractedSuccessorValue,
-      b: endpointWire(backward.diagram, conclusionSuccessor, 'arg', 1),
-    },
-  })
-  if (backward.diagram.nodes[conclusionNat] === undefined) {
-    throw new Error('reviewed one-is-Nat conclusion disappeared')
-  }
+  return { recorder: backward }
+}
 
-  const uniqueBody = exactOne(
-    directCuts(backward.diagram, zeroUnique!),
-    'zero uniqueness body',
-  )
-  const uniqueAntecedent = exactOne(
-    directCuts(backward.diagram, uniqueBody),
-    'zero uniqueness antecedent',
-  )
-  const uniqueZeroNodes = directNodes(
-    backward.diagram,
-    uniqueAntecedent,
-  )
-  for (const variable of scopedWires(backward.diagram, zeroUnique!)) {
-    backward.record('collapse zero-uniqueness variable to zero anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: existingZeroWire,
-        b: variable,
-      },
-    })
-  }
-  for (const node of uniqueZeroNodes) {
-    backward.record(
-      'discharge collapsed zero-uniqueness premise',
-      deiterationStep(backward.diagram, uniqueAntecedent, node),
-    )
-  }
-  backward.record('remove discharged zero-uniqueness implication', {
-    rule: 'doubleCutElim',
-    region: uniqueAntecedent,
-  })
-  backward.record('remove discharged zero-uniqueness quantifier', {
-    rule: 'doubleCutElim',
-    region: zeroUnique!,
-  })
-
-  const totalBody = exactOne(
-    directCuts(backward.diagram, successorTotal!),
-    'successor-totality body',
-  )
-  const totalSuccessor = nodeWithHead(
-    backward.diagram,
-    totalBody,
-    reviewedSuccessor,
-  )
-  backward.record('collapse successor-totality input to zero anchor', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'iota',
-      a: existingZeroWire,
-      b: endpointWire(backward.diagram, totalSuccessor, 'arg', 0),
-    },
-  })
-  backward.record('expose successor anchor', {
-    rule: 'doubleCutElim',
-    region: successorTotal!,
-  })
-  const successorAnchorOutput = endpointWire(
-    backward.diagram,
-    totalSuccessor,
-    'arg',
-    1,
-  )
-
-  const functionalSuccessorBody = exactOne(
-    directCuts(backward.diagram, successorFunctional!),
-    'functional-successor body',
-  )
-  const functionalSuccessorAntecedent = exactOne(
-    directCuts(backward.diagram, functionalSuccessorBody),
-    'functional-successor antecedent',
-  )
-  const functionalSuccessorNodes = directNodes(
-    backward.diagram,
-    functionalSuccessorAntecedent,
-  )
-  const functionalSuccessorInput = endpointWire(
-    backward.diagram,
-    functionalSuccessorNodes[0]!,
-    'arg',
-    0,
-  )
-  for (const variable of scopedWires(
-    backward.diagram,
-    successorFunctional!,
-  )) {
-    const target = variable === functionalSuccessorInput
-      ? existingZeroWire
-      : successorAnchorOutput
-    backward.record('collapse functional-successor variable to anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: target,
-        b: variable,
-      },
-    })
-  }
-  for (const node of functionalSuccessorNodes) {
-    backward.record(
-      'discharge collapsed functional-successor premise',
-      deiterationStep(backward.diagram, functionalSuccessorAntecedent, node),
-    )
-  }
-  backward.record('remove discharged functional-successor implication', {
-    rule: 'doubleCutElim',
-    region: functionalSuccessorAntecedent,
-  })
-  backward.record('remove discharged functional-successor quantifier', {
-    rule: 'doubleCutElim',
-    region: successorFunctional!,
-  })
-
-  const baseBody = exactOne(
-    directCuts(backward.diagram, additionBase!),
-    'addition-base body',
-  )
-  const baseAntecedent = exactOne(
-    directCuts(backward.diagram, baseBody),
-    'addition-base antecedent',
-  )
-  const baseConsequent = exactOne(
-    directCuts(backward.diagram, baseAntecedent),
-    'addition-base consequent',
-  )
-  const baseZero = nodeWithHead(
-    backward.diagram,
-    baseAntecedent,
-    reviewedZero,
-  )
-  const basePlus = nodeWithHead(
-    backward.diagram,
-    baseConsequent,
-    reviewedPlus,
-  )
-  for (const variable of scopedWires(backward.diagram, additionBase!)) {
-    backward.record('collapse addition-base variable to zero anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: existingZeroWire,
-        b: variable,
-      },
-    })
-  }
-  backward.record(
-    'discharge collapsed addition-base premise',
-    deiterationStep(backward.diagram, baseAntecedent, baseZero),
-  )
-  backward.record('expose addition-base anchor', {
-    rule: 'doubleCutElim',
-    region: baseAntecedent,
-  })
-  backward.record('finish collapsed addition-base hypothesis', {
-    rule: 'doubleCutElim',
-    region: additionBase!,
-  })
-
-  const stepBody = exactOne(
-    directCuts(backward.diagram, additionStep!),
-    'addition-step body',
-  )
-  const stepAntecedent = exactOne(
-    directCuts(backward.diagram, stepBody),
-    'addition-step antecedent',
-  )
-  const stepConsequent = exactOne(
-    directCuts(backward.diagram, stepAntecedent),
-    'addition-step consequent',
-  )
-  const stepPremises = directNodes(backward.diagram, stepAntecedent)
-  const stepPlusPremise = exactOne(
-    stepPremises.filter((node) =>
-      endpointWire(backward.diagram, node, 'head') === reviewedPlus),
-    'addition-step plus premise',
-  )
-  const stepSuccessorPremises = stepPremises.filter((node) =>
-    endpointWire(backward.diagram, node, 'head') === reviewedSuccessor)
-  const stepPlusResult = nodeWithHead(
-    backward.diagram,
-    stepConsequent,
-    reviewedPlus,
-  )
-  const stepLeft = endpointWire(
-    backward.diagram,
-    stepPlusPremise,
-    'arg',
-    0,
-  )
-  const stepRight = endpointWire(
-    backward.diagram,
-    stepPlusPremise,
-    'arg',
-    1,
-  )
-  const stepOutput = endpointWire(
-    backward.diagram,
-    stepPlusPremise,
-    'arg',
-    2,
-  )
-  for (const variable of scopedWires(backward.diagram, additionStep!)) {
-    const isSuccessor = stepSuccessorPremises.some((node) =>
-      endpointWire(backward.diagram, node, 'arg', 1) === variable)
-    const target = isSuccessor
-      ? successorAnchorOutput
-      : (
-          variable === stepLeft
-          || variable === stepRight
-          || variable === stepOutput
-            ? existingZeroWire
-            : existingZeroWire
-        )
-    backward.record('collapse addition-step variable to anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: target,
-        b: variable,
-      },
-    })
-  }
-  backward.record(
-    'discharge collapsed addition-step plus premise',
-    deiterationStep(backward.diagram, stepAntecedent, stepPlusPremise),
-  )
-  for (const node of stepSuccessorPremises) {
-    backward.record(
-      'discharge collapsed addition-step successor premise',
-      deiterationStep(backward.diagram, stepAntecedent, node),
-    )
-  }
-  backward.record('expose addition-step anchor', {
-    rule: 'doubleCutElim',
-    region: stepAntecedent,
-  })
-  backward.record('finish collapsed addition-step hypothesis', {
-    rule: 'doubleCutElim',
-    region: additionStep!,
-  })
-
-  const functionalAdditionBody = exactOne(
-    directCuts(backward.diagram, additionFunctional!),
-    'functional-addition body',
-  )
-  const functionalAdditionAntecedent = exactOne(
-    directCuts(backward.diagram, functionalAdditionBody),
-    'functional-addition antecedent',
-  )
-  const functionalAdditionPremises = directNodes(
-    backward.diagram,
-    functionalAdditionAntecedent,
-  )
-  for (const variable of scopedWires(
-    backward.diagram,
-    additionFunctional!,
-  )) {
-    backward.record('collapse functional-addition variable to zero anchor', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'iota',
-        a: existingZeroWire,
-        b: variable,
-      },
-    })
-  }
-  for (const node of functionalAdditionPremises) {
-    backward.record(
-      'discharge collapsed functional-addition premise',
-      deiterationStep(backward.diagram, functionalAdditionAntecedent, node),
-    )
-  }
-  backward.record('remove discharged functional-addition implication', {
-    rule: 'doubleCutElim',
-    region: functionalAdditionAntecedent,
-  })
-  backward.record('remove discharged functional-addition quantifier', {
-    rule: 'doubleCutElim',
-    region: additionFunctional!,
-  })
-  void basePlus
-  void stepPlusResult
-
+function oneIsNat(
+  statements: ArithmeticStatements,
+  context: ProofContext,
+): Theorem {
+  const forward = buildForward(context)
+  const rhs = statements.oneIsNat
+  const backward = buildBackward(rhs, context)
   return {
     name: 'oneIsNat',
-    lhs,
+    lhs: forward.lhs,
     rhs,
-    actions: forward.actions,
-    backActions: backward.actions,
+    actions: forward.recorder.actions,
+    backActions: backward.recorder.actions,
   }
 }
 

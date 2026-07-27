@@ -6,13 +6,68 @@ import { removeSubgraph } from '../../src/kernel/diagram/subgraph/splice'
 import {
   registerTheorem,
   verifyTheory,
+  type Theory,
 } from '../../src/kernel/proof/context'
 import { replayActions } from '../../src/kernel/proof/action'
 import { buildFregeTheory } from '../../src/theories'
+import { buildArithmeticBase } from '../../src/theories/arithmetic-base'
+import {
+  buildNaturalBaseTheorems,
+} from '../../src/theories/arithmetic-naturals'
+import { buildOneTheorem } from '../../src/theories/arithmetic-one'
 import {
   directCuts,
+  directNodes,
+  scopedWires,
 } from '../../src/theories/arithmetic-support'
-import { buildArithmeticStatements } from '../../src/theories/statements'
+import { buildLogicalTheoremPrefix } from '../../src/theories/logic'
+import { natRelation } from '../../src/theories/naturals'
+import {
+  ARITHMETIC_CONTRACTS,
+  buildArithmeticStatements,
+  type ArithmeticStatementName,
+  type HypothesisName,
+} from '../../src/theories/statements'
+
+const BASE_NATURAL_CONTRACTS = {
+  plusLeftUnit: {
+    primitives: ['zero', 'plus'],
+    hypotheses: ['plusBase', 'plusSingleValued'],
+  },
+  zeroIsNat: {
+    primitives: ['zero', 'successor'],
+    hypotheses: ['zeroExists'],
+  },
+  succNat: {
+    primitives: ['zero', 'successor'],
+    hypotheses: [],
+  },
+  oneIsNat: {
+    primitives: ['zero', 'successor'],
+    hypotheses: ['zeroExists', 'successorTotal'],
+  },
+} as const satisfies Readonly<
+  Partial<Record<ArithmeticStatementName, {
+    readonly primitives: readonly ('zero' | 'successor' | 'plus')[]
+    readonly hypotheses: readonly HypothesisName[]
+  }>>
+>
+
+const BASE_NATURAL_NAMES = Object.keys(
+  BASE_NATURAL_CONTRACTS,
+) as readonly (keyof typeof BASE_NATURAL_CONTRACTS)[]
+
+const HYPOTHESIS_ACTION_TERMS: Readonly<
+  Record<HypothesisName, readonly string[]>
+> = {
+  zeroExists: ['existential-zero hypothesis'],
+  zeroUnique: ['zero-uniqueness'],
+  successorTotal: ['successor-totality hypothesis'],
+  successorSingleValued: ['functional-successor'],
+  plusBase: ['addition-base hypothesis'],
+  plusStep: ['addition-step hypothesis'],
+  plusSingleValued: ['functional-addition'],
+}
 
 const REQUIRED_ARITHMETIC_ORDER = [
   'plusLeftUnit',
@@ -44,7 +99,53 @@ const LOGICAL_PREFIX_ORDER = [
   'existsProp',
 ] as const
 
+function buildBaseNaturalTheory(): Theory {
+  const relations: Theory['relations'] = [['nat', natRelation()]]
+  const statements = buildArithmeticStatements()
+  const logical = buildLogicalTheoremPrefix(relations)
+  const base = buildArithmeticBase(relations, logical, statements)
+  const naturals = buildNaturalBaseTheorems(
+    relations,
+    [...logical, ...base],
+    statements,
+  )
+  const one = buildOneTheorem(
+    relations,
+    [...logical, ...base, ...naturals],
+    statements,
+  )
+  return {
+    relations,
+    theorems: [...logical, ...base, ...naturals, ...one],
+  }
+}
+
 describe('relational Frege arithmetic proofs', () => {
+  it('declares the exact base and natural-number proof contracts', () => {
+    for (const name of BASE_NATURAL_NAMES) {
+      expect(ARITHMETIC_CONTRACTS[name]).toEqual(
+        BASE_NATURAL_CONTRACTS[name],
+      )
+    }
+  })
+
+  it('does not encode a fixed conclusion-plus-six statement shape', () => {
+    const modules = [
+      'arithmetic-base.ts',
+      'arithmetic-naturals.ts',
+      'arithmetic-one.ts',
+      'arithmetic-support.ts',
+    ]
+    const directory = fileURLToPath(
+      new URL('../../src/theories', import.meta.url),
+    )
+    const source = modules
+      .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
+      .join('\n')
+
+    expect(source).not.toContain('conclusion plus six')
+  })
+
   it('has no obsolete induction-statement or ref-spawn proof path', () => {
     const directory = fileURLToPath(
       new URL('../../src/theories', import.meta.url),
@@ -101,6 +202,95 @@ describe('relational Frege arithmetic proofs', () => {
       ]
       expect(actions.length).toBeGreaterThan(0)
       expect(actions.every((action) => action.steps.length === 1)).toBe(true)
+    }
+  })
+
+  it('uses only selected arithmetic hypotheses in the base and natural prefix', () => {
+    const theory = buildBaseNaturalTheory()
+
+    for (const name of BASE_NATURAL_NAMES) {
+      const theorem = theory.theorems.find(
+        (candidate) => candidate.name === name,
+      )!
+      const labels = [
+        ...theorem.actions,
+        ...(theorem.backActions ?? []),
+      ].map((action) => action.label)
+      const selected = new Set(BASE_NATURAL_CONTRACTS[name].hypotheses)
+
+      for (const [hypothesis, terms] of Object.entries(
+        HYPOTHESIS_ACTION_TERMS,
+      ) as [HypothesisName, readonly string[]][]) {
+        if (selected.has(hypothesis as never)) continue
+        for (const term of terms) {
+          expect(
+            labels.some((label) => label.includes(term)),
+            `${name} must not specialize ${hypothesis}`,
+          ).toBe(false)
+        }
+      }
+    }
+  })
+
+  it('makes every selected base and natural-number hypothesis causal', () => {
+    const theory = buildBaseNaturalTheory()
+
+    for (const name of BASE_NATURAL_NAMES) {
+      const theoremIndex = theory.theorems.findIndex(
+        (candidate) => candidate.name === name,
+      )
+      const theorem = theory.theorems[theoremIndex]!
+      const primitiveScope = directCuts(
+        theorem.rhs.diagram,
+        theorem.rhs.diagram.root,
+      )[0]!
+      const primitiveBody = directCuts(
+        theorem.rhs.diagram,
+        primitiveScope,
+      )[0]!
+      const antecedent = directCuts(
+        theorem.rhs.diagram,
+        primitiveBody,
+      )[0]!
+      const quantifiedHypotheses = directCuts(
+        theorem.rhs.diagram,
+        antecedent,
+      ).slice(1)
+      let quantifiedIndex = 0
+
+      for (const hypothesis of BASE_NATURAL_CONTRACTS[name].hypotheses) {
+        const removal = hypothesis === 'zeroExists'
+          ? {
+              region: antecedent,
+              regions: [],
+              nodes: directNodes(theorem.rhs.diagram, antecedent),
+              wires: scopedWires(theorem.rhs.diagram, antecedent),
+            }
+          : {
+              region: antecedent,
+              regions: [quantifiedHypotheses[quantifiedIndex++]!],
+              nodes: [],
+              wires: [],
+            }
+        const weakened = {
+          ...theorem,
+          rhs: {
+            ...theorem.rhs,
+            diagram: removeSubgraph(theorem.rhs.diagram, removal),
+          },
+        }
+
+        expect(
+          () => verifyTheory({
+            relations: theory.relations,
+            theorems: [
+              ...theory.theorems.slice(0, theoremIndex),
+              weakened,
+            ],
+          }),
+          `${name} without ${hypothesis}`,
+        ).toThrow()
+      }
     }
   })
 
