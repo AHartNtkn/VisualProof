@@ -132,12 +132,8 @@ const absentAuthorityPaths = [
   'src/theories/lambda.ts',
   'src/theories/macros.ts',
   'tests/theories/battery.test.ts',
-  'tests/theories/frege.test.ts',
   'tests/theories/lambda.test.ts',
   'tests/theories/macros.test.ts',
-  'scripts/emit-theories.ts',
-  'tests/scripts/emit-theories.test.ts',
-  'examples/frege.json',
   'examples/lambda.json',
 ] as const
 

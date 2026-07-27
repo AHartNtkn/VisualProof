@@ -16,7 +16,10 @@
     "formal:check": "node scripts/check-formalization.mjs",
     "typecheck": "tsc --noEmit",
     "demo": "vite demo",
+    "emit:theories": "tsx scripts/emit-theories.ts",
+    "preapp": "npm run emit:theories",
     "app": "vite app",
+    "pree2e": "npm run emit:theories",
     "e2e": "playwright test"
   },
   "devDependencies": {

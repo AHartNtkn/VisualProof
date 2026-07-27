@@ -1,13 +1,14 @@
 import { expect, test as base, type Page } from '@playwright/test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { theoryToJson } from '../src/kernel/proof/store'
 import { tinyTheory } from '../tests/fixtures/zero-signature'
 
 export type TheoryFiles = {
   readonly tiny: string
   readonly invalid: string
+  readonly frege: string
 }
 
 export const test = base.extend<{ theoryFiles: TheoryFiles }>({
@@ -16,6 +17,7 @@ export const test = base.extend<{ theoryFiles: TheoryFiles }>({
     const files = {
       tiny: join(directory, 'zero-signature.json'),
       invalid: join(directory, 'invalid.json'),
+      frege: resolve('examples/frege.json'),
     }
     await writeFile(files.tiny, JSON.stringify(theoryToJson(tinyTheory())))
     await writeFile(files.invalid, '{"relations":')

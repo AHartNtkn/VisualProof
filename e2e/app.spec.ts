@@ -54,6 +54,21 @@ test('the app boots empty and loads and unloads a zero-signature theory file', a
   await expect(page.locator('#status')).toContainText('EDIT')
 })
 
+test('the committed Frege theory loads through the ordinary library path', async ({ page, theoryFiles }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  const library = page.locator('#library')
+  await page.locator('#open-file-input').setInputFiles(theoryFiles.frege)
+  await expect(library.getByRole('button', {
+    name: 'Unload frege.json',
+    exact: true,
+  })).toBeVisible()
+  await library.getByRole('button', { name: '▸ frege.json', exact: true }).click()
+  await expect(library).toContainText('existsProp')
+  await expect(library).toContainText('plusComm')
+})
+
 test('the keyboard map exposes the surviving structural shortcuts', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
