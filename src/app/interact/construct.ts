@@ -112,7 +112,12 @@ export class ConstructController {
       engine: options.engine,
       viewScale: options.viewScale,
       theme: options.theme,
-      commit: (source, target, pointer) => {
+      commit: (gesture, pointer) => {
+        if (gesture.kind !== 'wire') {
+          this.#options.refuse('relation gestures belong to proof moves', pointer)
+          return false
+        }
+        const { source, target } = gesture
         if (source.wire === target.wire) {
           this.#options.refuse('release on another line to join', pointer)
           return false

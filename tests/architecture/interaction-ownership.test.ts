@@ -80,4 +80,21 @@ describe('production interaction ownership', () => {
     ]) expect(shellSource, `shell retains displaced proof path ${displaced}`).not.toContain(displaced)
     expect(movesSource).not.toMatch(/window\.addEventListener|document\.addEventListener|canvas\.addEventListener/)
   })
+
+  it('keeps relation quantifiers out of action menus and standalone constructors', () => {
+    const actionsSource = readFileSync('src/app/actions.ts', 'utf8')
+    for (const displaced of [
+      "kind: 'relationJoin'",
+      "kind: 'relationSever'",
+      'wire-content-and-parameters',
+      'scope-and-occurrences',
+      'Join relation content',
+      'Sever relation',
+      'relationJoinStep',
+      'relationSeverStep',
+    ]) {
+      expect(actionsSource + movesSource, `retains displaced relation input path ${displaced}`)
+        .not.toContain(displaced)
+    }
+  })
 })

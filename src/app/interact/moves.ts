@@ -1,16 +1,10 @@
-import type { DiagramWithBoundary } from '../../kernel/diagram/boundary'
-import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import type {
-  ContentOccurrence,
-  WireJoinInput,
-  WireSeverInput,
-} from '../../kernel/rules/wire-quantifier'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -22,7 +16,10 @@ import { inferFoldArgs } from '../define'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
-import { ConnectionDragController, type ConnectionEnd } from './connection'
+import {
+  ConnectionDragController,
+  type ConnectionEnd,
+} from './connection'
 import { CopyDragController } from './copy'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
@@ -115,40 +112,6 @@ export function proofConnectionStep(
   return step
 }
 
-export function relationSeverStep(
-  diagram: Diagram,
-  scope: RegionId,
-  occurrences: readonly ContentOccurrence[],
-  orientation: ProofOrientation,
-): ProofStep {
-  const input: WireSeverInput = {
-    kind: 'relation',
-    scope,
-    occurrences,
-  }
-  const step: ProofStep = { rule: 'wireSever', input }
-  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-  return step
-}
-
-export function relationJoinStep(
-  diagram: Diagram,
-  wire: WireId,
-  content: DiagramWithBoundary,
-  parameters: readonly WireId[],
-  orientation: ProofOrientation,
-): ProofStep {
-  const input: WireJoinInput = {
-    kind: 'relation',
-    wire,
-    content,
-    parameters,
-  }
-  const step: ProofStep = { rule: 'wireJoin', input }
-  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-  return step
-}
-
 export type ProofMoveControllerOptions = {
   readonly host: HTMLElement
   readonly active: () => boolean
@@ -202,20 +165,27 @@ export class ProofMoveController {
       engine: options.engine,
       viewScale: options.viewScale,
       theme: options.theme,
-      commit: (source, target, pointer) => {
+      relationGestures: true,
+      commit: (gesture, pointer) => {
         this.#lastPointer = pointer
-        try {
-          this.#commit(proofConnectionStep(
-            options.diagram(),
-            source,
-            target,
-            options.orientation(),
-            options.fuel(),
-          ))
-          return true
-        } catch (error) {
-          options.refuse(error instanceof Error ? error.message : String(error), pointer)
-          return false
+        switch (gesture.kind) {
+          case 'wire':
+            try {
+              return this.#commit(proofConnectionStep(
+                options.diagram(),
+                gesture.source,
+                gesture.target,
+                options.orientation(),
+                options.fuel(),
+              ))
+            } catch (error) {
+              options.refuse(error instanceof Error ? error.message : String(error), pointer)
+              return false
+            }
+          case 'relationJoin':
+            return this.#commit({ rule: 'wireJoin', input: gesture.input })
+          case 'relationSever':
+            return this.#commit({ rule: 'wireSever', input: gesture.input })
         }
       },
       refuse: options.refuse,
@@ -296,7 +266,9 @@ export class ProofMoveController {
     this.#context()
     if (!this.#options.active() || sample.repeat) return false
     if (sample.key === 'Escape') {
-      const active = this.#menu !== null || this.#cycle !== null
+      const active = this.#menu !== null
+        || this.#cycle !== null
+        || this.#connection.hasPendingInteraction
       this.cancel()
       return active
     }
@@ -416,7 +388,7 @@ export class ProofMoveController {
     this.#copy.modifiersChanged(ctrlHeld)
   }
 
-  #commit(step: ProofStep): void {
+  #commit(step: ProofStep): boolean {
     try {
       this.#options.apply(singleStepAction(
         step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
@@ -424,11 +396,13 @@ export class ProofMoveController {
       ))
       this.#options.setSelection([])
       this.#closeMenu()
+      return true
     } catch (error) {
       this.#options.refuse(
         error instanceof Error ? error.message : String(error),
         this.#lastPointer,
       )
+      return false
     }
   }
 
@@ -560,10 +534,6 @@ export class ProofMoveController {
             defId: name,
           }))
         }
-        return
-      case 'relationSever':
-      case 'relationJoin':
-        row(action.label, null)
         return
       case 'iterate':
       case 'citeTheorem':

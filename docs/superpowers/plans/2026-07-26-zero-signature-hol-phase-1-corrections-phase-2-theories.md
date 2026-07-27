@@ -633,25 +633,34 @@ git add -- \
 git commit -m "fix: strengthen relation wire quantifiers"
 ```
 
-### Task 4C: Migrate the durable proof and application surfaces
+### Task 4C: Migrate the durable proof and physical application surfaces
 
 **Files:**
 
 - Delete: `src/kernel/rules/reification.ts`
 - Modify: `src/kernel/rules/spawn.ts`
 - Modify: `src/app/actions.ts`
+- Modify: `src/app/hittest.ts`
+- Modify: `src/app/interact/connection.ts`
+- Modify: `src/app/interact/construct.ts`
 - Modify: `src/app/interact/moves.ts`
 - Modify: `tests/kernel/rules/spawn.test.ts`
 - Modify: `tests/app/actions.test.ts`
+- Modify: `tests/app/hittest.test.ts`
+- Modify: `tests/app/connection.test.ts`
 - Modify: `tests/app/moves.test.ts`
 - Modify: `tests/architecture/kernel-vocabulary.test.ts`
+- Modify: `tests/architecture/interaction-ownership.test.ts`
 
 **Interfaces:**
 
 - Consumes: `WireSeverInput`, `WireJoinInput`, and `ContentOccurrence` from
   Task 4B.
-- Produces uniformly polarity-gated ref spawning plus explicit application
-  affordances for Task 4B's already-landed durable step shapes.
+- Produces uniformly polarity-gated ref spawning and a zero-new-gesture
+  interaction domain for Task 4B's durable relation steps.
+- `hittest.ts` owns physical hit identity. `connection.ts` owns the ephemeral
+  pending relation wire and translates explicit contacts into durable inputs.
+  The kernel remains the sole semantic validator.
 
 - [ ] **Step 1: Write spawn-authority RED tests**
 
@@ -667,34 +676,41 @@ and nested negative scopes receive no exception. Add an architecture absence
 check for `src/kernel/rules/reification.ts` and
 `isExactReificationDefinition`.
 
-- [ ] **Step 2: Write application RED tests**
+- [ ] **Step 2: Write physical-interaction RED tests**
 
-Require direct connection drag to produce only:
+Require the existing `IOTA` wire-to-wire drag to remain unchanged. Require
+relation quantifiers to widen those physical hit domains without adding menus,
+pickers, selection modes, searches, or a new gesture:
 
-```ts
-{ rule: 'wireJoin', input: { kind: 'iota', a, b } }
-```
+- an exact occurrence is prepared with the existing double-cut wrap;
+- the real outer membrane ring is its sole landing target;
+- tapping physical wire crossings records formal arguments in tap order;
+- untapped crossings are ambient parameters, including the nullary case;
+- an existing relation wire dropped on the membrane emits relation
+  `wireJoin`;
+- a fresh pending relation wire records membrane contacts, branches from its
+  body, and commits relation `wireSever` only when its loose end lands in a
+  region.
 
-for `IOTA` wires. Require relation wires to use the explicit two-phase
-`relationJoin` and `relationSever` descriptors below; a direct relation-wire
-merge must be rejected.
+Add RED coverage for stable crossing/membrane/wire-part hit identities, exact
+extraction, pending-wire abort, kernel-refusal spring-back, mismatched explicitly
+touched occurrences, and absence of the displaced menu vocabulary.
 
 - [ ] **Step 3: Run RED**
 
 ```bash
 npx vitest run \
   tests/kernel/rules/spawn.test.ts \
-  tests/kernel/proof/json.test.ts \
-  tests/kernel/proof/step.test.ts \
-  tests/kernel/proof/compose.test.ts \
-  tests/kernel/proof/action.test.ts \
   tests/app/actions.test.ts \
+  tests/app/hittest.test.ts \
+  tests/app/connection.test.ts \
   tests/app/moves.test.ts \
-  tests/architecture/kernel-vocabulary.test.ts
+  tests/architecture/kernel-vocabulary.test.ts \
+  tests/architecture/interaction-ownership.test.ts
 ```
 
-Expected: FAIL on the reification spawn exception and direct relation-wire app
-connection.
+Expected: FAIL on the reification spawn exception, missing prepared-membrane hit
+grammar and pending connection state, and retained relation menu descriptors.
 
 - [ ] **Step 4: Remove the special ref authority**
 
@@ -703,32 +719,33 @@ callback from `spawn.ts`; `applyRefSpawn` must call the ordinary polarity gate
 with no definition-sensitive branch or diagnostic. Remove every recognizer test
 fixture and replace it with ordinary polarity coverage.
 
-- [ ] **Step 5: Migrate application affordances**
+- [ ] **Step 5: Implement the physical relation-wire domain**
 
-Keep direct connection-drag join only for `IOTA`. Add explicit two-phase
-descriptors and checked step constructors:
+Recognize only an erasable outer double cut as a prepared membrane. Its exact
+occurrence selection contains every direct child region, node, and directly
+scoped wire of the inner cut. Compute eligible crossing points from that
+selection's touching wires and the shared painted wire paths; crossing identity
+is stable `{ membrane, wire }`, independent of route samples.
 
-```ts
-| {
-    readonly kind: 'relationSever'
-    readonly label: string
-    readonly needsInput: 'scope-and-occurrences'
-  }
-| {
-    readonly kind: 'relationJoin'
-    readonly label: string
-    readonly needsInput: 'wire-content-and-parameters'
-  }
-```
+For grounding, reorder the extracted bounded diagram so tapped crossings form
+the formal prefix and untapped crossings retain deterministic extracted order
+as the parameter suffix. Commit the exact relation `wireJoin` input on the
+existing wire-drop release.
 
-They return the exact durable steps; they do not search for proofs, synthesize
-content, or retain a macro transaction. The UI may extract a DWB from a selected
-occurrence as an editing convenience, but the durable step stores the
-self-contained DWB and parameter wire IDs, not the host selection. Discovery
-mirrors polarity and basic shape only; the kernel applier remains authoritative
-and its refusal is surfaced verbatim.
+For abstraction, retain a legal endpoint-free relational wire in ephemeral
+connection state. Initial and branched membrane contacts append explicit
+`ContentOccurrence`s. The pending loose-end release supplies the exact region
+scope and is the sole relation `wireSever` commit. Abort deletes the pending
+wire; a kernel refusal clears it and restores the pregesture tap state.
 
-- [ ] **Step 6: Run focused proof/application gates**
+- [ ] **Step 6: Delete competing application paths**
+
+Remove relation join/sever action descriptors, discovery, menu rows, picker
+markers, and standalone checked constructors. Direct relation-wire-to-relation-
+wire dragging still reaches the unchanged kernel `IOTA` gate and is refused.
+Do not enumerate or infer occurrences and do not prevalidate semantic matches.
+
+- [ ] **Step 7: Run focused proof/application gates**
 
 ```bash
 npx vitest run \
@@ -739,34 +756,38 @@ npx vitest run \
   tests/kernel/proof/action.test.ts \
   tests/kernel/proof/theorem.test.ts \
   tests/app/actions.test.ts \
+  tests/app/hittest.test.ts \
+  tests/app/connection.test.ts \
   tests/app/moves.test.ts \
-  tests/architecture/kernel-vocabulary.test.ts
+  tests/architecture/kernel-vocabulary.test.ts \
+  tests/architecture/interaction-ownership.test.ts
 npm run typecheck
 ```
 
-Expected: the focused tests PASS. With the app consumer migrated here,
-`npm run typecheck` must now fail only on the displaced relation-wire proof in
-`src/theories/logic.ts`, which Task 4D re-derives. Any other type error is a
-Task 4C failure; do not add a compatibility shape for the remaining theorem.
+Expected: all focused tests and typecheck PASS, except that in-progress protected
+Task 4D files may temporarily be the sole typecheck failures. No compatibility
+shape is permitted for those theory consumers.
 
-- [ ] **Step 7: Audit absence and commit**
+- [ ] **Step 8: Audit absence and commit the interaction correction**
 
 ```bash
 rg -n \
-  "isExactReificationDefinition|exact reification definition|spawn.*every scope" \
-  src tests
-test ! -e src/kernel/rules/reification.ts
+  "relationJoinStep|relationSeverStep|wire-content-and-parameters|scope-and-occurrences" \
+  src/app tests/app tests/architecture
+git diff --check
 git add -- \
-  src/kernel/rules/reification.ts src/kernel/rules/spawn.ts \
-  src/app/actions.ts src/app/interact/moves.ts \
-  tests/kernel/rules/spawn.test.ts \
-  tests/app/actions.test.ts tests/app/moves.test.ts \
-  tests/architecture/kernel-vocabulary.test.ts
-git commit -m "fix: remove reification spawn authority"
+  src/app/actions.ts src/app/hittest.ts \
+  src/app/interact/connection.ts src/app/interact/construct.ts \
+  src/app/interact/moves.ts \
+  tests/app/actions.test.ts tests/app/hittest.test.ts \
+  tests/app/connection.test.ts tests/app/moves.test.ts \
+  tests/architecture/interaction-ownership.test.ts \
+  docs/superpowers/plans/2026-07-26-zero-signature-hol-phase-1-corrections-phase-2-theories.md
+git commit -m "fix: ground relation quantifiers through wire gestures"
 ```
 
-Expected `rg`: no production authority; historical documentation is outside the
-search. Negative tests may describe the removed behavior without exporting it.
+Expected `rg`: no displaced programmatic input path. Negative tests may name
+the removed behavior; production action and move sources may not retain it.
 
 ### Task 4D: Re-derive reification and existsProp through severing
 
