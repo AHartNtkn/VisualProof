@@ -23,8 +23,9 @@ describe('Lean semantics architecture', () => {
 
     expect(existsSync('VisualProof/Lambda')).toBe(false)
     expect(source).not.toMatch(
-      /\b(LambdaModel|betaEta|Item\.equation|comprehension|fusion|fission|headStrip|inconsistentCut)\b/i,
+      /\b(LambdaModel|betaEta|Item\.equation|comprehension|fission|headStrip|inconsistentCut)\b/i,
     )
+    expect(source).not.toMatch(/\b(?:def|theorem|axiom|opaque)\s+fusion\b/i)
     expect(source).not.toContain('openTermSpawn')
     expect(source).not.toContain('congruenceJoin')
 

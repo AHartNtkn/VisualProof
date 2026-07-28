@@ -314,6 +314,44 @@ theorem endpointOwner?_eq_of_incident
   have ownerEquality : owner = wire := congrArg Prod.fst pairEquality
   simpa [ownerEquality] using ownerEquation
 
+/-- A checked identity constructor carries its required minimum arity. -/
+theorem identity_arity
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (node : diagram.NodeId) (region : diagram.RegionId) (sig : Sig)
+    (arity : Nat)
+    (nodeData : diagram.nodes node = .identity region sig arity) :
+    2 ≤ arity := by
+  have checked := wellFormed.identities_have_arity
+  unfold IdentitiesHaveArity at checked
+  have nodeChecked := (List.all_eq_true.mp checked) node
+    (Data.Finite.mem_allFin node)
+  rw [nodeData] at nodeChecked
+  exact of_decide_eq_true nodeChecked
+
+/-- Every checked identity port is owned by a wire of the stored signature. -/
+theorem identity_port_typed
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (node : diagram.NodeId) (region : diagram.RegionId) (sig : Sig)
+    (arity : Nat)
+    (nodeData : diagram.nodes node = .identity region sig arity)
+    (index : Nat) (bound : index < arity)
+    (wire : diagram.WireId)
+    (owner : diagram.endpointOwner? ⟨node, .identity index⟩ = some wire) :
+    (diagram.wires wire).sig = sig := by
+  have checked := wellFormed.identity_ports_typed
+  unfold IdentityPortsTyped at checked
+  have nodeChecked := (List.all_eq_true.mp checked) node
+    (Data.Finite.mem_allFin node)
+  rw [nodeData] at nodeChecked
+  have indexChecked := (List.all_eq_true.mp nodeChecked) index
+    (by simpa using bound)
+  rw [owner] at indexChecked
+  exact eq_of_beq indexChecked
+
 private def secondSheetId (diagram : ConcreteDiagram definitionCount) : Nat :=
   match diagram.regionsList.find? (fun region =>
     decide (diagram.regions region = .sheet ∧ region ≠ diagram.root)) with

@@ -816,7 +816,7 @@ git commit -m "feat: prove boundary-pinned splice semantics"
   `IdentityRetarget`,
   and `identity_retarget_sound`.
 
-- [ ] **Step 1: Add failing identity theorem fixtures**
+- [x] **Step 1: Add failing identity theorem fixtures**
 
 Add examples for:
 
@@ -832,13 +832,13 @@ Add examples for:
 Run `lake build`; expected failure on missing normalization/substitution
 theorems.
 
-- [ ] **Step 2: Implement the three eager normalizations**
+- [x] **Step 2: Implement the three eager normalizations**
 
 Mirror the TypeScript fixpoint owner over checked concrete diagrams. Return both
 the normalized diagram and a typed wire-image map. Identity port indices may be
 renumbered but never consulted semantically.
 
-- [ ] **Step 3: Prove each normalization equivalence**
+- [x] **Step 3: Prove each normalization equivalence**
 
 Prove:
 
@@ -865,7 +865,7 @@ theorem normalizeIdentities_sound :
 
 The co-scoped proof is the one-point rule and must cover both cut parities.
 
-- [ ] **Step 4: Prove identity-retargeted substitution**
+- [x] **Step 4: Prove identity-retargeted substitution**
 
 `IdentityRetarget` names a boundary position, dominating identity node, source
 wire, and target wire. Its checker proves homogeneous signature, incidence of
@@ -873,13 +873,13 @@ both wires, distinctness of wire identities, exact boundary attachment, and
 dominance. Use `AllEqual` to prove endpoint value equality, then typed
 denotation substitution for iteration and deiteration.
 
-- [ ] **Step 5: Integrate normalization into splice**
+- [x] **Step 5: Integrate normalization into splice**
 
 Every concrete constructor returns the normalized diagram plus wire transport.
 Prove that composing splice soundness with the normalization receipt preserves
 ordered boundary aliases.
 
-- [ ] **Step 6: Run GREEN gates and commit**
+- [x] **Step 6: Run GREEN gates and commit**
 
 ```bash
 lake build

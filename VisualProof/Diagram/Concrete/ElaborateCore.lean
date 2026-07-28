@@ -1,7 +1,6 @@
 import VisualProof.Diagram.Concrete.ElaborationSupport
-
+import VisualProof.Diagram.Concrete.IdentityIncidence
 namespace VisualProof
-
 universe u
 
 namespace ConcreteElaboration
@@ -463,7 +462,7 @@ private abbrev wireOfVar (diagram : ConcreteDiagram definitionCount) :
   fun {ids} {_} value =>
     WireContext.origin diagram ids value
 
-private def appendRightVar
+def appendRightVar
     (diagram : ConcreteDiagram definitionCount)
     {rightIds : List diagram.WireId} {sig : Sig} :
     (leftIds : List diagram.WireId) →
@@ -472,20 +471,21 @@ private def appendRightVar
   | [], value => value
   | _ :: tail, value => .there (appendRightVar diagram tail value)
 
-private theorem wireOfVar_appendRightVar
+theorem origin_appendRightVar
     (diagram : ConcreteDiagram definitionCount)
     (leftIds : List diagram.WireId)
     {rightIds : List diagram.WireId} {sig : Sig}
     (value : Var (rightIds.map fun id => (diagram.wires id).sig) sig) :
-    wireOfVar diagram (appendRightVar diagram leftIds value) =
-      wireOfVar diagram value := by
+    WireContext.origin diagram (leftIds ++ rightIds)
+        (appendRightVar diagram leftIds value) =
+      WireContext.origin diagram rightIds value := by
   induction leftIds with
   | nil => rfl
   | cons head tail induction =>
       simpa [appendRightVar, wireOfVar,
         WireContext.origin] using induction
-
-private def extendEnvironmentFor
+/-- Extend an environment by an explicit ordered list of local wire values. -/
+def extendEnvironmentFor
     (diagram : ConcreteDiagram definitionCount)
     {pre : PreModel}
     (outerIds : List diagram.WireId) :
@@ -593,7 +593,7 @@ theorem extendEnvironmentFor_from
                 intro sig outer
                 exact agrees sig outer)) sig) value
 
-private theorem extendEnvironment_appendRightVar
+theorem extendEnvironment_appendRightVar
     (diagram : ConcreteDiagram definitionCount)
     (context : WireContext diagram) (region : diagram.RegionId)
     {pre : PreModel}
@@ -1356,19 +1356,6 @@ private def binaryIdentityRenaming
     match value with
     | .here => first
     | .there .here => second
-theorem WireContext.origin_signature
-    (diagram : ConcreteDiagram definitionCount)
-    (ids : List diagram.WireId)
-    {sig : Sig}
-    (value :
-      Var (ids.map fun wire => (diagram.wires wire).sig) sig) :
-    (diagram.wires (WireContext.origin diagram ids value)).sig = sig := by
-  induction ids with
-  | nil => exact nomatch value
-  | cons head tail induction =>
-      cases value with
-      | here => rfl
-      | there rest => exact induction rest
 private def binaryIdentityTemplateWireMap
     {definitions : List (List Sig)}
     {diagram : ConcreteDiagram definitions.length}
@@ -1566,6 +1553,58 @@ theorem compileNodes?_binaryIdentity_singleton
       sourceCompiled
   rw [targetCompiled]
   congr 1
+
+/-- A compiled checked identity's variable origins are exactly its incident wires. -/
+theorem compileNodes?_identity_origins
+    {definitions : List (List Sig)} (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions) (context : WireContext diagram)
+    (node : diagram.NodeId) {region : diagram.RegionId} {sig : Sig} {arity : Nat}
+    (nodeData : diagram.nodes node = .identity region sig arity) {items : ItemSeq definitions context.sigs}
+    (compiled : compileNodes? definitions diagram context [node] = some items) :
+    ∃ (ports : List (Var context.sigs sig)) (two : 2 ≤ ports.length),
+      items = .cons (.identity sig ports two) .nil ∧
+      ∀ wire, wire ∈ diagram.identityIncidentWires node ↔
+        ∃ resolvedVar ∈ ports, WireContext.origin diagram context.ids resolvedVar = wire := by
+  simp only [compileNodes?, compileNode?, nodeData] at compiled
+  split at compiled
+  · rename_i arityWitness
+    cases portsEquation :
+        resolveIdentityPorts? diagram context node sig arity 0 with
+    | none => simp [portsEquation] at compiled
+    | some ports =>
+        have two : 2 ≤ ports.val.length := by
+          simpa [ports.property] using arityWitness
+        refine ⟨ports.val, two,
+          (Option.some.inj (by simpa [portsEquation] using compiled)).symm, ?_⟩
+        intro wire
+        constructor
+        · intro incident
+          have ownerMember :=
+            (ConcreteDiagram.mem_identityIncidentWires_iff_mem_identityOwners definitions
+              diagram wellFormed node region sig arity nodeData wire).mp incident
+          rcases List.mem_filterMap.mp ownerMember with ⟨index, bound, owner⟩
+          obtain ⟨resolvedVar, resolved, member⟩ :=
+            resolveIdentityPorts?_at diagram context node sig arity 0 ports
+              portsEquation index (by simpa using bound)
+          refine ⟨resolvedVar, member, ?_⟩
+          exact wireOfVar_resolveExpected diagram context wire sig
+            (by simpa [resolvePort?, owner] using resolved)
+        · rintro ⟨resolvedVar, member, origin⟩
+          obtain ⟨index, _, resolved⟩ := resolveIdentityPorts?_mem diagram
+            context node sig arity 0 ports portsEquation resolvedVar member
+          cases owner : diagram.endpointOwner? ⟨node, .identity index⟩ with
+          | none => simp [resolvePort?, owner] at resolved
+          | some ownerWire =>
+              have expected : resolveExpected? diagram context ownerWire sig =
+                  some resolvedVar := by simpa [resolvePort?, owner] using resolved
+              change wireOfVar diagram resolvedVar = wire at origin
+              rw [wireOfVar_resolveExpected diagram context ownerWire sig expected]
+                at origin
+              subst wire
+              exact (ConcreteDiagram.mem_identityIncidentWires diagram node
+                ownerWire).mpr ⟨_, ConcreteDiagram.endpointOwner?_incident
+                  diagram _ _ owner, rfl⟩
+  · simp at compiled
 private theorem resolveExpected?_pair
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
@@ -1747,11 +1786,11 @@ theorem pullEnvironment_extend_agrees
     appendRightVar left (left.wiresAt region) leftOuterVar
   have rightWire :
       wireOfVar right rightExtendedVar = wireOfVar right rightVar :=
-    wireOfVar_appendRightVar right
+    origin_appendRightVar right
       (right.wiresAt (iso.regions region)) rightVar
   have leftWire :
       wireOfVar left leftExtendedVar = wireOfVar left leftOuterVar :=
-    wireOfVar_appendRightVar left (left.wiresAt region) leftOuterVar
+    origin_appendRightVar left (left.wiresAt region) leftOuterVar
   have leftOuterResolved := pullVar_resolves iso contexts rightVar
   have leftOuterWire :
       wireOfVar left leftOuterVar =
@@ -2473,27 +2512,6 @@ private theorem ref_arg_typed
   rw [lookup] at indexChecked
   exact eq_of_beq indexChecked
 
-private theorem identity_port_typed
-    (definitions : List (List Sig))
-    (diagram : ConcreteDiagram definitions.length)
-    (wellFormed : diagram.WellFormed definitions)
-    (node : diagram.NodeId) (region : diagram.RegionId) (sig : Sig)
-    (arity : Nat)
-    (nodeData : diagram.nodes node = .identity region sig arity)
-    (index : Nat) (bound : index < arity)
-    (wire : diagram.WireId)
-    (owner : diagram.endpointOwner? ⟨node, .identity index⟩ = some wire) :
-    (diagram.wires wire).sig = sig := by
-  have checked := wellFormed.identity_ports_typed
-  unfold ConcreteDiagram.IdentityPortsTyped at checked
-  have nodeChecked := (List.all_eq_true.mp checked) node
-    (Data.Finite.mem_allFin node)
-  rw [nodeData] at nodeChecked
-  have indexChecked := (List.all_eq_true.mp nodeChecked) index
-    (by simpa using bound)
-  rw [owner] at indexChecked
-  exact eq_of_beq indexChecked
-
 private theorem resolveArgs?_complete
     (diagram : ConcreteDiagram definitionCount)
     (context : WireContext diagram) (node : diagram.NodeId)
@@ -2741,21 +2759,6 @@ private theorem reference_signature
   rw [nodeData] at nodeChecked
   exact (eq_of_beq nodeChecked).symm
 
-private theorem identity_arity
-    (definitions : List (List Sig))
-    (diagram : ConcreteDiagram definitions.length)
-    (wellFormed : diagram.WellFormed definitions)
-    (node : diagram.NodeId) (region : diagram.RegionId) (sig : Sig)
-    (arity : Nat)
-    (nodeData : diagram.nodes node = .identity region sig arity) :
-    2 ≤ arity := by
-  have checked := wellFormed.identities_have_arity
-  unfold ConcreteDiagram.IdentitiesHaveArity at checked
-  have nodeChecked := (List.all_eq_true.mp checked) node
-    (Data.Finite.mem_allFin node)
-  rw [nodeData] at nodeChecked
-  exact of_decide_eq_true nodeChecked
-
 private theorem compileNode?_complete
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -2805,7 +2808,8 @@ private theorem compileNode?_complete
           rw [nodeData]
           simp [signatureGetElem, argumentsResolved]⟩
   | identity storedRegion sig arity =>
-      have arityWitness := identity_arity definitions diagram wellFormed
+      have arityWitness := ConcreteDiagram.identity_arity definitions diagram
+        wellFormed
         node storedRegion sig arity nodeData
       obtain ⟨ports, portsResolved⟩ :=
         resolveIdentityPorts?_complete diagram context node sig arity 0 (by
@@ -2813,8 +2817,8 @@ private theorem compileNode?_complete
           apply resolvePort?_complete definitions diagram wellFormed
             context region coverage node nodeRegion
           · simp [ConcreteDiagram.requiredPorts, nodeData, bound]
-          · simpa using identity_port_typed definitions diagram wellFormed node
-              storedRegion sig arity nodeData offset bound)
+          · simpa using ConcreteDiagram.identity_port_typed definitions diagram
+              wellFormed node storedRegion sig arity nodeData offset bound)
       exact ⟨.identity sig ports.val (by
         simpa [ports.property] using arityWitness), by
           unfold compileNode?

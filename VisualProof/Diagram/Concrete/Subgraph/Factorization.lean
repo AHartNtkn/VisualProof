@@ -1,12 +1,7 @@
 import VisualProof.Diagram.Concrete.Subgraph.Splice
-
 namespace VisualProof
-
 namespace RemovalFactorization
-
 open ConcreteElaboration
-
-
 private def mappedIndex
     (map : α → β) (values : List α) :
     Fin values.length → Fin (values.map map).length :=
@@ -53,7 +48,6 @@ private theorem denseIndex_map_injective
   apply Fin.ext
   rw [Option.get_of_eq_some _ mappedEquation,
     Option.get_of_eq_some _ sourceEquation]
-
 private theorem denseIndex_val_of_list_eq
     [DecidableEq α]
     {left right : List α} (same : left = right)
@@ -63,7 +57,6 @@ private theorem denseIndex_val_of_list_eq
       (DenseList.index right value rightMember).val := by
   subst right
   rfl
-
 /--
 The context obtained while the concrete compiler follows one region path to a
 removal site. `siteBody` is the actual compiler output at the hole, before the
@@ -457,6 +450,15 @@ theorem compileRegionFrame?_sound
                                 (diagram.wiresAt region) around.context
                                 around.siteBody).symm
 
+def CoversStrictlyAbove
+    (diagram : ConcreteDiagram definitionCount)
+    (site : diagram.RegionId)
+    (context : WireContext diagram) : Prop :=
+  ∀ wire,
+    diagram.Encloses (diagram.wires wire).scope site →
+    (diagram.wires wire).scope ≠ site →
+    wire ∈ context.ids
+
 /-- A root-specialized generated compiler frame. -/
 abbrev RemovalFrame
     (definitions : List (List Sig))
@@ -504,10 +506,33 @@ structure RemovalCompilation
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
     (removed : RemovalResult occurrence) where
+  private mk ::
   frame : RemovalFrame definitions removed.complement.val
-  frame_compiles : compileRemovalFrame? removed = some frame
+  private frame_compiles : compileRemovalFrame? removed = some frame
+  private visible_covers :
+    CoversStrictlyAbove removed.complement.val removed.site frame.visible
 
 namespace RemovalCompilation
+
+theorem frame_generated
+    (compiled : RemovalCompilation removed) :
+    compileRemovalFrame? removed = some compiled.frame :=
+  compiled.frame_compiles
+
+theorem region_frame_generated
+    (compiled : RemovalCompilation removed) :
+    compileRegionFrame? _ removed.complement.val removed.site
+        (removed.complement.val.regionCount + 1)
+        removed.complement.val.root
+        (WireContext.empty removed.complement.val) =
+      some compiled.frame := by
+  exact compiled.frame_generated
+
+theorem covers
+    (compiled : RemovalCompilation removed) :
+    CoversStrictlyAbove removed.complement.val removed.site
+      compiled.frame.visible :=
+  compiled.visible_covers
 
 theorem root_compiles
     {definitions : List (List Sig)}
@@ -794,7 +819,7 @@ private theorem compileTargetPositionsFor?_complete
       rw [resolvedCompiled, restCompiled]
       exact ⟨_, rfl⟩
 
-private def targetWiresFor
+def targetWiresFor
     {source : ConcreteDiagram sourceDefinitions}
     {target : ConcreteDiagram targetDefinitions} :
     (boundary : List source.WireId) →
@@ -1908,15 +1933,6 @@ private theorem compileSiblingFrame?_complete_of_children
                   simp [compileSiblingFrame?, same, bodyEquation,
                     frameCompiled], visibleEquality⟩
 
-private def CoversStrictlyAbove
-    (diagram : ConcreteDiagram definitionCount)
-    (site : diagram.RegionId)
-    (context : WireContext diagram) : Prop :=
-  ∀ wire,
-    diagram.Encloses (diagram.wires wire).scope site →
-    (diagram.wires wire).scope ≠ site →
-    wire ∈ context.ids
-
 private theorem encloses_child_split_local
     (diagram : ConcreteDiagram definitionCount)
     (ancestor child parent : diagram.RegionId)
@@ -2069,6 +2085,159 @@ private theorem compileWholeSiteFrame?_complete_of_region
                       simp [compileWholeSiteFrame?, atSite,
                         nodesEquation, childEquation, nestedCompiled,
                         aroundCompiled, frame], ?_⟩
+                    simpa [frame, aroundVisible] using nestedCovers
+
+private theorem compileRegionBody?_complete_of_compileRegion?
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat)
+    (region : diagram.RegionId)
+    (outer : WireContext diagram)
+    (compiled :
+      ∃ body,
+        compileRegion? definitions diagram (fuel + 1) region outer =
+          some body) :
+    ∃ body,
+      compileRegionBody? definitions diagram fuel region outer =
+        some body := by
+  rcases compiled with ⟨body, compiled⟩
+  unfold compileRegion? at compiled
+  unfold compileRegionBody?
+  cases nodesEquation :
+      compileNodes? definitions diagram (outer.extend region)
+        (diagram.nodesAt region) with
+  | none =>
+      simp [nodesEquation] at compiled
+  | some nodes =>
+      cases childrenEquation :
+          compileChildrenWith? definitions diagram
+            (compileRegion? definitions diagram fuel)
+            (outer.extend region) (diagram.childrenOf region) with
+      | none =>
+          simp [nodesEquation, childrenEquation] at compiled
+      | some children =>
+          exact ⟨.mk (nodes.append children), by
+            simp [nodesEquation, childrenEquation]⟩
+
+private theorem compileRegionFrame?_complete_of_region
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (site : diagram.RegionId) :
+    ∀ (fuel : Nat) (region : diagram.RegionId)
+      (outer : WireContext diagram)
+      (body : Region definitions outer.sigs),
+      diagram.Encloses region site →
+      CoversStrictlyAbove diagram region outer →
+      compileRegion? definitions diagram fuel region outer = some body →
+      ∃ frame,
+        compileRegionFrame? definitions diagram site fuel region outer =
+          some frame ∧
+        CoversStrictlyAbove diagram site frame.visible := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro region outer body _ _ compiled
+      simp [compileRegion?] at compiled
+  | succ fuel induction =>
+      intro region outer body encloses covers compiled
+      by_cases atSite : region = site
+      · subst region
+        obtain ⟨siteBody, bodyCompiled⟩ :=
+          compileRegionBody?_complete_of_compileRegion? definitions diagram
+            fuel site outer ⟨body, compiled⟩
+        let frame : RegionFrame definitions diagram outer :=
+          { visible := outer.extend site
+            siteBody := siteBody
+            context :=
+              bindContextFor diagram outer.ids
+                (diagram.wiresAt site) .hole }
+        refine ⟨frame, by
+          simp [compileRegionFrame?, bodyCompiled, frame], ?_⟩
+        intro wire wireEncloses strict
+        exact List.mem_append_right _ (covers wire wireEncloses strict)
+      · let extended := outer.extend region
+        cases nodesEquation :
+            compileNodes? definitions diagram extended
+              (diagram.nodesAt region) with
+        | none =>
+            simp only [compileRegion?] at compiled
+            rw [nodesEquation] at compiled
+            simp at compiled
+        | some nodes =>
+            cases childrenEquation :
+                compileChildrenWith? definitions diagram
+                  (compileRegion? definitions diagram fuel) extended
+                  (diagram.childrenOf region) with
+            | none =>
+                simp only [compileRegion?] at compiled
+                rw [nodesEquation, childrenEquation] at compiled
+                simp at compiled
+            | some children =>
+                obtain ⟨pathChild, pathMember, pathEncloses⟩ :=
+                  enclosing_child_exists diagram region site encloses atSite
+                cases childEquation :
+                    (diagram.childrenOf region).find?
+                      (fun candidate =>
+                        decide (diagram.Encloses candidate site)) with
+                | none =>
+                    have rejects :=
+                      (List.find?_eq_none.mp childEquation)
+                        pathChild pathMember
+                    simp [pathEncloses] at rejects
+                | some child =>
+                    have childMember :
+                        child ∈ diagram.childrenOf region :=
+                      List.mem_of_find?_eq_some childEquation
+                    have childEncloses :
+                        diagram.Encloses child site :=
+                      of_decide_eq_true
+                        (List.find?_some
+                          (p := fun candidate =>
+                            decide (diagram.Encloses candidate site))
+                          childEquation)
+                    have childData :
+                        diagram.regions child = .cut region := by
+                      have filtered :=
+                        (List.mem_filter.mp childMember).2
+                      cases data : diagram.regions child with
+                      | sheet => simp [data] at filtered
+                      | cut parent =>
+                          have same : parent = region := by
+                            exact eq_of_beq
+                              (by simpa [data] using filtered)
+                          exact congrArg CRegion.cut same
+                    have childCovers :
+                        CoversStrictlyAbove diagram child extended :=
+                      extend_covers_child diagram region child outer
+                        childData covers
+                    obtain ⟨childBody, childCompiled⟩ :=
+                      compileChildrenWith?_at definitions diagram
+                        (compileRegion? definitions diagram fuel)
+                        extended (diagram.childrenOf region) children
+                        childrenEquation child childMember
+                    obtain ⟨nested, nestedCompiled, nestedCovers⟩ :=
+                      induction child extended childBody childEncloses
+                        childCovers childCompiled
+                    have nestedRegionCompiled :=
+                      compileRegionFrame?_sound definitions diagram site
+                        fuel child extended nested nestedCompiled
+                    obtain ⟨around, aroundCompiled, aroundVisible⟩ :=
+                      compileSiblingFrame?_complete_of_children
+                        definitions diagram fuel extended child nested nodes
+                        (diagram.childrenOf region) children childMember
+                        nestedRegionCompiled childrenEquation
+                    let frame : RegionFrame definitions diagram outer :=
+                      { visible := around.visible
+                        siteBody := around.siteBody
+                        context :=
+                          bindContextFor diagram outer.ids
+                            (diagram.wiresAt region)
+                            around.context }
+                    unfold extended at nodesEquation nestedCompiled aroundCompiled
+                    refine ⟨frame, by
+                      simp [compileRegionFrame?, atSite, nodesEquation,
+                        childEquation, nestedCompiled, aroundCompiled,
+                        frame], ?_⟩
                     simpa [frame, aroundVisible] using nestedCovers
 
 /-- Root-specialized frame generated directly from the concrete splice candidate. -/
@@ -2236,6 +2405,42 @@ private theorem empty_covers_root
       rw [ConcreteDiagram.climb, wellFormed.root_is_sheet] at climbed
       simp at climbed
 
+/--
+The generated removal frame exists for every checked removal result; callers
+never supply a frame or a path-to-site receipt.
+-/
+theorem removalCompilation_complete
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    (removed : RemovalResult occurrence) :
+    Nonempty (RemovalCompilation removed) := by
+  have rootEncloses :
+      removed.complement.val.Encloses removed.complement.val.root
+        removed.site := by
+    have checked :=
+      (List.all_eq_true.mp
+        removed.complement.property.all_regions_reach_root)
+        removed.site (Data.Finite.mem_allFin _)
+    exact of_decide_eq_true checked
+  have rootCompiled :=
+    elaborateWith_compiles definitions removed.complement.val
+      removed.complement.property
+  unfold ConcreteElaboration.compileRoot? at rootCompiled
+  obtain ⟨frame, frameCompiled, visibleCovers⟩ :=
+    compileRegionFrame?_complete_of_region definitions
+      removed.complement.val removed.site
+      (removed.complement.val.regionCount + 1)
+      removed.complement.val.root
+      (WireContext.empty removed.complement.val)
+      (elaborateWith definitions removed.complement.val
+        removed.complement.property)
+      rootEncloses
+      (empty_covers_root definitions removed.complement.val
+        removed.complement.property)
+      rootCompiled
+  exact ⟨RemovalCompilation.mk frame frameCompiled visibleCovers⟩
+
 private theorem target_scope_ne_site
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
@@ -2258,6 +2463,44 @@ private theorem target_scope_ne_site
         (Removal.site occurrence) at member
   rw [complement_wiresAt_site_eq_nil occurrence] at member
   cases member
+
+/--
+Resolve one checked attachment in the generated, target-independent removal
+frame. The returned ordered variables retain their exact complement-wire
+origins; no candidate compiler or raw diagram is exposed.
+-/
+theorem removalAttachmentPositions_complete
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {removed : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    (compiled : RemovalCompilation removed)
+    (attachment : ConcreteSpliceAttachment removed fragment) :
+    ∃ positions : Vars compiled.visible.sigs
+        (checkedBoundarySigs fragment),
+      positions.entries.map
+          (fun packed =>
+            match packed with
+            | ⟨_, value⟩ =>
+                ConcreteElaboration.WireContext.origin
+                  removed.complement.val compiled.visible.ids value) =
+        targetWiresFor fragment.val.boundary attachment.target := by
+  have targetMembers :
+      ∀ position, attachment.target position ∈ compiled.visible.ids := by
+    intro position
+    apply compiled.covers
+    · exact attachment.scope position
+    · exact target_scope_ne_site attachment position
+  obtain ⟨positions, positionsCompiled⟩ :=
+    compileTargetPositionsFor?_complete fragment.val.diagram
+      removed.complement.val compiled.visible fragment.val.boundary
+      attachment.target attachment.signature targetMembers
+  refine ⟨positions, ?_⟩
+  exact
+    compileTargetPositionsFor?_origins fragment.val.diagram
+      removed.complement.val compiled.visible fragment.val.boundary
+      attachment.target attachment.signature positions positionsCompiled
 
 /--
 Every checked splice result makes executable factor compilation succeed;
@@ -2380,6 +2623,22 @@ theorem frame_compiles
                 accepted)
           cases factorEquality
           rfl
+
+theorem whole_frame_generated
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {removed : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment removed fragment}
+    (compiled : SpliceCompilation attachment) :
+    compileWholeSiteFrame? definitions attachment.diagram
+        (attachment.hostRegion removed.site)
+        (attachment.diagram.regionCount + 1)
+        attachment.diagram.root
+        (WireContext.empty attachment.diagram) =
+      some compiled.factor.frame := by
+  exact compiled.frame_compiles
 
 theorem positions_compiles
     {definitions : List (List Sig)}
@@ -2569,6 +2828,24 @@ theorem site_compiles
     (WireContext.empty attachment.diagram)
     compiled.factor.frame compiled.frame_compiles
 
+/-- Intrinsic attachment generated from any exact ordered position tuple. -/
+def intrinsicAttachmentFromPositions
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    (extracted : ExtractionCompilation occurrence)
+    {target : List Sig}
+    (positions : Vars target (checkedBoundarySigs extracted.checked)) :
+    SpliceAttachment extracted.openDiagram
+      target where
+  positions := positions
+  classMap := fun fiber =>
+    (firstPaired extracted.boundary positions fiber
+      (extracted.boundary_surjective _ fiber)).val
+  representative_position := fun fiber =>
+    (firstPaired extracted.boundary positions fiber
+      (extracted.boundary_surjective _ fiber)).property
+
 /-- Intrinsic attachment generated from this factor's exact ordered positions. -/
 def intrinsicAttachment
     {definitions : List (List Sig)}
@@ -2576,17 +2853,12 @@ def intrinsicAttachment
     {occurrence : Occurrence pattern host}
     (extracted : ExtractionCompilation occurrence)
     {removed : RemovalResult occurrence}
-    {attachment : ConcreteSpliceAttachment removed extracted.checked}
+    {attachment :
+      ConcreteSpliceAttachment removed extracted.checked}
     (compiled : SpliceCompilation attachment) :
     SpliceAttachment extracted.openDiagram
-      compiled.factor.frame.visible.sigs where
-  positions := compiled.factor.positions
-  classMap := fun fiber =>
-    (firstPaired extracted.boundary compiled.factor.positions fiber
-      (extracted.boundary_surjective _ fiber)).val
-  representative_position := fun fiber =>
-    (firstPaired extracted.boundary compiled.factor.positions fiber
-      (extracted.boundary_surjective _ fiber)).property
+      compiled.factor.frame.visible.sigs :=
+  intrinsicAttachmentFromPositions extracted compiled.factor.positions
 
 theorem intrinsicClassWire_mem_boundary
     {definitions : List (List Sig)}
@@ -2716,7 +2988,7 @@ theorem intrinsicAttachment_classMap_eq_positionPackedAt
       compiled.positionPackedAt representative
   rw [positionEquality]
   unfold SpliceCompilation.intrinsicAttachment
-  dsimp only
+    intrinsicAttachmentFromPositions
   rw [← firstTarget]
   unfold positionPackedAt targetPackedAt
   congr 1

@@ -1,16 +1,7 @@
 import VisualProof.Diagram.Concrete.Subgraph.Selection
+import VisualProof.Diagram.Concrete.IdentityIncidence
 
 namespace VisualProof
-
-namespace ConcreteDiagram
-
-/-- Wire owners of an identity's storage ports; only the resulting multiset matters. -/
-def identityOwners (diagram : ConcreteDiagram definitionCount)
-    (node : diagram.NodeId) (arity : Nat) : List diagram.WireId :=
-  (List.range arity).filterMap fun index =>
-    diagram.endpointOwner? ⟨node, .identity index⟩
-
-end ConcreteDiagram
 
 /-- Structural preservation of one node under injective occurrence maps. -/
 def OccurrenceNodeCorresponds

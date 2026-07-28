@@ -63,6 +63,18 @@ def origin
   | _ :: tail, _, .there value =>
       origin diagram tail value
 
+theorem origin_signature
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId) {sig : Sig}
+    (value : Var (ids.map fun wire => (diagram.wires wire).sig) sig) :
+    (diagram.wires (origin diagram ids value)).sig = sig := by
+  induction ids with
+  | nil => exact nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here => rfl
+      | there rest => exact induction rest
+
 def empty (diagram : ConcreteDiagram definitionCount) : WireContext diagram :=
   ⟨[]⟩
 
