@@ -1,0 +1,691 @@
+import VisualProof.Diagram.Concrete.WellFormed
+
+namespace VisualProof
+
+open Data.Finite
+
+namespace ConcreteIso
+
+private theorem portCorresponds_symm
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {endpoint : CEndpoint left.nodeCount}
+    {candidate : CEndpoint right.nodeCount}
+    (corresponds : PortCorresponds left right iso.nodes endpoint candidate) :
+    PortCorresponds right left iso.nodes.symm candidate endpoint := by
+  unfold PortCorresponds at corresponds ⊢
+  have nodeEquality : endpoint.node = iso.nodes.symm candidate.node :=
+    (iso.nodes.left_inv endpoint.node).symm.trans
+      (congrArg iso.nodes.symm corresponds.1.symm)
+  refine ⟨nodeEquality, ?_⟩
+  cases leftNode : left.nodes endpoint.node <;>
+    cases rightNode : right.nodes candidate.node <;>
+    simp [leftNode, rightNode] at corresponds ⊢
+  all_goals try exact corresponds.2.symm
+  exact ⟨corresponds.2.1.symm, corresponds.2.2.1.symm,
+    corresponds.2.2.2.2, corresponds.2.2.2.1⟩
+
+theorem regionCount_eq
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) :
+    left.regionCount = right.regionCount := by
+  apply Nat.le_antisymm
+  · exact Data.Finite.fin_card_le_of_injective iso.regions
+      iso.regions.injective
+  · exact Data.Finite.fin_card_le_of_injective iso.regions.invFun
+      (by
+        intro first second equality
+        have := congrArg iso.regions.toFun equality
+        simpa only [iso.regions.right_inv] using this)
+
+theorem nodeCount_eq
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) :
+    left.nodeCount = right.nodeCount := by
+  apply Nat.le_antisymm
+  · exact Data.Finite.fin_card_le_of_injective iso.nodes iso.nodes.injective
+  · exact Data.Finite.fin_card_le_of_injective iso.nodes.invFun
+      (by
+        intro first second equality
+        have := congrArg iso.nodes.toFun equality
+        simpa only [iso.nodes.right_inv] using this)
+
+theorem wireCount_eq
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) :
+    left.wireCount = right.wireCount := by
+  apply Nat.le_antisymm
+  · exact Data.Finite.fin_card_le_of_injective iso.wires iso.wires.injective
+  · exact Data.Finite.fin_card_le_of_injective iso.wires.invFun
+      (by
+        intro first second equality
+        have := congrArg iso.wires.toFun equality
+        simpa only [iso.wires.right_inv] using this)
+
+theorem target_region
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) (region : right.RegionId) :
+    right.regions region =
+      (left.regions (iso.regions.symm region)).rename iso.regions := by
+  calc
+    right.regions region =
+        right.regions (iso.regions (iso.regions.symm region)) :=
+      congrArg right.regions (iso.regions.right_inv region).symm
+    _ = (left.regions (iso.regions.symm region)).rename iso.regions :=
+      iso.region_table _
+
+theorem target_node
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) (node : right.NodeId) :
+    right.nodes node =
+      (left.nodes (iso.nodes.symm node)).rename iso.regions := by
+  calc
+    right.nodes node = right.nodes (iso.nodes (iso.nodes.symm node)) :=
+      congrArg right.nodes (iso.nodes.right_inv node).symm
+    _ = (left.nodes (iso.nodes.symm node)).rename iso.regions :=
+      iso.node_table _
+
+def symm
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) :
+    ConcreteIso right left where
+  regions := iso.regions.symm
+  nodes := iso.nodes.symm
+  wires := iso.wires.symm
+  root := (congrArg iso.regions.symm iso.root.symm).trans
+    (iso.regions.left_inv left.root)
+  region_table := by
+    intro region
+    have target := iso.target_region region
+    cases sourceData : left.regions (iso.regions.symm region) with
+    | sheet =>
+        rw [sourceData] at target
+        rw [target]
+        rfl
+    | cut parent =>
+        rw [sourceData] at target
+        rw [target]
+        simp [CRegion.rename]
+  node_table := by
+    intro node
+    have target := iso.target_node node
+    cases sourceData : left.nodes (iso.nodes.symm node) with
+    | atom region args =>
+        rw [sourceData] at target
+        rw [target]
+        simp [CNode.rename]
+    | ref region definition args =>
+        rw [sourceData] at target
+        rw [target]
+        simp [CNode.rename]
+    | identity region sig arity =>
+        rw [sourceData] at target
+        rw [target]
+        simp [CNode.rename]
+  wire_signature := by
+    intro wire
+    calc
+      (left.wires (iso.wires.symm wire)).sig =
+          (right.wires (iso.wires (iso.wires.symm wire))).sig :=
+        (iso.wire_signature (iso.wires.symm wire)).symm
+      _ = (right.wires wire).sig :=
+        congrArg (fun target => (right.wires target).sig)
+          (iso.wires.right_inv wire)
+  wire_scope := by
+    intro wire
+    calc
+      (left.wires (iso.wires.symm wire)).scope =
+          iso.regions.symm
+            (iso.regions (left.wires (iso.wires.symm wire)).scope) :=
+        (iso.regions.left_inv _).symm
+      _ = iso.regions.symm
+          (right.wires (iso.wires (iso.wires.symm wire))).scope :=
+        congrArg iso.regions.symm
+          (iso.wire_scope (iso.wires.symm wire)).symm
+      _ = iso.regions.symm (right.wires wire).scope :=
+        congrArg (fun target =>
+          iso.regions.symm (right.wires target).scope)
+          (iso.wires.right_inv wire)
+  endpoint_forward := by
+    intro wire candidate member
+    have mappedMember : candidate ∈
+        (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
+      exact Eq.mp (congrArg
+        (fun target => candidate ∈ (right.wires target).endpoints)
+        (iso.wires.right_inv wire).symm) member
+    obtain ⟨endpoint, endpointMember, corresponds⟩ :=
+      iso.endpoint_backward (iso.wires.symm wire) candidate mappedMember
+    exact ⟨endpoint, endpointMember,
+      portCorresponds_symm iso corresponds⟩
+  endpoint_backward := by
+    intro wire endpoint member
+    obtain ⟨candidate, candidateMember, corresponds⟩ :=
+      iso.endpoint_forward (iso.wires.symm wire) endpoint member
+    have wireEquality : iso.wires (iso.wires.symm wire) = wire :=
+      iso.wires.right_inv wire
+    rw [wireEquality] at candidateMember
+    exact ⟨candidate, candidateMember,
+      portCorresponds_symm iso corresponds⟩
+
+theorem node_region
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) (node : left.NodeId) :
+    (right.nodes (iso.nodes node)).region =
+      iso.regions (left.nodes node).region := by
+  rw [iso.node_table]
+  exact CNode.region_rename _ _
+
+theorem climb_transport
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) (steps : Nat)
+    (region : left.RegionId) :
+    right.climb steps (iso.regions region) =
+      (left.climb steps region).map iso.regions := by
+  induction steps generalizing region with
+  | zero => rfl
+  | succ steps ih =>
+      simp only [ConcreteDiagram.climb]
+      rw [iso.region_table]
+      cases data : left.regions region with
+      | sheet => rfl
+      | cut parent =>
+          simp only [CRegion.rename]
+          exact ih parent
+
+theorem encloses_transport
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {ancestor descendant : left.RegionId}
+    (encloses : left.Encloses ancestor descendant) :
+    right.Encloses (iso.regions ancestor) (iso.regions descendant) := by
+  unfold ConcreteDiagram.Encloses at encloses ⊢
+  rw [List.any_eq_true] at encloses ⊢
+  obtain ⟨steps, _, climbed⟩ := encloses
+  let targetSteps : Fin (right.regionCount + 1) :=
+    Fin.cast (congrArg (fun count => count + 1) iso.regionCount_eq) steps
+  refine ⟨targetSteps, Data.Finite.mem_allFin targetSteps, ?_⟩
+  change (right.climb steps.val (iso.regions descendant) ==
+    some (iso.regions ancestor)) = true
+  rw [iso.climb_transport, eq_of_beq climbed]
+  simp
+
+theorem wiresAt_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {region : left.RegionId} {wire : left.WireId}
+    (member : wire ∈ left.wiresAt region) :
+    iso.wires wire ∈ right.wiresAt (iso.regions region) := by
+  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member ⊢
+  rcases member with ⟨_, member⟩
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  have scope := iso.wire_scope wire
+  have leftScope := eq_of_beq member
+  apply beq_iff_eq.mpr
+  exact scope.trans (congrArg iso.regions leftScope)
+
+theorem wiresAt_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {region : right.RegionId} {wire : right.WireId}
+    (member : wire ∈ right.wiresAt region) :
+    iso.wires.symm wire ∈ left.wiresAt (iso.regions.symm region) := by
+  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member ⊢
+  rcases member with ⟨_, member⟩
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  apply beq_iff_eq.mpr
+  have scope := iso.wire_scope (iso.wires.symm wire)
+  have targetScope := eq_of_beq member
+  have mapped :
+      iso.regions (left.wires (iso.wires.symm wire)).scope = region := by
+    calc
+      iso.regions (left.wires (iso.wires.symm wire)).scope =
+          (right.wires (iso.wires (iso.wires.symm wire))).scope :=
+        scope.symm
+      _ = (right.wires wire).scope :=
+        congrArg (fun targetWire => (right.wires targetWire).scope)
+          (iso.wires.right_inv wire)
+      _ = region := targetScope
+  have pulled := congrArg iso.regions.invFun mapped
+  simpa only [iso.regions.left_inv] using pulled
+
+theorem nodesAt_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {region : left.RegionId} {node : left.NodeId}
+    (member : node ∈ left.nodesAt region) :
+    iso.nodes node ∈ right.nodesAt (iso.regions region) := by
+  rw [ConcreteDiagram.nodesAt, List.mem_filter] at member ⊢
+  rcases member with ⟨_, member⟩
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  apply beq_iff_eq.mpr
+  rw [iso.node_region]
+  exact congrArg iso.regions (eq_of_beq member)
+
+theorem nodesAt_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {region : right.RegionId} {node : right.NodeId}
+    (member : node ∈ right.nodesAt region) :
+    iso.nodes.symm node ∈ left.nodesAt (iso.regions.symm region) := by
+  rw [ConcreteDiagram.nodesAt, List.mem_filter] at member ⊢
+  rcases member with ⟨_, member⟩
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  apply beq_iff_eq.mpr
+  have mapped :
+      iso.regions (left.nodes (iso.nodes.symm node)).region = region := by
+    calc
+      iso.regions (left.nodes (iso.nodes.symm node)).region =
+          (right.nodes (iso.nodes (iso.nodes.symm node))).region :=
+        (iso.node_region (iso.nodes.symm node)).symm
+      _ = (right.nodes node).region :=
+        congrArg (fun targetNode => (right.nodes targetNode).region)
+          (iso.nodes.right_inv node)
+      _ = region := eq_of_beq member
+  have pulled := congrArg iso.regions.invFun mapped
+  simpa only [iso.regions.left_inv] using pulled
+
+theorem childrenOf_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {region child : left.RegionId}
+    (member : child ∈ left.childrenOf region) :
+    iso.regions child ∈ right.childrenOf (iso.regions region) := by
+  rw [ConcreteDiagram.childrenOf, List.mem_filter] at member ⊢
+  rcases member with ⟨_, member⟩
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  cases childData : left.regions child with
+  | sheet => simp [childData] at member
+  | cut parent =>
+      simp only [childData] at member
+      have parentEq : parent = region := by
+        exact eq_of_beq member
+      rw [iso.region_table, childData]
+      simp [CRegion.rename, parentEq]
+
+theorem childrenOf_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {region child : right.RegionId}
+    (member : child ∈ right.childrenOf region) :
+    iso.regions.symm child ∈ left.childrenOf (iso.regions.symm region) := by
+  have targetData := iso.target_region child
+  rw [ConcreteDiagram.childrenOf, List.mem_filter] at member ⊢
+  rcases member with ⟨_, member⟩
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  cases sourceData : left.regions (iso.regions.symm child) with
+  | sheet =>
+      rw [sourceData] at targetData
+      simp [targetData] at member
+  | cut parent =>
+      rw [sourceData] at targetData
+      rw [targetData] at member
+      simp only [CRegion.rename] at member
+      have mappedParent : iso.regions parent = region := by
+        exact eq_of_beq member
+      have parentEq : parent = iso.regions.symm region := by
+        have pulled := congrArg iso.regions.invFun mappedParent
+        simpa only [iso.regions.left_inv] using pulled
+      exact beq_iff_eq.mpr parentEq
+
+theorem requiredPorts_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {node : left.NodeId} {port : CPort}
+    (required : port ∈ left.requiredPorts node) :
+    port ∈ right.requiredPorts (iso.nodes node) := by
+  unfold ConcreteDiagram.requiredPorts at required ⊢
+  rw [iso.node_table]
+  cases nodeData : left.nodes node <;>
+    simpa [nodeData, CNode.rename] using required
+
+theorem atom_owner_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    (rightWellFormed : right.WellFormed definitions)
+    {node : left.NodeId} {region : left.RegionId} {args : List Sig}
+    (nodeData : left.nodes node = .atom region args)
+    {port : CPort} {wire : left.WireId}
+    (owner : left.endpointOwner? ⟨node, port⟩ = some wire) :
+    right.endpointOwner? ⟨iso.nodes node, port⟩ =
+      some (iso.wires wire) := by
+  have incident :=
+    ConcreteDiagram.endpointOwner?_incident left ⟨node, port⟩ wire owner
+  obtain ⟨candidate, candidateMember, corresponds⟩ :=
+    iso.endpoint_forward wire ⟨node, port⟩ incident
+  have nodeEquality : candidate.node = iso.nodes node :=
+    corresponds.1
+  have rightNode :
+      right.nodes candidate.node =
+        .atom (iso.regions region) args := by
+    rw [corresponds.1, iso.node_table, nodeData]
+    rfl
+  have portEquality : candidate.port = port := by
+    unfold PortCorresponds at corresponds
+    rw [nodeData, rightNode] at corresponds
+    exact corresponds.2
+  have candidateEquality :
+      candidate = (⟨iso.nodes node, port⟩ :
+        CEndpoint right.nodeCount) := by
+    cases candidate with
+    | mk candidateNode candidatePort =>
+        simp only at nodeEquality portEquality ⊢
+        subst candidateNode
+        subst candidatePort
+        rfl
+  subst candidate
+  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions right
+    rightWellFormed (iso.nodes node) port
+    (iso.requiredPorts_forward
+      (ConcreteDiagram.incident_port_required definitions left
+        leftWellFormed
+        wire ⟨node, port⟩ incident))
+    (iso.wires wire) candidateMember
+
+theorem atom_owner_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    {node : left.NodeId} {region : left.RegionId} {args : List Sig}
+    (nodeData : left.nodes node = .atom region args)
+    {port : CPort} {targetWire : right.WireId}
+    (owner : right.endpointOwner? ⟨iso.nodes node, port⟩ =
+      some targetWire) :
+    left.endpointOwner? ⟨node, port⟩ =
+      some (iso.wires.symm targetWire) := by
+  have incident :=
+    ConcreteDiagram.endpointOwner?_incident right
+      ⟨iso.nodes node, port⟩ targetWire owner
+  have mappedIncident :
+      (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
+        (right.wires
+          (iso.wires (iso.wires.symm targetWire))).endpoints := by
+    change (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
+      (right.wires
+        (iso.wires (iso.wires.invFun targetWire))).endpoints
+    rw [iso.wires.right_inv]
+    exact incident
+  obtain ⟨endpoint, endpointMember, corresponds⟩ :=
+    iso.endpoint_backward (iso.wires.symm targetWire)
+      ⟨iso.nodes node, port⟩ mappedIncident
+  have endpointNode : endpoint.node = node := by
+    apply iso.nodes.injective
+    exact corresponds.1.symm
+  have rightNode :
+      right.nodes
+          (⟨iso.nodes node, port⟩ :
+            CEndpoint right.nodeCount).node =
+        .atom (iso.regions region) args := by
+    rw [iso.node_table, nodeData]
+    rfl
+  have endpointPort : endpoint.port = port := by
+    unfold PortCorresponds at corresponds
+    rw [endpointNode, nodeData, rightNode] at corresponds
+    exact corresponds.2.symm
+  have endpointEquality :
+      endpoint = (⟨node, port⟩ : CEndpoint left.nodeCount) := by
+    cases endpoint with
+    | mk sourceNode sourcePort =>
+        simp only at endpointNode endpointPort ⊢
+        subst sourceNode
+        subst sourcePort
+        rfl
+  subst endpoint
+  have required :=
+    ConcreteDiagram.incident_port_required definitions left
+      leftWellFormed (iso.wires.symm targetWire)
+      ⟨node, port⟩ endpointMember
+  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions left
+    leftWellFormed node port required
+    (iso.wires.symm targetWire) endpointMember
+
+theorem ref_owner_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    (rightWellFormed : right.WellFormed definitions)
+    {node : left.NodeId} {region : left.RegionId}
+    {definition : Fin definitions.length} {args : List Sig}
+    (nodeData : left.nodes node = .ref region definition args)
+    {port : CPort} {wire : left.WireId}
+    (owner : left.endpointOwner? ⟨node, port⟩ = some wire) :
+    right.endpointOwner? ⟨iso.nodes node, port⟩ =
+      some (iso.wires wire) := by
+  have incident :=
+    ConcreteDiagram.endpointOwner?_incident left ⟨node, port⟩ wire owner
+  obtain ⟨candidate, candidateMember, corresponds⟩ :=
+    iso.endpoint_forward wire ⟨node, port⟩ incident
+  have nodeEquality : candidate.node = iso.nodes node :=
+    corresponds.1
+  have rightNode :
+      right.nodes candidate.node =
+        .ref (iso.regions region) definition args := by
+    rw [nodeEquality, iso.node_table, nodeData]
+    rfl
+  have portEquality : candidate.port = port := by
+    unfold PortCorresponds at corresponds
+    rw [nodeData, rightNode] at corresponds
+    exact corresponds.2
+  have candidateEquality :
+      candidate = (⟨iso.nodes node, port⟩ :
+        CEndpoint right.nodeCount) := by
+    cases candidate with
+    | mk candidateNode candidatePort =>
+        simp only at nodeEquality portEquality ⊢
+        subst candidateNode
+        subst candidatePort
+        rfl
+  subst candidate
+  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions right
+    rightWellFormed (iso.nodes node) port
+    (iso.requiredPorts_forward
+      (ConcreteDiagram.incident_port_required definitions left
+        leftWellFormed wire ⟨node, port⟩ incident))
+    (iso.wires wire) candidateMember
+
+theorem ref_owner_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    {node : left.NodeId} {region : left.RegionId}
+    {definition : Fin definitions.length} {args : List Sig}
+    (nodeData : left.nodes node = .ref region definition args)
+    {port : CPort} {targetWire : right.WireId}
+    (owner : right.endpointOwner? ⟨iso.nodes node, port⟩ =
+      some targetWire) :
+    left.endpointOwner? ⟨node, port⟩ =
+      some (iso.wires.symm targetWire) := by
+  have incident :=
+    ConcreteDiagram.endpointOwner?_incident right
+      ⟨iso.nodes node, port⟩ targetWire owner
+  have mappedIncident :
+      (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
+        (right.wires
+          (iso.wires (iso.wires.symm targetWire))).endpoints := by
+    change (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
+      (right.wires
+        (iso.wires (iso.wires.invFun targetWire))).endpoints
+    rw [iso.wires.right_inv]
+    exact incident
+  obtain ⟨endpoint, endpointMember, corresponds⟩ :=
+    iso.endpoint_backward (iso.wires.symm targetWire)
+      ⟨iso.nodes node, port⟩ mappedIncident
+  have endpointNode : endpoint.node = node := by
+    apply iso.nodes.injective
+    exact corresponds.1.symm
+  have rightNode :
+      right.nodes
+          (⟨iso.nodes node, port⟩ :
+            CEndpoint right.nodeCount).node =
+        .ref (iso.regions region) definition args := by
+    rw [iso.node_table, nodeData]
+    rfl
+  have endpointPort : endpoint.port = port := by
+    unfold PortCorresponds at corresponds
+    rw [endpointNode, nodeData, rightNode] at corresponds
+    exact corresponds.2.symm
+  have endpointEquality :
+      endpoint = (⟨node, port⟩ : CEndpoint left.nodeCount) := by
+    cases endpoint with
+    | mk sourceNode sourcePort =>
+        simp only at endpointNode endpointPort ⊢
+        subst sourceNode
+        subst sourcePort
+        rfl
+  subst endpoint
+  have required :=
+    ConcreteDiagram.incident_port_required definitions left
+      leftWellFormed (iso.wires.symm targetWire)
+      ⟨node, port⟩ endpointMember
+  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions left
+    leftWellFormed node port required
+    (iso.wires.symm targetWire) endpointMember
+
+theorem identity_owner_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (rightWellFormed : right.WellFormed definitions)
+    {node : left.NodeId} {region : left.RegionId} {sig : Sig} {arity : Nat}
+    (nodeData : left.nodes node = .identity region sig arity)
+    {index : Nat} {wire : left.WireId}
+    (owner : left.endpointOwner? ⟨node, .identity index⟩ = some wire) :
+    ∃ targetIndex,
+      right.endpointOwner? ⟨iso.nodes node, .identity targetIndex⟩ =
+        some (iso.wires wire) := by
+  have incident :=
+    ConcreteDiagram.endpointOwner?_incident left
+      ⟨node, .identity index⟩ wire owner
+  obtain ⟨candidate, candidateMember, corresponds⟩ :=
+    iso.endpoint_forward wire ⟨node, .identity index⟩ incident
+  have nodeEquality : candidate.node = iso.nodes node :=
+    corresponds.1
+  have rightNode :
+      right.nodes candidate.node =
+        .identity (iso.regions region) sig arity := by
+    rw [nodeEquality, iso.node_table, nodeData]
+    rfl
+  unfold PortCorresponds at corresponds
+  rw [nodeData, rightNode] at corresponds
+  rcases corresponds with
+    ⟨_, _, _, ⟨leftIndex, rightIndex, _, candidatePort⟩⟩
+  have candidateEquality :
+      candidate = (⟨iso.nodes node, .identity rightIndex⟩ :
+        CEndpoint right.nodeCount) := by
+    cases candidate with
+    | mk candidateNode candidatePortValue =>
+        simp only at nodeEquality candidatePort ⊢
+        subst candidateNode
+        subst candidatePortValue
+        rfl
+  subst candidate
+  have required :=
+    ConcreteDiagram.incident_port_required definitions right
+      rightWellFormed (iso.wires wire)
+      ⟨iso.nodes node, .identity rightIndex⟩ candidateMember
+  exact ⟨rightIndex,
+    ConcreteDiagram.endpointOwner?_eq_of_incident definitions right
+      rightWellFormed (iso.nodes node) (.identity rightIndex) required
+      (iso.wires wire) candidateMember⟩
+
+theorem identity_owner_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    {node : left.NodeId} {region : left.RegionId} {sig : Sig} {arity : Nat}
+    (nodeData : left.nodes node = .identity region sig arity)
+    {targetIndex : Nat} {targetWire : right.WireId}
+    (owner : right.endpointOwner?
+      ⟨iso.nodes node, .identity targetIndex⟩ = some targetWire) :
+    ∃ sourceIndex,
+      left.endpointOwner?
+        ⟨node, .identity sourceIndex⟩ =
+          some (iso.wires.symm targetWire) := by
+  have incident :=
+    ConcreteDiagram.endpointOwner?_incident right
+      ⟨iso.nodes node, .identity targetIndex⟩ targetWire owner
+  have mappedIncident :
+      (⟨iso.nodes node, .identity targetIndex⟩ :
+        CEndpoint right.nodeCount) ∈
+        (right.wires (iso.wires (iso.wires.symm targetWire))).endpoints := by
+    change (⟨iso.nodes node, .identity targetIndex⟩ :
+      CEndpoint right.nodeCount) ∈
+        (right.wires (iso.wires (iso.wires.invFun targetWire))).endpoints
+    rw [iso.wires.right_inv]
+    exact incident
+  obtain ⟨endpoint, endpointMember, corresponds⟩ :=
+    iso.endpoint_backward (iso.wires.symm targetWire)
+      ⟨iso.nodes node, .identity targetIndex⟩ mappedIncident
+  have nodeEquality : endpoint.node = node := by
+    apply iso.nodes.injective
+    calc
+      iso.nodes endpoint.node =
+          (⟨iso.nodes node, .identity targetIndex⟩ :
+            CEndpoint right.nodeCount).node := corresponds.1.symm
+      _ = iso.nodes node := rfl
+  have rightNode :
+      right.nodes
+          (⟨iso.nodes node, .identity targetIndex⟩ :
+            CEndpoint right.nodeCount).node =
+        .identity (iso.regions region) sig arity := by
+    rw [iso.node_table, nodeData]
+    rfl
+  unfold PortCorresponds at corresponds
+  rw [nodeEquality, nodeData, rightNode] at corresponds
+  rcases corresponds with
+    ⟨_, _, _, ⟨sourceIndex, _, endpointPort, _⟩⟩
+  have endpointEquality :
+      endpoint = (⟨node, .identity sourceIndex⟩ :
+        CEndpoint left.nodeCount) := by
+    cases endpoint with
+    | mk endpointNode endpointPortValue =>
+        simp only at nodeEquality endpointPort ⊢
+        subst endpointNode
+        subst endpointPortValue
+        rfl
+  subst endpoint
+  have required :=
+    ConcreteDiagram.incident_port_required definitions left
+      leftWellFormed (iso.wires.symm targetWire)
+      ⟨node, .identity sourceIndex⟩ endpointMember
+  exact ⟨sourceIndex,
+    ConcreteDiagram.endpointOwner?_eq_of_incident definitions left
+      leftWellFormed node (.identity sourceIndex) required
+      (iso.wires.symm targetWire) endpointMember⟩
+
+theorem identity_incidence_orderless
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    {wire : left.WireId} {endpoint : CEndpoint left.nodeCount}
+    (member : endpoint ∈ (left.wires wire).endpoints) :
+    ∃ candidate,
+      candidate ∈ (right.wires (iso.wires wire)).endpoints ∧
+        PortCorresponds left right iso.nodes endpoint candidate :=
+  iso.endpoint_forward wire endpoint member
+
+end ConcreteIso
+
+end VisualProof
