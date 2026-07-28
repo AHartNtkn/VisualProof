@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.ElaborationInvariance
+import VisualProof.Diagram.Concrete.IdentityNormalization
 import VisualProof.Diagram.Concrete.Subgraph.Extract
 
 namespace VisualProof
@@ -862,7 +863,10 @@ def reconstructionAttachment?
       (Removal.boundarySource_retained occurrence position)
 
 
-/-- Successful concrete splice certifies only the generated candidate. -/
+/--
+The normalized checked endpoint and total source-wire transport produced by a
+successful concrete splice.  Only `splice` can construct this receipt.
+-/
 structure ConcreteSpliceResult
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
@@ -870,24 +874,66 @@ structure ConcreteSpliceResult
     {site : RemovalResult occurrence}
     {fragment : CheckedOpenDiagram definitions}
     (attachment : ConcreteSpliceAttachment site fragment) : Type where
-  wellFormed : attachment.diagram.WellFormed definitions
+  private mk ::
+  checked : CheckedDiagram definitions
+  wireImage : attachment.diagram.WireId → checked.val.WireId
+  wireImage_signature :
+    ∀ wire,
+      (checked.val.wires (wireImage wire)).sig =
+        (attachment.diagram.wires wire).sig
 
 namespace ConcreteSpliceResult
 
-def checked
+/-- The normalized image of one supplied boundary position. -/
+def boundaryTarget
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
     {site : RemovalResult occurrence}
     {fragment : CheckedOpenDiagram definitions}
     {attachment : ConcreteSpliceAttachment site fragment}
-    (result : ConcreteSpliceResult attachment) :
-    CheckedDiagram definitions :=
-  ⟨attachment.diagram, result.wellFormed⟩
+    (result : ConcreteSpliceResult attachment)
+    (position : Fin fragment.val.boundary.length) :
+    result.checked.val.WireId :=
+  result.wireImage (attachment.hostWire (attachment.target position))
+
+theorem boundaryTarget_signature
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {site : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment site fragment}
+    (result : ConcreteSpliceResult attachment)
+    (position : Fin fragment.val.boundary.length) :
+    (result.checked.val.wires (result.boundaryTarget position)).sig =
+      (fragment.val.diagram.wires
+        (fragment.val.boundary.get position)).sig :=
+  (result.wireImage_signature
+      (attachment.hostWire (attachment.target position))).trans
+    ((attachment.diagram_wire_hostWire
+      (attachment.target position)).trans
+        (attachment.signature position))
+
+theorem boundaryTarget_eq_of_alias
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {site : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment site fragment}
+    (result : ConcreteSpliceResult attachment)
+    (left right : Fin fragment.val.boundary.length)
+    (alias : attachment.target left = attachment.target right) :
+    result.boundaryTarget left = result.boundaryTarget right := by
+  simp [boundaryTarget, alias]
 
 end ConcreteSpliceResult
 
-/-- Public checked concrete splice; `checkWellFormed` is the sole acceptance. -/
+/--
+Validate the generated candidate, normalize its checked form, and return the
+only public receipt for that pipeline.
+-/
 def splice
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
@@ -900,11 +946,63 @@ def splice
       ConcreteDiagram.checkWellFormed definitions attachment.diagram with
   | .error error => exact .error error
   | .ok checked =>
-      apply Except.ok
-      refine ⟨?_⟩
       have same :=
         ConcreteDiagram.checkWellFormed_preserves_input accepted
-      rw [← same]
-      exact checked.property
+      let generated : CheckedDiagram definitions :=
+        ⟨attachment.diagram, by
+          rw [← same]
+          exact checked.property⟩
+      let normalized :=
+        ConcreteDiagram.normalizeIdentities generated
+      exact .ok
+        (ConcreteSpliceResult.mk normalized.target
+          normalized.wireImage normalized.wire_signature)
+
+/--
+Raw generated-candidate well-formedness is recoverable only by presenting the
+exact successful `splice` receipt.  Proof modules use this to reason about the
+private pre-normalization stage.
+-/
+theorem splice_success_wellFormed
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {site : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment site fragment}
+    {result : ConcreteSpliceResult attachment}
+    (accepted : splice attachment = .ok result) :
+    attachment.diagram.WellFormed definitions := by
+  unfold splice at accepted
+  split at accepted
+  · contradiction
+  · rename_i generated checked
+    have same :=
+      ConcreteDiagram.checkWellFormed_preserves_input checked
+    rw [← same]
+    exact generated.property
+
+/-- A successful receipt's public checked target is exactly the eager normal form. -/
+theorem splice_success_checked
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {site : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment site fragment}
+    {result : ConcreteSpliceResult attachment}
+    (accepted : splice attachment = .ok result) :
+    result.checked =
+      (ConcreteDiagram.normalizeIdentities
+        (⟨attachment.diagram,
+          splice_success_wellFormed accepted⟩ :
+          CheckedDiagram definitions)).target := by
+  unfold splice at accepted
+  split at accepted
+  · contradiction
+  · rename_i checked checkedAccepted
+    simp only [Except.ok.injEq] at accepted
+    subst result
+    rfl
 
 end VisualProof

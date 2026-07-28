@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturality
+import VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
 
 namespace VisualProof
 
@@ -16,9 +17,13 @@ private theorem reconstruction_denotation
       reconstructionAttachment? occurrence extracted removed =
         some attachment)
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions) :
-    denoteChecked pre definitionEnv result.checked ↔
+    denoteChecked pre definitionEnv
+        (⟨attachment.diagram,
+          splice_success_wellFormed spliceAccepted⟩ :
+          CheckedDiagram definitions) ↔
       denoteChecked pre definitionEnv host :=
   iso_denotation
     (Reconstruction.extract_splice_iso occurrence extracted removed
@@ -731,6 +736,7 @@ private theorem identityNode_singleton_compiles
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (identity : Fin attachment.identityRequests.length) :
     ∃ (first second :
@@ -771,8 +777,8 @@ private theorem identityNode_singleton_compiles
   have secondOrigin := sitePositionVar_origin extracted compiled position
   have singletonCompiled :=
     ConcreteElaboration.compileNodes?_binaryIdentity_singleton
-      result.wellFormed
-      (candidateSiteContext_nodup result compiled)
+      (splice_success_wellFormed spliceAccepted)
+      (candidateSiteContext_nodup result spliceAccepted compiled)
       first second
       (attachment.hostWire
         (concreteRepresentativeTarget removed extracted.checked
@@ -1047,6 +1053,7 @@ private theorem identityValues_eq_iff_requestHolds
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (pre : PreModel)
     (env :
@@ -1088,7 +1095,7 @@ private theorem identityValues_eq_iff_requestHolds
       congrArg ConcreteIdentityRequest.target requestEquality
     have injective :=
       packedOrigin_injective attachment.diagram context.ids
-        (candidateSiteContext_nodup result compiled)
+        (candidateSiteContext_nodup result spliceAccepted compiled)
     have firstPackedEquality :
         (⟨(attachment.identityRequests.get identity).sig, first⟩ :
             PackedVar context.sigs) =
@@ -1150,7 +1157,7 @@ private theorem identityValues_eq_iff_requestHolds
       congrArg ConcreteIdentityRequest.target requestEquality
     have injective :=
       packedOrigin_injective attachment.diagram context.ids
-        (candidateSiteContext_nodup result compiled)
+        (candidateSiteContext_nodup result spliceAccepted compiled)
     have firstPackedEquality :
         (⟨(attachment.identityRequests.get identity).sig, first⟩ :
             PackedVar context.sigs) =
@@ -1254,6 +1261,7 @@ private theorem identityNodes_denote_iff_requestHolds
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions)
@@ -1284,7 +1292,8 @@ private theorem identityNodes_denote_iff_requestHolds
   | cons identity tail induction =>
       obtain ⟨first, second, firstOrigin, secondOrigin,
           headCompiled⟩ :=
-        identityNode_singleton_compiles extracted result compiled identity
+        identityNode_singleton_compiles extracted result spliceAccepted
+          compiled identity
       rw [List.map_cons, compileNodes?_cons_eq_singleton_bind,
         headCompiled] at itemsCompiled
       cases tailCompiled :
@@ -1308,7 +1317,8 @@ private theorem identityNodes_denote_iff_requestHolds
           simp only [ItemSeq.append, denoteItemSeq_cons,
             binary_identity]
           rw [
-            identityValues_eq_iff_requestHolds extracted result compiled
+            identityValues_eq_iff_requestHolds extracted result
+              spliceAccepted compiled
               pre env identity first second firstOrigin secondOrigin,
             induction tailItems tailCompiled]
           simp
@@ -1322,6 +1332,7 @@ private theorem identityNodes_denote_iff_positions
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions)
@@ -1351,7 +1362,8 @@ private theorem identityNodes_denote_iff_positions
         representative ≠ attachment.target position →
           identityPositionHolds extracted compiled pre env position := by
   have allRequests :=
-    identityNodes_denote_iff_requestHolds extracted result compiled pre
+    identityNodes_denote_iff_requestHolds extracted result spliceAccepted
+      compiled pre
       definitionEnv env
       (Data.Finite.allFin attachment.identityRequests.length)
       items itemsCompiled
@@ -1398,6 +1410,7 @@ private theorem siteBody_denote_iff_intrinsic
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions)
@@ -1458,7 +1471,7 @@ private theorem siteBody_denote_iff_intrinsic
   obtain ⟨sourceNodes, sourceChildren, sourceNodesCompiled,
       sourceChildrenCompiled⟩ := sourceComponents
   obtain ⟨copiedNodes, copiedNodesCompiled, copiedNodesEquality⟩ :=
-    copiedRootNodes_natural extracted result compiled
+    copiedRootNodes_natural extracted result spliceAccepted compiled
       (extracted.checked.val.diagram.nodesAt
         extracted.checked.val.diagram.root)
       sourceNodesCompiled
@@ -1516,11 +1529,13 @@ private theorem siteBody_denote_iff_intrinsic
           (Env.comp targetEnv
             (rootFragmentRenaming extracted compiled))
           sourceChildren :=
-      (fragmentChildren_denotation_natural extracted result compiled
+      (fragmentChildren_denotation_natural extracted result spliceAccepted
+        compiled
         childFuel sourceChildrenCompiled targetChildrenCompiled
         pre definitionEnv targetEnv).mp targetChildrenDenote
     have identityPositions :=
-      (identityNodes_denote_iff_positions extracted result compiled pre
+      (identityNodes_denote_iff_positions extracted result spliceAccepted
+        compiled pre
         definitionEnv targetEnv identityItems
         identityItemsCompiled).mp identityItemsDenote
     unfold denoteOpen
@@ -1625,7 +1640,7 @@ private theorem siteBody_denote_iff_intrinsic
         packedOrigin_injective attachment.diagram
           (compiled.factor.frame.visible.extend
             (attachment.hostRegion removed.site)).ids
-          (candidateSiteContext_nodup result compiled)
+          (candidateSiteContext_nodup result spliceAccepted compiled)
       change
         ConcreteElaboration.WireContext.origin attachment.diagram
             (compiled.factor.frame.visible.extend
@@ -1658,7 +1673,7 @@ private theorem siteBody_denote_iff_intrinsic
         packedOrigin_injective attachment.diagram
           (compiled.factor.frame.visible.extend
             (attachment.hostRegion removed.site)).ids
-          (candidateSiteContext_nodup result compiled)
+          (candidateSiteContext_nodup result spliceAccepted compiled)
       change
         ConcreteElaboration.WireContext.origin attachment.diagram
             (compiled.factor.frame.visible.extend
@@ -1748,7 +1763,7 @@ private theorem siteBody_denote_iff_intrinsic
           packedOrigin_injective attachment.diagram
             (compiled.factor.frame.visible.extend
               (attachment.hostRegion removed.site)).ids
-            (candidateSiteContext_nodup result compiled)
+            (candidateSiteContext_nodup result spliceAccepted compiled)
         change
           ConcreteElaboration.WireContext.origin attachment.diagram
               (compiled.factor.frame.visible.extend
@@ -1856,7 +1871,8 @@ private theorem siteBody_denote_iff_intrinsic
     have targetChildrenDenote :
         denoteItemSeq pre definitionEnv targetEnv targetChildren := by
       apply
-        (fragmentChildren_denotation_natural extracted result compiled
+        (fragmentChildren_denotation_natural extracted result spliceAccepted
+          compiled
           childFuel sourceChildrenCompiled targetChildrenCompiled
           pre definitionEnv targetEnv).mpr
       rw [environmentsEqual]
@@ -1864,7 +1880,8 @@ private theorem siteBody_denote_iff_intrinsic
     have identityItemsDenote :
         denoteItemSeq pre definitionEnv targetEnv identityItems := by
       apply
-        (identityNodes_denote_iff_positions extracted result compiled pre
+        (identityNodes_denote_iff_positions extracted result spliceAccepted
+          compiled pre
           definitionEnv targetEnv identityItems
           identityItemsCompiled).mpr
       intro position
@@ -1947,7 +1964,7 @@ private theorem siteBody_denote_iff_intrinsic
           packedOrigin_injective attachment.diagram
             (compiled.factor.frame.visible.extend
               (attachment.hostRegion removed.site)).ids
-            (candidateSiteContext_nodup result compiled)
+            (candidateSiteContext_nodup result spliceAccepted compiled)
         change
           ConcreteElaboration.WireContext.origin attachment.diagram
               (compiled.factor.frame.visible.extend
@@ -1981,7 +1998,7 @@ private theorem siteBody_denote_iff_intrinsic
           packedOrigin_injective attachment.diagram
             (compiled.factor.frame.visible.extend
               (attachment.hostRegion removed.site)).ids
-            (candidateSiteContext_nodup result compiled)
+            (candidateSiteContext_nodup result spliceAccepted compiled)
         change
           ConcreteElaboration.WireContext.origin attachment.diagram
               (compiled.factor.frame.visible.extend
@@ -2074,6 +2091,7 @@ theorem denote_splice
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions) :
     ∃ compiled : SpliceCompilation attachment,
@@ -2082,19 +2100,27 @@ theorem denote_splice
           (compiled.factor.frame.context.fill
             (intrinsicSplice extracted.openDiagram
               (compiled.intrinsicAttachment extracted))) := by
-  obtain ⟨factor, factorCompiled⟩ :=
-    compileSpliceFactor?_complete result
-  let compiled : SpliceCompilation attachment :=
-    ⟨factor, factorCompiled⟩
+  obtain ⟨compiled⟩ :=
+    spliceCompilation_complete result spliceAccepted
   refine ⟨compiled, ?_⟩
+  rw [splice_success_checked spliceAccepted]
+  apply
+    (ConcreteDiagram.normalizeIdentities_sound
+      (⟨attachment.diagram,
+        splice_success_wellFormed spliceAccepted⟩ :
+        CheckedDiagram definitions)
+      pre definitionEnv).trans
   rw [elaborate_denotes_checked]
   have elaborateEquality :
-      elaborate result.checked =
+      elaborate
+          (⟨attachment.diagram,
+            splice_success_wellFormed spliceAccepted⟩ :
+            CheckedDiagram definitions) =
         compiled.factor.frame.context.fill
           compiled.factor.frame.siteBody := by
     have elaborated :=
       elaborateWith_compiles definitions attachment.diagram
-        result.wellFormed
+        (splice_success_wellFormed spliceAccepted)
     exact Option.some.inj
       (elaborated.symm.trans compiled.root_compiles)
   rw [elaborateEquality]
@@ -2103,8 +2129,8 @@ theorem denote_splice
       compiled.factor.frame.siteBody
       (intrinsicSplice extracted.openDiagram
         (compiled.intrinsicAttachment extracted))
-      (siteBody_denote_iff_intrinsic extracted result compiled pre
-        definitionEnv)
+      (siteBody_denote_iff_intrinsic extracted result spliceAccepted
+        compiled pre definitionEnv)
       Env.empty
 
 /--
@@ -2123,6 +2149,7 @@ theorem exact_occurrence_denotation
       reconstructionAttachment? occurrence extracted removed =
         some attachment)
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions) :
     ∃ compiled : SpliceCompilation attachment,
@@ -2132,11 +2159,25 @@ theorem exact_occurrence_denotation
             (intrinsicSplice extracted.openDiagram
               (compiled.intrinsicAttachment extracted))) := by
   obtain ⟨compiled, spliceDenotation⟩ :=
-    denote_splice extracted result pre definitionEnv
+    denote_splice extracted result spliceAccepted pre definitionEnv
   refine ⟨compiled, ?_⟩
+  have normalizationDenotation :
+      denoteChecked pre definitionEnv
+          (⟨attachment.diagram,
+            splice_success_wellFormed spliceAccepted⟩ :
+            CheckedDiagram definitions) ↔
+        denoteChecked pre definitionEnv result.checked := by
+    rw [splice_success_checked spliceAccepted]
+    exact
+      (ConcreteDiagram.normalizeIdentities_sound
+        (⟨attachment.diagram,
+          splice_success_wellFormed spliceAccepted⟩ :
+          CheckedDiagram definitions)
+        pre definitionEnv).symm
   exact
     (reconstruction_denotation occurrence extracted removed attachment
-      accepted result pre definitionEnv).symm.trans spliceDenotation
+      accepted result spliceAccepted pre definitionEnv).symm.trans
+      (normalizationDenotation.trans spliceDenotation)
 
 end RemovalFactorization
 

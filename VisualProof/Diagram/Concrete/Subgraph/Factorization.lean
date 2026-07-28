@@ -2085,7 +2085,7 @@ abbrev CandidateFrame
 /--
 Generate the actual candidate carrier frame at the identified host splice site.
 -/
-def compileCandidateFrame?
+private def compileCandidateFrame?
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
@@ -2099,7 +2099,7 @@ def compileCandidateFrame?
     attachment.diagram.root
     (WireContext.empty attachment.diagram)
 
-theorem compileCandidateFrame?_sound
+private theorem compileCandidateFrame?_sound
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
@@ -2119,52 +2119,8 @@ theorem compileCandidateFrame?_sound
       attachment.diagram.root
       (WireContext.empty attachment.diagram) frame accepted
 
-structure CandidateCompilation
-    {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {removed : RemovalResult occurrence}
-    {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment removed fragment) where
-  frame : CandidateFrame attachment
-  frame_compiles : compileCandidateFrame? attachment = some frame
-
-namespace CandidateCompilation
-
-theorem root_compiles
-    {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {removed : RemovalResult occurrence}
-    {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment removed fragment}
-    (compiled : CandidateCompilation attachment) :
-    ConcreteElaboration.compileRoot? definitions attachment.diagram =
-      some (compiled.frame.context.fill compiled.frame.siteBody) :=
-  compileCandidateFrame?_sound attachment compiled.frame
-    compiled.frame_compiles
-
-theorem elaborate_eq_fill
-    {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {removed : RemovalResult occurrence}
-    {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment removed fragment}
-    (result : ConcreteSpliceResult attachment)
-    (compiled : CandidateCompilation attachment) :
-    elaborate result.checked =
-      compiled.frame.context.fill compiled.frame.siteBody := by
-  have elaborated :=
-    elaborateWith_compiles definitions attachment.diagram
-      result.wellFormed
-  exact Option.some.inj
-    (elaborated.symm.trans compiled.root_compiles)
-
-end CandidateCompilation
-
 /-- Resolve ordered concrete targets in the ancestor-visible candidate context. -/
-def compileCandidateAttachmentPositions?
+private def compileCandidateAttachmentPositions?
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
@@ -2195,7 +2151,7 @@ structure SpliceFactor
 Execute candidate-frame generation and ordered target resolution as one
 proof-independent compiler.
 -/
-def compileSpliceFactor?
+private def compileSpliceFactor?
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
@@ -2215,8 +2171,9 @@ structure SpliceCompilation
     {removed : RemovalResult occurrence}
     {fragment : CheckedOpenDiagram definitions}
     (attachment : ConcreteSpliceAttachment removed fragment) where
+  private mk ::
   factor : SpliceFactor attachment
-  factor_compiles :
+  private factor_compiles :
     compileSpliceFactor? attachment = some factor
 
 private theorem hostRegion_climb
@@ -2306,35 +2263,38 @@ private theorem target_scope_ne_site
 Every checked splice result makes executable factor compilation succeed;
 callers never supply a frame or a target-membership proof.
 -/
-theorem compileSpliceFactor?_complete
+private theorem compileSpliceFactor?_complete
     {definitions : List (List Sig)}
     {pattern host : CheckedDiagram definitions}
     {occurrence : Occurrence pattern host}
     {removed : RemovalResult occurrence}
     {fragment : CheckedOpenDiagram definitions}
     {attachment : ConcreteSpliceAttachment removed fragment}
-    (result : ConcreteSpliceResult attachment) :
+    (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result) :
     ∃ factor, compileSpliceFactor? attachment = some factor := by
+  have wellFormed :=
+    splice_success_wellFormed spliceAccepted
   have rootEncloses :
       attachment.diagram.Encloses attachment.diagram.root
         (attachment.hostRegion removed.site) := by
     have checked :=
-      (List.all_eq_true.mp result.wellFormed.all_regions_reach_root)
+      (List.all_eq_true.mp wellFormed.all_regions_reach_root)
         (attachment.hostRegion removed.site)
         (Data.Finite.mem_allFin _)
     exact of_decide_eq_true checked
   have rootCompiled :=
     elaborateWith_compiles definitions attachment.diagram
-      result.wellFormed
+      wellFormed
   unfold ConcreteElaboration.compileRoot? at rootCompiled
   obtain ⟨frame, frameCompiled, covers⟩ :=
     compileWholeSiteFrame?_complete_of_region definitions
       attachment.diagram (attachment.hostRegion removed.site)
       (attachment.diagram.regionCount + 1) attachment.diagram.root
       (WireContext.empty attachment.diagram)
-      (elaborateWith definitions attachment.diagram result.wellFormed)
+      (elaborateWith definitions attachment.diagram wellFormed)
       rootEncloses
-      (empty_covers_root definitions attachment.diagram result.wellFormed)
+      (empty_covers_root definitions attachment.diagram wellFormed)
       rootCompiled
   have targetMembers :
       ∀ position,
@@ -2369,6 +2329,24 @@ theorem compileSpliceFactor?_complete
       frame.visible).bind _ = some factor
   rw [positionsCompiled]
   rfl
+
+/--
+The proof-only factorization witness for a generated candidate exists only when
+the exact public splice pipeline accepted that candidate.
+-/
+theorem spliceCompilation_complete
+    {definitions : List (List Sig)}
+    {pattern host : CheckedDiagram definitions}
+    {occurrence : Occurrence pattern host}
+    {removed : RemovalResult occurrence}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment removed fragment}
+    (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result) :
+    Nonempty (SpliceCompilation attachment) := by
+  obtain ⟨factor, factorCompiled⟩ :=
+    compileSpliceFactor?_complete result spliceAccepted
+  exact ⟨SpliceCompilation.mk factor factorCompiled⟩
 
 namespace SpliceCompilation
 

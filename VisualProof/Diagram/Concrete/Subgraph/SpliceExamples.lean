@@ -288,17 +288,27 @@ example : ¬removed.complement.val.Encloses
     removed.site := by
   native_decide
 
-theorem splicedWellFormed : attachment.diagram.WellFormed [] := by
-  native_decide
-
-def spliced : ConcreteSpliceResult attachment :=
-  ⟨splicedWellFormed⟩
-
-example :
+private theorem splice_returns_ok :
     (match splice attachment with
       | .ok _ => true
       | .error _ => false) = true := by
   native_decide
+
+theorem splice_succeeds :
+    ∃ result, splice attachment = .ok result := by
+  cases accepted : splice attachment with
+  | error error =>
+      have := splice_returns_ok
+      simp [accepted] at this
+  | ok result =>
+      exact ⟨result, rfl⟩
+
+noncomputable def spliced : ConcreteSpliceResult attachment :=
+  Classical.choose splice_succeeds
+
+theorem spliced_accepted :
+    splice attachment = .ok spliced :=
+  Classical.choose_spec splice_succeeds
 
 theorem materializedIdentityData :
     attachment.diagram.nodes

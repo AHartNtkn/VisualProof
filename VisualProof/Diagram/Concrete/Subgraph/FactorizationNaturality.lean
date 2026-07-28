@@ -235,6 +235,7 @@ theorem candidateSiteContext_nodup
     {fragment : CheckedOpenDiagram definitions}
     {attachment : ConcreteSpliceAttachment removed fragment}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment) :
     (compiled.factor.frame.visible.extend
       (attachment.hostRegion removed.site)).ids.Nodup := by
@@ -248,14 +249,16 @@ theorem candidateSiteContext_nodup
       simp [ConcreteElaboration.WireContext.empty] at member
   have visibleAbove :=
     compileWholeSiteFrame?_visible_above definitions attachment.diagram
-      result.wellFormed (attachment.hostRegion removed.site)
+      (splice_success_wellFormed spliceAccepted)
+      (attachment.hostRegion removed.site)
       (attachment.diagram.regionCount + 1)
       attachment.diagram.root
       (ConcreteElaboration.WireContext.empty attachment.diagram)
       compiled.factor.frame emptyAbove compiled.frame_compiles
   exact
     ConcreteElaboration.extend_nodup definitions attachment.diagram
-      result.wellFormed compiled.factor.frame.visible
+      (splice_success_wellFormed spliceAccepted)
+      compiled.factor.frame.visible
       (attachment.hostRegion removed.site) visibleAbove
 
 /--
@@ -340,6 +343,7 @@ private theorem copiedRootNode_singleton_natural
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (node : extracted.checked.val.diagram.NodeId)
     {sourceItems :
@@ -376,8 +380,8 @@ private theorem copiedRootNode_singleton_natural
           (rootFragmentRenaming extracted compiled) := by
   apply
     ConcreteElaboration.compileNodes?_singleton_natural
-      result.wellFormed
-      (candidateSiteContext_nodup result compiled)
+      (splice_success_wellFormed spliceAccepted)
+      (candidateSiteContext_nodup result spliceAccepted compiled)
       (rootFragmentRenaming extracted compiled)
       attachment.fragmentWire
       (fragmentWire_signature attachment)
@@ -475,6 +479,7 @@ private theorem copiedFragmentNodes_natural
     {fragment : CheckedOpenDiagram definitions}
     {attachment : ConcreteSpliceAttachment removed fragment}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (sourceContext :
       ConcreteElaboration.WireContext fragment.val.diagram)
     (targetContext :
@@ -528,7 +533,8 @@ private theorem copiedFragmentNodes_natural
       obtain
         ⟨targetHead, targetHeadCompiled, targetHeadEquality⟩ :=
         ConcreteElaboration.compileNodes?_singleton_natural
-          result.wellFormed targetNodup rho
+          (splice_success_wellFormed spliceAccepted)
+          targetNodup rho
           attachment.fragmentWire
           (fragmentWire_signature attachment)
           contextAction
@@ -573,6 +579,7 @@ theorem copiedRootNodes_natural
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment) :
     ∀ (nodes : List extracted.checked.val.diagram.NodeId)
       {sourceItems :
@@ -644,7 +651,7 @@ theorem copiedRootNodes_natural
       obtain
         ⟨targetHead, targetHeadCompiled, targetHeadEquality⟩ :=
         copiedRootNode_singleton_natural
-          extracted result compiled node headCompiled
+          extracted result spliceAccepted compiled node headCompiled
       obtain
         ⟨targetTail, targetTailCompiled, targetTailEquality⟩ :=
         induction tailCompiled
@@ -1287,6 +1294,7 @@ private theorem fragmentRegion_denotation_natural
     {fragment : CheckedOpenDiagram definitions}
     {attachment : ConcreteSpliceAttachment removed fragment}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (sourceFuel targetFuel : Nat)
     (region : fragment.val.diagram.RegionId)
     (nonroot : region ≠ fragment.val.diagram.root)
@@ -1403,7 +1411,8 @@ private theorem fragmentRegion_denotation_natural
                               (targetContext.extend
                                 (attachment.fragmentRegion region)).ids.Nodup :=
                             ConcreteElaboration.extend_nodup definitions
-                              attachment.diagram result.wellFormed
+                              attachment.diagram
+                              (splice_success_wellFormed spliceAccepted)
                               targetContext
                               (attachment.fragmentRegion region)
                               targetAbove
@@ -1411,7 +1420,7 @@ private theorem fragmentRegion_denotation_natural
                             ⟨naturalTargetNodes,
                               naturalTargetNodesCompiled,
                               naturalTargetNodesEquality⟩ :=
-                            copiedFragmentNodes_natural result
+                            copiedFragmentNodes_natural result spliceAccepted
                               (sourceContext.extend region)
                               (targetContext.extend
                                 (attachment.fragmentRegion region))
@@ -1471,7 +1480,8 @@ private theorem fragmentRegion_denotation_natural
                             exact
                               ConcreteElaboration.extend_above_child
                                 definitions attachment.diagram
-                                result.wellFormed targetContext
+                                (splice_success_wellFormed spliceAccepted)
+                                targetContext
                                 (attachment.fragmentRegion region)
                                 (attachment.fragmentRegion child)
                                 targetAbove childData
@@ -1493,6 +1503,7 @@ private theorem fragmentRegion_denotation_natural
                                 denoteItemSeq_renameWires]
                             · exact
                                 fragmentChildren_denotation_natural_generic result
+                                  spliceAccepted
                                   sourceChildFuel targetChildFuel
                                   (sourceContext.extend region)
                                   (targetContext.extend
@@ -1585,6 +1596,7 @@ private theorem fragmentChildren_denotation_natural_generic
     {fragment : CheckedOpenDiagram definitions}
     {attachment : ConcreteSpliceAttachment removed fragment}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (sourceFuel targetFuel : Nat)
     (sourceContext :
       ConcreteElaboration.WireContext fragment.val.diagram)
@@ -1686,7 +1698,7 @@ private theorem fragmentChildren_denotation_natural_generic
                       subst sourceItems
                       subst targetItems
                       have headNatural :=
-                        fragmentRegion_denotation_natural result
+                        fragmentRegion_denotation_natural result spliceAccepted
                           sourceFuel targetFuel child
                           (childrenNonroot child (by simp))
                           sourceContext targetContext rho contextAction
@@ -1716,6 +1728,7 @@ theorem fragmentChildren_denotation_natural
     {attachment :
       ConcreteSpliceAttachment removed extracted.checked}
     (result : ConcreteSpliceResult attachment)
+    (spliceAccepted : splice attachment = .ok result)
     (compiled : SpliceCompilation attachment)
     (targetFuel : Nat)
     {sourceItems :
@@ -1788,7 +1801,8 @@ theorem fragmentChildren_denotation_natural
       simp [ConcreteElaboration.WireContext.empty] at member
   have visibleAbove :=
     compileWholeSiteFrame?_visible_above definitions attachment.diagram
-      result.wellFormed (attachment.hostRegion removed.site)
+      (splice_success_wellFormed spliceAccepted)
+      (attachment.hostRegion removed.site)
       (attachment.diagram.regionCount + 1)
       attachment.diagram.root
       (ConcreteElaboration.WireContext.empty attachment.diagram)
@@ -1814,11 +1828,12 @@ theorem fragmentChildren_denotation_natural
         (attachment.fragmentRegion child) targetMember
     exact
       ConcreteElaboration.extend_above_child definitions attachment.diagram
-        result.wellFormed compiled.factor.frame.visible
+        (splice_success_wellFormed spliceAccepted)
+        compiled.factor.frame.visible
         (attachment.hostRegion removed.site)
         (attachment.fragmentRegion child) visibleAbove childData
   exact
-    fragmentChildren_denotation_natural_generic result
+    fragmentChildren_denotation_natural_generic result spliceAccepted
       extracted.checked.val.diagram.regionCount targetFuel
       (⟨ConcreteElaboration.openRootLocalWires
             extracted.checked.val ++
