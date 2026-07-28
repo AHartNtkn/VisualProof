@@ -6,3 +6,10 @@ import VisualProof.Theory.Semantics
 import VisualProof.Diagram.Concrete.ElaborationSupport
 import VisualProof.Diagram.Concrete.ElaborationInvariance
 import VisualProof.Diagram.Concrete.Examples
+import VisualProof.Diagram.Context
+import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
+import VisualProof.Diagram.Concrete.Subgraph.SpliceExamples
+import VisualProof.Diagram.Concrete.Subgraph.Factorization
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationStructure
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics

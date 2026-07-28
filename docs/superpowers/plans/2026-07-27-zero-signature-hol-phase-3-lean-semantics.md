@@ -153,7 +153,7 @@ is the only umbrella and imports exactly the maintained modules above.
   and `Env.append`.
 - Retains: `VisualProof.Data.Finite.FiniteEquiv`.
 
-- [ ] **Step 1: Write the failing displaced-model architecture test**
+- [x] **Step 1: Write the failing displaced-model architecture test**
 
 Create `tests/architecture/lean-semantics.test.ts` with a recursive Lean-source
 reader that excludes `.lake`, `archive`, and `scratchpad`, then assert:
@@ -170,7 +170,7 @@ expect(source).not.toContain('congruenceJoin')
 Also assert that `VisualProof/Sig.lean`, `VisualProof/Model.lean`, and the retained
 `VisualProof/Data/Finite.lean` exist.
 
-- [ ] **Step 2: Run the architecture test and verify RED**
+- [x] **Step 2: Run the architecture test and verify RED**
 
 Run:
 
@@ -181,7 +181,7 @@ npx vitest run tests/architecture/lean-semantics.test.ts
 Expected: FAIL because `VisualProof/Lambda/` exists and the source contains the
 displaced vocabulary.
 
-- [ ] **Step 3: Delete the displaced hierarchy explicitly**
+- [x] **Step 3: Delete the displaced hierarchy explicitly**
 
 Run only these exact deletions:
 
@@ -198,7 +198,7 @@ git rm -- VisualProof/Audit.lean VisualProof.lean
 
 Do not remove `VisualProof/Data/Finite.lean`.
 
-- [ ] **Step 4: Implement recursive signatures and typed variables**
+- [x] **Step 4: Implement recursive signatures and typed variables**
 
 Create `VisualProof/Sig.lean` with:
 
@@ -234,7 +234,7 @@ end VisualProof
 Add structural `Sig.beq`, prove `Sig.beq_eq_true_iff`, and define typed lookup
 for `Sig.Args`/`Vars`; do not introduce an untyped `Nat` arity fallback.
 
-- [ ] **Step 5: Implement generic and full models**
+- [x] **Step 5: Implement generic and full models**
 
 Create `VisualProof/Model.lean` with:
 
@@ -292,13 +292,13 @@ theorem Model.reify (model : Model) (P : Sig.Args model.Carrier args → Prop) :
 This theorem is the single fullness constructor later consumed by relational
 sever/join.
 
-- [ ] **Step 6: Rebuild the root import and Lake target**
+- [x] **Step 6: Rebuild the root import and Lake target**
 
 Replace `VisualProof.lean` with imports of `VisualProof.Data.Finite`,
 `VisualProof.Sig`, and `VisualProof.Model`. Remove both obsolete executables from
 `lakefile.toml`; Task 10 restores only the new step-tag executable.
 
-- [ ] **Step 7: Run GREEN gates**
+- [x] **Step 7: Run GREEN gates**
 
 Run:
 
@@ -311,7 +311,7 @@ npm run formal:size
 Expected: the minimal new library builds, the displaced vocabulary test passes,
 and the retained/new sources remain below 3,000 lines.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A -- \
@@ -348,7 +348,7 @@ git commit -m "refactor: replace the displaced Lean semantic core"
   `Valid`,
   and `Entails`.
 
-- [ ] **Step 1: Add compile-failing semantic examples**
+- [x] **Step 1: Add compile-failing semantic examples**
 
 At the bottom of the new `VisualProof/Diagram/Semantics.lean`, first add examples
 using the not-yet-defined API:
@@ -370,7 +370,7 @@ example (ports₁ ports₂ : List (Var ctx sig))
 Run `lake build` and require failure on missing `Valid`, `blank`, or
 `denoteItem`.
 
-- [ ] **Step 2: Implement the intrinsic syntax**
+- [x] **Step 2: Implement the intrinsic syntax**
 
 In `VisualProof/Diagram/Core.lean`, use one heterogeneous wire context. The
 uniform `.bind` item binds one value of any signature; its `.rel` case is the
@@ -399,7 +399,7 @@ Define `DefVar` as an intrinsically signature-correct de Bruijn reference into
 the ordered list of definition boundary signatures. Define `blank`, sequence
 append, typed wire renaming, definition renaming, and binder-safe substitution.
 
-- [ ] **Step 3: Implement denotation**
+- [x] **Step 3: Implement denotation**
 
 Define `DefinitionEnv pre defs` as typed relation interpretations indexed by
 `DefVar`; Task 3 adds the law tying those values to ordered definition bodies.
@@ -438,14 +438,14 @@ def Entails (left right : Region defs []) : Prop :=
       denoteRegion model.toPreModel definitions Env.empty right
 ```
 
-- [ ] **Step 4: Prove unordered identity and binder laws**
+- [x] **Step 4: Prove unordered identity and binder laws**
 
 Prove `AllEqual` reflexivity, append, union, and `List.Perm` invariance. Add
 theorems for empty/singleton impossibility under the syntax proof, binary
 identity, conjunction append, cut negation, binder existential, environment
 renaming, and denotation under typed substitution.
 
-- [ ] **Step 5: Run GREEN gates and commit**
+- [x] **Step 5: Run GREEN gates and commit**
 
 ```bash
 lake build
@@ -482,7 +482,7 @@ git commit -m "feat: define all-model diagram denotation"
   `Definitions.denote`,
   and `Definitions.lookup_denote`.
 
-- [ ] **Step 1: Add failing alias and dependency examples**
+- [x] **Step 1: Add failing alias and dependency examples**
 
 Add examples requiring:
 
@@ -501,7 +501,7 @@ example (defs : Definitions) (ref : DefVar defs.signatures args) :
 
 Run `lake build`; expected failure on missing open/definition APIs.
 
-- [ ] **Step 2: Implement ordered, aliased boundaries**
+- [x] **Step 2: Implement ordered, aliased boundaries**
 
 `OpenDiagram defs args` stores:
 
@@ -519,7 +519,7 @@ boundary occurrence to the supplied `PreModel.Args pre.Domain args`, then
 denotes `body`. Repeated boundary variables therefore enforce aliases without a
 second equality representation.
 
-- [ ] **Step 3: Implement the dependent ordered definition store**
+- [x] **Step 3: Implement the dependent ordered definition store**
 
 Use a snoc-list so each body can reference exactly its prior prefix:
 
@@ -538,7 +538,7 @@ stored relation value applies exactly when its open body denotes. Prove that
 `Definitions.denote model` is lawful and prove lookup for the newest and
 weakened earlier definitions.
 
-- [ ] **Step 4: Prove definition interpretation is model-parametric**
+- [x] **Step 4: Prove definition interpretation is model-parametric**
 
 Prove that definition denotation depends only on the model, ordered prefix, and
 boundary values; it is invariant under concrete identifiers and item order.
@@ -547,7 +547,7 @@ Generic fold/unfold theorems quantify over a `PreModel` plus
 unconstrained named-relation valuation and no recursive/cyclic definition
 constructor.
 
-- [ ] **Step 5: Run GREEN gates and commit**
+- [x] **Step 5: Run GREEN gates and commit**
 
 ```bash
 lake build
@@ -591,7 +591,7 @@ git commit -m "feat: formalize ordered relation definitions"
   `ConcreteIso`,
   and `iso_denotation`.
 
-- [ ] **Step 1: Write failing executable fixtures**
+- [x] **Step 1: Write failing executable fixtures**
 
 Create concrete examples for:
 
@@ -606,7 +606,7 @@ Examples 1–4 must elaborate and have the expected denotation. Examples 5–6
 must return exact `WFError` constructors. Run `lake build` and require failure
 before implementing the checker.
 
-- [ ] **Step 2: Define the finite graph matching TypeScript**
+- [x] **Step 2: Define the finite graph matching TypeScript**
 
 Use separate `Fin` identifier types over stored counts. Define:
 
@@ -630,7 +630,7 @@ inductive CPort
 `ConcreteDiagram` owns total region/node/wire tables, one root, typed wire
 signatures, scopes, and endpoint lists. Identity indices are storage-only.
 
-- [ ] **Step 3: Define and decide one well-formedness proposition**
+- [x] **Step 3: Define and decide one well-formedness proposition**
 
 `WellFormed definitions diagram` must state:
 
@@ -659,7 +659,7 @@ theorem checkWellFormed_iff :
       diagram.WellFormed definitions
 ```
 
-- [ ] **Step 4: Implement checked elaboration**
+- [x] **Step 4: Implement checked elaboration**
 
 Elaboration recursively traverses the region tree. For each region it
 deterministically nests `.bind` items for every wire scoped there, regardless of
@@ -681,7 +681,7 @@ theorem elaborate_denotes_checked
 The enumeration order of co-scoped binders is nonsemantic and is discharged by
 typed-renaming and existential-commutation lemmas.
 
-- [ ] **Step 5: Prove concrete isomorphism invariance**
+- [x] **Step 5: Prove concrete isomorphism invariance**
 
 `ConcreteIso` contains region/node/wire finite equivalences preserving root,
 parentage, node kinds, ref identity, positional atom/ref ports, unordered
@@ -689,7 +689,7 @@ identity incidences, wire signatures/scopes, and endpoint incidence. Prove
 elaboration and denotation invariance, including an explicit fixture where all
 identity port indices and endpoint list orders are permuted.
 
-- [ ] **Step 6: Run GREEN gates and commit**
+- [x] **Step 6: Run GREEN gates and commit**
 
 ```bash
 lake build
@@ -732,14 +732,14 @@ git commit -m "feat: elaborate checked signature-indexed diagrams"
   `denote_splice`,
   and `extract_splice_iso`.
 
-- [ ] **Step 1: Add failing context and splice examples**
+- [x] **Step 1: Add failing context and splice examples**
 
 Add compile-checked examples for positive monotonicity, negative
 antitonicity, exact occurrence with repeated boundary aliases, and
 extract-then-splice reconstruction. Require `lake build` to fail on the absent
 theorems.
 
-- [ ] **Step 2: Implement intrinsic contexts and polarity**
+- [x] **Step 2: Implement intrinsic contexts and polarity**
 
 Represent one typed hole with its cut depth and binder path. Prove by structural
 induction:
@@ -758,7 +758,7 @@ theorem context_anti
 
 Equivalence transports at every depth.
 
-- [ ] **Step 3: Define checked selection and exact occurrence**
+- [x] **Step 3: Define checked selection and exact occurrence**
 
 A selection is closed under descendant regions/nodes and internally scoped
 wires. An `Occurrence pattern host` supplies injective region/node/wire maps,
@@ -767,20 +767,20 @@ multiset, preserves scopes and exact nested content, and reports ordered
 boundary attachments including aliases. It validates evidence; it never
 searches.
 
-- [ ] **Step 4: Implement extraction and capture-avoiding splice**
+- [x] **Step 4: Implement extraction and capture-avoiding splice**
 
 Extraction converts touching wires into ordered root boundary classes. Splice
 maps those classes to supplied host wires, validates signatures and enclosure,
 materializes identity when distinct attachments fill repeated boundary
 positions, and normalizes only through the identity owner added in Task 6.
 
-- [ ] **Step 5: Prove semantic substitution and reconstruction**
+- [x] **Step 5: Prove semantic substitution and reconstruction**
 
 Prove `denote_splice`, exact-occurrence denotation preservation, removal frame
 semantics, and `extract_splice_iso`. These are the only subgraph semantic
 theorems later rules may cite.
 
-- [ ] **Step 6: Run GREEN gates and commit**
+- [x] **Step 6: Run GREEN gates and commit**
 
 ```bash
 lake build

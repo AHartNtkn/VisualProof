@@ -2,6 +2,8 @@ import VisualProof.Diagram.Semantics
 
 namespace VisualProof
 
+universe u
+
 /-- A variable packaged with its intrinsic signature. -/
 abbrev PackedVar (ctx : List Sig) : Type :=
   Sigma fun sig => Var ctx sig
@@ -36,7 +38,7 @@ structure OpenDiagram (defs : List (List Sig)) (args : List Sig) where
   body : Region defs classes
 
 /-- Values supplied at an open diagram's ordered boundary. -/
-abbrev BoundaryEnv (pre : PreModel) (args : List Sig) : Type :=
+abbrev BoundaryEnv (pre : PreModel.{u}) (args : List Sig) : Type u :=
   PreModel.Args pre.Domain args
 
 namespace OpenDiagram
@@ -53,7 +55,7 @@ end OpenDiagram
 An open diagram denotes when one class environment projects to exactly the
 supplied ordered boundary values and makes the body true.
 -/
-def denoteOpen (pre : PreModel) (definitions : DefinitionEnv pre defs)
+def denoteOpen (pre : PreModel.{u}) (definitions : DefinitionEnv pre defs)
     (diagram : OpenDiagram defs args) (values : BoundaryEnv pre args) : Prop :=
   ∃ env : Env pre diagram.classes,
     Vars.denote env diagram.boundary = values ∧

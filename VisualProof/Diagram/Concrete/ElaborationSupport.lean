@@ -48,6 +48,21 @@ namespace WireContext
 def sigs (context : WireContext diagram) : List Sig :=
   context.ids.map fun wire => (diagram.wires wire).sig
 
+/--
+Recover the concrete wire named by a typed variable in this ordered context.
+This is the structural observation surface for compiler naturality; resolver
+search remains private to elaboration.
+-/
+def origin
+    (diagram : ConcreteDiagram definitionCount) :
+    (ids : List diagram.WireId) → {sig : Sig} →
+      Var (ids.map fun wire => (diagram.wires wire).sig) sig →
+        diagram.WireId
+  | [], _, value => nomatch value
+  | head :: _, _, .here => head
+  | _ :: tail, _, .there value =>
+      origin diagram tail value
+
 def empty (diagram : ConcreteDiagram definitionCount) : WireContext diagram :=
   ⟨[]⟩
 
