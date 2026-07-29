@@ -423,7 +423,7 @@ theorem targetContext_sigs
   intro wire _
   exact targetWire_signature source removed wire
 
-private theorem targetContext_extend
+theorem targetContext_extend
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (context : ConcreteElaboration.WireContext source.val)
@@ -920,6 +920,38 @@ private theorem target_find_enclosing
   | none => rfl
   | some region => simp [targetRegion_eq]
 
+theorem erased_childrenOf
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).childrenOf
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          source removed region) =
+      (source.val.childrenOf region).map
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          source removed) :=
+  target_childrenOf source removed region
+
+theorem erased_find_enclosing
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (site : source.val.RegionId)
+    (regions : List source.val.RegionId) :
+    (((regions.map
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          source removed)).find? fun candidate =>
+      decide
+        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed).Encloses candidate
+            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+              source removed site)))) =
+      (regions.find? fun candidate =>
+        decide (source.val.Encloses candidate site)).map
+          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            source removed) :=
+  target_find_enclosing source removed site regions
+
 private theorem targetContext_above
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
@@ -950,6 +982,352 @@ private theorem targetContext_above
             source removed).wires
               (targetWire source removed wire)).scope :=
       congrArg some (targetWire_scope source removed wire).symm
+
+/--
+The canonical erasure renaming at one compiler-extended context, expressed at
+the target compiler's definitional extension context.
+-/
+def extendedContextRenaming
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId) :
+    WireRenaming (context.extend region).sigs
+      ((targetContext source removed context).extend
+        (targetRegion source removed region)).sigs :=
+  congrArg ConcreteElaboration.WireContext.sigs
+      (targetContext_extend source removed context region) ▸
+    contextRenaming source removed (context.extend region)
+
+private def extendedContextSection
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId) :
+    WireRenaming
+      ((targetContext source removed context).extend
+        (targetRegion source removed region)).sigs
+      (context.extend region).sigs :=
+  congrArg ConcreteElaboration.WireContext.sigs
+      (targetContext_extend source removed context region).symm ▸
+    contextSection source removed (context.extend region)
+
+private theorem cast_renaming_inverse_right
+    {sourceContext left right : List Sig}
+    (same : left = right)
+    (forward : WireRenaming sourceContext left)
+    (backward : WireRenaming left sourceContext)
+    (inverse : ∀ {sig} (value : Var left sig),
+      forward (backward value) = value)
+    {sig} (value : Var right sig) :
+    (same ▸ forward) ((same.symm ▸ backward) value) = value := by
+  subst right
+  exact inverse value
+
+private theorem cast_renaming_inverse_left
+    {sourceContext left right : List Sig}
+    (same : left = right)
+    (forward : WireRenaming sourceContext left)
+    (backward : WireRenaming left sourceContext)
+    (inverse : ∀ {sig} (value : Var sourceContext sig),
+      backward (forward value) = value)
+    {sig} (value : Var sourceContext sig) :
+    (same.symm ▸ backward) ((same ▸ forward) value) = value := by
+  subst right
+  exact inverse value
+
+private theorem origin_cast_renaming
+    (diagram : ConcreteDiagram definitionCount)
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (sourceContext : List Sig)
+    (rho : WireRenaming sourceContext left.sigs)
+    {sig} (value : Var sourceContext sig) :
+    ConcreteElaboration.WireContext.origin diagram right.ids
+        ((congrArg ConcreteElaboration.WireContext.sigs same ▸ rho)
+          value) =
+      ConcreteElaboration.WireContext.origin diagram left.ids
+        (rho value) := by
+  subst right
+  rfl
+
+private theorem extendedRenaming_section
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (context.extend region).ids.Nodup)
+    {sig} (value :
+      Var
+        ((targetContext source removed context).extend
+          (targetRegion source removed region)).sigs sig) :
+    extendedContextRenaming source removed context region
+        (extendedContextSection source removed context region value) =
+      value := by
+  exact
+    cast_renaming_inverse_right
+      (congrArg ConcreteElaboration.WireContext.sigs
+        (targetContext_extend source removed context region))
+      (contextRenaming source removed (context.extend region))
+      (contextSection source removed (context.extend region))
+      (contextRenaming_section source removed (context.extend region)
+        (targetContext_nodup source removed (context.extend region)
+          sourceExtendedNodup))
+      value
+
+private theorem extendedSection_renaming
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (context.extend region).ids.Nodup)
+    {sig} (value : Var (context.extend region).sigs sig) :
+    extendedContextSection source removed context region
+        (extendedContextRenaming source removed context region value) =
+      value := by
+  exact
+    cast_renaming_inverse_left
+      (congrArg ConcreteElaboration.WireContext.sigs
+        (targetContext_extend source removed context region))
+      (contextRenaming source removed (context.extend region))
+      (contextSection source removed (context.extend region))
+      (contextSection_renaming source removed (context.extend region)
+        sourceExtendedNodup)
+      value
+
+private theorem extendedRenaming_appendRight
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (context.extend region).ids.Nodup)
+    {sig} (value : Var context.sigs sig) :
+    extendedContextRenaming source removed context region
+        (ConcreteElaboration.appendRightVar source.val
+          (source.val.wiresAt region) value) =
+      ConcreteElaboration.appendRightVar
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed)
+        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed).wiresAt (targetRegion source removed region))
+        (contextRenaming source removed context value) := by
+  apply origin_injective_of_nodup
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      source removed)
+  · exact
+      (targetContext_extend source removed context region) ▸
+        targetContext_nodup source removed (context.extend region)
+          sourceExtendedNodup
+  · unfold extendedContextRenaming
+    rw [origin_cast_renaming
+      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed)
+      (targetContext_extend source removed context region)
+      (context.extend region).sigs
+      (contextRenaming source removed (context.extend region))]
+    rw [contextRenaming_action]
+    simp only [ConcreteElaboration.WireContext.extend]
+    rw [
+      ConcreteElaboration.origin_appendRightVar,
+      ConcreteElaboration.origin_appendRightVar,
+      contextRenaming_action]
+
+private theorem extendedSection_appendRight
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (context.extend region).ids.Nodup)
+    {sig} (value :
+      Var (targetContext source removed context).sigs sig) :
+    extendedContextSection source removed context region
+        (ConcreteElaboration.appendRightVar
+          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source removed)
+          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source removed).wiresAt
+              (targetRegion source removed region))
+          value) =
+      ConcreteElaboration.appendRightVar source.val
+        (source.val.wiresAt region)
+        (contextSection source removed context value) := by
+  apply
+    (Function.LeftInverse.injective
+      (fun value =>
+        extendedSection_renaming source removed context region
+          sourceExtendedNodup value))
+  have sourceNodup : context.ids.Nodup := by
+    rw [ConcreteElaboration.WireContext.extend,
+      List.nodup_append] at sourceExtendedNodup
+    exact sourceExtendedNodup.2.1
+  rw [extendedRenaming_section source removed context region
+    sourceExtendedNodup]
+  rw [extendedRenaming_appendRight source removed context region
+    sourceExtendedNodup]
+  rw [contextRenaming_section source removed context
+    (targetContext_nodup source removed context sourceNodup)]
+
+private theorem extendEnvironment_from
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (env : Env pre (context.extend region).sigs)
+    (outerEnv : Env pre context.sigs)
+    (agrees : ∀ {sig} (value : Var context.sigs sig),
+      env sig
+          (ConcreteElaboration.appendRightVar diagram
+            (diagram.wiresAt region) value) =
+        outerEnv sig value) :
+    ConcreteElaboration.extendEnvironment diagram context region
+        (ConcreteElaboration.valuesFromEnvironmentFor diagram context.ids
+          (diagram.wiresAt region) env)
+        outerEnv =
+      env := by
+  apply ConcreteElaboration.extendEnvironmentFor_from
+  intro sig value
+  exact agrees value
+
+/--
+Canonical local-wire environment extensions correspond in both directions.
+The proof-private section is used only to construct the source-to-target
+witness; consumers receive target values and exact pullback equations.
+-/
+theorem extendedEnvironment_correspondence
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (context.extend region).ids.Nodup)
+    (pre : PreModel)
+    (sourceOuter : Env pre context.sigs)
+    (targetOuter : Env pre (targetContext source removed context).sigs)
+    (outerExact :
+      sourceOuter =
+        Env.comp targetOuter (contextRenaming source removed context)) :
+    (∀ sourceValues :
+        ConcreteElaboration.WireValues pre
+          ((source.val.wiresAt region).map fun wire =>
+            (source.val.wires wire).sig),
+      ∃ targetValues :
+          ConcreteElaboration.WireValues pre
+            (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              source removed).wiresAt
+                (targetRegion source removed region)).map fun wire =>
+              ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                source removed).wires wire).sig),
+        ConcreteElaboration.extendEnvironment source.val context region
+            sourceValues sourceOuter =
+          Env.comp
+            (ConcreteElaboration.extendEnvironment
+              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                source removed)
+              (targetContext source removed context)
+              (targetRegion source removed region) targetValues targetOuter)
+            (extendedContextRenaming source removed context region)) ∧
+      (∀ targetValues :
+          ConcreteElaboration.WireValues pre
+            (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              source removed).wiresAt
+                (targetRegion source removed region)).map fun wire =>
+              ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                source removed).wires wire).sig),
+        ∃ sourceValues :
+            ConcreteElaboration.WireValues pre
+              ((source.val.wiresAt region).map fun wire =>
+                (source.val.wires wire).sig),
+          ConcreteElaboration.extendEnvironment source.val context region
+              sourceValues sourceOuter =
+            Env.comp
+              (ConcreteElaboration.extendEnvironment
+                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  source removed)
+                (targetContext source removed context)
+                (targetRegion source removed region) targetValues targetOuter)
+              (extendedContextRenaming source removed context region)) := by
+  have sourceNodup : context.ids.Nodup := by
+    simp only [ConcreteElaboration.WireContext.extend,
+      List.nodup_append] at sourceExtendedNodup
+    exact sourceExtendedNodup.2.1
+  constructor
+  · intro sourceValues
+    let sourceExtended :=
+      ConcreteElaboration.extendEnvironment source.val context region
+        sourceValues sourceOuter
+    let targetExtended :=
+      Env.comp sourceExtended
+        (extendedContextSection source removed context region)
+    let targetValues :=
+      ConcreteElaboration.valuesFromEnvironmentFor
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed)
+        (targetContext source removed context).ids
+        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed).wiresAt (targetRegion source removed region))
+        targetExtended
+    refine ⟨targetValues, ?_⟩
+    have targetRealized :
+        ConcreteElaboration.extendEnvironment
+            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              source removed)
+            (targetContext source removed context)
+            (targetRegion source removed region) targetValues targetOuter =
+          targetExtended := by
+      apply extendEnvironment_from
+      intro sig value
+      change
+        sourceExtended sig
+            (extendedContextSection source removed context region
+              (ConcreteElaboration.appendRightVar
+                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  source removed)
+                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  source removed).wiresAt
+                    (targetRegion source removed region))
+                value)) =
+          targetOuter sig value
+      rw [extendedSection_appendRight source removed context region
+        sourceExtendedNodup]
+      dsimp [sourceExtended]
+      rw [
+        ConcreteElaboration.extendEnvironment_appendRightVar]
+      rw [outerExact]
+      exact congrArg (targetOuter sig)
+        (contextRenaming_section source removed context
+          (targetContext_nodup source removed context sourceNodup) value)
+    rw [targetRealized]
+    funext sig value
+    exact congrArg (sourceExtended sig)
+      (extendedSection_renaming source removed context region
+        sourceExtendedNodup value).symm
+  · intro targetValues
+    let targetExtended :=
+      ConcreteElaboration.extendEnvironment
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed)
+        (targetContext source removed context)
+        (targetRegion source removed region) targetValues targetOuter
+    let sourceExtended :=
+      Env.comp targetExtended
+        (extendedContextRenaming source removed context region)
+    let sourceValues :=
+      ConcreteElaboration.valuesFromEnvironmentFor source.val context.ids
+        (source.val.wiresAt region) sourceExtended
+    refine ⟨sourceValues, ?_⟩
+    apply extendEnvironment_from
+    intro sig value
+    change
+      targetExtended sig
+          (extendedContextRenaming source removed context region
+            (ConcreteElaboration.appendRightVar source.val
+              (source.val.wiresAt region) value)) =
+        sourceOuter sig value
+    rw [extendedRenaming_appendRight source removed context region
+      sourceExtendedNodup]
+    dsimp [targetExtended]
+    rw [
+      ConcreteElaboration.extendEnvironment_appendRightVar]
+    rw [outerExact]
+    rfl
 
 private theorem map_get_allFin (values : List α) :
     (Data.Finite.allFin values.length).map values.get = values := by

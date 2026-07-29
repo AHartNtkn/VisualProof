@@ -1166,41 +1166,30 @@ theorem base_generated
 
 end RelationJoinStep
 
-def RelationJoinTraceChain
-    {source : CheckedDiagram definitions}
-    {dying : source.val.WireId}
-    {content : CheckedOpenDiagram definitions} :
-    CheckedDiagram definitions →
-      List (RelationJoinStep source dying content) →
-        CheckedDiagram definitions → Prop
-  | initial, [], final => initial = final
-  | initial, step :: rest, final =>
-      step.prior = initial ∧
-        RelationJoinTraceChain step.checked rest final
-
-private theorem relationJoinTraceChain_snoc
-    {source : CheckedDiagram definitions}
-    {dying : source.val.WireId}
-    {content : CheckedOpenDiagram definitions}
-    {initial current next : CheckedDiagram definitions}
-    {steps : List (RelationJoinStep source dying content)}
-    (chain : RelationJoinTraceChain initial steps current)
-    (step : RelationJoinStep source dying content)
-    (prior : step.prior = current)
-    (target : step.checked = next) :
-    RelationJoinTraceChain initial (steps ++ [step]) next := by
-  induction steps generalizing initial with
-  | nil =>
-      change initial = current at chain
-      change step.prior = initial ∧ step.checked = next
-      exact ⟨prior.trans chain.symm, target⟩
-  | cons head tail induction =>
-      simp only [RelationJoinTraceChain] at chain
-      rcases chain with ⟨headBase, tailChain⟩
-      simp only [List.cons_append, RelationJoinTraceChain]
-      exact
-        ⟨headBase,
-          induction tailChain⟩
+inductive RelationJoinSemanticTrace
+    (source : CheckedDiagram definitions) (dying : source.val.WireId)
+    (content : CheckedOpenDiagram definitions)
+    (parameters : List source.val.WireId) (args : List Sig) :
+    (steps : List (RelationJoinStep source dying content)) →
+    (final : CheckedDiagram definitions) → final.val.WireId →
+    final.val.RegionId → Prop
+  | nil :
+      RelationJoinSemanticTrace source dying content parameters args []
+        source dying (source.val.wires dying).scope
+  | snoc {steps current currentDying currentScope}
+      (trace :
+        RelationJoinSemanticTrace source dying content parameters args steps
+          current currentDying currentScope)
+      (step : RelationJoinStep source dying content)
+      (_ : step.prior = current)
+      (_ : HEq (step.priorWireImage dying) currentDying)
+      (_ : HEq
+        (step.priorRegionImage (source.val.wires dying).scope) currentScope)
+      (_ : step.relationArgs = args)
+      (_ : step.sourceParameters = parameters) :
+      RelationJoinSemanticTrace source dying content parameters args
+        (steps ++ [step]) step.checked (step.checkedWireImage dying)
+        (step.checkedRegionImage (source.val.wires dying).scope)
 
 private theorem checkedWire_injective
     {definitions : List (List Sig)}
@@ -1231,7 +1220,9 @@ private theorem retainedWireIndex_injective
 private structure RelationJoinState
     (source : CheckedDiagram definitions)
     (dying : source.val.WireId)
-    (content : CheckedOpenDiagram definitions) : Type where
+    (content : CheckedOpenDiagram definitions)
+    (parameters : List source.val.WireId)
+    (args : List Sig) : Type where
   checked : CheckedDiagram definitions
   regionImage : source.val.RegionId → checked.val.RegionId
   wireImage : source.val.WireId → checked.val.WireId
@@ -1241,23 +1232,25 @@ private structure RelationJoinState
       (checked.val.wires (wireImage sourceWire)).scope =
         regionImage (source.val.wires sourceWire).scope
   nodeImage : source.val.NodeId → Option checked.val.NodeId
-  origin : CheckedDiagram definitions
   processed : List source.val.NodeId
   steps : List (RelationJoinStep source dying content)
   traceExact :
     steps.map RelationJoinStep.application = processed
-  chain : RelationJoinTraceChain origin steps checked
+  semanticTrace :
+    RelationJoinSemanticTrace source dying content parameters args steps checked
+      (wireImage dying) (regionImage (source.val.wires dying).scope)
 
 private structure RelationJoinStepResult
     {source : CheckedDiagram definitions}
     {dying : source.val.WireId}
     {content : CheckedOpenDiagram definitions}
-    (state : RelationJoinState source dying content)
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    (state : RelationJoinState source dying content parameters args)
     (application : RelationJoinApplication source) : Type where
-  next : RelationJoinState source dying content
+  next : RelationJoinState source dying content parameters args
   processedExact :
     next.processed = state.processed ++ [application.node]
-  originExact : next.origin = state.origin
 
 private theorem relationJoinRegionRetained
     (source : CheckedDiagram definitions)
@@ -1280,11 +1273,9 @@ private structure RelationJoinInitialResult
     {content : CheckedOpenDiagram definitions}
     {parameters : List source.val.WireId}
     (plan : RelationJoinPlan source wire content parameters) : Type where
-  state : RelationJoinState source wire content
+  state : RelationJoinState source wire content parameters plan.args
   checkedExact : state.checked = source
   processedEmpty : state.processed = []
-  stepsEmpty : state.steps = []
-  originSource : state.origin = source
 
 private def relationJoinInitialState
     (source : CheckedDiagram definitions)
@@ -1293,24 +1284,21 @@ private def relationJoinInitialState
     (parameters : List source.val.WireId)
     (plan : RelationJoinPlan source wire content parameters) :
     RelationJoinInitialResult plan := by
-  let state : RelationJoinState source wire content :=
+  let state : RelationJoinState source wire content parameters plan.args :=
     { checked := source
       regionImage := id
       wireImage := id
       wireImage_injective := Function.injective_id
       wireScopeExact := fun _ => rfl
       nodeImage := fun node => some node
-      origin := source
       processed := []
       steps := []
       traceExact := rfl
-      chain := rfl }
+      semanticTrace := .nil }
   exact
     { state := state
       checkedExact := rfl
-      processedEmpty := rfl
-      stepsEmpty := rfl
-      originSource := rfl }
+      processedEmpty := rfl }
 
 private def relationJoinAttachments
     {source : CheckedDiagram definitions}
@@ -1325,7 +1313,7 @@ private def spliceRelationApplication
     (content : CheckedOpenDiagram definitions)
     (parameters : List source.val.WireId)
     (args : List Sig)
-    (state : RelationJoinState source wire content)
+    (state : RelationJoinState source wire content parameters args)
     (application : RelationJoinApplication source) :
     Except Error (RelationJoinStepResult state application) := by
   match priorApplicationAccepted :
@@ -1541,7 +1529,8 @@ private def spliceRelationApplication
                                                 (baseWireScopeExact
                                                   sourceWire)) }
                                     let nextState :
-                                        RelationJoinState source wire content :=
+                                        RelationJoinState source wire content
+                                          parameters args :=
                                       { checked := next
                                         regionImage :=
                                           step.checkedRegionImage
@@ -1568,20 +1557,19 @@ private def spliceRelationApplication
                                               checkedNode generated
                                                 (attachment.hostNode
                                                   baseNode)
-                                        origin := state.origin
                                         processed :=
                                           state.processed ++
                                             [application.node]
                                         steps := state.steps ++ [step]
                                         traceExact := by
                                           simp [step, state.traceExact]
-                                        chain :=
-                                          relationJoinTraceChain_snoc
-                                            state.chain step rfl rfl }
+                                        semanticTrace :=
+                                          .snoc state.semanticTrace step
+                                            rfl (by simp [step]) (by simp [step])
+                                            rfl rfl }
                                     exact .ok
                                       { next := nextState
-                                        processedExact := rfl
-                                        originExact := rfl }
+                                        processedExact := rfl }
                           else
                             exact .error .dyingWireParameter
                         else
@@ -1599,9 +1587,10 @@ private def spliceRelationApplications
     (content : CheckedOpenDiagram definitions)
     (parameters : List source.val.WireId) :
     (args : List Sig) →
-    RelationJoinState source wire content →
+    RelationJoinState source wire content parameters args →
       List (RelationJoinApplication source) →
-        Except Error (RelationJoinState source wire content)
+        Except Error
+          (RelationJoinState source wire content parameters args)
   | _, state, [] => .ok state
   | args, state, application :: rest => do
       let step ←
@@ -1616,7 +1605,7 @@ private theorem spliceRelationApplications_processed
     (content : CheckedOpenDiagram definitions)
     (parameters : List source.val.WireId)
     (args : List Sig)
-    (state final : RelationJoinState source wire content)
+    (state final : RelationJoinState source wire content parameters args)
     (applications : List (RelationJoinApplication source))
     (accepted :
       spliceRelationApplications source wire content parameters args
@@ -1643,42 +1632,13 @@ private theorem spliceRelationApplications_processed
           rw [induction step.next accepted, step.processedExact]
           simp [List.append_assoc]
 
-private theorem spliceRelationApplications_origin
-    (source : CheckedDiagram definitions)
-    (wire : source.val.WireId)
-    (content : CheckedOpenDiagram definitions)
-    (parameters : List source.val.WireId)
-    (args : List Sig)
-    (state final : RelationJoinState source wire content)
-    (applications : List (RelationJoinApplication source))
-    (accepted :
-      spliceRelationApplications source wire content parameters args
-          state applications =
-        .ok final) :
-    final.origin = state.origin := by
-  induction applications generalizing state with
-  | nil =>
-      simp only [spliceRelationApplications, Except.ok.injEq] at accepted
-      subst final
-      rfl
-  | cons application rest induction =>
-      unfold spliceRelationApplications at accepted
-      cases stepAccepted :
-          spliceRelationApplication source wire content parameters args
-            state application with
-      | error error =>
-          rw [stepAccepted] at accepted
-          contradiction
-      | ok step =>
-          rw [stepAccepted] at accepted
-          exact
-            (induction step.next accepted).trans step.originExact
-
 private structure RelationJoinFinalRemoval
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {content : CheckedOpenDiagram definitions}
-    (state : RelationJoinState source wire content) : Type where
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    (state : RelationJoinState source wire content parameters args) : Type where
   checked : CheckedDiagram definitions
   plan :
     BatchRemovalPlan state.checked [] [] [state.wireImage wire]
@@ -1693,7 +1653,9 @@ private def removeRelationJoinWire
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {content : CheckedOpenDiagram definitions}
-    (state : RelationJoinState source wire content) :
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    (state : RelationJoinState source wire content parameters args) :
     Except Error (RelationJoinFinalRemoval state) := by
   let dying := state.wireImage wire
   match prepared :
@@ -1746,7 +1708,8 @@ structure RelationJoinResult
       sourceWire ≠ wire → checked.val.WireId
   private plan : RelationJoinPlan source wire content parameters
   private initial : RelationJoinInitialResult plan
-  private finalState : RelationJoinState source wire content
+  private finalState :
+    RelationJoinState source wire content parameters plan.args
   private batchAccepted :
     spliceRelationApplications source wire content parameters plan.args
         initial.state plan.applications =
@@ -1795,25 +1758,21 @@ variable {wire : source.val.WireId}
 variable {content : CheckedOpenDiagram definitions}
 variable {parameters : List source.val.WireId}
 
-/-- Raw checked endpoint before the exhausted relation wire is deleted. -/
 def boundFinal
     (result : RelationJoinResult source wire content parameters) :
     CheckedDiagram definitions :=
   result.finalState.checked
 
-/-- Source-region image at the raw endpoint before final wire deletion. -/
 def boundRegionImage
     (result : RelationJoinResult source wire content parameters) :
     source.val.RegionId → result.boundFinal.val.RegionId :=
   result.finalState.regionImage
 
-/-- Image of the exhausted relation wire at the raw bound endpoint. -/
 def boundDying
     (result : RelationJoinResult source wire content parameters) :
     result.boundFinal.val.WireId :=
   result.finalState.wireImage wire
 
-/-- Checked endpoint immediately after deleting the exhausted relation wire. -/
 def plainFinal
     (result : RelationJoinResult source wire content parameters) :
     CheckedDiagram definitions :=
@@ -1846,6 +1805,13 @@ theorem final_deletion_exact
     (result.boundFinal.val.wires result.boundDying).scope =
       result.boundRegionImage (source.val.wires wire).scope :=
   result.finalState.wireScopeExact wire
+
+theorem semantic_trace
+    (result : RelationJoinResult source wire content parameters) :
+    RelationJoinSemanticTrace source wire content parameters result.args
+      result.finalState.steps result.boundFinal result.boundDying
+        (result.boundRegionImage (source.val.wires wire).scope) :=
+  result.finalState.semanticTrace
 
 end FinalDeletion
 
@@ -1911,11 +1877,6 @@ theorem endpoint_applied
     ⟨rfl, region, by
       simpa [args, accepted] using nodeData⟩
 
-/--
-The full ordered raw-splice trace is recoverable for semantic compilation.
-Every step owns its checked attachment; the final eager normalization is
-returned as the trace endpoint, never supplied by the caller.
--/
 theorem trace_complete
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
@@ -1923,29 +1884,20 @@ theorem trace_complete
     {content : CheckedOpenDiagram definitions}
     {parameters : List source.val.WireId}
     (result : RelationJoinResult source wire content parameters) :
-    ∃ initial : CheckedDiagram definitions,
-      ∃ steps : List (RelationJoinStep source wire content),
-        ∃ boundFinal plainFinal : CheckedDiagram definitions,
-          ∃ normalization :
-              ConcreteDiagram.IdentityNormalization plainFinal,
-            RelationJoinTraceChain initial steps boundFinal ∧
-              steps.map RelationJoinStep.application =
-                result.applications ∧
-              normalization =
-                ConcreteDiagram.normalizeIdentities plainFinal ∧
-              normalization.target = result.checked := by
-  have originExact :
-      result.finalState.origin = result.initial.state.checked :=
-    ((spliceRelationApplications_origin source wire content parameters
-      result.plan.args result.initial.state result.finalState
-      result.plan.applications result.batchAccepted).trans
-        result.initial.originSource).trans result.initial.checkedExact.symm
-  have chain := result.finalState.chain
-  rw [originExact] at chain
+    ∃ steps : List (RelationJoinStep source wire content),
+      ∃ normalization :
+          ConcreteDiagram.IdentityNormalization result.plainFinal,
+        RelationJoinSemanticTrace source wire content parameters result.args
+            steps result.boundFinal result.boundDying
+              (result.boundRegionImage (source.val.wires wire).scope) ∧
+          steps.map RelationJoinStep.application =
+            result.applications ∧
+          normalization =
+            ConcreteDiagram.normalizeIdentities result.plainFinal ∧
+          normalization.target = result.checked := by
   refine
-    ⟨result.initial.state.checked, result.finalState.steps,
-      result.finalState.checked, result.finalRemoval.checked,
-      result.normalization, chain, ?_, result.normalizationExact,
+    ⟨result.finalState.steps, result.normalization,
+      result.finalState.semanticTrace, ?_, result.normalizationExact,
       result.checkedExact.symm⟩
   exact
     result.finalState.traceExact.trans result.applicationsExact.symm
