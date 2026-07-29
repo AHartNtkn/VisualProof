@@ -70,6 +70,28 @@ structure RegionFrame
   siteBody : Region definitions visible.sigs
   context : DiagramContext definitions visible.sigs outer.sigs
 
+namespace RegionFrame
+
+/--
+Proof-only relation saying that one generated region frame is the same retained
+path as an enclosing generated frame followed by an inner context.
+-/
+def Decomposes
+    {definitions : List (List Sig)}
+    {diagram : ConcreteDiagram definitions.length}
+    {outer : WireContext diagram}
+    (site scope : RegionFrame definitions diagram outer) : Prop :=
+  ∃ inner :
+      DiagramContext definitions site.visible.sigs scope.visible.sigs,
+    scope.siteBody = inner.fill site.siteBody ∧
+    (∀ body : Region definitions site.visible.sigs,
+      site.context.fill body =
+        scope.context.fill (inner.fill body)) ∧
+    site.context.cutDepth =
+      scope.context.cutDepth + inner.cutDepth
+
+end RegionFrame
+
 /-- Bind exactly one region's locally scoped wires around a generated context. -/
 def bindContextFor
     (diagram : ConcreteDiagram definitionCount)
@@ -201,6 +223,21 @@ theorem bindContextFor_fill
       simpa [bindContextFor, DiagramContext.fill, finishBodyFor] using
         induction (.bind (diagram.wires head).sig inner)
 
+@[simp] theorem bindContextFor_cutDepth
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds : List diagram.WireId)
+    (localIds : List diagram.WireId)
+    (inner : DiagramContext definitions holeCtx
+      ((localIds ++ outerIds).map fun wire =>
+        (diagram.wires wire).sig)) :
+    (bindContextFor diagram outerIds localIds inner).cutDepth =
+      inner.cutDepth := by
+  induction localIds with
+  | nil => rfl
+  | cons head tail induction =>
+      simpa [bindContextFor, DiagramContext.cutDepth] using
+        induction (.bind (diagram.wires head).sig inner)
+
 theorem finishBodyFor_eq_finishRegion
     (diagram : ConcreteDiagram definitionCount)
     (outer : WireContext diagram)
@@ -291,6 +328,82 @@ theorem compileSiblingFrame?_sound
               ⟨.cons (.cut body) compiledTail, ?_, ?_⟩
             · simp [compileChildrenWith?, bodyEquation, tailCompiled]
             · simpa [ItemSeq.append_assoc] using filled
+
+private theorem compileSiblingFrame?_decomposes
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat)
+    (outer : WireContext diagram)
+    (target : diagram.RegionId)
+    (siteNested scopeNested : RegionFrame definitions diagram outer)
+    (decomposed : RegionFrame.Decomposes siteNested scopeNested) :
+    ∀ (leading : ItemSeq definitions outer.sigs)
+      (children : List diagram.RegionId)
+      (siteFrame scopeFrame : RegionFrame definitions diagram outer),
+      compileSiblingFrame? definitions diagram fuel outer target siteNested
+          leading children = some siteFrame →
+      compileSiblingFrame? definitions diagram fuel outer target scopeNested
+          leading children = some scopeFrame →
+      RegionFrame.Decomposes siteFrame scopeFrame := by
+  rcases decomposed with
+    ⟨inner, scopeBody, replace, cutDepth⟩
+  intro leading children
+  induction children generalizing leading with
+  | nil =>
+      intro siteFrame scopeFrame siteAccepted _
+      simp [compileSiblingFrame?] at siteAccepted
+  | cons child tail induction =>
+      intro siteFrame scopeFrame siteAccepted scopeAccepted
+      by_cases same : child = target
+      · subst child
+        cases suffixEquation :
+            compileChildrenWith? definitions diagram
+              (compileRegion? definitions diagram fuel) outer tail with
+        | none =>
+            simp [compileSiblingFrame?, suffixEquation] at siteAccepted
+        | some suffix =>
+            have siteEquality :
+                ({ visible := siteNested.visible
+                   siteBody := siteNested.siteBody
+                   context :=
+                     .surround leading (.cut siteNested.context) suffix } :
+                  RegionFrame definitions diagram outer) =
+                siteFrame :=
+              Option.some.inj
+                (by simpa [compileSiblingFrame?, suffixEquation] using
+                  siteAccepted)
+            have scopeEquality :
+                ({ visible := scopeNested.visible
+                   siteBody := scopeNested.siteBody
+                   context :=
+                     .surround leading (.cut scopeNested.context) suffix } :
+                  RegionFrame definitions diagram outer) =
+                scopeFrame :=
+              Option.some.inj
+                (by simpa [compileSiblingFrame?, suffixEquation] using
+                  scopeAccepted)
+            subst siteFrame
+            subst scopeFrame
+            refine ⟨inner, scopeBody, ?_, ?_⟩
+            · intro body
+              simp only [DiagramContext.fill, Region.surround]
+              rw [replace body]
+            · simp only [DiagramContext.cutDepth]
+              rw [cutDepth]
+              omega
+      · cases bodyEquation :
+            compileRegion? definitions diagram fuel child outer with
+        | none =>
+            simp [compileSiblingFrame?, same, bodyEquation] at siteAccepted
+        | some body =>
+            exact
+              induction
+                (leading.append (.cons (.cut body) .nil))
+                siteFrame scopeFrame
+                (by simpa [compileSiblingFrame?, same, bodyEquation] using
+                  siteAccepted)
+                (by simpa [compileSiblingFrame?, same, bodyEquation] using
+                  scopeAccepted)
 
 theorem compileRegion?_of_compileRegionBody?
     (definitions : List (List Sig))
@@ -649,6 +762,245 @@ private theorem encloses_child_split_local
       exact
         ⟨⟨steps, by omega⟩, by
           simpa [ConcreteDiagram.climb, childData] using climbed⟩
+
+private theorem factor_climb_add
+    (diagram : ConcreteDiagram definitionCount)
+    (first second : Nat)
+    (region : diagram.RegionId) :
+    diagram.climb (first + second) region =
+      (diagram.climb first region).bind (diagram.climb second) := by
+  induction first generalizing region with
+  | zero => simp
+  | succ first induction =>
+      cases regionData : diagram.regions region with
+      | sheet =>
+          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
+      | cut parent =>
+          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
+            induction parent
+
+private theorem factor_climb_root_unique
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    {region : diagram.RegionId} {left right : Nat}
+    (leftClimb : diagram.climb left region = some diagram.root)
+    (rightClimb : diagram.climb right region = some diagram.root) :
+    left = right := by
+  induction left generalizing right region with
+  | zero =>
+      have regionRoot : region = diagram.root := by
+        simpa [ConcreteDiagram.climb] using leftClimb
+      subst region
+      cases right with
+      | zero => rfl
+      | succ right =>
+          have rootData : diagram.regions diagram.root = .sheet :=
+            wellFormed.root_is_sheet
+          have impossible :
+              diagram.climb (right + 1) diagram.root = none := by
+            simp [ConcreteDiagram.climb, rootData]
+          rw [impossible] at rightClimb
+          contradiction
+  | succ left induction =>
+      cases right with
+      | zero =>
+          have regionRoot : region = diagram.root := by
+            simpa [ConcreteDiagram.climb] using rightClimb
+          subst region
+          have rootData : diagram.regions diagram.root = .sheet :=
+            wellFormed.root_is_sheet
+          have impossible :
+              diagram.climb (left + 1) diagram.root = none := by
+            simp [ConcreteDiagram.climb, rootData]
+          rw [impossible] at leftClimb
+          contradiction
+      | succ right =>
+          cases regionData : diagram.regions region with
+          | sheet =>
+              simp [ConcreteDiagram.climb, regionData] at leftClimb
+          | cut parent =>
+              apply congrArg Nat.succ
+              apply induction
+              · simpa [ConcreteDiagram.climb, regionData] using leftClimb
+              · simpa [ConcreteDiagram.climb, regionData] using rightClimb
+
+private theorem factor_reaches_root
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (region : diagram.RegionId) :
+    ∃ steps : Fin (diagram.regionCount + 1),
+      diagram.climb steps region = some diagram.root := by
+  exact
+    (ConcreteElaboration.encloses_iff_exists
+      diagram diagram.root region).mp
+      (of_decide_eq_true
+        ((List.all_eq_true.mp wellFormed.all_regions_reach_root)
+          region (Data.Finite.mem_allFin region)))
+
+private theorem factor_encloses_trans
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    {outer middle inner : diagram.RegionId}
+    (outerMiddle : diagram.Encloses outer middle)
+    (middleInner : diagram.Encloses middle inner) :
+    diagram.Encloses outer inner := by
+  obtain ⟨outerSteps, outerClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists
+      diagram outer middle).mp outerMiddle
+  obtain ⟨middleSteps, middleClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists
+      diagram middle inner).mp middleInner
+  obtain ⟨rootSteps, outerRoot⟩ :=
+    factor_reaches_root definitions diagram wellFormed outer
+  have composed :
+      diagram.climb (middleSteps.val + outerSteps.val) inner =
+        some outer := by
+    rw [factor_climb_add diagram middleSteps.val outerSteps.val inner,
+      middleClimb]
+    exact outerClimb
+  have composedRoot :
+      diagram.climb
+          ((middleSteps.val + outerSteps.val) + rootSteps.val) inner =
+        some diagram.root := by
+    rw [factor_climb_add diagram
+      (middleSteps.val + outerSteps.val) rootSteps.val inner, composed]
+    exact outerRoot
+  obtain ⟨canonicalSteps, canonicalRoot⟩ :=
+    factor_reaches_root definitions diagram wellFormed inner
+  have sameDepth :=
+    factor_climb_root_unique definitions diagram wellFormed
+      composedRoot canonicalRoot
+  apply
+    (ConcreteElaboration.encloses_iff_exists diagram outer inner).mpr
+  exact
+    ⟨⟨middleSteps.val + outerSteps.val, by omega⟩, composed⟩
+
+private theorem factor_encloses_antisymm
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    {left right : diagram.RegionId}
+    (leftRight : diagram.Encloses left right)
+    (rightLeft : diagram.Encloses right left) :
+    left = right := by
+  obtain ⟨leftSteps, leftClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram left right).mp
+      leftRight
+  obtain ⟨rightSteps, rightClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram right left).mp
+      rightLeft
+  obtain ⟨rootSteps, rootClimb⟩ :=
+    factor_reaches_root definitions diagram wellFormed left
+  have loop :
+      diagram.climb (rightSteps.val + leftSteps.val) left = some left := by
+    rw [factor_climb_add diagram rightSteps.val leftSteps.val left, rightClimb]
+    exact leftClimb
+  have longerRoot :
+      diagram.climb
+          ((rightSteps.val + leftSteps.val) + rootSteps.val) left =
+        some diagram.root := by
+    rw [factor_climb_add diagram
+      (rightSteps.val + leftSteps.val) rootSteps.val left, loop]
+    exact rootClimb
+  have sameDepth :=
+    factor_climb_root_unique definitions diagram wellFormed
+      longerRoot rootClimb
+  have rightZero : rightSteps.val = 0 := by omega
+  rw [rightZero] at rightClimb
+  simpa [ConcreteDiagram.climb] using rightClimb
+
+private theorem factor_encloses_comparable
+    (diagram : ConcreteDiagram definitionCount)
+    {left right descendant : diagram.RegionId}
+    (leftEncloses : diagram.Encloses left descendant)
+    (rightEncloses : diagram.Encloses right descendant) :
+    diagram.Encloses left right ∨ diagram.Encloses right left := by
+  obtain ⟨leftSteps, leftClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram left descendant).mp
+      leftEncloses
+  obtain ⟨rightSteps, rightClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram right descendant).mp
+      rightEncloses
+  by_cases before : leftSteps.val ≤ rightSteps.val
+  · right
+    let remaining := rightSteps.val - leftSteps.val
+    apply
+      (ConcreteElaboration.encloses_iff_exists diagram right left).mpr
+    refine ⟨⟨remaining, Nat.lt_of_le_of_lt
+      (Nat.sub_le _ _) rightSteps.isLt⟩, ?_⟩
+    have composed :=
+      factor_climb_add diagram leftSteps.val remaining descendant
+    have sum : leftSteps.val + remaining = rightSteps.val := by omega
+    rw [sum, leftClimb, rightClimb] at composed
+    exact composed.symm
+  · left
+    let remaining := leftSteps.val - rightSteps.val
+    apply
+      (ConcreteElaboration.encloses_iff_exists diagram left right).mpr
+    refine ⟨⟨remaining, Nat.lt_of_le_of_lt
+      (Nat.sub_le _ _) leftSteps.isLt⟩, ?_⟩
+    have composed :=
+      factor_climb_add diagram rightSteps.val remaining descendant
+    have sum : rightSteps.val + remaining = leftSteps.val := by omega
+    rw [sum, rightClimb, leftClimb] at composed
+    exact composed.symm
+
+private theorem selected_child_encloses_scope
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    {region child scope site : diagram.RegionId}
+    (regionScope : diagram.Encloses region scope)
+    (scopeStrict : scope ≠ region)
+    (childData : diagram.regions child = .cut region)
+    (childSite : diagram.Encloses child site)
+    (scopeSite : diagram.Encloses scope site) :
+    diagram.Encloses child scope := by
+  rcases factor_encloses_comparable diagram childSite scopeSite with
+    childScope | scopeChild
+  · exact childScope
+  · rcases encloses_child_split_local diagram scope child region
+        childData scopeChild with scopeIsChild | scopeRegion
+    · subst scope
+      exact ConcreteDiagram.encloses_refl diagram child
+    · have same :=
+        factor_encloses_antisymm definitions diagram wellFormed
+          regionScope scopeRegion
+      exact (scopeStrict same.symm).elim
+
+private theorem find?_enclosing_scope
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (children : List diagram.RegionId)
+    (child scope site : diagram.RegionId)
+    (foundSite :
+      children.find?
+          (fun candidate => decide (diagram.Encloses candidate site)) =
+        some child)
+    (childScope : diagram.Encloses child scope)
+    (scopeSite : diagram.Encloses scope site) :
+    children.find?
+        (fun candidate => decide (diagram.Encloses candidate scope)) =
+      some child := by
+  induction children with
+  | nil => simp at foundSite
+  | cons head tail induction =>
+      by_cases headSite : diagram.Encloses head site
+      · have same : head = child := by
+          simpa [headSite] using foundSite
+        subst child
+        simp [childScope]
+      · have headScope : ¬diagram.Encloses head scope := by
+          intro encloses
+          exact headSite
+            (factor_encloses_trans definitions diagram wellFormed
+              encloses scopeSite)
+        simp [headSite, headScope] at foundSite ⊢
+        exact induction foundSite
 
 private theorem extend_covers_child
     (diagram : ConcreteDiagram definitionCount)
@@ -1032,6 +1384,249 @@ private theorem compileRegionFrame?_site_origin
                                   aroundBody).trans
                                 siteBodyEquality)⟩
 
+private theorem compileRegionFrame?_decompose_at
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (site scope : diagram.RegionId) :
+    ∀ (fuel : Nat) (region : diagram.RegionId)
+      (outer : WireContext diagram)
+      (siteFrame : RegionFrame definitions diagram outer),
+      diagram.Encloses region scope →
+      diagram.Encloses scope site →
+      compileRegionFrame? definitions diagram site fuel region outer =
+          some siteFrame →
+      ∃ scopeFrame : RegionFrame definitions diagram outer,
+        compileRegionFrame? definitions diagram scope fuel region outer =
+            some scopeFrame ∧
+        RegionFrame.Decomposes siteFrame scopeFrame := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro region outer siteFrame _ _ accepted
+      simp [compileRegionFrame?] at accepted
+  | succ fuel induction =>
+      intro region outer siteFrame regionScope scopeSite accepted
+      unfold compileRegionFrame? at accepted
+      simp only [] at accepted
+      split at accepted
+      · rename_i atSite
+        subst region
+        have sameScope : scope = site :=
+          factor_encloses_antisymm definitions diagram wellFormed
+            scopeSite regionScope
+        subst scope
+        refine ⟨siteFrame, ?_, ?_⟩
+        · simpa [compileRegionFrame?] using accepted
+        exact ⟨.hole, rfl, fun _ => rfl,
+          by simp [DiagramContext.cutDepth]⟩
+      · rename_i notAtSite
+        cases nodesEquation :
+            compileNodes? definitions diagram (outer.extend region)
+              (diagram.nodesAt region) with
+        | none =>
+            simp [nodesEquation] at accepted
+        | some nodes =>
+            cases childEquation :
+                (diagram.childrenOf region).find?
+                  (fun candidate =>
+                    decide (diagram.Encloses candidate site)) with
+            | none =>
+                simp [nodesEquation, childEquation] at accepted
+            | some child =>
+                cases nestedEquation :
+                    compileRegionFrame? definitions diagram site fuel child
+                      (outer.extend region) with
+                | none =>
+                    simp [nodesEquation, childEquation, nestedEquation] at accepted
+                | some nested =>
+                    cases aroundEquation :
+                        compileSiblingFrame? definitions diagram fuel
+                          (outer.extend region) child nested nodes
+                          (diagram.childrenOf region) with
+                    | none =>
+                        simp [nodesEquation, childEquation, nestedEquation,
+                          aroundEquation] at accepted
+                    | some around =>
+                        have frameEquality :
+                            ({ visible := around.visible
+                               siteBody := around.siteBody
+                               context :=
+                                 bindContextFor diagram outer.ids
+                                   (diagram.wiresAt region)
+                                   around.context } :
+                              RegionFrame definitions diagram outer) =
+                            siteFrame :=
+                          Option.some.inj
+                            (by simpa [nodesEquation, childEquation,
+                                nestedEquation, aroundEquation] using
+                              accepted)
+                        subst siteFrame
+                        have childMember :
+                            child ∈ diagram.childrenOf region :=
+                          List.mem_of_find?_eq_some childEquation
+                        have childSite : diagram.Encloses child site :=
+                          of_decide_eq_true
+                            (List.find?_some
+                              (p := fun candidate =>
+                                decide (diagram.Encloses candidate site))
+                              childEquation)
+                        have childData :
+                            diagram.regions child = .cut region := by
+                          have filtered :=
+                            (List.mem_filter.mp childMember).2
+                          cases data : diagram.regions child with
+                          | sheet => simp [data] at filtered
+                          | cut parent =>
+                              have same : parent = region :=
+                                eq_of_beq (by simpa [data] using filtered)
+                              exact congrArg CRegion.cut same
+                        have nestedCompiled :=
+                          compileRegionFrame?_sound definitions diagram site
+                            fuel child (outer.extend region) nested
+                            nestedEquation
+                        obtain ⟨compiledChildren, childrenEquation,
+                            aroundFilled⟩ :=
+                          compileSiblingFrame?_sound definitions diagram fuel
+                            (outer.extend region) child nested around nodes
+                            (diagram.childrenOf region) nestedCompiled
+                            aroundEquation
+                        by_cases atScope : region = scope
+                        · subst scope
+                          let scopeBody :
+                              Region definitions
+                                (outer.extend region).sigs :=
+                            .mk (nodes.append compiledChildren)
+                          let scopeFrame :
+                              RegionFrame definitions diagram outer :=
+                            { visible := outer.extend region
+                              siteBody := scopeBody
+                              context :=
+                                bindContextFor diagram outer.ids
+                                  (diagram.wiresAt region) .hole }
+                          refine ⟨scopeFrame, ?_, ?_⟩
+                          · simp [compileRegionFrame?, compileRegionBody?,
+                              nodesEquation, childrenEquation, scopeFrame,
+                              scopeBody]
+                          · refine ⟨around.context, aroundFilled, ?_, ?_⟩
+                            · intro body
+                              dsimp [scopeFrame]
+                              calc
+                                _ = finishBodyFor diagram outer.ids
+                                      (diagram.wiresAt region)
+                                      (around.context.fill body) :=
+                                  bindContextFor_fill diagram outer.ids
+                                    (diagram.wiresAt region)
+                                    around.context body
+                                _ = _ :=
+                                  (bindContextFor_fill diagram outer.ids
+                                    (diagram.wiresAt region)
+                                    (DiagramContext.hole :
+                                      DiagramContext definitions
+                                        (outer.extend region).sigs
+                                        (outer.extend region).sigs)
+                                    (around.context.fill body)).symm
+                            · dsimp [scopeFrame]
+                              calc
+                                _ = around.context.cutDepth :=
+                                  bindContextFor_cutDepth diagram outer.ids
+                                    (diagram.wiresAt region) around.context
+                                _ = (DiagramContext.hole :
+                                      DiagramContext definitions
+                                        (outer.extend region).sigs
+                                        (outer.extend region).sigs
+                                    ).cutDepth + around.context.cutDepth := by
+                                  simp [DiagramContext.cutDepth]
+                                _ = _ :=
+                                  congrArg
+                                    (fun depth =>
+                                      depth + around.context.cutDepth)
+                                    (bindContextFor_cutDepth diagram outer.ids
+                                      (diagram.wiresAt region)
+                                      (DiagramContext.hole :
+                                        DiagramContext definitions
+                                          (outer.extend region).sigs
+                                          (outer.extend region).sigs)).symm
+                        · have childScope :
+                              diagram.Encloses child scope :=
+                            selected_child_encloses_scope definitions diagram
+                              wellFormed regionScope (Ne.symm atScope) childData
+                              childSite scopeSite
+                          have scopeChildEquation :=
+                            find?_enclosing_scope definitions diagram
+                              wellFormed (diagram.childrenOf region) child
+                              scope site childEquation childScope scopeSite
+                          obtain ⟨nestedScope, nestedScopeGenerated,
+                              nestedDecomposed⟩ :=
+                            induction child (outer.extend region) nested
+                              childScope scopeSite nestedEquation
+                          have nestedScopeCompiled :=
+                            compileRegionFrame?_sound definitions diagram scope
+                              fuel child (outer.extend region) nestedScope
+                              nestedScopeGenerated
+                          obtain ⟨aroundScope, aroundScopeGenerated, _⟩ :=
+                            compileSiblingFrame?_complete_of_children
+                              definitions diagram fuel (outer.extend region)
+                              child nestedScope nodes
+                              (diagram.childrenOf region) compiledChildren
+                              childMember nestedScopeCompiled childrenEquation
+                          obtain ⟨inner, scopeBodyEquality,
+                              replaceEquality, depthEquality⟩ :=
+                            compileSiblingFrame?_decomposes definitions diagram
+                              fuel (outer.extend region) child nested
+                              nestedScope nestedDecomposed nodes
+                              (diagram.childrenOf region) around aroundScope
+                              aroundEquation aroundScopeGenerated
+                          let scopeFrame :
+                              RegionFrame definitions diagram outer :=
+                            { visible := aroundScope.visible
+                              siteBody := aroundScope.siteBody
+                              context :=
+                                bindContextFor diagram outer.ids
+                                  (diagram.wiresAt region)
+                                  aroundScope.context }
+                          refine ⟨scopeFrame, ?_, ?_⟩
+                          · simp [compileRegionFrame?, atScope, nodesEquation,
+                              scopeChildEquation, nestedScopeGenerated,
+                              aroundScopeGenerated, scopeFrame]
+                          · refine
+                              ⟨inner, scopeBodyEquality, ?_, ?_⟩
+                            · intro body
+                              dsimp [scopeFrame]
+                              calc
+                                _ = finishBodyFor diagram outer.ids
+                                      (diagram.wiresAt region)
+                                      (around.context.fill body) :=
+                                  bindContextFor_fill diagram outer.ids
+                                    (diagram.wiresAt region)
+                                    around.context body
+                                _ = finishBodyFor diagram outer.ids
+                                      (diagram.wiresAt region)
+                                      (aroundScope.context.fill
+                                        (inner.fill body)) :=
+                                  congrArg
+                                    (finishBodyFor diagram outer.ids
+                                      (diagram.wiresAt region))
+                                    (replaceEquality body)
+                                _ = _ :=
+                                  (bindContextFor_fill diagram outer.ids
+                                    (diagram.wiresAt region)
+                                    aroundScope.context
+                                    (inner.fill body)).symm
+                            · dsimp [scopeFrame]
+                              calc
+                                _ = around.context.cutDepth :=
+                                  bindContextFor_cutDepth diagram outer.ids
+                                    (diagram.wiresAt region) around.context
+                                _ = aroundScope.context.cutDepth +
+                                      inner.cutDepth := depthEquality
+                                _ = _ :=
+                                  congrArg
+                                    (fun depth => depth + inner.cutDepth)
+                                    (bindContextFor_cutDepth diagram outer.ids
+                                      (diagram.wiresAt region)
+                                      aroundScope.context).symm
+
 /-- The root-specialized frame produced for an explicit checked base site. -/
 abbrev SiteFrame
     {definitions : List (List Sig)}
@@ -1176,6 +1771,52 @@ theorem frame_generated
         (WireContext.empty base.val) =
       some compiled.frame :=
   compiled.frame_compiles
+
+/--
+Factor this exact generated root-to-site receipt at any enclosing scope. The
+scope receipt is reconstructed by inversion of `frame_generated`; no site
+search or second compiler run is performed.
+-/
+theorem factorAt
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site)
+    (scope : base.val.RegionId)
+    (encloses : base.val.Encloses scope site) :
+    ∃ scopeCompiled : SiteCompilation base scope,
+      RegionFrame.Decomposes compiled.frame scopeCompiled.frame := by
+  have rootScope : base.val.Encloses base.val.root scope :=
+    of_decide_eq_true
+      ((List.all_eq_true.mp base.property.all_regions_reach_root)
+        scope (Data.Finite.mem_allFin scope))
+  obtain ⟨scopeFrame, generated, decomposed⟩ :=
+    compileRegionFrame?_decompose_at definitions base.val base.property
+      site scope (base.val.regionCount + 1) base.val.root
+      (WireContext.empty base.val) compiled.frame rootScope encloses
+      compiled.frame_generated
+  exact ⟨SiteCompilation.mk scopeFrame generated, decomposed⟩
+
+/--
+Usability projection: every replacement through the original site frame
+commutes with the enclosing scope decomposition returned by `factorAt`.
+-/
+theorem factorAt_replace
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site)
+    (scope : base.val.RegionId)
+    (encloses : base.val.Encloses scope site) :
+    ∃ (scopeCompiled : SiteCompilation base scope)
+      (inner : DiagramContext definitions compiled.frame.visible.sigs
+        scopeCompiled.frame.visible.sigs),
+      ∀ body : Region definitions compiled.frame.visible.sigs,
+        compiled.frame.context.fill body =
+          scopeCompiled.frame.context.fill (inner.fill body) := by
+  obtain ⟨scopeCompiled, inner, _, replace, _⟩ :=
+    compiled.factorAt scope encloses
+  exact ⟨scopeCompiled, inner, replace⟩
 
 /--
 Recover the exact ordinary compiler components at the retained explicit site.
