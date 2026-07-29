@@ -234,8 +234,7 @@ private theorem targetWire_injective
   ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_injective
     source removed
 
-/-- The count-preserving image of one region in the raw erase candidate. -/
-def targetRegion
+private def targetRegion
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
@@ -587,8 +586,12 @@ private def castVar
   cases equality
   rfl
 
-/-- The inverse intrinsic renaming for a visible erase-candidate context. -/
-def contextSection
+/-
+Canonical first-occurrence section of the visible erase-candidate context.
+The roundtrip laws below require the corresponding context identifiers to be
+Nodup.
+-/
+private def contextSection
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (context : ConcreteElaboration.WireContext source.val) :
