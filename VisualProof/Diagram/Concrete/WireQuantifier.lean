@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Diagram.Concrete.Subgraph.Factorization
 
 namespace VisualProof
 
@@ -1082,6 +1082,7 @@ structure RelationJoinStep
   priorNodeExact :
     prior.val.nodes priorApplication =
       .atom (priorRegionImage sourceRegion) relationArgs
+  priorSite : SiteCompilation prior (priorRegionImage sourceRegion)
   priorDyingOwner :
     prior.val.endpointOwner? ⟨priorApplication, .head⟩ =
       some (priorWireImage dying)
@@ -1157,6 +1158,27 @@ theorem base_generated
       ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
         step.prior step.priorApplication :=
   step.baseGenerated
+
+theorem prior_dying_scope_encloses_site
+    (step : RelationJoinStep source dying content) :
+    step.prior.val.Encloses
+        (step.priorRegionImage (source.val.wires dying).scope)
+        (step.priorRegionImage step.sourceRegion) := by
+  have occurrence :=
+    ConcreteDiagram.endpointOwner?_occurs step.prior.val
+      ⟨step.priorApplication, .head⟩ (step.priorWireImage dying)
+      step.priorDyingOwner
+  have checked :=
+    (List.all_eq_true.mp step.prior.property.wire_scopes_enclose)
+      (step.priorWireImage dying, ⟨step.priorApplication, .head⟩)
+      occurrence
+  have encloses :
+      step.prior.val.Encloses
+        (step.prior.val.wires (step.priorWireImage dying)).scope
+        (step.prior.val.nodes step.priorApplication).region :=
+    of_decide_eq_true checked
+  rw [step.priorWireScopeExact dying, step.priorNodeExact] at encloses
+  exact encloses
 
 @[simp] theorem checked_dying_scope
     (step : RelationJoinStep source dying content) :
@@ -1459,6 +1481,11 @@ private def spliceRelationApplication
                                         state.wireScopeExact sourceWire]
                                       apply Fin.ext
                                       rfl
+                                    match compileSite? state.checked
+                                        (state.regionImage application.region) with
+                                  | none =>
+                                      exact .error .invalidRemoval
+                                  | some priorSite =>
                                     let step :
                                         RelationJoinStep source wire content :=
                                       { application := application.node
@@ -1486,6 +1513,7 @@ private def spliceRelationApplication
                                         priorWireScopeExact :=
                                           state.wireScopeExact
                                         priorNodeExact := priorNodeExact
+                                        priorSite := priorSite
                                         priorDyingOwner := priorDyingOwner
                                         priorArguments := priorArguments
                                         priorArgumentsAccepted :=
