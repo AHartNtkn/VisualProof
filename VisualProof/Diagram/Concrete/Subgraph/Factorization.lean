@@ -1925,11 +1925,6 @@ theorem frame_generated
       some compiled.frame :=
   compiled.frame_compiles
 
-/--
-Factor this exact generated root-to-site receipt at any enclosing scope. The
-scope receipt is reconstructed by inversion of `frame_generated`; no site
-search or second compiler run is performed.
--/
 theorem factorAt
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
@@ -1951,7 +1946,6 @@ theorem factorAt
       compiled.frame_generated
   exact ⟨SiteCompilation.mk scopeFrame generated, decomposed⟩
 
-/-- Recover the typed generated relative origin with no compiler inputs. -/
 theorem factorAt_relative_origin
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
@@ -1965,25 +1959,31 @@ theorem factorAt_relative_origin
       (relativeVisible : relative.visible = compiled.frame.visible)
       (inner : DiagramContext definitions relative.visible.sigs
         (outer.extend scope).sigs)
-      (scopeVisible : scopeCompiled.frame.visible = outer.extend scope),
+      (scopeVisible : scopeCompiled.frame.visible = outer.extend scope)
+      (rootInner : DiagramContext definitions compiled.frame.visible.sigs
+        scopeCompiled.frame.visible.sigs),
       compileRegionFrame? definitions base.val site fuel scope outer = some relative ∧
       congrArg WireContext.sigs relativeVisible ▸ relative.siteBody =
         compiled.frame.siteBody ∧
       relative.context = bindContextFor base.val outer.ids
         (base.val.wiresAt scope) inner ∧
       congrArg WireContext.sigs scopeVisible ▸ scopeCompiled.frame.siteBody =
-        inner.fill relative.siteBody := by
+        inner.fill relative.siteBody ∧
+      scopeCompiled.frame.siteBody =
+        rootInner.fill compiled.frame.siteBody ∧
+      (∀ body : Region definitions compiled.frame.visible.sigs,
+        compiled.frame.context.fill body =
+          scopeCompiled.frame.context.fill (rootInner.fill body)) ∧
+      compiled.frame.context.cutDepth =
+        scopeCompiled.frame.context.cutDepth + rootInner.cutDepth := by
   obtain ⟨scopeCompiled, outer, fuel, relative, relativeVisible,
       generated, relativeBody, inner, relativeContext, scopeVisible,
-      scopeBody, _⟩ := compiled.factorAt scope encloses
+      scopeBody, rootInner, rootBody, replacementBody, cutDepth⟩ :=
+    compiled.factorAt scope encloses
   exact ⟨scopeCompiled, outer, fuel, relative, relativeVisible, inner,
-    scopeVisible, generated, relativeBody, relativeContext, scopeBody⟩
+    scopeVisible, rootInner, generated, relativeBody, relativeContext, scopeBody,
+    rootBody, replacementBody, cutDepth⟩
 
-/--
-Recover the exact ordinary compiler components at the retained explicit site.
-The outer context is derived from the generated frame path, never supplied by
-the caller.
--/
 theorem site_origin
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
