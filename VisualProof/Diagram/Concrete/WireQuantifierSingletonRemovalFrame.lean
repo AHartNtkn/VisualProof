@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemoval
+import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalInnerFrame
 
 namespace VisualProof
 
@@ -456,28 +456,7 @@ private theorem denoteRegion_equiv_cast_target
   subst targetActual
   exact canonical
 
-private def LocalReplacementEquiv
-    (source : CheckedDiagram definitions)
-    (removed : source.val.NodeId)
-    (sourceVisible : ConcreteElaboration.WireContext source.val)
-    (targetVisible :
-      ConcreteElaboration.WireContext (Target source removed))
-    (visibleExact :
-      targetVisible = targetContext source removed sourceVisible)
-    (replacement : Region definitions targetVisible.sigs)
-    (removedItem : Item definitions sourceVisible.sigs)
-    (pre : PreModel)
-    (definitionEnv : DefinitionEnv pre definitions) : Prop :=
-  ∀ targetEnv : Env pre targetVisible.sigs,
-    denoteRegion pre definitionEnv targetEnv replacement ↔
-      denoteItem pre definitionEnv
-        (Env.comp
-          (congrArg ConcreteElaboration.WireContext.sigs visibleExact ▸
-            targetEnv)
-          (contextRenaming source removed sourceVisible))
-        removedItem
-
-private theorem LocalReplacementEquiv.cast
+private theorem LocalReplacementAt.cast
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     {sourceLeft sourceRight :
@@ -494,13 +473,16 @@ private theorem LocalReplacementEquiv.cast
     (removedItem : Item definitions sourceLeft.sigs)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions)
+    (targetEnv : Env pre targetRight.sigs)
     (equivalent :
-      LocalReplacementEquiv source removed sourceLeft targetLeft leftExact
-        replacement removedItem pre definitionEnv) :
-    LocalReplacementEquiv source removed sourceRight targetRight rightExact
+      LocalReplacementAt source removed sourceLeft targetLeft leftExact
+        replacement removedItem pre definitionEnv
+        (congrArg ConcreteElaboration.WireContext.sigs targetSame.symm ▸
+          targetEnv)) :
+    LocalReplacementAt source removed sourceRight targetRight rightExact
       (congrArg ConcreteElaboration.WireContext.sigs targetSame ▸ replacement)
       (congrArg ConcreteElaboration.WireContext.sigs sourceSame ▸ removedItem)
-      pre definitionEnv := by
+      pre definitionEnv targetEnv := by
   subst sourceRight
   subst targetRight
   have exactProof : rightExact = leftExact := Subsingleton.elim _ _
@@ -517,6 +499,73 @@ private theorem env_comp_cast_renaming
       Env.comp (same.symm ▸ targetEnv) rho := by
   subst targetActual
   rfl
+
+private theorem DiagramContext.liftOuter_bindContextFor
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds : List diagram.WireId)
+    (localIds : List diagram.WireId)
+    (inner : DiagramContext definitions holeCtx
+      ((localIds ++ outerIds).map fun wire =>
+        (diagram.wires wire).sig))
+    {sig : Sig}
+    (value :
+      Var (outerIds.map fun wire => (diagram.wires wire).sig) sig) :
+    DiagramContext.liftOuter
+        (bindContextFor diagram outerIds localIds inner) value =
+      DiagramContext.liftOuter inner
+        (ConcreteElaboration.appendRightVar diagram localIds value) := by
+  induction localIds with
+  | nil => rfl
+  | cons head tail induction =>
+      simpa [bindContextFor, DiagramContext.liftOuter,
+        ConcreteElaboration.appendRightVar] using
+        induction
+          (.bind (diagram.wires head).sig inner)
+
+private theorem DiagramContext.preservesOuter_bindContextFor
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (inner : DiagramContext definitions holeCtx
+      (context.extend region).sigs)
+    (pre : PreModel)
+    (values : ConcreteElaboration.WireValues pre
+      ((diagram.wiresAt region).map fun wire =>
+        (diagram.wires wire).sig))
+    (fixed : Env pre context.sigs)
+    (descendant : Env pre holeCtx)
+    (preserves :
+      DiagramContext.PreservesOuter inner
+        (ConcreteElaboration.extendEnvironment diagram context region
+          values fixed)
+        descendant) :
+    DiagramContext.PreservesOuter
+      (bindContextFor diagram context.ids (diagram.wiresAt region) inner)
+      fixed descendant := by
+  unfold DiagramContext.PreservesOuter at preserves ⊢
+  funext sig value
+  change
+    descendant sig
+        (DiagramContext.liftOuter
+          (bindContextFor diagram context.ids
+            (diagram.wiresAt region) inner) value) =
+      fixed sig value
+  rw [DiagramContext.liftOuter_bindContextFor]
+  calc
+    descendant sig
+        (DiagramContext.liftOuter inner
+          (ConcreteElaboration.appendRightVar diagram
+            (diagram.wiresAt region) value)) =
+      ConcreteElaboration.extendEnvironment diagram context region values
+          fixed sig
+          (ConcreteElaboration.appendRightVar diagram
+            (diagram.wiresAt region) value) := by
+        exact congrFun (congrFun preserves sig)
+          (ConcreteElaboration.appendRightVar diagram
+            (diagram.wiresAt region) value)
+    _ = fixed sig value :=
+      ConcreteElaboration.extendEnvironment_appendRightVar diagram context
+        region values fixed value
 
 private theorem cast_symm_cast
     {α : Sort u} {motive : α → Sort v}
@@ -1182,18 +1231,23 @@ private theorem compileSiblingFrame_replacement
     (replacement : Region definitions targetNested.visible.sigs)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions)
+    (localLaw : Env pre targetNested.visible.sigs → Prop)
     (nestedEquiv :
       ∀ targetEnv :
           Env pre
             ((targetContext source removed context).extend
               (targetRegion source removed region)).sigs,
-        denoteRegion pre definitionEnv targetEnv
-            (targetNested.context.fill
-              (replacement.conjoin targetNested.siteBody)) ↔
-          denoteRegion pre definitionEnv
-            (Env.comp targetEnv
-              (extendedContextRenaming source removed context region))
-            (sourceNested.context.fill sourceNested.siteBody))
+        (∀ targetVisibleEnv : Env pre targetNested.visible.sigs,
+          DiagramContext.PreservesOuter targetNested.context targetEnv
+            targetVisibleEnv →
+          localLaw targetVisibleEnv) →
+        (denoteRegion pre definitionEnv targetEnv
+              (targetNested.context.fill
+                (replacement.conjoin targetNested.siteBody)) ↔
+            denoteRegion pre definitionEnv
+              (Env.comp targetEnv
+                (extendedContextRenaming source removed context region))
+              (sourceNested.context.fill sourceNested.siteBody)))
     (allAbove :
       ∀ child, child ∈ source.val.childrenOf region →
         ConcreteElaboration.ContextAbove source.val
@@ -1237,16 +1291,25 @@ private theorem compileSiblingFrame_replacement
               (extendedContextRenaming source removed context region))
             sourceLeading) →
       ∃ targetVisible : targetFrame.visible = targetNested.visible,
-        ∀ targetEnv,
-          denoteRegion pre definitionEnv targetEnv
-              (targetFrame.context.fill
-                ((congrArg ConcreteElaboration.WireContext.sigs
-                    targetVisible.symm ▸ replacement).conjoin
-                  targetFrame.siteBody)) ↔
-            denoteRegion pre definitionEnv
-              (Env.comp targetEnv
-                (extendedContextRenaming source removed context region))
-              (sourceFrame.context.fill sourceFrame.siteBody) := by
+        ∀ (targetEnv :
+            Env pre
+              ((targetContext source removed context).extend
+                (targetRegion source removed region)).sigs),
+          (∀ targetVisibleEnv : Env pre targetFrame.visible.sigs,
+            DiagramContext.PreservesOuter targetFrame.context targetEnv
+              targetVisibleEnv →
+            localLaw
+              (congrArg ConcreteElaboration.WireContext.sigs
+                targetVisible ▸ targetVisibleEnv)) →
+          (denoteRegion pre definitionEnv targetEnv
+                (targetFrame.context.fill
+                  ((congrArg ConcreteElaboration.WireContext.sigs
+                      targetVisible.symm ▸ replacement).conjoin
+                    targetFrame.siteBody)) ↔
+              denoteRegion pre definitionEnv
+                (Env.comp targetEnv
+                  (extendedContextRenaming source removed context region))
+                (sourceFrame.context.fill sourceFrame.siteBody)) := by
   intro sourceLeading targetLeading children
   induction children generalizing sourceLeading targetLeading with
   | nil =>
@@ -1286,7 +1349,8 @@ private theorem compileSiblingFrame_replacement
           Option.some.inj targetFrameEquation
         subst sourceFrame
         subst targetFrame
-        refine ⟨rfl, fun targetEnv => ?_⟩
+        refine ⟨rfl, ?_⟩
+        intro targetEnv localHyp
         have suffixEquiv :=
           compiledChildren_equiv source.val (Target source removed)
             (ConcreteElaboration.compileRegion? definitions source.val fuel)
@@ -1322,7 +1386,12 @@ private theorem compileSiblingFrame_replacement
             (by
               simpa only [denoteRegion, denoteItemSeq_cons,
                 denoteItemSeq, denoteItem, and_true] using
-                not_congr (nestedEquiv targetEnv))
+                not_congr
+                  (nestedEquiv targetEnv (by
+                    intro targetVisibleEnv preserves
+                    exact localHyp targetVisibleEnv (by
+                      simpa [DiagramContext.PreservesOuter,
+                        DiagramContext.liftOuter] using preserves))))
             suffixEquiv)
       · have targetDifferent :
             targetRegion source removed child ≠
@@ -1562,12 +1631,15 @@ private theorem compileRegionFrame_replacement
           some (.cons removedItem .nil))
       (pre : PreModel)
       (definitionEnv : DefinitionEnv pre definitions)
-      (localEquiv :
-        LocalReplacementEquiv source removed sourceFrame.visible
-          targetFrame.visible visibleExact replacement removedItem pre
-          definitionEnv)
       (targetEnv :
-        Env pre targetOuter.sigs),
+        Env pre targetOuter.sigs)
+      (localEquiv :
+        ∀ targetVisibleEnv : Env pre targetFrame.visible.sigs,
+          DiagramContext.PreservesOuter targetFrame.context targetEnv
+              targetVisibleEnv →
+            LocalReplacementAt source removed sourceFrame.visible
+              targetFrame.visible visibleExact replacement removedItem pre
+              definitionEnv targetVisibleEnv),
       denoteRegion pre definitionEnv targetEnv
           (targetFrame.context.fill
             (replacement.conjoin targetFrame.siteBody)) ↔
@@ -1587,7 +1659,7 @@ private theorem compileRegionFrame_replacement
   | succ childFuel induction =>
       intro sourceOuter targetOuter outerExact region sourceAbove sourceFrame
         targetFrame sourceCompiled targetCompiled visibleExact replacement
-        removedItem removedCompiled pre definitionEnv localEquiv targetEnv
+        removedItem removedCompiled pre definitionEnv targetEnv localEquiv
       subst targetOuter
       by_cases atSite :
           region = (source.val.nodes removed).region
@@ -1656,14 +1728,24 @@ private theorem compileRegionFrame_replacement
                   ((targetContext source removed sourceOuter).extend
                     (targetRegion source removed
                       (source.val.nodes removed).region)).sigs,
-              denoteRegion pre definitionEnv currentTarget replacement ↔
+              DiagramContext.PreservesOuter
+                  (definitions := definitions)
+                  (bindContextFor (definitions := definitions)
+                    (Target source removed)
+                    (targetContext source removed sourceOuter).ids
+                    ((Target source removed).wiresAt
+                      (targetRegion source removed
+                        (source.val.nodes removed).region))
+                    .hole)
+                  targetEnv currentTarget →
+              (denoteRegion pre definitionEnv currentTarget replacement ↔
                 denoteItem pre definitionEnv
                   (Env.comp currentTarget
                     (extendedContextRenaming source removed sourceOuter
                       (source.val.nodes removed).region))
-                  removedItem := by
-          intro currentTarget
-          have equivalent := localEquiv currentTarget
+                  removedItem) := by
+          intro currentTarget preserves
+          have equivalent := localEquiv currentTarget preserves
           have environments :=
             env_comp_cast_renaming
               (congrArg ConcreteElaboration.WireContext.sigs
@@ -1695,20 +1777,30 @@ private theorem compileRegionFrame_replacement
                   ((targetContext source removed sourceOuter).extend
                     (targetRegion source removed
                       (source.val.nodes removed).region)).sigs,
-              denoteRegion pre definitionEnv currentTarget
+              DiagramContext.PreservesOuter
+                  (definitions := definitions)
+                  (bindContextFor (definitions := definitions)
+                    (Target source removed)
+                    (targetContext source removed sourceOuter).ids
+                    ((Target source removed).wiresAt
+                      (targetRegion source removed
+                        (source.val.nodes removed).region))
+                    .hole)
+                  targetEnv currentTarget →
+              (denoteRegion pre definitionEnv currentTarget
                   (replacement.conjoin targetBody) ↔
                 denoteRegion pre definitionEnv
                   (Env.comp currentTarget
                     (extendedContextRenaming source removed sourceOuter
                       (source.val.nodes removed).region))
-                  sourceBody := by
-          intro currentTarget
+                  sourceBody) := by
+          intro currentTarget preserves
           exact
             compileScopeBody_replacement source removed candidateWellFormed
               childFuel sourceOuter sourceAbove sourceBody targetBody
               sourceBodyCompiled targetBodyCompiled replacement removedItem
               removedCompiled pre definitionEnv currentTarget
-              (replacementEquiv currentTarget)
+              (replacementEquiv currentTarget preserves)
         change
           denoteRegion pre definitionEnv targetEnv
               ((bindContextFor (Target source removed)
@@ -1739,7 +1831,16 @@ private theorem compileRegionFrame_replacement
               targetEnv rfl).2 targetValues
           refine ⟨sourceValues, ?_⟩
           rw [environments]
-          exact (coreEquiv _).mp targetCore
+          exact
+            (coreEquiv _
+              (DiagramContext.preservesOuter_bindContextFor
+                (Target source removed)
+                (targetContext source removed sourceOuter)
+                (targetRegion source removed
+                  (source.val.nodes removed).region)
+                .hole pre targetValues targetEnv _ (by
+                  unfold DiagramContext.PreservesOuter
+                  rfl))).mp targetCore
         · rintro ⟨sourceValues, sourceCore⟩
           obtain ⟨targetValues, environments⟩ :=
             (extendedEnvironment_correspondence source removed sourceOuter
@@ -1748,7 +1849,16 @@ private theorem compileRegionFrame_replacement
                 (contextRenaming source removed sourceOuter))
               targetEnv rfl).1 sourceValues
           refine ⟨targetValues, ?_⟩
-          apply (coreEquiv _).mpr
+          apply
+            (coreEquiv _
+              (DiagramContext.preservesOuter_bindContextFor
+                (Target source removed)
+                (targetContext source removed sourceOuter)
+                (targetRegion source removed
+                  (source.val.nodes removed).region)
+                .hole pre targetValues targetEnv _ (by
+                  unfold DiagramContext.PreservesOuter
+                  rfl))).mpr
           rw [environments] at sourceCore
           exact sourceCore
       · have targetAtSite :
@@ -1857,13 +1967,6 @@ private theorem compileRegionFrame_replacement
           simpa only [nestedRemovedItem, cast_itemSeq_singleton] using
             (compileNodes_cast_context source.val sourceAroundVisible
               [removed] removedCompiled)
-        have nestedLocal :
-            LocalReplacementEquiv source removed sourceNested.visible
-              targetNested.visible nestedVisibleExact nestedReplacement
-              nestedRemovedItem pre definitionEnv :=
-          LocalReplacementEquiv.cast source removed sourceAroundVisible
-            targetAroundVisible visibleExact nestedVisibleExact replacement
-            removedItem pre definitionEnv localEquiv
         have selectedMember :
             selected ∈ source.val.childrenOf region :=
           List.mem_of_find?_eq_some selectedFound
@@ -1896,15 +1999,22 @@ private theorem compileRegionFrame_replacement
                 Env pre
                   ((targetContext source removed sourceOuter).extend
                     (targetRegion source removed region)).sigs,
-              denoteRegion pre definitionEnv currentTarget
+              (∀ targetVisibleEnv : Env pre targetNested.visible.sigs,
+                DiagramContext.PreservesOuter targetNested.context
+                    currentTarget targetVisibleEnv →
+                  LocalReplacementAt source removed sourceNested.visible
+                    targetNested.visible nestedVisibleExact
+                    nestedReplacement nestedRemovedItem pre definitionEnv
+                    targetVisibleEnv) →
+              (denoteRegion pre definitionEnv currentTarget
                   (targetNested.context.fill
                     (nestedReplacement.conjoin targetNested.siteBody)) ↔
                 denoteRegion pre definitionEnv
                   (Env.comp currentTarget
                     (extendedContextRenaming source removed sourceOuter
                       region))
-                  (sourceNested.context.fill sourceNested.siteBody) := by
-          intro currentTarget
+                  (sourceNested.context.fill sourceNested.siteBody)) := by
+          intro currentTarget nestedLocal
           have recursive :=
             induction (sourceOuter.extend region)
               ((targetContext source removed sourceOuter).extend
@@ -1912,8 +2022,8 @@ private theorem compileRegionFrame_replacement
               targetExtendedExact selected selectedAbove sourceNested
               targetNested sourceNestedCompiled targetNestedCompiled
               nestedVisibleExact nestedReplacement nestedRemovedItem
-              nestedRemovedCompiled pre definitionEnv nestedLocal
-              currentTarget
+              nestedRemovedCompiled pre definitionEnv currentTarget
+              nestedLocal
           have environments :=
             env_comp_cast_renaming
               (congrArg ConcreteElaboration.WireContext.sigs
@@ -1978,7 +2088,12 @@ private theorem compileRegionFrame_replacement
           compileSiblingFrame_replacement source removed
             candidateWellFormed childFuel sourceOuter region selected
             sourceNested targetNested nestedReplacement pre definitionEnv
-            nestedEquiv allChildrenAbove allOtherChildrenOutside sourceNodes
+            (fun targetVisibleEnv =>
+              LocalReplacementAt source removed sourceNested.visible
+                targetNested.visible nestedVisibleExact nestedReplacement
+                nestedRemovedItem pre definitionEnv targetVisibleEnv)
+            nestedEquiv
+            allChildrenAbove allOtherChildrenOutside sourceNodes
             targetNodes (source.val.childrenOf region) (fun _ member => member)
             childrenNodup selectedMember sourceAroundCompiled
             (by
@@ -2002,6 +2117,59 @@ private theorem compileRegionFrame_replacement
             cast_symm_cast
               (congrArg ConcreteElaboration.WireContext.sigs
                 targetAroundVisible) replacement
+        have aroundLocal :
+            ∀ (targetValues :
+                ConcreteElaboration.WireValues pre
+                  (((Target source removed).wiresAt
+                    (targetRegion source removed region)).map
+                      fun wire => ((Target source removed).wires wire).sig))
+              (targetAroundEnv : Env pre targetAround.visible.sigs),
+              DiagramContext.PreservesOuter targetAround.context
+                  (ConcreteElaboration.extendEnvironment
+                    (Target source removed)
+                    (targetContext source removed sourceOuter)
+                    (targetRegion source removed region) targetValues
+                    targetEnv)
+                  targetAroundEnv →
+                LocalReplacementAt source removed sourceNested.visible
+                  targetNested.visible nestedVisibleExact nestedReplacement
+                  nestedRemovedItem pre definitionEnv
+                  (congrArg ConcreteElaboration.WireContext.sigs
+                    replacementVisible ▸ targetAroundEnv) := by
+          intro targetValues targetAroundEnv preserves
+          have fullPreserves :=
+            DiagramContext.preservesOuter_bindContextFor
+              (Target source removed)
+              (targetContext source removed sourceOuter)
+              (targetRegion source removed region)
+              targetAround.context pre targetValues targetEnv
+              targetAroundEnv preserves
+          have aroundLaw := localEquiv targetAroundEnv fullPreserves
+          have visibleProof :
+              replacementVisible = targetAroundVisible :=
+            Subsingleton.elim _ _
+          rw [visibleProof]
+          have casted :=
+            LocalReplacementAt.cast source removed sourceAroundVisible
+              targetAroundVisible visibleExact nestedVisibleExact replacement
+              removedItem pre definitionEnv
+              (congrArg ConcreteElaboration.WireContext.sigs
+                targetAroundVisible ▸ targetAroundEnv)
+              (by
+                have environmentTransport :
+                    congrArg ConcreteElaboration.WireContext.sigs
+                        targetAroundVisible.symm ▸
+                      (congrArg ConcreteElaboration.WireContext.sigs
+                          targetAroundVisible ▸
+                        targetAroundEnv) =
+                      targetAroundEnv :=
+                  cast_symm_cast
+                    (congrArg ConcreteElaboration.WireContext.sigs
+                      targetAroundVisible)
+                    targetAroundEnv
+                rw [environmentTransport]
+                exact aroundLaw)
+          simpa [nestedReplacement, nestedRemovedItem] using casted
         change
           denoteRegion pre definitionEnv targetEnv
               ((bindContextFor (Target source removed)
@@ -2041,7 +2209,16 @@ private theorem compileRegionFrame_replacement
                     targetAround.siteBody)) := by
             rw [replacementTransport]
             exact targetCore
-          have sourceResult := (aroundEquiv _).mp targetCore'
+          have aroundAt :=
+            aroundEquiv
+              (ConcreteElaboration.extendEnvironment
+                (Target source removed)
+                (targetContext source removed sourceOuter)
+                (targetRegion source removed region) targetValues targetEnv)
+              (by
+                intro targetAroundEnv preserves
+                exact aroundLocal targetValues targetAroundEnv preserves)
+          have sourceResult := aroundAt.mp targetCore'
           exact environments.symm ▸ sourceResult
         · rintro ⟨sourceValues, sourceCore⟩
           obtain ⟨targetValues, environments⟩ :=
@@ -2051,10 +2228,452 @@ private theorem compileRegionFrame_replacement
                 (contextRenaming source removed sourceOuter))
               targetEnv rfl).1 sourceValues
           refine ⟨targetValues, ?_⟩
+          have aroundAt :=
+            aroundEquiv
+              (ConcreteElaboration.extendEnvironment
+                (Target source removed)
+                (targetContext source removed sourceOuter)
+                (targetRegion source removed region) targetValues targetEnv)
+              (by
+                intro targetAroundEnv preserves
+                exact aroundLocal targetValues targetAroundEnv preserves)
           have targetResult :=
-            (aroundEquiv _).mpr (environments ▸ sourceCore)
+            aroundAt.mpr (environments ▸ sourceCore)
           rw [replacementTransport] at targetResult
           exact targetResult
+
+/--
+Retain the paired contexts immediately inside any enclosing region's binders.
+The semantic receipt fixes one target environment for that enclosing extended
+context and asks for the local replacement law only in descendants preserving
+that fixed environment.
+-/
+theorem PairedGeneratedFrame.enclosing_replacement_receipt
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (erasure : CheckedErasure source removed)
+    (region : source.val.RegionId)
+    (fuel : Nat)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (sourceFrame : RegionFrame definitions source.val sourceOuter)
+    (paired :
+      PairedGeneratedFrame source removed
+        (source.val.nodes removed).region region fuel sourceOuter sourceFrame)
+    (removedItem : Item definitions sourceFrame.visible.sigs)
+    (removedCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          sourceFrame.visible [removed] =
+        some (.cons removedItem .nil))
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre definitions) :
+    ∃ targetFrame :
+        RegionFrame definitions (Target source removed)
+          (targetContext source removed sourceOuter),
+      compileRegionFrame? definitions (Target source removed)
+          (targetRegion source removed (source.val.nodes removed).region)
+          fuel (targetRegion source removed region)
+          (targetContext source removed sourceOuter) =
+        some targetFrame ∧
+      ∃ visibleExact :
+          targetFrame.visible =
+            targetContext source removed sourceFrame.visible,
+        ∀ replacement : Region definitions targetFrame.visible.sigs,
+          ∃ inner :
+              PairedInnerFrame source removed region sourceOuter sourceFrame
+                targetFrame,
+            inner.ReplacementDenotation visibleExact replacement removedItem
+              pre definitionEnv := by
+  cases paired with
+  | intro targetFrame sourceAbove _ sourceGenerated targetGenerated
+      visibleExact =>
+    refine ⟨targetFrame, targetGenerated, visibleExact, ?_⟩
+    intro replacement
+    cases fuel with
+    | zero =>
+        simp [compileRegionFrame?] at sourceGenerated
+    | succ childFuel =>
+      by_cases atSite : region = (source.val.nodes removed).region
+      · subst region
+        simp only [compileRegionFrame?, ↓reduceDIte] at sourceGenerated targetGenerated
+        obtain ⟨sourceBody, sourceBodyCompiled, sourceEquation⟩ :=
+          Option.bind_eq_some_iff.mp sourceGenerated
+        obtain ⟨targetBody, targetBodyCompiled, targetEquation⟩ :=
+          Option.bind_eq_some_iff.mp targetGenerated
+        have sourceExact :
+            ({ visible :=
+                 sourceOuter.extend (source.val.nodes removed).region
+               siteBody := sourceBody
+               context :=
+                 bindContextFor source.val sourceOuter.ids
+                   (source.val.wiresAt (source.val.nodes removed).region)
+                   .hole } :
+              RegionFrame definitions source.val sourceOuter) =
+              sourceFrame :=
+          Option.some.inj sourceEquation
+        have targetExact :
+            ({ visible :=
+                 (targetContext source removed sourceOuter).extend
+                   (targetRegion source removed
+                     (source.val.nodes removed).region)
+               siteBody := targetBody
+               context :=
+                 bindContextFor (Target source removed)
+                   (targetContext source removed sourceOuter).ids
+                   ((Target source removed).wiresAt
+                     (targetRegion source removed
+                       (source.val.nodes removed).region))
+                   .hole } :
+              RegionFrame definitions (Target source removed)
+                (targetContext source removed sourceOuter)) =
+              targetFrame :=
+          Option.some.inj targetEquation
+        subst sourceFrame
+        subst targetFrame
+        dsimp only at visibleExact removedCompiled ⊢
+        let inner :
+            PairedInnerFrame source removed
+              (source.val.nodes removed).region sourceOuter
+              { visible :=
+                  sourceOuter.extend (source.val.nodes removed).region
+                siteBody := sourceBody
+                context :=
+                  bindContextFor source.val sourceOuter.ids
+                    (source.val.wiresAt
+                      (source.val.nodes removed).region) .hole }
+              { visible :=
+                  (targetContext source removed sourceOuter).extend
+                    (targetRegion source removed
+                      (source.val.nodes removed).region)
+                siteBody := targetBody
+                context :=
+                  bindContextFor (Target source removed)
+                    (targetContext source removed sourceOuter).ids
+                    ((Target source removed).wiresAt
+                      (targetRegion source removed
+                        (source.val.nodes removed).region)) .hole } :=
+          ⟨.hole, .hole, rfl, rfl⟩
+        refine ⟨inner, ?_⟩
+        intro fixedTargetEnv localLaw
+        have visibleProof :
+            visibleExact =
+              (targetContext_extend source removed sourceOuter
+                (source.val.nodes removed).region).symm :=
+          Subsingleton.elim _ _
+        rw [visibleProof] at localLaw
+        have localAt := localLaw fixedTargetEnv (by
+          unfold DiagramContext.PreservesOuter
+          rfl)
+        have environments :=
+          env_comp_cast_renaming
+            (congrArg ConcreteElaboration.WireContext.sigs
+              (targetContext_extend source removed sourceOuter
+                (source.val.nodes removed).region))
+            (contextRenaming source removed
+              (sourceOuter.extend (source.val.nodes removed).region))
+            pre fixedTargetEnv
+        apply
+          compileScopeBody_replacement source removed
+            erasure.candidate_wellFormed childFuel sourceOuter sourceAbove
+            sourceBody targetBody sourceBodyCompiled targetBodyCompiled
+            replacement removedItem removedCompiled pre definitionEnv
+            fixedTargetEnv
+        unfold LocalReplacementAt at localAt
+        constructor
+        · intro replacementHolds
+          exact environments.symm ▸ localAt.mp replacementHolds
+        · intro removedHolds
+          apply localAt.mpr
+          exact environments ▸ removedHolds
+      · have targetAtSite :
+            targetRegion source removed region ≠
+              targetRegion source removed (source.val.nodes removed).region :=
+          fun same => atSite (targetRegion_injective source removed same)
+        simp only [compileRegionFrame?, atSite, targetAtSite,
+          ↓reduceDIte] at sourceGenerated targetGenerated
+        obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
+          Option.bind_eq_some_iff.mp sourceGenerated
+        obtain ⟨selected, selectedFound, sourceAfterSelected⟩ :=
+          Option.bind_eq_some_iff.mp sourceAfterNodes
+        obtain ⟨sourceNested, sourceNestedCompiled, sourceAfterNested⟩ :=
+          Option.bind_eq_some_iff.mp sourceAfterSelected
+        obtain ⟨sourceAround, sourceAroundCompiled, sourceEquation⟩ :=
+          Option.bind_eq_some_iff.mp sourceAfterNested
+        obtain ⟨targetNodes, targetNodesCompiled, targetAfterNodes⟩ :=
+          Option.bind_eq_some_iff.mp targetGenerated
+        obtain ⟨targetSelected, targetSelectedFound, targetAfterSelected⟩ :=
+          Option.bind_eq_some_iff.mp targetAfterNodes
+        have targetSelectedExact :
+            targetSelected = targetRegion source removed selected := by
+          have mapped :=
+            erased_find_enclosing source removed
+              (source.val.nodes removed).region
+              (source.val.childrenOf region)
+          rw [selectedFound] at mapped
+          rw [target_childrenOf] at targetSelectedFound
+          exact Option.some.inj (targetSelectedFound.symm.trans mapped)
+        subst targetSelected
+        obtain ⟨targetNested, targetNestedCompiled, targetAfterNested⟩ :=
+          Option.bind_eq_some_iff.mp targetAfterSelected
+        obtain ⟨targetAround, targetAroundCompiled, targetEquation⟩ :=
+          Option.bind_eq_some_iff.mp targetAfterNested
+        have sourceExact :
+            ({ visible := sourceAround.visible
+               siteBody := sourceAround.siteBody
+               context :=
+                 bindContextFor source.val sourceOuter.ids
+                   (source.val.wiresAt region) sourceAround.context } :
+              RegionFrame definitions source.val sourceOuter) =
+              sourceFrame :=
+          Option.some.inj sourceEquation
+        have targetExact :
+            ({ visible := targetAround.visible
+               siteBody := targetAround.siteBody
+               context :=
+                 bindContextFor (Target source removed)
+                   (targetContext source removed sourceOuter).ids
+                   ((Target source removed).wiresAt
+                     (targetRegion source removed region))
+                   targetAround.context } :
+              RegionFrame definitions (Target source removed)
+                (targetContext source removed sourceOuter)) =
+              targetFrame :=
+          Option.some.inj targetEquation
+        subst sourceFrame
+        subst targetFrame
+        dsimp only at visibleExact removedCompiled ⊢
+        obtain ⟨sourceAroundVisible, _⟩ :=
+          siblingFrame_site_eq definitions source.val childFuel
+            (sourceOuter.extend region) selected sourceNested sourceNodes
+            (source.val.childrenOf region) sourceAround
+            sourceAroundCompiled
+        obtain ⟨targetAroundVisible, _⟩ :=
+          siblingFrame_site_eq definitions (Target source removed)
+            childFuel
+            ((targetContext source removed sourceOuter).extend
+              (targetRegion source removed region))
+            (targetRegion source removed selected) targetNested targetNodes
+            ((source.val.childrenOf region).map (targetRegion source removed))
+            targetAround (by
+              rw [← target_childrenOf]
+              exact targetAroundCompiled)
+        have nestedVisibleExact :
+            targetNested.visible =
+              targetContext source removed sourceNested.visible := by
+          calc
+            targetNested.visible = targetAround.visible :=
+              targetAroundVisible.symm
+            _ = targetContext source removed sourceAround.visible :=
+              visibleExact
+            _ = targetContext source removed sourceNested.visible :=
+              congrArg (targetContext source removed) sourceAroundVisible
+        let nestedReplacement :
+            Region definitions targetNested.visible.sigs :=
+          congrArg ConcreteElaboration.WireContext.sigs
+            targetAroundVisible ▸ replacement
+        let nestedRemovedItem :
+            Item definitions sourceNested.visible.sigs :=
+          congrArg ConcreteElaboration.WireContext.sigs
+            sourceAroundVisible ▸ removedItem
+        have nestedRemovedCompiled :
+            ConcreteElaboration.compileNodes? definitions source.val
+                sourceNested.visible [removed] =
+              some (.cons nestedRemovedItem .nil) := by
+          simpa only [nestedRemovedItem, cast_itemSeq_singleton] using
+            (compileNodes_cast_context source.val sourceAroundVisible
+              [removed] removedCompiled)
+        have selectedMember :
+            selected ∈ source.val.childrenOf region :=
+          List.mem_of_find?_eq_some selectedFound
+        have selectedAbove :
+            ConcreteElaboration.ContextAbove source.val
+              (sourceOuter.extend region) selected :=
+          ConcreteElaboration.extend_above_child definitions source.val
+            source.property sourceOuter region selected sourceAbove
+            (ConcreteElaboration.mem_childrenOf source.val region selected
+              selectedMember)
+        have nestedEquiv :
+            ∀ fixedTargetEnv :
+                Env pre
+                  ((targetContext source removed sourceOuter).extend
+                    (targetRegion source removed region)).sigs,
+              (∀ descendant : Env pre targetNested.visible.sigs,
+                DiagramContext.PreservesOuter targetNested.context
+                    fixedTargetEnv descendant →
+                  LocalReplacementAt source removed sourceNested.visible
+                    targetNested.visible nestedVisibleExact
+                    nestedReplacement nestedRemovedItem pre definitionEnv
+                    descendant) →
+              (denoteRegion pre definitionEnv fixedTargetEnv
+                    (targetNested.context.fill
+                      (nestedReplacement.conjoin targetNested.siteBody)) ↔
+                denoteRegion pre definitionEnv
+                  (Env.comp fixedTargetEnv
+                    (extendedContextRenaming source removed sourceOuter
+                      region))
+                  (sourceNested.context.fill sourceNested.siteBody)) := by
+          intro fixedTargetEnv localLaw
+          have recursive :=
+            compileRegionFrame_replacement source removed
+              erasure.candidate_wellFormed childFuel
+              (sourceOuter.extend region)
+              ((targetContext source removed sourceOuter).extend
+                (targetRegion source removed region))
+              (targetContext_extend source removed sourceOuter region).symm
+              selected selectedAbove sourceNested targetNested
+              sourceNestedCompiled targetNestedCompiled nestedVisibleExact
+              nestedReplacement nestedRemovedItem nestedRemovedCompiled pre
+              definitionEnv fixedTargetEnv localLaw
+          have environments :=
+            env_comp_cast_renaming
+              (congrArg ConcreteElaboration.WireContext.sigs
+                (targetContext_extend source removed sourceOuter region))
+              (contextRenaming source removed (sourceOuter.extend region))
+              pre fixedTargetEnv
+          constructor
+          · intro targetHolds
+            exact environments.symm ▸ recursive.mp targetHolds
+          · intro sourceHolds
+            apply recursive.mpr
+            exact environments ▸ sourceHolds
+        have sourceExtendedNodup :
+            (sourceOuter.extend region).ids.Nodup :=
+          ConcreteElaboration.extend_nodup definitions source.val
+            source.property sourceOuter region sourceAbove
+        have leadingEquiv :
+            ∀ fixedTargetEnv,
+              denoteItemSeq pre definitionEnv fixedTargetEnv targetNodes ↔
+                denoteItemSeq pre definitionEnv
+                  (Env.comp fixedTargetEnv
+                    (extendedContextRenaming source removed sourceOuter
+                      region))
+                  sourceNodes := by
+          intro fixedTargetEnv
+          exact
+            compiledNodes_outside_extended source removed
+              erasure.candidate_wellFormed sourceOuter region
+              sourceExtendedNodup
+              (removed_not_mem_nodesAt_of_ne source removed region atSite)
+              sourceNodesCompiled targetNodesCompiled pre definitionEnv
+              fixedTargetEnv
+        have childrenNodup :
+            (source.val.childrenOf region).Nodup := by
+          unfold ConcreteDiagram.childrenOf ConcreteDiagram.regionsList
+          exact (Data.Finite.allFin_nodup source.val.regionCount).filter _
+        have allAbove :
+            ∀ child, child ∈ source.val.childrenOf region →
+              ConcreteElaboration.ContextAbove source.val
+                (sourceOuter.extend region) child := by
+          intro child member
+          exact
+            ConcreteElaboration.extend_above_child definitions source.val
+              source.property sourceOuter region child sourceAbove
+              (ConcreteElaboration.mem_childrenOf source.val region child
+                member)
+        have selectedEncloses :
+            source.val.Encloses selected
+              (source.val.nodes removed).region :=
+          of_decide_eq_true
+            (List.find?_some
+              (p := fun candidate =>
+                decide
+                  (source.val.Encloses candidate
+                    (source.val.nodes removed).region))
+              selectedFound)
+        have outsideOther :
+            ∀ child, child ∈ source.val.childrenOf region →
+              child ≠ selected →
+                ¬source.val.Encloses child
+                  (source.val.nodes removed).region := by
+          intro child member different childSite
+          exact different
+            (enclosing_children_unique source region child selected
+              (source.val.nodes removed).region member selectedMember
+              childSite selectedEncloses)
+        obtain ⟨replacementVisible, aroundEquiv⟩ :=
+          compileSiblingFrame_replacement source removed
+            erasure.candidate_wellFormed childFuel sourceOuter region selected
+            sourceNested targetNested nestedReplacement pre definitionEnv
+            (fun descendant =>
+              LocalReplacementAt source removed sourceNested.visible
+                targetNested.visible nestedVisibleExact nestedReplacement
+                nestedRemovedItem pre definitionEnv descendant)
+            nestedEquiv allAbove outsideOther sourceNodes targetNodes
+            (source.val.childrenOf region) (fun _ member => member)
+            childrenNodup selectedMember sourceAroundCompiled (by
+              rw [← target_childrenOf]
+              exact targetAroundCompiled)
+            leadingEquiv
+        have replacementTransport :
+            congrArg ConcreteElaboration.WireContext.sigs
+                  replacementVisible.symm ▸
+                nestedReplacement =
+              replacement := by
+          unfold nestedReplacement
+          have reverseProof :
+              congrArg ConcreteElaboration.WireContext.sigs
+                  replacementVisible.symm =
+                (congrArg ConcreteElaboration.WireContext.sigs
+                  targetAroundVisible).symm :=
+            Subsingleton.elim _ _
+          rw [reverseProof]
+          exact
+            cast_symm_cast
+              (congrArg ConcreteElaboration.WireContext.sigs
+                targetAroundVisible) replacement
+        let inner :
+            PairedInnerFrame source removed region sourceOuter
+              { visible := sourceAround.visible
+                siteBody := sourceAround.siteBody
+                context :=
+                  bindContextFor source.val sourceOuter.ids
+                    (source.val.wiresAt region) sourceAround.context }
+              { visible := targetAround.visible
+                siteBody := targetAround.siteBody
+                context :=
+                  bindContextFor (Target source removed)
+                    (targetContext source removed sourceOuter).ids
+                    ((Target source removed).wiresAt
+                      (targetRegion source removed region))
+                    targetAround.context } :=
+          ⟨sourceAround.context, targetAround.context, rfl, rfl⟩
+        refine ⟨inner, ?_⟩
+        intro fixedTargetEnv localLaw
+        change
+          denoteRegion pre definitionEnv fixedTargetEnv
+              (targetAround.context.fill
+                (replacement.conjoin targetAround.siteBody)) ↔
+            denoteRegion pre definitionEnv
+              (Env.comp fixedTargetEnv
+                (extendedContextRenaming source removed sourceOuter region))
+              (sourceAround.context.fill sourceAround.siteBody)
+        rw [← replacementTransport]
+        apply aroundEquiv fixedTargetEnv
+        intro targetAroundEnv preserves
+        have aroundLaw := localLaw targetAroundEnv preserves
+        have visibleProof :
+            replacementVisible = targetAroundVisible :=
+          Subsingleton.elim _ _
+        rw [visibleProof]
+        have casted :=
+          LocalReplacementAt.cast source removed sourceAroundVisible
+            targetAroundVisible visibleExact nestedVisibleExact replacement
+            removedItem pre definitionEnv
+            (congrArg ConcreteElaboration.WireContext.sigs
+              targetAroundVisible ▸ targetAroundEnv)
+            (by
+              have environmentTransport :
+                  congrArg ConcreteElaboration.WireContext.sigs
+                      targetAroundVisible.symm ▸
+                    (congrArg ConcreteElaboration.WireContext.sigs
+                        targetAroundVisible ▸ targetAroundEnv) =
+                    targetAroundEnv :=
+                cast_symm_cast
+                  (congrArg ConcreteElaboration.WireContext.sigs
+                    targetAroundVisible)
+                  targetAroundEnv
+              rw [environmentTransport]
+              exact aroundLaw)
+        simpa [nestedReplacement, nestedRemovedItem] using casted
 
 /--
 Expose the two scope bodies immediately before the removed node's scope
@@ -2301,7 +2920,8 @@ theorem PairedGeneratedFrame.replacement_denotation
           (targetContext source removed sourceOuter) rfl region sourceAbove
           sourceFrame targetFrame sourceGenerated targetGenerated visibleExact
           replacement removedItem removedCompiled pre definitionEnv
-          localEquiv targetOuterEnv
+          targetOuterEnv (fun targetVisibleEnv _ =>
+            localEquiv targetVisibleEnv)
 
 end SingletonRemovalSemantics
 
