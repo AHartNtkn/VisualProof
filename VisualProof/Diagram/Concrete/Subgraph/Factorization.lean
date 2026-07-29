@@ -223,7 +223,7 @@ theorem bindContextFor_fill
       simpa [bindContextFor, DiagramContext.fill, finishBodyFor] using
         induction (.bind (diagram.wires head).sig inner)
 
-@[simp] theorem bindContextFor_cutDepth
+@[simp] private theorem bindContextFor_cutDepth
     (diagram : ConcreteDiagram definitionCount)
     (outerIds : List diagram.WireId)
     (localIds : List diagram.WireId)
