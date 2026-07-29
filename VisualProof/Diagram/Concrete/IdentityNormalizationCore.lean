@@ -246,7 +246,7 @@ Well-formedness is intentionally separate: identity normalization proves it
 from Rule-1 eligibility, while other checked structural owners may retain an
 independently checked candidate.
 -/
-def eraseNodeCandidate
+@[reducible] def eraseNodeCandidate
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId) :
     ConcreteDiagram definitions.length :=
@@ -284,7 +284,7 @@ def eraseNodeWire
     (wire : source.val.WireId) :
     (eraseNodeCandidate source node).WireId :=
   ⟨wire.val, by
-    simp [eraseNodeCandidate, ConcreteDiagram.wiresList,
+    simp [ConcreteDiagram.wiresList,
       Data.Finite.allFin_eq_finRange, wire.isLt]⟩
 
 theorem eraseNodeWire_injective
@@ -311,23 +311,7 @@ def dropCandidate
     (node : source.val.NodeId)
     (_eligible : DropEligibility source node) :
     ConcreteDiagram definitions.length :=
-  let nodes := retainedNodes source.val [node]
-  let wires := source.val.wiresList
-  { regionCount := source.val.regionCount
-    nodeCount := nodes.length
-    wireCount := wires.length
-    root := source.val.root
-    regions := source.val.regions
-    nodes := fun targetNode =>
-      source.val.nodes (nodes.get targetNode)
-    wires := fun targetWire =>
-      let sourceWire := wires.get targetWire
-      let data := source.val.wires sourceWire
-      { sig := data.sig
-        scope := data.scope
-        endpoints :=
-          reindexEndpoints nodes
-            (eraseNodeEndpoints node data.endpoints) } }
+  eraseNodeCandidate source node
 
 /-- Raw Rule 2 candidate. Its sole consumer is the preservation proof layer. -/
 def collapseCandidate
