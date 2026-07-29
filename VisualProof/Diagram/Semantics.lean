@@ -192,6 +192,20 @@ def Entails (left right : Region defs []) : Prop :=
       · rintro ⟨⟨headDenotes, tailDenotes⟩, rightDenotes⟩
         exact ⟨headDenotes, tailDenotes, rightDenotes⟩
 
+namespace Region
+
+@[simp] theorem denote_conjoin
+    (pre : PreModel) (definitions : DefinitionEnv pre defs)
+    (env : Env pre ctx) (left right : Region defs ctx) :
+    denoteRegion pre definitions env (left.conjoin right) ↔
+      denoteRegion pre definitions env left ∧
+        denoteRegion pre definitions env right := by
+  cases left
+  cases right
+  exact denoteItemSeq_append pre definitions env _ _
+
+end Region
+
 @[simp] theorem denoteItem_atom
     (pre : PreModel) (definitions : DefinitionEnv pre defs)
     (env : Env pre ctx) (head : Var ctx (.rel args))

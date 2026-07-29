@@ -899,6 +899,16 @@ git commit -m "feat: prove orderless identity transformations"
 
 - Create: `VisualProof/Rule/Tag.lean`
 - Create: `VisualProof/Rule/Structural.lean`
+- Create: `VisualProof/Diagram/Concrete/OpenCompilation.lean`
+- Correct: `VisualProof/Diagram/Concrete/Subgraph/Selection.lean`
+- Create: `VisualProof/Diagram/Concrete/Subgraph/SelectionFixtures.lean`
+- Correct: `VisualProof/Diagram/Concrete/Subgraph/Occurrence.lean`
+- Create: `VisualProof/Diagram/Concrete/Subgraph/OccurrenceFixtures.lean`
+- Correct: `VisualProof/Diagram/Concrete/Subgraph/Extract.lean`
+- Correct: `VisualProof/Diagram/Concrete/Subgraph/Splice.lean`
+- Correct: `VisualProof/Diagram/Concrete/Subgraph/Reconstruction.lean`
+- Correct: `VisualProof/Diagram/Concrete/Subgraph/Factorization*.lean`
+- Correct: `VisualProof/Rule/Identity*.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
@@ -909,6 +919,35 @@ git commit -m "feat: prove orderless identity transformations"
   `Directed`,
   structural checked transformations,
   and their prestructure-generic soundness theorems.
+
+- [ ] **Step 0: Correct the concrete selection and insertion authority**
+
+Replace the Task 5 selection receipt that incorrectly selected its ambient
+anchor and every descendant. Match the kernel's exact selection contract:
+
+- `region` is an unselected ambient anchor;
+- selected regions are direct child-subtree roots, with descendant closure
+  derived internally;
+- selected nodes are explicit direct anchor nodes plus nodes in selected
+  subtrees;
+- selected top-level wires are explicit anchor-scoped internal wires;
+- all other internally scoped and touching wires are derived;
+- extraction creates one ordered boundary stub per touching wire, not one per
+  endpoint crossing.
+
+Rebuild occurrence, extraction, removal, reconstruction, and factorization on
+that sole authority. Generalize concrete splice attachment to an arbitrary
+checked base diagram plus explicit site so the same constructor supports both
+replacement and non-replacing insertion. Migrate Task 6 identity-retargeting
+to the generalized splice without changing identity semantics or
+normalization. Canonical selection extraction requires its ordered boundary to
+equal the unique host-ordered touching-wire list; generic exact open-occurrence
+reconstruction remains separate and preserves repeated ordered boundary
+aliases. Add RED fixtures for partial direct-node selection, partial
+child-subtree selection, explicit anchor-scoped internal wires, one boundary
+class for a multiply incident touching wire, and a legal descendant target
+outside the selected content. Delete the old root-selected/crossing-boundary
+model; do not retain an adapter or parallel selection authority.
 
 - [ ] **Step 1: Define the exact tag inventory and failing coverage theorem**
 
@@ -933,10 +972,14 @@ constructor/checker returns an explicit orientation error. Prove soundness using
 
 - [ ] **Step 3: Implement ordinary and identity-retargeted copy rules**
 
-Iteration splices an exact extracted occurrence into the same or a descendant
-region outside the copied subgraph. Deiteration consumes a checked exact
-ancestor occurrence certificate. Prove conjunction contraction/weakening and
-invoke Task 6 only for retargeted attachments.
+Iteration non-destructively extracts the exact selection and splices it into
+the same anchor or a descendant region outside the copied content.
+Deiteration removes an explicitly selected inner copy only after checking an
+exact ancestor justifier occurrence and ordered attachment correspondence.
+Prove conjunction contraction/weakening through checker-derived concrete
+factorizations and invoke Task 6 only for checked identity-retargeted
+attachments. Freely constructed intrinsic contexts may be private proof
+machinery but are not durable concrete rule receipts.
 
 - [ ] **Step 4: Implement double-cut and vacuous wire rules**
 
@@ -964,9 +1007,14 @@ They must reject:
 lake build
 npm run formal:size
 git add -- \
+  docs/superpowers/plans/2026-07-27-zero-signature-hol-phase-3-lean-semantics.md \
   VisualProof.lean \
+  VisualProof/Diagram/Concrete/Subgraph \
   VisualProof/Rule/Tag.lean \
-  VisualProof/Rule/Structural.lean
+  VisualProof/Rule/Structural.lean \
+  VisualProof/Rule/Identity.lean \
+  VisualProof/Rule/IdentityFixtures.lean \
+  VisualProof/Rule/IdentityRetargetSemantics.lean
 git commit -m "feat: prove structural rule soundness"
 ```
 

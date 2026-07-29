@@ -29,26 +29,83 @@ structure IdentityRetarget
     {definitions : List (List Sig)}
     (host : CheckedDiagram definitions)
     (site : host.val.RegionId) : Type where
-  boundary : Nat
-  identity : host.val.NodeId
-  sourceWire : host.val.WireId
-  targetWire : host.val.WireId
-  identityRegion : host.val.RegionId
-  identitySig : Sig
-  identityArity : Nat
-  distinct : sourceWire ≠ targetWire
-  identity_data :
-    host.val.nodes identity =
-      .identity identityRegion identitySig identityArity
-  source_incident :
-    sourceWire ∈ host.val.identityIncidentWires identity
-  target_incident :
-    targetWire ∈ host.val.identityIncidentWires identity
-  source_signature : (host.val.wires sourceWire).sig = identitySig
-  target_signature : (host.val.wires targetWire).sig = identitySig
-  dominates : host.val.Encloses identityRegion site
+  private mk ::
+  private boundaryValue : Nat
+  private identityValue : host.val.NodeId
+  private sourceWireValue : host.val.WireId
+  private targetWireValue : host.val.WireId
+  private identityRegionValue : host.val.RegionId
+  private identitySigValue : Sig
+  private identityArityValue : Nat
+  private distinctProof : sourceWireValue ≠ targetWireValue
+  private identityDataProof :
+    host.val.nodes identityValue =
+      .identity identityRegionValue identitySigValue identityArityValue
+  private sourceIncidentProof :
+    sourceWireValue ∈ host.val.identityIncidentWires identityValue
+  private targetIncidentProof :
+    targetWireValue ∈ host.val.identityIncidentWires identityValue
+  private sourceSignatureProof :
+    (host.val.wires sourceWireValue).sig = identitySigValue
+  private targetSignatureProof :
+    (host.val.wires targetWireValue).sig = identitySigValue
+  private dominatesProof : host.val.Encloses identityRegionValue site
 
 namespace IdentityRetarget
+
+def boundary (retarget : IdentityRetarget host site) : Nat :=
+  retarget.boundaryValue
+
+def identity (retarget : IdentityRetarget host site) : host.val.NodeId :=
+  retarget.identityValue
+
+def sourceWire (retarget : IdentityRetarget host site) : host.val.WireId :=
+  retarget.sourceWireValue
+
+def targetWire (retarget : IdentityRetarget host site) : host.val.WireId :=
+  retarget.targetWireValue
+
+def identityRegion (retarget : IdentityRetarget host site) :
+    host.val.RegionId :=
+  retarget.identityRegionValue
+
+def identitySig (retarget : IdentityRetarget host site) : Sig :=
+  retarget.identitySigValue
+
+def identityArity (retarget : IdentityRetarget host site) : Nat :=
+  retarget.identityArityValue
+
+theorem distinct (retarget : IdentityRetarget host site) :
+    retarget.sourceWire ≠ retarget.targetWire :=
+  retarget.distinctProof
+
+theorem identity_data (retarget : IdentityRetarget host site) :
+    host.val.nodes retarget.identity =
+      .identity retarget.identityRegion retarget.identitySig
+        retarget.identityArity :=
+  retarget.identityDataProof
+
+theorem source_incident (retarget : IdentityRetarget host site) :
+    retarget.sourceWire ∈
+      host.val.identityIncidentWires retarget.identity :=
+  retarget.sourceIncidentProof
+
+theorem target_incident (retarget : IdentityRetarget host site) :
+    retarget.targetWire ∈
+      host.val.identityIncidentWires retarget.identity :=
+  retarget.targetIncidentProof
+
+theorem source_signature (retarget : IdentityRetarget host site) :
+    (host.val.wires retarget.sourceWire).sig = retarget.identitySig :=
+  retarget.sourceSignatureProof
+
+theorem target_signature (retarget : IdentityRetarget host site) :
+    (host.val.wires retarget.targetWire).sig = retarget.identitySig :=
+  retarget.targetSignatureProof
+
+theorem dominates (retarget : IdentityRetarget host site) :
+    host.val.Encloses retarget.identityRegion site :=
+  retarget.dominatesProof
 
 def expected
     (direction : IdentityRetargetDirection)
@@ -88,20 +145,10 @@ def checkIdentityRetargetEvidence
                   (host.val.wires input.targetWire).sig = sig then
                 if dominates : host.val.Encloses region site then
                   exact some
-                    { boundary := input.boundary
-                      identity := input.identity
-                      sourceWire := input.sourceWire
-                      targetWire := input.targetWire
-                      identityRegion := region
-                      identitySig := sig
-                      identityArity := arity
-                      distinct := distinct
-                      identity_data := identityData
-                      source_incident := sourceIncident
-                      target_incident := targetIncident
-                      source_signature := sourceSignature
-                      target_signature := targetSignature
-                      dominates := dominates }
+                    (IdentityRetarget.mk input.boundary input.identity
+                      input.sourceWire input.targetWire region sig arity
+                      distinct identityData sourceIncident targetIncident
+                      sourceSignature targetSignature dominates)
                 else
                   exact none
               else
@@ -124,10 +171,26 @@ structure CheckedIdentityRetarget
     (site : host.val.RegionId)
     (direction : IdentityRetargetDirection)
     (attachments : List host.val.WireId) where
-  evidence : IdentityRetarget host site
-  attachment :
-    attachments[evidence.boundary]? =
-      some (evidence.expected direction)
+  private mk ::
+  private evidenceValue : IdentityRetarget host site
+  private attachmentProof :
+    attachments[evidenceValue.boundary]? =
+      some (evidenceValue.expected direction)
+
+namespace CheckedIdentityRetarget
+
+def evidence
+    (checked : CheckedIdentityRetarget host site direction attachments) :
+    IdentityRetarget host site :=
+  checked.evidenceValue
+
+theorem attachment
+    (checked : CheckedIdentityRetarget host site direction attachments) :
+    attachments[checked.evidence.boundary]? =
+      some (checked.evidence.expected direction) :=
+  checked.attachmentProof
+
+end CheckedIdentityRetarget
 
 /--
 Validate one supplied retarget at exactly its named boundary position.
@@ -146,7 +209,7 @@ def checkIdentityRetarget
   if attached :
       attachments[evidence.boundary]? =
         some (evidence.expected direction) then
-    some { evidence := evidence, attachment := attached }
+    some (CheckedIdentityRetarget.mk evidence attached)
   else
     none
 
@@ -157,10 +220,32 @@ structure CheckedIdentityRetargets
     (site : host.val.RegionId)
     (direction : IdentityRetargetDirection)
     (attachments : List host.val.WireId) where
-  entries :
+  private mk ::
+  private entriesValue :
     List (CheckedIdentityRetarget host site direction attachments)
-  positions_nodup :
-    (entries.map fun entry => entry.evidence.boundary).Nodup
+  private positionsNodupProof :
+    (entriesValue.map fun entry => entry.evidence.boundary).Nodup
+
+namespace CheckedIdentityRetargets
+
+def entries
+    (checked :
+      CheckedIdentityRetargets host site direction attachments) :
+    List (CheckedIdentityRetarget host site direction attachments) :=
+  checked.entriesValue
+
+theorem positions_nodup
+    {definitions : List (List Sig)}
+    {host : CheckedDiagram definitions}
+    {site : host.val.RegionId}
+    {direction : IdentityRetargetDirection}
+    {attachments : List host.val.WireId}
+    (checked :
+      CheckedIdentityRetargets host site direction attachments) :
+    (checked.entries.map fun entry => entry.evidence.boundary).Nodup :=
+  checked.positionsNodupProof
+
+end CheckedIdentityRetargets
 
 /-- Validate every explicit retarget and reject duplicate boundary positions. -/
 def checkIdentityRetargets
@@ -176,7 +261,7 @@ def checkIdentityRetargets
     checkIdentityRetarget host site direction attachments input
   if positionsNodup :
       (entries.map fun entry => entry.evidence.boundary).Nodup then
-    some { entries := entries, positions_nodup := positionsNodup }
+    some (CheckedIdentityRetargets.mk entries positionsNodup)
   else
     none
 
@@ -354,17 +439,17 @@ theorem retargetAttachments_get_eq_of_mem
 
 end CheckedIdentityRetargets
 
-/-- The positional attachment tuple consumed by the retarget checker. -/
-def concreteAttachmentTargets
-    (attachment : ConcreteSpliceAttachment site fragment) :
-    List site.complement.val.WireId :=
+/-- The ordered positional tuple consumed by the identity-retarget checker. -/
+def orderedAttachmentTuple
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    List base.val.WireId :=
   List.ofFn attachment.target
 
-@[simp] theorem concreteAttachmentTargets_length
-    (attachment : ConcreteSpliceAttachment site fragment) :
-    (concreteAttachmentTargets attachment).length =
+@[simp] theorem orderedAttachmentTuple_length
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    (orderedAttachmentTuple attachment).length =
       fragment.val.boundary.length := by
-  simp [concreteAttachmentTargets]
+  simp [orderedAttachmentTuple]
 
 /--
 One exact splice attachment and the attachment obtained by applying only the
@@ -373,26 +458,43 @@ checked concrete splice inputs; no semantic receipt is supplied by the caller.
 -/
 structure CheckedIdentityRetargetedSplice
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    (site : RemovalResult occurrence)
+    (base : CheckedDiagram definitions)
+    (site : base.val.RegionId)
     (fragment : CheckedOpenDiagram definitions)
     (direction : IdentityRetargetDirection) where
-  source : ConcreteSpliceAttachment site fragment
+  private mk ::
+  source : ConcreteSpliceAttachment base site fragment
   retargets :
-    CheckedIdentityRetargets site.complement site.site direction
-      (concreteAttachmentTargets source)
-  target : ConcreteSpliceAttachment site fragment
-  target_exact :
+    CheckedIdentityRetargets base site direction
+      (orderedAttachmentTuple source)
+  target : ConcreteSpliceAttachment base site fragment
+  private targetExactProof :
     ∀ position,
       target.target position =
       retargets.retargetAttachments.get
           ⟨position.val, by
             rw [CheckedIdentityRetargets.retargetAttachments_length]
-            rw [concreteAttachmentTargets_length source]
+            rw [orderedAttachmentTuple_length source]
             exact position.isLt⟩
 
 namespace CheckedIdentityRetargetedSplice
+
+theorem target_exact
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {direction : IdentityRetargetDirection}
+    (checked :
+      CheckedIdentityRetargetedSplice base site fragment direction)
+    (position : Fin fragment.val.boundary.length) :
+    checked.target.target position =
+      checked.retargets.retargetAttachments.get
+        ⟨position.val, by
+          rw [CheckedIdentityRetargets.retargetAttachments_length]
+          rw [orderedAttachmentTuple_length checked.source]
+          exact position.isLt⟩ :=
+  checked.targetExactProof position
 
 /--
 At every ordered boundary position, the checked target is either unchanged or
@@ -400,13 +502,12 @@ is exactly one checked identity replacement whose expected wire is the source.
 -/
 theorem target_eq_source_or_entry
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
     {direction : IdentityRetargetDirection}
     (checked :
-      CheckedIdentityRetargetedSplice site fragment direction)
+      CheckedIdentityRetargetedSplice base site fragment direction)
     (position : Fin fragment.val.boundary.length) :
     checked.target.target position = checked.source.target position ∨
       ∃ entry ∈ checked.retargets.entries,
@@ -416,14 +517,14 @@ theorem target_eq_source_or_entry
           checked.target.target position =
             entry.evidence.replacement direction := by
   let sourceIndex :
-      Fin (concreteAttachmentTargets checked.source).length :=
+      Fin (orderedAttachmentTuple checked.source).length :=
     ⟨position.val, by
-      rw [concreteAttachmentTargets_length]
+      rw [orderedAttachmentTuple_length]
       exact position.isLt⟩
   have sourceAt :
-      (concreteAttachmentTargets checked.source).get sourceIndex =
+      (orderedAttachmentTuple checked.source).get sourceIndex =
         checked.source.target position := by
-    simp [sourceIndex, concreteAttachmentTargets]
+    simp [sourceIndex, orderedAttachmentTuple]
   have classified :=
     checked.retargets.retargetAttachments_get_eq_or_entry sourceIndex
   rw [checked.target_exact position]
@@ -433,7 +534,7 @@ theorem target_eq_source_or_entry
   · right
     rcases changed with ⟨entry, member, atPosition, targetAt⟩
     have attachedAt :
-        (concreteAttachmentTargets checked.source)[position.val]? =
+        (orderedAttachmentTuple checked.source)[position.val]? =
           some (entry.evidence.expected direction) := by
       rw [← atPosition]
       exact entry.attachment
@@ -443,7 +544,7 @@ theorem target_eq_source_or_entry
         checked.source.target position =
           entry.evidence.expected direction := by
       have sourceGet :
-          (concreteAttachmentTargets checked.source).get sourceIndex =
+          (orderedAttachmentTuple checked.source).get sourceIndex =
             entry.evidence.expected direction := by
         simpa [sourceIndex, List.get_eq_getElem] using attachedValue
       exact sourceAt.symm.trans sourceGet
@@ -457,16 +558,15 @@ exact source-to-replacement pair at that position.
 -/
 theorem entry_position_exact
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
     {direction : IdentityRetargetDirection}
     (checked :
-      CheckedIdentityRetargetedSplice site fragment direction)
+      CheckedIdentityRetargetedSplice base site fragment direction)
     (entry :
-      CheckedIdentityRetarget site.complement site.site direction
-        (concreteAttachmentTargets checked.source))
+      CheckedIdentityRetarget base site direction
+        (orderedAttachmentTuple checked.source))
     (member : entry ∈ checked.retargets.entries) :
     ∃ position : Fin fragment.val.boundary.length,
       entry.evidence.boundary = position.val ∧
@@ -478,17 +578,17 @@ theorem entry_position_exact
     List.getElem?_eq_some_iff.mp entry.attachment
   have boundaryBound :
       entry.evidence.boundary < fragment.val.boundary.length := by
-    simpa only [concreteAttachmentTargets_length] using sourceBound
+    simpa only [orderedAttachmentTuple_length] using sourceBound
   let position : Fin fragment.val.boundary.length :=
     ⟨entry.evidence.boundary, boundaryBound⟩
   refine ⟨position, rfl, ?_, ?_⟩
-  · simpa [position, concreteAttachmentTargets] using sourceAt
+  · simpa [position, orderedAttachmentTuple] using sourceAt
   · rw [checked.target_exact position]
     exact
       checked.retargets.retargetAttachments_get_eq_of_mem
         entry member
         (by
-          rw [concreteAttachmentTargets_length]
+          rw [orderedAttachmentTuple_length]
           exact boundaryBound)
 
 end CheckedIdentityRetargetedSplice
@@ -500,46 +600,41 @@ identity or occurrence is searched for.
 -/
 def checkIdentityRetargetedSplice
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    (site : RemovalResult occurrence)
+    (base : CheckedDiagram definitions)
+    (site : base.val.RegionId)
     (fragment : CheckedOpenDiagram definitions)
     (direction : IdentityRetargetDirection)
-    (source : ConcreteSpliceAttachment site fragment)
-    (inputs : List (IdentityRetargetInput site.complement)) :
+    (source : ConcreteSpliceAttachment base site fragment)
+    (inputs : List (IdentityRetargetInput base)) :
     Option
-      (CheckedIdentityRetargetedSplice site fragment direction) := do
+      (CheckedIdentityRetargetedSplice base site fragment direction) := do
   let checked ←
-    checkIdentityRetargets site.complement site.site direction
-      (concreteAttachmentTargets source) inputs
+    checkIdentityRetargets base site direction
+      (orderedAttachmentTuple source) inputs
   let retargeted := checked.retargetAttachments
   have retargetedLength :
       retargeted.length = fragment.val.boundary.length := by
     rw [CheckedIdentityRetargets.retargetAttachments_length]
-    exact concreteAttachmentTargets_length source
+    exact orderedAttachmentTuple_length source
   let targetAt :
       Fin fragment.val.boundary.length →
-        site.complement.val.WireId :=
+        base.val.WireId :=
     fun position =>
       retargeted.get
         ⟨position.val, by
           rw [retargetedLength]
           exact position.isLt⟩
   match accepted :
-      checkConcreteSpliceAttachment site fragment targetAt with
+      checkConcreteSpliceAttachment base site fragment targetAt with
   | none => none
   | some target =>
       have targetTable :
           target.target = targetAt :=
-        checkConcreteSpliceAttachment_target site fragment targetAt target
-          accepted
+        checkConcreteSpliceAttachment_target base site fragment targetAt
+          target accepted
       some
-        { source := source
-          retargets := checked
-          target := target
-          target_exact := by
-            intro position
-            rw [targetTable]
-            }
+        (CheckedIdentityRetargetedSplice.mk source checked target (by
+          intro position
+          rw [targetTable]))
 
 end VisualProof

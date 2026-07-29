@@ -70,44 +70,236 @@ structure SpliceAttachment (fragment : OpenDiagram defs args)
 
 namespace SpliceAttachment
 
-private def buildIdentities (classMap : WireRenaming source target) :
+private def targetsFor :
     {args : List Sig} →
-      Vars source args → Vars target args → ItemSeq defs target
-  | [], .nil, .nil => .nil
-  | _ :: _, .cons source sourceTail, .cons destination destinationTail =>
-      if classMap source = destination then
-        buildIdentities classMap sourceTail destinationTail
+      (fiber : Var source sig) →
+      Vars source args → Vars target args → List (Var target sig)
+  | [], _, .nil, .nil => []
+  | _ :: _, fiber, .cons sourceHead sourceTail,
+      .cons targetHead targetTail =>
+      if equality :
+          (⟨_, sourceHead⟩ : PackedVar source) =
+            (⟨_, fiber⟩ : PackedVar source) then
+        match equality with
+        | rfl => targetHead :: targetsFor sourceHead sourceTail targetTail
       else
-        .cons (Item.binaryIdentity _ (classMap source) destination)
-          (buildIdentities classMap sourceTail destinationTail)
+        targetsFor fiber sourceTail targetTail
 
-private theorem buildIdentities_denote
-    (classMap : WireRenaming source target)
-    (sources : Vars source args) (targets : Vars target args)
-    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
-    (env : Env pre target) :
-    denoteItemSeq pre definitionEnv env
-        (buildIdentities classMap sources targets) ↔
-      Vars.denote (Env.comp env classMap) sources =
-        Vars.denote env targets := by
+private theorem mem_targetsFor_iff
+    (fiber : Var source sig)
+    (sources : Vars source args)
+    (targets : Vars target args)
+    (value : Var target sig) :
+    value ∈ targetsFor fiber sources targets ↔
+      Vars.Paired sources targets fiber value := by
   induction sources with
   | nil =>
       cases targets
-      simp [buildIdentities, Vars.denote]
-  | cons source sourceTail induction =>
+      constructor
+      · simp [targetsFor]
+      · intro impossible
+        nomatch impossible
+  | cons sourceHead sourceTail induction =>
       cases targets with
-      | cons destination destinationTail =>
-          by_cases equality : classMap source = destination
-          · simp only [buildIdentities, equality, ↓reduceIte,
-              Vars.denote_cons, Env.comp]
-            simpa only [PreModel.Args, Prod.mk.injEq, true_and] using
-              induction destinationTail
-          · simp only [buildIdentities, equality, ↓reduceIte,
-              denoteItemSeq_cons, Item.binaryIdentity,
-              denoteItem_identity, List.map_cons, List.map_nil,
-              AllEqual.pair, Vars.denote_cons, Env.comp]
-            simp only [PreModel.Args, Prod.mk.injEq]
-            exact and_congr Iff.rfl (induction destinationTail)
+      | cons targetHead targetTail =>
+          by_cases equality :
+              (⟨_, sourceHead⟩ : PackedVar source) =
+                (⟨_, fiber⟩ : PackedVar source)
+          · cases equality
+            simp only [targetsFor, ↓reduceDIte, List.mem_cons]
+            constructor
+            · intro member
+              rcases member with rfl | tailMember
+              · exact .head
+              · exact .tail ((induction targetTail).mp tailMember)
+            · intro paired
+              cases paired with
+              | head => exact Or.inl rfl
+              | tail tailPaired =>
+                  exact Or.inr ((induction targetTail).mpr tailPaired)
+          · simp only [targetsFor, equality, ↓reduceDIte]
+            constructor
+            · intro member
+              exact .tail ((induction targetTail).mp member)
+            · intro paired
+              cases paired with
+              | head => exact (equality rfl).elim
+              | tail tailPaired =>
+                  exact (induction targetTail).mpr tailPaired
+
+private def classEqual
+    (sources : Vars source args)
+    (targets : Vars target args)
+    (env : Env pre target) :
+    PackedVar source → Prop
+  | ⟨sig, fiber⟩ =>
+      AllEqual
+        (((targetsFor fiber sources targets).eraseDups).map (env sig))
+
+private theorem allEqual_of_length_lt_two
+    (values : List α) (short : values.length < 2) :
+    AllEqual values := by
+  cases values with
+  | nil => simp [AllEqual]
+  | cons head tail =>
+      cases tail with
+      | nil => simp [AllEqual]
+      | cons second rest =>
+          simp only [List.length_cons] at short
+          omega
+
+private def buildClassIdentities
+    (sources : Vars source args)
+    (targets : Vars target args) :
+    List (PackedVar source) → ItemSeq defs target
+  | [] => .nil
+  | ⟨sig, fiber⟩ :: tail =>
+      let ports := (targetsFor fiber sources targets).eraseDups
+      if enough : 2 ≤ ports.length then
+        .cons (.identity sig ports enough)
+          (buildClassIdentities sources targets tail)
+      else
+        buildClassIdentities sources targets tail
+
+private theorem buildClassIdentities_denote
+    (sources : Vars source args)
+    (targets : Vars target args)
+    (classes : List (PackedVar source))
+    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
+    (env : Env pre target) :
+    denoteItemSeq pre definitionEnv env
+        (buildClassIdentities sources targets classes) ↔
+      ∀ packed, packed ∈ classes →
+        classEqual sources targets env packed := by
+  induction classes with
+  | nil =>
+      simp [buildClassIdentities]
+  | cons packed tail induction =>
+      rcases packed with ⟨sig, fiber⟩
+      let ports := (targetsFor fiber sources targets).eraseDups
+      by_cases enough : 2 ≤ ports.length
+      · simp only [buildClassIdentities, ports, enough, ↓reduceDIte,
+          denoteItemSeq_cons, denoteItem_identity, induction,
+          List.mem_cons, forall_eq_or_imp]
+        rfl
+      · have short : ports.length < 2 := by omega
+        have automatic : AllEqual (ports.map (env sig)) := by
+          apply allEqual_of_length_lt_two
+          simpa only [List.length_map] using short
+        simp only [buildClassIdentities, ports, enough, ↓reduceDIte,
+          induction, List.mem_cons, forall_eq_or_imp]
+        exact Iff.intro
+          (fun tailEqual => ⟨automatic, tailEqual⟩)
+          (fun both => both.2)
+
+private def buildIdentities
+    (sources : Vars source args)
+    (targets : Vars target args) :
+    ItemSeq defs target :=
+  buildClassIdentities sources targets sources.entries.eraseDups
+
+private theorem source_mem_of_paired
+    {source target : List Sig}
+    {args : List Sig}
+    {sig : Sig}
+    {sources : Vars source args}
+    {targets : Vars target args}
+    {sourceValue : Var source sig}
+    {targetValue : Var target sig}
+    (paired : Vars.Paired sources targets sourceValue targetValue) :
+    (⟨_, sourceValue⟩ : PackedVar source) ∈ sources.entries := by
+  induction paired with
+  | head => simp [Vars.entries]
+  | tail _ induction => exact List.mem_cons_of_mem _ induction
+
+private theorem paired_values_equal_of_classes
+    (attachment : SpliceAttachment fragment target)
+    (pre : PreModel.{u})
+    (env : Env pre target)
+    (classes :
+      ∀ packed, packed ∈ fragment.boundary.entries.eraseDups →
+        classEqual fragment.boundary attachment.positions env packed)
+    {sig : Sig}
+    (fiber : Var fragment.classes sig)
+    (value : Var target sig)
+    (paired :
+      Vars.Paired fragment.boundary attachment.positions fiber value) :
+    env sig (attachment.classMap fiber) = env sig value := by
+  have classMember :
+      (⟨sig, fiber⟩ : PackedVar fragment.classes) ∈
+        fragment.boundary.entries.eraseDups := by
+    simp only [List.mem_eraseDups]
+    exact source_mem_of_paired paired
+  have equalClass := classes ⟨sig, fiber⟩ classMember
+  have representativeMember :
+      attachment.classMap fiber ∈
+        targetsFor fiber fragment.boundary attachment.positions :=
+    (mem_targetsFor_iff fiber fragment.boundary attachment.positions
+      (attachment.classMap fiber)).mpr
+      (attachment.representative_position fiber)
+  have valueMember :
+      value ∈ targetsFor fiber fragment.boundary attachment.positions :=
+    (mem_targetsFor_iff fiber fragment.boundary attachment.positions value).mpr
+      paired
+  apply equalClass
+  · exact List.mem_map.mpr
+      ⟨attachment.classMap fiber, by simpa using representativeMember, rfl⟩
+  · exact List.mem_map.mpr
+      ⟨value, by simpa using valueMember, rfl⟩
+
+private theorem denote_eq_of_paired_values
+    (sources : Vars source args)
+    (targets : Vars target args)
+    (left : Env pre source)
+    (right : Env pre target)
+    (equal :
+      ∀ {sig} (sourceValue : Var source sig)
+        (targetValue : Var target sig),
+        Vars.Paired sources targets sourceValue targetValue →
+          left sig sourceValue = right sig targetValue) :
+    Vars.denote left sources = Vars.denote right targets := by
+  induction sources with
+  | nil =>
+      cases targets
+      rfl
+  | cons sourceHead sourceTail induction =>
+      cases targets with
+      | cons targetHead targetTail =>
+          simp only [Vars.denote_cons, PreModel.Args, Prod.mk.injEq]
+          constructor
+          · exact equal sourceHead targetHead .head
+          · apply induction
+            intro sig sourceValue targetValue paired
+            exact equal sourceValue targetValue (.tail paired)
+
+private theorem classes_of_boundary_denote_eq
+    (attachment : SpliceAttachment fragment target)
+    (pre : PreModel.{u})
+    (env : Env pre target)
+    (same :
+      Vars.denote (Env.comp env attachment.classMap) fragment.boundary =
+        Vars.denote env attachment.positions) :
+    ∀ packed, packed ∈ fragment.boundary.entries.eraseDups →
+      classEqual fragment.boundary attachment.positions env packed := by
+  rintro ⟨sig, fiber⟩ classMember
+  intro left leftMember right rightMember
+  rcases List.mem_map.mp leftMember with
+    ⟨leftVar, leftTargetMember, rfl⟩
+  rcases List.mem_map.mp rightMember with
+    ⟨rightVar, rightTargetMember, rfl⟩
+  have leftPaired :
+      Vars.Paired fragment.boundary attachment.positions fiber leftVar :=
+    (mem_targetsFor_iff fiber fragment.boundary attachment.positions
+      leftVar).mp (by simpa using leftTargetMember)
+  have rightPaired :
+      Vars.Paired fragment.boundary attachment.positions fiber rightVar :=
+    (mem_targetsFor_iff fiber fragment.boundary attachment.positions
+      rightVar).mp (by simpa using rightTargetMember)
+  exact
+    (Vars.value_eq_of_paired leftPaired
+      (Env.comp env attachment.classMap) env same).symm.trans
+      (Vars.value_eq_of_paired rightPaired
+        (Env.comp env attachment.classMap) env same)
 
 /--
 Materialize only mismatches between an ordered attachment and its class
@@ -117,7 +309,7 @@ normalization of the resulting identities.
 -/
 def identities (attachment : SpliceAttachment fragment target) :
     ItemSeq defs target :=
-  buildIdentities attachment.classMap fragment.boundary attachment.positions
+  buildIdentities fragment.boundary attachment.positions
 
 private theorem identities_denote
     (attachment : SpliceAttachment fragment target)
@@ -126,8 +318,14 @@ private theorem identities_denote
     denoteItemSeq pre definitionEnv env attachment.identities ↔
       Vars.denote (Env.comp env attachment.classMap) fragment.boundary =
         Vars.denote env attachment.positions := by
-  exact buildIdentities_denote attachment.classMap fragment.boundary
-    attachment.positions pre definitionEnv env
+  rw [identities, buildIdentities, buildClassIdentities_denote]
+  constructor
+  · intro classes
+    apply denote_eq_of_paired_values
+    intro sig sourceValue targetValue paired
+    exact paired_values_equal_of_classes attachment pre env classes
+      sourceValue targetValue paired
+  · exact classes_of_boundary_denote_eq attachment pre env
 
 end SpliceAttachment
 
@@ -202,13 +400,26 @@ theorem denote_intrinsicSplice_in_context
   rw [denote_intrinsicSplice, denote_intrinsicSplice]
   exact equivalent holeEnv
 
-/-- One concrete binary identity requested by a distinct attachment pair. -/
+/--
+One source boundary class whose distinct positional attachments require one
+orderless n-ary identity node. The attachment list retains first-seen boundary
+order solely to give the concrete ports deterministic names.
+-/
 structure ConcreteIdentityRequest
-    (diagram : ConcreteDiagram definitionCount) where
-  sig : Sig
-  representative : diagram.WireId
-  target : diagram.WireId
+    (base : ConcreteDiagram baseDefinitionCount)
+    (fragment : ConcreteDiagram fragmentDefinitionCount) where
+  source : fragment.WireId
+  attachments : List base.WireId
   deriving DecidableEq
+
+namespace ConcreteIdentityRequest
+
+/-- The identity signature is determined by its source boundary class. -/
+def sig
+    (request : ConcreteIdentityRequest base fragment) : Sig :=
+  (fragment.wires request.source).sig
+
+end ConcreteIdentityRequest
 
 def concreteRepresentativePosition
     (fragment : CheckedOpenDiagram definitions)
@@ -218,36 +429,53 @@ def concreteRepresentativePosition
   DenseList.index fragment.val.boundary wire member
 
 def concreteRepresentativeTarget
-    (site : RemovalResult occurrence)
+    (base : CheckedDiagram definitions)
     (fragment : CheckedOpenDiagram definitions)
     (target :
       Fin fragment.val.boundary.length →
-        site.complement.val.WireId)
+        base.val.WireId)
     (wire : fragment.val.diagram.WireId)
     (member : wire ∈ fragment.val.boundary) :
-    site.complement.val.WireId :=
+    base.val.WireId :=
   target (concreteRepresentativePosition fragment wire member)
 
-/-- Canonical deduplicated identity requests computed from positional targets. -/
-def computedIdentityRequests
-    (site : RemovalResult occurrence)
+/--
+The distinct host attachments of one source class, in first-seen boundary
+position order.
+-/
+def concreteAttachmentTargets
+    (base : CheckedDiagram definitions)
     (fragment : CheckedOpenDiagram definitions)
     (target :
       Fin fragment.val.boundary.length →
-        site.complement.val.WireId) :
-    List (ConcreteIdentityRequest site.complement.val) :=
+        base.val.WireId)
+    (source : fragment.val.diagram.WireId) :
+    List base.val.WireId :=
   ((Data.Finite.allFin fragment.val.boundary.length).filterMap fun position =>
-    let source := fragment.val.boundary.get position
-    let representative := concreteRepresentativeTarget site fragment target
-      source (List.get_mem fragment.val.boundary position)
-    let destination := target position
-    if representative = destination then
-      none
+    if fragment.val.boundary.get position = source then
+      some (target position)
     else
-      some
-        { sig := (fragment.val.diagram.wires source).sig
-          representative := representative
-          target := destination }).eraseDups
+      none).eraseDups
+
+/--
+Canonical grouped identity requests computed from positional targets. There is
+at most one request per source boundary class, and it contains every distinct
+host attachment for that class. Singleton classes require no identity node.
+-/
+def computedIdentityRequests
+    (base : CheckedDiagram definitions)
+    (fragment : CheckedOpenDiagram definitions)
+    (target :
+      Fin fragment.val.boundary.length →
+        base.val.WireId) :
+    List (ConcreteIdentityRequest base.val fragment.val.diagram) :=
+  (fragment.val.boundary.eraseDups.filterMap fun source =>
+    let attachments :=
+      concreteAttachmentTargets base fragment target source
+    if 2 ≤ attachments.length then
+      some { source := source, attachments := attachments }
+    else
+      none).eraseDups
 
 /--
 Concrete attachments are indexed by genuine generated boundary positions.
@@ -255,57 +483,92 @@ Typing and enclosure are explicit, validated data; no target search occurs.
 -/
 structure ConcreteSpliceAttachment
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    (site : RemovalResult occurrence)
+    (base : CheckedDiagram definitions)
+    (site : base.val.RegionId)
     (fragment : CheckedOpenDiagram definitions) where
-  target :
+  private mk ::
+  private targetFn :
     Fin fragment.val.boundary.length →
-      site.complement.val.WireId
-  signature :
+      base.val.WireId
+  private signatureProof :
     ∀ position,
-      (site.complement.val.wires (target position)).sig =
+      (base.val.wires (targetFn position)).sig =
         (fragment.val.diagram.wires
           (fragment.val.boundary.get position)).sig
-  scope :
+  private scopeProof :
     ∀ position,
-      site.complement.val.Encloses
-        (site.complement.val.wires (target position)).scope
-        site.site
-  identityRequests : List (ConcreteIdentityRequest site.complement.val)
-  identityRequests_nodup : identityRequests.Nodup
-  identityRequests_exact :
-    identityRequests = computedIdentityRequests site fragment target
+      base.val.Encloses
+        (base.val.wires (targetFn position)).scope
+        site
+
+namespace ConcreteSpliceAttachment
+
+/-- The exact supplied positional target function. -/
+def target
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    Fin fragment.val.boundary.length → base.val.WireId :=
+  attachment.targetFn
+
+/-- Every supplied target has the signature of its boundary position. -/
+theorem signature
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (position : Fin fragment.val.boundary.length) :
+    (base.val.wires (attachment.target position)).sig =
+      (fragment.val.diagram.wires
+        (fragment.val.boundary.get position)).sig :=
+  attachment.signatureProof position
+
+/-- Every supplied target is visible from the splice site. -/
+theorem scope
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (position : Fin fragment.val.boundary.length) :
+    base.val.Encloses
+      (base.val.wires (attachment.target position)).scope
+      site :=
+  attachment.scopeProof position
+
+/-- The grouped identity requests derived from the checked positional target. -/
+def identityRequests
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    List (ConcreteIdentityRequest base.val fragment.val.diagram) :=
+  computedIdentityRequests base fragment attachment.target
+
+/-- Canonical grouped requests contain no duplicate source-class requests. -/
+theorem identityRequests_nodup
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    attachment.identityRequests.Nodup :=
+  Data.Finite.eraseDups_nodup _
+
+/-- Grouped requests are exactly the canonical executable computation. -/
+theorem identityRequests_exact
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    attachment.identityRequests =
+      computedIdentityRequests base fragment attachment.target :=
+  rfl
+
+end ConcreteSpliceAttachment
 
 /-- Executably validate explicit target positions into a typed attachment. -/
 def checkConcreteSpliceAttachment
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    (site : RemovalResult occurrence)
+    (base : CheckedDiagram definitions)
+    (site : base.val.RegionId)
     (fragment : CheckedOpenDiagram definitions)
     (target :
       Fin fragment.val.boundary.length →
-        site.complement.val.WireId) :
-    Option (ConcreteSpliceAttachment site fragment) :=
+        base.val.WireId) :
+    Option (ConcreteSpliceAttachment base site fragment) :=
   if signature :
       ∀ position,
-        (site.complement.val.wires (target position)).sig =
+        (base.val.wires (target position)).sig =
           (fragment.val.diagram.wires
             (fragment.val.boundary.get position)).sig then
     if scope :
         ∀ position,
-          site.complement.val.Encloses
-            (site.complement.val.wires (target position)).scope
-            site.site then
-      let identities := computedIdentityRequests site fragment target
-      some
-        { target := target
-          signature := signature
-          scope := scope
-          identityRequests := identities
-          identityRequests_nodup := Data.Finite.eraseDups_nodup _
-          identityRequests_exact := rfl }
+          base.val.Encloses
+            (base.val.wires (target position)).scope
+            site then
+      some (ConcreteSpliceAttachment.mk target signature scope)
     else
       none
   else
@@ -313,16 +576,15 @@ def checkConcreteSpliceAttachment
 
 theorem checkConcreteSpliceAttachment_target
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    (site : RemovalResult occurrence)
+    (base : CheckedDiagram definitions)
+    (site : base.val.RegionId)
     (fragment : CheckedOpenDiagram definitions)
     (target :
       Fin fragment.val.boundary.length →
-        site.complement.val.WireId)
-    (attachment : ConcreteSpliceAttachment site fragment)
+        base.val.WireId)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (accepted :
-      checkConcreteSpliceAttachment site fragment target =
+      checkConcreteSpliceAttachment base site fragment target =
         some attachment) :
     attachment.target = target := by
   simp only [checkConcreteSpliceAttachment] at accepted
@@ -338,7 +600,7 @@ namespace ConcreteSpliceAttachment
 
 /-- The first actual boundary position of a source class. -/
 def representativePosition
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (wire : fragment.val.diagram.WireId)
     (member : wire ∈ fragment.val.boundary) :
     Fin fragment.val.boundary.length :=
@@ -346,59 +608,59 @@ def representativePosition
 
 /-- Every source class chooses a representative from its supplied positions. -/
 def representativeTarget
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (wire : fragment.val.diagram.WireId)
     (member : wire ∈ fragment.val.boundary) :
-    site.complement.val.WireId :=
+    base.val.WireId :=
   attachment.target (attachment.representativePosition wire member)
 
 theorem identityRequests_mem_iff
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (request : ConcreteIdentityRequest site.complement.val) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (request : ConcreteIdentityRequest base.val fragment.val.diagram) :
     request ∈ attachment.identityRequests ↔
-      request ∈ computedIdentityRequests site fragment attachment.target := by
+      request ∈ computedIdentityRequests base fragment attachment.target := by
   rw [attachment.identityRequests_exact]
 
 def fragmentRegions
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     List fragment.val.diagram.RegionId :=
   fragment.val.diagram.regionsList.filter fun region =>
     decide (region ≠ fragment.val.diagram.root)
 
 def fragmentInternalWires
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     List fragment.val.diagram.WireId :=
   fragment.val.diagram.wiresList.filter fun wire =>
     decide (wire ∉ fragment.val.boundary)
 
 abbrev regionCount
-    (attachment : ConcreteSpliceAttachment site fragment) : Nat :=
-  site.complement.val.regionCount + attachment.fragmentRegions.length
+    (attachment : ConcreteSpliceAttachment base site fragment) : Nat :=
+  base.val.regionCount + attachment.fragmentRegions.length
 
 abbrev nodeCount
-    (attachment : ConcreteSpliceAttachment site fragment) : Nat :=
-  site.complement.val.nodeCount +
+    (attachment : ConcreteSpliceAttachment base site fragment) : Nat :=
+  base.val.nodeCount +
     (fragment.val.diagram.nodeCount + attachment.identityRequests.length)
 
 abbrev wireCount
-    (attachment : ConcreteSpliceAttachment site fragment) : Nat :=
-  site.complement.val.wireCount + attachment.fragmentInternalWires.length
+    (attachment : ConcreteSpliceAttachment base site fragment) : Nat :=
+  base.val.wireCount + attachment.fragmentInternalWires.length
 
 def hostRegion
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (region : site.complement.val.RegionId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (region : base.val.RegionId) :
     Fin attachment.regionCount :=
   Fin.castAdd attachment.fragmentRegions.length region
 
 def freshRegion
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (region : Fin attachment.fragmentRegions.length) :
     Fin attachment.regionCount :=
-  Fin.natAdd site.complement.val.regionCount region
+  Fin.natAdd base.val.regionCount region
 
 theorem hostRegion_ne_freshRegion
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (hostId : site.complement.val.RegionId)
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (hostId : base.val.RegionId)
     (freshId : Fin attachment.fragmentRegions.length) :
     attachment.hostRegion hostId ≠ attachment.freshRegion freshId := by
   intro equality
@@ -409,11 +671,11 @@ theorem hostRegion_ne_freshRegion
 
 /-- The fragment root is identified with the site; all other regions are fresh. -/
 def fragmentRegion
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (region : fragment.val.diagram.RegionId) :
     Fin attachment.regionCount :=
   if root : region = fragment.val.diagram.root then
-    attachment.hostRegion site.site
+    attachment.hostRegion site
   else
     attachment.freshRegion
       (DenseList.index attachment.fragmentRegions region (by
@@ -421,34 +683,34 @@ def fragmentRegion
           Data.Finite.mem_allFin, root]))
 
 def hostNode
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (node : site.complement.val.NodeId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (node : base.val.NodeId) :
     Fin attachment.nodeCount :=
   Fin.castAdd
     (fragment.val.diagram.nodeCount + attachment.identityRequests.length)
     node
 
 def fragmentNode
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (node : fragment.val.diagram.NodeId) :
     Fin attachment.nodeCount :=
-  ⟨site.complement.val.nodeCount + node.val, by
+  ⟨base.val.nodeCount + node.val, by
     have bound := node.isLt
     simp only [nodeCount]
     omega⟩
 
 def identityNode
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (node : Fin attachment.identityRequests.length) :
     Fin attachment.nodeCount :=
-  ⟨site.complement.val.nodeCount + fragment.val.diagram.nodeCount + node.val, by
+  ⟨base.val.nodeCount + fragment.val.diagram.nodeCount + node.val, by
     have bound := node.isLt
     simp only [nodeCount]
     omega⟩
 
 theorem hostNode_ne_fragmentNode
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (hostId : site.complement.val.NodeId)
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (hostId : base.val.NodeId)
     (fragmentId : fragment.val.diagram.NodeId) :
     attachment.hostNode hostId ≠ attachment.fragmentNode fragmentId := by
   intro equality
@@ -458,8 +720,8 @@ theorem hostNode_ne_fragmentNode
   omega
 
 theorem hostNode_ne_identityNode
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (hostId : site.complement.val.NodeId)
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (hostId : base.val.NodeId)
     (identityId : Fin attachment.identityRequests.length) :
     attachment.hostNode hostId ≠ attachment.identityNode identityId := by
   intro equality
@@ -469,7 +731,7 @@ theorem hostNode_ne_identityNode
   omega
 
 theorem fragmentNode_ne_identityNode
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (fragmentId : fragment.val.diagram.NodeId)
     (identityId : Fin attachment.identityRequests.length) :
     attachment.fragmentNode fragmentId ≠
@@ -481,27 +743,27 @@ theorem fragmentNode_ne_identityNode
   omega
 
 def hostWire
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (wire : site.complement.val.WireId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : base.val.WireId) :
     Fin attachment.wireCount :=
   Fin.castAdd attachment.fragmentInternalWires.length wire
 
 def freshWire
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (wire : Fin attachment.fragmentInternalWires.length) :
     Fin attachment.wireCount :=
-  Fin.natAdd site.complement.val.wireCount wire
+  Fin.natAdd base.val.wireCount wire
 
 theorem hostWire_injective
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     Function.Injective attachment.hostWire := by
   intro left right same
   apply Fin.ext
   simpa [hostWire] using congrArg Fin.val same
 
 theorem hostWire_ne_freshWire
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (hostId : site.complement.val.WireId)
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (hostId : base.val.WireId)
     (freshId : Fin attachment.fragmentInternalWires.length) :
     attachment.hostWire hostId ≠ attachment.freshWire freshId := by
   intro equality
@@ -515,7 +777,7 @@ Boundary classes reconnect to their representative actual target. Every
 nonboundary fragment wire receives a disjoint fresh identifier.
 -/
 def fragmentWire
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (wire : fragment.val.diagram.WireId) :
     Fin attachment.wireCount :=
   if boundary : wire ∈ fragment.val.boundary then
@@ -528,24 +790,24 @@ def fragmentWire
 
 /-- Rename one retained host endpoint into the enlarged node carrier. -/
 def hostEndpoint
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (endpoint : CEndpoint site.complement.val.nodeCount) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (endpoint : CEndpoint base.val.nodeCount) :
     CEndpoint attachment.nodeCount :=
   ⟨attachment.hostNode endpoint.node, endpoint.port⟩
 
 /-- Rename one copied fragment endpoint into its disjoint fresh node carrier. -/
 def fragmentEndpoint
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (endpoint : CEndpoint fragment.val.diagram.nodeCount) :
     CEndpoint attachment.nodeCount :=
   ⟨attachment.fragmentNode endpoint.node, endpoint.port⟩
 
 def regionTable
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     Fin attachment.regionCount → CRegion attachment.regionCount :=
   Fin.addCases
     (fun region =>
-      match site.complement.val.regions region with
+      match base.val.regions region with
       | .sheet => .sheet
       | .cut parent => .cut (attachment.hostRegion parent))
     (fun fresh =>
@@ -556,14 +818,13 @@ def regionTable
 
 def renameHostNode
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (node : site.complement.val.NodeId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (node : base.val.NodeId) :
     CNode attachment.regionCount definitions.length :=
-  match site.complement.val.nodes node with
+  match base.val.nodes node with
   | .atom region args => .atom (attachment.hostRegion region) args
   | .ref region definition args =>
       .ref (attachment.hostRegion region) definition args
@@ -572,11 +833,10 @@ def renameHostNode
 
 def renameFragmentNode
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (node : fragment.val.diagram.NodeId) :
     CNode attachment.regionCount definitions.length :=
   match fragment.val.diagram.nodes node with
@@ -588,11 +848,10 @@ def renameFragmentNode
 
 def nodeTable
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     Fin attachment.nodeCount →
       CNode attachment.regionCount definitions.length :=
   Fin.addCases
@@ -601,30 +860,33 @@ def nodeTable
       (fun node => renameFragmentNode attachment node)
       (fun identity =>
         let request := attachment.identityRequests.get identity
-        .identity (attachment.hostRegion site.site) request.sig 2))
+        .identity (attachment.hostRegion site) request.sig
+          request.attachments.length))
 
 /-- Every copied fragment incidence, keyed by its mapped destination wire. -/
 def fragmentEndpointOccurrences
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     List (Fin attachment.wireCount × CEndpoint attachment.nodeCount) :=
   fragment.val.diagram.endpointOccurrences.map fun occurrence =>
     (attachment.fragmentWire occurrence.1,
       attachment.fragmentEndpoint occurrence.2)
 
-/-- The two concrete ports of every requested attachment identity. -/
+/--
+Every distinct attachment of a grouped source class occupies one port of its
+single n-ary identity node.
+-/
 def identityEndpointOccurrences
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     List (Fin attachment.wireCount × CEndpoint attachment.nodeCount) :=
   (Data.Finite.allFin attachment.identityRequests.length).flatMap fun index =>
     let request := attachment.identityRequests.get index
     let node := attachment.identityNode index
-    [(attachment.hostWire request.representative,
-        ⟨node, .identity 0⟩),
-      (attachment.hostWire request.target,
-        ⟨node, .identity 1⟩)]
+    (Data.Finite.allFin request.attachments.length).map fun port =>
+      (attachment.hostWire (request.attachments.get port),
+        ⟨node, .identity port.val⟩)
 
 def generatedEndpoints
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (wire : Fin attachment.wireCount) :
     List (CEndpoint attachment.nodeCount) :=
   (attachment.fragmentEndpointOccurrences ++
@@ -632,7 +894,7 @@ def generatedEndpoints
     if occurrence.1 = wire then some occurrence.2 else none
 
 theorem fragmentEndpoint_mem_generated
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (_empty : attachment.identityRequests = [])
     (source : fragment.val.diagram.WireId)
     (endpoint : CEndpoint fragment.val.diagram.nodeCount)
@@ -652,7 +914,7 @@ theorem fragmentEndpoint_mem_generated
   · simp
 
 theorem generatedEndpoint_origin
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (empty : attachment.identityRequests = [])
     (wire : Fin attachment.wireCount)
     (endpoint : CEndpoint attachment.nodeCount)
@@ -670,8 +932,13 @@ theorem generatedEndpoint_origin
     simpa using congrArg List.length empty
   have identityOccurrencesEmpty :
       attachment.identityEndpointOccurrences = [] := by
+    have noIdentityIndices :
+        Data.Finite.allFin attachment.identityRequests.length = [] := by
+      rw [identityLength]
+      rfl
     unfold identityEndpointOccurrences
-    simp [identityLength]
+    rw [noIdentityIndices]
+    rfl
   have fragmentMember :
       mappedOccurrence ∈ attachment.fragmentEndpointOccurrences := by
     simpa [identityOccurrencesEmpty] using occurrenceMember
@@ -697,12 +964,12 @@ theorem generatedEndpoint_origin
   · contradiction
 
 def wireTable
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     Fin attachment.wireCount →
       CWire attachment.regionCount attachment.nodeCount :=
   Fin.addCases
     (fun wire =>
-      let source := site.complement.val.wires wire
+      let source := base.val.wires wire
       { sig := source.sig
         scope := attachment.hostRegion source.scope
         endpoints :=
@@ -715,47 +982,46 @@ def wireTable
         scope := attachment.fragmentRegion source.scope
         endpoints :=
           attachment.generatedEndpoints
-            (Fin.natAdd site.complement.val.wireCount fresh) })
+            (Fin.natAdd base.val.wireCount fresh) })
 
 /--
-The concrete splice candidate copies every complement and fragment table,
+The concrete splice candidate copies every base and fragment table,
 reconnects boundary classes to actual targets, and materializes requested
 identities. No normalization is performed.
 -/
 def diagram
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     ConcreteDiagram definitions.length where
   regionCount := attachment.regionCount
   nodeCount := attachment.nodeCount
   wireCount := attachment.wireCount
-  root := attachment.hostRegion site.complement.val.root
+  root := attachment.hostRegion base.val.root
   regions := regionTable attachment
   nodes := nodeTable attachment
   wires := wireTable attachment
 
 @[simp] theorem diagram_wire_hostWire
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (wire : site.complement.val.WireId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : base.val.WireId) :
     (attachment.diagram.wires (attachment.hostWire wire)).sig =
-      (site.complement.val.wires wire).sig := by
+      (base.val.wires wire).sig := by
   unfold diagram wireTable hostWire
   simp only [Fin.addCases_left]
 
 @[simp] theorem diagram_wire_hostWire_scope
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (wire : site.complement.val.WireId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : base.val.WireId) :
     (attachment.diagram.wires (attachment.hostWire wire)).scope =
-      attachment.hostRegion (site.complement.val.wires wire).scope := by
+      attachment.hostRegion (base.val.wires wire).scope := by
   unfold diagram wireTable hostWire
   simp only [Fin.addCases_left]
 
 @[simp] theorem diagram_wire_freshWire_scope
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (fresh : Fin attachment.fragmentInternalWires.length) :
     (attachment.diagram.wires (attachment.freshWire fresh)).scope =
       attachment.fragmentRegion
@@ -765,21 +1031,21 @@ def diagram
   simp only [Fin.addCases_right]
 
 @[simp] theorem diagram_node_hostNode
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (node : site.complement.val.NodeId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (node : base.val.NodeId) :
     attachment.diagram.nodes (attachment.hostNode node) =
       renameHostNode attachment node := by
   unfold diagram nodeTable hostNode
   simp only [Fin.addCases_left]
 
 @[simp] theorem diagram_node_fragmentNode
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (node : fragment.val.diagram.NodeId) :
     attachment.diagram.nodes (attachment.fragmentNode node) =
       renameFragmentNode attachment node := by
   have allocated :
       attachment.fragmentNode node =
-        Fin.natAdd site.complement.val.nodeCount
+        Fin.natAdd base.val.nodeCount
           (Fin.castAdd attachment.identityRequests.length node) :=
     Fin.ext (by simp [fragmentNode])
   unfold diagram
@@ -788,16 +1054,16 @@ def diagram
   simp only [Fin.addCases_right, Fin.addCases_left]
 
 @[simp] theorem diagram_node_hostNode_region
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (node : site.complement.val.NodeId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (node : base.val.NodeId) :
   (attachment.diagram.nodes (attachment.hostNode node)).region =
-      attachment.hostRegion (site.complement.val.nodes node).region := by
+      attachment.hostRegion (base.val.nodes node).region := by
   rw [diagram_node_hostNode]
-  cases data : site.complement.val.nodes node <;>
+  cases data : base.val.nodes node <;>
     simp [renameHostNode, CNode.region, data]
 
 @[simp] theorem diagram_node_fragmentNode_region
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (node : fragment.val.diagram.NodeId) :
   (attachment.diagram.nodes (attachment.fragmentNode node)).region =
       attachment.fragmentRegion (fragment.val.diagram.nodes node).region := by
@@ -806,14 +1072,15 @@ def diagram
     simp [renameFragmentNode, CNode.region, data]
 
 @[simp] theorem diagram_node_identityNode
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (identity : Fin attachment.identityRequests.length) :
     attachment.diagram.nodes (attachment.identityNode identity) =
-      .identity (attachment.hostRegion site.site)
-        (attachment.identityRequests.get identity).sig 2 := by
+      .identity (attachment.hostRegion site)
+        (attachment.identityRequests.get identity).sig
+        (attachment.identityRequests.get identity).attachments.length := by
   have allocated :
       attachment.identityNode identity =
-        Fin.natAdd site.complement.val.nodeCount
+        Fin.natAdd base.val.nodeCount
           (Fin.natAdd fragment.val.diagram.nodeCount identity) :=
     Fin.ext (by simp [identityNode]; omega)
   unfold diagram
@@ -822,18 +1089,18 @@ def diagram
   simp only [Fin.addCases_right]
 
 @[simp] theorem diagram_region_hostRegion
-    (attachment : ConcreteSpliceAttachment site fragment)
-    (region : site.complement.val.RegionId) :
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (region : base.val.RegionId) :
     attachment.diagram.regions (attachment.hostRegion region) =
       mapRegion attachment.hostRegion
-        (site.complement.val.regions region) := by
+        (base.val.regions region) := by
   unfold diagram regionTable hostRegion
   simp only [Fin.addCases_left]
-  cases data : site.complement.val.regions region <;>
+  cases data : base.val.regions region <;>
     simp [mapRegion, data]
 
 @[simp] theorem diagram_region_freshRegion
-    (attachment : ConcreteSpliceAttachment site fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
     (fresh : Fin attachment.fragmentRegions.length) :
     attachment.diagram.regions (attachment.freshRegion fresh) =
       mapRegion attachment.fragmentRegion
@@ -848,20 +1115,38 @@ def diagram
 
 end ConcreteSpliceAttachment
 
-/-- Original boundary targets, generated from the exact crossing positions. -/
+/--
+Occurrence reconstruction is the sole thin specialization of generic splice.
+It preserves the authoritative ordered pattern boundary, maps every position
+through the exact occurrence, and refuses if any attachment wire is absent
+from the checked complement.  It is independent of selection extraction:
+generic exact occurrences may retain repeated boundary aliases.
+-/
 def reconstructionAttachment?
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
     (occurrence : Occurrence pattern host)
-    (compiled : ExtractionCompilation occurrence)
     (removed : RemovalResult occurrence) :
-    Option (ConcreteSpliceAttachment removed compiled.checked) :=
-  checkConcreteSpliceAttachment removed compiled.checked
-    fun position =>
-    Removal.wireIndex occurrence
-      (occurrence.wireMap (occurrence.boundarySourceAt position))
-      (Removal.boundarySource_retained occurrence position)
-
+    Option (ConcreteSpliceAttachment
+      removed.complement removed.site pattern) := by
+  let attachments : List host.val.WireId :=
+    occurrence.boundaryAttachments
+  if retained :
+      ∀ position : Fin attachments.length,
+        attachments.get position ∈ Removal.wires occurrence then
+    exact checkConcreteSpliceAttachment
+      removed.complement removed.site pattern
+      fun position =>
+        Removal.wireIndex occurrence
+          (attachments.get
+            ⟨position.val, by
+              simpa [attachments] using position.isLt⟩)
+          (retained
+            ⟨position.val, by
+              simpa [attachments] using position.isLt⟩)
+  else
+    exact none
 
 /--
 The normalized checked endpoint and total source-wire transport produced by a
@@ -869,11 +1154,10 @@ successful concrete splice.  Only `splice` can construct this receipt.
 -/
 structure ConcreteSpliceResult
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment site fragment) : Type where
+    (attachment : ConcreteSpliceAttachment base site fragment) : Type where
   private mk ::
   checked : CheckedDiagram definitions
   wireImage : attachment.diagram.WireId → checked.val.WireId
@@ -887,11 +1171,10 @@ namespace ConcreteSpliceResult
 /-- The normalized image of one supplied boundary position. -/
 def boundaryTarget
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment site fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
     (result : ConcreteSpliceResult attachment)
     (position : Fin fragment.val.boundary.length) :
     result.checked.val.WireId :=
@@ -899,11 +1182,10 @@ def boundaryTarget
 
 theorem boundaryTarget_signature
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment site fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
     (result : ConcreteSpliceResult attachment)
     (position : Fin fragment.val.boundary.length) :
     (result.checked.val.wires (result.boundaryTarget position)).sig =
@@ -917,11 +1199,10 @@ theorem boundaryTarget_signature
 
 theorem boundaryTarget_eq_of_alias
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment site fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
     (result : ConcreteSpliceResult attachment)
     (left right : Fin fragment.val.boundary.length)
     (alias : attachment.target left = attachment.target right) :
@@ -936,11 +1217,10 @@ only public receipt for that pipeline.
 -/
 def splice
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    (attachment : ConcreteSpliceAttachment site fragment) :
+    (attachment : ConcreteSpliceAttachment base site fragment) :
     Except WFError (ConcreteSpliceResult attachment) := by
   match accepted :
       ConcreteDiagram.checkWellFormed definitions attachment.diagram with
@@ -965,11 +1245,10 @@ private pre-normalization stage.
 -/
 theorem splice_success_wellFormed
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment site fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
     {result : ConcreteSpliceResult attachment}
     (accepted : splice attachment = .ok result) :
     attachment.diagram.WellFormed definitions := by
@@ -985,11 +1264,10 @@ theorem splice_success_wellFormed
 /-- A successful receipt's public checked target is exactly the eager normal form. -/
 theorem splice_success_checked
     {definitions : List (List Sig)}
-    {pattern host : CheckedDiagram definitions}
-    {occurrence : Occurrence pattern host}
-    {site : RemovalResult occurrence}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
-    {attachment : ConcreteSpliceAttachment site fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
     {result : ConcreteSpliceResult attachment}
     (accepted : splice attachment = .ok result) :
     result.checked =

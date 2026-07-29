@@ -87,6 +87,16 @@ def append : ItemSeq defs ctx → ItemSeq defs ctx → ItemSeq defs ctx
 
 end ItemSeq
 
+namespace Region
+
+/-- Conjoin two same-scope regions by appending their intrinsic item sequences. -/
+def conjoin (left right : Region defs ctx) : Region defs ctx :=
+  match left, right with
+  | .mk leftItems, .mk rightItems =>
+      .mk (leftItems.append rightItems)
+
+end Region
+
 mutual
   /-- Rename every wire occurrence, lifting safely through binders. -/
   def Region.renameWires (rho : WireRenaming source target) :
