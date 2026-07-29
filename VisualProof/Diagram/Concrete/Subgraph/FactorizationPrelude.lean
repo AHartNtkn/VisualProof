@@ -60,4 +60,31 @@ theorem denseIndex_val_of_list_eq
   subst right
   rfl
 
+/-- Cast only the signature index of a visible variable. -/
+def castVisibleVar
+    (equality : sourceSig = targetSig)
+    (value : Var ctx sourceSig) :
+    Var ctx targetSig :=
+  equality ▸ value
+
+theorem visibleOrigin_cast
+    (diagram : ConcreteDiagram definitionCount)
+    {ids : List diagram.WireId}
+    (value : Var
+      (ids.map fun id => (diagram.wires id).sig) sourceSig)
+    (equality : sourceSig = targetSig) :
+    ConcreteElaboration.WireContext.origin diagram ids
+        (castVisibleVar equality value) =
+      ConcreteElaboration.WireContext.origin diagram ids value := by
+  cases equality
+  rfl
+
+theorem packed_castVisibleVar
+    (value : Var ctx sourceSig)
+    (equality : sourceSig = targetSig) :
+    (⟨sourceSig, value⟩ : PackedVar ctx) =
+      ⟨targetSig, castVisibleVar equality value⟩ := by
+  cases equality
+  rfl
+
 end VisualProof.FactorizationInternal

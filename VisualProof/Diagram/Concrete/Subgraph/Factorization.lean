@@ -1777,8 +1777,8 @@ private theorem compileSiteFrame?_complete
   exact ⟨frame, generated, covers⟩
 
 /--
-Executable structural receipt for one explicit insertion site. Construction is
-owned solely by `compileSite?`.
+Executable structural receipt for one explicit insertion site. Public
+construction requires an exact successful site-frame compiler equation.
 -/
 structure SiteCompilation
     {definitions : List (List Sig)}
@@ -1862,6 +1862,21 @@ private theorem covers
   have same : frame = compiled.frame :=
     Option.some.inj (generated.symm.trans compiled.frame_compiles)
   simpa [same] using covers
+
+/--
+A wire whose scope encloses the compiled site occurs in the retained visible
+context. This projects only the membership fact, not the private coverage map.
+-/
+theorem visible_of_encloses
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site)
+    (wire : base.val.WireId)
+    (encloses :
+      base.val.Encloses (base.val.wires wire).scope site) :
+    wire ∈ compiled.frame.visible.ids :=
+  compiled.covers wire encloses
 
 /-- The intrinsic root produced by the ordinary checked elaborator. -/
 def checked
@@ -2078,32 +2093,6 @@ private def resolveVisiblePacked?
       (ids.map fun id => (diagram.wires id).sig)) :=
   (resolveVisibleWireIn? diagram ids wire).map fun value =>
     ⟨_, value⟩
-
-private def castVisibleVar
-    (equality : sourceSig = targetSig)
-    (value : Var ctx sourceSig) :
-    Var ctx targetSig :=
-  equality ▸ value
-
-private theorem visibleOrigin_cast
-    (diagram : ConcreteDiagram definitionCount)
-    {ids : List diagram.WireId}
-    (value : Var
-      (ids.map fun id => (diagram.wires id).sig) sourceSig)
-    (equality : sourceSig = targetSig) :
-    ConcreteElaboration.WireContext.origin diagram ids
-        (castVisibleVar equality value) =
-      ConcreteElaboration.WireContext.origin diagram ids value := by
-  cases equality
-  rfl
-
-private theorem packed_castVisibleVar
-    (value : Var ctx sourceSig)
-    (equality : sourceSig = targetSig) :
-    (⟨sourceSig, value⟩ : PackedVar ctx) =
-      ⟨targetSig, castVisibleVar equality value⟩ := by
-  cases equality
-  rfl
 
 /-- The intrinsic target occurrence at one ordered concrete boundary position. -/
 def targetPackedAt
