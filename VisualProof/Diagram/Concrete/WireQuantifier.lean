@@ -1790,8 +1790,7 @@ def initialChecked
 
 section FinalDeletion
 
-variable {definitions : List (List Sig)}
-variable {source : CheckedDiagram definitions}
+variable {definitions : List (List Sig)} {source : CheckedDiagram definitions}
 variable {wire : source.val.WireId}
 variable {content : CheckedOpenDiagram definitions}
 variable {parameters : List source.val.WireId}
@@ -1820,26 +1819,33 @@ def plainFinal
     CheckedDiagram definitions :=
   result.finalRemoval.checked
 
-/--
-The exact checker-generated dense deletion candidate from `boundFinal` to
-`plainFinal`. Its private batch plan remains encapsulated by the result.
--/
-def finalDeletionCandidate
+theorem final_deletion_exact
     (result : RelationJoinResult source wire content parameters) :
-    ConcreteDiagram definitions.length :=
-  batchRemovalCandidate result.finalRemoval.plan
+    result.plainFinal.val =
+      ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        result.boundFinal result.boundDying := by
+  unfold plainFinal; rw [result.finalRemoval.generated]
+  unfold boundFinal boundDying batchRemovalCandidate
+    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    batchRegionTable batchNodeTable batchWireTable batchEndpoint?
+  unfold retainedRegionIndex retainedNodeIndex
+    sourceRetainedRegion sourceRetainedNode sourceRetainedWire
+    DenseList.index
+  unfold retainedRegions retainedNodes retainedWires
+    ConcreteDiagram.IdentityNormalizationCore.retainedWires
+  congr 1
+  funext target
+  split
+  · rename_i equation
+    simp only [equation]
+  · rename_i parent equation
+    simp only [equation]
 
 @[simp] theorem bound_dying_scope
     (result : RelationJoinResult source wire content parameters) :
     (result.boundFinal.val.wires result.boundDying).scope =
       result.boundRegionImage (source.val.wires wire).scope :=
   result.finalState.wireScopeExact wire
-
-/-- Public proof receipt for the final checked bound-to-plain deletion. -/
-theorem final_deletion_generated
-    (result : RelationJoinResult source wire content parameters) :
-    result.plainFinal.val = result.finalDeletionCandidate :=
-  result.finalRemoval.generated
 
 end FinalDeletion
 

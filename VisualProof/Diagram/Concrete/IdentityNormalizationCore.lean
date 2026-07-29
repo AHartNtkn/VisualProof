@@ -268,6 +268,72 @@ independently checked candidate.
           reindexEndpoints nodes
             (eraseNodeEndpoints node data.endpoints) } }
 
+/--
+Raw dense deletion of one wire while retaining every region, node, and all
+data of the other wires.  Well-formedness remains the responsibility of the
+checked structural owner that produced the deletion.
+-/
+def eraseWireCandidate
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId) :
+    ConcreteDiagram definitions.length :=
+  let regions :=
+    source.val.regionsList.filter fun region =>
+      decide (region ∉ ([] : List source.val.RegionId))
+  let nodes :=
+    source.val.nodesList.filter fun node =>
+      decide (node ∉ ([] : List source.val.NodeId))
+  let wires :=
+    retainedWires source.val [removed]
+  let regionIndex (region : source.val.RegionId)
+      (member : region ∈ regions) : Fin regions.length :=
+    (Data.Finite.indexOf? regions region).get
+      (Data.Finite.indexOf?_isSome_iff.mpr member)
+  let nodeIndex (node : source.val.NodeId)
+      (member : node ∈ nodes) : Fin nodes.length :=
+    (Data.Finite.indexOf? nodes node).get
+      (Data.Finite.indexOf?_isSome_iff.mpr member)
+  let endpoint? (endpoint : CEndpoint source.val.nodeCount) :
+      Option (CEndpoint nodes.length) :=
+    if retained : endpoint.node ∈ nodes then
+      some ⟨nodeIndex endpoint.node retained, endpoint.port⟩
+    else
+      none
+  { regionCount := regions.length
+    nodeCount := nodes.length
+    wireCount := wires.length
+    root :=
+      regionIndex source.val.root (by
+        simp [regions, ConcreteDiagram.regionsList,
+          Data.Finite.mem_allFin])
+    regions := fun target =>
+      match source.val.regions (regions.get target) with
+      | .sheet => .sheet
+      | .cut parent =>
+          .cut
+            (regionIndex parent (by
+              simp [regions, ConcreteDiagram.regionsList,
+                Data.Finite.mem_allFin]))
+    nodes := fun target =>
+      let sourceNode := nodes.get target
+      let region :=
+        regionIndex (source.val.nodes sourceNode).region (by
+          simp [regions, ConcreteDiagram.regionsList,
+            Data.Finite.mem_allFin])
+      match source.val.nodes sourceNode with
+      | .atom _ args => .atom region args
+      | .ref _ definition args => .ref region definition args
+      | .identity _ sig arity => .identity region sig arity
+    wires := fun target =>
+      let sourceWire := wires.get target
+      let data := source.val.wires sourceWire
+      { sig := data.sig
+        scope :=
+          regionIndex data.scope (by
+            simp [regions, ConcreteDiagram.regionsList,
+              Data.Finite.mem_allFin])
+        endpoints := data.endpoints.filterMap endpoint? } }
+
 /-- Count-preserving region image into a raw singleton-node deletion. -/
 def eraseNodeRegion
     (source : CheckedDiagram definitions)
