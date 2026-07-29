@@ -58,10 +58,7 @@ private theorem denseIndex_val_of_list_eq
   rfl
 
 /--
-The context obtained while the concrete compiler follows one region path to an
-explicit insertion site. `siteBody` is the actual compiler output at the hole,
-before the enclosing frame is filled.
--/
+Compiler path context; `siteBody` is hole output before enclosing frame fill. -/
 structure RegionFrame
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -118,10 +115,7 @@ def compileRegionBody?
   pure (.mk (nodes.append children))
 
 /--
-Compile ordered siblings around an already generated nested child frame.
-The target child is data selected by the enclosure search, never caller input
-to the public frame compiler.
--/
+Compile siblings around the enclosure-selected child; it is never caller input. -/
 def compileSiblingFrame?
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -147,9 +141,7 @@ def compileSiblingFrame?
           (leading.append (.cons (.cut body) .nil)) tail
 
 /--
-Follow the unique checked enclosure path to `site`, compiling every complete
-sibling with the ordinary concrete compiler.
--/
+Follow the unique checked enclosure path; compile complete siblings ordinarily. -/
 def compileRegionFrame?
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -197,7 +189,8 @@ def GeneratedRelativeFrame
   ∃ (outer : WireContext diagram) (fuel : Nat)
     (relative : RegionFrame definitions diagram outer)
     (relativeVisible : relative.visible = siteFrame.visible),
-    compileRegionFrame? definitions diagram site fuel scope outer = some relative ∧
+    ContextAbove diagram outer scope ∧ compileRegionFrame? definitions diagram
+      site fuel scope outer = some relative ∧
     congrArg WireContext.sigs relativeVisible ▸ relative.siteBody =
         siteFrame.siteBody ∧
     ∃ inner : DiagramContext definitions relative.visible.sigs
@@ -1425,6 +1418,7 @@ private theorem compileRegionFrame?_generated_relative_at
     ∀ (fuel : Nat) (region : diagram.RegionId)
       (outer : WireContext diagram)
       (siteFrame : RegionFrame definitions diagram outer),
+      ContextAbove diagram outer region →
       diagram.Encloses region scope →
       diagram.Encloses scope site →
       compileRegionFrame? definitions diagram site fuel region outer =
@@ -1437,10 +1431,10 @@ private theorem compileRegionFrame?_generated_relative_at
   intro fuel
   induction fuel with
   | zero =>
-      intro region outer siteFrame _ _ accepted
+      intro region outer siteFrame _ _ _ accepted
       simp [compileRegionFrame?] at accepted
   | succ fuel induction =>
-      intro region outer siteFrame regionScope scopeSite accepted
+      intro region outer siteFrame above regionScope scopeSite accepted
       unfold compileRegionFrame? at accepted
       simp only [] at accepted
       split at accepted
@@ -1470,7 +1464,7 @@ private theorem compileRegionFrame?_generated_relative_at
               simp [compileRegionFrame?, bodyEquation, relative]
             refine ⟨relative, generated, ?_⟩
             exact
-              ⟨outer, fuel + 1, relative, rfl, generated, rfl, .hole,
+              ⟨outer, fuel + 1, relative, rfl, above, generated, rfl, .hole,
                 rfl, rfl, rfl, ⟨.hole, rfl, fun _ => rfl,
                   by simp [DiagramContext.cutDepth]⟩⟩
       · rename_i notAtSite
@@ -1623,8 +1617,8 @@ private theorem compileRegionFrame?_generated_relative_at
                           refine ⟨scopeFrame, scopeGenerated, ?_⟩
                           exact
                             ⟨outer, fuel + 1, relative, rfl,
-                              relativeGenerated, rfl, around.context, rfl, rfl,
-                              aroundFilled, projection⟩
+                              above, relativeGenerated, rfl, around.context, rfl,
+                              rfl, aroundFilled, projection⟩
                         · have childScope :
                               diagram.Encloses child scope :=
                             selected_child_encloses_scope definitions diagram
@@ -1637,9 +1631,11 @@ private theorem compileRegionFrame?_generated_relative_at
                           obtain ⟨nestedScope, nestedScopeGenerated,
                               nestedRelative⟩ :=
                             induction child (outer.extend region) nested
+                              (extend_above_child definitions diagram wellFormed outer
+                                region child above childData)
                               childScope scopeSite nestedEquation
                           obtain ⟨relativeOuter, relativeFuel, relative,
-                              relativeVisible, relativeGenerated,
+                              relativeVisible, relativeAbove, relativeGenerated,
                               relativeBody, relativeInner, relativeContext,
                               nestedScopeVisible, nestedScopeBody,
                               nestedRootInner, nestedRootScopeBody,
@@ -1776,7 +1772,7 @@ private theorem compileRegionFrame?_generated_relative_at
                           refine ⟨scopeFrame, scopeGenerated, ?_⟩
                           exact
                             ⟨relativeOuter, relativeFuel, relative,
-                              relativeVisible', relativeGenerated,
+                              relativeVisible', relativeAbove, relativeGenerated,
                               relativeBody', relativeInner, relativeContext,
                               scopeVisible', scopeBody', projection⟩
 
@@ -1942,7 +1938,9 @@ theorem factorAt
     compileRegionFrame?_generated_relative_at
       definitions base.val base.property
       site scope (base.val.regionCount + 1) base.val.root
-      (WireContext.empty base.val) compiled.frame rootScope encloses
+      (WireContext.empty base.val) compiled.frame ⟨by
+        simp [WireContext.empty], by simp [WireContext.empty]⟩
+      rootScope encloses
       compiled.frame_generated
   exact ⟨SiteCompilation.mk scopeFrame generated, decomposed⟩
 
@@ -1962,7 +1960,8 @@ theorem factorAt_relative_origin
       (scopeVisible : scopeCompiled.frame.visible = outer.extend scope)
       (rootInner : DiagramContext definitions compiled.frame.visible.sigs
         scopeCompiled.frame.visible.sigs),
-      compileRegionFrame? definitions base.val site fuel scope outer = some relative ∧
+      ContextAbove base.val outer scope ∧ compileRegionFrame? definitions base.val
+        site fuel scope outer = some relative ∧
       congrArg WireContext.sigs relativeVisible ▸ relative.siteBody =
         compiled.frame.siteBody ∧
       relative.context = bindContextFor base.val outer.ids
@@ -1977,12 +1976,12 @@ theorem factorAt_relative_origin
       compiled.frame.context.cutDepth =
         scopeCompiled.frame.context.cutDepth + rootInner.cutDepth := by
   obtain ⟨scopeCompiled, outer, fuel, relative, relativeVisible,
-      generated, relativeBody, inner, relativeContext, scopeVisible,
+      above, generated, relativeBody, inner, relativeContext, scopeVisible,
       scopeBody, rootInner, rootBody, replacementBody, cutDepth⟩ :=
     compiled.factorAt scope encloses
-  exact ⟨scopeCompiled, outer, fuel, relative, relativeVisible, inner,
-    scopeVisible, rootInner, generated, relativeBody, relativeContext, scopeBody,
-    rootBody, replacementBody, cutDepth⟩
+  exact ⟨scopeCompiled, outer, fuel, relative, relativeVisible, inner, scopeVisible,
+    rootInner, above, generated, relativeBody, relativeContext, scopeBody, rootBody,
+    replacementBody, cutDepth⟩
 
 theorem site_origin
     {definitions : List (List Sig)}
