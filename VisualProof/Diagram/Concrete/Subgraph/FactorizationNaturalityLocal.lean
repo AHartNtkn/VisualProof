@@ -4,7 +4,7 @@ namespace VisualProof
 namespace InsertionCompilation
 namespace NaturalityInternal
 
-private theorem concreteAttachmentTargets_mem_iff
+theorem concreteAttachmentTargets_mem_iff
     {definitions : List (List Sig)}
     (base : CheckedDiagram definitions)
     (fragment : CheckedOpenDiagram definitions)
@@ -33,7 +33,7 @@ private theorem concreteAttachmentTargets_mem_iff
       simpa [List.get_eq_getElem] using sameSource
     simp [sameSource']
 
-private theorem identityRequest_components
+theorem identityRequest_components
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}
@@ -85,7 +85,7 @@ private theorem identityRequest_for_source
   · dsimp
     rw [if_pos enough]
 
-private theorem identityNode_port_incident
+theorem identityNode_port_incident
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}

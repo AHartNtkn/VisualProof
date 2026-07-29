@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityInnerFrame
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityGeneratedSiblingSemantics
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityRecursive
 import VisualProof.Diagram.ContextZipper
 
@@ -206,7 +207,7 @@ private theorem GeneratedSiblingProvenance.zipper
         targetFrame.siteBody := by
   induction provenance with
   | selected sourceLeading targetLeading tail sourceSuffix targetSuffix
-      sourceSuffixCompiled targetSuffixCompiled =>
+      suffix =>
       rw [List.nodup_cons] at childrenNodup
       have suffixLaw :
           ∀ (pre : PreModel.{u})
@@ -216,19 +217,7 @@ private theorem GeneratedSiblingProvenance.zipper
               denoteItemSeq pre definitionEnv (Env.comp env rho)
                 sourceSuffix := by
         intro pre definitionEnv env
-        exact
-          hostChildren_denotation_natural_outside compiled sourceFuel
-            targetFuel sourceContext targetContext rho contextAction tail
-            (by
-              intro child member
-              apply outside child (by simp [member])
-              intro same
-              subst child
-              exact childrenNodup.1 member)
-            (by
-              intro child member
-              exact above child (by simp [member]))
-            sourceSuffixCompiled targetSuffixCompiled pre definitionEnv env
+        exact suffix.denotationNatural rho contextAction pre definitionEnv env
       exact
         ⟨rfl, rfl, rfl, rfl,
           DiagramContext.FilledZipper.surround

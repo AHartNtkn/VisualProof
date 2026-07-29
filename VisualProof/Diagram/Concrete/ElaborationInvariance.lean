@@ -6,6 +6,75 @@ universe u
 
 namespace ConcreteElaboration
 
+theorem compileNodes?_iso_denotation
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    (rightWellFormed : right.WellFormed definitions)
+    {leftContext : WireContext left}
+    {rightContext : WireContext right}
+    (contexts : WireContextsCorrespond iso leftContext rightContext)
+    {pre : PreModel}
+    (definitionEnv : DefinitionEnv pre definitions)
+    {leftEnv : Env pre leftContext.sigs}
+    {rightEnv : Env pre rightContext.sigs}
+    (envs : EnvironmentsCorrespond iso leftContext rightContext
+      leftEnv rightEnv)
+    {leftNodes : List left.NodeId} {rightNodes : List right.NodeId}
+    (forwardNodes :
+      ∀ node, node ∈ leftNodes → iso.nodes node ∈ rightNodes)
+    (backwardNodes :
+      ∀ node, node ∈ rightNodes → iso.nodes.symm node ∈ leftNodes)
+    {leftItems : ItemSeq definitions leftContext.sigs}
+    {rightItems : ItemSeq definitions rightContext.sigs}
+    (leftCompiled :
+      compileNodes? definitions left leftContext leftNodes = some leftItems)
+    (rightCompiled :
+      compileNodes? definitions right rightContext rightNodes =
+        some rightItems) :
+    denoteItemSeq pre definitionEnv leftEnv leftItems ↔
+      denoteItemSeq pre definitionEnv rightEnv rightItems := by
+  rw [ItemSeq.denote_iff_mem, ItemSeq.denote_iff_mem]
+  constructor
+  · intro leftDenotes rightItem rightMember
+    obtain ⟨rightNode, rightNodeMember, rightItemCompiled⟩ :=
+      compileNodes?_node_for_item definitions right rightContext
+        rightCompiled rightItem rightMember
+    let leftNode := iso.nodes.symm rightNode
+    have leftNodeMember : leftNode ∈ leftNodes :=
+      backwardNodes rightNode rightNodeMember
+    obtain ⟨leftItem, leftItemMember, leftItemCompiled⟩ :=
+      compileNodes?_item_for_node definitions left leftContext leftCompiled
+        leftNode leftNodeMember
+    obtain ⟨mappedItem, mappedCompiled, itemDenotation⟩ :=
+      compileNode?_forward_denotation iso leftWellFormed rightWellFormed
+        contexts definitionEnv envs leftNode leftItem leftItemCompiled
+    have mappedNode : iso.nodes leftNode = rightNode :=
+      iso.nodes.right_inv rightNode
+    have mappedItemEquality : mappedItem = rightItem := by
+      apply Option.some.inj
+      rw [mappedNode] at mappedCompiled
+      exact mappedCompiled.symm.trans rightItemCompiled
+    subst mappedItem
+    exact itemDenotation.mp (leftDenotes leftItem leftItemMember)
+  · intro rightDenotes leftItem leftMember
+    obtain ⟨leftNode, leftNodeMember, leftItemCompiled⟩ :=
+      compileNodes?_node_for_item definitions left leftContext leftCompiled
+        leftItem leftMember
+    obtain ⟨rightItem, rightItemCompiled, itemDenotation⟩ :=
+      compileNode?_forward_denotation iso leftWellFormed rightWellFormed
+        contexts definitionEnv envs leftNode leftItem leftItemCompiled
+    have rightNodeMember : iso.nodes leftNode ∈ rightNodes :=
+      forwardNodes leftNode leftNodeMember
+    obtain ⟨storedItem, storedMember, storedCompiled⟩ :=
+      compileNodes?_item_for_node definitions right rightContext rightCompiled
+        (iso.nodes leftNode) rightNodeMember
+    have storedEquality : storedItem = rightItem := by
+      exact Option.some.inj (storedCompiled.symm.trans rightItemCompiled)
+    subst storedItem
+    exact itemDenotation.mpr (rightDenotes rightItem storedMember)
+
 private theorem compileRegion?_forward_denotation
     {definitions : List (List Sig)}
     {pre : PreModel.{u}}

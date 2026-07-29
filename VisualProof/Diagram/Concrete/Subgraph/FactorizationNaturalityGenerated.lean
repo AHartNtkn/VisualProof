@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityLocal
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityGeneratedSibling
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrameSupport
 
 namespace VisualProof
@@ -502,77 +502,25 @@ private theorem generatedSiteContext_host_mem
     change attachment.hostWire wire ∈ outer.ids.map attachment.hostWire
     exact List.mem_map.mpr ⟨wire, inherited, rfl⟩
 
-private theorem generatedSiteContext_covers
-    {definitions : List (List Sig)}
-    {base : CheckedDiagram definitions}
-    {site : base.val.RegionId}
-    {fragment : CheckedOpenDiagram definitions}
-    {fragmentCompiled : OpenCompilation fragment}
-    {attachment : ConcreteSpliceAttachment base site fragment}
-    (compiled : InsertionCompilation fragmentCompiled attachment)
-    (outer : ConcreteElaboration.WireContext base.val)
-    (visible : compiled.site.frame.visible = outer.extend site) :
-    (generatedSiteContext attachment outer).Covers
-      (attachment.hostRegion site) := by
-  intro wire encloses
-  have allocated : wire ∈ Data.Finite.allFin attachment.wireCount :=
-    Data.Finite.mem_allFin wire
-  rw [compiled.wire_allocations] at allocated
-  rcases List.mem_append.mp allocated with host | fresh
-  · rcases List.mem_map.mp host with ⟨sourceWire, _, rfl⟩
-    rw [(compiled.host_wire_source sourceWire).2] at encloses
-    have sourceEncloses :
-        base.val.Encloses (base.val.wires sourceWire).scope site :=
-      (hostEncloses_iff compiled _ _).mp encloses
-    exact generatedSiteContext_host_mem compiled outer visible sourceWire
-      (compiled.site.visible_of_encloses sourceWire sourceEncloses)
-  · rcases List.mem_map.mp fresh with ⟨freshWire, _, rfl⟩
-    let sourceWire := attachment.fragmentInternalWires.get freshWire
-    have rootReach :=
-      of_decide_eq_true
-        ((List.all_eq_true.mp
-          fragment.property.diagram.all_regions_reach_root)
-          (fragment.val.diagram.wires sourceWire).scope
-          (Data.Finite.mem_allFin _))
-    obtain ⟨steps, rootClimb⟩ :=
-      (ConcreteElaboration.encloses_iff_exists fragment.val.diagram
-        fragment.val.diagram.root
-        (fragment.val.diagram.wires sourceWire).scope).mp rootReach
-    have siteEncloses :
-        attachment.diagram.Encloses (attachment.hostRegion site)
-          (attachment.fragmentRegion
-            (fragment.val.diagram.wires sourceWire).scope) :=
-      by
-        have mappedClimb :=
-          fragmentClimb_to_root compiled steps.val _ rootClimb
-        have bounded :=
-          successfulClimb_le_count definitions attachment.diagram
-            compiled.generated_wellFormed steps.val
-            (attachment.fragmentRegion
-              (fragment.val.diagram.wires sourceWire).scope)
-            (attachment.hostRegion site) mappedClimb
-        apply
-          (ConcreteElaboration.encloses_iff_exists attachment.diagram
-            (attachment.hostRegion site)
-            (attachment.fragmentRegion
-              (fragment.val.diagram.wires sourceWire).scope)).mpr
-        exact ⟨⟨steps.val, by omega⟩, mappedClimb⟩
-    rw [(compiled.fresh_wire_source freshWire).2] at encloses
-    have sameScope :=
-      checked_encloses_antisymm definitions attachment.diagram
-        compiled.generated_wellFormed encloses siteEncloses
-    have targetScope :
-        (attachment.diagram.wires
-          (attachment.freshWire freshWire)).scope =
-          attachment.hostRegion site :=
-      (compiled.fresh_wire_source freshWire).2.trans sameScope
-    change attachment.freshWire freshWire ∈
-      (generatedSiteContext attachment outer).ids
-    unfold generatedSiteContext ConcreteElaboration.WireContext.extend
-    apply List.mem_append_left
-    apply List.mem_filter.mpr
-    exact ⟨Data.Finite.mem_allFin _, by
-      simpa only [beq_iff_eq] using targetScope⟩
+private theorem compileNodes_append
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (left right : List diagram.NodeId) :
+    ConcreteElaboration.compileNodes? definitions diagram context
+        (left ++ right) =
+      (do
+        let leftItems ←
+          ConcreteElaboration.compileNodes? definitions diagram context left
+        let rightItems ←
+          ConcreteElaboration.compileNodes? definitions diagram context right
+        pure (leftItems.append rightItems)) := by
+  induction left with
+  | nil => simp [ConcreteElaboration.compileNodes?, ItemSeq.append]
+  | cons head tail induction =>
+      simp only [List.cons_append, ConcreteElaboration.compileNodes?]
+      rw [induction]
+      simp [Option.bind_assoc, ItemSeq.append]
 
 /--
 Compile the grouped identity nodes introduced at the generated site from the
@@ -596,34 +544,88 @@ theorem generatedIdentityNodes_compile
           ((Data.Finite.allFin attachment.identityRequests.length).map
             attachment.identityNode) =
         some items := by
-  apply ConcreteElaboration.compileNodes?_complete definitions
-    attachment.diagram compiled.generated_wellFormed
-    (generatedSiteContext attachment outer) (attachment.hostRegion site)
-    (generatedSiteContext_covers compiled outer visible)
-  intro node member
-  rcases List.mem_map.mp member with ⟨identity, _, rfl⟩
-  rw [compiled.identity_node]
-  rfl
-
-private theorem compileNodes_append
-    (definitions : List (List Sig))
-    (diagram : ConcreteDiagram definitions.length)
-    (context : ConcreteElaboration.WireContext diagram)
-    (left right : List diagram.NodeId) :
-    ConcreteElaboration.compileNodes? definitions diagram context
-        (left ++ right) =
-      (do
-        let leftItems ←
-          ConcreteElaboration.compileNodes? definitions diagram context left
-        let rightItems ←
-          ConcreteElaboration.compileNodes? definitions diagram context right
-        pure (leftItems.append rightItems)) := by
-  induction left with
-  | nil => simp [ConcreteElaboration.compileNodes?, ItemSeq.append]
-  | cons head tail induction =>
-      simp only [List.cons_append, ConcreteElaboration.compileNodes?]
-      rw [induction]
-      simp [Option.bind_assoc, ItemSeq.append]
+  have compileIdentities :
+      ∀ identities : List (Fin attachment.identityRequests.length),
+        ∃ items :
+            ItemSeq definitions
+              (generatedSiteContext attachment outer).sigs,
+          ConcreteElaboration.compileNodes? definitions attachment.diagram
+              (generatedSiteContext attachment outer)
+              (identities.map attachment.identityNode) =
+            some items := by
+    intro identities
+    induction identities with
+    | nil => exact ⟨.nil, rfl⟩
+    | cons identity tail induction =>
+        let request := attachment.identityRequests.get identity
+        obtain ⟨headItems, headCompiled⟩ :=
+          ConcreteElaboration.compileNodes?_identity_singleton_of_incident
+            definitions attachment.diagram compiled.generated_wellFormed
+            (generatedSiteContext attachment outer)
+            (attachment.identityNode identity)
+            (attachment.hostRegion site) request.sig
+            request.attachments.length
+            (compiled.identity_node identity)
+            (by
+              intro index bound
+              let port : Fin request.attachments.length := ⟨index, bound⟩
+              let attachedWire := request.attachments.get port
+              let wire :=
+                attachment.hostWire attachedWire
+              refine
+                ⟨wire, identityNode_port_incident compiled identity port, ?_⟩
+              have requestMember : request ∈ attachment.identityRequests :=
+                List.get_mem attachment.identityRequests identity
+              have components :=
+                identityRequest_components attachment request requestMember
+              have attachmentMember :
+                  attachedWire ∈ request.attachments := by
+                exact List.get_mem request.attachments port
+              have attachmentMember' :
+                  attachedWire ∈
+                    concreteAttachmentTargets base fragment attachment.target
+                      request.source := by
+                rw [← components.2.1]
+                exact attachmentMember
+              obtain ⟨position, _, targetEquality⟩ :=
+                (concreteAttachmentTargets_mem_iff base fragment
+                  attachment.target request.source
+                  attachedWire).mp attachmentMember'
+              change
+                attachment.hostWire attachedWire ∈
+                  (generatedSiteContext attachment outer).ids
+              rw [← targetEquality]
+              exact
+                generatedSiteContext_host_mem compiled outer visible
+                  (attachment.target position)
+                  (compiled.target_visible position))
+        obtain ⟨tailItems, tailCompiled⟩ := induction
+        refine ⟨headItems.append tailItems, ?_⟩
+        change
+          ConcreteElaboration.compileNodes? definitions attachment.diagram
+              (generatedSiteContext attachment outer)
+              ([attachment.identityNode identity] ++
+                tail.map attachment.identityNode) =
+            some (headItems.append tailItems)
+        calc
+          _ = (do
+              let leftItems ←
+                ConcreteElaboration.compileNodes? definitions
+                  attachment.diagram (generatedSiteContext attachment outer)
+                  [attachment.identityNode identity]
+              let rightItems ←
+                ConcreteElaboration.compileNodes? definitions
+                  attachment.diagram (generatedSiteContext attachment outer)
+                  (tail.map attachment.identityNode)
+              pure (leftItems.append rightItems)) :=
+            compileNodes_append definitions attachment.diagram
+              (generatedSiteContext attachment outer)
+              [attachment.identityNode identity]
+              (tail.map attachment.identityNode)
+          _ = _ := by simp [headCompiled, tailCompiled]
+  exact
+    compileIdentities
+      (Data.Finite.allFin attachment.identityRequests.length)
 
 private theorem compileChildren_append
     (definitions : List (List Sig))
@@ -1490,75 +1492,6 @@ theorem generatedSiteBody_compile
     targetNodesCompiled, targetChildrenCompiled]
   rfl
 
-private theorem hostChildren_compile_outside
-    {definitions : List (List Sig)}
-    {base : CheckedDiagram definitions}
-    {site : base.val.RegionId}
-    {fragment : CheckedOpenDiagram definitions}
-    {fragmentCompiled : OpenCompilation fragment}
-    {attachment : ConcreteSpliceAttachment base site fragment}
-    (compiled : InsertionCompilation fragmentCompiled attachment)
-    (fuel : Nat)
-    (sourceContext : ConcreteElaboration.WireContext base.val)
-    (targetContext :
-      ConcreteElaboration.WireContext attachment.diagram)
-    (rho : WireRenaming sourceContext.sigs targetContext.sigs)
-    (contextAction :
-      ∀ {sig} (value : Var sourceContext.sigs sig),
-        ConcreteElaboration.WireContext.origin attachment.diagram
-            targetContext.ids (rho value) =
-          attachment.hostWire
-            (ConcreteElaboration.WireContext.origin base.val
-              sourceContext.ids value)) :
-    ∀ (children : List base.val.RegionId),
-      (∀ child, child ∈ children → ¬base.val.Encloses child site) →
-      (∀ child, child ∈ children →
-        ConcreteElaboration.ContextAbove attachment.diagram targetContext
-          (attachment.hostRegion child)) →
-      ∀ {sourceItems : ItemSeq definitions sourceContext.sigs},
-        ConcreteElaboration.compileChildrenWith? definitions base.val
-            (ConcreteElaboration.compileRegion? definitions base.val fuel)
-            sourceContext children =
-          some sourceItems →
-        ∃ targetItems : ItemSeq definitions targetContext.sigs,
-          ConcreteElaboration.compileChildrenWith? definitions
-              attachment.diagram
-              (ConcreteElaboration.compileRegion? definitions
-                attachment.diagram fuel)
-              targetContext (children.map attachment.hostRegion) =
-            some targetItems := by
-  intro children
-  induction children with
-  | nil =>
-      intro outside above sourceItems sourceCompiled
-      have sourceExact : sourceItems = .nil :=
-        (Option.some.inj sourceCompiled).symm
-      subst sourceItems
-      exact ⟨.nil, rfl⟩
-  | cons child tail induction =>
-      intro outside above sourceItems sourceCompiled
-      obtain ⟨sourceHead, sourceTail, sourceHeadCompiled,
-          sourceTailCompiled, sourceItemsShape⟩ :=
-        compileChildren_cons_components definitions base.val
-          (ConcreteElaboration.compileRegion? definitions base.val fuel)
-          sourceContext child tail sourceItems sourceCompiled
-      obtain ⟨targetHead, targetHeadCompiled⟩ :=
-        hostRegion_compile_outside compiled fuel child
-          (outside child (by simp)) sourceContext targetContext rho
-          contextAction (above child (by simp)) sourceHeadCompiled
-      obtain ⟨targetTail, targetTailCompiled⟩ :=
-        induction
-          (by
-            intro candidate member
-            exact outside candidate (by simp [member]))
-          (by
-            intro candidate member
-            exact above candidate (by simp [member]))
-          sourceTailCompiled
-      refine ⟨.cons (.cut targetHead) targetTail, ?_⟩
-      simp [ConcreteElaboration.compileChildrenWith?, targetHeadCompiled,
-        targetTailCompiled]
-
 /--
 Recursive authority for one source-driven host sibling branch. The selected
 child and every skipped outside sibling are retained while the target frame is
@@ -1595,20 +1528,9 @@ inductive GeneratedSiblingProvenance
       (sourceSuffix : ItemSeq definitions sourceContext.sigs)
       (targetSuffix :
         ItemSeq definitions targetContext.sigs)
-      (sourceSuffixCompiled :
-        ConcreteElaboration.compileChildrenWith? definitions base.val
-            (ConcreteElaboration.compileRegion? definitions base.val
-              sourceFuel)
-            sourceContext tail =
-          some sourceSuffix)
-      (targetSuffixCompiled :
-        ConcreteElaboration.compileChildrenWith? definitions
-            attachment.diagram
-            (ConcreteElaboration.compileRegion? definitions
-              attachment.diagram targetFuel)
-            targetContext
-            (tail.map attachment.hostRegion) =
-          some targetSuffix) :
+      (suffix :
+        GeneratedOutsideChildrenProvenance compiled sourceFuel targetFuel
+          sourceContext targetContext tail sourceSuffix targetSuffix) :
       GeneratedSiblingProvenance compiled sourceFuel targetFuel sourceContext
         targetContext selected sourceNested targetNested sourceLeading targetLeading
         (selected :: tail)
@@ -1724,12 +1646,23 @@ theorem compileHostSiblingFrame
               sourceFrame :=
           Option.some.inj sourceFrameEquation
         subst sourceFrame
-        have sourceSuffixAtTargetFuel :=
-          compileChildren_fuel_mono definitions base.val sourceFuel
-            targetFuel fuelLe sourceContext tail sourceSuffixCompiled
-        obtain ⟨targetSuffix, targetSuffixCompiled⟩ :=
-          hostChildren_compile_outside compiled targetFuel sourceContext
-            targetContext rho contextAction tail
+        obtain ⟨targetSuffix, suffix⟩ :=
+          GeneratedOutsideChildrenProvenance.generate
+            (compiled := compiled)
+            (sourceFuel := sourceFuel) (targetFuel := targetFuel)
+            (sourceContext := sourceContext) (targetContext := targetContext)
+            (fun candidate candidateOutside candidateAbove sourceBody
+                sourceBodyCompiled => by
+              have sourceBodyAtTargetFuel :=
+                compileRegion_fuel_mono definitions base.val sourceFuel
+                  targetFuel fuelLe candidate sourceContext
+                  sourceBodyCompiled
+              exact
+                hostRegion_compile_outside compiled targetFuel candidate
+                  candidateOutside sourceContext targetContext rho
+                  contextAction candidateAbove
+                  sourceBodyAtTargetFuel)
+            tail
             (by
               intro candidate member
               apply outside candidate (by simp [member])
@@ -1739,7 +1672,8 @@ theorem compileHostSiblingFrame
             (by
               intro candidate member
               exact above candidate (by simp [member]))
-            sourceSuffixAtTargetFuel
+            sourceSuffixCompiled
+        have targetSuffixCompiled := suffix.targetGenerated
         let targetFrame :
             RegionFrame definitions attachment.diagram targetContext :=
           { visible := targetNested.visible
@@ -1751,7 +1685,7 @@ theorem compileHostSiblingFrame
         simp [targetSuffixCompiled, targetFrame]
         exact
           .selected sourceLeading targetLeading tail sourceSuffix
-            targetSuffix sourceSuffixCompiled targetSuffixCompiled
+            targetSuffix suffix
       · simp only [same, ↓reduceDIte] at sourceCompiled
         obtain ⟨sourceHead, sourceHeadCompiled, sourceRecursive⟩ :=
           Option.bind_eq_some_iff.mp sourceCompiled
@@ -1824,8 +1758,8 @@ theorem GeneratedSiblingProvenance.sourceGenerated
       some sourceFrame := by
   induction provenance with
   | selected sourceLeading targetLeading tail sourceSuffix targetSuffix
-      sourceSuffixCompiled targetSuffixCompiled =>
-      simp [compileSiblingFrame?, sourceSuffixCompiled]
+      suffix =>
+      simp [compileSiblingFrame?, suffix.sourceGenerated]
   | outside sourceLeading targetLeading child tail different sourceBody
       targetBody sourceBodyCompiled targetBodyCompiled rest induction =>
       simp [compileSiblingFrame?, different, sourceBodyCompiled, induction]
@@ -1866,8 +1800,8 @@ theorem GeneratedSiblingProvenance.targetGenerated
       some targetFrame := by
   induction provenance with
   | selected sourceLeading targetLeading tail sourceSuffix targetSuffix
-      sourceSuffixCompiled targetSuffixCompiled =>
-      simp [compileSiblingFrame?, targetSuffixCompiled]
+      suffix =>
+      simp [compileSiblingFrame?, suffix.targetGenerated]
   | outside sourceLeading targetLeading child tail different sourceBody
       targetBody sourceBodyCompiled targetBodyCompiled rest induction =>
       have mappedDifferent :

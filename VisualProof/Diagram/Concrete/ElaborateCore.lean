@@ -30,7 +30,7 @@ private def resolveExpected? (diagram : ConcreteDiagram definitionCount)
   else
     none
 
-private def EnvironmentsCorrespond
+def EnvironmentsCorrespond
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
     (iso : ConcreteIso left right)
@@ -45,17 +45,6 @@ private def EnvironmentsCorrespond
       resolveExpected? right rightContext (iso.wires wire) expected =
         some rightVar →
       leftEnv expected leftVar = rightEnv expected rightVar
-
-private theorem empty_environments_correspond
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) (pre : PreModel) :
-    EnvironmentsCorrespond iso
-      (WireContext.empty left) (WireContext.empty right)
-      (Env.empty : Env pre []) (Env.empty : Env pre []) := by
-  intro wire expected leftVar rightVar leftResolved
-  simp [resolveExpected?, resolveWire?, resolveWireIn?,
-    WireContext.empty] at leftResolved
 
 private def resolvePort? (diagram : ConcreteDiagram definitionCount)
     (context : WireContext diagram) (node : diagram.NodeId)
@@ -2567,6 +2556,58 @@ private theorem resolveIdentityPorts?_complete
       exact ⟨⟨head :: tail.val, by simp [tail.property]⟩, by
         simp [resolveIdentityPorts?, headResolved', tailResolved]⟩
 
+/--
+Compile one checked identity directly from its exact concrete node and the
+checker-owned incident wire for every required port. This is the narrow
+identity compiler boundary used by source-driven generated identities.
+-/
+theorem compileNodes?_identity_singleton_of_incident
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (context : WireContext diagram)
+    (node : diagram.NodeId)
+    (region : diagram.RegionId)
+    (sig : Sig)
+    (arity : Nat)
+    (nodeData : diagram.nodes node = .identity region sig arity)
+    (portsVisible :
+      ∀ index (_bound : index < arity),
+        ∃ wire : diagram.WireId,
+          (⟨node, .identity index⟩ : CEndpoint diagram.nodeCount) ∈
+              (diagram.wires wire).endpoints ∧
+            wire ∈ context.ids) :
+    ∃ items : ItemSeq definitions context.sigs,
+      compileNodes? definitions diagram context [node] = some items := by
+  have arityWitness :=
+    ConcreteDiagram.identity_arity definitions diagram wellFormed node
+      region sig arity nodeData
+  obtain ⟨ports, portsResolved⟩ :=
+    resolveIdentityPorts?_complete diagram context node sig arity 0 (by
+      intro index bound
+      obtain ⟨wire, incident, visible⟩ := portsVisible index bound
+      have required :
+          CPort.identity index ∈ diagram.requiredPorts node := by
+        simp [ConcreteDiagram.requiredPorts, nodeData, bound]
+      have owner :=
+        ConcreteDiagram.endpointOwner?_eq_of_incident definitions diagram
+          wellFormed node (.identity index) required wire incident
+      have signature :=
+        ConcreteDiagram.identity_port_typed definitions diagram wellFormed
+          node region sig arity nodeData index bound wire owner
+      obtain ⟨wireVar, wireResolved⟩ :=
+        resolveWire?_complete diagram context wire visible
+      exact
+        ⟨signature ▸ wireVar, by
+          simp [resolvePort?, owner, resolveExpected?, signature,
+            wireResolved]⟩)
+  let item : Item definitions context.sigs :=
+    .identity sig ports.val (by
+      simpa only [ports.property] using arityWitness)
+  refine ⟨.cons item .nil, ?_⟩
+  simp [compileNodes?, compileNode?, nodeData, arityWitness, portsResolved,
+    item]
+
 private theorem compileIdentityNode?_forward_denotation
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
@@ -2706,7 +2747,7 @@ private theorem compileIdentityNode?_forward_denotation
               ⟨leftVar, leftMember, valuesEqual.trans rightValue⟩
   · simp at leftCompiled
 
-private theorem compileNode?_forward_denotation
+theorem compileNode?_forward_denotation
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
     (iso : ConcreteIso left right)
@@ -2845,7 +2886,7 @@ theorem compileNodes?_complete
       exact ⟨.cons head rest, by
         simp [compileNodes?, headCompiled, restCompiled]⟩
 
-private theorem compileNodes?_item_for_node
+theorem compileNodes?_item_for_node
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (context : WireContext diagram) :
@@ -2883,7 +2924,7 @@ private theorem compileNodes?_item_for_node
                 exact ⟨item, by
                   simp [ItemSeq.toList, itemMember], itemCompiled⟩
 
-private theorem compileNodes?_node_for_item
+theorem compileNodes?_node_for_item
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (context : WireContext diagram) :
@@ -2923,76 +2964,6 @@ private theorem compileNodes?_node_for_item
                   compileNodes?_node_for_item definitions diagram context
                     tailEquation item tailMember
                 exact ⟨node, by simp [nodeMember], itemCompiled⟩
-
-theorem compileNodes?_iso_denotation
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (leftWellFormed : left.WellFormed definitions)
-    (rightWellFormed : right.WellFormed definitions)
-    {leftContext : WireContext left}
-    {rightContext : WireContext right}
-    (contexts : WireContextsCorrespond iso leftContext rightContext)
-    {pre : PreModel}
-    (definitionEnv : DefinitionEnv pre definitions)
-    {leftEnv : Env pre leftContext.sigs}
-    {rightEnv : Env pre rightContext.sigs}
-    (envs : EnvironmentsCorrespond iso leftContext rightContext
-      leftEnv rightEnv)
-    {leftNodes : List left.NodeId} {rightNodes : List right.NodeId}
-    (forwardNodes :
-      ∀ node, node ∈ leftNodes → iso.nodes node ∈ rightNodes)
-    (backwardNodes :
-      ∀ node, node ∈ rightNodes → iso.nodes.symm node ∈ leftNodes)
-    {leftItems : ItemSeq definitions leftContext.sigs}
-    {rightItems : ItemSeq definitions rightContext.sigs}
-    (leftCompiled :
-      compileNodes? definitions left leftContext leftNodes = some leftItems)
-    (rightCompiled :
-      compileNodes? definitions right rightContext rightNodes =
-        some rightItems) :
-    denoteItemSeq pre definitionEnv leftEnv leftItems ↔
-      denoteItemSeq pre definitionEnv rightEnv rightItems := by
-  rw [ItemSeq.denote_iff_mem, ItemSeq.denote_iff_mem]
-  constructor
-  · intro leftDenotes rightItem rightMember
-    obtain ⟨rightNode, rightNodeMember, rightItemCompiled⟩ :=
-      compileNodes?_node_for_item definitions right rightContext
-        rightCompiled rightItem rightMember
-    let leftNode := iso.nodes.symm rightNode
-    have leftNodeMember : leftNode ∈ leftNodes :=
-      backwardNodes rightNode rightNodeMember
-    obtain ⟨leftItem, leftItemMember, leftItemCompiled⟩ :=
-      compileNodes?_item_for_node definitions left leftContext leftCompiled
-        leftNode leftNodeMember
-    obtain ⟨mappedItem, mappedCompiled, itemDenotation⟩ :=
-      compileNode?_forward_denotation iso leftWellFormed rightWellFormed
-        contexts definitionEnv envs leftNode leftItem leftItemCompiled
-    have mappedNode : iso.nodes leftNode = rightNode :=
-      iso.nodes.right_inv rightNode
-    have mappedItemEquality : mappedItem = rightItem := by
-      apply Option.some.inj
-      rw [mappedNode] at mappedCompiled
-      exact mappedCompiled.symm.trans rightItemCompiled
-    subst mappedItem
-    exact itemDenotation.mp (leftDenotes leftItem leftItemMember)
-  · intro rightDenotes leftItem leftMember
-    obtain ⟨leftNode, leftNodeMember, leftItemCompiled⟩ :=
-      compileNodes?_node_for_item definitions left leftContext leftCompiled
-        leftItem leftMember
-    obtain ⟨rightItem, rightItemCompiled, itemDenotation⟩ :=
-      compileNode?_forward_denotation iso leftWellFormed rightWellFormed
-        contexts definitionEnv envs leftNode leftItem leftItemCompiled
-    have rightNodeMember : iso.nodes leftNode ∈ rightNodes :=
-      forwardNodes leftNode leftNodeMember
-    obtain ⟨storedItem, storedMember, storedCompiled⟩ :=
-      compileNodes?_item_for_node definitions right rightContext rightCompiled
-        (iso.nodes leftNode) rightNodeMember
-    have storedEquality : storedItem = rightItem := by
-      exact Option.some.inj (storedCompiled.symm.trans rightItemCompiled)
-    subst storedItem
-    exact itemDenotation.mpr (rightDenotes rightItem storedMember)
-
 
 end ConcreteElaboration
 
