@@ -1,61 +1,7 @@
-import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationPrelude
 namespace VisualProof
 open ConcreteElaboration
-private def mappedIndex
-    (map : α → β) (values : List α) :
-    Fin values.length → Fin (values.map map).length :=
-  fun index => ⟨index.val, by simpa using index.isLt⟩
-
-private theorem indexOf?_map_injective
-    [DecidableEq α] [DecidableEq β]
-    (map : α → β) (injective : Function.Injective map)
-    (values : List α) (value : α) :
-    Data.Finite.indexOf? (values.map map) (map value) =
-      (Data.Finite.indexOf? values value).map
-        (mappedIndex map values) := by
-  induction values with
-  | nil => rfl
-  | cons head tail induction =>
-      by_cases same : value = head
-      · subst value
-        simp [Data.Finite.indexOf?, mappedIndex]
-      · have mappedDifferent : map value ≠ map head :=
-          fun mappedSame => same (injective mappedSame)
-        simp only [List.map_cons, Data.Finite.indexOf?, same,
-          mappedDifferent, ↓reduceIte, induction, Option.map_map]
-        apply Option.map_congr
-        intro index
-        intro _
-        apply Fin.ext
-        rfl
-
-private theorem denseIndex_map_injective
-    [DecidableEq α] [DecidableEq β]
-    (map : α → β) (injective : Function.Injective map)
-    (values : List α) (value : α) (member : value ∈ values) :
-    DenseList.index (values.map map) (map value)
-        (List.mem_map.mpr ⟨value, member, rfl⟩) =
-      mappedIndex map values (DenseList.index values value member) := by
-  obtain ⟨sourceIndex, sourceEquation⟩ :=
-    Data.Finite.indexOf?_complete member
-  have mappedEquation :
-      Data.Finite.indexOf? (values.map map) (map value) =
-        some (mappedIndex map values sourceIndex) := by
-    rw [indexOf?_map_injective map injective, sourceEquation]
-    rfl
-  unfold DenseList.index
-  apply Fin.ext
-  rw [Option.get_of_eq_some _ mappedEquation,
-    Option.get_of_eq_some _ sourceEquation]
-private theorem denseIndex_val_of_list_eq
-    [DecidableEq α]
-    {left right : List α} (same : left = right)
-    (value : α) (leftMember : value ∈ left)
-    (rightMember : value ∈ right) :
-    (DenseList.index left value leftMember).val =
-      (DenseList.index right value rightMember).val := by
-  subst right
-  rfl
+open FactorizationInternal
 
 /--
 Compiler path context; `siteBody` is hole output before enclosing frame fill. -/
@@ -1875,6 +1821,23 @@ theorem compileSite_complete
 
 namespace SiteCompilation
 
+/--
+Package a canonical site receipt from an already-proved exact root-frame
+compiler equation. This does not execute `compileSite?` or search for a site.
+-/
+def ofFrame
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (frame : SiteFrame base site)
+    (generated :
+      compileRegionFrame? definitions base.val site
+          (base.val.regionCount + 1) base.val.root
+          (WireContext.empty base.val) =
+        some frame) :
+    SiteCompilation base site :=
+  SiteCompilation.mk frame generated
+
 /-- The executable site compiler has one proof-independent receipt per input. -/
 theorem unique
     {definitions : List (List Sig)}
@@ -2515,8 +2478,34 @@ structure InsertionCompilation
     splice attachment = .ok candidate
 
 /--
-Run the site compiler, ordered target resolver, and concrete splice checker as
-one proof-independent structural computation.
+Resolve ordered targets and check a concrete splice at an already-compiled
+canonical site. No site traversal is performed.
+-/
+def compileInsertionAt?
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (siteCompiled : SiteCompilation base site)
+    (fragmentCompiled : OpenCompilation fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    Option (InsertionCompilation fragmentCompiled attachment) :=
+  match targetsAccepted :
+      compileTargetPositions? fragment.val.diagram base.val
+        siteCompiled.frame.visible fragment.val.boundary
+        attachment.target attachment.signature with
+  | none => none
+  | some targets =>
+      match candidateAccepted : splice attachment with
+      | .error _ => none
+      | .ok candidate =>
+          some
+            (InsertionCompilation.mk siteCompiled targets
+              targetsAccepted candidate candidateAccepted)
+
+/--
+Run the site compiler before ordered target resolution and splice checking.
+This legacy entry point remains for callers that do not already own a site.
 -/
 def compileInsertion?
     {definitions : List (List Sig)}
@@ -2529,18 +2518,62 @@ def compileInsertion?
   match compileSite? base site with
   | none => none
   | some siteCompiled =>
-      match targetsAccepted :
-          compileTargetPositions? fragment.val.diagram base.val
-            siteCompiled.frame.visible fragment.val.boundary
-            attachment.target attachment.signature with
-      | none => none
-      | some targets =>
-          match candidateAccepted : splice attachment with
-          | .error _ => none
-          | .ok candidate =>
-              some
-                (InsertionCompilation.mk siteCompiled targets
-                  targetsAccepted candidate candidateAccepted)
+      compileInsertionAt? siteCompiled fragmentCompiled attachment
+
+namespace InsertionCompilation
+
+/--
+An accepted splice at an existing canonical site has a complete ordered
+insertion receipt. Target completeness uses only that site's retained coverage.
+-/
+theorem ofSite
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (siteCompiled : SiteCompilation base site)
+    (fragmentCompiled : OpenCompilation fragment)
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (result : ConcreteSpliceResult attachment)
+    (accepted : splice attachment = .ok result) :
+    ∃ compiled,
+      compileInsertionAt? siteCompiled fragmentCompiled attachment =
+        some compiled := by
+  have visibleTargets :
+      ∀ position,
+        attachment.target position ∈ siteCompiled.frame.visible.ids :=
+    fun position =>
+      siteCompiled.covers (attachment.target position)
+        (attachment.scope position)
+  obtain ⟨targets, targetsGenerated⟩ :=
+    compileTargetPositions?_complete fragment.val.diagram base.val
+      siteCompiled.frame.visible fragment.val.boundary attachment.target
+      attachment.signature visibleTargets
+  let compiled : InsertionCompilation fragmentCompiled attachment :=
+    InsertionCompilation.mk (fragmentCompiled := fragmentCompiled)
+      siteCompiled targets targetsGenerated result accepted
+  refine ⟨compiled, ?_⟩
+  unfold compileInsertionAt?
+  split
+  · rename_i rejected
+    rw [targetsGenerated] at rejected
+    contradiction
+  · rename_i generatedTargets generatedTargetsEquation
+    have sameTargets : generatedTargets = targets :=
+      Option.some.inj
+        (generatedTargetsEquation.symm.trans targetsGenerated)
+    subst generatedTargets
+    split
+    · rename_i error rejected
+      rw [accepted] at rejected
+      contradiction
+    · rename_i generatedResult generatedResultEquation
+      have sameResult : generatedResult = result :=
+        Except.ok.inj (generatedResultEquation.symm.trans accepted)
+      subst generatedResult
+      congr
+
+end InsertionCompilation
 
 /--
 Every accepted concrete splice internally supplies the complete structural
@@ -2559,47 +2592,13 @@ theorem compileInsertion_complete_of_splice
       compileInsertion? fragmentCompiled attachment = some compiled := by
   obtain ⟨siteCompiled, siteGenerated⟩ :=
     compileSite_complete base site
-  have visibleTargets :
-      ∀ position,
-        attachment.target position ∈ siteCompiled.frame.visible.ids :=
-    fun position =>
-      siteCompiled.covers (attachment.target position)
-        (attachment.scope position)
-  obtain ⟨targets, targetsGenerated⟩ :=
-    compileTargetPositions?_complete fragment.val.diagram base.val
-      siteCompiled.frame.visible fragment.val.boundary attachment.target
-      attachment.signature visibleTargets
-  let compiled : InsertionCompilation fragmentCompiled attachment :=
-    InsertionCompilation.mk (fragmentCompiled := fragmentCompiled)
-      siteCompiled targets targetsGenerated result accepted
+  obtain ⟨compiled, compiledGenerated⟩ :=
+    InsertionCompilation.ofSite siteCompiled fragmentCompiled attachment
+      result accepted
   refine ⟨compiled, ?_⟩
   unfold compileInsertion?
-  split
-  · rename_i rejected
-    rw [siteGenerated] at rejected
-    contradiction
-  · rename_i generatedSite generatedSiteEquation
-    have sameSite : generatedSite = siteCompiled :=
-      Option.some.inj (generatedSiteEquation.symm.trans siteGenerated)
-    subst generatedSite
-    split
-    · rename_i rejected
-      rw [targetsGenerated] at rejected
-      contradiction
-    · rename_i generatedTargets generatedTargetsEquation
-      have sameTargets : generatedTargets = targets :=
-        Option.some.inj
-          (generatedTargetsEquation.symm.trans targetsGenerated)
-      subst generatedTargets
-      split
-      · rename_i error rejected
-        rw [accepted] at rejected
-        contradiction
-      · rename_i generatedResult generatedResultEquation
-        have sameResult : generatedResult = result :=
-          Except.ok.inj (generatedResultEquation.symm.trans accepted)
-        subst generatedResult
-        congr
+  rw [siteGenerated]
+  exact compiledGenerated
 
 namespace InsertionCompilation
 
