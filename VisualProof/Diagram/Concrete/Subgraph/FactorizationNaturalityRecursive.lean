@@ -1175,28 +1175,15 @@ theorem generatedSite_denotation_natural
       ConcreteElaboration.ContextAbove attachment.diagram
         (hostContext attachment outer) (attachment.hostRegion site))
     (sourceChildFuel targetChildFuel : Nat)
-    (sourceNodes sourceChildren :
-      ItemSeq definitions (outer.extend site).sigs)
-    (sourceNodesCompiled :
-      ConcreteElaboration.compileNodes? definitions base.val
-          (outer.extend site) (base.val.nodesAt site) =
-        some sourceNodes)
-    (sourceChildrenCompiled :
-      ConcreteElaboration.compileChildrenWith? definitions base.val
-          (ConcreteElaboration.compileRegion? definitions base.val
-            sourceChildFuel)
-          (outer.extend site) (base.val.childrenOf site) =
-        some sourceChildren)
-    (siteBodyEquality :
-      congrArg ConcreteElaboration.WireContext.sigs visibleEquality ▸
-          compiled.site.frame.siteBody =
-        .mk (sourceNodes.append sourceChildren))
+    {sourceBody : Region definitions (outer.extend site).sigs}
+    (sourceCompiled :
+      compileRegionBody? definitions base.val sourceChildFuel site outer =
+        some sourceBody)
     {targetBody :
-      Region definitions (hostContext attachment outer).sigs}
+      Region definitions (generatedSiteContext attachment outer).sigs}
     (targetCompiled :
-      ConcreteElaboration.compileRegion? definitions attachment.diagram
-          (Nat.succ targetChildFuel) (attachment.hostRegion site)
-          (hostContext attachment outer) =
+      compileRegionBody? definitions attachment.diagram targetChildFuel
+          (attachment.hostRegion site) (hostContext attachment outer) =
         some targetBody)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions)
@@ -1222,16 +1209,28 @@ theorem generatedSite_denotation_natural
                 (Env.comp generatedEnv
                   (generatedSiteHostRenaming compiled outer))
                 sourceBody) :
-    denoteRegion pre definitionEnv targetEnv targetBody ↔
+    denoteRegion pre definitionEnv targetEnv
+        (ConcreteElaboration.finishRegion attachment.diagram
+          (hostContext attachment outer) (attachment.hostRegion site)
+          targetBody) ↔
       denoteRegion pre definitionEnv
         (Env.comp targetEnv (hostContextRenaming attachment outer))
         (ConcreteElaboration.finishRegion base.val outer site
-          (congrArg ConcreteElaboration.WireContext.sigs
-              visibleEquality ▸
-            Region.conjoin compiled.site.frame.siteBody
-              (intrinsicSplice fragmentCompiled.openDiagram
+          (Region.conjoin sourceBody
+            (congrArg ConcreteElaboration.WireContext.sigs visibleEquality ▸
+              intrinsicSplice fragmentCompiled.openDiagram
                 compiled.intrinsicAttachment))) := by
-  simp only [ConcreteElaboration.compileRegion?] at targetCompiled
+  unfold compileRegionBody? at sourceCompiled targetCompiled
+  obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
+    Option.bind_eq_some_iff.mp sourceCompiled
+  obtain ⟨sourceChildren, sourceChildrenCompiled, sourceBodyEquation⟩ :=
+    Option.bind_eq_some_iff.mp sourceAfterNodes
+  have sourceBodyExact :
+      (.mk (sourceNodes.append sourceChildren) :
+        Region definitions (outer.extend site).sigs) =
+        sourceBody :=
+    Option.some.inj sourceBodyEquation
+  subst sourceBody
   change
     (do
       let nodes ←
@@ -1245,10 +1244,7 @@ theorem generatedSite_denotation_natural
             attachment.diagram targetChildFuel)
           (generatedSiteContext attachment outer)
           (attachment.diagram.childrenOf (attachment.hostRegion site))
-      pure
-        (ConcreteElaboration.finishRegion attachment.diagram
-          (hostContext attachment outer) (attachment.hostRegion site)
-          (.mk (nodes.append children)))) =
+      pure (.mk (nodes.append children))) =
       some targetBody at targetCompiled
   cases targetNodesEquation :
       ConcreteElaboration.compileNodes? definitions attachment.diagram
@@ -1271,10 +1267,9 @@ theorem generatedSite_denotation_natural
       | some targetChildren =>
           rw [targetChildrenEquation] at targetCompiled
           have targetBodyEquality :
-              ConcreteElaboration.finishRegion attachment.diagram
-                  (hostContext attachment outer)
-                  (attachment.hostRegion site)
-                  (.mk (targetNodes.append targetChildren)) =
+              (.mk (targetNodes.append targetChildren) :
+                Region definitions
+                  (generatedSiteContext attachment outer).sigs) =
                 targetBody :=
             Option.some.inj targetCompiled
           subst targetBody
@@ -1536,16 +1531,6 @@ theorem generatedSite_denotation_natural
                 (denoteItemSeq_append pre definitionEnv sourceSiteEnv
                   sourceNodes sourceChildren).mpr
                   ⟨sourceNodesDenote, sourceChildrenDenote⟩
-            have retainedDenote :
-                denoteRegion pre definitionEnv frameEnv
-                  compiled.site.frame.siteBody := by
-              apply
-                (denoteRegion_castContext pre definitionEnv
-                  (congrArg ConcreteElaboration.WireContext.sigs
-                    visibleEquality)
-                  sourceSiteEnv compiled.site.frame.siteBody).mp
-              rw [siteBodyEquality]
-              exact sourceCoreDenote
             have sourceFragmentNodesDenote :
                 denoteItemSeq pre definitionEnv fragmentEnv
                   sourceFragmentNodes := by
@@ -1632,42 +1617,28 @@ theorem generatedSite_denotation_natural
                     compiled.intrinsicAttachment.classMap,
                   boundaryDenote, fragmentBodyDenote⟩
             refine ⟨sourceValues, ?_⟩
-            apply
-              (denoteRegion_castContext pre definitionEnv
-                (congrArg ConcreteElaboration.WireContext.sigs
-                  visibleEquality)
-                (ConcreteElaboration.extendEnvironment base.val outer
-                  site sourceValues
+            change
+              sourceSiteEnv =
+                ConcreteElaboration.extendEnvironment base.val outer site
+                  sourceValues
                   (Env.comp targetEnv
-                    (hostContextRenaming attachment outer)))
-                (Region.conjoin compiled.site.frame.siteBody
-                  (intrinsicSplice fragmentCompiled.openDiagram
-                    compiled.intrinsicAttachment))).mpr
-            have sourceFrameEquality :
-                Env.comp
-                    (ConcreteElaboration.extendEnvironment base.val outer
-                      site sourceValues
-                      (Env.comp targetEnv
-                        (hostContextRenaming attachment outer)))
-                    (equalityRenaming
-                      (congrArg ConcreteElaboration.WireContext.sigs
-                        visibleEquality)) =
-                  frameEnv := by
-              exact
-                congrArg
-                  (fun env =>
-                    Env.comp env
-                      (equalityRenaming
-                        (congrArg ConcreteElaboration.WireContext.sigs
-                          visibleEquality)))
-                  sourceEnvironmentEquality.symm
-            rw [sourceFrameEquality]
+                    (hostContextRenaming attachment outer))
+              at sourceEnvironmentEquality
+            rw [← sourceEnvironmentEquality]
             exact
-              (Region.denote_conjoin pre definitionEnv frameEnv
-                compiled.site.frame.siteBody
-                (intrinsicSplice fragmentCompiled.openDiagram
-                  compiled.intrinsicAttachment)).mpr
-                ⟨retainedDenote, intrinsicDenote⟩
+              (Region.denote_conjoin pre definitionEnv sourceSiteEnv
+                (.mk (sourceNodes.append sourceChildren))
+                (congrArg ConcreteElaboration.WireContext.sigs
+                    visibleEquality ▸
+                  intrinsicSplice fragmentCompiled.openDiagram
+                    compiled.intrinsicAttachment)).mpr
+                ⟨sourceCoreDenote,
+                  (denoteRegion_castContext pre definitionEnv
+                    (congrArg ConcreteElaboration.WireContext.sigs
+                      visibleEquality)
+                    sourceSiteEnv
+                    (intrinsicSplice fragmentCompiled.openDiagram
+                      compiled.intrinsicAttachment)).mpr intrinsicDenote⟩
           · rintro ⟨sourceValues, sourceHoleDenotes⟩
             let sourceSiteEnv :=
               ConcreteElaboration.extendEnvironment base.val outer site
@@ -1679,35 +1650,27 @@ theorem generatedSite_denotation_natural
                 (equalityRenaming
                   (congrArg ConcreteElaboration.WireContext.sigs
                     visibleEquality))
-            have sourceConjoinDenotes :
-                denoteRegion pre definitionEnv frameEnv
-                  (Region.conjoin compiled.site.frame.siteBody
-                    (intrinsicSplice fragmentCompiled.openDiagram
-                      compiled.intrinsicAttachment)) :=
-              (denoteRegion_castContext pre definitionEnv
-                (congrArg ConcreteElaboration.WireContext.sigs
-                  visibleEquality)
-                sourceSiteEnv
-                (Region.conjoin compiled.site.frame.siteBody
-                  (intrinsicSplice fragmentCompiled.openDiagram
-                    compiled.intrinsicAttachment))).mp sourceHoleDenotes
             rcases
-                (Region.denote_conjoin pre definitionEnv frameEnv
-                  compiled.site.frame.siteBody
+                (Region.denote_conjoin pre definitionEnv sourceSiteEnv
+                  (.mk (sourceNodes.append sourceChildren))
+                  (congrArg ConcreteElaboration.WireContext.sigs
+                      visibleEquality ▸
+                    intrinsicSplice fragmentCompiled.openDiagram
+                      compiled.intrinsicAttachment)).mp
+                  sourceHoleDenotes with
+              ⟨sourceCoreDenote, intrinsicSourceDenote⟩
+            have intrinsicDenote :
+                denoteRegion pre definitionEnv frameEnv
                   (intrinsicSplice fragmentCompiled.openDiagram
-                    compiled.intrinsicAttachment)).mp
-                  sourceConjoinDenotes with
-              ⟨retainedDenote, intrinsicDenote⟩
-            have sourceCoreDenote :
-                denoteRegion pre definitionEnv sourceSiteEnv
-                  (.mk (sourceNodes.append sourceChildren)) := by
-              rw [← siteBodyEquality]
+                    compiled.intrinsicAttachment) := by
               exact
                 (denoteRegion_castContext pre definitionEnv
                   (congrArg ConcreteElaboration.WireContext.sigs
                     visibleEquality)
-                  sourceSiteEnv compiled.site.frame.siteBody).mpr
-                  retainedDenote
+                  sourceSiteEnv
+                  (intrinsicSplice fragmentCompiled.openDiagram
+                    compiled.intrinsicAttachment)).mp
+                  intrinsicSourceDenote
             change
               denoteItemSeq pre definitionEnv sourceSiteEnv
                 (sourceNodes.append sourceChildren)

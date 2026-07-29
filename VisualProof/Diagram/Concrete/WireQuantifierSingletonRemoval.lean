@@ -234,7 +234,7 @@ private theorem targetWire_injective
   ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_injective
     source removed
 
-private def targetRegion
+def targetRegion
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
@@ -250,7 +250,7 @@ private def targetRegion
     (targetRegion source removed region).val = region.val :=
   rfl
 
-@[simp] private theorem targetRegion_eq
+@[simp] theorem targetRegion_eq
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
@@ -258,7 +258,7 @@ private def targetRegion
   apply Fin.ext
   rfl
 
-private theorem targetRegion_injective
+theorem targetRegion_injective
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId) :
     Function.Injective (targetRegion source removed) := by
@@ -266,7 +266,7 @@ private theorem targetRegion_injective
   apply Fin.ext
   exact congrArg Fin.val same
 
-private theorem target_childrenOf
+theorem target_childrenOf
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
@@ -865,7 +865,7 @@ private theorem target_encloses
     rw [target_climb, climbed]
     rfl
 
-private theorem target_find_enclosing
+theorem target_find_enclosing
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (site : source.val.RegionId) :
@@ -1493,7 +1493,7 @@ private theorem compileNodes_cons_eq_singleton_bind
   simp [ConcreteElaboration.compileNodes?, ItemSeq.append,
     Option.bind_assoc]
 
-private theorem compileNodes_filter
+theorem compileNodes_filter
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (context : ConcreteElaboration.WireContext diagram)
@@ -1645,7 +1645,7 @@ theorem survivingNodes_natural
       · rw [sourceEquality, targetHeadEquality, targetTailEquality]
         rfl
 
-private theorem compileChildren_natural_of
+theorem compileChildren_natural_of
     (sourceDiagram : ConcreteDiagram definitions.length)
     (targetDiagram : ConcreteDiagram definitions.length)
     (sourceRecurse : (region : sourceDiagram.RegionId) →
@@ -1733,7 +1733,7 @@ One accepted ordinary source-region compilation induces the canonical
 singleton-erased target compilation at the mapped context and region.  This is
 the only ordinary traversal used by paired frame generation.
 -/
-private theorem compileRegion_natural
+theorem compileRegion_natural
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
@@ -1895,7 +1895,7 @@ private theorem compileRegion_natural
               rw [targetChildrenCompiled']
               rfl
 
-private theorem compileRegionBody_natural
+theorem compileRegionBody_natural
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
@@ -2178,353 +2178,7 @@ private theorem compileFrameBranch_cast_context
     ⟨leading, nested, frame, leadingCompiled, nestedCompiled,
       frameCompiled, rfl⟩
 
-private theorem compileRegionFrame_natural
-    (source : CheckedDiagram definitions)
-    (removed : source.val.NodeId)
-    (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-        source removed).WellFormed definitions) :
-    ∀ (fuel : Nat)
-      (sourceOuter : ConcreteElaboration.WireContext source.val)
-      (region site : source.val.RegionId)
-      (sourceAbove :
-        ConcreteElaboration.ContextAbove source.val sourceOuter region)
-      {sourceFrame : RegionFrame definitions source.val sourceOuter},
-      compileRegionFrame? definitions source.val site fuel region
-          sourceOuter =
-        some sourceFrame →
-      ∃ targetFrame :
-          RegionFrame definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-              source removed)
-            (targetContext source removed sourceOuter),
-        compileRegionFrame? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-              source removed)
-            (targetRegion source removed site) fuel
-            (targetRegion source removed region)
-            (targetContext source removed sourceOuter) =
-          some targetFrame ∧
-        targetFrame.visible =
-          targetContext source removed sourceFrame.visible := by
-  intro fuel
-  induction fuel with
-  | zero =>
-      intro sourceOuter region site sourceAbove sourceFrame sourceCompiled
-      simp [compileRegionFrame?] at sourceCompiled
-  | succ childFuel induction =>
-      intro sourceOuter region site sourceAbove sourceFrame sourceCompiled
-      by_cases atSite : region = site
-      · subst region
-        simp only [compileRegionFrame?, ↓reduceDIte] at sourceCompiled
-        obtain ⟨sourceBody, sourceBodyCompiled, sourceFrameEquation⟩ :=
-          Option.bind_eq_some_iff.mp sourceCompiled
-        have sourceFrameExact :
-            ({ visible := sourceOuter.extend site
-               siteBody := sourceBody
-               context :=
-                 bindContextFor source.val sourceOuter.ids
-                   (source.val.wiresAt site) .hole } :
-              RegionFrame definitions source.val sourceOuter) =
-              sourceFrame :=
-          Option.some.inj sourceFrameEquation
-        subst sourceFrame
-        obtain ⟨targetBody, targetBodyCompiled⟩ :=
-          compileRegionBody_natural source removed candidateWellFormed
-            childFuel sourceOuter site sourceAbove sourceBodyCompiled
-        let targetFrame :
-            RegionFrame definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                source removed)
-              (targetContext source removed sourceOuter) :=
-          { visible :=
-              (targetContext source removed sourceOuter).extend
-                (targetRegion source removed site)
-            siteBody := targetBody
-            context :=
-              bindContextFor
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                  source removed)
-                (targetContext source removed sourceOuter).ids
-                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                  source removed).wiresAt
-                    (targetRegion source removed site))
-                .hole }
-        refine ⟨targetFrame, ?_, ?_⟩
-        · simp [compileRegionFrame?, targetFrame, targetBodyCompiled]
-        · exact (targetContext_extend source removed sourceOuter site).symm
-      · simp only [compileRegionFrame?, atSite, ↓reduceDIte]
-          at sourceCompiled
-        obtain ⟨sourceNodes, sourceNodesCompiled, afterNodes⟩ :=
-          Option.bind_eq_some_iff.mp sourceCompiled
-        obtain ⟨sourceChild, sourceChildFound, afterChild⟩ :=
-          Option.bind_eq_some_iff.mp afterNodes
-        obtain ⟨sourceNested, sourceNestedCompiled, afterNested⟩ :=
-          Option.bind_eq_some_iff.mp afterChild
-        obtain ⟨sourceAround, sourceAroundCompiled, sourceFrameEquation⟩ :=
-          Option.bind_eq_some_iff.mp afterNested
-        have sourceFrameExact :
-            ({ visible := sourceAround.visible
-               siteBody := sourceAround.siteBody
-               context :=
-                 bindContextFor source.val sourceOuter.ids
-                   (source.val.wiresAt region) sourceAround.context } :
-              RegionFrame definitions source.val sourceOuter) =
-              sourceFrame :=
-          Option.some.inj sourceFrameEquation
-        subst sourceFrame
-        have sourceExtendedNodup :
-            (sourceOuter.extend region).ids.Nodup :=
-          ConcreteElaboration.extend_nodup definitions source.val
-            source.property sourceOuter region sourceAbove
-        obtain ⟨filteredNodes, filteredNodesCompiled⟩ :=
-          compileNodes_filter definitions source.val
-            (sourceOuter.extend region) removed
-            (source.val.nodesAt region) sourceNodesCompiled
-        have sourceTargetNodesCompiled :
-            ConcreteElaboration.compileNodes? definitions source.val
-                (sourceOuter.extend region)
-                (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                    source removed).nodesAt
-                  (targetRegion source removed region)).map
-                  (sourceNode source removed)) =
-              some filteredNodes := by
-          simpa [targetRegion] using
-            (erased_nodesAt_sources source removed region ▸
-              filteredNodesCompiled)
-        obtain ⟨targetNodes, targetNodesCompiled, _⟩ :=
-          survivingNodes_natural source removed candidateWellFormed
-            (sourceOuter.extend region) sourceExtendedNodup
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-              source removed).nodesAt
-              (targetRegion source removed region))
-            sourceTargetNodesCompiled
-        have targetContextExtended :
-            targetContext source removed (sourceOuter.extend region) =
-              (targetContext source removed sourceOuter).extend
-                (targetRegion source removed region) :=
-          targetContext_extend source removed sourceOuter region
-        have sourceChildMember :
-            sourceChild ∈ source.val.childrenOf region :=
-          List.mem_of_find?_eq_some sourceChildFound
-        have sourceChildData :=
-          ConcreteElaboration.mem_childrenOf source.val region
-            sourceChild sourceChildMember
-        have sourceChildAbove :
-            ConcreteElaboration.ContextAbove source.val
-              (sourceOuter.extend region) sourceChild :=
-          ConcreteElaboration.extend_above_child definitions source.val
-            source.property sourceOuter region sourceChild sourceAbove
-            sourceChildData
-        obtain ⟨targetNested, targetNestedCompiled, nestedVisible⟩ :=
-          induction (sourceOuter.extend region) sourceChild site
-            sourceChildAbove sourceNestedCompiled
-        have targetChildFound :
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                source removed).childrenOf
-                (targetRegion source removed region)).find?
-                (fun candidate =>
-                  decide
-                    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                      source removed).Encloses candidate
-                        (targetRegion source removed site))) =
-              some (targetRegion source removed sourceChild) := by
-          rw [target_childrenOf, target_find_enclosing, sourceChildFound]
-          rfl
-        obtain ⟨targetAround, targetAroundCompiled, aroundVisible⟩ :=
-          compileSiblingFrame_natural source removed candidateWellFormed
-            childFuel (sourceOuter.extend region) sourceChild
-            sourceNested targetNested nestedVisible
-            sourceNodes targetNodes (source.val.childrenOf region)
-            sourceAroundCompiled
-            (by
-              intro child childMember
-              have childData :=
-                ConcreteElaboration.mem_childrenOf source.val region
-                  child childMember
-              exact
-                ConcreteElaboration.extend_above_child definitions
-                  source.val source.property sourceOuter region child
-                  sourceAbove childData)
-        obtain
-            ⟨targetNodes', targetNested', targetAround',
-              targetNodesCompiled', targetNestedCompiled',
-              targetAroundCompiled', targetAroundVisible'⟩ :=
-          compileFrameBranch_cast_context
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-              source removed)
-            targetContextExtended
-            (targetRegion source removed site) childFuel
-            (targetRegion source removed sourceChild)
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-              source removed).nodesAt
-                (targetRegion source removed region))
-            ((source.val.childrenOf region).map
-              (targetRegion source removed))
-            targetNodesCompiled targetNestedCompiled targetAroundCompiled
-        let targetFrame :
-            RegionFrame definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                source removed)
-              (targetContext source removed sourceOuter) :=
-          { visible := targetAround'.visible
-            siteBody := targetAround'.siteBody
-            context :=
-              bindContextFor
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                  source removed)
-                (targetContext source removed sourceOuter).ids
-                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                  source removed).wiresAt
-                    (targetRegion source removed region))
-                targetAround'.context }
-        have targetNotAtSite :
-            targetRegion source removed region ≠
-              targetRegion source removed site :=
-          fun same => atSite (targetRegion_injective source removed same)
-        refine ⟨targetFrame, ?_, ?_⟩
-        · simp only [compileRegionFrame?, targetNotAtSite, ↓reduceDIte]
-          rw [targetNodesCompiled']
-          rw [targetChildFound]
-          change
-            (compileRegionFrame? definitions
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                  source removed)
-                (targetRegion source removed site) childFuel
-                (targetRegion source removed sourceChild)
-                ((targetContext source removed sourceOuter).extend
-                  (targetRegion source removed region))).bind
-                (fun nested =>
-                  (compileSiblingFrame? definitions
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                      source removed)
-                    childFuel
-                    ((targetContext source removed sourceOuter).extend
-                      (targetRegion source removed region))
-                    (targetRegion source removed sourceChild) nested
-                    targetNodes'
-                    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                      source removed).childrenOf
-                        (targetRegion source removed region))).bind
-                      (fun around =>
-                        some
-                          { visible := around.visible
-                            siteBody := around.siteBody
-                            context :=
-                              bindContextFor
-                                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                                  source removed)
-                                (targetContext source removed sourceOuter).ids
-                                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                                  source removed).wiresAt
-                                    (targetRegion source removed region))
-                                around.context })) =
-              some targetFrame
-          rw [targetNestedCompiled']
-          rw [target_childrenOf]
-          change
-            (compileSiblingFrame? definitions
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                  source removed)
-                childFuel
-                ((targetContext source removed sourceOuter).extend
-                  (targetRegion source removed region))
-                (targetRegion source removed sourceChild) targetNested'
-                targetNodes'
-                ((source.val.childrenOf region).map
-                  (targetRegion source removed))).bind
-                (fun around =>
-                  some
-                    { visible := around.visible
-                      siteBody := around.siteBody
-                      context :=
-                        bindContextFor
-                          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                            source removed)
-                          (targetContext source removed sourceOuter).ids
-                          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                            source removed).wiresAt
-                              (targetRegion source removed region))
-                          around.context }) =
-              some targetFrame
-          rw [targetAroundCompiled']
-          rfl
-        · exact targetAroundVisible'.trans aroundVisible
-
-/--
-One source-accepted factorization frame and its compiler-generated dense
-singleton-erasure counterpart.  The target outer context and region images are
-canonical; callers supply no target ancestry or target compiler witness.
--/
-inductive PairedGeneratedFrame
-    (source : CheckedDiagram definitions)
-    (removed : source.val.NodeId)
-    (site region : source.val.RegionId)
-    (fuel : Nat)
-    (sourceOuter : ConcreteElaboration.WireContext source.val)
-    (sourceFrame : RegionFrame definitions source.val sourceOuter) : Prop where
-  | intro
-    (targetFrame :
-      RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-          source removed)
-        (targetContext source removed sourceOuter))
-    (sourceAbove :
-      ConcreteElaboration.ContextAbove source.val sourceOuter region)
-    (targetAbove :
-      ConcreteElaboration.ContextAbove
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-          source removed)
-        (targetContext source removed sourceOuter)
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
-          source removed region))
-    (sourceGenerated :
-      compileRegionFrame? definitions source.val site fuel region sourceOuter =
-        some sourceFrame)
-    (targetGenerated :
-      compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-            source removed)
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
-            source removed site)
-          fuel
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
-            source removed region)
-          (targetContext source removed sourceOuter) =
-        some targetFrame)
-    (visibleExact :
-      targetFrame.visible =
-        targetContext source removed sourceFrame.visible) :
-    PairedGeneratedFrame source removed site region fuel sourceOuter
-      sourceFrame
-
-/--
-Generate the target half of a paired factorization receipt solely from a
-checked canonical erasure and an accepted source frame.
--/
-theorem pairedGeneratedFrame
-    (source : CheckedDiagram definitions)
-    (removed : source.val.NodeId)
-    (erasure : CheckedErasure source removed)
-    (site region : source.val.RegionId)
-    (fuel : Nat)
-    (sourceOuter : ConcreteElaboration.WireContext source.val)
-    (sourceFrame : RegionFrame definitions source.val sourceOuter)
-    (sourceAbove :
-      ConcreteElaboration.ContextAbove source.val sourceOuter region)
-    (sourceGenerated :
-      compileRegionFrame? definitions source.val site fuel region sourceOuter =
-        some sourceFrame) :
-    PairedGeneratedFrame source removed site region fuel sourceOuter
-      sourceFrame := by
-  obtain ⟨targetFrame, targetGenerated, visibleExact⟩ :=
-    compileRegionFrame_natural source removed erasure.candidate_wellFormed
-      fuel sourceOuter region site sourceAbove sourceGenerated
-  exact .intro targetFrame sourceAbove
-    (targetContext_above source removed sourceOuter region sourceAbove)
-    sourceGenerated targetGenerated visibleExact
-
-/--
+ /--
 Transport denotation of an ordered retained-node compilation through the exact
 dense erase-candidate context.  This theorem changes only the compiler-owned
 wire context; it makes no claim about the removed singleton.
@@ -2661,34 +2315,6 @@ def relationJoinStepErasure
     CheckedErasure step.prior step.priorApplication where
   target := step.base
   generated := step.base_generated
-
-/--
-Project a relation-join checker receipt directly into the canonical paired
-factorization receipt used by singleton-removal semantics.
--/
-theorem RelationJoinStep.pairedGeneratedFrame
-    {source : CheckedDiagram definitions}
-    {dying : source.val.WireId}
-    {content : CheckedOpenDiagram definitions}
-    (step : RelationJoinStep source dying content)
-    (site region : step.prior.val.RegionId)
-    (fuel : Nat)
-    (sourceOuter :
-      ConcreteElaboration.WireContext step.prior.val)
-    (sourceFrame :
-      RegionFrame definitions step.prior.val sourceOuter)
-    (sourceAbove :
-      ConcreteElaboration.ContextAbove step.prior.val sourceOuter region)
-    (sourceGenerated :
-      compileRegionFrame? definitions step.prior.val site fuel region
-          sourceOuter =
-        some sourceFrame) :
-    PairedGeneratedFrame step.prior step.priorApplication site region fuel
-      sourceOuter sourceFrame :=
-  SingletonRemovalSemantics.pairedGeneratedFrame
-    step.prior step.priorApplication
-    (relationJoinStepErasure step) site region fuel sourceOuter sourceFrame
-    sourceAbove sourceGenerated
 
 end SingletonRemovalSemantics
 

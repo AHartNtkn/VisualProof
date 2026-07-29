@@ -21,3 +21,7 @@ import VisualProof.Rule.IdentityFixtures
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 import VisualProof.Rule.StructuralFixtures
+import VisualProof.Diagram.Concrete.WireQuantifier
+import VisualProof.Diagram.Concrete.WireQuantifierSemantics
+import VisualProof.Rule.WireQuantifier
+import VisualProof.Rule.WireQuantifierFixtures

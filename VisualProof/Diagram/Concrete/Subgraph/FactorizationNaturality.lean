@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityFrame
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityZipper
 
 namespace VisualProof
 namespace InsertionCompilation
@@ -32,14 +32,6 @@ theorem generated_root_denotes_inserted
       by
         intro wire member
         simp [ConcreteElaboration.WireContext.empty] at member⟩
-  have targetAbove :
-      ConcreteElaboration.ContextAbove attachment.diagram
-        (ConcreteElaboration.WireContext.empty attachment.diagram)
-        (attachment.hostRegion base.val.root) :=
-    ⟨by simp [ConcreteElaboration.WireContext.empty],
-      by
-        intro wire member
-        simp [ConcreteElaboration.WireContext.empty] at member⟩
   have targetCompiled :
       ConcreteElaboration.compileRegion? definitions attachment.diagram
           (attachment.diagram.regionCount + 1)
@@ -54,16 +46,57 @@ theorem generated_root_denotes_inserted
         compiled.generated_wellFormed
     unfold ConcreteElaboration.compileRoot? at rooted
     simpa [ConcreteSpliceAttachment.diagram] using rooted
-  have natural :=
-    hostFrame_denotation_natural compiled
+  obtain ⟨siteOuter, siteFuel, sourceNodes, sourceChildren, siteVisible,
+      sourceNodesCompiled, sourceChildrenCompiled, siteBodyExact⟩ :=
+    compiled.site.site_origin
+  obtain ⟨targetFrame, paired⟩ :=
+    pairedGeneratedFrame compiled base.val.root
       (base.val.regionCount + 1)
+      (ConcreteElaboration.WireContext.empty base.val) siteOuter
+      compiled.site.frame sourceAbove siteVisible siteVisible
+      compiled.site.frame_generated
+  obtain ⟨inner, natural⟩ :=
+    paired.fullInsertionDenotation pre definitionEnv
+  have fragmentRegionCountLe :
+      attachment.fragmentRegions.length ≤
+        fragment.val.diagram.regionCount := by
+    unfold ConcreteSpliceAttachment.fragmentRegions
+    simpa [ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange] using
+      List.length_filter_le
+        (fun region : fragment.val.diagram.RegionId =>
+          decide (region ≠ fragment.val.diagram.root))
+        (Data.Finite.allFin fragment.val.diagram.regionCount)
+  have targetFuelLe :
+      attachment.diagram.regionCount + 1 ≤
+        base.val.regionCount + 1 + fragment.val.diagram.regionCount := by
+    change
+      base.val.regionCount + attachment.fragmentRegions.length + 1 ≤
+        base.val.regionCount + 1 + fragment.val.diagram.regionCount
+    omega
+  have targetCompiledAtGeneratedFuel :=
+    compileRegion_fuel_mono definitions attachment.diagram
       (attachment.diagram.regionCount + 1)
-      base.val.root
-      (ConcreteElaboration.WireContext.empty base.val)
+      (base.val.regionCount + 1 + fragment.val.diagram.regionCount)
+      targetFuelLe (attachment.hostRegion base.val.root)
       (ConcreteElaboration.WireContext.empty attachment.diagram)
-      rfl sourceAbove targetAbove compiled.site.frame rfl rfl
-      compiled.site.frame_generated targetCompiled pre definitionEnv
-      Env.empty
+      targetCompiled
+  have targetFrameCompiled :=
+    paired.provenance.targetGenerated
+  have targetFrameSound :=
+    compileRegionFrame?_sound definitions attachment.diagram
+      (attachment.hostRegion site)
+      (base.val.regionCount + 1 + fragment.val.diagram.regionCount)
+      (attachment.hostRegion base.val.root)
+      (ConcreteElaboration.WireContext.empty attachment.diagram)
+      targetFrame targetFrameCompiled
+  have targetExact :
+      targetFrame.context.fill targetFrame.siteBody =
+        elaborate
+          (⟨attachment.diagram, compiled.generated_wellFormed⟩ :
+            CheckedDiagram definitions) :=
+    Option.some.inj
+      (targetFrameSound.symm.trans targetCompiledAtGeneratedFuel)
   have normalizeEmpty
       (env : Env pre [])
       (body : Region definitions []) :
@@ -75,19 +108,28 @@ theorem generated_root_denotes_inserted
     rw [same]
   constructor
   · intro targetDenotes
-    have sourceDenotes := natural.mp targetDenotes
+    have framedTarget :
+        denoteRegion pre definitionEnv Env.empty
+          (targetFrame.context.fill targetFrame.siteBody) := by
+      rw [targetExact]
+      exact targetDenotes
+    have sourceDenotes := (natural Env.empty).mp framedTarget
     have normalized := (normalizeEmpty _ _).mp sourceDenotes
-    simpa [InsertionCompilation.inserted, replacementAtFrame, castValue]
+    simpa [InsertionCompilation.inserted,
+      NaturalityInternal.FullFrameDenotation,
+      PairedInnerFrame.replacement]
       using normalized
   · intro insertedDenotes
     have normalized :
         denoteRegion pre definitionEnv Env.empty
-          (compiled.site.frame.context.fill
-            (replacementAtFrame compiled compiled.site.frame rfl)) := by
-      simpa [InsertionCompilation.inserted, replacementAtFrame, castValue]
+          (compiled.site.frame.context.fill inner.replacement) := by
+      simpa [InsertionCompilation.inserted,
+        PairedInnerFrame.replacement]
         using insertedDenotes
-    apply natural.mpr
-    exact (normalizeEmpty _ _).mpr normalized
+    have framedTarget :=
+      (natural Env.empty).mpr ((normalizeEmpty _ _).mpr normalized)
+    rw [targetExact] at framedTarget
+    exact framedTarget
 
 /--
 Checked denotation of the raw generated attachment diagram is the compiled

@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalFrame
+import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper
 import VisualProof.Diagram.Concrete.WireQuantifierFrameNaturality
 
 namespace VisualProof

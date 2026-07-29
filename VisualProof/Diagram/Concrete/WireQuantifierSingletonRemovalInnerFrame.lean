@@ -1,4 +1,5 @@
-import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemoval
+import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalProvenance
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrameSupport
 
 namespace VisualProof
 
@@ -8,35 +9,8 @@ namespace ConcreteWireQuantifier
 
 namespace SingletonRemovalSemantics
 
-namespace DiagramContext
-
-/--
-Embed the variables visible outside a one-hole context into the context's
-hole. Intervening binders contribute only local variables.
--/
-def liftOuter :
-    {holeCtx outerCtx : List Sig} →
-      DiagramContext definitions holeCtx outerCtx →
-      WireRenaming outerCtx holeCtx
-  | _, _, .hole => fun value => value
-  | _, _, .surround _ inner _ => liftOuter inner
-  | _, _, .cut inner => liftOuter inner
-  | _, _, .bind _ inner => fun value => liftOuter inner (.there value)
-
-/--
-A hole environment preserves a fixed enclosing environment when it agrees on
-every retained ancestor variable. Descendant binder values remain unrestricted.
--/
-def PreservesOuter
-    (context : DiagramContext definitions holeCtx outerCtx)
-    (fixed : Env pre outerCtx)
-    (descendant : Env pre holeCtx) : Prop :=
-  Env.comp descendant (liftOuter context) = fixed
-
-end DiagramContext
-
 /-- The paired contexts immediately inside one enclosing region's binders. -/
-structure PairedInnerFrame
+abbrev PairedInnerFrame
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId)
@@ -46,30 +20,12 @@ structure PairedInnerFrame
       RegionFrame definitions
         (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
           source removed)
-        (targetContext source removed sourceOuter)) where
-  sourceInner :
-    DiagramContext definitions sourceFrame.visible.sigs
-      (sourceOuter.extend region).sigs
-  targetInner :
-    DiagramContext definitions targetFrame.visible.sigs
-      ((targetContext source removed sourceOuter).extend
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
-          source removed region)).sigs
-  sourceDecomposition :
-    sourceFrame.context =
-      bindContextFor source.val sourceOuter.ids
-        (source.val.wiresAt region) sourceInner
-  targetDecomposition :
-    targetFrame.context =
-      bindContextFor
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-          source removed)
-        (targetContext source removed sourceOuter).ids
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-            source removed).wiresAt
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
-            source removed region))
-        targetInner
+        (targetContext source removed sourceOuter)) :=
+  RegionFrame.PairedInner region
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+      source removed region)
+    sourceOuter (targetContext source removed sourceOuter) sourceFrame
+      targetFrame
 
 /-- Pointwise replacement law in one canonical target visible environment. -/
 def LocalReplacementAt
