@@ -240,6 +240,71 @@ def eraseTwoNodeEndpoints
   endpoints.filter fun endpoint =>
     decide (endpoint.node ≠ left ∧ endpoint.node ≠ right)
 
+/--
+Raw dense deletion of one node while retaining every region and wire.
+Well-formedness is intentionally separate: identity normalization proves it
+from Rule-1 eligibility, while other checked structural owners may retain an
+independently checked candidate.
+-/
+def eraseNodeCandidate
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId) :
+    ConcreteDiagram definitions.length :=
+  let nodes := retainedNodes source.val [node]
+  let wires := source.val.wiresList
+  { regionCount := source.val.regionCount
+    nodeCount := nodes.length
+    wireCount := wires.length
+    root := source.val.root
+    regions := source.val.regions
+    nodes := fun targetNode =>
+      source.val.nodes (nodes.get targetNode)
+    wires := fun targetWire =>
+      let sourceWire := wires.get targetWire
+      let data := source.val.wires sourceWire
+      { sig := data.sig
+        scope := data.scope
+        endpoints :=
+          reindexEndpoints nodes
+            (eraseNodeEndpoints node data.endpoints) } }
+
+/-- Count-preserving region image into a raw singleton-node deletion. -/
+def eraseNodeRegion
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (eraseNodeCandidate source node).RegionId :=
+  ⟨region.val, by
+    simpa [eraseNodeCandidate] using region.isLt⟩
+
+/-- Count-preserving wire image into a raw singleton-node deletion. -/
+def eraseNodeWire
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (wire : source.val.WireId) :
+    (eraseNodeCandidate source node).WireId :=
+  ⟨wire.val, by
+    simp [eraseNodeCandidate, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange, wire.isLt]⟩
+
+theorem eraseNodeWire_injective
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId) :
+    Function.Injective (eraseNodeWire source node) := by
+  intro left right same
+  apply Fin.ext
+  exact congrArg (fun value => value.val) same
+
+/-- Dense image of one retained node in a raw singleton-node deletion. -/
+def eraseNodeIndex
+    (source : CheckedDiagram definitions)
+    (removed candidate : source.val.NodeId)
+    (retained : candidate ∈ retainedNodes source.val [removed]) :
+    (eraseNodeCandidate source removed).NodeId :=
+  (Data.Finite.indexOf?
+    (retainedNodes source.val [removed]) candidate).get
+      (Data.Finite.indexOf?_isSome_iff.mpr retained)
+
 /-- Raw Rule 1 candidate. Its sole consumer is the preservation proof layer. -/
 def dropCandidate
     (source : CheckedDiagram definitions)
