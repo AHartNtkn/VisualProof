@@ -234,6 +234,113 @@ private theorem targetWire_injective
   ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_injective
     source removed
 
+/-- The count-preserving image of one region in the raw erase candidate. -/
+def targetRegion
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      source removed).RegionId :=
+  ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+    source removed region
+
+@[simp] private theorem targetRegion_val
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (targetRegion source removed region).val = region.val :=
+  rfl
+
+@[simp] private theorem targetRegion_eq
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    targetRegion source removed region = region := by
+  apply Fin.ext
+  rfl
+
+private theorem targetRegion_injective
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId) :
+    Function.Injective (targetRegion source removed) := by
+  intro left right same
+  apply Fin.ext
+  exact congrArg Fin.val same
+
+private theorem target_childrenOf
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).childrenOf
+        (targetRegion source removed region) =
+      (source.val.childrenOf region).map
+        (targetRegion source removed) := by
+  change
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      source removed).childrenOf region =
+      (source.val.childrenOf region).map (targetRegion source removed)
+  have mappedIdentity :
+      (source.val.childrenOf region).map (targetRegion source removed) =
+        source.val.childrenOf region := by
+    induction source.val.childrenOf region with
+    | nil => rfl
+    | cons head tail induction =>
+        simp only [List.map_cons, targetRegion_eq, induction]
+  rw [mappedIdentity]
+  unfold ConcreteDiagram.childrenOf ConcreteDiagram.regionsList
+  apply List.filter_congr
+  intro child _
+  generalize dataEquation : source.val.regions child = data
+  cases data <;>
+    simp [ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+      dataEquation]
+
+private theorem all_targetWires
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId) :
+    Data.Finite.allFin source.val.wiresList.length =
+      (Data.Finite.allFin source.val.wireCount).map
+        (targetWire source removed) := by
+  rw [Data.Finite.allFin_eq_finRange,
+    Data.Finite.allFin_eq_finRange]
+  apply List.ext_get
+  · simp only [List.length_finRange, List.length_map]
+    simp [ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange]
+  · intro index leftBound rightBound
+    apply Fin.ext
+    simp only [List.get_eq_getElem, List.getElem_map]
+    simp [targetWire,
+      ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire,
+      ConcreteDiagram.wiresList]
+
+private theorem target_wiresAt
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).wiresAt
+        (targetRegion source removed region) =
+      (source.val.wiresAt region).map (targetWire source removed) := by
+  unfold ConcreteDiagram.wiresAt
+  change
+    (Data.Finite.allFin source.val.wiresList.length).filter
+        (fun wire =>
+          (source.val.wires (source.val.wiresList.get wire)).scope ==
+            region) =
+      ((Data.Finite.allFin source.val.wireCount).filter
+        (fun wire => (source.val.wires wire).scope == region)).map
+          (targetWire source removed)
+  rw [all_targetWires source removed, List.filter_map]
+  apply congrArg (List.map (targetWire source removed))
+  apply List.filter_congr
+  intro wire _
+  exact congrArg
+    (fun data => data.scope == region)
+    (congrArg source.val.wires
+      (wiresList_get_targetWire source removed wire))
+
 /-- The dense target index of one retained source node. -/
 def targetNode
     (source : CheckedDiagram definitions)
@@ -317,6 +424,18 @@ theorem targetContext_sigs
   intro wire _
   exact targetWire_signature source removed wire
 
+private theorem targetContext_extend
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId) :
+    targetContext source removed (context.extend region) =
+      (targetContext source removed context).extend
+        (targetRegion source removed region) := by
+  cases context
+  simp only [targetContext, ConcreteElaboration.WireContext.extend,
+    target_wiresAt, List.map_append]
+
 private def mappedHere
     (signature : targetSig = sourceSig) :
     Var (targetSig :: tail) sourceSig :=
@@ -371,6 +490,224 @@ def contextRenaming
       (targetContext source removed context).sigs :=
   contextRenamingFor source removed context.ids
 
+private theorem origin_mem
+    (diagram : ConcreteDiagram definitionCount)
+    {ids : List diagram.WireId} {sig : Sig}
+    (value :
+      Var (ids.map fun wire => (diagram.wires wire).sig) sig) :
+    ConcreteElaboration.WireContext.origin diagram ids value ∈ ids := by
+  induction ids with
+  | nil => exact nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here => simp [ConcreteElaboration.WireContext.origin]
+      | there value =>
+          exact List.mem_cons_of_mem head (induction value)
+
+private def sourceWire
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (wire :
+      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).WireId) :
+    source.val.WireId :=
+  ⟨wire.val, by
+    simpa [ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+      ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange] using wire.isLt⟩
+
+@[simp] private theorem sourceWire_targetWire
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (wire : source.val.WireId) :
+    sourceWire source removed (targetWire source removed wire) = wire := by
+  apply Fin.ext
+  rfl
+
+@[simp] private theorem targetWire_sourceWire
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (wire :
+      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).WireId) :
+    targetWire source removed (sourceWire source removed wire) = wire := by
+  apply Fin.ext
+  rfl
+
+private def varForMember
+    (diagram : ConcreteDiagram definitionCount)
+    (wire : diagram.WireId) :
+    (ids : List diagram.WireId) →
+      wire ∈ ids →
+      Var (ids.map fun candidate => (diagram.wires candidate).sig)
+        (diagram.wires wire).sig
+  | [], member => by simp at member
+  | head :: tail, member =>
+      if equality : wire = head then
+        equality ▸ .here
+      else
+        .there (varForMember diagram wire tail (by
+          simpa [equality] using member))
+
+@[simp] private theorem origin_varForMember
+    (diagram : ConcreteDiagram definitionCount)
+    (wire : diagram.WireId)
+    (ids : List diagram.WireId)
+    (member : wire ∈ ids) :
+    ConcreteElaboration.WireContext.origin diagram ids
+        (varForMember diagram wire ids member) =
+      wire := by
+  induction ids with
+  | nil => simp at member
+  | cons head tail induction =>
+      unfold varForMember
+      split
+      · rename_i equality
+        subst head
+        rfl
+      · simp only [ConcreteElaboration.WireContext.origin]
+        exact induction _
+
+private def castVar
+    (equality : sourceSig = targetSig)
+    (value : Var context sourceSig) :
+    Var context targetSig :=
+  equality ▸ value
+
+@[simp] private theorem origin_castVarFor
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    {sourceSig targetSig : Sig}
+    (equality : sourceSig = targetSig)
+    (value :
+      Var (ids.map fun wire => (diagram.wires wire).sig) sourceSig) :
+    ConcreteElaboration.WireContext.origin diagram ids
+        (castVar equality value) =
+      ConcreteElaboration.WireContext.origin diagram ids value := by
+  cases equality
+  rfl
+
+/-- The inverse intrinsic renaming for a visible erase-candidate context. -/
+def contextSection
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val) :
+    WireRenaming (targetContext source removed context).sigs
+      context.sigs := fun {sig} value =>
+  let targetOrigin :=
+    ConcreteElaboration.WireContext.origin
+      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed)
+      (targetContext source removed context).ids value
+  let original := sourceWire source removed targetOrigin
+  let sourceMember : original ∈ context.ids := by
+    have targetMember :=
+      origin_mem
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed) value
+    rcases List.mem_map.mp targetMember with
+      ⟨wire, member, equality⟩
+    have originalEquality : original = wire := by
+      rw [← sourceWire_targetWire source removed wire, equality]
+    exact originalEquality.symm ▸ member
+  let sourceVar :=
+    varForMember source.val original context.ids sourceMember
+  let signature : (source.val.wires original).sig = sig :=
+    (targetWire_signature source removed original).symm.trans
+      ((congrArg
+        (fun wire =>
+          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source removed).wires wire).sig)
+        (targetWire_sourceWire source removed targetOrigin)).trans
+      (ConcreteElaboration.WireContext.origin_signature
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed)
+        (targetContext source removed context).ids value))
+  castVar signature sourceVar
+
+private theorem contextSection_origin
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    {sig : Sig}
+    (value :
+      Var (targetContext source removed context).sigs sig) :
+    ConcreteElaboration.WireContext.origin source.val context.ids
+        (contextSection source removed context value) =
+      sourceWire source removed
+        (ConcreteElaboration.WireContext.origin
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed)
+        (targetContext source removed context).ids value) := by
+  unfold contextSection
+  dsimp only
+  exact
+    (origin_castVarFor source.val context.ids _ _).trans
+      (origin_varForMember _ _ _ _)
+
+private theorem contextSection_action
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    {sig : Sig}
+    (value :
+      Var (targetContext source removed context).sigs sig) :
+    targetWire source removed
+        (ConcreteElaboration.WireContext.origin source.val context.ids
+          (contextSection source removed context value)) =
+      ConcreteElaboration.WireContext.origin
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed)
+        (targetContext source removed context).ids value := by
+  rw [contextSection_origin, targetWire_sourceWire]
+
+private theorem origin_injective_of_nodup
+    (diagram : ConcreteDiagram definitionCount)
+    {ids : List diagram.WireId}
+    (nodup : ids.Nodup)
+    {sig : Sig}
+    (left right :
+      Var (ids.map fun wire => (diagram.wires wire).sig) sig)
+    (sameOrigin :
+      ConcreteElaboration.WireContext.origin diagram ids left =
+        ConcreteElaboration.WireContext.origin diagram ids right) :
+    left = right := by
+  induction ids with
+  | nil => exact nomatch left
+  | cons head tail induction =>
+      rw [List.nodup_cons] at nodup
+      cases left with
+      | here =>
+          cases right with
+          | here => rfl
+          | there right =>
+              have member := origin_mem diagram right
+              have equality :
+                  head =
+                    ConcreteElaboration.WireContext.origin
+                      diagram tail right := by
+                simpa [ConcreteElaboration.WireContext.origin] using
+                  sameOrigin
+              rw [← equality] at member
+              exact (nodup.1 member).elim
+      | there left =>
+          cases right with
+          | here =>
+              have member := origin_mem diagram left
+              have equality :
+                  ConcreteElaboration.WireContext.origin
+                      diagram tail left =
+                    head := by
+                simpa [ConcreteElaboration.WireContext.origin] using
+                  sameOrigin
+              rw [equality] at member
+              exact (nodup.1 member).elim
+          | there right =>
+              exact congrArg Var.there
+                (induction nodup.2 left right (by
+                  simpa [ConcreteElaboration.WireContext.origin] using
+                    sameOrigin))
+
 theorem contextRenaming_action
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
@@ -404,6 +741,48 @@ theorem contextRenaming_action
           | there value =>
               simpa [contextRenaming, contextRenamingFor, targetContext,
                 ConcreteElaboration.WireContext.origin] using induction value
+
+private theorem contextRenaming_section
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (targetNodup : (targetContext source removed context).ids.Nodup)
+    {sig} (value : Var (targetContext source removed context).sigs sig) :
+    contextRenaming source removed context
+        (contextSection source removed context value) =
+      value := by
+  apply origin_injective_of_nodup
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      source removed) targetNodup
+  rw [contextRenaming_action, contextSection_action]
+
+private theorem contextSection_renaming
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (sourceNodup : context.ids.Nodup)
+    {sig} (value : Var context.sigs sig) :
+    contextSection source removed context
+        (contextRenaming source removed context value) =
+      value := by
+  apply origin_injective_of_nodup source.val sourceNodup
+  apply targetWire_injective source removed
+  rw [contextSection_action, contextRenaming_action]
+
+private theorem environment_roundtrip_source
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (sourceNodup : context.ids.Nodup)
+    (pre : PreModel)
+    (env : Env pre context.sigs) :
+    Env.comp
+        (Env.comp env (contextSection source removed context))
+        (contextRenaming source removed context) =
+      env := by
+  funext sig value
+  exact congrArg (env sig)
+    (contextSection_renaming source removed context sourceNodup value)
 
 private theorem targetContext_nodup
     (source : CheckedDiagram definitions)
@@ -856,6 +1235,19 @@ theorem erasedNodes_denotation
       filteredItems sourceCompiled filteredCompiled removedItem
       removedCompiled).trans
         (and_congr_right fun _ => targetDenotation.symm)
+
+/--
+The relation-join checker receipt is already the canonical checked singleton
+erasure consumed by this proof owner; no structural choice is reconstructed.
+-/
+def relationJoinStepErasure
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    (step : RelationJoinStep source dying content) :
+    CheckedErasure step.prior step.priorApplication where
+  target := step.base
+  generated := step.base_generated
 
 end SingletonRemovalSemantics
 
