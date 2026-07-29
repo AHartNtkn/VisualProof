@@ -71,12 +71,7 @@ structure RegionFrame
   context : DiagramContext definitions visible.sigs outer.sigs
 
 namespace RegionFrame
-
-/--
-Proof-only relation saying that one generated region frame is the same retained
-path as an enclosing generated frame followed by an inner context.
--/
-def Decomposes
+private def RootProjection
     {definitions : List (List Sig)}
     {diagram : ConcreteDiagram definitions.length}
     {outer : WireContext diagram}
@@ -91,7 +86,6 @@ def Decomposes
       scope.context.cutDepth + inner.cutDepth
 
 end RegionFrame
-
 /-- Bind exactly one region's locally scoped wires around a generated context. -/
 def bindContextFor
     (diagram : ConcreteDiagram definitionCount)
@@ -193,6 +187,36 @@ def compileRegionFrame?
               bindContextFor diagram outer.ids
                 (diagram.wiresAt region) around.context }
 
+namespace RegionFrame
+/-- One accepted root factorization retaining its generated scope-to-site path. -/
+def GeneratedRelativeFrame
+    {definitions : List (List Sig)}
+    {diagram : ConcreteDiagram definitions.length}
+    (site scope : diagram.RegionId) {rootOuter : WireContext diagram}
+    (siteFrame scopeFrame : RegionFrame definitions diagram rootOuter) : Prop :=
+  ∃ (outer : WireContext diagram) (fuel : Nat)
+    (relative : RegionFrame definitions diagram outer)
+    (relativeVisible : relative.visible = siteFrame.visible),
+    compileRegionFrame? definitions diagram site fuel scope outer = some relative ∧
+    congrArg WireContext.sigs relativeVisible ▸ relative.siteBody =
+        siteFrame.siteBody ∧
+    ∃ inner : DiagramContext definitions relative.visible.sigs
+        (outer.extend scope).sigs,
+      relative.context = bindContextFor diagram outer.ids
+          (diagram.wiresAt scope) inner ∧
+      ∃ scopeVisible : scopeFrame.visible = outer.extend scope,
+        congrArg WireContext.sigs scopeVisible ▸ scopeFrame.siteBody =
+            inner.fill relative.siteBody ∧
+        ∃ rootInner : DiagramContext definitions siteFrame.visible.sigs
+            scopeFrame.visible.sigs,
+          scopeFrame.siteBody = rootInner.fill siteFrame.siteBody ∧
+          (∀ body : Region definitions siteFrame.visible.sigs,
+            siteFrame.context.fill body =
+              scopeFrame.context.fill (rootInner.fill body)) ∧
+          siteFrame.context.cutDepth = scopeFrame.context.cutDepth +
+            rootInner.cutDepth
+
+end RegionFrame
 def finishBodyFor
     (diagram : ConcreteDiagram definitionCount)
     (outerIds : List diagram.WireId) :
@@ -329,14 +353,14 @@ theorem compileSiblingFrame?_sound
             · simp [compileChildrenWith?, bodyEquation, tailCompiled]
             · simpa [ItemSeq.append_assoc] using filled
 
-private theorem compileSiblingFrame?_decomposes
+private theorem compileSiblingFrame?_projects
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (fuel : Nat)
     (outer : WireContext diagram)
     (target : diagram.RegionId)
     (siteNested scopeNested : RegionFrame definitions diagram outer)
-    (decomposed : RegionFrame.Decomposes siteNested scopeNested) :
+    (decomposed : RegionFrame.RootProjection siteNested scopeNested) :
     ∀ (leading : ItemSeq definitions outer.sigs)
       (children : List diagram.RegionId)
       (siteFrame scopeFrame : RegionFrame definitions diagram outer),
@@ -344,7 +368,7 @@ private theorem compileSiblingFrame?_decomposes
           leading children = some siteFrame →
       compileSiblingFrame? definitions diagram fuel outer target scopeNested
           leading children = some scopeFrame →
-      RegionFrame.Decomposes siteFrame scopeFrame := by
+      RegionFrame.RootProjection siteFrame scopeFrame := by
   rcases decomposed with
     ⟨inner, scopeBody, replace, cutDepth⟩
   intro leading children
@@ -1190,6 +1214,15 @@ private theorem cast_trans
   cases middleRight
   rfl
 
+private theorem cast_symm_of_cast_eq
+    {α : Sort u} {motive : α → Sort v}
+    {left right : α} (same : left = right)
+    {leftValue : motive left} {rightValue : motive right}
+    (casted : same ▸ leftValue = rightValue) :
+    same.symm ▸ rightValue = leftValue := by
+  cases same
+  exact casted.symm
+
 private theorem compileSiblingFrame?_site_eq
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -1384,7 +1417,7 @@ private theorem compileRegionFrame?_site_origin
                                   aroundBody).trans
                                 siteBodyEquality)⟩
 
-private theorem compileRegionFrame?_decompose_at
+private theorem compileRegionFrame?_generated_relative_at
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (wellFormed : diagram.WellFormed definitions)
@@ -1399,7 +1432,8 @@ private theorem compileRegionFrame?_decompose_at
       ∃ scopeFrame : RegionFrame definitions diagram outer,
         compileRegionFrame? definitions diagram scope fuel region outer =
             some scopeFrame ∧
-        RegionFrame.Decomposes siteFrame scopeFrame := by
+        RegionFrame.GeneratedRelativeFrame site scope
+          siteFrame scopeFrame := by
   intro fuel
   induction fuel with
   | zero =>
@@ -1416,10 +1450,29 @@ private theorem compileRegionFrame?_decompose_at
           factor_encloses_antisymm definitions diagram wellFormed
             scopeSite regionScope
         subst scope
-        refine ⟨siteFrame, ?_, ?_⟩
-        · simpa [compileRegionFrame?] using accepted
-        exact ⟨.hole, rfl, fun _ => rfl,
-          by simp [DiagramContext.cutDepth]⟩
+        cases bodyEquation :
+            compileRegionBody? definitions diagram fuel site outer with
+        | none => simp [bodyEquation] at accepted
+        | some body =>
+            let relative : RegionFrame definitions diagram outer :=
+              { visible := outer.extend site
+                siteBody := body
+                context := bindContextFor diagram outer.ids
+                  (diagram.wiresAt site) .hole }
+            have frameEquality : relative = siteFrame :=
+              Option.some.inj
+                (by simpa [bodyEquation, relative] using accepted)
+            subst siteFrame
+            have generated :
+                compileRegionFrame? definitions diagram site (fuel + 1)
+                    site outer =
+                  some relative := by
+              simp [compileRegionFrame?, bodyEquation, relative]
+            refine ⟨relative, generated, ?_⟩
+            exact
+              ⟨outer, fuel + 1, relative, rfl, generated, rfl, .hole,
+                rfl, rfl, rfl, ⟨.hole, rfl, fun _ => rfl,
+                  by simp [DiagramContext.cutDepth]⟩⟩
       · rename_i notAtSite
         cases nodesEquation :
             compileNodes? definitions diagram (outer.extend region)
@@ -1504,13 +1557,33 @@ private theorem compileRegionFrame?_decompose_at
                               context :=
                                 bindContextFor diagram outer.ids
                                   (diagram.wiresAt region) .hole }
-                          refine ⟨scopeFrame, ?_, ?_⟩
-                          · simp [compileRegionFrame?, compileRegionBody?,
+                          let relative :
+                              RegionFrame definitions diagram outer :=
+                            { visible := around.visible
+                              siteBody := around.siteBody
+                              context :=
+                                bindContextFor diagram outer.ids
+                                  (diagram.wiresAt region) around.context }
+                          have scopeGenerated :
+                              compileRegionFrame? definitions diagram region
+                                  (fuel + 1) region outer =
+                                some scopeFrame := by
+                            simp [compileRegionFrame?, compileRegionBody?,
                               nodesEquation, childrenEquation, scopeFrame,
                               scopeBody]
-                          · refine ⟨around.context, aroundFilled, ?_, ?_⟩
+                          have relativeGenerated :
+                              compileRegionFrame? definitions diagram site
+                                  (fuel + 1) region outer =
+                                some relative := by
+                            simp [compileRegionFrame?, notAtSite, nodesEquation,
+                              childEquation, nestedEquation, aroundEquation,
+                              relative]
+                          have projection :
+                              RegionFrame.RootProjection relative scopeFrame := by
+                            refine ⟨around.context, ?_, ?_, ?_⟩
+                            · exact aroundFilled
                             · intro body
-                              dsimp [scopeFrame]
+                              dsimp [relative, scopeFrame]
                               calc
                                 _ = finishBodyFor diagram outer.ids
                                       (diagram.wiresAt region)
@@ -1526,7 +1599,7 @@ private theorem compileRegionFrame?_decompose_at
                                         (outer.extend region).sigs
                                         (outer.extend region).sigs)
                                     (around.context.fill body)).symm
-                            · dsimp [scopeFrame]
+                            · dsimp [relative, scopeFrame]
                               calc
                                 _ = around.context.cutDepth :=
                                   bindContextFor_cutDepth diagram outer.ids
@@ -1547,6 +1620,11 @@ private theorem compileRegionFrame?_decompose_at
                                         DiagramContext definitions
                                           (outer.extend region).sigs
                                           (outer.extend region).sigs)).symm
+                          refine ⟨scopeFrame, scopeGenerated, ?_⟩
+                          exact
+                            ⟨outer, fuel + 1, relative, rfl,
+                              relativeGenerated, rfl, around.context, rfl, rfl,
+                              aroundFilled, projection⟩
                         · have childScope :
                               diagram.Encloses child scope :=
                             selected_child_encloses_scope definitions diagram
@@ -1557,9 +1635,19 @@ private theorem compileRegionFrame?_decompose_at
                               wellFormed (diagram.childrenOf region) child
                               scope site childEquation childScope scopeSite
                           obtain ⟨nestedScope, nestedScopeGenerated,
-                              nestedDecomposed⟩ :=
+                              nestedRelative⟩ :=
                             induction child (outer.extend region) nested
                               childScope scopeSite nestedEquation
+                          obtain ⟨relativeOuter, relativeFuel, relative,
+                              relativeVisible, relativeGenerated,
+                              relativeBody, relativeInner, relativeContext,
+                              nestedScopeVisible, nestedScopeBody,
+                              nestedRootInner, nestedRootScopeBody,
+                              nestedReplace, nestedDepth⟩ := nestedRelative
+                          have nestedProjection :
+                              RegionFrame.RootProjection nested nestedScope :=
+                            ⟨nestedRootInner, nestedRootScopeBody,
+                              nestedReplace, nestedDepth⟩
                           have nestedScopeCompiled :=
                             compileRegionFrame?_sound definitions diagram scope
                               fuel child (outer.extend region) nestedScope
@@ -1570,13 +1658,60 @@ private theorem compileRegionFrame?_decompose_at
                               child nestedScope nodes
                               (diagram.childrenOf region) compiledChildren
                               childMember nestedScopeCompiled childrenEquation
-                          obtain ⟨inner, scopeBodyEquality,
+                          obtain ⟨rootInner, scopeBodyEquality,
                               replaceEquality, depthEquality⟩ :=
-                            compileSiblingFrame?_decomposes definitions diagram
+                            compileSiblingFrame?_projects definitions diagram
                               fuel (outer.extend region) child nested
-                              nestedScope nestedDecomposed nodes
+                              nestedScope nestedProjection nodes
                               (diagram.childrenOf region) around aroundScope
                               aroundEquation aroundScopeGenerated
+                          obtain ⟨aroundVisible, aroundBody⟩ :=
+                            compileSiblingFrame?_site_eq definitions diagram
+                              fuel (outer.extend region) child nested nodes
+                              (diagram.childrenOf region) around aroundEquation
+                          obtain ⟨aroundScopeVisible, aroundScopeBody⟩ :=
+                            compileSiblingFrame?_site_eq definitions diagram
+                              fuel (outer.extend region) child nestedScope nodes
+                              (diagram.childrenOf region) aroundScope
+                              aroundScopeGenerated
+                          have relativeVisible' :
+                              relative.visible = around.visible :=
+                            relativeVisible.trans aroundVisible.symm
+                          have relativeBody' :
+                              congrArg WireContext.sigs relativeVisible' ▸
+                                  relative.siteBody =
+                                around.siteBody := by
+                            exact
+                              (cast_trans
+                                  (congrArg WireContext.sigs relativeVisible)
+                                  (congrArg WireContext.sigs
+                                    aroundVisible.symm)
+                                  relative.siteBody).trans
+                                ((congrArg
+                                    (fun body =>
+                                      congrArg WireContext.sigs
+                                          aroundVisible.symm ▸ body)
+                                    relativeBody).trans
+                                  (cast_symm_of_cast_eq
+                                    (congrArg WireContext.sigs aroundVisible)
+                                    aroundBody))
+                          have scopeVisible' :
+                              aroundScope.visible =
+                                relativeOuter.extend scope :=
+                            aroundScopeVisible.trans nestedScopeVisible
+                          have scopeBody' :
+                              congrArg WireContext.sigs scopeVisible' ▸
+                                  aroundScope.siteBody =
+                                relativeInner.fill relative.siteBody :=
+                            (cast_trans
+                                (congrArg WireContext.sigs aroundScopeVisible)
+                                (congrArg WireContext.sigs nestedScopeVisible)
+                                aroundScope.siteBody).trans
+                              ((congrArg
+                                  (fun body =>
+                                    congrArg WireContext.sigs
+                                        nestedScopeVisible ▸ body)
+                                  aroundScopeBody).trans nestedScopeBody)
                           let scopeFrame :
                               RegionFrame definitions diagram outer :=
                             { visible := aroundScope.visible
@@ -1585,12 +1720,24 @@ private theorem compileRegionFrame?_decompose_at
                                 bindContextFor diagram outer.ids
                                   (diagram.wiresAt region)
                                   aroundScope.context }
-                          refine ⟨scopeFrame, ?_, ?_⟩
-                          · simp [compileRegionFrame?, atScope, nodesEquation,
+                          have scopeGenerated :
+                              compileRegionFrame? definitions diagram scope
+                                  (fuel + 1) region outer =
+                                some scopeFrame := by
+                            simp [compileRegionFrame?, atScope, nodesEquation,
                               scopeChildEquation, nestedScopeGenerated,
                               aroundScopeGenerated, scopeFrame]
-                          · refine
-                              ⟨inner, scopeBodyEquality, ?_, ?_⟩
+                          have projection :
+                              RegionFrame.RootProjection
+                                ({ visible := around.visible
+                                   siteBody := around.siteBody
+                                   context :=
+                                     bindContextFor diagram outer.ids
+                                       (diagram.wiresAt region)
+                                       around.context } :
+                                  RegionFrame definitions diagram outer)
+                                scopeFrame := by
+                            refine ⟨rootInner, scopeBodyEquality, ?_, ?_⟩
                             · intro body
                               dsimp [scopeFrame]
                               calc
@@ -1603,7 +1750,7 @@ private theorem compileRegionFrame?_decompose_at
                                 _ = finishBodyFor diagram outer.ids
                                       (diagram.wiresAt region)
                                       (aroundScope.context.fill
-                                        (inner.fill body)) :=
+                                        (rootInner.fill body)) :=
                                   congrArg
                                     (finishBodyFor diagram outer.ids
                                       (diagram.wiresAt region))
@@ -1612,20 +1759,26 @@ private theorem compileRegionFrame?_decompose_at
                                   (bindContextFor_fill diagram outer.ids
                                     (diagram.wiresAt region)
                                     aroundScope.context
-                                    (inner.fill body)).symm
+                                    (rootInner.fill body)).symm
                             · dsimp [scopeFrame]
                               calc
                                 _ = around.context.cutDepth :=
                                   bindContextFor_cutDepth diagram outer.ids
                                     (diagram.wiresAt region) around.context
                                 _ = aroundScope.context.cutDepth +
-                                      inner.cutDepth := depthEquality
+                                      rootInner.cutDepth := depthEquality
                                 _ = _ :=
                                   congrArg
-                                    (fun depth => depth + inner.cutDepth)
+                                    (fun depth => depth + rootInner.cutDepth)
                                     (bindContextFor_cutDepth diagram outer.ids
                                       (diagram.wiresAt region)
                                       aroundScope.context).symm
+                          refine ⟨scopeFrame, scopeGenerated, ?_⟩
+                          exact
+                            ⟨relativeOuter, relativeFuel, relative,
+                              relativeVisible', relativeGenerated,
+                              relativeBody', relativeInner, relativeContext,
+                              scopeVisible', scopeBody', projection⟩
 
 /-- The root-specialized frame produced for an explicit checked base site. -/
 abbrev SiteFrame
@@ -1782,26 +1935,24 @@ theorem factorAt
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}
     (compiled : SiteCompilation base site)
-    (scope : base.val.RegionId)
-    (encloses : base.val.Encloses scope site) :
+    (scope : base.val.RegionId) (encloses : base.val.Encloses scope site) :
     ∃ scopeCompiled : SiteCompilation base scope,
-      RegionFrame.Decomposes compiled.frame scopeCompiled.frame := by
+      RegionFrame.GeneratedRelativeFrame site scope
+        compiled.frame scopeCompiled.frame := by
   have rootScope : base.val.Encloses base.val.root scope :=
     of_decide_eq_true
       ((List.all_eq_true.mp base.property.all_regions_reach_root)
         scope (Data.Finite.mem_allFin scope))
   obtain ⟨scopeFrame, generated, decomposed⟩ :=
-    compileRegionFrame?_decompose_at definitions base.val base.property
+    compileRegionFrame?_generated_relative_at
+      definitions base.val base.property
       site scope (base.val.regionCount + 1) base.val.root
       (WireContext.empty base.val) compiled.frame rootScope encloses
       compiled.frame_generated
   exact ⟨SiteCompilation.mk scopeFrame generated, decomposed⟩
 
-/--
-Usability projection: every replacement through the original site frame
-commutes with the enclosing scope decomposition returned by `factorAt`.
--/
-theorem factorAt_replace
+/-- Recover the typed generated relative origin with no compiler inputs. -/
+theorem factorAt_relative_origin
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}
@@ -1809,14 +1960,24 @@ theorem factorAt_replace
     (scope : base.val.RegionId)
     (encloses : base.val.Encloses scope site) :
     ∃ (scopeCompiled : SiteCompilation base scope)
-      (inner : DiagramContext definitions compiled.frame.visible.sigs
-        scopeCompiled.frame.visible.sigs),
-      ∀ body : Region definitions compiled.frame.visible.sigs,
-        compiled.frame.context.fill body =
-          scopeCompiled.frame.context.fill (inner.fill body) := by
-  obtain ⟨scopeCompiled, inner, _, replace, _⟩ :=
-    compiled.factorAt scope encloses
-  exact ⟨scopeCompiled, inner, replace⟩
+      (outer : WireContext base.val) (fuel : Nat)
+      (relative : RegionFrame definitions base.val outer)
+      (relativeVisible : relative.visible = compiled.frame.visible)
+      (inner : DiagramContext definitions relative.visible.sigs
+        (outer.extend scope).sigs)
+      (scopeVisible : scopeCompiled.frame.visible = outer.extend scope),
+      compileRegionFrame? definitions base.val site fuel scope outer = some relative ∧
+      congrArg WireContext.sigs relativeVisible ▸ relative.siteBody =
+        compiled.frame.siteBody ∧
+      relative.context = bindContextFor base.val outer.ids
+        (base.val.wiresAt scope) inner ∧
+      congrArg WireContext.sigs scopeVisible ▸ scopeCompiled.frame.siteBody =
+        inner.fill relative.siteBody := by
+  obtain ⟨scopeCompiled, outer, fuel, relative, relativeVisible,
+      generated, relativeBody, inner, relativeContext, scopeVisible,
+      scopeBody, _⟩ := compiled.factorAt scope encloses
+  exact ⟨scopeCompiled, outer, fuel, relative, relativeVisible, inner,
+    scopeVisible, generated, relativeBody, relativeContext, scopeBody⟩
 
 /--
 Recover the exact ordinary compiler components at the retained explicit site.
