@@ -1297,9 +1297,9 @@ def boundCanonical
   contextDecomposition := receipt.reflected.sourceDecomposition
 
 /--
-Lift the caller's dying-scope body implication through the retained outer
-contexts. Even cut depth points plain-to-bound; odd depth reverses that outer
-direction.
+Lift the receipt-owned dying-scope body law through the retained outer
+contexts for the caller-selected removed value. Even cut depth points
+plain-to-bound; odd depth reverses that outer direction.
 -/
 theorem scopeParity
     {source : CheckedDiagram definitions}
