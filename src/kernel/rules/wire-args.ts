@@ -764,9 +764,13 @@ export function applyIdentityAbstract(
 }
 
 /**
- * Gated (join family): every end becomes a reference to the stored
- * definition. Refs are opaque here — recursing into the body diverges on
- * recursive definitions, so this pair is a completeness requirement.
+ * Gated (join family): every end becomes a reference to the named stored
+ * definition — instantiating the bound relation wire at that macro, the way
+ * identity leaf instantiates it at identity. Definitions are macros and are
+ * never expanded implicitly, so content drawn with a folded reference
+ * compiles to a step that introduces the reference as drawn. (Unfolding the
+ * macro body, compiling it, and folding back would reach the same diagram,
+ * but expands what the drawing keeps folded.)
  */
 export function applyRefLeaf(
   diagram: Diagram,
