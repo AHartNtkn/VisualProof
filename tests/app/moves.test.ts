@@ -14,10 +14,10 @@ import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 
-function keySample(key: string) {
+function keySample(key: string, shiftKey = false) {
   return {
     key,
-    shiftKey: false,
+    shiftKey,
     ctrlKey: false,
     altKey: false,
     metaKey: false,
@@ -168,6 +168,29 @@ describe('proof move vocabulary', () => {
       rule: 'vacuousIntro',
       scope: cut,
       sig: { kind: 'iota' },
+    }])
+  })
+
+  it('Shift+Q spawns a floating proposition quantifier there', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.ref(cut, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    engine.regions.set(cut, {
+      center: vec(300, 200),
+      radius: 120,
+      support: [],
+    })
+
+    moves.passiveSample(pointerSample(vec(300, 200)))
+    expect(moves.keyDown(keySample('Q', true))).toBe(true)
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps).toEqual([{
+      rule: 'vacuousIntro',
+      scope: cut,
+      sig: relSig([]),
     }])
   })
 

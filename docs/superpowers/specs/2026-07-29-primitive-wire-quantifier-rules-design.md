@@ -350,6 +350,14 @@ design in ways this project fixes because it is already rebuilding this layer:
   (an individual existential; 2026-07-30 ruling: a floating existential is
   meaningful content — its presence changes the statement, if only
   trivially, unlike identity collapse — so it gets a direct move).
+- **Shift+Q spawns a floating proposition quantifier** (a bare nullary
+  relation wire; 2026-07-30 ruling). This closes the signature-birth gap
+  inductively: ι comes from Q, rel([]) from Shift+Q, and every other
+  signature follows by applying the handle (spawn list), rim-pulling new
+  first-order positions, and extension-dragging wires of already-built
+  signatures — argExtend takes the dragged wire's signature, so nesting
+  recurses. Distinct from the struck Shift+W: no arity prompt, no sig
+  stipulation — the two fixed births plus context-driven growth.
 - **The palette trigger becomes an explicit still right-click** (today it
   opens on a plain click over a hit). The only remaining rows are relFold
   and citeTheorem (relUnfold's row is deleted — double-click is its

@@ -283,9 +283,12 @@ export class ProofMoveController {
         return true
       }
     }
-    // Q spawns a bare quantifier wire at the region under the pointer
-    // (2026-07-30 ruling: a floating existential is meaningful content —
-    // its presence changes the statement, if only trivially).
+    // Q spawns a bare quantifier wire at the region under the pointer;
+    // Shift+Q spawns a proposition quantifier (nullary relation) instead
+    // (2026-07-30 rulings: a floating existential is meaningful content —
+    // its presence changes the statement, if only trivially — and the
+    // nullary spawn seeds every relational signature by application,
+    // rim-pull, and extension).
     if (sample.key === 'q' || sample.key === 'Q') {
       if (this.#lastWorld === null) {
         this.#options.refuse('point at a region first', this.#lastPointer)
@@ -298,7 +301,7 @@ export class ProofMoveController {
           this.#options.diagram(),
           this.#lastWorld,
         ),
-        sig: IOTA,
+        sig: sample.shiftKey ? relSig([]) : IOTA,
       })
       return true
     }
