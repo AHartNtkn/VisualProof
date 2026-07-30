@@ -169,6 +169,7 @@ export class ProofMoveController {
         return this.#commitSteps(label, steps)
       },
       openSpawn: options.openSpawn,
+      stillMenu: (sample) => { this.#openContextMenu(sample) },
       refuse: options.refuse,
     })
     this.#copy = new CopyDragController({
@@ -224,8 +225,14 @@ export class ProofMoveController {
     this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active()) return false
-    // A right-drag that drew or committed already consumed this press.
+    // Every claimed right press suppresses the browser's contextmenu event
+    // (it can fire at press time); a still release reopens through
+    // stillMenu, so the palette appears exactly once for a plain click.
     if (this.#draw.consumeMenuSuppression()) return true
+    return this.#openContextMenu(sample)
+  }
+
+  #openContextMenu(sample: PointerSample): boolean {
     this.#closeMenu()
     const selection = this.#options.selection()
     if (

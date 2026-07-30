@@ -30,6 +30,7 @@ function harness(diagram: Diagram, engine: Engine) {
   const committed: Committed[] = []
   const refusals: string[] = []
   const spawns: RegionId[] = []
+  const stillMenus: PointerSample[] = []
   let current = diagram
   const controller = new DrawGestureController({
     active: () => true,
@@ -55,6 +56,7 @@ function harness(diagram: Diagram, engine: Engine) {
       return true
     },
     openSpawn: (_sample, region) => { spawns.push(region) },
+    stillMenu: (sample) => { stillMenus.push(sample) },
     refuse: (text) => { refusals.push(text) },
   })
   return {
@@ -62,6 +64,7 @@ function harness(diagram: Diagram, engine: Engine) {
     committed,
     refusals,
     spawns,
+    stillMenus,
     diagram: () => current,
   }
 }
@@ -377,17 +380,19 @@ describe('drawing gesture dispatch', () => {
     expect(h.controller.hasPendingInteraction).toBe(false)
   })
 
-  it('a plain right-click with no drawing pending is not claimed as a gesture', () => {
+  it('a plain right-click suppresses the raw event and reopens the palette', () => {
     const builder = new DiagramBuilder()
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     const h = harness(diagram, engine)
 
     const claim = h.controller.claim(sample({ x: 10, y: 10 }))!
+    // The browser contextmenu event (possibly fired at press time) is
+    // consumed by the claim; the still release reopens through stillMenu.
+    expect(h.controller.consumeMenuSuppression()).toBe(true)
     claim.release(sample({ x: 10, y: 10 }), false)
 
     expect(h.controller.hasPendingInteraction).toBe(false)
-    // The palette must still open: nothing suppresses the context menu.
-    expect(h.controller.consumeMenuSuppression()).toBe(false)
+    expect(h.stillMenus).toHaveLength(1)
   })
 })

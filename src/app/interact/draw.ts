@@ -51,6 +51,10 @@ export type DrawGestureOptions = {
   ) => boolean
   /** The contactless drop: the existing spawn prompt picks the signature. */
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
+  /** A still right-click with nothing pending: open the ordinary palette.
+      The browser's contextmenu event may fire at press time, before a drag
+      can be told from a click, so the gesture owns palette opening. */
+  readonly stillMenu: (sample: PointerSample) => void
   readonly refuse: (text: string, pointer: Vec2) => void
 }
 
@@ -191,6 +195,7 @@ export class DrawGestureController {
 
   /** Grabbing the loose end: releasing it anywhere commits the drawing. */
   #claimDrop(pending: PendingDrawing): PointerClaim {
+    this.#suppressMenu = true
     return this.#issueClaim({
       still: 'claim',
       blocksPassiveRelaxation: true,
@@ -198,7 +203,6 @@ export class DrawGestureController {
         pending.loose = sample.world
       },
       release: (sample) => {
-        this.#suppressMenu = true
         pending.loose = sample.world
         this.#commit(pending, sample)
       },
@@ -214,6 +218,7 @@ export class DrawGestureController {
     const stroke = { from: start, at: start }
     const path: Vec2[] = [start]
     this.#stroke = stroke
+    this.#suppressMenu = true
     return this.#issueClaim({
       still: 'claim',
       blocksPassiveRelaxation: true,
@@ -225,10 +230,12 @@ export class DrawGestureController {
         this.#stroke = null
         const contact = this.#probe(sample.world)
         if (pending === null) {
-          // A plain right-click founds nothing; the palette stays reachable.
-          if (!moved) return
+          // A plain right-click founds nothing; it opens the palette.
+          if (!moved) {
+            this.#options.stillMenu(sample)
+            return
+          }
           if (this.#lassoCommit(start, sample, path)) return
-          this.#suppressMenu = true
           this.#pending = {
             contacts: contact === null
               ? new Map()
@@ -237,7 +244,6 @@ export class DrawGestureController {
           }
           return
         }
-        this.#suppressMenu = true
         const site = contact ?? {
           kind: 'blank' as const,
           region: regionAt(
@@ -277,7 +283,6 @@ export class DrawGestureController {
       if (wire !== null) wires.add(wire)
     }
     if (wires.size === 0) return false
-    this.#suppressMenu = true
     if (wires.size > 1) {
       this.#options.refuse(
         "the lasso must enclose one wire's end",
