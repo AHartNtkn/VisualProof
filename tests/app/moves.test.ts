@@ -116,6 +116,38 @@ describe('proof move vocabulary', () => {
     expect(applied[0]!.steps[0]).toMatchObject({ rule: 'doubleCutIntro' })
   })
 
+  it('Delete on a lone wire deletes its ends; endpoint-free wires vacuous-eliminate', () => {
+    const builder = new DiagramBuilder()
+    const atomA = builder.atom(builder.root, UNARY)
+    const atomB = builder.atom(builder.root, UNARY)
+    builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
+    const shared = builder.wire(builder.root, [
+      { node: atomA, port: { kind: 'arg', index: 0 } },
+      { node: atomB, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const withEnds = harness(diagram, [{ kind: 'wire', id: shared }])
+
+    expect(withEnds.moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(withEnds.refusals).toEqual([])
+    expect(withEnds.applied).toHaveLength(1)
+    expect(withEnds.applied[0]!.steps).toEqual([
+      { rule: 'endsDelete', wire: shared },
+    ])
+
+    const bareBuilder = new DiagramBuilder()
+    const bare = bareBuilder.wire(bareBuilder.root, [])
+    const bareDiagram = bareBuilder.build()
+    const bareCase = harness(bareDiagram, [{ kind: 'wire', id: bare }])
+
+    expect(bareCase.moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(bareCase.applied).toHaveLength(1)
+    expect(bareCase.applied[0]!.steps).toEqual([
+      { rule: 'vacuousElim', wireId: bare },
+    ])
+  })
+
   it('the i key is retired', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)

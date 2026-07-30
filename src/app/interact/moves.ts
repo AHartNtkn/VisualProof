@@ -88,16 +88,6 @@ export function contextualDeleteStep(
   if (has('vacuousElim')) {
     return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
   }
-  // Delete on a lone wire deletes its ends; the wire itself stays, quantified.
-  const selection = discovery.sel
-  if (
-    selection.nodes.length === 0
-    && selection.regions.length === 0
-    && selection.wires.length === 1
-    && (diagram.wires[selection.wires[0]!]?.endpoints.length ?? 0) > 0
-  ) {
-    return { rule: 'endsDelete', wire: selection.wires[0]! }
-  }
   if (has('erase')) return erasureStep(diagram, discovery.sel)
   return has('deiterate') ? deiterationStep(diagram, discovery.sel, fuel) : null
 }
@@ -323,6 +313,19 @@ export class ProofMoveController {
         },
       })
       return true
+    }
+    // Delete on a lone attached wire deletes its ends; the wire itself
+    // stays, quantified. This never forms a subgraph selection (the ends
+    // stay behind), so it dispatches before discovery.
+    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+      const hits = this.#options.selection()
+      if (hits.length === 1 && hits[0]!.kind === 'wire') {
+        const wire = this.#options.diagram().wires[hits[0]!.id]
+        if (wire !== undefined && wire.endpoints.length > 0) {
+          this.#commit({ rule: 'endsDelete', wire: hits[0]!.id })
+          return true
+        }
+      }
     }
     const discovery = discoverProofActions(
       this.#options.diagram(),
