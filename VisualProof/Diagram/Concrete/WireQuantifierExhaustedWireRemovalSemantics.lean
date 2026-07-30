@@ -1027,6 +1027,88 @@ def contextProjection
         targetContext.ids (targetWire source removed wire survives)
         targetMember)
 
+/--
+Project one source variable known individually to survive deletion.  Unlike
+`contextProjection`, this does not require the whole source context to omit
+the removed wire; it is the local inverse used below the dying binder.
+-/
+def survivingProjection
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    {sig : Sig}
+    (value : Var sourceContext.sigs sig)
+    (survives :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value ≠
+        removed) :
+    Var targetContext.sigs sig :=
+  let wire :=
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+      value
+  let member :=
+    InsertionCompilation.NaturalityInternal.origin_member source.val
+      sourceContext.ids value
+  let targetMember :=
+    target_visible source removed correspond wire survives member
+  InsertionCompilation.NaturalityInternal.castVar
+    ((targetWire_signature source removed wire survives).trans
+      (ConcreteElaboration.WireContext.origin_signature source.val
+        sourceContext.ids value))
+    (InsertionCompilation.NaturalityInternal.varForMember
+      (Target source removed)
+      targetContext.ids (targetWire source removed wire survives)
+      targetMember)
+
+theorem survivingProjection_action
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    {sig : Sig}
+    (value : Var sourceContext.sigs sig)
+    (survives :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value ≠
+        removed) :
+    ConcreteElaboration.WireContext.origin (Target source removed)
+        targetContext.ids
+        (survivingProjection source removed targetContext sourceContext
+          correspond value survives) =
+      targetWire source removed
+        (ConcreteElaboration.WireContext.origin source.val
+          sourceContext.ids value) survives := by
+  let wire :=
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+      value
+  let member :=
+    InsertionCompilation.NaturalityInternal.origin_member source.val
+      sourceContext.ids value
+  let targetMember :=
+    target_visible source removed correspond wire survives member
+  have castOrigin :=
+    InsertionCompilation.NaturalityInternal.origin_castVar
+      (Target source removed) targetContext.ids
+      ((targetWire_signature source removed wire survives).trans
+        (ConcreteElaboration.WireContext.origin_signature source.val
+          sourceContext.ids value))
+      (InsertionCompilation.NaturalityInternal.varForMember
+        (Target source removed) targetContext.ids
+        (targetWire source removed wire survives) targetMember)
+  have memberOrigin :=
+    InsertionCompilation.NaturalityInternal.varForMember_origin
+      (Target source removed) targetContext.ids
+      (targetWire source removed wire survives) targetMember
+  simpa only [survivingProjection, wire, member, targetMember] using
+    castOrigin.trans memberOrigin
+
 theorem contextProjection_action
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
@@ -1217,6 +1299,210 @@ theorem contextProjection_embedding
                 (Target source removed) targetContext.ids value)) := by
         congr
       _ = _ := targetWire_sourceWire source removed _
+
+theorem survivingProjection_embedding
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (sourceNodup : sourceContext.ids.Nodup)
+    {sig : Sig} (value : Var targetContext.sigs sig) :
+    survivingProjection source removed targetContext sourceContext correspond
+        (contextEmbedding source removed targetContext sourceContext
+          correspond value)
+        (by
+          rw [contextEmbedding_action]
+          exact sourceWire_ne source removed _) =
+      value := by
+  apply InsertionCompilation.NaturalityInternal.origin_injective
+    (Target source removed) targetContext.ids
+  · exact targetContext_nodup source removed targetContext sourceContext
+      correspond sourceNodup
+  · rw [survivingProjection_action]
+    have sourceOrigin :=
+      contextEmbedding_action source removed targetContext sourceContext
+        correspond value
+    calc
+      _ =
+          targetWire source removed
+            (sourceWire source removed
+              (ConcreteElaboration.WireContext.origin
+                (Target source removed) targetContext.ids value))
+            (sourceWire_ne source removed
+              (ConcreteElaboration.WireContext.origin
+                (Target source removed) targetContext.ids value)) := by
+        congr
+      _ = _ := targetWire_sourceWire source removed _
+
+theorem contextEmbedding_survivingProjection
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (sourceNodup : sourceContext.ids.Nodup)
+    {sig : Sig}
+    (value : Var sourceContext.sigs sig)
+    (survives :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value ≠
+        removed) :
+    contextEmbedding source removed targetContext sourceContext correspond
+        (survivingProjection source removed targetContext sourceContext
+          correspond value survives) =
+      value := by
+  apply InsertionCompilation.NaturalityInternal.origin_injective source.val
+    sourceContext.ids sourceNodup
+  rw [contextEmbedding_action, survivingProjection_action]
+  exact sourceWire_targetWire source removed _ survives
+
+/--
+Extend a target environment across the one deleted source variable.  Surviving
+variables are read through the canonical projection and every occurrence of
+the removed origin receives the caller-selected value.
+-/
+noncomputable def sourceEnvironmentFromTarget
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetEnv : Env pre targetContext.sigs) :
+    Env pre sourceContext.sigs :=
+  fun sig value =>
+    if survives :
+        ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+            value ≠
+          removed
+    then
+      targetEnv sig
+        (survivingProjection source removed targetContext sourceContext
+          correspond value survives)
+    else
+      let originExact :
+          ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+              value =
+            removed :=
+        Classical.not_not.mp survives
+      let signature :
+          (source.val.wires removed).sig = sig :=
+        (congrArg (fun wire => (source.val.wires wire).sig)
+            originExact).symm.trans
+          (ConcreteElaboration.WireContext.origin_signature source.val
+            sourceContext.ids value)
+      congrArg pre.Domain signature ▸ specified
+
+theorem sourceEnvironmentFromTarget_embedding
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetEnv : Env pre targetContext.sigs) :
+    Env.comp
+        (sourceEnvironmentFromTarget source removed targetContext
+          sourceContext correspond pre specified targetEnv)
+        (contextEmbedding source removed targetContext sourceContext
+          correspond) =
+      targetEnv := by
+  funext sig value
+  simp only [Env.comp, sourceEnvironmentFromTarget]
+  split
+  · rename_i survives
+    exact congrArg (targetEnv sig)
+      (survivingProjection_embedding source removed targetContext
+        sourceContext correspond sourceNodup value)
+  · rename_i notSurvives
+    exact (notSurvives (by
+      rw [contextEmbedding_action]
+      exact sourceWire_ne source removed _)).elim
+
+theorem sourceEnvironmentFromTarget_removed
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetEnv : Env pre targetContext.sigs)
+    (value : Var sourceContext.sigs (source.val.wires removed).sig)
+    (origin :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value =
+        removed) :
+    sourceEnvironmentFromTarget source removed targetContext sourceContext
+        correspond pre specified targetEnv _ value =
+      specified := by
+  simp only [sourceEnvironmentFromTarget]
+  split
+  · rename_i survives
+    exact (survives origin).elim
+  · rfl
+
+/-- The exact semantic relation between paired deletion environments. -/
+structure EnvironmentsCorrespond
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetEnv : Env pre targetContext.sigs)
+    (sourceEnv : Env pre sourceContext.sigs) : Prop where
+  surviving :
+    Env.comp sourceEnv
+        (contextEmbedding source removed targetContext sourceContext
+          correspond) =
+      targetEnv
+  removedValue :
+    ∀ value : Var sourceContext.sigs (source.val.wires removed).sig,
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value =
+        removed →
+      sourceEnv _ value = specified
+
+theorem sourceEnvironmentFromTarget_corresponds
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetEnv : Env pre targetContext.sigs) :
+    EnvironmentsCorrespond source removed targetContext sourceContext
+      correspond pre specified targetEnv
+      (sourceEnvironmentFromTarget source removed targetContext
+        sourceContext correspond pre specified targetEnv) where
+  surviving :=
+    sourceEnvironmentFromTarget_embedding source removed targetContext
+      sourceContext correspond sourceNodup pre specified targetEnv
+  removedValue :=
+    sourceEnvironmentFromTarget_removed source removed targetContext
+      sourceContext correspond pre specified targetEnv
 
 theorem contextProjection_embedding_environment
     (source : CheckedDiagram definitions)
@@ -1447,6 +1733,109 @@ private theorem contextProjection_appendRight
         (contextProjection source removed targetContext sourceContext
           correspond removedAbsent value)).symm
 
+private theorem survivingProjection_appendRight
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
+    {sig : Sig}
+    (value : Var sourceContext.sigs sig)
+    (survives :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value ≠
+        removed) :
+    survivingProjection source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        (ConcreteElaboration.appendRightVar source.val
+          (source.val.wiresAt region) value)
+        (by
+          intro same
+          apply survives
+          exact
+            (ConcreteElaboration.origin_appendRightVar source.val
+              (source.val.wiresAt region) value).symm.trans same) =
+      ConcreteElaboration.appendRightVar (Target source removed)
+        ((Target source removed).wiresAt
+          (targetRegion source removed region))
+        (survivingProjection source removed targetContext sourceContext
+          correspond value survives) := by
+  apply InsertionCompilation.NaturalityInternal.origin_injective
+    (Target source removed)
+    (targetContext.extend (targetRegion source removed region)).ids
+  · exact
+      targetContext_nodup source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        sourceExtendedNodup
+  · let extendedValue :=
+      ConcreteElaboration.appendRightVar source.val
+        (source.val.wiresAt region) value
+    have sourceOrigin :
+        ConcreteElaboration.WireContext.origin source.val
+            (sourceContext.extend region).ids extendedValue =
+          ConcreteElaboration.WireContext.origin source.val
+            sourceContext.ids value := by
+      exact
+        ConcreteElaboration.origin_appendRightVar source.val
+          (source.val.wiresAt region) value
+    let extendedSurvives :
+        ConcreteElaboration.WireContext.origin source.val
+            (sourceContext.extend region).ids extendedValue ≠
+          removed :=
+      fun same => survives (sourceOrigin.symm.trans same)
+    calc
+      ConcreteElaboration.WireContext.origin (Target source removed)
+          (targetContext.extend (targetRegion source removed region)).ids
+          (survivingProjection source removed
+            (targetContext.extend (targetRegion source removed region))
+            (sourceContext.extend region)
+            (extend_contexts_correspond source removed correspond region)
+            extendedValue extendedSurvives) =
+        targetWire source removed
+          (ConcreteElaboration.WireContext.origin source.val
+            (sourceContext.extend region).ids extendedValue)
+          extendedSurvives :=
+        survivingProjection_action source removed
+          (targetContext.extend (targetRegion source removed region))
+          (sourceContext.extend region)
+          (extend_contexts_correspond source removed correspond region)
+          extendedValue extendedSurvives
+      _ =
+        targetWire source removed
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceContext.ids value) survives :=
+        targetWire_congr source removed sourceOrigin extendedSurvives
+          survives
+      _ =
+        ConcreteElaboration.WireContext.origin (Target source removed)
+          targetContext.ids
+          (survivingProjection source removed targetContext sourceContext
+            correspond value survives) :=
+        (survivingProjection_action source removed targetContext
+          sourceContext correspond value survives).symm
+      _ =
+        ConcreteElaboration.WireContext.origin (Target source removed)
+          (targetContext.extend (targetRegion source removed region)).ids
+          (ConcreteElaboration.appendRightVar (Target source removed)
+            ((Target source removed).wiresAt
+              (targetRegion source removed region))
+            (survivingProjection source removed targetContext sourceContext
+              correspond value survives)) :=
+        (ConcreteElaboration.origin_appendRightVar
+          (Target source removed)
+          ((Target source removed).wiresAt
+            (targetRegion source removed region))
+          (survivingProjection source removed targetContext sourceContext
+            correspond value survives)).symm
+
 private theorem extendEnvironment_from
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
@@ -1466,6 +1855,259 @@ private theorem extendEnvironment_from
   apply ConcreteElaboration.extendEnvironmentFor_from
   intro sig value
   exact agrees value
+
+/--
+Extend a paired environment through one retained region in the
+target-to-source direction.  A removed value already living in the source
+outer environment is preserved; all local wires survive because this is not
+the removed wire's own scope.
+-/
+private theorem extendEnvironmentsCorrespond_target
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
+    (notScope : region ≠ (source.val.wires removed).scope)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetOuter : Env pre targetContext.sigs)
+    (sourceOuter : Env pre sourceContext.sigs)
+    (outerCorrespond :
+      EnvironmentsCorrespond source removed targetContext sourceContext
+        correspond pre specified targetOuter sourceOuter)
+    (targetValues :
+      ConcreteElaboration.WireValues pre
+        (((Target source removed).wiresAt
+          (targetRegion source removed region)).map fun wire =>
+            ((Target source removed).wires wire).sig)) :
+    ∃ sourceValues :
+        ConcreteElaboration.WireValues pre
+          ((source.val.wiresAt region).map fun wire =>
+            (source.val.wires wire).sig),
+      EnvironmentsCorrespond source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        pre specified
+        (ConcreteElaboration.extendEnvironment (Target source removed)
+          targetContext (targetRegion source removed region)
+          targetValues targetOuter)
+        (ConcreteElaboration.extendEnvironment source.val sourceContext
+          region sourceValues sourceOuter) := by
+  let targetExtended :=
+    ConcreteElaboration.extendEnvironment (Target source removed)
+      targetContext (targetRegion source removed region)
+      targetValues targetOuter
+  let extendedCorrespond :=
+    extend_contexts_correspond source removed correspond region
+  let sourceCandidate :=
+    sourceEnvironmentFromTarget source removed
+      (targetContext.extend (targetRegion source removed region))
+      (sourceContext.extend region) extendedCorrespond pre specified
+      targetExtended
+  let sourceValues :=
+    ConcreteElaboration.valuesFromEnvironmentFor source.val
+      sourceContext.ids (source.val.wiresAt region) sourceCandidate
+  refine ⟨sourceValues, ?_⟩
+  have sourceRealized :
+      ConcreteElaboration.extendEnvironment source.val sourceContext region
+          sourceValues sourceOuter =
+        sourceCandidate := by
+    apply extendEnvironment_from
+    intro sig value
+    change
+      sourceCandidate sig
+          (ConcreteElaboration.appendRightVar source.val
+            (source.val.wiresAt region) value) =
+        sourceOuter sig value
+    simp only [sourceCandidate, sourceEnvironmentFromTarget]
+    split
+    · rename_i survives
+      have outerSurvives :
+          ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+              value ≠
+            removed := by
+        intro same
+        apply survives
+        exact
+          (ConcreteElaboration.origin_appendRightVar source.val
+            (source.val.wiresAt region) value).trans same
+      rw [survivingProjection_appendRight source removed targetContext
+        sourceContext correspond region sourceExtendedNodup value
+        outerSurvives]
+      dsimp [targetExtended]
+      rw [ConcreteElaboration.extendEnvironment_appendRightVar]
+      have outerPoint :=
+        congrFun (congrFun outerCorrespond.surviving sig)
+          (survivingProjection source removed targetContext sourceContext
+            correspond value outerSurvives)
+      have embeddedExact :=
+        contextEmbedding_survivingProjection source removed targetContext
+          sourceContext correspond
+          (by
+            have parts := sourceExtendedNodup
+            rw [ConcreteElaboration.WireContext.extend,
+              List.nodup_append] at parts
+            exact parts.2.1)
+          value outerSurvives
+      simpa only [Env.comp, embeddedExact] using outerPoint.symm
+    · rename_i notSurvives
+      have outerOrigin :
+          ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+              value =
+            removed := by
+        apply Classical.not_not.mp
+        intro outerSurvives
+        exact notSurvives (by
+          intro same
+          apply outerSurvives
+          exact
+            (ConcreteElaboration.origin_appendRightVar source.val
+              (source.val.wiresAt region) value).symm.trans same)
+      have signature :
+          (source.val.wires removed).sig = sig :=
+        (congrArg (fun wire => (source.val.wires wire).sig)
+            outerOrigin).symm.trans
+          (ConcreteElaboration.WireContext.origin_signature source.val
+            sourceContext.ids value)
+      cases signature
+      exact (outerCorrespond.removedValue value outerOrigin).symm
+  rw [sourceRealized]
+  exact
+    sourceEnvironmentFromTarget_corresponds source removed
+      (targetContext.extend (targetRegion source removed region))
+      (sourceContext.extend region) extendedCorrespond sourceExtendedNodup
+      pre specified targetExtended
+
+/-- Extend a paired environment through one retained region source-to-target. -/
+private theorem extendEnvironmentsCorrespond_source
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
+    (notScope : region ≠ (source.val.wires removed).scope)
+    (pre : PreModel.{u})
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetOuter : Env pre targetContext.sigs)
+    (sourceOuter : Env pre sourceContext.sigs)
+    (outerCorrespond :
+      EnvironmentsCorrespond source removed targetContext sourceContext
+        correspond pre specified targetOuter sourceOuter)
+    (sourceValues :
+      ConcreteElaboration.WireValues pre
+        ((source.val.wiresAt region).map fun wire =>
+          (source.val.wires wire).sig)) :
+    ∃ targetValues :
+        ConcreteElaboration.WireValues pre
+          (((Target source removed).wiresAt
+            (targetRegion source removed region)).map fun wire =>
+              ((Target source removed).wires wire).sig),
+      EnvironmentsCorrespond source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        pre specified
+        (ConcreteElaboration.extendEnvironment (Target source removed)
+          targetContext (targetRegion source removed region)
+          targetValues targetOuter)
+        (ConcreteElaboration.extendEnvironment source.val sourceContext
+          region sourceValues sourceOuter) := by
+  let sourceExtended :=
+    ConcreteElaboration.extendEnvironment source.val sourceContext region
+      sourceValues sourceOuter
+  let extendedCorrespond :=
+    extend_contexts_correspond source removed correspond region
+  let targetCandidate :=
+    Env.comp sourceExtended
+      (contextEmbedding source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region) extendedCorrespond)
+  let targetValues :=
+    ConcreteElaboration.valuesFromEnvironmentFor
+      (Target source removed) targetContext.ids
+      ((Target source removed).wiresAt
+        (targetRegion source removed region))
+      targetCandidate
+  refine ⟨targetValues, ?_⟩
+  have targetRealized :
+      ConcreteElaboration.extendEnvironment (Target source removed)
+          targetContext (targetRegion source removed region)
+          targetValues targetOuter =
+        targetCandidate := by
+    apply extendEnvironment_from
+    intro sig value
+    change
+      sourceExtended sig
+          (contextEmbedding source removed
+            (targetContext.extend (targetRegion source removed region))
+            (sourceContext.extend region) extendedCorrespond
+            (ConcreteElaboration.appendRightVar (Target source removed)
+              ((Target source removed).wiresAt
+                (targetRegion source removed region)) value)) =
+        targetOuter sig value
+    rw [contextEmbedding_appendRight source removed targetContext
+      sourceContext correspond region sourceExtendedNodup]
+    dsimp [sourceExtended]
+    rw [ConcreteElaboration.extendEnvironment_appendRightVar]
+    exact congrFun (congrFun outerCorrespond.surviving sig) value
+  rw [targetRealized]
+  refine
+    { surviving := rfl
+      removedValue := ?_ }
+  intro value origin
+  have outerMember : removed ∈ sourceContext.ids := by
+    have member :=
+      InsertionCompilation.NaturalityInternal.origin_member source.val
+        (sourceContext.extend region).ids value
+    rw [origin, ConcreteElaboration.WireContext.extend,
+      List.mem_append] at member
+    exact member.resolve_left
+      (removed_not_mem_wiresAt source removed region notScope)
+  let outerValue :=
+    InsertionCompilation.NaturalityInternal.varForMember source.val
+      sourceContext.ids removed outerMember
+  have outerOrigin :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          outerValue =
+        removed :=
+    InsertionCompilation.NaturalityInternal.varForMember_origin source.val
+      sourceContext.ids removed outerMember
+  have appendedExact :
+      ConcreteElaboration.appendRightVar source.val
+          (source.val.wiresAt region) outerValue =
+        value := by
+    apply InsertionCompilation.NaturalityInternal.origin_injective source.val
+      (sourceContext.extend region).ids sourceExtendedNodup
+    calc
+      ConcreteElaboration.WireContext.origin source.val
+          (sourceContext.extend region).ids
+          (ConcreteElaboration.appendRightVar source.val
+            (source.val.wiresAt region) outerValue) =
+        ConcreteElaboration.WireContext.origin source.val
+          sourceContext.ids outerValue :=
+        ConcreteElaboration.origin_appendRightVar source.val
+          (source.val.wiresAt region) outerValue
+      _ = removed := outerOrigin
+      _ =
+        ConcreteElaboration.WireContext.origin source.val
+          (sourceContext.extend region).ids value := origin.symm
+  rw [← appendedExact]
+  change
+    ConcreteElaboration.extendEnvironment source.val sourceContext region
+        sourceValues sourceOuter _ _ =
+      specified
+  rw [ConcreteElaboration.extendEnvironment_appendRightVar]
+  exact outerCorrespond.removedValue outerValue outerOrigin
 
 /--
 Canonical retained local environments correspond in both directions above the
@@ -2339,6 +2981,33 @@ private theorem child_outside
     simp [ConcreteDiagram.climb, childData]
   exact outside (checked_encloses_trans source parentChild childSite)
 
+private theorem child_outside_parent
+    (source : CheckedDiagram definitions)
+    (region child : source.val.RegionId)
+    (member : child ∈ source.val.childrenOf region) :
+    ¬source.val.Encloses child region := by
+  intro childRegion
+  have childData :=
+    ConcreteElaboration.mem_childrenOf source.val region child member
+  obtain ⟨backSteps, backClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists
+      source.val child region).mp childRegion
+  obtain ⟨rootSteps, rootClimb⟩ := checked_reaches_root source child
+  have cycle :
+      source.val.climb (1 + backSteps.val) child = some child := by
+    rw [climb_add source.val 1 backSteps.val child]
+    simp [ConcreteDiagram.climb, childData, backClimb]
+  have longRoot :
+      source.val.climb ((1 + backSteps.val) + rootSteps.val) child =
+        some source.val.root := by
+    rw [climb_add source.val (1 + backSteps.val) rootSteps.val child,
+      cycle]
+    exact rootClimb
+  have sameLength :=
+    climb_to_root_unique definitions source.val source.property
+      longRoot rootClimb
+  omega
+
 /-- Complete retained region binders preserve the reflected core equivalence. -/
 private theorem finishRetainedRegion_equiv
     (source : CheckedDiagram definitions)
@@ -2555,6 +3224,581 @@ theorem compileChildren_reflect_of
               eachOutside candidate
                 (List.mem_cons_of_mem targetChild member))
             pre definitionEnv targetEnv)
+
+/--
+Pair exact source and target child compiler results under a caller-supplied
+semantic law for each corresponding child body.
+-/
+private theorem compileChildren_corresponding_denotation
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (sourceRecurse : (region : source.val.RegionId) →
+      (context : ConcreteElaboration.WireContext source.val) →
+        Option (Region definitions context.sigs))
+    (targetRecurse : (region : (Target source removed).RegionId) →
+      (context :
+        ConcreteElaboration.WireContext (Target source removed)) →
+        Option (Region definitions context.sigs))
+    (targetChildren : List (Target source removed).RegionId)
+    (sourceItems : ItemSeq definitions sourceContext.sigs)
+    (targetItems : ItemSeq definitions targetContext.sigs)
+    (sourceCompiled :
+      ConcreteElaboration.compileChildrenWith? definitions source.val
+          sourceRecurse sourceContext
+          (targetChildren.map (sourceRegion source removed)) =
+        some sourceItems)
+    (targetCompiled :
+      ConcreteElaboration.compileChildrenWith? definitions
+          (Target source removed) targetRecurse targetContext targetChildren =
+        some targetItems)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (targetEnv : Env pre targetContext.sigs)
+    (sourceEnv : Env pre sourceContext.sigs)
+    (bodyLaw :
+      ∀ targetChild, targetChild ∈ targetChildren →
+        ∀ sourceBody targetBody,
+          sourceRecurse (sourceRegion source removed targetChild)
+              sourceContext =
+            some sourceBody →
+          targetRecurse targetChild targetContext =
+            some targetBody →
+          (denoteRegion pre definitionEnv targetEnv targetBody ↔
+            denoteRegion pre definitionEnv sourceEnv sourceBody)) :
+    denoteItemSeq pre definitionEnv targetEnv targetItems ↔
+      denoteItemSeq pre definitionEnv sourceEnv sourceItems := by
+  induction targetChildren generalizing sourceItems targetItems with
+  | nil =>
+      simp only [List.map_nil,
+        ConcreteElaboration.compileChildrenWith?] at sourceCompiled
+      simp only [ConcreteElaboration.compileChildrenWith?] at targetCompiled
+      have sourceEmpty : sourceItems = .nil :=
+        Option.some.inj sourceCompiled.symm
+      have targetEmpty : targetItems = .nil :=
+        Option.some.inj targetCompiled.symm
+      subst sourceItems
+      subst targetItems
+      exact Iff.rfl
+  | cons targetChild tail induction =>
+      obtain ⟨sourceBody, sourceRest, sourceBodyCompiled,
+          sourceRestCompiled, sourceExact⟩ :=
+        InsertionCompilation.NaturalityInternal.compileChildren_cons_components
+          definitions source.val sourceRecurse sourceContext
+          (sourceRegion source removed targetChild)
+          (tail.map (sourceRegion source removed)) sourceItems
+          (by simpa using sourceCompiled)
+      obtain ⟨targetBody, targetRest, targetBodyCompiled,
+          targetRestCompiled, targetExact⟩ :=
+        InsertionCompilation.NaturalityInternal.compileChildren_cons_components
+          definitions (Target source removed) targetRecurse targetContext
+          targetChild tail targetItems targetCompiled
+      subst sourceItems
+      subst targetItems
+      simp only [denoteItemSeq_cons, cut_denotes_negation]
+      exact and_congr
+        (not_congr
+          (bodyLaw targetChild (by simp) sourceBody targetBody
+            sourceBodyCompiled targetBodyCompiled))
+        (induction sourceRest targetRest sourceRestCompiled
+          targetRestCompiled (by
+            intro candidate member sourceCandidate targetCandidate
+              sourceCandidateCompiled targetCandidateCompiled
+            exact
+              bodyLaw candidate (List.mem_cons_of_mem targetChild member)
+                sourceCandidate targetCandidate sourceCandidateCompiled
+                targetCandidateCompiled))
+
+/--
+Exact fueled compilations of a retained region have equivalent denotation
+under corresponding deletion environments.  This is the recursive child law
+needed at the removed wire's own unbound body.
+-/
+private theorem compileRegion_corresponding_denotation
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetWellFormed : (Target source removed).WellFormed definitions)
+    (removedEndpoints : (source.val.wires removed).endpoints = []) :
+    ∀ (fuel : Nat)
+      (targetContext :
+        ConcreteElaboration.WireContext (Target source removed))
+      (sourceContext : ConcreteElaboration.WireContext source.val)
+      (correspond : ContextsCorrespond source removed
+        targetContext sourceContext)
+      (region : source.val.RegionId)
+      (above :
+        ConcreteElaboration.ContextAbove source.val sourceContext region)
+      (outside :
+        ¬source.val.Encloses region (source.val.wires removed).scope)
+      (sourceBody : Region definitions sourceContext.sigs)
+      (targetBody : Region definitions targetContext.sigs),
+      ConcreteElaboration.compileRegion? definitions source.val fuel
+          region sourceContext =
+        some sourceBody →
+      ConcreteElaboration.compileRegion? definitions (Target source removed)
+          fuel (targetRegion source removed region) targetContext =
+        some targetBody →
+      ∀ (pre : PreModel.{u})
+        (definitionEnv : DefinitionEnv pre definitions)
+        (specified : pre.Domain (source.val.wires removed).sig)
+        (targetEnv : Env pre targetContext.sigs)
+        (sourceEnv : Env pre sourceContext.sigs),
+        EnvironmentsCorrespond source removed targetContext sourceContext
+            correspond pre specified targetEnv sourceEnv →
+          (denoteRegion pre definitionEnv targetEnv targetBody ↔
+            denoteRegion pre definitionEnv sourceEnv sourceBody) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro targetContext sourceContext correspond region above outside
+        sourceBody targetBody sourceCompiled
+      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+  | succ fuel induction =>
+      intro targetContext sourceContext correspond region above outside
+        sourceBody targetBody sourceCompiled targetCompiled pre definitionEnv
+        specified targetEnv sourceEnv environments
+      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp only [ConcreteElaboration.compileRegion?] at targetCompiled
+      cases sourceNodesEquation :
+          ConcreteElaboration.compileNodes? definitions source.val
+            (sourceContext.extend region) (source.val.nodesAt region) with
+      | none =>
+          rw [sourceNodesEquation] at sourceCompiled
+          simp at sourceCompiled
+      | some sourceNodes =>
+          rw [sourceNodesEquation] at sourceCompiled
+          cases sourceChildrenEquation :
+              ConcreteElaboration.compileChildrenWith? definitions source.val
+                (ConcreteElaboration.compileRegion? definitions source.val
+                  fuel)
+                (sourceContext.extend region)
+                (source.val.childrenOf region) with
+          | none =>
+              rw [sourceChildrenEquation] at sourceCompiled
+              simp at sourceCompiled
+          | some sourceChildren =>
+              rw [sourceChildrenEquation] at sourceCompiled
+              cases targetNodesEquation :
+                  ConcreteElaboration.compileNodes? definitions
+                    (Target source removed)
+                    (targetContext.extend
+                      (targetRegion source removed region))
+                    ((Target source removed).nodesAt
+                      (targetRegion source removed region)) with
+              | none =>
+                  rw [targetNodesEquation] at targetCompiled
+                  simp at targetCompiled
+              | some targetNodes =>
+                  rw [targetNodesEquation] at targetCompiled
+                  cases targetChildrenEquation :
+                      ConcreteElaboration.compileChildrenWith? definitions
+                        (Target source removed)
+                        (ConcreteElaboration.compileRegion? definitions
+                          (Target source removed) fuel)
+                        (targetContext.extend
+                          (targetRegion source removed region))
+                        ((Target source removed).childrenOf
+                          (targetRegion source removed region)) with
+                  | none =>
+                      rw [targetChildrenEquation] at targetCompiled
+                      simp at targetCompiled
+                  | some targetChildren =>
+                      rw [targetChildrenEquation] at targetCompiled
+                      have sourceBodyExact :
+                          ConcreteElaboration.finishRegion source.val
+                              sourceContext region
+                              (.mk (sourceNodes.append sourceChildren)) =
+                            sourceBody :=
+                        Option.some.inj sourceCompiled
+                      have targetBodyExact :
+                          ConcreteElaboration.finishRegion
+                              (Target source removed) targetContext
+                              (targetRegion source removed region)
+                              (.mk (targetNodes.append targetChildren)) =
+                            targetBody :=
+                        Option.some.inj targetCompiled
+                      subst sourceBody
+                      subst targetBody
+                      have sourceExtendedNodup :
+                          (sourceContext.extend region).ids.Nodup :=
+                        ConcreteElaboration.extend_nodup definitions source.val
+                          source.property sourceContext region above
+                      obtain ⟨expectedTargetNodes, expectedTargetCompiled,
+                          sourceNodesExact⟩ :=
+                        compileRegionNodes_reflect source removed
+                          targetWellFormed removedEndpoints
+                          (targetContext.extend
+                            (targetRegion source removed region))
+                          (sourceContext.extend region)
+                          (extend_contexts_correspond source removed correspond
+                            region)
+                          sourceExtendedNodup region sourceNodesEquation
+                      have targetNodesExact :
+                          expectedTargetNodes = targetNodes :=
+                        Option.some.inj
+                          (expectedTargetCompiled.symm.trans
+                            targetNodesEquation)
+                      subst expectedTargetNodes
+                      have sourceChildrenMapped :
+                          ConcreteElaboration.compileChildrenWith? definitions
+                              source.val
+                              (ConcreteElaboration.compileRegion? definitions
+                                source.val fuel)
+                              (sourceContext.extend region)
+                              (((Target source removed).childrenOf
+                                (targetRegion source removed region)).map
+                                (sourceRegion source removed)) =
+                            some sourceChildren := by
+                        rw [childrenOf_sources]
+                        exact sourceChildrenEquation
+                      rw [ConcreteElaboration.denote_finishRegion,
+                        ConcreteElaboration.denote_finishRegion]
+                      constructor
+                      · rintro ⟨targetValues, targetCore⟩
+                        obtain ⟨sourceValues, extendedEnvironments⟩ :=
+                          extendEnvironmentsCorrespond_target source removed
+                            targetContext sourceContext correspond region
+                            sourceExtendedNodup
+                            (fun same => outside
+                              (same ▸ source.val.encloses_refl region))
+                            pre specified targetEnv sourceEnv environments
+                            targetValues
+                        refine ⟨sourceValues, ?_⟩
+                        simp only [denoteRegion, denoteItemSeq_append] at targetCore
+                        simp only [denoteRegion, denoteItemSeq_append]
+                        refine ⟨?_, ?_⟩
+                        · rw [sourceNodesExact,
+                            denoteItemSeq_renameWires,
+                            extendedEnvironments.surviving]
+                          exact targetCore.1
+                        · exact
+                            (compileChildren_corresponding_denotation source
+                              removed
+                              (targetContext.extend
+                                (targetRegion source removed region))
+                              (sourceContext.extend region)
+                              (ConcreteElaboration.compileRegion? definitions
+                                source.val fuel)
+                              (ConcreteElaboration.compileRegion? definitions
+                                (Target source removed) fuel)
+                              ((Target source removed).childrenOf
+                                (targetRegion source removed region))
+                              sourceChildren targetChildren
+                              sourceChildrenMapped targetChildrenEquation pre
+                              definitionEnv
+                              (ConcreteElaboration.extendEnvironment
+                                (Target source removed) targetContext
+                                (targetRegion source removed region)
+                                targetValues targetEnv)
+                              (ConcreteElaboration.extendEnvironment source.val
+                                sourceContext region sourceValues sourceEnv)
+                              (by
+                                intro targetChild targetMember childSource
+                                  childTarget childSourceCompiled
+                                  childTargetCompiled
+                                have sourceMember :
+                                    sourceRegion source removed targetChild ∈
+                                      source.val.childrenOf region := by
+                                  rw [← childrenOf_sources source removed
+                                    region]
+                                  exact List.mem_map.mpr
+                                    ⟨targetChild, targetMember, rfl⟩
+                                exact
+                                  induction
+                                    (targetContext.extend
+                                      (targetRegion source removed region))
+                                    (sourceContext.extend region)
+                                    (extend_contexts_correspond source removed
+                                      correspond region)
+                                    (sourceRegion source removed targetChild)
+                                    (ConcreteElaboration.extend_above_child
+                                      definitions source.val source.property
+                                      sourceContext region
+                                      (sourceRegion source removed targetChild)
+                                      above
+                                      (ConcreteElaboration.mem_childrenOf
+                                        source.val region
+                                        (sourceRegion source removed
+                                          targetChild)
+                                        sourceMember))
+                                    (child_outside source removed region
+                                      (sourceRegion source removed targetChild)
+                                      outside sourceMember)
+                                    childSource childTarget childSourceCompiled
+                                    (by
+                                      simpa only [targetRegion_sourceRegion]
+                                        using childTargetCompiled)
+                                    pre definitionEnv
+                                    specified _ _ extendedEnvironments)
+                            ).mp targetCore.2
+                      · rintro ⟨sourceValues, sourceCore⟩
+                        obtain ⟨targetValues, extendedEnvironments⟩ :=
+                          extendEnvironmentsCorrespond_source source removed
+                            targetContext sourceContext correspond region
+                            sourceExtendedNodup
+                            (fun same => outside
+                              (same ▸ source.val.encloses_refl region))
+                            pre specified targetEnv sourceEnv environments
+                            sourceValues
+                        refine ⟨targetValues, ?_⟩
+                        simp only [denoteRegion, denoteItemSeq_append] at sourceCore
+                        simp only [denoteRegion, denoteItemSeq_append]
+                        refine ⟨?_, ?_⟩
+                        · rw [sourceNodesExact,
+                            denoteItemSeq_renameWires,
+                            extendedEnvironments.surviving] at sourceCore
+                          exact sourceCore.1
+                        · exact
+                            (compileChildren_corresponding_denotation source
+                              removed
+                              (targetContext.extend
+                                (targetRegion source removed region))
+                              (sourceContext.extend region)
+                              (ConcreteElaboration.compileRegion? definitions
+                                source.val fuel)
+                              (ConcreteElaboration.compileRegion? definitions
+                                (Target source removed) fuel)
+                              ((Target source removed).childrenOf
+                                (targetRegion source removed region))
+                              sourceChildren targetChildren
+                              sourceChildrenMapped targetChildrenEquation pre
+                              definitionEnv
+                              (ConcreteElaboration.extendEnvironment
+                                (Target source removed) targetContext
+                                (targetRegion source removed region)
+                                targetValues targetEnv)
+                              (ConcreteElaboration.extendEnvironment source.val
+                                sourceContext region sourceValues sourceEnv)
+                              (by
+                                intro targetChild targetMember childSource
+                                  childTarget childSourceCompiled
+                                  childTargetCompiled
+                                have sourceMember :
+                                    sourceRegion source removed targetChild ∈
+                                      source.val.childrenOf region := by
+                                  rw [← childrenOf_sources source removed
+                                    region]
+                                  exact List.mem_map.mpr
+                                    ⟨targetChild, targetMember, rfl⟩
+                                exact
+                                  induction
+                                    (targetContext.extend
+                                      (targetRegion source removed region))
+                                    (sourceContext.extend region)
+                                    (extend_contexts_correspond source removed
+                                      correspond region)
+                                    (sourceRegion source removed targetChild)
+                                    (ConcreteElaboration.extend_above_child
+                                      definitions source.val source.property
+                                      sourceContext region
+                                      (sourceRegion source removed targetChild)
+                                      above
+                                      (ConcreteElaboration.mem_childrenOf
+                                        source.val region
+                                        (sourceRegion source removed
+                                          targetChild)
+                                        sourceMember))
+                                    (child_outside source removed region
+                                      (sourceRegion source removed targetChild)
+                                      outside sourceMember)
+                                    childSource childTarget childSourceCompiled
+                                    (by
+                                      simpa only [targetRegion_sourceRegion]
+                                        using childTargetCompiled)
+                                    pre definitionEnv
+                                    specified _ _ extendedEnvironments)
+                            ).mpr sourceCore.2
+
+/--
+The unbound body at the removed wire's own scope preserves denotation under
+one exact corresponding full-visible environment.
+-/
+theorem compileRegionBody_corresponding_denotation
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetWellFormed : (Target source removed).WellFormed definitions)
+    (removedEndpoints : (source.val.wires removed).endpoints = [])
+    (fuel : Nat)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (region : source.val.RegionId)
+    (atRemovedScope :
+      region = (source.val.wires removed).scope)
+    (above :
+      ConcreteElaboration.ContextAbove source.val sourceContext region)
+    (sourceBody :
+      Region definitions (sourceContext.extend region).sigs)
+    (targetBody :
+      Region definitions
+        (targetContext.extend
+          (targetRegion source removed region)).sigs)
+    (sourceCompiled :
+      compileRegionBody? definitions source.val fuel region sourceContext =
+        some sourceBody)
+    (targetCompiled :
+      compileRegionBody? definitions (Target source removed) fuel
+          (targetRegion source removed region) targetContext =
+        some targetBody)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (specified : pre.Domain (source.val.wires removed).sig)
+    (targetEnv :
+      Env pre
+        (targetContext.extend
+          (targetRegion source removed region)).sigs)
+    (sourceEnv : Env pre (sourceContext.extend region).sigs)
+    (environments :
+      EnvironmentsCorrespond source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        pre specified targetEnv sourceEnv) :
+    denoteRegion pre definitionEnv targetEnv targetBody ↔
+      denoteRegion pre definitionEnv sourceEnv sourceBody := by
+  cases sourceNodesEquation :
+      ConcreteElaboration.compileNodes? definitions source.val
+        (sourceContext.extend region) (source.val.nodesAt region) with
+  | none =>
+      simp [compileRegionBody?, sourceNodesEquation] at sourceCompiled
+  | some sourceNodes =>
+      cases sourceChildrenEquation :
+          ConcreteElaboration.compileChildrenWith? definitions source.val
+            (ConcreteElaboration.compileRegion? definitions source.val fuel)
+            (sourceContext.extend region) (source.val.childrenOf region) with
+      | none =>
+          simp [compileRegionBody?, sourceNodesEquation,
+            sourceChildrenEquation] at sourceCompiled
+      | some sourceChildren =>
+          have sourceBodyExact :
+              (.mk (sourceNodes.append sourceChildren) :
+                Region definitions (sourceContext.extend region).sigs) =
+                sourceBody := by
+            apply Option.some.inj
+            simpa [compileRegionBody?, sourceNodesEquation,
+              sourceChildrenEquation] using sourceCompiled
+          subst sourceBody
+          cases targetNodesEquation :
+              ConcreteElaboration.compileNodes? definitions
+                (Target source removed)
+                (targetContext.extend
+                  (targetRegion source removed region))
+                ((Target source removed).nodesAt
+                  (targetRegion source removed region)) with
+          | none =>
+              simp [compileRegionBody?, targetNodesEquation] at targetCompiled
+          | some targetNodes =>
+              cases targetChildrenEquation :
+                  ConcreteElaboration.compileChildrenWith? definitions
+                    (Target source removed)
+                    (ConcreteElaboration.compileRegion? definitions
+                      (Target source removed) fuel)
+                    (targetContext.extend
+                      (targetRegion source removed region))
+                    ((Target source removed).childrenOf
+                      (targetRegion source removed region)) with
+              | none =>
+                  simp [compileRegionBody?, targetNodesEquation,
+                    targetChildrenEquation] at targetCompiled
+              | some targetChildren =>
+                  have targetBodyExact :
+                      (.mk (targetNodes.append targetChildren) :
+                        Region definitions
+                          (targetContext.extend
+                            (targetRegion source removed region)).sigs) =
+                        targetBody := by
+                    apply Option.some.inj
+                    simpa [compileRegionBody?, targetNodesEquation,
+                      targetChildrenEquation] using targetCompiled
+                  subst targetBody
+                  have sourceExtendedNodup :
+                      (sourceContext.extend region).ids.Nodup :=
+                    ConcreteElaboration.extend_nodup definitions source.val
+                      source.property sourceContext region above
+                  obtain ⟨expectedTargetNodes, expectedTargetCompiled,
+                      sourceNodesExact⟩ :=
+                    compileRegionNodes_reflect source removed targetWellFormed
+                      removedEndpoints
+                      (targetContext.extend
+                        (targetRegion source removed region))
+                      (sourceContext.extend region)
+                      (extend_contexts_correspond source removed correspond
+                        region)
+                      sourceExtendedNodup region sourceNodesEquation
+                  have targetNodesExact :
+                      expectedTargetNodes = targetNodes :=
+                    Option.some.inj
+                      (expectedTargetCompiled.symm.trans targetNodesEquation)
+                  subst expectedTargetNodes
+                  have sourceChildrenMapped :
+                      ConcreteElaboration.compileChildrenWith? definitions
+                          source.val
+                          (ConcreteElaboration.compileRegion? definitions
+                            source.val fuel)
+                          (sourceContext.extend region)
+                          (((Target source removed).childrenOf
+                            (targetRegion source removed region)).map
+                            (sourceRegion source removed)) =
+                        some sourceChildren := by
+                    rw [childrenOf_sources]
+                    exact sourceChildrenEquation
+                  simp only [denoteRegion, denoteItemSeq_append]
+                  exact and_congr
+                    (by
+                      rw [sourceNodesExact, denoteItemSeq_renameWires,
+                        environments.surviving])
+                    (compileChildren_corresponding_denotation source removed
+                      (targetContext.extend
+                        (targetRegion source removed region))
+                      (sourceContext.extend region)
+                      (ConcreteElaboration.compileRegion? definitions
+                        source.val fuel)
+                      (ConcreteElaboration.compileRegion? definitions
+                        (Target source removed) fuel)
+                      ((Target source removed).childrenOf
+                        (targetRegion source removed region))
+                      sourceChildren targetChildren sourceChildrenMapped
+                      targetChildrenEquation pre definitionEnv targetEnv
+                      sourceEnv (by
+                        intro targetChild targetMember childSource childTarget
+                          childSourceCompiled childTargetCompiled
+                        have sourceMember :
+                            sourceRegion source removed targetChild ∈
+                              source.val.childrenOf region := by
+                          rw [← childrenOf_sources source removed region]
+                          exact List.mem_map.mpr
+                            ⟨targetChild, targetMember, rfl⟩
+                        exact
+                          compileRegion_corresponding_denotation source removed
+                            targetWellFormed removedEndpoints fuel
+                            (targetContext.extend
+                              (targetRegion source removed region))
+                            (sourceContext.extend region)
+                            (extend_contexts_correspond source removed
+                              correspond region)
+                            (sourceRegion source removed targetChild)
+                            (ConcreteElaboration.extend_above_child definitions
+                              source.val source.property sourceContext region
+                              (sourceRegion source removed targetChild) above
+                              (ConcreteElaboration.mem_childrenOf source.val
+                                region
+                                (sourceRegion source removed targetChild)
+                                sourceMember))
+                            (by
+                              simpa only [← atRemovedScope] using
+                                child_outside_parent source region
+                                  (sourceRegion source removed targetChild)
+                                  sourceMember)
+                            childSource childTarget childSourceCompiled
+                            (by
+                              simpa only [targetRegion_sourceRegion] using
+                                childTargetCompiled)
+                            pre definitionEnv specified targetEnv sourceEnv
+                            environments))
 
 /--
 Reflect one accepted fueled source-region compilation through singleton-wire
@@ -2835,351 +4079,120 @@ theorem compileRegionBody_reflect
                     targetChildrenEquation]
 
 /--
-Insert one caller-supplied value at every occurrence of a removed wire in an
-ordered source wire list. The compiler supplies nodup local lists, so the
-result-indexed use inserts exactly once.
+Above the removed wire, the canonical source environment is exactly the
+ordinary deletion projection.
 -/
-private def castWireValues
-    {pre : PreModel.{u}} {source target : List Sig}
-    (exact : source = target)
-    (values : ConcreteElaboration.WireValues pre source) :
-    ConcreteElaboration.WireValues pre target :=
-  exact ▸ values
-
-def insertRemovedValue
+theorem sourceEnvironmentFromTarget_eq_projection
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
-    (specified : pre.Domain (source.val.wires removed).sig) :
-    (wires : List source.val.WireId) →
-      ConcreteElaboration.WireValues pre
-        ((wires.filter fun wire => decide (wire ≠ removed)).map
-          (fun wire => (source.val.wires wire).sig)) →
-      ConcreteElaboration.WireValues pre
-        (wires.map fun wire => (source.val.wires wire).sig)
-  | [], values =>
-      castWireValues (by simp) values
-  | head :: tail, values => by
-      by_cases same : head = removed
-      · exact
-          castWireValues (by simp [same]) <|
-            .cons (same ▸ specified)
-              (insertRemovedValue source removed specified tail
-                (castWireValues (by simp [same]) values))
-      · let retained :
-            ConcreteElaboration.WireValues pre
-              ((source.val.wires head).sig ::
-                ((tail.filter fun wire =>
-                    decide (wire ≠ removed)).map
-                  fun wire => (source.val.wires wire).sig)) :=
-            castWireValues (by simp [same]) values
-        exact
-          match retained with
-          | .cons value rest =>
-              .cons value
-                (insertRemovedValue source removed specified tail rest)
-
-private theorem extendEnvironmentFor_insertRemovedValue_of_origin
-    (source : CheckedDiagram definitions)
-    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (removedAbsent : removed ∉ sourceContext.ids)
+    (pre : PreModel.{u})
     (specified : pre.Domain (source.val.wires removed).sig)
-    (outerIds wires : List source.val.WireId)
-    (allNodup : (wires ++ outerIds).Nodup)
-    (removedOuterAbsent : removed ∉ outerIds)
-    (values :
-      ConcreteElaboration.WireValues pre
-        ((wires.filter fun wire => decide (wire ≠ removed)).map
-          fun wire => (source.val.wires wire).sig))
-    (outerEnv :
-      Env pre (outerIds.map fun wire => (source.val.wires wire).sig))
-    {sig : Sig}
-    (value :
-      Var
-        ((wires ++ outerIds).map
-          fun wire => (source.val.wires wire).sig)
-        sig)
-    (origin :
-      ConcreteElaboration.WireContext.origin source.val
-          (wires ++ outerIds) value =
-        removed)
-    (signature : (source.val.wires removed).sig = sig) :
-    ConcreteElaboration.extendEnvironmentFor source.val outerIds wires
-        (insertRemovedValue source removed specified wires values)
-        outerEnv sig value =
-      congrArg pre.Domain signature ▸ specified := by
-  induction wires with
-  | nil =>
-      have member :=
-        InsertionCompilation.NaturalityInternal.origin_member source.val
-          outerIds value
-      exact (removedOuterAbsent (origin ▸ member)).elim
-  | cons head tail induction =>
-      rw [List.cons_append, List.nodup_cons] at allNodup
-      by_cases same : head = removed
-      · subst head
-        cases value with
-        | here =>
-            simp only [ConcreteElaboration.extendEnvironmentFor,
-              insertRemovedValue]
-            rfl
-        | there rest =>
-            have tailOrigin :
-                ConcreteElaboration.WireContext.origin source.val
-                    (tail ++ outerIds) rest =
-                  removed := origin
-            have member :=
-              InsertionCompilation.NaturalityInternal.origin_member
-                source.val (tail ++ outerIds) rest
-            exact (allNodup.1 (tailOrigin ▸ member)).elim
-      · cases value with
-        | here =>
-            exact (same origin).elim
-        | there tailValue =>
-            let retainedValues :
-                ConcreteElaboration.WireValues pre
-                  ((source.val.wires head).sig ::
-                    ((tail.filter fun wire =>
-                        decide (wire ≠ removed)).map
-                      fun wire => (source.val.wires wire).sig)) :=
-              castWireValues (by simp [same]) values
-            have insertedExact :
-                insertRemovedValue source removed specified
-                    (head :: tail) values =
-                  match retainedValues with
-                  | .cons retained rest =>
-                      ConcreteElaboration.WireValues.cons retained
-                        (insertRemovedValue source removed specified
-                          tail rest) := by
-              simp only [insertRemovedValue, same, ↓reduceDIte]
-              rfl
-            rw [insertedExact]
-            cases retainedValues with
-            | cons _ rest =>
-                simp only [ConcreteElaboration.extendEnvironmentFor,
-                  Env.extend_there]
-                exact induction allNodup.2 rest tailValue origin
+    (targetEnv : Env pre targetContext.sigs) :
+    sourceEnvironmentFromTarget source removed targetContext sourceContext
+        correspond pre specified targetEnv =
+      Env.comp targetEnv
+        (contextProjection source removed targetContext sourceContext
+          correspond removedAbsent) := by
+  funext sig value
+  have survives :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value ≠
+        removed := by
+    intro same
+    exact removedAbsent (same ▸
+      InsertionCompilation.NaturalityInternal.origin_member source.val
+        sourceContext.ids value)
+  simp only [sourceEnvironmentFromTarget, dif_pos survives, Env.comp]
+  apply congrArg (targetEnv sig)
+  apply InsertionCompilation.NaturalityInternal.origin_injective
+    (Target source removed) targetContext.ids
+  · exact targetContext_nodup source removed targetContext sourceContext
+      correspond sourceNodup
+  · rw [survivingProjection_action, contextProjection_action]
 
 /--
-The completed source-scope environment assigns the caller's inserted value to
-the unique visible variable whose concrete origin is the removed wire.
+Recover the source binder witnesses from the canonical full source
+environment.  The generic environment retraction closes the binder block;
+there is no second positional deletion representation.
 -/
-theorem extendEnvironment_insertRemovedValue_of_origin
+theorem sourceEnvironmentFromTarget_extend_reconstruct
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
-    (sourceContext :
-      ConcreteElaboration.WireContext source.val)
-    (removedContextAbsent : removed ∉ sourceContext.ids)
-    (visibleNodup :
-      (sourceContext.extend (source.val.wires removed).scope).ids.Nodup)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (region : source.val.RegionId)
+    (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
+    (removedAbsent : removed ∉ sourceContext.ids)
+    (pre : PreModel.{u})
     (specified : pre.Domain (source.val.wires removed).sig)
-    (values :
+    (targetValues :
       ConcreteElaboration.WireValues pre
-        (((source.val.wiresAt
-            (source.val.wires removed).scope).filter
-          fun wire => decide (wire ≠ removed)).map
-            fun wire => (source.val.wires wire).sig))
-    (outerEnv : Env pre sourceContext.sigs)
-    (value :
-      Var
-        (sourceContext.extend
-          (source.val.wires removed).scope).sigs
-        (source.val.wires removed).sig)
-    (origin :
+        (((Target source removed).wiresAt
+          (targetRegion source removed region)).map fun wire =>
+            ((Target source removed).wires wire).sig))
+    (targetOuter : Env pre targetContext.sigs) :
+    let targetExtended :=
+      ConcreteElaboration.extendEnvironment (Target source removed)
+        targetContext (targetRegion source removed region)
+        targetValues targetOuter
+    let sourceExtended :=
+      sourceEnvironmentFromTarget source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        pre specified targetExtended
+    ConcreteElaboration.extendEnvironment source.val sourceContext region
+        (ConcreteElaboration.valuesFromEnvironmentFor source.val
+          sourceContext.ids (source.val.wiresAt region) sourceExtended)
+        (sourceEnvironmentFromTarget source removed targetContext
+          sourceContext correspond pre specified targetOuter) =
+      sourceExtended := by
+  simp only
+  apply extendEnvironment_from
+  intro sig value
+  have outerSurvives :
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          value ≠
+        removed := by
+    intro same
+    exact removedAbsent (same ▸
+      InsertionCompilation.NaturalityInternal.origin_member source.val
+        sourceContext.ids value)
+  have extendedSurvives :
       ConcreteElaboration.WireContext.origin source.val
-          (sourceContext.extend
-            (source.val.wires removed).scope).ids value =
-        removed) :
-    ConcreteElaboration.extendEnvironment source.val sourceContext
-        (source.val.wires removed).scope
-        (insertRemovedValue source removed specified
-          (source.val.wiresAt (source.val.wires removed).scope) values)
-        outerEnv (source.val.wires removed).sig value =
-      specified := by
+          (sourceContext.extend region).ids
+          (ConcreteElaboration.appendRightVar source.val
+            (source.val.wiresAt region) value) ≠
+        removed := by
+    intro same
+    exact outerSurvives
+      ((ConcreteElaboration.origin_appendRightVar source.val
+        (source.val.wiresAt region) value).symm.trans same)
+  simp only [sourceEnvironmentFromTarget, dif_pos extendedSurvives,
+    dif_pos outerSurvives]
+  rw [survivingProjection_appendRight source removed targetContext
+    sourceContext correspond region sourceExtendedNodup value
+    outerSurvives]
   exact
-    extendEnvironmentFor_insertRemovedValue_of_origin source removed
-      specified sourceContext.ids
-      (source.val.wiresAt (source.val.wires removed).scope)
-      visibleNodup removedContextAbsent values outerEnv value origin rfl
-
-private theorem
-    extendEnvironmentFor_insertRemovedValue_irrelevant_of_origin_ne
-    (source : CheckedDiagram definitions)
-    (removed : source.val.WireId)
-    (first second : pre.Domain (source.val.wires removed).sig)
-    (outerIds wires : List source.val.WireId)
-    (values :
-      ConcreteElaboration.WireValues pre
-        ((wires.filter fun wire => decide (wire ≠ removed)).map
-          fun wire => (source.val.wires wire).sig))
-    (outerEnv :
-      Env pre (outerIds.map fun wire => (source.val.wires wire).sig))
-    {sig : Sig}
-    (value :
-      Var
-        ((wires ++ outerIds).map
-          fun wire => (source.val.wires wire).sig)
-        sig)
-    (survives :
-      ConcreteElaboration.WireContext.origin source.val
-          (wires ++ outerIds) value ≠
-        removed) :
-    ConcreteElaboration.extendEnvironmentFor source.val outerIds wires
-        (insertRemovedValue source removed first wires values)
-        outerEnv sig value =
-      ConcreteElaboration.extendEnvironmentFor source.val outerIds wires
-        (insertRemovedValue source removed second wires values)
-        outerEnv sig value := by
-  induction wires with
-  | nil => rfl
-  | cons head tail induction =>
-      by_cases same : head = removed
-      · subst head
-        cases value with
-        | here =>
-            exact (survives rfl).elim
-        | there tailValue =>
-            simp only [ConcreteElaboration.extendEnvironmentFor,
-              insertRemovedValue, Env.extend_there]
-            exact
-              induction (castWireValues (by simp) values)
-                tailValue survives
-      · cases value with
-        | here =>
-            let retainedValues :
-                ConcreteElaboration.WireValues pre
-                  ((source.val.wires head).sig ::
-                    ((tail.filter fun wire =>
-                        decide (wire ≠ removed)).map
-                      fun wire => (source.val.wires wire).sig)) :=
-              castWireValues (by simp [same]) values
-            cases retainedEquation : retainedValues with
-            | cons retained rest =>
-                have firstExact :
-                    insertRemovedValue source removed first
-                        (head :: tail) values =
-                      .cons retained
-                        (insertRemovedValue source removed first
-                          tail rest) := by
-                  simp only [insertRemovedValue, same, ↓reduceDIte]
-                  change
-                    (match retainedValues with
-                    | .cons value tailValues =>
-                        ConcreteElaboration.WireValues.cons value
-                          (insertRemovedValue source removed first
-                            tail tailValues)) =
-                      _
-                  simpa only [retainedEquation]
-                have secondExact :
-                    insertRemovedValue source removed second
-                        (head :: tail) values =
-                      ConcreteElaboration.WireValues.cons retained
-                        (insertRemovedValue source removed second
-                          tail rest) := by
-                  simp only [insertRemovedValue, same, ↓reduceDIte]
-                  change
-                    (match retainedValues with
-                    | .cons value tailValues =>
-                        ConcreteElaboration.WireValues.cons value
-                          (insertRemovedValue source removed second
-                            tail tailValues)) =
-                      _
-                  simpa only [retainedEquation]
-                rw [firstExact, secondExact]
-                rfl
-        | there tailValue =>
-            let retainedValues :
-                ConcreteElaboration.WireValues pre
-                  ((source.val.wires head).sig ::
-                    ((tail.filter fun wire =>
-                        decide (wire ≠ removed)).map
-                      fun wire => (source.val.wires wire).sig)) :=
-              castWireValues (by simp [same]) values
-            cases retainedEquation : retainedValues with
-            | cons retained rest =>
-                have firstExact :
-                    insertRemovedValue source removed first
-                        (head :: tail) values =
-                      ConcreteElaboration.WireValues.cons retained
-                        (insertRemovedValue source removed first
-                          tail rest) := by
-                  simp only [insertRemovedValue, same, ↓reduceDIte]
-                  change
-                    (match retainedValues with
-                    | .cons value tailValues =>
-                        ConcreteElaboration.WireValues.cons value
-                          (insertRemovedValue source removed first
-                            tail tailValues)) =
-                      _
-                  simpa only [retainedEquation]
-                have secondExact :
-                    insertRemovedValue source removed second
-                        (head :: tail) values =
-                      ConcreteElaboration.WireValues.cons retained
-                        (insertRemovedValue source removed second
-                          tail rest) := by
-                  simp only [insertRemovedValue, same, ↓reduceDIte]
-                  change
-                    (match retainedValues with
-                    | .cons value tailValues =>
-                        ConcreteElaboration.WireValues.cons value
-                          (insertRemovedValue source removed second
-                            tail tailValues)) =
-                      _
-                  simpa only [retainedEquation]
-                rw [firstExact, secondExact]
-                simp only [ConcreteElaboration.extendEnvironmentFor,
-                  Env.extend_there]
-                exact induction rest tailValue survives
+    ConcreteElaboration.extendEnvironment_appendRightVar
+      (Target source removed) targetContext
+      (targetRegion source removed region) targetValues targetOuter
+      (survivingProjection source removed targetContext sourceContext
+        correspond value outerSurvives)
 
 /--
-Changing the value inserted for the removed wire leaves every surviving
-visible variable unchanged.
--/
-theorem extendEnvironment_insertRemovedValue_irrelevant_of_origin_ne
-    (source : CheckedDiagram definitions)
-    (removed : source.val.WireId)
-    (sourceContext :
-      ConcreteElaboration.WireContext source.val)
-    (first second : pre.Domain (source.val.wires removed).sig)
-    (values :
-      ConcreteElaboration.WireValues pre
-        (((source.val.wiresAt
-            (source.val.wires removed).scope).filter
-          fun wire => decide (wire ≠ removed)).map
-            fun wire => (source.val.wires wire).sig))
-    (outerEnv : Env pre sourceContext.sigs)
-    {sig : Sig}
-    (value :
-      Var
-        (sourceContext.extend
-          (source.val.wires removed).scope).sigs
-        sig)
-    (survives :
-      ConcreteElaboration.WireContext.origin source.val
-          (sourceContext.extend
-            (source.val.wires removed).scope).ids value ≠
-        removed) :
-    ConcreteElaboration.extendEnvironment source.val sourceContext
-        (source.val.wires removed).scope
-        (insertRemovedValue source removed first
-          (source.val.wiresAt (source.val.wires removed).scope) values)
-        outerEnv sig value =
-      ConcreteElaboration.extendEnvironment source.val sourceContext
-        (source.val.wires removed).scope
-        (insertRemovedValue source removed second
-          (source.val.wiresAt (source.val.wires removed).scope) values)
-        outerEnv sig value := by
-  exact
-    extendEnvironmentFor_insertRemovedValue_irrelevant_of_origin_ne
-      source removed first second sourceContext.ids
-      (source.val.wiresAt (source.val.wires removed).scope)
-      values outerEnv value survives
-
-/--
-Lift a site-body implication across the whole completed dying-wire scope.
-The plain target supplies values for all surviving local wires; the caller's
-specified dying value is inserted at its exact original source-list position.
-Relating the two outer environments and proving the body implication belong to
-the separate enclosing-context composition layer.
+Close the unequal dying-scope binder blocks using the canonical
+origin-indexed source environment.
 -/
 theorem finishDyingRegion_implication
     (source : CheckedDiagram definitions)
@@ -3187,18 +4200,21 @@ theorem finishDyingRegion_implication
     (targetContext :
       ConcreteElaboration.WireContext (Target source removed))
     (sourceContext : ConcreteElaboration.WireContext source.val)
-    (pre : PreModel)
+    (correspond :
+      ContextsCorrespond source removed targetContext sourceContext)
+    (removedAbsent : removed ∉ sourceContext.ids)
+    (sourceExtendedNodup :
+      (sourceContext.extend (source.val.wires removed).scope).ids.Nodup)
+    (pre : PreModel.{u})
     (definitionEnv : DefinitionEnv pre definitions)
     (targetOuterEnv : Env pre targetContext.sigs)
-    (sourceOuterEnv : Env pre sourceContext.sigs)
     (specified :
-      ∀ (retainedOuter : Env pre targetContext.sigs)
-        (retainedLocal :
+      ∀ retainedLocal :
           ConcreteElaboration.WireValues pre
             (((Target source removed).wiresAt
               (targetRegion source removed
                 (source.val.wires removed).scope)).map
-              fun wire => ((Target source removed).wires wire).sig)),
+              fun wire => ((Target source removed).wires wire).sig),
         pre.Domain (source.val.wires removed).sig)
     (targetBody :
       Region definitions
@@ -3209,29 +4225,24 @@ theorem finishDyingRegion_implication
       Region definitions
         (sourceContext.extend
           (source.val.wires removed).scope).sigs)
-    (bodyImplication :
-      ∀ targetValues :
-          ConcreteElaboration.WireValues pre
-            (((Target source removed).wiresAt
+    (localBodyLaw :
+      ∀ (chosen : pre.Domain (source.val.wires removed).sig)
+        (targetEnv :
+          Env pre
+            (targetContext.extend
               (targetRegion source removed
-                (source.val.wires removed).scope)).map
-              fun wire => ((Target source removed).wires wire).sig),
-        denoteRegion pre definitionEnv
-            (ConcreteElaboration.extendEnvironment
-              (Target source removed) targetContext
-              (targetRegion source removed
-                (source.val.wires removed).scope)
-              targetValues targetOuterEnv)
-            targetBody →
+                (source.val.wires removed).scope)).sigs),
+        denoteRegion pre definitionEnv targetEnv targetBody →
           denoteRegion pre definitionEnv
-            (ConcreteElaboration.extendEnvironment source.val sourceContext
-              (source.val.wires removed).scope
-              (insertRemovedValue source removed
-                (specified targetOuterEnv targetValues)
-                (source.val.wiresAt (source.val.wires removed).scope)
-                ((wiresAt_signatures source removed
-                  (source.val.wires removed).scope) ▸ targetValues))
-              sourceOuterEnv)
+            (sourceEnvironmentFromTarget source removed
+              (targetContext.extend
+                (targetRegion source removed
+                  (source.val.wires removed).scope))
+              (sourceContext.extend
+                (source.val.wires removed).scope)
+              (extend_contexts_correspond source removed correspond
+                (source.val.wires removed).scope)
+              pre chosen targetEnv)
             sourceBody) :
     denoteRegion pre definitionEnv targetOuterEnv
         (ConcreteElaboration.finishRegion
@@ -3239,7 +4250,10 @@ theorem finishDyingRegion_implication
           (targetRegion source removed
             (source.val.wires removed).scope)
           targetBody) →
-      denoteRegion pre definitionEnv sourceOuterEnv
+      denoteRegion pre definitionEnv
+        (Env.comp targetOuterEnv
+          (contextProjection source removed targetContext sourceContext
+            correspond removedAbsent))
         (ConcreteElaboration.finishRegion source.val sourceContext
           (source.val.wires removed).scope sourceBody) := by
   intro targetFinished
@@ -3249,17 +4263,55 @@ theorem finishDyingRegion_implication
       (targetRegion source removed
         (source.val.wires removed).scope)
       pre definitionEnv targetOuterEnv targetBody).mp targetFinished
+  let chosen := specified targetValues
+  let targetExtended :=
+    ConcreteElaboration.extendEnvironment (Target source removed)
+      targetContext
+      (targetRegion source removed (source.val.wires removed).scope)
+      targetValues targetOuterEnv
+  let sourceExtended :=
+    sourceEnvironmentFromTarget source removed
+      (targetContext.extend
+        (targetRegion source removed (source.val.wires removed).scope))
+      (sourceContext.extend (source.val.wires removed).scope)
+      (extend_contexts_correspond source removed correspond
+        (source.val.wires removed).scope)
+      pre chosen targetExtended
+  let sourceValues :=
+    ConcreteElaboration.valuesFromEnvironmentFor source.val
+      sourceContext.ids
+      (source.val.wiresAt (source.val.wires removed).scope)
+      sourceExtended
   apply
     (ConcreteElaboration.denote_finishRegion definitions source.val
       sourceContext (source.val.wires removed).scope
-      pre definitionEnv sourceOuterEnv sourceBody).mpr
-  exact
-    ⟨insertRemovedValue source removed
-        (specified targetOuterEnv targetValues)
-        (source.val.wiresAt (source.val.wires removed).scope)
-        ((wiresAt_signatures source removed
-          (source.val.wires removed).scope) ▸ targetValues),
-      bodyImplication targetValues targetCore⟩
+      pre definitionEnv
+      (Env.comp targetOuterEnv
+        (contextProjection source removed targetContext sourceContext
+          correspond removedAbsent))
+      sourceBody).mpr
+  refine ⟨sourceValues, ?_⟩
+  have reconstructed :
+      ConcreteElaboration.extendEnvironment source.val sourceContext
+          (source.val.wires removed).scope sourceValues
+          (sourceEnvironmentFromTarget source removed targetContext
+            sourceContext correspond pre chosen targetOuterEnv) =
+        sourceExtended := by
+    exact
+      sourceEnvironmentFromTarget_extend_reconstruct source removed
+        targetContext sourceContext correspond
+        (source.val.wires removed).scope sourceExtendedNodup removedAbsent
+        pre chosen targetValues targetOuterEnv
+  rw [sourceEnvironmentFromTarget_eq_projection source removed
+    targetContext sourceContext correspond
+    (by
+      have parts := sourceExtendedNodup
+      rw [ConcreteElaboration.WireContext.extend,
+        List.nodup_append] at parts
+      exact parts.2.1)
+    removedAbsent pre chosen targetOuterEnv] at reconstructed
+  rw [reconstructed]
+  exact localBodyLaw chosen targetExtended targetCore
 
 end ExhaustedWireRemovalSemantics
 

@@ -72,6 +72,8 @@ structure AboveScopeReflection
       targetSiteOuter.extend
         (targetRegion source removed
           (source.val.wires removed).scope)
+  sourceVisibleNodup :
+    (sourceSiteOuter.extend (source.val.wires removed).scope).ids.Nodup
   sourceBodyExact :
     congrArg ConcreteElaboration.WireContext.sigs sourceVisibleExact ▸
         sourceFrame.siteBody =
@@ -80,6 +82,27 @@ structure AboveScopeReflection
     congrArg ConcreteElaboration.WireContext.sigs targetVisibleExact ▸
         targetFrame.siteBody =
       targetBody
+  localBodyLaw :
+    ∀ (pre : PreModel.{u})
+      (definitionEnv : DefinitionEnv pre definitions)
+      (specified : pre.Domain (source.val.wires removed).sig)
+      (targetEnv :
+        Env pre
+          (targetSiteOuter.extend
+            (targetRegion source removed
+              (source.val.wires removed).scope)).sigs),
+      denoteRegion pre definitionEnv targetEnv targetBody →
+        denoteRegion pre definitionEnv
+          (sourceEnvironmentFromTarget source removed
+            (targetSiteOuter.extend
+              (targetRegion source removed
+                (source.val.wires removed).scope))
+            (sourceSiteOuter.extend
+              (source.val.wires removed).scope)
+            (extend_contexts_correspond source removed siteCorrespond
+              (source.val.wires removed).scope)
+            pre specified targetEnv)
+          sourceBody
   sourceCutDepthExact :
     sourceFrame.context.cutDepth = sourceAbove.cutDepth
   sourceFill :
@@ -374,8 +397,10 @@ private theorem compileSiblingFrame_reflect_outer
                   targetBody := nested.targetBody
                   sourceVisibleExact := nested.sourceVisibleExact
                   targetVisibleExact := nested.targetVisibleExact
+                  sourceVisibleNodup := nested.sourceVisibleNodup
                   sourceBodyExact := nested.sourceBodyExact
                   targetBodyExact := nested.targetBodyExact
+                  localBodyLaw := nested.localBodyLaw
                   sourceCutDepthExact := by
                     simpa [sourceGenerated, DiagramContext.cutDepth] using
                       congrArg Nat.succ nested.sourceCutDepthExact
@@ -580,8 +605,45 @@ private theorem compileRegionFrame_reflect_outer
                   targetBody := targetBody
                   sourceVisibleExact := rfl
                   targetVisibleExact := rfl
+                  sourceVisibleNodup :=
+                    ConcreteElaboration.extend_nodup definitions source.val
+                      source.property sourceOuter
+                      (source.val.wires removed).scope above
                   sourceBodyExact := rfl
                   targetBodyExact := rfl
+                  localBodyLaw := by
+                    intro pre definitionEnv specified targetEnv
+                      targetDenotes
+                    apply
+                      (compileRegionBody_corresponding_denotation
+                        source removed targetWellFormed removedEndpoints fuel
+                        targetOuter sourceOuter correspond
+                        (source.val.wires removed).scope rfl above sourceBody
+                        targetBody sourceBodyEquation targetBodyCompiled pre
+                        definitionEnv specified targetEnv
+                        (sourceEnvironmentFromTarget source removed
+                          (targetOuter.extend
+                            (targetRegion source removed
+                              (source.val.wires removed).scope))
+                          (sourceOuter.extend
+                            (source.val.wires removed).scope)
+                          (extend_contexts_correspond source removed
+                            correspond (source.val.wires removed).scope)
+                          pre specified targetEnv)
+                        (sourceEnvironmentFromTarget_corresponds source
+                          removed
+                          (targetOuter.extend
+                            (targetRegion source removed
+                              (source.val.wires removed).scope))
+                          (sourceOuter.extend
+                            (source.val.wires removed).scope)
+                          (extend_contexts_correspond source removed
+                            correspond (source.val.wires removed).scope)
+                          (ConcreteElaboration.extend_nodup definitions
+                            source.val source.property sourceOuter
+                            (source.val.wires removed).scope above)
+                          pre specified targetEnv)).mp
+                    exact targetDenotes
                   sourceCutDepthExact := by
                     exact
                       bindContextFor_cutDepth_eq source.val sourceOuter.ids
@@ -960,10 +1022,14 @@ private theorem compileRegionFrame_reflect_outer
                                 aroundReflection.sourceVisibleExact
                               targetVisibleExact :=
                                 aroundReflection.targetVisibleExact
+                              sourceVisibleNodup :=
+                                aroundReflection.sourceVisibleNodup
                               sourceBodyExact :=
                                 aroundReflection.sourceBodyExact
                               targetBodyExact :=
                                 aroundReflection.targetBodyExact
+                              localBodyLaw :=
+                                aroundReflection.localBodyLaw
                               sourceCutDepthExact := by
                                 change
                                   (bindContextFor source.val
@@ -1256,39 +1322,7 @@ theorem scopeParity
                 (source.val.wires removed).scope)).map
               fun wire => ((Target source removed).wires wire).sig)),
         pre.Domain (source.val.wires removed).sig)
-    (bodyImplication :
-      ∀ (targetOuterEnv :
-          Env pre receipt.reflected.targetSiteOuter.sigs)
-        (targetValues :
-          ConcreteElaboration.WireValues pre
-            (((Target source removed).wiresAt
-              (targetRegion source removed
-                (source.val.wires removed).scope)).map
-              fun wire => ((Target source removed).wires wire).sig)),
-        denoteRegion pre definitionEnv
-            (ConcreteElaboration.extendEnvironment
-              (Target source removed)
-              receipt.reflected.targetSiteOuter
-              (targetRegion source removed
-                (source.val.wires removed).scope)
-              targetValues targetOuterEnv)
-            receipt.reflected.targetBody →
-          denoteRegion pre definitionEnv
-            (ConcreteElaboration.extendEnvironment source.val
-              receipt.reflected.sourceSiteOuter
-              (source.val.wires removed).scope
-              (insertRemovedValue source removed
-                (specified targetOuterEnv targetValues)
-                (source.val.wiresAt (source.val.wires removed).scope)
-                ((wiresAt_signatures source removed
-                  (source.val.wires removed).scope) ▸ targetValues))
-              (Env.comp targetOuterEnv
-                (contextProjection source removed
-                  receipt.reflected.targetSiteOuter
-                  receipt.reflected.sourceSiteOuter
-                  receipt.reflected.siteCorrespond
-                  receipt.reflected.siteRemovedAbsent)))
-            receipt.reflected.sourceBody) :
+    :
     (receipt.reflected.sourceAbove.cutDepth % 2 = 0 →
       denoteRegion pre definitionEnv fixed
           (receipt.reflected.targetAbove.fill
@@ -1337,15 +1371,15 @@ theorem scopeParity
   exact
     finishDyingRegion_implication source removed
       receipt.reflected.targetSiteOuter
-      receipt.reflected.sourceSiteOuter pre definitionEnv descendant
-      (Env.comp descendant
-        (contextProjection source removed
-          receipt.reflected.targetSiteOuter
-          receipt.reflected.sourceSiteOuter
-          receipt.reflected.siteCorrespond
-          receipt.reflected.siteRemovedAbsent))
-      specified receipt.reflected.targetBody receipt.reflected.sourceBody
-      (bodyImplication descendant) targetFinished
+      receipt.reflected.sourceSiteOuter
+      receipt.reflected.siteCorrespond
+      receipt.reflected.siteRemovedAbsent
+      receipt.reflected.sourceVisibleNodup pre definitionEnv descendant
+      (specified descendant) receipt.reflected.targetBody
+      receipt.reflected.sourceBody
+      (fun chosen targetEnv =>
+        receipt.reflected.localBodyLaw pre definitionEnv chosen targetEnv)
+      targetFinished
 
 /-- Specialize `scopeParity` to the exact bound and plain checked roots. -/
 theorem rootParity
@@ -1368,39 +1402,7 @@ theorem rootParity
                 (source.val.wires removed).scope)).map
               fun wire => ((Target source removed).wires wire).sig)),
         pre.Domain (source.val.wires removed).sig)
-    (bodyImplication :
-      ∀ (targetOuterEnv :
-          Env pre receipt.reflected.targetSiteOuter.sigs)
-        (targetValues :
-          ConcreteElaboration.WireValues pre
-            (((Target source removed).wiresAt
-              (targetRegion source removed
-                (source.val.wires removed).scope)).map
-              fun wire => ((Target source removed).wires wire).sig)),
-        denoteRegion pre definitionEnv
-            (ConcreteElaboration.extendEnvironment
-              (Target source removed)
-              receipt.reflected.targetSiteOuter
-              (targetRegion source removed
-                (source.val.wires removed).scope)
-              targetValues targetOuterEnv)
-            receipt.reflected.targetBody →
-          denoteRegion pre definitionEnv
-            (ConcreteElaboration.extendEnvironment source.val
-              receipt.reflected.sourceSiteOuter
-              (source.val.wires removed).scope
-              (insertRemovedValue source removed
-                (specified targetOuterEnv targetValues)
-                (source.val.wiresAt (source.val.wires removed).scope)
-                ((wiresAt_signatures source removed
-                  (source.val.wires removed).scope) ▸ targetValues))
-              (Env.comp targetOuterEnv
-                (contextProjection source removed
-                  receipt.reflected.targetSiteOuter
-                  receipt.reflected.sourceSiteOuter
-                  receipt.reflected.siteCorrespond
-                  receipt.reflected.siteRemovedAbsent)))
-            receipt.reflected.sourceBody) :
+    :
     (receipt.reflected.sourceAbove.cutDepth % 2 = 0 →
       denoteRegion pre definitionEnv Env.empty receipt.plain.checked →
         denoteRegion pre definitionEnv Env.empty bound.checked) ∧
@@ -1409,7 +1411,6 @@ theorem rootParity
         denoteRegion pre definitionEnv Env.empty receipt.plain.checked) := by
   have parity :=
     receipt.scopeParity pre definitionEnv Env.empty specified
-      bodyImplication
   have emptySource :
       Env.comp (Env.empty : Env pre [])
           (contextProjection source removed
