@@ -1,5 +1,4 @@
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
@@ -141,16 +140,6 @@ function exactHypothesesContent() {
   )
 }
 
-function boundaryIndex(
-  diagram: Parameters<typeof extractSubgraph>[0],
-  selection: Parameters<typeof extractSubgraph>[1],
-  wire: WireId,
-): number {
-  const index = extractSubgraph(diagram, selection).attachments.indexOf(wire)
-  if (index < 0) throw new Error(`wire '${wire}' is not a selection boundary`)
-  return index
-}
-
 function deiterateNode(
   recorder: PrimitiveStepRecorder,
   label: string,
@@ -173,7 +162,6 @@ function deiterateNode(
     sel: selection,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -608,8 +596,7 @@ export function rightIdentityCarrierInductive(
         wires: [],
       },
       target: targetRegion,
-      retargets: [],
-    })
+      })
     const copiedScope = onlyNewCut(prior, backward.diagram, targetRegion)
     const copiedBody = exactOne(
       directCuts(backward.diagram, copiedScope),
@@ -703,7 +690,6 @@ export function rightIdentityCarrierInductive(
       wires: [],
     },
     target: baseConditionAntecedent,
-    retargets: [],
   })
   const copiedBaseScope = onlyNewCut(
     before,
@@ -753,70 +739,13 @@ export function rightIdentityCarrierInductive(
     region: copiedBaseScope,
   })
 
-  {
-    const selection = {
-      region: baseEAntecedent,
-      regions: [],
-      nodes: [baseLocalZeroNode],
-      wires: [],
-    } as const
-    const retargets = [{
-      boundary: boundaryIndex(
-        backward.diagram,
-        selection,
-        baseLocalZero,
-      ),
-      identity: baseLocalIdentity,
-      from: baseValue,
-      to: baseLocalZero,
-    }] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge carrier-base local Zero', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
-    })
-  }
-  {
-    const selection = {
-      region: baseEConsequent,
-      regions: [],
-      nodes: [baseLocalPlusNode],
-      wires: [],
-    } as const
-    const retargets = [
-      {
-        boundary: boundaryIndex(
-          backward.diagram,
-          selection,
-          baseLocalZero,
-        ),
-        identity: baseLocalIdentity,
-        from: baseValue,
-        to: baseLocalZero,
-      },
-    ] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge carrier-base local Plus', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
-    })
-  }
+  // Substitution is the derivation (no retargets). The consequent keeps a
+  // plain copy of the equality; severing the local zero so the antecedent
+  // identity keeps one co-scoped end lands the local Plus on the supplied
+  // zero, where it discharges exactly. The consumed antecedent identity is
+  // re-derived while the local Zero hypothesis still stands, and that
+  // hypothesis finally erases (backward erasure at the negative antecedent
+  // reads in reverse as hypothesis insertion).
   backward.record('copy carrier-base local equality into consequent', {
     rule: 'iteration',
     sel: {
@@ -826,7 +755,38 @@ export function rightIdentityCarrierInductive(
       wires: [],
     },
     target: baseEConsequent,
-    retargets: [],
+  })
+  backward.record('land the carrier-base local Plus on the supplied zero', {
+    rule: 'wireSever',
+    input: {
+      wire: baseLocalZero,
+      keep: backward.diagram.wires[baseLocalZero]!.endpoints
+        .filter((endpoint) =>
+          endpoint.node !== baseLocalIdentity
+          && endpoint.node !== baseLocalPlusNode),
+      scope: baseEAntecedent,
+    },
+  })
+  deiterateNode(
+    backward,
+    'discharge carrier-base local Plus',
+    baseEConsequent,
+    baseLocalPlusNode,
+  )
+  deriveZeroIdentity(
+    baseEAntecedent,
+    baseValue,
+    baseLocalZero,
+    'carrier-base restored',
+  )
+  backward.record('erase the carrier-base local Zero hypothesis', {
+    rule: 'erasure',
+    sel: {
+      region: baseEAntecedent,
+      regions: [],
+      nodes: [baseLocalZeroNode],
+      wires: [],
+    },
   })
   backward.record('close carrier-base local equality implication', {
     rule: 'theorem',
@@ -925,7 +885,6 @@ export function rightIdentityCarrierInductive(
       wires: [],
     },
     target: successorEAntecedent,
-    retargets: [],
   })
   const copiedPredecessorE = onlyNewCut(
     before,
@@ -988,7 +947,6 @@ export function rightIdentityCarrierInductive(
       wires: [],
     },
     target: successorEAntecedent,
-    retargets: [],
   })
   const copiedStepScope = onlyNewCut(
     before,

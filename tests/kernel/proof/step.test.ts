@@ -35,7 +35,7 @@ describe('primitive replay', () => {
     ))).toBe(exploreForm(applyErasure(diagram, selection)))
   })
 
-  it('does not replay forward-only erasure backward', () => {
+  it('replays backward erasure only at negative regions', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, relSig([]))
     const diagram = builder.build()
@@ -51,7 +51,7 @@ describe('primitive replay', () => {
       { rule: 'erasure', sel: selection },
       EMPTY_PROOF_CONTEXT,
       'backward',
-    )).toThrowError(/backward erasure is not supported/i)
+    )).toThrowError(/backward erasure requires a negative region/)
   })
 
   it('routes identity insertion through the orientation-aware polarity gate', () => {

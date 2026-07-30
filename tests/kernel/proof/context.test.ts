@@ -43,8 +43,7 @@ function deiterationTheory(): Theory {
       sel: selCopy,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    }],
+      }],
   }
   const theorem: Theorem = {
     name: 'deiterate-copy',

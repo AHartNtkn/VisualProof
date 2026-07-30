@@ -263,7 +263,6 @@ function buildForward(context: ProofContext) {
       wires: [],
     },
     target: conclusion,
-    retargets: [],
   })
   forward.record('iterate successor witness into one-is-Nat conclusion', {
     rule: 'iteration',
@@ -274,7 +273,6 @@ function buildForward(context: ProofContext) {
       wires: [],
     },
     target: conclusion,
-    retargets: [],
   })
 
   before = forward.diagram
@@ -374,7 +372,6 @@ function buildForward(context: ProofContext) {
       wires: [],
     },
     target: inherited,
-    retargets: [],
   })
 
   return {
@@ -467,7 +464,6 @@ function buildBackward(
       wires: [],
     },
     target: antecedent,
-    retargets: [],
   })
   const copiedTotality = onlyNewCut(
     before,
@@ -556,7 +552,6 @@ function buildBackward(
       wires: [],
     },
     target: hereditary,
-    retargets: [],
   })
   const copiedBase = onlyNewCut(
     before,
@@ -614,7 +609,6 @@ function buildBackward(
       wires: [],
     },
     target: hereditary,
-    retargets: [],
   })
   const copiedClosure = onlyNewCut(
     before,

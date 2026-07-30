@@ -325,7 +325,6 @@ function recordExplicitReification(
     rule: 'iteration',
     sel: source,
     target: forwardConsequent,
-    retargets: [],
   })
 
   before = recorder.diagram
@@ -338,7 +337,6 @@ function recordExplicitReification(
       wires: [],
     },
     target: universal.body,
-    retargets: [],
   })
   const reverse = onlyNewCut(before, recorder.diagram, universal.body)
   const reverseConsequent = copiedChild(

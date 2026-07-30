@@ -153,7 +153,6 @@ function planProof(
     rule: 'iteration',
     sel: selection,
     target: destination.region,
-    retargets: [],
   })
   try {
     const result = applyAction(

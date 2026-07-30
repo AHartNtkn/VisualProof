@@ -67,8 +67,12 @@ describe('polarity matrix across depths 0–3', () => {
         expect(() => applyErasure(diagram, selection))
           .toThrowError(/erasure requires a positive region/)
       }
-      expect(() => applyErasure(diagram, selection, 'backward'))
-        .toThrowError(/backward erasure is not supported; erasure is forward-only/)
+      if (positive) {
+        expect(() => applyErasure(diagram, selection, 'backward'))
+          .toThrowError(/backward erasure requires a negative region/)
+      } else {
+        expect(() => applyErasure(diagram, selection, 'backward')).not.toThrow()
+      }
     })
 
     it(`depth ${depth}: iteration and double-cut rules remain polarity-free`, () => {

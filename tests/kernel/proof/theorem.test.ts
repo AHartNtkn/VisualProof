@@ -342,7 +342,7 @@ describe('checkTheorem', () => {
         }),
       ],
     }, EMPTY_PROOF_CONTEXT)).toThrowError(
-      /backward erasure is not supported/i,
+      /backward erasure requires a negative region/i,
     )
   })
 

@@ -243,7 +243,6 @@ function conjunctionClosureTheorem(): Theorem {
       wires: [],
     },
     target: forwardConsequent,
-    retargets: [],
   })
   expect(directNodes(recorder.diagram, forwardConsequent)
     .filter((node) => before.nodes[node] === undefined)).toHaveLength(2)
@@ -258,7 +257,6 @@ function conjunctionClosureTheorem(): Theorem {
       wires: [],
     },
     target: individualBody,
-    retargets: [],
   })
   const reverse = onlyNewCut(before, recorder.diagram, individualBody)
   const reverseConsequent = exactOne(

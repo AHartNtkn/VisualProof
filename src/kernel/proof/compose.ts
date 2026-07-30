@@ -3,7 +3,6 @@ import type { DiagramIso } from '../diagram/canonical/explore'
 import { exploreIso } from '../diagram/canonical/explore'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import type { IdentityRetarget } from '../rules/iteration'
 import { allocationReservation, type ProofAction } from './action'
 import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
@@ -56,18 +55,6 @@ function mapEndpoint(iso: DiagramIso, endpoint: Endpoint): Endpoint {
   return {
     node: mapId(iso.nodes, endpoint.node, 'node'),
     port: endpoint.port,
-  }
-}
-
-function mapRetarget(
-  iso: DiagramIso,
-  retarget: IdentityRetarget,
-): IdentityRetarget {
-  return {
-    boundary: retarget.boundary,
-    identity: mapId(iso.nodes, retarget.identity, 'node'),
-    from: mapId(iso.wires, retarget.from, 'wire'),
-    to: mapId(iso.wires, retarget.to, 'wire'),
   }
 }
 
@@ -143,8 +130,6 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         ...step,
         sel: mapSelection(iso, step.sel),
         target: mapId(iso.regions, step.target, 'region'),
-        retargets: step.retargets.map((retarget) =>
-          mapRetarget(iso, retarget)),
       }
     case 'deiteration':
       return {
@@ -152,8 +137,6 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         sel: mapSelection(iso, step.sel),
         justifier: mapSelection(iso, step.justifier),
         certificate: mapOccurrenceCertificate(iso, step.certificate),
-        retargets: step.retargets.map((retarget) =>
-          mapRetarget(iso, retarget)),
       }
     case 'doubleCutIntro':
       return { ...step, sel: mapSelection(iso, step.sel) }

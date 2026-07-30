@@ -62,7 +62,6 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -211,8 +210,7 @@ function succShiftS(
         wires: [],
       },
       target: forwardClaimAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive carrier-support sources', {
     rule: 'erasure',
@@ -461,8 +459,7 @@ function succShiftS(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose cited carrier-support conclusion', {
     rule: 'doubleCutElim',
@@ -553,8 +550,7 @@ function succShiftS(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited direct carrier', {
     rule: 'doubleCutElim',
@@ -626,7 +622,6 @@ function succShiftS(
       wires: [],
     },
     target: claimAntecedent,
-    retargets: [],
   })
   const copiedSuccessorTotal = onlyNewCut(
     before,
@@ -774,7 +769,6 @@ function succShiftS(
       wires: [],
     },
     target: claimAntecedent,
-    retargets: [],
   })
   const copiedFunctional = onlyNewCut(
     before,

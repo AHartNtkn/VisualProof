@@ -403,7 +403,6 @@ export function deiterationStep(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   } as const
 }
 
@@ -417,6 +416,5 @@ export function deiterationSelectionStep(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   } as const
 }

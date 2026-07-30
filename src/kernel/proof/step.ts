@@ -24,7 +24,6 @@ import { applyIdentityInsertion } from '../rules/identity'
 import {
   applyDeiteration,
   applyIteration,
-  type IdentityRetarget,
 } from '../rules/iteration'
 import { applyRefSpawn, applyAtomSpawn } from '../rules/spawn'
 import { applyVacuousElim, applyVacuousIntro } from '../rules/vacuous'
@@ -70,8 +69,8 @@ export type ProofStep =
   | { readonly rule: 'wireJoin'; readonly input: WireJoinInput }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly input: WireSeverInput }
-  | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId; readonly retargets: readonly IdentityRetarget[] }
-  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate; readonly retargets: readonly IdentityRetarget[] }
+  | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId }
+  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
@@ -194,7 +193,6 @@ function applyStepRaw(
         diagram,
         step.sel,
         step.target,
-        step.retargets,
         reservation,
       )
     case 'deiteration':
@@ -203,7 +201,6 @@ function applyStepRaw(
         step.sel,
         step.justifier,
         step.certificate,
-        step.retargets,
       )
     case 'doubleCutIntro':
       return applyDoubleCutIntro(diagram, step.sel, reservation)

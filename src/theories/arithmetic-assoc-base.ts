@@ -1,6 +1,6 @@
 import type { ProofContext } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
+import type { NodeId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import {
   TERNARY,
@@ -417,7 +417,6 @@ export function associativityCarrierBase(
       wires: [],
     },
     target: baseAntecedent,
-    retargets: [],
   })
   const copiedAdditionBase = onlyNewCut(
     before,
@@ -582,8 +581,7 @@ export function associativityCarrierBase(
         wires: [],
       },
       target: baseTransportAntecedent,
-      retargets: [],
-    })
+      })
     const scope = onlyNewCut(
       prior,
       backward.diagram,
@@ -649,111 +647,125 @@ export function associativityCarrierBase(
       scopedWires(backward.diagram, region).length === 4),
     'plusSingleValued hypothesis',
   )
+  const deriveInlineBaseOutputIdentity = (): NodeId => {
+    const prior = backward.diagram
+    backward.record('copy addition functionality into inline base transport', {
+      rule: 'iteration',
+      sel: {
+        region: hypotheses,
+        regions: [additionFunctional],
+        nodes: [],
+        wires: [],
+      },
+      target: baseTransportAntecedent,
+      })
+    const copiedFunctional = onlyNewCut(
+      prior,
+      backward.diagram,
+      baseTransportAntecedent,
+    )
+    const copiedFunctionalBody = exactOne(
+      directCuts(backward.diagram, copiedFunctional),
+      'inline-base functionality body',
+    )
+    const copiedFunctionalAntecedent = exactOne(
+      directCuts(backward.diagram, copiedFunctionalBody),
+      'inline-base functionality antecedent',
+    )
+    const copiedFunctionalConsequent = exactOne(
+      directCuts(backward.diagram, copiedFunctionalAntecedent),
+      'inline-base functionality consequent',
+    )
+    const copiedFunctionalPluses = directNodes(
+      backward.diagram,
+      copiedFunctionalAntecedent,
+    ).filter((node) => endpointWire(backward.diagram, node, 'head') === plus)
+    if (copiedFunctionalPluses.length !== 2) {
+      throw new Error('expected two inline-base functionality premises')
+    }
+    const copiedFunctionalFirst = copiedFunctionalPluses[0]!
+    const copiedFunctionalSecond = copiedFunctionalPluses[1]!
+    for (const [target, variable] of [
+      [baseValue, endpointWire(backward.diagram, copiedFunctionalFirst, 'arg', 0)],
+      [baseTransportRight, endpointWire(backward.diagram, copiedFunctionalFirst, 'arg', 1)],
+      [baseTransportFirstSum, endpointWire(backward.diagram, copiedFunctionalFirst, 'arg', 2)],
+      [baseTransportRight, endpointWire(backward.diagram, copiedFunctionalSecond, 'arg', 2)],
+    ] as const) {
+      backward.record('specialize inline-base functionality', {
+        rule: 'wireJoin',
+        input: { a: target, b: variable },
+      })
+    }
+    backward.record(
+      'discharge inline-base functional original result',
+      deiterationStep(
+        backward.diagram,
+        copiedFunctionalAntecedent,
+        copiedFunctionalFirst,
+      ),
+    )
+    backward.record(
+      'discharge inline-base functional canonical result',
+      deiterationStep(
+        backward.diagram,
+        copiedFunctionalAntecedent,
+        copiedFunctionalSecond,
+      ),
+    )
+    const identity = exactOne(
+      directNodes(backward.diagram, copiedFunctionalConsequent),
+      'inline-base functionality identity',
+    )
+    backward.record('expose inline-base output identity', {
+      rule: 'doubleCutElim',
+      region: copiedFunctionalAntecedent,
+    })
+    backward.record('finish inline-base functionality', {
+      rule: 'doubleCutElim',
+      region: copiedFunctional,
+    })
+    return identity
+  }
+  const baseOutputIdentity = deriveInlineBaseOutputIdentity()
+
+  // Substitution is the derivation (no retargets): copy the inner premise,
+  // then sever the transport right so the one-point collapse lands the
+  // copy's boundary on the first sum through the output identity. That
+  // consumes the identity; a second functionality pass restores it.
   before = backward.diagram
-  backward.record('copy addition functionality into inline base transport', {
+  backward.record('copy inline-base inner premise', {
     rule: 'iteration',
     sel: {
-      region: hypotheses,
-      regions: [additionFunctional],
-      nodes: [],
+      region: baseTransportAntecedent,
+      regions: [],
+      nodes: [baseTransportInner],
       wires: [],
     },
     target: baseTransportAntecedent,
-    retargets: [],
-  })
-  const copiedFunctional = onlyNewCut(
-    before,
-    backward.diagram,
-    baseTransportAntecedent,
-  )
-  const copiedFunctionalBody = exactOne(
-    directCuts(backward.diagram, copiedFunctional),
-    'inline-base functionality body',
-  )
-  const copiedFunctionalAntecedent = exactOne(
-    directCuts(backward.diagram, copiedFunctionalBody),
-    'inline-base functionality antecedent',
-  )
-  const copiedFunctionalConsequent = exactOne(
-    directCuts(backward.diagram, copiedFunctionalAntecedent),
-    'inline-base functionality consequent',
-  )
-  const copiedFunctionalPluses = directNodes(
-    backward.diagram,
-    copiedFunctionalAntecedent,
-  ).filter((node) => endpointWire(backward.diagram, node, 'head') === plus)
-  if (copiedFunctionalPluses.length !== 2) {
-    throw new Error('expected two inline-base functionality premises')
-  }
-  const copiedFunctionalFirst = copiedFunctionalPluses[0]!
-  const copiedFunctionalSecond = copiedFunctionalPluses[1]!
-  for (const [target, variable] of [
-    [baseValue, endpointWire(backward.diagram, copiedFunctionalFirst, 'arg', 0)],
-    [baseTransportRight, endpointWire(backward.diagram, copiedFunctionalFirst, 'arg', 1)],
-    [baseTransportFirstSum, endpointWire(backward.diagram, copiedFunctionalFirst, 'arg', 2)],
-    [baseTransportRight, endpointWire(backward.diagram, copiedFunctionalSecond, 'arg', 2)],
-  ] as const) {
-    backward.record('specialize inline-base functionality', {
-      rule: 'wireJoin',
-      input: { a: target, b: variable },
-    })
-  }
-  backward.record(
-    'discharge inline-base functional original result',
-    deiterationStep(
-      backward.diagram,
-      copiedFunctionalAntecedent,
-      copiedFunctionalFirst,
-    ),
-  )
-  backward.record(
-    'discharge inline-base functional canonical result',
-    deiterationStep(
-      backward.diagram,
-      copiedFunctionalAntecedent,
-      copiedFunctionalSecond,
-    ),
-  )
-  const baseOutputIdentity = exactOne(
-    directNodes(backward.diagram, copiedFunctionalConsequent),
-    'inline-base functionality identity',
-  )
-  backward.record('expose inline-base output identity', {
-    rule: 'doubleCutElim',
-    region: copiedFunctionalAntecedent,
-  })
-  backward.record('finish inline-base functionality', {
-    rule: 'doubleCutElim',
-    region: copiedFunctional,
-  })
-  const innerSelection = {
-    region: baseTransportAntecedent,
-    regions: [],
-    nodes: [baseTransportInner],
-    wires: [],
-  } as const
-  const innerBoundary = extractSubgraph(
-    backward.diagram,
-    innerSelection,
-  ).attachments.indexOf(baseTransportRight)
-  if (innerBoundary < 0) throw new Error('inner premise lost right boundary')
-  before = backward.diagram
-  backward.record('retarget inline-base inner premise', {
-    rule: 'iteration',
-    sel: innerSelection,
-    target: baseTransportAntecedent,
-    retargets: [{
-      boundary: innerBoundary,
-      identity: baseOutputIdentity,
-      from: baseTransportRight,
-      to: baseTransportFirstSum,
-    }],
   })
   const transportedInner = onlyNewNode(
     before,
     backward.diagram,
     baseTransportAntecedent,
   )
+  const transportedInnerRightPorts = backward.diagram
+    .wires[baseTransportRight]!.endpoints
+    .filter((endpoint) => endpoint.node === transportedInner)
+  if (transportedInnerRightPorts.length !== 1) {
+    throw new Error('inner premise copy must touch the transport right once')
+  }
+  backward.record('land the inner copy on the first sum', {
+    rule: 'wireSever',
+    input: {
+      wire: baseTransportRight,
+      keep: backward.diagram.wires[baseTransportRight]!.endpoints
+        .filter((endpoint) =>
+          endpoint.node !== baseOutputIdentity
+          && endpoint.node !== transportedInner),
+      scope: baseTransportAntecedent,
+    },
+  })
+  deriveInlineBaseOutputIdentity()
   backward.record(
     'discharge inline-base first-sum goal',
     deiterationStep(

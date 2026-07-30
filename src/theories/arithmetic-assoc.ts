@@ -268,8 +268,7 @@ function plusAssoc(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   publicForward.record('expose exact cited carrier base', {
     rule: 'doubleCutElim',
@@ -346,8 +345,7 @@ function plusAssoc(
         wires: [],
       },
       target: publicClaimAntecedent,
-      retargets: [],
-    })
+      })
   }
   publicForward.record('copy exact carrier closure into claim', {
     rule: 'iteration',
@@ -358,7 +356,6 @@ function plusAssoc(
       wires: [],
     },
     target: publicClaimAntecedent,
-    retargets: [],
   })
   publicForward.record('erase positive support sources', {
     rule: 'erasure',
@@ -449,7 +446,6 @@ function plusAssoc(
       wires: [forwardInnerSum],
     },
     target: publicClaimConsequent,
-    retargets: [],
   })
   spawnPublic(
     'transport first result',
@@ -708,8 +704,7 @@ function plusAssoc(
         sel,
         justifier: evidence.justifier,
         certificate: evidence.certificate,
-        retargets: [],
-      })
+          })
     }
     publicBackward.record('expose ' + name + ' conclusion', {
       rule: 'doubleCutElim',
@@ -740,7 +735,6 @@ function plusAssoc(
       wires: [],
     },
     target: backwardClaimAntecedent,
-    retargets: [],
   })
   const secondBackwardBase = onlyNewCut(
     backwardBefore,
@@ -831,8 +825,7 @@ function plusAssoc(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   publicBackward.record('expose inherited A(a)', {
     rule: 'doubleCutElim',
@@ -941,8 +934,7 @@ function plusAssoc(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   publicBackward.record('expose inherited A(b)', {
     rule: 'doubleCutElim',
@@ -1129,7 +1121,6 @@ function plusAssoc(
       wires: [],
     },
     target: backwardClaimAntecedent,
-    retargets: [],
   })
   const copiedOutputFunctional = onlyNewCut(
     backwardBefore,
@@ -1243,7 +1234,6 @@ function plusAssoc(
       wires: [],
     },
     target: backwardClaimAntecedent,
-    retargets: [],
   })
   const retargetedOuterResult = onlyNewNode(
     backwardBefore,

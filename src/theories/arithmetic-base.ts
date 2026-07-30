@@ -283,7 +283,6 @@ function plusLeftUnit(
       wires: [],
     },
     target: claimConsequent,
-    retargets: [],
   })
 
   const rhs = statements.plusLeftUnit
@@ -381,7 +380,6 @@ function plusLeftUnit(
       wires: [],
     },
     target: reviewedClaimAntecedent,
-    retargets: [],
   })
   const copiedBaseScope = onlyNewCut(
     before,
@@ -461,7 +459,6 @@ function plusLeftUnit(
       wires: [],
     },
     target: reviewedClaimAntecedent,
-    retargets: [],
   })
   const copiedFunctionalScope = onlyNewCut(
     before,

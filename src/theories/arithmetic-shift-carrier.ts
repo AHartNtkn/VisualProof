@@ -1,5 +1,4 @@
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
@@ -32,16 +31,6 @@ import {
   onlyNewWire,
 } from './record'
 import type { ArithmeticStatements } from './statements'
-
-function boundaryIndex(
-  diagram: Parameters<typeof extractSubgraph>[0],
-  selection: Parameters<typeof extractSubgraph>[1],
-  wire: WireId,
-): number {
-  const index = extractSubgraph(diagram, selection).attachments.indexOf(wire)
-  if (index < 0) throw new Error(`wire '${wire}' is not a selection boundary`)
-  return index
-}
 
 function successorSingleValuedContent() {
   let graph = emptyGraph()
@@ -97,7 +86,6 @@ function deiterateNode(
     sel: selection,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -441,6 +429,16 @@ export function successorShiftCarrierInductive(
       forwardBaseValue!,
       forwardBaseTransportRightSuccessor!,
       forwardBaseTransportRightSuccessor!,
+    ],
+  )
+  spawnForwardAtom(
+    'forward base transport crossed successor addition',
+    forwardBaseTransportAntecedent,
+    forwardPlus,
+    [
+      forwardBaseValue!,
+      forwardBaseTransportRightSuccessor!,
+      forwardBaseTransportOutputSuccessor!,
     ],
   )
 
@@ -830,7 +828,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: baseTotality,
-    retargets: [],
   })
   const copiedBaseScope = onlyNewCut(
     before,
@@ -980,8 +977,7 @@ export function successorShiftCarrierInductive(
         wires: [],
       },
       target: baseTransportAntecedent,
-      retargets: [],
-    })
+      })
     const scope = onlyNewCut(
       prior,
       backward.diagram,
@@ -1042,263 +1038,290 @@ export function successorShiftCarrierInductive(
     baseRight,
     'base-transport right',
   )
+  const deriveBaseOutputIdentity = (): NodeId => {
+    const prior = backward.diagram
+    backward.record('copy addition functionality into base transport', {
+      rule: 'iteration',
+      sel: {
+        region: hypotheses,
+        regions: [additionFunctional],
+        nodes: [],
+        wires: [],
+      },
+      target: baseTransportAntecedent,
+    })
+    const copiedAdditionFunctional = onlyNewCut(
+      prior,
+      backward.diagram,
+      baseTransportAntecedent,
+    )
+    const copiedAdditionFunctionalBody = exactOne(
+      directCuts(backward.diagram, copiedAdditionFunctional),
+      'base-transport addition-functionality body',
+    )
+    const copiedAdditionFunctionalAntecedent = exactOne(
+      directCuts(backward.diagram, copiedAdditionFunctionalBody),
+      'base-transport addition-functionality antecedent',
+    )
+    const copiedAdditionFunctionalConsequent = exactOne(
+      directCuts(backward.diagram, copiedAdditionFunctionalAntecedent),
+      'base-transport addition-functionality consequent',
+    )
+    const copiedFunctionalPluses = directNodes(
+      backward.diagram,
+      copiedAdditionFunctionalAntecedent,
+    )
+    if (copiedFunctionalPluses.length !== 2) {
+      throw new Error(
+        `expected two base-transport functional Plus premises, found ${copiedFunctionalPluses.length}`,
+      )
+    }
+    const [functionalFirst, functionalSecond] = copiedFunctionalPluses
+    for (const [label, outer, inner] of [
+      [
+        'left',
+        baseValue,
+        endpointWire(backward.diagram, functionalFirst!, 'arg', 0),
+      ],
+      [
+        'right',
+        baseRight,
+        endpointWire(backward.diagram, functionalFirst!, 'arg', 1),
+      ],
+      [
+        'actual output',
+        baseOutput,
+        endpointWire(backward.diagram, functionalFirst!, 'arg', 2),
+      ],
+      [
+        'canonical output',
+        baseRight,
+        endpointWire(backward.diagram, functionalSecond!, 'arg', 2),
+      ],
+    ] as const) {
+      backward.record(`specialize base-transport functionality ${label}`, {
+        rule: 'wireJoin',
+        input: { a: outer, b: inner },
+      })
+    }
+    deiterateNode(
+      backward,
+      'discharge base-transport actual addition result',
+      copiedAdditionFunctionalAntecedent,
+      functionalFirst!,
+    )
+    deiterateNode(
+      backward,
+      'discharge base-transport canonical addition result',
+      copiedAdditionFunctionalAntecedent,
+      functionalSecond!,
+    )
+    const identity = exactOne(
+      directNodes(backward.diagram, copiedAdditionFunctionalConsequent),
+      'base-transport output identity',
+    )
+    backward.record('expose base-transport output identity', {
+      rule: 'doubleCutElim',
+      region: copiedAdditionFunctionalAntecedent,
+    })
+    backward.record('finish base-transport addition functionality', {
+      rule: 'doubleCutElim',
+      region: copiedAdditionFunctional,
+    })
+    return identity
+  }
+  const baseOutputIdentity = deriveBaseOutputIdentity()
+
+  // Substitution is the derivation (no retargets): copy the right-successor
+  // premise, then sever the base right so the one-point collapse lands the
+  // copy's input on the base output through the output identity. That
+  // consumes the identity; a second functionality pass restores it.
   before = backward.diagram
-  backward.record('copy addition functionality into base transport', {
+  backward.record('copy base right successor beside the output', {
     rule: 'iteration',
     sel: {
-      region: hypotheses,
-      regions: [additionFunctional],
-      nodes: [],
+      region: baseTransportAntecedent,
+      regions: [],
+      nodes: [baseRightSuccessorNode],
       wires: [],
     },
     target: baseTransportAntecedent,
-    retargets: [],
-  })
-  const copiedAdditionFunctional = onlyNewCut(
-    before,
-    backward.diagram,
-    baseTransportAntecedent,
-  )
-  const copiedAdditionFunctionalBody = exactOne(
-    directCuts(backward.diagram, copiedAdditionFunctional),
-    'base-transport addition-functionality body',
-  )
-  const copiedAdditionFunctionalAntecedent = exactOne(
-    directCuts(backward.diagram, copiedAdditionFunctionalBody),
-    'base-transport addition-functionality antecedent',
-  )
-  const copiedAdditionFunctionalConsequent = exactOne(
-    directCuts(backward.diagram, copiedAdditionFunctionalAntecedent),
-    'base-transport addition-functionality consequent',
-  )
-  const copiedFunctionalPluses = directNodes(
-    backward.diagram,
-    copiedAdditionFunctionalAntecedent,
-  )
-  if (copiedFunctionalPluses.length !== 2) {
-    throw new Error(
-      `expected two base-transport functional Plus premises, found ${copiedFunctionalPluses.length}`,
-    )
-  }
-  const [functionalFirst, functionalSecond] = copiedFunctionalPluses
-  for (const [label, outer, inner] of [
-    [
-      'left',
-      baseValue,
-      endpointWire(backward.diagram, functionalFirst!, 'arg', 0),
-    ],
-    [
-      'right',
-      baseRight,
-      endpointWire(backward.diagram, functionalFirst!, 'arg', 1),
-    ],
-    [
-      'actual output',
-      baseOutput,
-      endpointWire(backward.diagram, functionalFirst!, 'arg', 2),
-    ],
-    [
-      'canonical output',
-      baseRight,
-      endpointWire(backward.diagram, functionalSecond!, 'arg', 2),
-    ],
-  ] as const) {
-    backward.record(`specialize base-transport functionality ${label}`, {
-      rule: 'wireJoin',
-      input: { a: outer, b: inner },
-    })
-  }
-  deiterateNode(
-    backward,
-    'discharge base-transport actual addition result',
-    copiedAdditionFunctionalAntecedent,
-    functionalFirst!,
-  )
-  deiterateNode(
-    backward,
-    'discharge base-transport canonical addition result',
-    copiedAdditionFunctionalAntecedent,
-    functionalSecond!,
-  )
-  const baseOutputIdentity = exactOne(
-    directNodes(backward.diagram, copiedAdditionFunctionalConsequent),
-    'base-transport output identity',
-  )
-  backward.record('expose base-transport output identity', {
-    rule: 'doubleCutElim',
-    region: copiedAdditionFunctionalAntecedent,
-  })
-  backward.record('finish base-transport addition functionality', {
-    rule: 'doubleCutElim',
-    region: copiedAdditionFunctional,
-  })
-
-  const rightSuccessorSelection = {
-    region: baseTransportAntecedent,
-    regions: [],
-    nodes: [baseRightSuccessorNode],
-    wires: [],
-  } as const
-  const rightBoundary = boundaryIndex(
-    backward.diagram,
-    rightSuccessorSelection,
-    baseRight,
-  )
-  before = backward.diagram
-  backward.record('transport base right successor across output identity', {
-    rule: 'iteration',
-    sel: rightSuccessorSelection,
-    target: baseTransportAntecedent,
-    retargets: [{
-      boundary: rightBoundary,
-      identity: baseOutputIdentity,
-      from: baseRight,
-      to: baseOutput,
-    }],
   })
   const transportedRightSuccessor = onlyNewNode(
     before,
     backward.diagram,
     baseTransportAntecedent,
   )
-
-  before = backward.diagram
-  backward.record('copy successor functionality into base transport', {
-    rule: 'iteration',
-    sel: {
-      region: hypotheses,
-      regions: [successorFunctional],
-      nodes: [],
-      wires: [],
+  if (backward.diagram.wires[baseRight]!.endpoints
+    .filter((endpoint) => endpoint.node === transportedRightSuccessor)
+    .length !== 1) {
+    throw new Error('right-successor copy must touch the base right once')
+  }
+  backward.record('land the right-successor copy on the base output', {
+    rule: 'wireSever',
+    input: {
+      wire: baseRight,
+      keep: backward.diagram.wires[baseRight]!.endpoints
+        .filter((endpoint) =>
+          endpoint.node !== baseOutputIdentity
+          && endpoint.node !== transportedRightSuccessor),
+      scope: baseTransportAntecedent,
     },
-    target: baseTransportAntecedent,
-    retargets: [],
   })
-  const copiedSuccessorFunctional = onlyNewCut(
-    before,
-    backward.diagram,
-    baseTransportAntecedent,
-  )
-  const copiedSuccessorFunctionalBody = exactOne(
-    directCuts(backward.diagram, copiedSuccessorFunctional),
-    'base-transport successor-functionality body',
-  )
-  const copiedSuccessorFunctionalAntecedent = exactOne(
-    directCuts(backward.diagram, copiedSuccessorFunctionalBody),
-    'base-transport successor-functionality antecedent',
-  )
-  const copiedSuccessorFunctionalConsequent = exactOne(
-    directCuts(backward.diagram, copiedSuccessorFunctionalAntecedent),
-    'base-transport successor-functionality consequent',
-  )
-  const copiedFunctionalSuccessors = directNodes(
-    backward.diagram,
-    copiedSuccessorFunctionalAntecedent,
-  )
-  if (copiedFunctionalSuccessors.length !== 2) {
-    throw new Error(
-      `expected two base-transport functional Succ premises, found ${copiedFunctionalSuccessors.length}`,
-    )
-  }
-  const [functionalSuccessorFirst, functionalSuccessorSecond] =
-    copiedFunctionalSuccessors
-  for (const [label, outer, inner] of [
-    [
-      'input',
-      baseOutput,
-      endpointWire(
-        backward.diagram,
-        functionalSuccessorFirst!,
-        'arg',
-        0,
-      ),
-    ],
-    [
-      'actual output',
-      baseOutputSuccessor,
-      endpointWire(
-        backward.diagram,
-        functionalSuccessorFirst!,
-        'arg',
-        1,
-      ),
-    ],
-    [
-      'canonical output',
-      baseRightSuccessor,
-      endpointWire(
-        backward.diagram,
-        functionalSuccessorSecond!,
-        'arg',
-        1,
-      ),
-    ],
-  ] as const) {
-    backward.record(`specialize base successor functionality ${label}`, {
-      rule: 'wireJoin',
-      input: { a: outer, b: inner },
+  deriveBaseOutputIdentity()
+
+  const deriveBaseSuccessorIdentity = (): NodeId => {
+    const prior = backward.diagram
+    backward.record('copy successor functionality into base transport', {
+      rule: 'iteration',
+      sel: {
+        region: hypotheses,
+        regions: [successorFunctional],
+        nodes: [],
+        wires: [],
+      },
+      target: baseTransportAntecedent,
     })
+    const copiedSuccessorFunctional = onlyNewCut(
+      prior,
+      backward.diagram,
+      baseTransportAntecedent,
+    )
+    const copiedSuccessorFunctionalBody = exactOne(
+      directCuts(backward.diagram, copiedSuccessorFunctional),
+      'base-transport successor-functionality body',
+    )
+    const copiedSuccessorFunctionalAntecedent = exactOne(
+      directCuts(backward.diagram, copiedSuccessorFunctionalBody),
+      'base-transport successor-functionality antecedent',
+    )
+    const copiedSuccessorFunctionalConsequent = exactOne(
+      directCuts(backward.diagram, copiedSuccessorFunctionalAntecedent),
+      'base-transport successor-functionality consequent',
+    )
+    const copiedFunctionalSuccessors = directNodes(
+      backward.diagram,
+      copiedSuccessorFunctionalAntecedent,
+    )
+    if (copiedFunctionalSuccessors.length !== 2) {
+      throw new Error(
+        `expected two base-transport functional Succ premises, found ${copiedFunctionalSuccessors.length}`,
+      )
+    }
+    const [functionalSuccessorFirst, functionalSuccessorSecond] =
+      copiedFunctionalSuccessors
+    for (const [label, outer, inner] of [
+      [
+        'input',
+        baseOutput,
+        endpointWire(
+          backward.diagram,
+          functionalSuccessorFirst!,
+          'arg',
+          0,
+        ),
+      ],
+      [
+        'actual output',
+        baseOutputSuccessor,
+        endpointWire(
+          backward.diagram,
+          functionalSuccessorFirst!,
+          'arg',
+          1,
+        ),
+      ],
+      [
+        'canonical output',
+        baseRightSuccessor,
+        endpointWire(
+          backward.diagram,
+          functionalSuccessorSecond!,
+          'arg',
+          1,
+        ),
+      ],
+    ] as const) {
+      backward.record(`specialize base successor functionality ${label}`, {
+        rule: 'wireJoin',
+        input: { a: outer, b: inner },
+      })
+    }
+    deiterateNode(
+      backward,
+      'discharge base actual successor',
+      copiedSuccessorFunctionalAntecedent,
+      functionalSuccessorFirst!,
+    )
+    deiterateNode(
+      backward,
+      'discharge base transported successor',
+      copiedSuccessorFunctionalAntecedent,
+      functionalSuccessorSecond!,
+    )
+    const identity = exactOne(
+      directNodes(backward.diagram, copiedSuccessorFunctionalConsequent),
+      'base-transport successor identity',
+    )
+    backward.record('expose base-transport successor identity', {
+      rule: 'doubleCutElim',
+      region: copiedSuccessorFunctionalAntecedent,
+    })
+    backward.record('finish base-transport successor functionality', {
+      rule: 'doubleCutElim',
+      region: copiedSuccessorFunctional,
+    })
+    return identity
   }
-  deiterateNode(
-    backward,
-    'discharge base actual successor',
-    copiedSuccessorFunctionalAntecedent,
-    functionalSuccessorFirst!,
-  )
-  deiterateNode(
-    backward,
-    'discharge base transported successor',
-    copiedSuccessorFunctionalAntecedent,
-    functionalSuccessorSecond!,
-  )
-  const baseSuccessorIdentity = exactOne(
-    directNodes(backward.diagram, copiedSuccessorFunctionalConsequent),
-    'base-transport successor identity',
-  )
-  backward.record('expose base-transport successor identity', {
-    rule: 'doubleCutElim',
-    region: copiedSuccessorFunctionalAntecedent,
-  })
-  backward.record('finish base-transport successor functionality', {
-    rule: 'doubleCutElim',
-    region: copiedSuccessorFunctional,
-  })
+  const baseSuccessorIdentity = deriveBaseSuccessorIdentity()
 
   const baseAtRightSuccessor = deriveBaseAddition(
     baseRightSuccessor,
     'base-transport right successor',
   )
-  {
-    const selection = {
-      region: baseTransportConsequent,
+  // Substitution is the derivation (no retargets): copy the right-successor
+  // addition, sever the right successor so the one-point collapse lands the
+  // copy's output on the output successor (consuming the successor
+  // identity), discharge the goal against the copy, and restore the
+  // identity with a second functionality pass.
+  before = backward.diagram
+  backward.record('copy right-successor addition for the shift goal', {
+    rule: 'iteration',
+    sel: {
+      region: baseTransportAntecedent,
       regions: [],
-      nodes: [baseTransportGoal],
+      nodes: [baseAtRightSuccessor],
       wires: [],
-    } as const
-    const retargets = [{
-      boundary: boundaryIndex(
-        backward.diagram,
-        selection,
-        baseOutputSuccessor,
-      ),
-      identity: baseSuccessorIdentity,
-      from: baseRightSuccessor,
-      to: baseOutputSuccessor,
-    }] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge base successor-shift goal', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
-    })
-  }
+    },
+    target: baseTransportAntecedent,
+  })
+  const crossedBaseAddition = onlyNewNode(
+    before,
+    backward.diagram,
+    baseTransportAntecedent,
+  )
+  backward.record('land the crossed addition on the output successor', {
+    rule: 'wireSever',
+    input: {
+      wire: baseRightSuccessor,
+      keep: backward.diagram.wires[baseRightSuccessor]!.endpoints
+        .filter((endpoint) =>
+          endpoint.node !== baseSuccessorIdentity
+          && !(
+            endpoint.node === crossedBaseAddition
+            && endpoint.port.kind === 'arg'
+            && endpoint.port.index === 2
+          )),
+      scope: baseTransportAntecedent,
+    },
+  })
+  deiterateNode(
+    backward,
+    'discharge base successor-shift goal',
+    baseTransportConsequent,
+    baseTransportGoal,
+  )
+  deriveBaseSuccessorIdentity()
 
   void baseZero
   void baseAtRight
@@ -1387,7 +1410,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTotalityScope,
-    retargets: [],
   })
   const copiedInheritedTotality = onlyNewCut(
     before,
@@ -1434,7 +1456,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTotalityScope,
-    retargets: [],
   })
   const copiedSuccessorTotal = onlyNewCut(
     before,
@@ -1477,7 +1498,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTotalityScope,
-    retargets: [],
   })
   const copiedTotalityStep = onlyNewCut(
     before,
@@ -1691,7 +1711,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
   const copiedTransportTotality = onlyNewCut(
     before,
@@ -1738,7 +1757,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
   const copiedTransportSuccessorTotal = onlyNewCut(
     before,
@@ -1793,8 +1811,7 @@ export function successorShiftCarrierInductive(
         wires: [],
       },
       target,
-      retargets: [],
-    })
+      })
     const scope = onlyNewCut(prior, backward.diagram, target)
     const body = exactOne(
       directCuts(backward.diagram, scope),
@@ -1912,7 +1929,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
   const copiedTransportFunctionality = onlyNewCut(
     before,
@@ -2007,7 +2023,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
   const transportedOutputSuccessor = onlyNewNode(
     before,
@@ -2025,7 +2040,6 @@ export function successorShiftCarrierInductive(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
   const copiedInheritedShift = onlyNewCut(
     before,

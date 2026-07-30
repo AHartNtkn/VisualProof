@@ -9,7 +9,7 @@ export type {
 } from './wire-quantifier'
 export { applyRefSpawn, applyAtomSpawn } from './spawn'
 export { applyErasure } from './erasure'
-export type { DeiterationEvidence, IdentityRetarget } from './iteration'
+export type { DeiterationEvidence } from './iteration'
 export {
   applyIteration,
   applyDeiteration,

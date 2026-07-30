@@ -1,7 +1,6 @@
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import type { NodeId, Region, RegionId, WireId } from '../kernel/diagram/diagram'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import type { ProofContext } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
@@ -44,18 +43,7 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
-}
-
-function boundaryIndex(
-  diagram: Parameters<typeof extractSubgraph>[0],
-  selection: Parameters<typeof extractSubgraph>[1],
-  wire: WireId,
-): number {
-  const index = extractSubgraph(diagram, selection).attachments.indexOf(wire)
-  if (index < 0) throw new Error(`wire '${wire}' is not a selection boundary`)
-  return index
 }
 
 function zeroUniqueContent() {
@@ -216,8 +204,7 @@ function exposeClosedCitation(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   recorder.record(`expose ${name} conclusion`, {
     rule: 'doubleCutElim',
@@ -362,8 +349,7 @@ export function commutativityCarrierInductive(
         wires: [],
       },
       target: forwardSupportAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive support fact sources', {
     rule: 'erasure',
@@ -616,7 +602,7 @@ export function commutativityCarrierInductive(
     [
       forwardFixedRight,
       forwardBaseValue!,
-      forwardFixedRight,
+      forwardBaseOutput!,
     ],
   )
   spawnForward(
@@ -924,7 +910,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: supportAntecedent,
-    retargets: [],
   })
   backward.record('retain support Nat for right-identity carrier', {
     rule: 'iteration',
@@ -935,7 +920,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: supportAntecedent,
-    retargets: [],
   })
   backward.record('unfold support fixed-right Nat', {
     rule: 'unfold',
@@ -988,8 +972,7 @@ export function commutativityCarrierInductive(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
     void fact
   }
   backward.record('expose support inherited successor-shift carrier', {
@@ -1072,8 +1055,7 @@ export function commutativityCarrierInductive(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited right-identity carrier', {
     rule: 'doubleCutElim',
@@ -1189,7 +1171,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseConditionAntecedent,
-    retargets: [],
   })
   const copiedZeroUnique = onlyNewCut(
     before,
@@ -1274,7 +1255,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseTotality,
-    retargets: [],
   })
   const copiedAdditionBase = onlyNewCut(before, backward.diagram, baseTotality)
   const copiedAdditionBaseBody = exactOne(
@@ -1345,8 +1325,7 @@ export function commutativityCarrierInductive(
       sel: selection,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   void copiedAdditionBaseResult
   const baseCommutativityBody = exactOne(
@@ -1386,7 +1365,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseCommutativityAntecedent,
-    retargets: [],
   })
   const retainedBaseZero = onlyNewNode(
     before,
@@ -1403,7 +1381,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseCommutativityAntecedent,
-    retargets: [],
   })
   const copiedBaseLeftUnit = onlyNewCut(
     before,
@@ -1513,7 +1490,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseCommutativityAntecedent,
-    retargets: [],
   })
   const copiedBaseTotality = onlyNewCut(
     before,
@@ -1559,7 +1535,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseCommutativityAntecedent,
-    retargets: [],
   })
   const copiedBaseRightUnit = onlyNewCut(
     before,
@@ -1630,8 +1605,7 @@ export function commutativityCarrierInductive(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   const baseRightIdentity = exactOne(
     directNodes(backward.diagram, copiedBaseRightUnitConsequent),
@@ -1655,7 +1629,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: baseCommutativityAntecedent,
-    retargets: [],
   })
   const copiedInheritedRightCarrier = onlyNewCut(
     before,
@@ -1721,39 +1694,98 @@ export function commutativityCarrierInductive(
       .map(([identity]) => identity),
     'combined commutativity-base unit identity',
   )
-  {
-    const selection = {
-      region: baseCommutativityConsequent,
-      regions: [],
-      nodes: [baseCommutativityGoal],
+  // Substitution is the derivation (no retargets): severing the fixed
+  // right so the unit identity keeps one co-scoped end makes the one-point
+  // collapse land the inherited result's output endpoint on the base
+  // output. This consumes the identity; addition functionality re-derives
+  // it below, once the crossed goal has discharged against the result.
+  backward.record('land the inherited result on the base output', {
+    rule: 'wireSever',
+    input: {
+      wire: fixedRight,
+      keep: backward.diagram.wires[fixedRight]!.endpoints.filter((endpoint) =>
+        endpoint.node !== baseUnitIdentity
+        && !(
+          endpoint.node === inheritedRightPlus
+          && endpoint.port.kind === 'arg'
+          && endpoint.port.index === 2
+        )),
+      scope: baseCommutativityAntecedent,
+    },
+  })
+  deiterateNode(
+    backward,
+    'discharge commutativity-base crossed goal',
+    baseCommutativityConsequent,
+    baseCommutativityGoal,
+  )
+  before = backward.diagram
+  backward.record('copy addition functionality to restore the unit identity', {
+    rule: 'iteration',
+    sel: {
+      region: hypotheses,
+      regions: [additionFunctional],
+      nodes: [],
       wires: [],
-    } as const
-    const retargets = [{
-      boundary: boundaryIndex(
-        backward.diagram,
-        selection,
-        baseCommutativityOutput,
-      ),
-      identity: baseUnitIdentity,
-      from: fixedRight,
-      to: baseCommutativityOutput,
-    }] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge commutativity-base crossed goal', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
+    },
+    target: baseCommutativityAntecedent,
+  })
+  const restoredFunctional = onlyNewCut(
+    before,
+    backward.diagram,
+    baseCommutativityAntecedent,
+  )
+  const restoredFunctionalBody = exactOne(
+    directCuts(backward.diagram, restoredFunctional),
+    'restored functionality body',
+  )
+  const restoredFunctionalAntecedent = exactOne(
+    directCuts(backward.diagram, restoredFunctionalBody),
+    'restored functionality antecedent',
+  )
+  const restoredFunctionalConsequent = exactOne(
+    directCuts(backward.diagram, restoredFunctionalAntecedent),
+    'restored functionality consequent',
+  )
+  const restoredFunctionalVariables = scopedWires(
+    backward.diagram,
+    restoredFunctional,
+  )
+  for (const [label, outer, inner] of [
+    ['left', fixedRight, restoredFunctionalVariables[0]!],
+    ['right', baseValue, restoredFunctionalVariables[1]!],
+    ['first output', baseCommutativityOutput, restoredFunctionalVariables[2]!],
+    ['second output', fixedRight, restoredFunctionalVariables[3]!],
+  ] as const) {
+    backward.record(`specialize restored functionality ${label}`, {
+      rule: 'wireJoin',
+      input: { a: outer, b: inner },
     })
   }
+  for (const node of directNodes(
+    backward.diagram,
+    restoredFunctionalAntecedent,
+  )) {
+    deiterateNode(
+      backward,
+      'discharge restored functionality premise',
+      restoredFunctionalAntecedent,
+      node,
+    )
+  }
+  exactOne(
+    directNodes(backward.diagram, restoredFunctionalConsequent),
+    'restored unit identity',
+  )
+  backward.record('expose restored unit identity', {
+    rule: 'doubleCutElim',
+    region: restoredFunctionalAntecedent,
+  })
+  backward.record('finish restoring the unit identity', {
+    rule: 'doubleCutElim',
+    region: restoredFunctional,
+  })
   void inheritedBasePlus
-  void inheritedRightPlus
   void baseRightIdentity
   const successorTotal = exactOne(
     hypothesisChildren.filter((region) =>
@@ -1835,7 +1867,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureGoalTotality,
-    retargets: [],
   })
   const copiedClosureInheritedTotality = onlyNewCut(
     before,
@@ -1885,7 +1916,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureGoalTotality,
-    retargets: [],
   })
   const copiedClosureSuccessorTotal = onlyNewCut(
     before,
@@ -1933,7 +1963,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureGoalTotality,
-    retargets: [],
   })
   const copiedClosureStep = onlyNewCut(
     before,
@@ -2077,7 +2106,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedCrossPredecessorTotality = onlyNewCut(
     before,
@@ -2123,7 +2151,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedCrossSuccessorTotality = onlyNewCut(
     before,
@@ -2171,7 +2198,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedCrossStep = onlyNewCut(
     before,
@@ -2259,7 +2285,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedInheritedCommutativity = onlyNewCut(
     before,
@@ -2336,7 +2361,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedShiftTransport = onlyNewCut(
     before,
@@ -2434,7 +2458,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedCrossFunctional = onlyNewCut(
     before,
@@ -2505,7 +2528,6 @@ export function commutativityCarrierInductive(
       wires: [],
     },
     target: closureCrossAntecedent,
-    retargets: [],
   })
   const copiedPublicShift = onlyNewCut(
     before,
@@ -2650,8 +2672,7 @@ export function commutativityCarrierInductive(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose duplicate right-identity carrier', {
     rule: 'doubleCutElim',
@@ -2674,8 +2695,7 @@ export function commutativityCarrierInductive(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   void baseZero
   void baseCommutativity

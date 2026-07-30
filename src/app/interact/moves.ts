@@ -72,7 +72,6 @@ export function deiterationStep(
     rule: 'deiteration',
     sel: selection,
     ...evidence,
-    retargets: [],
   }
 }
 

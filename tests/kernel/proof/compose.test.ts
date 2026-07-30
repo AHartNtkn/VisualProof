@@ -255,18 +255,6 @@ describe('mapStepIds', () => {
     nodes: ['N0'],
     wires: ['W0'],
   } as const
-  const retargets = [{
-    boundary: 0,
-    identity: 'n2',
-    from: 'w1',
-    to: 'w2',
-  }] as const
-  const mappedRetargets = [{
-    boundary: 0,
-    identity: 'N2',
-    from: 'W1',
-    to: 'W2',
-  }] as const
   const certificate = {
     region: 'r0',
     regionMap: new Map([['pr0', 'r1']]),
@@ -314,7 +302,7 @@ describe('mapStepIds', () => {
     })
   })
 
-  it('maps selections, endpoints, certificates, and every retarget id', () => {
+  it('maps selections, endpoints, and certificates', () => {
     expect(mapStepIds({
       rule: 'wireSever',
       input: {
@@ -347,25 +335,21 @@ describe('mapStepIds', () => {
       rule: 'iteration',
       sel: selection,
       target: 'r1',
-      retargets,
     }, iso)).toEqual({
       rule: 'iteration',
       sel: mappedSelection,
       target: 'R1',
-      retargets: mappedRetargets,
     })
     expect(mapStepIds({
       rule: 'deiteration',
       sel: selection,
       justifier: selection,
       certificate,
-      retargets,
     }, iso)).toEqual({
       rule: 'deiteration',
       sel: mappedSelection,
       justifier: mappedSelection,
       certificate: mappedCertificate,
-      retargets: mappedRetargets,
     })
   })
 

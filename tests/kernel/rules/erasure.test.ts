@@ -60,19 +60,30 @@ describe('applyErasure', () => {
       .toThrowError(/erasure requires a positive region; 'r1' is negative/)
   })
 
-  it('rejects forward-only erasure during backward replay', () => {
+  it('erases from a negative region backward and refuses a positive one', () => {
     const builder = new DiagramBuilder()
-    const node = builder.ref(builder.root, 'outside', relSig([]))
+    const cut = builder.cut(builder.root)
+    const inner = builder.ref(cut, 'hypothesis', relSig([]))
+    const outer = builder.ref(builder.root, 'outside', relSig([]))
     const diagram = builder.build()
-    const selection = mkSelection(diagram, {
+    const negative = mkSelection(diagram, {
+      region: cut,
+      regions: [],
+      nodes: [inner],
+      wires: [],
+    })
+    const positive = mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [node],
+      nodes: [outer],
       wires: [],
     })
 
-    expect(() => applyErasure(diagram, selection, 'backward'))
-      .toThrowError(/backward erasure is not supported/i)
+    // Reverse reading: inserting a hypothesis into a negative context.
+    const erased = applyErasure(diagram, negative, 'backward')
+    expect(erased.nodes[inner]).toBeUndefined()
+    expect(() => applyErasure(diagram, positive, 'backward'))
+      .toThrowError(/backward erasure requires a negative region/)
   })
 })
 

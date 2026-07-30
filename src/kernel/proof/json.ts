@@ -10,7 +10,6 @@ import {
 } from '../diagram/json'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import type { IdentityRetarget } from '../rules/iteration'
 import type {
   WireJoinInput,
   WireSeverInput,
@@ -185,32 +184,6 @@ function occurrenceCertificateFromJson(
   }
 }
 
-function retargetToJson(retarget: IdentityRetarget): unknown {
-  return {
-    boundary: retarget.boundary,
-    identity: retarget.identity,
-    from: retarget.from,
-    to: retarget.to,
-  }
-}
-
-function retargetFromJson(value: unknown, what: string): IdentityRetarget {
-  if (!isRecord(value)) fail(`${what} must be an object`)
-  assertOnlyKeys(value, ['boundary', 'identity', 'from', 'to'], what)
-  return {
-    boundary: nonNegativeSafeInteger(value.boundary, `${what}.boundary`),
-    identity: str(value.identity, `${what}.identity`),
-    from: str(value.from, `${what}.from`),
-    to: str(value.to, `${what}.to`),
-  }
-}
-
-function retargetsFromJson(value: unknown, what: string): IdentityRetarget[] {
-  if (!Array.isArray(value)) fail(`${what} must be an array`)
-  return value.map((retarget, index) =>
-    retargetFromJson(retarget, `${what}[${index}]`))
-}
-
 function applicationToJson(application: TheoremApplication): unknown {
   return {
     sel: selectionToJson(application.sel),
@@ -264,7 +237,6 @@ export function stepToJson(step: ProofStep): unknown {
         rule: step.rule,
         sel: selectionToJson(step.sel),
         target: step.target,
-        retargets: step.retargets.map(retargetToJson),
       }
     case 'deiteration':
       return {
@@ -272,7 +244,6 @@ export function stepToJson(step: ProofStep): unknown {
         sel: selectionToJson(step.sel),
         justifier: selectionToJson(step.justifier),
         certificate: occurrenceCertificateToJson(step.certificate),
-        retargets: step.retargets.map(retargetToJson),
       }
     case 'doubleCutIntro':
       return { rule: step.rule, sel: selectionToJson(step.sel) }
@@ -393,21 +364,16 @@ export function stepFromJson(value: unknown): ProofStep {
       assertOnlyKeys(value, ['rule', 'input'], 'wireSever step')
       return { rule, input: wireSeverInputFromJson(value.input) }
     case 'iteration':
-      assertOnlyKeys(
-        value,
-        ['rule', 'sel', 'target', 'retargets'],
-        'iteration step',
-      )
+      assertOnlyKeys(value, ['rule', 'sel', 'target'], 'iteration step')
       return {
         rule,
         sel: selectionFromJson(value.sel, 'sel'),
         target: str(value.target, 'target'),
-        retargets: retargetsFromJson(value.retargets, 'retargets'),
       }
     case 'deiteration':
       assertOnlyKeys(
         value,
-        ['rule', 'sel', 'justifier', 'certificate', 'retargets'],
+        ['rule', 'sel', 'justifier', 'certificate'],
         'deiteration step',
       )
       return {
@@ -418,7 +384,6 @@ export function stepFromJson(value: unknown): ProofStep {
           value.certificate,
           'certificate',
         ),
-        retargets: retargetsFromJson(value.retargets, 'retargets'),
       }
     case 'doubleCutIntro':
       assertOnlyKeys(value, ['rule', 'sel'], 'doubleCutIntro step')

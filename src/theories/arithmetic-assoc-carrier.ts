@@ -675,7 +675,6 @@ export function associativityCarrierHereditary(
       wires: [],
     },
     target: successorTotality,
-    retargets: [],
   })
   const copiedPredecessorTotality = onlyNewCut(
     before,
@@ -726,7 +725,6 @@ export function associativityCarrierHereditary(
       wires: [],
     },
     target: successorTotality,
-    retargets: [],
   })
   const copiedSuccessorTotality = onlyNewCut(
     before,
@@ -783,7 +781,6 @@ export function associativityCarrierHereditary(
       wires: [],
     },
     target: successorTotality,
-    retargets: [],
   })
   const copiedTotalityStep = onlyNewCut(
     before,
@@ -945,8 +942,7 @@ export function associativityCarrierHereditary(
         wires: [],
       },
       target,
-      retargets: [],
-    })
+      })
     const scope = onlyNewCut(prior, backward.diagram, target)
     const variables = scopedWires(backward.diagram, scope)
     if (variables.length !== values.length) {
@@ -1091,7 +1087,6 @@ export function associativityCarrierHereditary(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
   const transportFunctionalityScope = onlyNewCut(
     before,
@@ -1334,7 +1329,6 @@ export function associativityCarrierHereditary(
       wires: [],
     },
     target: successorTransportAntecedent,
-    retargets: [],
   })
 
   backward.record(

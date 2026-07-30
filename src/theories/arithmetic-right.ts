@@ -101,7 +101,6 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -260,8 +259,7 @@ function plusRightUnit(
         wires: [],
       },
       target: forwardClaimAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive carrier-support sources', {
     rule: 'erasure',
@@ -350,7 +348,6 @@ function plusRightUnit(
       wires: [],
     },
     target: forwardClaimConsequent,
-    retargets: [],
   })
 
   const rhs = statements.plusRightUnit
@@ -495,8 +492,7 @@ function plusRightUnit(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose cited carrier-support conclusion', {
     rule: 'doubleCutElim',
@@ -583,8 +579,7 @@ function plusRightUnit(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited direct carrier', {
     rule: 'doubleCutElim',
@@ -659,7 +654,6 @@ function plusRightUnit(
       wires: [],
     },
     target: claimAntecedent,
-    retargets: [],
   })
   const copiedFunctional = onlyNewCut(
     before,

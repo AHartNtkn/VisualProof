@@ -55,7 +55,6 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -174,8 +173,7 @@ function plusComm(
         wires: [],
       },
       target: forwardInnerAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive carrier support', {
     rule: 'erasure',
@@ -242,7 +240,6 @@ function plusComm(
       wires: [],
     },
     target: forwardInnerConsequent,
-    retargets: [],
   })
   before = forward.diagram
   forward.record('open residual commutativity totality', {
@@ -508,8 +505,7 @@ function plusComm(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose cited support conclusion', {
     rule: 'doubleCutElim',
@@ -569,8 +565,7 @@ function plusComm(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose local Base and Closure', {
     rule: 'doubleCutElim',
@@ -647,8 +642,7 @@ function plusComm(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited commutativity carrier', {
     rule: 'doubleCutElim',

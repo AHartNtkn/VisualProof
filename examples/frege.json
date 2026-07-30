@@ -425,8 +425,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -761,8 +760,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_4",
-              "retargets": []
+              "target": "dc_4"
             }
           ],
           "placements": []
@@ -780,8 +778,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -965,8 +962,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -984,8 +980,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r0",
-              "retargets": []
+              "target": "r0"
             }
           ],
           "placements": []
@@ -1534,8 +1529,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -1553,8 +1547,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -2630,8 +2623,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -2649,8 +2641,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -4168,8 +4159,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -4187,8 +4177,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -5321,8 +5310,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -5340,8 +5328,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -6578,8 +6565,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_6",
-              "retargets": []
+              "target": "dc_6"
             }
           ],
           "placements": []
@@ -6599,8 +6585,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r15",
-              "retargets": []
+              "target": "r15"
             }
           ],
           "placements": []
@@ -6680,8 +6665,7 @@
                   "w0",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -6719,8 +6703,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r15",
-              "retargets": []
+              "target": "r15"
             }
           ],
           "placements": []
@@ -6836,8 +6819,7 @@
                   "w8",
                   "w9"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -6896,8 +6878,7 @@
                   "w8",
                   "w9"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -7193,8 +7174,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -7438,8 +7418,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_6",
-              "retargets": []
+              "target": "dc_6"
             }
           ],
           "placements": []
@@ -7482,8 +7461,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r3_0",
-              "retargets": []
+              "target": "r3_0"
             }
           ],
           "placements": []
@@ -7550,8 +7528,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -8205,8 +8182,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_6",
-              "retargets": []
+              "target": "dc_6"
             }
           ],
           "placements": []
@@ -8234,8 +8210,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r4",
-              "retargets": []
+              "target": "r4"
             }
           ],
           "placements": []
@@ -8315,8 +8290,7 @@
                   "dc_3_vac",
                   "w3"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -8375,8 +8349,7 @@
                   "dc_3_vac_0",
                   "dc_vac_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -8892,8 +8865,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -8911,8 +8883,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -9180,8 +9151,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_6",
-              "retargets": []
+              "target": "dc_6"
             }
           ],
           "placements": []
@@ -9214,8 +9184,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r3",
-              "retargets": []
+              "target": "r3"
             }
           ],
           "placements": []
@@ -9279,8 +9248,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r3_0",
-              "retargets": []
+              "target": "r3_0"
             }
           ],
           "placements": []
@@ -9347,8 +9315,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -9386,8 +9353,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r3_0",
-              "retargets": []
+              "target": "r3_0"
             }
           ],
           "placements": []
@@ -9467,8 +9433,7 @@
                   "w2",
                   "w3_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -9527,8 +9492,7 @@
                   "w2",
                   "w4_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -11279,8 +11243,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r23",
-              "retargets": []
+              "target": "r23"
             }
           ],
           "placements": []
@@ -11360,8 +11323,7 @@
                   "w0",
                   "w12"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -11415,8 +11377,7 @@
                   "w0",
                   "w13"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -11454,8 +11415,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r19",
-              "retargets": []
+              "target": "r19"
             }
           ],
           "placements": []
@@ -11535,8 +11495,7 @@
                   "w0",
                   "w12"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -11562,63 +11521,42 @@
           "placements": []
         },
         {
-          "label": "discharge carrier-base local Zero",
+          "label": "copy carrier-base local equality into consequent",
           "steps": [
             {
-              "rule": "deiteration",
+              "rule": "iteration",
               "sel": {
                 "region": "r23",
                 "regions": [],
                 "nodes": [
-                  "n10"
+                  "n2_0"
                 ],
                 "wires": []
               },
-              "justifier": {
-                "region": "r19",
-                "regions": [],
-                "nodes": [
-                  "n9"
+              "target": "r24"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "land the carrier-base local Plus on the supplied zero",
+          "steps": [
+            {
+              "rule": "wireSever",
+              "input": {
+                "wire": "w13",
+                "keep": [
+                  {
+                    "node": "n10",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n2_0_0",
+                    "port": "i:1"
+                  }
                 ],
-                "wires": []
-              },
-              "certificate": {
-                "region": "r19",
-                "regionMap": [
-                  [
-                    "root",
-                    "r19"
-                  ]
-                ],
-                "nodeMap": [
-                  [
-                    "n10",
-                    "n9"
-                  ]
-                ],
-                "wireMap": [
-                  [
-                    "b0",
-                    "w0"
-                  ],
-                  [
-                    "b1",
-                    "w12"
-                  ]
-                ],
-                "attachments": [
-                  "w0",
-                  "w12"
-                ]
-              },
-              "retargets": [
-                {
-                  "boundary": 1,
-                  "identity": "n2_0",
-                  "from": "w12",
-                  "to": "w13"
-                }
-              ]
+                "scope": "r23"
+              }
             }
           ],
           "placements": []
@@ -11665,46 +11603,203 @@
                   ],
                   [
                     "b1",
-                    "w12"
-                  ],
-                  [
-                    "b2",
                     "w2"
                   ]
                 ],
                 "attachments": [
                   "w12",
-                  "w12",
                   "w2"
                 ]
-              },
-              "retargets": [
-                {
-                  "boundary": 1,
-                  "identity": "n2_0",
-                  "from": "w12",
-                  "to": "w13"
-                }
-              ]
+              }
             }
           ],
           "placements": []
         },
         {
-          "label": "copy carrier-base local equality into consequent",
+          "label": "copy zero uniqueness for carrier-base restored",
           "steps": [
             {
               "rule": "iteration",
               "sel": {
-                "region": "r23",
+                "region": "r3",
+                "regions": [
+                  "r5"
+                ],
+                "nodes": [],
+                "wires": []
+              },
+              "target": "r23"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize carrier-base restored uniqueness",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w12",
+                "b": "w3_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize carrier-base restored uniqueness",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w13",
+                "b": "w4_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge carrier-base restored zero premise",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r7_0",
                 "regions": [],
                 "nodes": [
-                  "n2_0"
+                  "n0_0"
                 ],
                 "wires": []
               },
-              "target": "r24",
-              "retargets": []
+              "justifier": {
+                "region": "r19",
+                "regions": [],
+                "nodes": [
+                  "n9"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r19",
+                "regionMap": [
+                  [
+                    "root",
+                    "r19"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n0_0",
+                    "n9"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w0"
+                  ],
+                  [
+                    "b1",
+                    "w12"
+                  ]
+                ],
+                "attachments": [
+                  "w0",
+                  "w12"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge carrier-base restored zero premise",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r7_0",
+                "regions": [],
+                "nodes": [
+                  "n1_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r23",
+                "regions": [],
+                "nodes": [
+                  "n10"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r23",
+                "regionMap": [
+                  [
+                    "root",
+                    "r23"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n1_0",
+                    "n10"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w0"
+                  ],
+                  [
+                    "b1",
+                    "w13"
+                  ]
+                ],
+                "attachments": [
+                  "w0",
+                  "w13"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "expose carrier-base restored identity",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r7_0"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "finish carrier-base restored uniqueness",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r5_0"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "erase the carrier-base local Zero hypothesis",
+          "steps": [
+            {
+              "rule": "erasure",
+              "sel": {
+                "region": "r23",
+                "regions": [],
+                "nodes": [
+                  "n10"
+                ],
+                "wires": []
+              }
             }
           ],
           "placements": []
@@ -11767,8 +11862,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r35",
-              "retargets": []
+              "target": "r35"
             }
           ],
           "placements": []
@@ -11835,8 +11929,7 @@
                   "w0",
                   "w17"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -11874,8 +11967,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r35",
-              "retargets": []
+              "target": "r35"
             }
           ],
           "placements": []
@@ -11999,8 +12091,7 @@
                   "w17",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -12059,8 +12150,7 @@
                   "w14",
                   "w15"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -12119,8 +12209,7 @@
                   "w14",
                   "w15"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -12199,8 +12288,7 @@
                   "w17",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -13172,8 +13260,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -13191,8 +13278,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -13366,8 +13452,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -13530,8 +13615,7 @@
                 "attachments": [
                   "w0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -13613,8 +13697,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -13716,8 +13799,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -13927,8 +14009,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -14067,8 +14148,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -14155,8 +14235,7 @@
                   "w0",
                   "w16"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -14194,8 +14273,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r23",
-              "retargets": []
+              "target": "r23"
             }
           ],
           "placements": []
@@ -14311,8 +14389,7 @@
                   "w18",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -14371,8 +14448,7 @@
                   "w17",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -15745,8 +15821,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r15",
-              "retargets": []
+              "target": "r15"
             }
           ],
           "placements": []
@@ -15813,8 +15888,7 @@
                   "w0",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -15890,8 +15964,7 @@
                   "w1",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -15945,8 +16018,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": []
+              "target": "r21"
             }
           ],
           "placements": []
@@ -16026,8 +16098,7 @@
                   "w0",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -16065,8 +16136,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": []
+              "target": "r21"
             }
           ],
           "placements": []
@@ -16146,8 +16216,7 @@
                   "w0",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -16185,8 +16254,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": []
+              "target": "r21"
             }
           ],
           "placements": []
@@ -16302,8 +16370,7 @@
                   "w13",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -16362,8 +16429,7 @@
                   "w11",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -16389,7 +16455,7 @@
           "placements": []
         },
         {
-          "label": "retarget inline-base inner premise",
+          "label": "copy inline-base inner premise",
           "steps": [
             {
               "rule": "iteration",
@@ -16401,15 +16467,251 @@
                 ],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": [
-                {
-                  "boundary": 1,
-                  "identity": "n4_0",
-                  "from": "w11",
-                  "to": "w13"
-                }
-              ]
+              "target": "r21"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "land the inner copy on the first sum",
+          "steps": [
+            {
+              "rule": "wireSever",
+              "input": {
+                "wire": "w11",
+                "keep": [
+                  {
+                    "node": "n7",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n8",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n1_1",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n1_1",
+                    "port": "a:2"
+                  }
+                ],
+                "scope": "r21"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "copy addition functionality into inline base transport",
+          "steps": [
+            {
+              "rule": "iteration",
+              "sel": {
+                "region": "r3",
+                "regions": [
+                  "r9"
+                ],
+                "nodes": [],
+                "wires": []
+              },
+              "target": "r21"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize inline-base functionality",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w8",
+                "b": "w4_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize inline-base functionality",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w11",
+                "b": "w5_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize inline-base functionality",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w13",
+                "b": "w6_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize inline-base functionality",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w11",
+                "b": "w7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge inline-base functional original result",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r11_0",
+                "regions": [],
+                "nodes": [
+                  "n2_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r21",
+                "regions": [],
+                "nodes": [
+                  "n7"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r21",
+                "regionMap": [
+                  [
+                    "root",
+                    "r21"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n2_0",
+                    "n7"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w1"
+                  ],
+                  [
+                    "b1",
+                    "w11"
+                  ],
+                  [
+                    "b2",
+                    "w13"
+                  ],
+                  [
+                    "b3",
+                    "w8"
+                  ]
+                ],
+                "attachments": [
+                  "w1",
+                  "w11",
+                  "w13",
+                  "w8"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge inline-base functional canonical result",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r11_0",
+                "regions": [],
+                "nodes": [
+                  "n3_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r21",
+                "regions": [],
+                "nodes": [
+                  "n1_1"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r21",
+                "regionMap": [
+                  [
+                    "root",
+                    "r21"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n3_0",
+                    "n1_1"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w1"
+                  ],
+                  [
+                    "b1",
+                    "w11"
+                  ],
+                  [
+                    "b2",
+                    "w8"
+                  ]
+                ],
+                "attachments": [
+                  "w1",
+                  "w11",
+                  "w8"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "expose inline-base output identity",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r11_0"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "finish inline-base functionality",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r9_0"
             }
           ],
           "placements": []
@@ -16473,8 +16775,7 @@
                   "w13",
                   "w14"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -16533,8 +16834,7 @@
                   "w14",
                   "w8"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19114,8 +19414,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r25",
-              "retargets": []
+              "target": "r25"
             }
           ],
           "placements": []
@@ -19156,8 +19455,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r25",
-              "retargets": []
+              "target": "r25"
             }
           ],
           "placements": []
@@ -19211,8 +19509,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r25",
-              "retargets": []
+              "target": "r25"
             }
           ],
           "placements": []
@@ -19341,8 +19638,7 @@
                   "w16_0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19401,8 +19697,7 @@
                   "w13",
                   "w14"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19461,8 +19756,7 @@
                   "w16_0",
                   "w3_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19546,8 +19840,7 @@
                   "w22",
                   "w3_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19565,8 +19858,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -19607,8 +19899,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -19649,8 +19940,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -19779,8 +20069,7 @@
                   "w16_1",
                   "w24"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19839,8 +20128,7 @@
                   "w13",
                   "w14"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19899,8 +20187,7 @@
                   "w16_1",
                   "w3_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -19938,8 +20225,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -20055,8 +20341,7 @@
                   "w24",
                   "w3_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20120,8 +20405,7 @@
                   "w24",
                   "w26"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20159,8 +20443,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -20276,8 +20559,7 @@
                   "w16_1",
                   "w24"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20341,8 +20623,7 @@
                   "w25",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20380,8 +20661,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -20435,8 +20715,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -20565,8 +20844,7 @@
                   "w21_0",
                   "w25"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20625,8 +20903,7 @@
                   "w16_1",
                   "w26"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20685,8 +20962,7 @@
                   "w21_0",
                   "w3_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20724,8 +21000,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -20854,8 +21129,7 @@
                   "w21_0",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20914,8 +21188,7 @@
                   "w13",
                   "w14"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -20974,8 +21247,7 @@
                   "w21_0",
                   "w3_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -21013,8 +21285,7 @@
                 ],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -21078,8 +21349,7 @@
                   "w26",
                   "w3_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -21143,8 +21413,7 @@
                   "w27",
                   "w3_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -21208,8 +21477,7 @@
                   "w24",
                   "w26"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -22319,8 +22587,7 @@
                   "r1_vac",
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -22409,8 +22676,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -22543,8 +22809,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -22562,8 +22827,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -22581,8 +22845,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -22847,8 +23110,7 @@
                   "dc_1_vac"
                 ]
               },
-              "target": "dc_2",
-              "retargets": []
+              "target": "dc_2"
             }
           ],
           "placements": []
@@ -23417,8 +23679,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -23507,8 +23768,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -23653,8 +23913,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -23756,8 +24015,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -23846,8 +24104,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -23885,8 +24142,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": []
+              "target": "r21"
             }
           ],
           "placements": []
@@ -24243,8 +24499,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -24466,8 +24721,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -24844,8 +25098,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -25067,8 +25320,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -25227,8 +25479,7 @@
                   "w19",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -25292,8 +25543,7 @@
                   "w2",
                   "w3_0_split_wrap_shift_wrap_local_3"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -25331,8 +25581,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": []
+              "target": "r21"
             }
           ],
           "placements": []
@@ -25448,8 +25697,7 @@
                   "w2",
                   "w20"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -25513,8 +25761,7 @@
                   "w2",
                   "w3_0_split_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_local_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -25552,8 +25799,7 @@
                 ],
                 "wires": []
               },
-              "target": "r21",
-              "retargets": []
+              "target": "r21"
             }
           ],
           "placements": []
@@ -27671,6 +27917,56 @@
           "placements": []
         },
         {
+          "label": "spawn forward base transport crossed successor addition",
+          "steps": [
+            {
+              "rule": "atomSpawn",
+              "region": "dc_7",
+              "wire": "w2"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "attach forward base transport crossed successor addition argument 0",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "dc_vac",
+                "b": "w"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "attach forward base transport crossed successor addition argument 1",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "dc_5_vac_0",
+                "b": "w_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "attach forward base transport crossed successor addition argument 2",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "dc_5_vac_2",
+                "b": "w_1"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "open forward carrier closure scope",
           "steps": [
             {
@@ -28691,7 +28987,7 @@
           "allocation": {
             "regions": [],
             "nodes": [
-              "n_8"
+              "n_9"
             ],
             "wires": [
               "dc_9_vac_1"
@@ -28713,8 +29009,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r27",
-              "retargets": []
+              "target": "r27"
             }
           ],
           "placements": []
@@ -28794,8 +29089,7 @@
                   "w0",
                   "w19"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -28887,8 +29181,7 @@
                   "w2",
                   "w20"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -28906,8 +29199,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r31",
-              "retargets": []
+              "target": "r31"
             }
           ],
           "placements": []
@@ -28987,8 +29279,7 @@
                   "w0",
                   "w19"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29026,8 +29317,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r31",
-              "retargets": []
+              "target": "r31"
             }
           ],
           "placements": []
@@ -29143,8 +29433,7 @@
                   "w22",
                   "w24"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29203,8 +29492,7 @@
                   "w2",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29230,7 +29518,7 @@
           "placements": []
         },
         {
-          "label": "transport base right successor across output identity",
+          "label": "copy base right successor beside the output",
           "steps": [
             {
               "rule": "iteration",
@@ -29242,15 +29530,251 @@
                 ],
                 "wires": []
               },
-              "target": "r31",
-              "retargets": [
-                {
-                  "boundary": 1,
-                  "identity": "n12_0",
-                  "from": "w22",
-                  "to": "w24"
-                }
-              ]
+              "target": "r31"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "land the right-successor copy on the base output",
+          "steps": [
+            {
+              "rule": "wireSever",
+              "input": {
+                "wire": "w22",
+                "keep": [
+                  {
+                    "node": "n15",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n16",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n5_1",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n5_1",
+                    "port": "a:2"
+                  }
+                ],
+                "scope": "r31"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "copy addition functionality into base transport",
+          "steps": [
+            {
+              "rule": "iteration",
+              "sel": {
+                "region": "r3",
+                "regions": [
+                  "r19"
+                ],
+                "nodes": [],
+                "wires": []
+              },
+              "target": "r31"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base-transport functionality left",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w19",
+                "b": "w15_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base-transport functionality right",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w22",
+                "b": "w16_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base-transport functionality actual output",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w24",
+                "b": "w17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base-transport functionality canonical output",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w22",
+                "b": "w18_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge base-transport actual addition result",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r21_0",
+                "regions": [],
+                "nodes": [
+                  "n10_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r31",
+                "regions": [],
+                "nodes": [
+                  "n16"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r31",
+                "regionMap": [
+                  [
+                    "root",
+                    "r31"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n10_0",
+                    "n16"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w19"
+                  ],
+                  [
+                    "b1",
+                    "w2"
+                  ],
+                  [
+                    "b2",
+                    "w22"
+                  ],
+                  [
+                    "b3",
+                    "w24"
+                  ]
+                ],
+                "attachments": [
+                  "w19",
+                  "w2",
+                  "w22",
+                  "w24"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge base-transport canonical addition result",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r21_0",
+                "regions": [],
+                "nodes": [
+                  "n11_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r31",
+                "regions": [],
+                "nodes": [
+                  "n5_1"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r31",
+                "regionMap": [
+                  [
+                    "root",
+                    "r31"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n11_0",
+                    "n5_1"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w19"
+                  ],
+                  [
+                    "b1",
+                    "w2"
+                  ],
+                  [
+                    "b2",
+                    "w22"
+                  ]
+                ],
+                "attachments": [
+                  "w19",
+                  "w2",
+                  "w22"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "expose base-transport output identity",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r21_0"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "finish base-transport addition functionality",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r19_0"
             }
           ],
           "placements": []
@@ -29268,8 +29792,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r31",
-              "retargets": []
+              "target": "r31"
             }
           ],
           "placements": []
@@ -29367,8 +29890,7 @@
                   "w24",
                   "w25"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29427,8 +29949,7 @@
                   "w23",
                   "w24"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29466,8 +29987,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r31",
-              "retargets": []
+              "target": "r31"
             }
           ],
           "placements": []
@@ -29547,8 +30067,7 @@
                   "w0",
                   "w19"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29574,6 +30093,63 @@
           "placements": []
         },
         {
+          "label": "copy right-successor addition for the shift goal",
+          "steps": [
+            {
+              "rule": "iteration",
+              "sel": {
+                "region": "r31",
+                "regions": [],
+                "nodes": [
+                  "n5_2"
+                ],
+                "wires": []
+              },
+              "target": "r31"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "land the crossed addition on the output successor",
+          "steps": [
+            {
+              "rule": "wireSever",
+              "input": {
+                "wire": "w23",
+                "keep": [
+                  {
+                    "node": "n15",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n18",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n15_0",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n5_2",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n5_2",
+                    "port": "a:2"
+                  },
+                  {
+                    "node": "n5_2_0",
+                    "port": "a:1"
+                  }
+                ],
+                "scope": "r31"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge base successor-shift goal",
           "steps": [
             {
@@ -29590,7 +30166,7 @@
                 "region": "r31",
                 "regions": [],
                 "nodes": [
-                  "n5_2"
+                  "n5_2_0"
                 ],
                 "wires": []
               },
@@ -29605,7 +30181,7 @@
                 "nodeMap": [
                   [
                     "n18",
-                    "n5_2"
+                    "n5_2_0"
                   ]
                 ],
                 "wireMap": [
@@ -29623,24 +30199,211 @@
                   ],
                   [
                     "b3",
-                    "w23"
+                    "w25"
                   ]
                 ],
                 "attachments": [
                   "w19",
                   "w2",
                   "w23",
-                  "w23"
+                  "w25"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "copy successor functionality into base transport",
+          "steps": [
+            {
+              "rule": "iteration",
+              "sel": {
+                "region": "r3",
+                "regions": [
+                  "r7"
+                ],
+                "nodes": [],
+                "wires": []
               },
-              "retargets": [
-                {
-                  "boundary": 3,
-                  "identity": "n3_0",
-                  "from": "w23",
-                  "to": "w25"
-                }
-              ]
+              "target": "r31"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base successor functionality input",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w24",
+                "b": "w5_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base successor functionality actual output",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w25",
+                "b": "w6_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize base successor functionality canonical output",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w23",
+                "b": "w7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge base actual successor",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r9_0",
+                "regions": [],
+                "nodes": [
+                  "n1_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r31",
+                "regions": [],
+                "nodes": [
+                  "n17"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r31",
+                "regionMap": [
+                  [
+                    "root",
+                    "r31"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n1_0",
+                    "n17"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w1"
+                  ],
+                  [
+                    "b1",
+                    "w24"
+                  ],
+                  [
+                    "b2",
+                    "w25"
+                  ]
+                ],
+                "attachments": [
+                  "w1",
+                  "w24",
+                  "w25"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge base transported successor",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r9_0",
+                "regions": [],
+                "nodes": [
+                  "n2_0"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r31",
+                "regions": [],
+                "nodes": [
+                  "n15_0"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r31",
+                "regionMap": [
+                  [
+                    "root",
+                    "r31"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n2_0",
+                    "n15_0"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w1"
+                  ],
+                  [
+                    "b1",
+                    "w23"
+                  ],
+                  [
+                    "b2",
+                    "w24"
+                  ]
+                ],
+                "attachments": [
+                  "w1",
+                  "w23",
+                  "w24"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "expose base-transport successor identity",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r9_0"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "finish base-transport successor functionality",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r7_0"
             }
           ],
           "placements": []
@@ -29658,8 +30421,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r43",
-              "retargets": []
+              "target": "r43"
             }
           ],
           "placements": []
@@ -29700,8 +30462,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r43",
-              "retargets": []
+              "target": "r43"
             }
           ],
           "placements": []
@@ -29742,8 +30503,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r43",
-              "retargets": []
+              "target": "r43"
             }
           ],
           "placements": []
@@ -29872,8 +30632,7 @@
                   "w29_0",
                   "w34"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29932,8 +30691,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -29992,8 +30750,7 @@
                   "w29_0",
                   "w4_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30090,8 +30847,7 @@
                   "w34",
                   "w4_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30109,8 +30865,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -30151,8 +30906,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -30193,8 +30947,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -30323,8 +31076,7 @@
                   "w29_1",
                   "w36"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30383,8 +31135,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30443,8 +31194,7 @@
                   "w29_1",
                   "w4_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30482,8 +31232,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -30599,8 +31348,7 @@
                   "w36",
                   "w38"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30664,8 +31412,7 @@
                   "w36",
                   "w4_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30703,8 +31450,7 @@
                 ],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -30722,8 +31468,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -30839,8 +31584,7 @@
                   "w29_1",
                   "w36"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30899,8 +31643,7 @@
                   "w36",
                   "w37"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30959,8 +31702,7 @@
                   "w29_1",
                   "w38"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -30998,8 +31740,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r47",
-              "retargets": []
+              "target": "r47"
             }
           ],
           "placements": []
@@ -31128,8 +31869,7 @@
                   "w37",
                   "w38"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -31188,8 +31928,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -31248,8 +31987,7 @@
                   "w38",
                   "w39"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -31333,8 +32071,7 @@
                   "w37",
                   "w39"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -32330,8 +33067,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -32349,8 +33085,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -32779,8 +33514,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -32865,8 +33599,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -32948,8 +33681,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -33051,8 +33783,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -33141,8 +33872,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -33504,8 +34234,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -33719,8 +34448,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -33781,8 +34509,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r25",
-              "retargets": []
+              "target": "r25"
             }
           ],
           "placements": []
@@ -33921,8 +34648,7 @@
                   "w20",
                   "w3_0_split_wrap_shift_wrap_local_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -33981,8 +34707,7 @@
                   "w20",
                   "w21"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -34041,8 +34766,7 @@
                   "w3_0_split_wrap_shift_wrap_local_2",
                   "w4_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -34080,8 +34804,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r25",
-              "retargets": []
+              "target": "r25"
             }
           ],
           "placements": []
@@ -34197,8 +34920,7 @@
                   "w21",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -34262,8 +34984,7 @@
                   "w21",
                   "w4_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -34360,8 +35081,7 @@
                   "w20",
                   "w3_0_split_wrap_shift_wrap_local_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -34420,8 +35140,7 @@
                   "w22",
                   "w3_0_split_wrap_shift_wrap_local_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36052,8 +36771,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36142,8 +36860,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36357,8 +37074,7 @@
                 "attachments": [
                   "w0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36440,8 +37156,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36543,8 +37258,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36633,8 +37347,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36799,8 +37512,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36885,8 +37597,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -36968,8 +37679,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -37071,8 +37781,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -37161,8 +37870,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -37343,8 +38051,7 @@
                 "attachments": [
                   "w0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -37426,8 +38133,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -37529,8 +38235,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -37611,8 +38316,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -37630,8 +38334,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -37649,8 +38352,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -37668,8 +38370,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -37687,8 +38388,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -37706,8 +38406,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -37725,8 +38424,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc_1",
-              "retargets": []
+              "target": "dc_1"
             }
           ],
           "placements": []
@@ -38390,7 +39088,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "dc_vac",
+                "a": "dc_9_vac",
                 "b": "w_1"
               }
             }
@@ -39514,8 +40212,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -39600,8 +40297,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -39683,8 +40379,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -39786,8 +40481,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -39876,8 +40570,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -40058,8 +40751,7 @@
                 "attachments": [
                   "w0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -40141,8 +40833,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -40244,8 +40935,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -40283,8 +40973,7 @@
                 ],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -40302,8 +40991,7 @@
                 ],
                 "wires": []
               },
-              "target": "r29",
-              "retargets": []
+              "target": "r29"
             }
           ],
           "placements": []
@@ -40645,8 +41333,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -40860,8 +41547,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41071,8 +41757,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41211,8 +41896,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41374,8 +42058,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41464,8 +42147,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41679,8 +42361,7 @@
                 "attachments": [
                   "w0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41762,8 +42443,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41865,8 +42545,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -41955,8 +42634,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42154,8 +42832,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42240,8 +42917,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42323,8 +42999,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42426,8 +43101,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42516,8 +43190,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42555,8 +43228,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r33",
-              "retargets": []
+              "target": "r33"
             }
           ],
           "placements": []
@@ -42636,8 +43308,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42691,8 +43362,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42730,8 +43400,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r35",
-              "retargets": []
+              "target": "r35"
             }
           ],
           "placements": []
@@ -42811,8 +43480,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42904,8 +43572,7 @@
                   "w22",
                   "w23"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -42923,8 +43590,7 @@
                 ],
                 "wires": []
               },
-              "target": "r39",
-              "retargets": []
+              "target": "r39"
             }
           ],
           "placements": []
@@ -42942,8 +43608,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r39",
-              "retargets": []
+              "target": "r39"
             }
           ],
           "placements": []
@@ -43036,8 +43701,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43101,8 +43765,7 @@
                   "w22",
                   "w25"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43176,8 +43839,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43195,8 +43857,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r39",
-              "retargets": []
+              "target": "r39"
             }
           ],
           "placements": []
@@ -43237,8 +43898,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r39",
-              "retargets": []
+              "target": "r39"
             }
           ],
           "placements": []
@@ -43331,8 +43991,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43396,8 +44055,7 @@
                   "w22",
                   "w3_0_split_wrap_shift_wrap_local_2_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43456,8 +44114,7 @@
                   "w1",
                   "w21"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43495,8 +44152,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r39",
-              "retargets": []
+              "target": "r39"
             }
           ],
           "placements": []
@@ -43563,8 +44219,7 @@
                   "w0",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43590,6 +44245,81 @@
           "placements": []
         },
         {
+          "label": "land the inherited result on the base output",
+          "steps": [
+            {
+              "rule": "wireSever",
+              "input": {
+                "wire": "w21",
+                "keep": [
+                  {
+                    "node": "n19",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n20",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n22",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n23",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n26",
+                    "port": "a:1"
+                  },
+                  {
+                    "node": "n27",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n16_3",
+                    "port": "a:2"
+                  },
+                  {
+                    "node": "n_70",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n_90",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n_118",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n_34",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n_34",
+                    "port": "a:2"
+                  },
+                  {
+                    "node": "n_118_0",
+                    "port": "a:0"
+                  },
+                  {
+                    "node": "n_118_0",
+                    "port": "a:2"
+                  },
+                  {
+                    "node": "n_34_0",
+                    "port": "a:0"
+                  }
+                ],
+                "scope": "r39"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge commutativity-base crossed goal",
           "steps": [
             {
@@ -43599,6 +44329,204 @@
                 "regions": [],
                 "nodes": [
                   "n20"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r39",
+                "regions": [],
+                "nodes": [
+                  "n_34_0"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r39",
+                "regionMap": [
+                  [
+                    "root",
+                    "r39"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n20",
+                    "n_34_0"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w2"
+                  ],
+                  [
+                    "b1",
+                    "w21"
+                  ],
+                  [
+                    "b2",
+                    "w22"
+                  ],
+                  [
+                    "b3",
+                    "w25"
+                  ]
+                ],
+                "attachments": [
+                  "w2",
+                  "w21",
+                  "w22",
+                  "w25"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "copy addition functionality to restore the unit identity",
+          "steps": [
+            {
+              "rule": "iteration",
+              "sel": {
+                "region": "r3",
+                "regions": [
+                  "r23"
+                ],
+                "nodes": [],
+                "wires": []
+              },
+              "target": "r39"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize restored functionality left",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w21",
+                "b": "w17_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize restored functionality right",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w22",
+                "b": "w18_1"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize restored functionality first output",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w25",
+                "b": "w19_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "specialize restored functionality second output",
+          "steps": [
+            {
+              "rule": "wireJoin",
+              "input": {
+                "a": "w21",
+                "b": "w20_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge restored functionality premise",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r25_3",
+                "regions": [],
+                "nodes": [
+                  "n13_3"
+                ],
+                "wires": []
+              },
+              "justifier": {
+                "region": "r39",
+                "regions": [],
+                "nodes": [
+                  "n_34_0"
+                ],
+                "wires": []
+              },
+              "certificate": {
+                "region": "r39",
+                "regionMap": [
+                  [
+                    "root",
+                    "r39"
+                  ]
+                ],
+                "nodeMap": [
+                  [
+                    "n13_3",
+                    "n_34_0"
+                  ]
+                ],
+                "wireMap": [
+                  [
+                    "b0",
+                    "w2"
+                  ],
+                  [
+                    "b1",
+                    "w21"
+                  ],
+                  [
+                    "b2",
+                    "w22"
+                  ],
+                  [
+                    "b3",
+                    "w25"
+                  ]
+                ],
+                "attachments": [
+                  "w2",
+                  "w21",
+                  "w22",
+                  "w25"
+                ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "discharge restored functionality premise",
+          "steps": [
+            {
+              "rule": "deiteration",
+              "sel": {
+                "region": "r25_3",
+                "regions": [],
+                "nodes": [
+                  "n14_4"
                 ],
                 "wires": []
               },
@@ -43620,7 +44548,7 @@
                 ],
                 "nodeMap": [
                   [
-                    "n20",
+                    "n14_4",
                     "n_118_0"
                   ]
                 ],
@@ -43636,27 +44564,34 @@
                   [
                     "b2",
                     "w22"
-                  ],
-                  [
-                    "b3",
-                    "w21"
                   ]
                 ],
                 "attachments": [
                   "w2",
                   "w21",
-                  "w22",
-                  "w21"
+                  "w22"
                 ]
-              },
-              "retargets": [
-                {
-                  "boundary": 3,
-                  "identity": "n7_0_0",
-                  "from": "w21",
-                  "to": "w25"
-                }
-              ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "expose restored unit identity",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r25_3"
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "finish restoring the unit identity",
+          "steps": [
+            {
+              "rule": "doubleCutElim",
+              "region": "r23_4"
             }
           ],
           "placements": []
@@ -43674,8 +44609,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r51",
-              "retargets": []
+              "target": "r51"
             }
           ],
           "placements": []
@@ -43716,8 +44650,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r51",
-              "retargets": []
+              "target": "r51"
             }
           ],
           "placements": []
@@ -43758,8 +44691,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r51",
-              "retargets": []
+              "target": "r51"
             }
           ],
           "placements": []
@@ -43888,8 +44820,7 @@
                   "w29_1",
                   "w31"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -43948,8 +44879,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44008,8 +44938,7 @@
                   "w29_1",
                   "w6_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44106,8 +45035,7 @@
                   "w31",
                   "w6_0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44125,8 +45053,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -44167,8 +45094,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -44209,8 +45135,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -44339,8 +45264,7 @@
                   "w26",
                   "w29_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44399,8 +45323,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44459,8 +45382,7 @@
                   "w29_2",
                   "w6_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44498,8 +45420,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -44576,8 +45497,7 @@
                   "w26",
                   "w29_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44615,8 +45535,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -44727,8 +45646,7 @@
                   "w29_2",
                   "w6_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44792,8 +45710,7 @@
                   "w26",
                   "w29_2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44852,8 +45769,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -44891,8 +45807,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -45008,8 +45923,7 @@
                   "w27",
                   "w33"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45073,8 +45987,7 @@
                   "w27",
                   "w6_1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45112,8 +46025,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "r55",
-              "retargets": []
+              "target": "r55"
             }
           ],
           "placements": []
@@ -45224,8 +46136,7 @@
                   "w26",
                   "w27"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45289,8 +46200,7 @@
                   "w27",
                   "w33"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45349,8 +46259,7 @@
                   "w1",
                   "w21"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45434,8 +46343,7 @@
                   "w27",
                   "w33"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45625,8 +46533,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45765,8 +46672,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -45869,8 +46775,7 @@
                   "w2",
                   "w21"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -46887,8 +47792,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc",
-              "retargets": []
+              "target": "dc"
             }
           ],
           "placements": []
@@ -46906,8 +47810,7 @@
                 "nodes": [],
                 "wires": []
               },
-              "target": "dc",
-              "retargets": []
+              "target": "dc"
             }
           ],
           "placements": []
@@ -47053,8 +47956,7 @@
                 ],
                 "wires": []
               },
-              "target": "dc_0",
-              "retargets": []
+              "target": "dc_0"
             }
           ],
           "placements": []
@@ -47338,8 +48240,7 @@
                 "attachments": [
                   "w0"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -47404,8 +48305,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -47490,8 +48390,7 @@
                 "attachments": [
                   "w1"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -47573,8 +48472,7 @@
                   "w0",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -47676,8 +48574,7 @@
                   "w1",
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -47766,8 +48663,7 @@
                 "attachments": [
                   "w2"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -47963,8 +48859,7 @@
                   "w1",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -48249,8 +49144,7 @@
                   "w2",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -48429,8 +49323,7 @@
                   "w2",
                   "w22"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []
@@ -48527,8 +49420,7 @@
                   "w22",
                   "w23"
                 ]
-              },
-              "retargets": []
+              }
             }
           ],
           "placements": []

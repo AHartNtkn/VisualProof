@@ -159,7 +159,6 @@ function buildZeroForward(context: ProofContext) {
     rule: 'iteration',
     sel: { region: antecedent, regions: [], nodes: [zeroAnchor], wires: [] },
     target: conclusion,
-    retargets: [],
   })
 
   before = forward.diagram
@@ -237,7 +236,6 @@ function buildZeroForward(context: ProofContext) {
       wires: [],
     },
     target: inherited,
-    retargets: [],
   })
 
   return { recorder: forward }
@@ -320,7 +318,6 @@ function buildZeroBackward(
       wires: [],
     },
     target: unfoldedHereditary,
-    retargets: [],
   })
   const specializedBaseCondition = onlyNewCut(
     before,
@@ -612,7 +609,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
       wires: [],
     },
     target: claimConsequent,
-    retargets: [],
   })
   const copiedNat = onlyNewNode(
     before,
@@ -646,7 +642,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
       wires: [],
     },
     target: meeting.inherited,
-    retargets: [],
   })
   const copiedClosureScope = onlyNewCut(
     before,

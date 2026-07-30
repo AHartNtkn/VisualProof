@@ -110,7 +110,6 @@ function ordinaryEqualityContradiction(
       wires: [],
     },
     target: disequality,
-    retargets: [],
   })
 
   let law = emptyGraph()

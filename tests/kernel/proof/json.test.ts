@@ -57,13 +57,6 @@ function boundedIdentity(swap: boolean) {
   })).pattern
 }
 
-const retargets = [{
-  boundary: 0,
-  identity: 'n2',
-  from: 'w1',
-  to: 'w2',
-}] as const
-
 describe('action allocation JSON', () => {
   it('round-trips non-logical allocation exclusions', () => {
     const action: ProofAction = {
@@ -130,13 +123,12 @@ describe('step JSON', () => {
           scope: 'r1',
         },
       },
-      { rule: 'iteration', sel: selection, target: 'r1', retargets },
+      { rule: 'iteration', sel: selection, target: 'r1' },
       {
         rule: 'deiteration',
         sel: selection,
         justifier: selection,
         certificate: occurrenceCertificate,
-        retargets,
       },
       { rule: 'doubleCutIntro', sel: selection },
       { rule: 'doubleCutElim', region: 'r1' },
@@ -246,8 +238,7 @@ describe('step JSON', () => {
       sel: selection,
       justifier: selection,
       certificate: occurrenceCertificate,
-      retargets: [],
-    }) as {
+      }) as {
       certificate: Record<string, unknown>
     }
 
@@ -291,8 +282,8 @@ describe('step JSON', () => {
       rule: 'iteration',
       sel: selection,
       target: 'r1',
-      retargets: [{ boundary: -1, identity: 'n0', from: 'w0', to: 'w1' }],
-    })).toThrowError(/boundary.*non-negative safe integer/)
+      retargets: [],
+    })).toThrowError(/iteration step/)
     expect(() => stepFromJson({
       rule: 'deiteration',
       sel: selection,
@@ -305,8 +296,7 @@ describe('step JSON', () => {
         attachments: [],
         termCertificates: [],
       },
-      retargets: [],
-    })).toThrowError(/unknown field 'termCertificates'/)
+      })).toThrowError(/unknown field 'termCertificates'/)
     expect(() => stepFromJson({
       rule: 'vacuousIntro',
       scope: 'r0',
