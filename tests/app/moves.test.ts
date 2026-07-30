@@ -14,10 +14,10 @@ import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 
-function keySample(key: string) {
+function keySample(key: string, shiftKey = false) {
   return {
     key,
-    shiftKey: false,
+    shiftKey,
     ctrlKey: false,
     altKey: false,
     metaKey: false,
@@ -40,12 +40,42 @@ function pointerSample(point: Vec2, hit: Hit | null = null): PointerSample {
   }
 }
 
+/** A minimal element double: enough DOM for the controller's prompts. */
+function fakeElement(): {
+  element: Record<string, unknown>
+  listeners: Map<string, (event: unknown) => void>
+} {
+  const listeners = new Map<string, (event: unknown) => void>()
+  const element: Record<string, unknown> = {
+    style: {},
+    append: () => undefined,
+    remove: () => undefined,
+    focus: () => undefined,
+    setAttribute: () => undefined,
+    addEventListener: (name: string, fn: (event: unknown) => void) => {
+      listeners.set(name, fn)
+    },
+  }
+  return { element, listeners }
+}
+
 function harness(diagram: Diagram, selection: readonly Hit[] = []) {
   const engine = mkEngine(diagram, [])
   const applied: ProofAction[] = []
   const refusals: string[] = []
+  const inputs: ReturnType<typeof fakeElement>[] = []
+  const host = {
+    ownerDocument: {
+      createElement: (tag: string) => {
+        const made = fakeElement()
+        if (tag === 'input') inputs.push(made)
+        return made.element
+      },
+    },
+    append: () => undefined,
+  }
   const moves = new ProofMoveController({
-    host: { ownerDocument: {} } as unknown as HTMLElement,
+    host: host as unknown as HTMLElement,
     active: () => true,
     diagram: () => diagram,
     engine: () => engine,
@@ -60,7 +90,7 @@ function harness(diagram: Diagram, selection: readonly Hit[] = []) {
     fuel: () => 0,
     openSpawn: () => undefined,
   })
-  return { moves, engine, applied, refusals }
+  return { moves, engine, applied, refusals, inputs }
 }
 
 describe('proof move vocabulary', () => {
@@ -146,6 +176,35 @@ describe('proof move vocabulary', () => {
     expect(bareCase.applied[0]!.steps).toEqual([
       { rule: 'vacuousElim', wireId: bare },
     ])
+  })
+
+  it('Shift+W introduces a bare quantified wire through the arity prompt', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.ref(cut, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, engine, applied, inputs } = harness(diagram)
+    engine.regions.set(cut, {
+      center: vec(300, 200),
+      radius: 120,
+      support: [],
+    })
+
+    moves.passiveSample(pointerSample(vec(300, 200)))
+    expect(moves.keyDown(keySample('W', true))).toBe(true)
+    expect(applied).toEqual([])
+    expect(inputs).toHaveLength(1)
+
+    // Enter with a blank value picks an individual (ι) wire.
+    inputs[0]!.element['value'] = ''
+    inputs[0]!.listeners.get('keydown')!({ key: 'Enter' })
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps).toEqual([{
+      rule: 'vacuousIntro',
+      scope: cut,
+      sig: { kind: 'iota' },
+    }])
   })
 
   it('the i key is retired', () => {

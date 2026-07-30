@@ -293,10 +293,22 @@ export class ProofMoveController {
       (sample.key === 'w' || sample.key === 'W')
       && this.#options.selection().length === 0
     ) {
-      // W with nothing highlighted spawns an empty double cut at the region
-      // under the pointer (2026-07-10 approved design; 2026-07-30 ruling).
       if (this.#lastWorld === null) {
         this.#options.refuse('point at a region first', this.#lastPointer)
+        return true
+      }
+      // Shift+W introduces a bare quantified wire at the hovered region,
+      // through the arity prompt; plain W spawns an empty double cut there
+      // (2026-07-10 approved design; 2026-07-30 ruling).
+      if (sample.shiftKey) {
+        const scope = regionAt(
+          this.#options.engine(),
+          this.#options.diagram(),
+          this.#lastWorld,
+        )
+        this.#promptSig(this.#lastPointer, (sig) => {
+          this.#commit({ rule: 'vacuousIntro', scope, sig })
+        })
         return true
       }
       this.#commit({
