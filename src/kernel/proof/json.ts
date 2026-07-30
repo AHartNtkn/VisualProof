@@ -439,6 +439,10 @@ export function stepToJson(step: ProofStep): unknown {
       return { rule: step.rule, wire: step.wire }
     case 'identityAbstract':
       return { rule: step.rule, nodes: [...step.nodes], scope: step.scope }
+    case 'refLeaf':
+      return { rule: step.rule, wire: step.wire, defId: step.defId }
+    case 'refAbstract':
+      return { rule: step.rule, nodes: [...step.nodes], scope: step.scope }
   }
 }
 
@@ -643,6 +647,20 @@ export function stepFromJson(value: unknown): ProofStep {
       return { rule, wire: str(value.wire, 'wire') }
     case 'identityAbstract':
       assertOnlyKeys(value, ['rule', 'nodes', 'scope'], 'identityAbstract step')
+      return {
+        rule,
+        nodes: strArray(value.nodes, 'nodes'),
+        scope: str(value.scope, 'scope'),
+      }
+    case 'refLeaf':
+      assertOnlyKeys(value, ['rule', 'wire', 'defId'], 'refLeaf step')
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        defId: str(value.defId, 'defId'),
+      }
+    case 'refAbstract':
+      assertOnlyKeys(value, ['rule', 'nodes', 'scope'], 'refAbstract step')
       return {
         rule,
         nodes: strArray(value.nodes, 'nodes'),

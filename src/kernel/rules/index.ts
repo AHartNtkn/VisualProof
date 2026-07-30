@@ -41,4 +41,6 @@ export {
   applyArityUnshift,
   applyIdentityAbstract,
   applyIdentityLeaf,
+  applyRefAbstract,
+  applyRefLeaf,
 } from './wire-args'

@@ -204,6 +204,8 @@ describe('step JSON', () => {
       { rule: 'abstractFormal', ends: ['n0', 'n1'], scope: 'r1' },
       { rule: 'identityLeaf', wire: 'w0' },
       { rule: 'identityAbstract', nodes: ['n0'], scope: 'r0' },
+      { rule: 'refLeaf', wire: 'w0', defId: 'nat' },
+      { rule: 'refAbstract', nodes: ['n0', 'n1'], scope: 'r1' },
     ]
 
     for (const step of steps) roundTrip(step)

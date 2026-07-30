@@ -1,3 +1,4 @@
+import type { DiagramWithBoundary } from '../diagram/boundary'
 import type {
   Diagram,
   DiagramNode,
@@ -13,6 +14,7 @@ import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
+import { definitionSig } from './fold'
 import {
   appliedEnds,
   attachArgs,
@@ -721,6 +723,158 @@ export function applyIdentityAbstract(
     attachArgs(wires, node, end.args)
   }
   wires[fresh] = { scope, sig: freshSig, endpoints }
+
+  return mkDiagram({
+    root: diagram.root,
+    regions: { ...diagram.regions },
+    nodes: nextNodes,
+    wires,
+  })
+}
+
+/**
+ * Gated (join family): every end becomes a reference to the stored
+ * definition. Refs are opaque here — recursing into the body diverges on
+ * recursive definitions, so this pair is a completeness requirement.
+ */
+export function applyRefLeaf(
+  diagram: Diagram,
+  wireId: WireId,
+  defId: string,
+  definitions: ReadonlyMap<string, DiagramWithBoundary>,
+  orientation: Orientation = 'forward',
+  reservation?: IdReservation,
+): Diagram {
+  const ends = appliedEnds(diagram, wireId, 'ref leaf')
+  const sig = relSigOf(diagram, wireId, 'ref leaf')
+  const definition = definitions.get(defId)
+  if (definition === undefined) {
+    throw new RuleError(`ref leaf: no relation named '${defId}'`)
+  }
+  const expected = definitionSig(definition)
+  if (!sigEquals(sig, expected)) {
+    throw new RuleError(
+      `ref leaf: wire '${wireId}' signature '${sigKey(sig)}' does not match `
+      + `definition '${defId}' signature '${sigKey(expected)}'`,
+    )
+  }
+  requireGate(
+    diagram,
+    wireAt(diagram, wireId).scope,
+    orientation,
+    'negative',
+    'ref leaf',
+  )
+
+  const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
+  const wires: Record<WireId, Wire> = { ...diagram.wires }
+  const removed = new Set(ends.map((end) => end.node))
+  for (const end of ends) delete nodes[end.node]
+  withoutEndpointsOf(wires, removed)
+  delete wires[wireId]
+
+  const takenNodes = new Set(Object.keys(nodes))
+  for (const end of ends) {
+    const node = freshId(takenNodes, 'ref', reservation?.nodes)
+    takenNodes.add(node)
+    nodes[node] = { kind: 'ref', region: end.region, defId, sig }
+    attachArgs(wires, node, end.args)
+  }
+
+  return mkDiagram({
+    root: diagram.root,
+    regions: { ...diagram.regions },
+    nodes,
+    wires,
+  })
+}
+
+/**
+ * Inverse of ref leaf: references to one definition become ends of one fresh
+ * wire at `scope`.
+ */
+export function applyRefAbstract(
+  diagram: Diagram,
+  nodes: readonly NodeId[],
+  scope: RegionId,
+  orientation: Orientation = 'forward',
+  reservation?: IdReservation,
+): Diagram {
+  if (nodes.length === 0) {
+    throw new RuleError('ref abstract requires at least one node')
+  }
+  if (diagram.regions[scope] === undefined) {
+    throw new DiagramError(`unknown region '${scope}'`)
+  }
+  requireGate(diagram, scope, orientation, 'positive', 'ref abstract')
+
+  type RefEnd = {
+    readonly node: NodeId
+    readonly region: RegionId
+    readonly args: readonly WireId[]
+  }
+  const resolved: RefEnd[] = nodes.map((nodeId) => {
+    const node = diagram.nodes[nodeId]
+    if (node === undefined) throw new DiagramError(`unknown node '${nodeId}'`)
+    if (node.kind !== 'ref') {
+      throw new RuleError(
+        `ref abstract requires reference nodes; '${nodeId}' is a ${node.kind}`,
+      )
+    }
+    if (!isAncestorOrEqual(diagram, scope, node.region)) {
+      throw new RuleError(
+        `scope '${scope}' does not enclose ref '${nodeId}' in region `
+        + `'${node.region}'`,
+      )
+    }
+    return {
+      node: nodeId,
+      region: node.region,
+      args: node.sig.args.map((_, index) => {
+        for (const [wireId, wire] of Object.entries(diagram.wires)) {
+          if (wire.endpoints.some((endpoint) =>
+            endpoint.node === nodeId
+            && endpoint.port.kind === 'arg'
+            && endpoint.port.index === index)) return wireId
+        }
+        throw new DiagramError(
+          `ref '${nodeId}' has no attached wire at argument ${index}`,
+        )
+      }),
+    }
+  })
+  const first = diagram.nodes[resolved[0]!.node] as Extract<DiagramNode, { kind: 'ref' }>
+  for (const end of resolved) {
+    const node = diagram.nodes[end.node] as Extract<DiagramNode, { kind: 'ref' }>
+    if (node.defId !== first.defId || !sigEquals(node.sig, first.sig)) {
+      throw new RuleError(
+        `ref abstract requires one shared definition; '${end.node}' differs `
+        + `from '${resolved[0]!.node}'`,
+      )
+    }
+  }
+
+  const nextNodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
+  const wires: Record<WireId, Wire> = { ...diagram.wires }
+  const removed = new Set(resolved.map((end) => end.node))
+  for (const end of resolved) delete nextNodes[end.node]
+  withoutEndpointsOf(wires, removed)
+
+  const fresh = freshId(
+    new Set(Object.keys(wires)),
+    'refwire',
+    reservation?.wires,
+  )
+  const endpoints: Endpoint[] = []
+  const takenNodes = new Set(Object.keys(nextNodes))
+  for (const end of resolved) {
+    const node = freshId(takenNodes, 'n', reservation?.nodes)
+    takenNodes.add(node)
+    nextNodes[node] = { kind: 'atom', region: end.region, sig: first.sig }
+    endpoints.push({ node, port: { kind: 'head' } })
+    attachArgs(wires, node, end.args)
+  }
+  wires[fresh] = { scope, sig: first.sig, endpoints }
 
   return mkDiagram({
     root: diagram.root,

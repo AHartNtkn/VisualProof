@@ -49,6 +49,8 @@ import {
   applyArityUnshift,
   applyIdentityAbstract,
   applyIdentityLeaf,
+  applyRefAbstract,
+  applyRefLeaf,
 } from '../rules/wire-args'
 import {
   applyWireJoin,
@@ -94,6 +96,8 @@ export type ProofStep =
   | { readonly rule: 'abstractFormal'; readonly ends: readonly NodeId[]; readonly scope: RegionId }
   | { readonly rule: 'identityLeaf'; readonly wire: WireId }
   | { readonly rule: 'identityAbstract'; readonly nodes: readonly NodeId[]; readonly scope: RegionId }
+  | { readonly rule: 'refLeaf'; readonly wire: WireId; readonly defId: string }
+  | { readonly rule: 'refAbstract'; readonly nodes: readonly NodeId[]; readonly scope: RegionId }
 
 /** Logical transport of source wire identities through one proof step. */
 export type WireInterfaceTransport = {
@@ -311,6 +315,23 @@ function applyStepRaw(
       return applyIdentityLeaf(diagram, step.wire, orientation, reservation)
     case 'identityAbstract':
       return applyIdentityAbstract(
+        diagram,
+        step.nodes,
+        step.scope,
+        orientation,
+        reservation,
+      )
+    case 'refLeaf':
+      return applyRefLeaf(
+        diagram,
+        step.wire,
+        step.defId,
+        context.relations,
+        orientation,
+        reservation,
+      )
+    case 'refAbstract':
+      return applyRefAbstract(
         diagram,
         step.nodes,
         step.scope,

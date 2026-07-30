@@ -276,10 +276,16 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         scope: mapId(iso.regions, step.scope, 'region'),
       }
     case 'identityAbstract':
+    case 'refAbstract':
       return {
         ...step,
         nodes: step.nodes.map((node) => mapId(iso.nodes, node, 'node')),
         scope: mapId(iso.regions, step.scope, 'region'),
+      }
+    case 'refLeaf':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
       }
   }
 }
