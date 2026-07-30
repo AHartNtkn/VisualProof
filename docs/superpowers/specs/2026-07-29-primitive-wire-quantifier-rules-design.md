@@ -315,9 +315,10 @@ design in ways this project fixes because it is already rebuilding this layer:
 
 - **W with an empty selection spawns an empty double cut at the region under
   the pointer** (today it refuses "select something first"); W with a
-  selection wraps it, unchanged. Shift+W (vacuous intro with arity prompt)
-  and the Delete precedence (double-cut elim → vacuous elim → erasure →
-  deiterate) are unchanged.
+  selection wraps it, unchanged. The Delete precedence (double-cut elim →
+  vacuous elim → erasure → deiterate) is unchanged. (A Shift+W arity-prompt
+  binding was wrongly listed here as surviving doctrine; it belonged to the
+  replaced second-order bubble calculus and is not part of this design.)
 - **Menu rows duplicating agreed dedicated interactions are removed**: erase,
   doubleCutWrap, doubleCutElim, vacuousElim, deiterate, identityInsert, and
   iterate (menu-triggered iteration was explicitly removed by the 2026-07-10
