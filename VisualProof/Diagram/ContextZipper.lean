@@ -666,6 +666,26 @@ theorem ComposableSemanticZipper.toSemanticZipper
   | bind inner mapExtend induction =>
       exact SemanticZipper.bind induction mapExtend
 
+/-- The constructor-preserving identity derivation for one context. -/
+noncomputable def ComposableSemanticZipper.identity
+    {holeCtx outerCtx : List Sig}
+    (context : DiagramContext definitions holeCtx outerCtx) :
+    ComposableSemanticZipper context context
+      (fun (_pre : PreModel.{u}) env => env)
+      (fun (_pre : PreModel.{u}) env => env) := by
+  induction context with
+  | hole =>
+      exact .hole (fun _pre env => env)
+  | surround leading inner suffix induction =>
+      exact
+        .surround induction leading suffix leading suffix
+          (fun _pre _definitionEnv _env => Iff.rfl)
+          (fun _pre _definitionEnv _env => Iff.rfl)
+  | cut inner induction =>
+      exact .cut induction
+  | bind sig inner induction =>
+      exact .bind induction (fun _pre _fixed _value => rfl)
+
 /-- Reindex only the target context's exposed outer environment. -/
 noncomputable def ComposableSemanticZipper.rebaseTargetOuter
     {source :

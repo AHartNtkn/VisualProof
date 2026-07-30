@@ -121,6 +121,15 @@ private def transportCheckedContext
   cases same
   exact context
 
+private theorem transport_checked_context_cast_eq
+    {definitions : List (List Sig)}
+    {left right : CheckedDiagram definitions}
+    (same : left = right)
+    (context : ConcreteElaboration.WireContext left.val) :
+    same ▸ context = transportCheckedContext same context := by
+  cases same
+  rfl
+
 private def transportCheckedRegion
     {definitions : List (List Sig)}
     {left right : CheckedDiagram definitions}
@@ -1839,6 +1848,153 @@ private def transportRenaming
     (rho : WireRenaming source' target') :
     WireRenaming source target :=
   fun {_} value => targetExact.symm ▸ rho (sourceExact ▸ value)
+
+private theorem transportRenaming_transportCheckedVariable
+    {definitions : List (List Sig)}
+    {left right : CheckedDiagram definitions}
+    (same : left = right)
+    (context : ConcreteElaboration.WireContext left.val)
+    (sourceContext : List Sig)
+    (rho : WireRenaming sourceContext context.sigs)
+    {sig : Sig}
+    (value : Var sourceContext sig) :
+    transportRenaming rfl
+        (transport_checked_context_sigs same context) rho value =
+      transportCheckedVariable same context
+        (transportCheckedContext same context)
+        (transport_checked_context_cast_eq same context)
+        (rho value) := by
+  cases same
+  rfl
+
+private def embedOuterThroughSite
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (visible outer : ConcreteElaboration.WireContext base.val)
+    (same : visible = outer.extend site) :
+    WireRenaming outer.sigs visible.sigs :=
+  fun {_} value =>
+    (congrArg ConcreteElaboration.WireContext.sigs
+      same).symm ▸
+        ConcreteElaboration.appendRightVar base.val
+          (base.val.wiresAt site) value
+
+/-- Embed the canonical site-outer variables through the site's local block. -/
+def aboveScopeEmbedOuter
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled) :
+    WireRenaming canonical.siteOuter.sigs compiled.frame.visible.sigs :=
+  embedOuterThroughSite compiled.frame.visible canonical.siteOuter
+    canonical.visibleExact
+
+private theorem embedOuterThroughSite_origin
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (visible outer : ConcreteElaboration.WireContext base.val)
+    (same : visible = outer.extend site)
+    {sig : Sig}
+    (value : Var outer.sigs sig) :
+    ConcreteElaboration.WireContext.origin base.val visible.ids
+        (embedOuterThroughSite visible outer same value) =
+      ConcreteElaboration.WireContext.origin base.val outer.ids value := by
+  cases same
+  simpa [embedOuterThroughSite, ConcreteElaboration.WireContext.extend]
+    using
+      (ConcreteElaboration.origin_appendRightVar base.val
+        (base.val.wiresAt site) value)
+
+private theorem aboveScopeEmbedOuter_origin
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled)
+    {sig : Sig}
+    (value : Var canonical.siteOuter.sigs sig) :
+    ConcreteElaboration.WireContext.origin base.val
+        compiled.frame.visible.ids
+        (aboveScopeEmbedOuter canonical value) =
+      ConcreteElaboration.WireContext.origin base.val
+        canonical.siteOuter.ids value := by
+  exact
+    embedOuterThroughSite_origin compiled.frame.visible
+      canonical.siteOuter canonical.visibleExact value
+
+/--
+One projection authority for a compiled scope. The visible projection extends
+the zipper's site-outer projection through each endpoint's actual ordered local
+binder block; those blocks need not be equal.
+-/
+structure RelationJoinSemanticTrace.ScopeProjection
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {target : CheckedDiagram definitions}
+    {targetSite : target.val.RegionId}
+    {targetScope : SiteCompilation target targetSite}
+    (sourceCanonical :
+      SiteCompilation.AboveScopeDecomposition sourceScope)
+    (targetCanonical :
+      SiteCompilation.AboveScopeDecomposition targetScope)
+    (outerProjection :
+      WireRenaming sourceCanonical.siteOuter.sigs
+        targetCanonical.siteOuter.sigs) where
+  visibleProjection :
+    WireRenaming sourceScope.frame.visible.sigs
+      targetScope.frame.visible.sigs
+  visibleExtendsOuter :
+    ∀ {sig : Sig} (value : Var sourceCanonical.siteOuter.sigs sig),
+      visibleProjection (aboveScopeEmbedOuter sourceCanonical value) =
+        aboveScopeEmbedOuter targetCanonical (outerProjection value)
+
+def RelationJoinSemanticTrace.ScopeProjection.identity
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled) :
+    RelationJoinSemanticTrace.ScopeProjection canonical canonical
+      (fun {_} value => value) where
+  visibleProjection := fun {_} value => value
+  visibleExtendsOuter := fun _value => rfl
+
+def RelationJoinSemanticTrace.ScopeProjection.compose
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {middle : CheckedDiagram definitions}
+    {middleSite : middle.val.RegionId}
+    {middleScope : SiteCompilation middle middleSite}
+    {target : CheckedDiagram definitions}
+    {targetSite : target.val.RegionId}
+    {targetScope : SiteCompilation target targetSite}
+    {sourceCanonical :
+      SiteCompilation.AboveScopeDecomposition sourceScope}
+    {middleCanonical :
+      SiteCompilation.AboveScopeDecomposition middleScope}
+    {targetCanonical :
+      SiteCompilation.AboveScopeDecomposition targetScope}
+    {firstOuter :
+      WireRenaming sourceCanonical.siteOuter.sigs
+        middleCanonical.siteOuter.sigs}
+    {secondOuter :
+      WireRenaming middleCanonical.siteOuter.sigs
+        targetCanonical.siteOuter.sigs}
+    (first :
+      RelationJoinSemanticTrace.ScopeProjection
+        sourceCanonical middleCanonical firstOuter)
+    (second :
+      RelationJoinSemanticTrace.ScopeProjection
+        middleCanonical targetCanonical secondOuter) :
+    RelationJoinSemanticTrace.ScopeProjection
+      sourceCanonical targetCanonical
+      (fun {_} value => secondOuter (firstOuter value)) where
+  visibleProjection :=
+    fun {_} value =>
+      second.visibleProjection (first.visibleProjection value)
+  visibleExtendsOuter := by
+    intro sig value
+    rw [first.visibleExtendsOuter, second.visibleExtendsOuter]
 
 private theorem transportRenaming_reindexed_identity
     {source source' target target' : List Sig}
@@ -3922,6 +4078,26 @@ private theorem transportRegion_root
   cases same
   simp [transportRegion]
 
+private def transportWire
+    {left right : ConcreteDiagram definitionCount}
+    (same : left = right)
+    (wire : left.WireId) :
+    right.WireId :=
+  Fin.cast (congrArg ConcreteDiagram.wireCount same) wire
+
+def relationJoinPriorToCheckedWire
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    (step : RelationJoinStep source dying content)
+    (wire : step.prior.val.WireId) :
+    step.checked.val.WireId :=
+  transportWire step.checked_generated.symm
+    (step.attachment.hostWire
+      (transportWire step.base_generated.symm
+        (SingletonRemovalSemantics.targetWire
+          step.prior step.priorApplication wire)))
+
 def relationJoinPriorToCheckedRegion
     {source : CheckedDiagram definitions}
     {dying : source.val.WireId}
@@ -4083,6 +4259,13 @@ structure RelationJoinStep.AboveDyingScopeReceipt
       checkedBody
   siteProjection :
     WireRenaming priorSiteOuter.sigs checkedSiteOuter.sigs
+  siteProjectionOrigin :
+    ∀ {sig : Sig} (value : Var priorSiteOuter.sigs sig),
+      ConcreteElaboration.WireContext.origin step.checked.val
+          checkedSiteOuter.ids (siteProjection value) =
+        relationJoinPriorToCheckedWire step
+          (ConcreteElaboration.WireContext.origin step.prior.val
+            priorSiteOuter.ids value)
   priorRootFill :
     priorScope.checked =
       priorAbove.fill
@@ -4213,6 +4396,13 @@ private theorem RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
         checkedBody)
     (siteProjection :
       WireRenaming priorSiteOuter.sigs checkedSiteOuter.sigs)
+    (siteProjectionOrigin :
+      ∀ {sig : Sig} (value : Var priorSiteOuter.sigs sig),
+        ConcreteElaboration.WireContext.origin step.checked.val
+            checkedSiteOuter.ids (siteProjection value) =
+          relationJoinPriorToCheckedWire step
+            (ConcreteElaboration.WireContext.origin step.prior.val
+              priorSiteOuter.ids value))
     (priorRootFill :
       priorScope.checked =
         priorAbove.fill
@@ -4247,6 +4437,7 @@ private theorem RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
     priorBodyExact := priorBodyExact
     checkedBodyExact := checkedBodyExact
     siteProjection := siteProjection
+    siteProjectionOrigin := siteProjectionOrigin
     priorRootFill := priorRootFill
     checkedRootFill := checkedRootFill
     composable := composable
@@ -8550,6 +8741,27 @@ private theorem RelationJoinStep.aboveDyingScopeReceiptOfExplicitBase
       WireRenaming reflected.sourceSiteOuter.sigs
         checkedSiteOuter.sigs :=
     transportRenaming rfl checkedSiteOuterSigs rawSiteProjection
+  have siteProjectionOrigin :
+      ∀ {sig : Sig}
+        (value : Var reflected.sourceSiteOuter.sigs sig),
+        ConcreteElaboration.WireContext.origin step.checked.val
+            checkedSiteOuter.ids (siteProjection value) =
+          relationJoinPriorToCheckedWire step
+            (ConcreteElaboration.WireContext.origin step.prior.val
+              reflected.sourceSiteOuter.ids value) := by
+    intro sig value
+    unfold siteProjection
+    rw [transportRenaming_transportCheckedVariable checkedExact
+      rawCheckedSiteOuter reflected.sourceSiteOuter.sigs
+      rawSiteProjection value]
+    unfold rawSiteProjection
+    rw [transportCheckedVariable_origin,
+      InsertionCompilation.NaturalityInternal.hostContextRenaming_origin]
+    dsimp [singletonErasureBase]
+    rw [SingletonRemovalSemantics.contextRenaming_action]
+    unfold relationJoinPriorToCheckedWire transportWire
+    apply Fin.ext
+    rfl
   have outerMapExact :
       (fun (pre : PreModel.{u}) (env : Env pre []) => env) =
         (fun (pre : PreModel.{u}) (env : Env pre []) =>
@@ -8599,7 +8811,8 @@ private theorem RelationJoinStep.aboveDyingScopeReceiptOfExplicitBase
             reflected.targetAbove reflected.targetStoppedVisible
             reflected.targetDecomposition checkedVisibleExact)
       priorBodyExact checkedBodyExact
-      siteProjection priorRootFill checkedRootFill composable
+      siteProjection siteProjectionOrigin priorRootFill checkedRootFill
+      composable
 
 theorem RelationJoinStep.aboveDyingScopeReceipt
     {source : CheckedDiagram definitions}
@@ -8719,9 +8932,10 @@ private theorem RelationJoinStep.preBinderDenotation
       (aboveReceipt :
         RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
           checkedScope)
-      (projection :
-        WireRenaming priorScope.frame.visible.sigs
-          checkedScope.frame.visible.sigs)
+      (scopeProjection :
+        RelationJoinSemanticTrace.ScopeProjection
+          aboveReceipt.priorCanonical aboveReceipt.checkedCanonical
+          aboveReceipt.siteProjection)
       (priorHead :
         Var priorScope.frame.visible.sigs (.rel step.relationArgs))
       (checkedHead :
@@ -8742,8 +8956,11 @@ private theorem RelationJoinStep.preBinderDenotation
       ConcreteElaboration.variableOrigins step.checked.val
           checkedScope.frame.visible checkedParameters =
         step.sourceParameters.map step.checkedWireImage ∧
-      projection (sig := .rel step.relationArgs) priorHead = checkedHead ∧
-      Vars.rename projection priorParameters = checkedParameters ∧
+      scopeProjection.visibleProjection
+          (sig := .rel step.relationArgs) priorHead =
+        checkedHead ∧
+      Vars.rename scopeProjection.visibleProjection priorParameters =
+        checkedParameters ∧
       ∀ checkedEnv :
           Env model.toPreModel checkedScope.frame.visible.sigs,
         checkedEnv (.rel step.relationArgs) checkedHead =
@@ -8753,7 +8970,7 @@ private theorem RelationJoinStep.preBinderDenotation
           denoteRegion model.toPreModel definitionEnv checkedEnv
               checkedScope.frame.siteBody →
             denoteRegion model.toPreModel definitionEnv
-              (Env.comp checkedEnv projection)
+              (Env.comp checkedEnv scopeProjection.visibleProjection)
               priorScope.frame.siteBody := by
   obtain ⟨priorScope, priorOuter, fuel, priorFrame, priorVisible,
       priorInner, priorScopeVisible, priorAbove, priorGenerated,
@@ -9145,6 +9362,23 @@ private theorem RelationJoinStep.preBinderDenotation
       InsertionCompilation.enclosingRenaming_contextAction compiled
         (step.baseRegionImage (source.val.wires dying).scope)
         baseReceipt.outer value
+  have projectionOriginGeneral :
+      ∀ {sig : Sig}
+        (value : Var priorScope.frame.visible.sigs sig),
+        ConcreteElaboration.WireContext.origin step.checked.val
+            checkedScope.frame.visible.ids (projection value) =
+          relationJoinPriorToCheckedWire step
+            (ConcreteElaboration.WireContext.origin step.prior.val
+              priorScope.frame.visible.ids value) := by
+    intro sig value
+    unfold projection
+    rw [transportCheckedVariable_origin,
+      transportVariable_origin, enclosingProjectionOrigin,
+      transportVariable_origin, extendedContextRenaming_origin,
+      transportVariable_origin]
+    unfold relationJoinPriorToCheckedWire transportWire
+    apply Fin.ext
+    rfl
   have projectionOrigin :
       ∀ (sourceWire : source.val.WireId)
         {sig : Sig}
@@ -9156,11 +9390,7 @@ private theorem RelationJoinStep.preBinderDenotation
               checkedScope.frame.visible.ids (projection value) =
             step.checkedWireImage sourceWire := by
     intro sourceWire sig value sourceOrigin
-    unfold projection
-    rw [transportCheckedVariable_origin,
-      transportVariable_origin, enclosingProjectionOrigin,
-      transportVariable_origin, extendedContextRenaming_origin,
-      transportVariable_origin, sourceOrigin]
+    rw [projectionOriginGeneral, sourceOrigin]
     rw [step.checkedWireImageExact, step.baseWireImageExact]
     apply Fin.ext
     rfl
@@ -9196,8 +9426,25 @@ private theorem RelationJoinStep.preBinderDenotation
   obtain ⟨aboveReceipt⟩ :=
     RelationJoinStep.aboveDyingScopeReceipt step contentCompiled compiled
       priorScope checkedScope
+  let scopeProjection :
+      RelationJoinSemanticTrace.ScopeProjection
+        aboveReceipt.priorCanonical aboveReceipt.checkedCanonical
+        aboveReceipt.siteProjection :=
+    {
+      visibleProjection := projection
+      visibleExtendsOuter := by
+        intro sig value
+        apply
+          InsertionCompilation.NaturalityInternal.origin_injective
+            step.checked.val checkedScope.frame.visible.ids
+        · exact siteCompilation_visible_nodup checkedScope
+        · rw [projectionOriginGeneral]
+          rw [aboveScopeEmbedOuter_origin,
+              aboveScopeEmbedOuter_origin]
+          exact (aboveReceipt.siteProjectionOrigin value).symm
+    }
   refine
-    ⟨priorScope, checkedScope, aboveReceipt, projection,
+    ⟨priorScope, checkedScope, aboveReceipt, scopeProjection,
       priorHead, checkedHead,
       priorParameters, checkedParameters, priorHeadOrigin,
       checkedHeadOrigin, priorParameterOrigins, checkedParameterOrigins,
@@ -10972,6 +11219,49 @@ theorem RelationJoinSemanticTrace.finalDyingScope
       sourceParametersExact induction =>
       exact step.checked_dying_scope
 
+/-- The canonical endpoints, projection, and structural derivation of a fold. -/
+structure RelationJoinSemanticTrace.AboveDyingScopeTransport
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    (sourceScope : SiteCompilation source sourceSite)
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    (finalScope : SiteCompilation final finalSite) : Type (u + 1) where
+  sourceCanonical :
+    SiteCompilation.AboveScopeDecomposition sourceScope
+  finalCanonical :
+    SiteCompilation.AboveScopeDecomposition finalScope
+  outerProjection :
+    WireRenaming sourceCanonical.siteOuter.sigs
+      finalCanonical.siteOuter.sigs
+  scopeProjection :
+    RelationJoinSemanticTrace.ScopeProjection
+      sourceCanonical finalCanonical outerProjection
+  composable :
+    DiagramContext.ComposableSemanticZipper
+      sourceCanonical.above finalCanonical.above
+      (fun (_pre : PreModel.{u}) env => env)
+      (fun (_pre : PreModel.{u}) env =>
+        Env.comp env outerProjection)
+
+/-- Interpret exactly the structural derivation owned by one trace transport. -/
+theorem RelationJoinSemanticTrace.AboveDyingScopeTransport.toSemanticZipper
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (transport :
+      RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+        sourceScope finalScope) :
+    DiagramContext.SemanticZipper
+      transport.sourceCanonical.above transport.finalCanonical.above
+      (fun (_pre : PreModel.{u}) env => env)
+      (fun (_pre : PreModel.{u}) env =>
+        Env.comp env transport.outerProjection) :=
+  transport.composable.toSemanticZipper
+
 /--
 The structural part of the sole relation trace. Nil is an indexed identity;
 every nonempty trace carries one constructor-preserving source-to-final
@@ -10990,79 +11280,150 @@ inductive RelationJoinSemanticTrace.AboveDyingScopeFold
       {finalSite : final.val.RegionId}
       (finalScope : SiteCompilation final finalSite)
       (same : HEq finalScope sourceScope) :
+      (transport :
+        RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+          sourceScope finalScope) →
       AboveDyingScopeFold sourceScope finalScope
   | nonempty
-      {actualSource : CheckedDiagram definitions}
-      {actualSourceSite : actualSource.val.RegionId}
-      {actualSourceScope :
-        SiteCompilation actualSource actualSourceSite}
       {final : CheckedDiagram definitions}
       {finalSite : final.val.RegionId}
       {finalScope : SiteCompilation final finalSite}
-      (sourceExact : HEq actualSourceScope sourceScope)
-      (sourceCanonical :
-        SiteCompilation.AboveScopeDecomposition actualSourceScope)
-      (finalCanonical :
-        SiteCompilation.AboveScopeDecomposition finalScope)
-      (holeMap :
-        ∀ pre : PreModel.{u},
-          Env pre finalCanonical.siteOuter.sigs →
-            Env pre sourceCanonical.siteOuter.sigs)
-      (composable :
-        DiagramContext.ComposableSemanticZipper
-          sourceCanonical.above finalCanonical.above
-          (fun (_pre : PreModel.{u}) env => env)
-          holeMap) :
+      (transport :
+        RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+          sourceScope finalScope) :
       AboveDyingScopeFold sourceScope finalScope
 
-private noncomputable def
-    RelationJoinSemanticTrace.AboveDyingScopeFold.composeNonempty
+def RelationJoinSemanticTrace.AboveDyingScopeFold.transport
     {source : CheckedDiagram definitions}
     {sourceSite : source.val.RegionId}
-    {actualSourceScope : SiteCompilation source sourceSite}
-    {foldSource : CheckedDiagram definitions}
-    {foldSourceSite : foldSource.val.RegionId}
-    {foldSourceScope :
-      SiteCompilation foldSource foldSourceSite}
+    {sourceScope : SiteCompilation source sourceSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (fold :
+      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+        sourceScope finalScope) :
+    RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+      sourceScope finalScope :=
+  match fold with
+  | .identity _ _ transport => transport
+  | .nonempty transport => transport
+
+def RelationJoinSemanticTrace.AboveDyingScopeFold.scopeProjection
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (fold :
+      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+        sourceScope finalScope) :
+    RelationJoinSemanticTrace.ScopeProjection
+      fold.transport.sourceCanonical fold.transport.finalCanonical
+      fold.transport.outerProjection :=
+  fold.transport.scopeProjection
+
+theorem RelationJoinSemanticTrace.AboveDyingScopeFold.toSemanticZipper
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (fold :
+      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+        sourceScope finalScope) :
+    DiagramContext.SemanticZipper
+      fold.transport.sourceCanonical.above
+      fold.transport.finalCanonical.above
+      (fun (_pre : PreModel.{u}) env => env)
+      (fun (_pre : PreModel.{u}) env =>
+        Env.comp env fold.transport.outerProjection) :=
+  fold.transport.toSemanticZipper
+
+/--
+Consume an endpoint local law through the interpreter owned by this fold.
+Callers close the site's ordered local binders into `sourceBody` and
+`finalBody`; this theorem is the sole above-scope integration surface.
+-/
+theorem
+    RelationJoinSemanticTrace.AboveDyingScopeFold.transportEndpointLocalLaw
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (fold :
+      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+        sourceScope finalScope)
+    (direction : DiagramContext.ContextDirection)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (sourceBody :
+      Region definitions fold.transport.sourceCanonical.siteOuter.sigs)
+    (finalBody :
+      Region definitions fold.transport.finalCanonical.siteOuter.sigs)
+    (fixed : Env pre [])
+    (localLaw :
+      ∀ descendant :
+          Env pre fold.transport.finalCanonical.siteOuter.sigs,
+        DiagramContext.PreservesOuter
+            fold.transport.finalCanonical.above fixed descendant →
+          direction.holds
+            (denoteRegion pre definitionEnv descendant finalBody)
+            (denoteRegion pre definitionEnv
+              (Env.comp descendant fold.transport.outerProjection)
+              sourceBody)) :
+    (direction.through
+        fold.transport.sourceCanonical.above.cutDepth).holds
+      (denoteRegion pre definitionEnv fixed
+        (fold.transport.finalCanonical.above.fill finalBody))
+      (denoteRegion pre definitionEnv fixed
+        (fold.transport.sourceCanonical.above.fill sourceBody)) :=
+  fold.toSemanticZipper.transport direction pre definitionEnv
+    sourceBody finalBody fixed localLaw
+
+private noncomputable def
+    RelationJoinSemanticTrace.AboveDyingScopeTransport.compose
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
     {middle : CheckedDiagram definitions}
     {middleSite : middle.val.RegionId}
     {middleScope : SiteCompilation middle middleSite}
     {final : CheckedDiagram definitions}
     {finalSite : final.val.RegionId}
     {finalScope : SiteCompilation final finalSite}
-    (sourceExact : HEq actualSourceScope foldSourceScope)
-    (sourceCanonical :
-      SiteCompilation.AboveScopeDecomposition actualSourceScope)
-    (middleCanonical :
-      SiteCompilation.AboveScopeDecomposition middleScope)
-    (holeMap :
-      ∀ pre : PreModel.{u},
-        Env pre middleCanonical.siteOuter.sigs →
-          Env pre sourceCanonical.siteOuter.sigs)
-    (composable :
-      DiagramContext.ComposableSemanticZipper
-        sourceCanonical.above middleCanonical.above
-        (fun (_pre : PreModel.{u}) env => env)
-        holeMap)
+    (first :
+      RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+        sourceScope middleScope)
     (nextCanonical :
       SiteCompilation.AboveScopeDecomposition middleScope)
     (finalCanonical :
       SiteCompilation.AboveScopeDecomposition finalScope)
-    (nextHoleMap :
-      ∀ pre : PreModel.{u},
-        Env pre finalCanonical.siteOuter.sigs →
-          Env pre nextCanonical.siteOuter.sigs)
+    (nextOuterProjection :
+      WireRenaming nextCanonical.siteOuter.sigs
+        finalCanonical.siteOuter.sigs)
+    (nextProjection :
+      RelationJoinSemanticTrace.ScopeProjection
+        nextCanonical finalCanonical nextOuterProjection)
     (nextComposable :
       DiagramContext.ComposableSemanticZipper
         nextCanonical.above finalCanonical.above
         (fun (_pre : PreModel.{u}) env => env)
-        nextHoleMap)
+        (fun (_pre : PreModel.{u}) env =>
+          Env.comp env nextOuterProjection))
     (aligned :
       SiteCompilation.AboveScopeDecomposition.Alignment
-        middleCanonical nextCanonical) :
-    RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
-      foldSourceScope finalScope := by
-  cases middleCanonical with
+        first.finalCanonical nextCanonical) :
+    RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+      sourceScope finalScope := by
+  cases first with
+  | mk sourceCanonical middleCanonical firstOuterProjection firstProjection
+      firstComposable =>
+    cases middleCanonical with
   | mk middleOuter middleAbove middleVisible middleDecomposition =>
       cases nextCanonical with
       | mk nextOuter nextAbove nextVisible nextDecomposition =>
@@ -11070,11 +11431,73 @@ private noncomputable def
           | mk outerExact aboveExact =>
               cases outerExact
               cases aboveExact
+              let scopeProjection :=
+                firstProjection.compose nextProjection
               exact
-                .nonempty sourceExact sourceCanonical finalCanonical
-                  (fun pre env => holeMap pre (nextHoleMap pre env))
-                  (DiagramContext.ComposableSemanticZipper.compose
-                    composable nextComposable)
+                {
+                  sourceCanonical := sourceCanonical
+                  finalCanonical := finalCanonical
+                  outerProjection :=
+                    fun {_} value =>
+                      nextOuterProjection (firstOuterProjection value)
+                  scopeProjection := scopeProjection
+                  composable :=
+                    DiagramContext.ComposableSemanticZipper.compose
+                      firstComposable nextComposable
+                }
+
+private theorem
+    RelationJoinSemanticTrace.AboveDyingScopeTransport.compose_visibleProjection
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {middle : CheckedDiagram definitions}
+    {middleSite : middle.val.RegionId}
+    {middleScope : SiteCompilation middle middleSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (first :
+      RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+        sourceScope middleScope)
+    (nextCanonical :
+      SiteCompilation.AboveScopeDecomposition middleScope)
+    (finalCanonical :
+      SiteCompilation.AboveScopeDecomposition finalScope)
+    (nextOuterProjection :
+      WireRenaming nextCanonical.siteOuter.sigs
+        finalCanonical.siteOuter.sigs)
+    (nextProjection :
+      RelationJoinSemanticTrace.ScopeProjection
+        nextCanonical finalCanonical nextOuterProjection)
+    (nextComposable :
+      DiagramContext.ComposableSemanticZipper
+        nextCanonical.above finalCanonical.above
+        (fun (_pre : PreModel.{u}) env => env)
+        (fun (_pre : PreModel.{u}) env =>
+          Env.comp env nextOuterProjection))
+    (aligned :
+      SiteCompilation.AboveScopeDecomposition.Alignment
+        first.finalCanonical nextCanonical)
+    {sig : Sig}
+    (value : Var sourceScope.frame.visible.sigs sig) :
+    (first.compose nextCanonical finalCanonical nextOuterProjection
+        nextProjection nextComposable aligned).scopeProjection.visibleProjection
+          value =
+      nextProjection.visibleProjection
+        (first.scopeProjection.visibleProjection value) := by
+  cases first with
+  | mk sourceCanonical middleCanonical firstOuterProjection firstProjection
+      firstComposable =>
+    cases middleCanonical with
+    | mk middleOuter middleAbove middleVisible middleDecomposition =>
+      cases nextCanonical with
+      | mk nextOuter nextAbove nextVisible nextDecomposition =>
+          cases aligned with
+          | mk outerExact aboveExact =>
+              cases outerExact
+              cases aboveExact
+              rfl
 
 noncomputable def RelationJoinSemanticTrace.AboveDyingScopeFold.snoc
     {source : CheckedDiagram definitions}
@@ -11094,24 +11517,59 @@ noncomputable def RelationJoinSemanticTrace.AboveDyingScopeFold.snoc
         sourceScope priorScope)
     (stepReceipt :
       RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
-        checkedScope) :
+        checkedScope)
+    (stepProjection :
+      RelationJoinSemanticTrace.ScopeProjection
+        stepReceipt.priorCanonical stepReceipt.checkedCanonical
+        stepReceipt.siteProjection) :
     RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
       sourceScope checkedScope := by
-  cases fold with
-  | identity =>
-      exact
-        .nonempty (by assumption) stepReceipt.priorCanonical
-          stepReceipt.checkedCanonical
-          (fun _pre env => Env.comp env stepReceipt.siteProjection)
-          stepReceipt.composable
-  | nonempty sourceExact sourceCanonical middleCanonical holeMap
-      composable =>
-      exact
-        .composeNonempty sourceExact sourceCanonical middleCanonical holeMap
-          composable stepReceipt.priorCanonical stepReceipt.checkedCanonical
-          (fun _pre env => Env.comp env stepReceipt.siteProjection)
-          stepReceipt.composable
-          (middleCanonical.alignment stepReceipt.priorCanonical)
+  exact
+    .nonempty
+      (fold.transport.compose stepReceipt.priorCanonical
+        stepReceipt.checkedCanonical stepReceipt.siteProjection
+        stepProjection stepReceipt.composable
+        (fold.transport.finalCanonical.alignment
+          stepReceipt.priorCanonical))
+
+theorem RelationJoinSemanticTrace.AboveDyingScopeFold.snoc_visibleProjection
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {sourceScope :
+      SiteCompilation source (source.val.wires dying).scope}
+    {step : RelationJoinStep source dying content}
+    {priorScope :
+      SiteCompilation step.prior
+        (step.priorRegionImage (source.val.wires dying).scope)}
+    {checkedScope :
+      SiteCompilation step.checked
+        (step.checkedRegionImage (source.val.wires dying).scope)}
+    (fold :
+      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+        sourceScope priorScope)
+    (stepReceipt :
+      RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
+        checkedScope)
+    (stepProjection :
+      RelationJoinSemanticTrace.ScopeProjection
+        stepReceipt.priorCanonical stepReceipt.checkedCanonical
+        stepReceipt.siteProjection)
+    {sig : Sig}
+    (value : Var sourceScope.frame.visible.sigs sig) :
+    (fold.snoc stepReceipt stepProjection).scopeProjection.visibleProjection
+        value =
+      stepProjection.visibleProjection
+        (fold.scopeProjection.visibleProjection value) := by
+  unfold RelationJoinSemanticTrace.AboveDyingScopeFold.snoc
+    RelationJoinSemanticTrace.AboveDyingScopeFold.scopeProjection
+    RelationJoinSemanticTrace.AboveDyingScopeFold.transport
+  exact
+    fold.transport.compose_visibleProjection stepReceipt.priorCanonical
+      stepReceipt.checkedCanonical stepReceipt.siteProjection
+      stepProjection stepReceipt.composable
+      (fold.transport.finalCanonical.alignment
+        stepReceipt.priorCanonical) value
 
 /--
 Fold the sole accepted relation-join trace at the dying scope before its
@@ -11158,9 +11616,6 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
       (aboveFold :
         RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
           sourceScope finalScopeCompiled)
-      (projection :
-        WireRenaming sourceScope.frame.visible.sigs
-          finalScopeCompiled.frame.visible.sigs)
       (sourceHead :
         Var sourceScope.frame.visible.sigs (.rel args))
       (finalHead :
@@ -11183,8 +11638,12 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
       ConcreteElaboration.variableOrigins final.val
           finalScopeCompiled.frame.visible finalParameters =
         parameters.map finalWireImage ∧
-      projection (sig := .rel args) sourceHead = finalHead ∧
-      Vars.rename projection sourceParameters = finalParameters ∧
+      aboveFold.scopeProjection.visibleProjection
+          (sig := .rel args) sourceHead =
+        finalHead ∧
+      Vars.rename aboveFold.scopeProjection.visibleProjection
+          sourceParameters =
+        finalParameters ∧
       ∀ finalEnv :
           Env model.toPreModel finalScopeCompiled.frame.visible.sigs,
         finalEnv (.rel args) finalHead =
@@ -11194,7 +11653,8 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
           denoteRegion model.toPreModel definitionEnv finalEnv
               finalScopeCompiled.frame.siteBody →
             denoteRegion model.toPreModel definitionEnv
-              (Env.comp finalEnv projection)
+              (Env.comp finalEnv
+                aboveFold.scopeProjection.visibleProjection)
               sourceScope.frame.siteBody := by
   induction trace with
   | nil =>
@@ -11247,23 +11707,48 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         exact
           variablesOfMembers_origins source.val sourceScope.frame.visible
             parameters parameterMembers
-      let projection :
-          WireRenaming sourceScope.frame.visible.sigs
-            sourceScope.frame.visible.sigs :=
-        fun {_} value => value
+      obtain ⟨sourceCanonical⟩ :=
+        sourceScope.aboveScopeDecomposition
+      let identityTransport :
+          RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
+            sourceScope sourceScope :=
+        {
+          sourceCanonical := sourceCanonical
+          finalCanonical := sourceCanonical
+          outerProjection := fun {_} value => value
+          scopeProjection :=
+            RelationJoinSemanticTrace.ScopeProjection.identity
+              sourceCanonical
+          composable :=
+            DiagramContext.ComposableSemanticZipper.identity
+              sourceCanonical.above
+        }
+      let aboveFold :
+          RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+            sourceScope sourceScope :=
+        .identity sourceScope HEq.rfl identityTransport
       have projectionParameters :
-          Vars.rename projection sourceParameters = sourceParameters := by
-        simpa only [projection] using
+          Vars.rename aboveFold.scopeProjection.visibleProjection
+              sourceParameters =
+            sourceParameters := by
+        change
+          Vars.rename (fun {_} value => value) sourceParameters =
+            sourceParameters
+        simpa only using
           vars_rename_identity sourceParameters
       refine
-        ⟨sourceScope, .identity sourceScope (HEq.rfl), projection,
-          sourceHead, sourceHead,
+        ⟨sourceScope, aboveFold, sourceHead, sourceHead,
           sourceParameters, sourceParameters, sourceHeadOrigin,
-          sourceHeadOrigin, sourceParameterOrigins, ?_, rfl,
+          sourceHeadOrigin, sourceParameterOrigins, ?_, ?_,
           projectionParameters, ?_⟩
       · simpa using sourceParameterOrigins
+      · rfl
       · intro finalEnv _headValue finalHolds
-        exact finalHolds
+        change
+          denoteRegion model.toPreModel definitionEnv
+              (Env.comp finalEnv (fun {_} value => value))
+              sourceScope.frame.siteBody
+        simpa [Env.comp] using finalHolds
   | snoc trace step priorExact priorRegionImageExact priorWireImageExact
       priorDyingExact priorScopeExact relationArgsExact
       sourceParametersExact induction =>
@@ -11274,7 +11759,7 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
       cases eq_of_heq priorScopeExact
       cases relationArgsExact
       cases sourceParametersExact
-      obtain ⟨priorCanonicalScope, priorAboveFold, priorProjection,
+      obtain ⟨priorCanonicalScope, priorAboveFold,
           sourceHead, priorCanonicalHead, sourceParameters,
           priorCanonicalParameters, sourceHeadOrigin,
           priorCanonicalHeadOrigin, sourceParameterOrigins,
@@ -11283,7 +11768,8 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         induction
       obtain ⟨compiled, _compiledGenerated⟩ :=
         step.insertionCompilation contentCompiled
-      obtain ⟨priorStepScope, checkedScope, stepAboveReceipt, stepProjection,
+      obtain ⟨priorStepScope, checkedScope, stepAboveReceipt,
+          stepScopeProjection,
           priorStepHead, checkedHead, priorStepParameters,
           checkedParameters, priorStepHeadOrigin, checkedHeadOrigin,
           priorStepParameterOrigins, checkedParameterOrigins,
@@ -11295,7 +11781,7 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         SiteCompilation.unique priorCanonicalScope priorStepScope
       cases priorScopeExact
       let finalAboveFold :=
-        priorAboveFold.snoc stepAboveReceipt
+        priorAboveFold.snoc stepAboveReceipt stepScopeProjection
       have priorHeadsExact :
           priorCanonicalHead = priorStepHead := by
         apply
@@ -11314,46 +11800,83 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         exact
           priorCanonicalParameterOrigins.trans
             priorStepParameterOrigins.symm
-      let projection :
-          WireRenaming sourceScope.frame.visible.sigs
-            checkedScope.frame.visible.sigs :=
-        fun {_} value => stepProjection (priorProjection value)
+      have finalProjectionExact :
+          ∀ {sig : Sig}
+            (value : Var sourceScope.frame.visible.sigs sig),
+            finalAboveFold.scopeProjection.visibleProjection value =
+              stepScopeProjection.visibleProjection
+                (priorAboveFold.scopeProjection.visibleProjection value) := by
+        intro sig value
+        exact
+          priorAboveFold.snoc_visibleProjection stepAboveReceipt
+            stepScopeProjection value
+      have finalProjectionRenamingExact :
+          (fun {sig : Sig}
+              (value : Var sourceScope.frame.visible.sigs sig) =>
+            finalAboveFold.scopeProjection.visibleProjection value :
+            WireRenaming sourceScope.frame.visible.sigs
+              checkedScope.frame.visible.sigs) =
+            (fun {sig : Sig}
+                (value : Var sourceScope.frame.visible.sigs sig) =>
+              stepScopeProjection.visibleProjection
+                (priorAboveFold.scopeProjection.visibleProjection value) :
+              WireRenaming sourceScope.frame.visible.sigs
+                checkedScope.frame.visible.sigs) := by
+        funext sig value
+        exact finalProjectionExact value
       have projectionHeadExact :
-          projection sourceHead = checkedHead := by
-        change stepProjection (priorProjection sourceHead) = checkedHead
+          finalAboveFold.scopeProjection.visibleProjection sourceHead =
+            checkedHead := by
+        rw [finalProjectionExact]
         rw [priorHeadExact, priorHeadsExact, stepHeadExact]
       have projectionParametersExact :
-          Vars.rename projection sourceParameters =
+          Vars.rename finalAboveFold.scopeProjection.visibleProjection
+              sourceParameters =
             checkedParameters := by
+        change
+          Vars.rename
+              (fun {sig : Sig}
+                (value : Var sourceScope.frame.visible.sigs sig) =>
+                  finalAboveFold.scopeProjection.visibleProjection value)
+              sourceParameters =
+            checkedParameters
+        rw [finalProjectionRenamingExact]
         rw [← stepParametersExact, ← priorParameterVariablesExact,
           ← priorParametersExact]
         exact
-          (vars_rename_compose priorProjection stepProjection
-            sourceParameters).symm
+          (vars_rename_compose
+            priorAboveFold.scopeProjection.visibleProjection
+            stepScopeProjection.visibleProjection sourceParameters).symm
       refine
-        ⟨checkedScope, finalAboveFold, projection, sourceHead, checkedHead,
+        ⟨checkedScope, finalAboveFold, sourceHead, checkedHead,
           sourceParameters, checkedParameters, sourceHeadOrigin,
           checkedHeadOrigin, sourceParameterOrigins,
           checkedParameterOrigins, projectionHeadExact,
           projectionParametersExact, ?_⟩
       intro checkedEnv checkedHeadValue checkedBody
       have priorParameterValuesExact :
-          Vars.denote (Env.comp checkedEnv stepProjection)
+          Vars.denote
+              (Env.comp checkedEnv
+                stepScopeProjection.visibleProjection)
               priorCanonicalParameters =
             Vars.denote checkedEnv checkedParameters := by
         rw [← Vars.denote_rename, priorParameterVariablesExact,
           stepParametersExact]
       have priorHeadValue :
-          (Env.comp checkedEnv stepProjection) (.rel step.relationArgs)
+          (Env.comp checkedEnv stepScopeProjection.visibleProjection)
+              (.rel step.relationArgs)
               priorCanonicalHead =
             WireQuantifierSemantics.contentRelation model definitionEnv
               contentCompiled boundaryExact
-                (Vars.denote (Env.comp checkedEnv stepProjection)
+                (Vars.denote
+                  (Env.comp checkedEnv
+                    stepScopeProjection.visibleProjection)
                   priorCanonicalParameters) := by
         rw [priorParameterValuesExact]
         change
           checkedEnv (.rel step.relationArgs)
-              (stepProjection priorCanonicalHead) =
+              (stepScopeProjection.visibleProjection
+                priorCanonicalHead) =
             WireQuantifierSemantics.contentRelation model definitionEnv
               contentCompiled boundaryExact
                 (Vars.denote checkedEnv checkedParameters)
@@ -11361,13 +11884,24 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         exact checkedHeadValue
       have priorBody :
           denoteRegion model.toPreModel definitionEnv
-              (Env.comp checkedEnv stepProjection)
+              (Env.comp checkedEnv
+                stepScopeProjection.visibleProjection)
               priorCanonicalScope.frame.siteBody :=
         stepLaw checkedEnv checkedHeadValue checkedBody
       have sourceBody :=
-        priorLaw (Env.comp checkedEnv stepProjection) priorHeadValue
+        priorLaw
+          (Env.comp checkedEnv
+            stepScopeProjection.visibleProjection) priorHeadValue
           priorBody
-      exact sourceBody
+      change
+        denoteRegion model.toPreModel definitionEnv
+          (Env.comp checkedEnv
+            (fun {sig : Sig}
+              (value : Var sourceScope.frame.visible.sigs sig) =>
+                finalAboveFold.scopeProjection.visibleProjection value))
+          sourceScope.frame.siteBody
+      rw [finalProjectionRenamingExact]
+      simpa [Env.comp] using sourceBody
 
 /--
 Expose the folded trace at the canonical final dying-wire scope, eliminating
@@ -11411,9 +11945,6 @@ private theorem RelationJoinSemanticTrace.preBinderDenotation
       (aboveFold :
         RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
           sourceScope finalScopeCompiled)
-      (projection :
-        WireRenaming sourceScope.frame.visible.sigs
-          finalScopeCompiled.frame.visible.sigs)
       (sourceHead :
         Var sourceScope.frame.visible.sigs (.rel args))
       (finalHead :
@@ -11434,8 +11965,12 @@ private theorem RelationJoinSemanticTrace.preBinderDenotation
       ConcreteElaboration.variableOrigins final.val
           finalScopeCompiled.frame.visible finalParameters =
         parameters.map finalWireImage ∧
-      projection (sig := .rel args) sourceHead = finalHead ∧
-      Vars.rename projection sourceParameters = finalParameters ∧
+      aboveFold.scopeProjection.visibleProjection
+          (sig := .rel args) sourceHead =
+        finalHead ∧
+      Vars.rename aboveFold.scopeProjection.visibleProjection
+          sourceParameters =
+        finalParameters ∧
       ∀ finalEnv :
           Env model.toPreModel finalScopeCompiled.frame.visible.sigs,
         finalEnv (.rel args) finalHead =
@@ -11445,7 +11980,8 @@ private theorem RelationJoinSemanticTrace.preBinderDenotation
           denoteRegion model.toPreModel definitionEnv finalEnv
               finalScopeCompiled.frame.siteBody →
             denoteRegion model.toPreModel definitionEnv
-              (Env.comp finalEnv projection)
+              (Env.comp finalEnv
+                aboveFold.scopeProjection.visibleProjection)
               sourceScope.frame.siteBody := by
   have scopeExact :=
     RelationJoinSemantics.RelationJoinSemanticTrace.finalDyingScope trace
