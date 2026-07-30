@@ -1,9 +1,10 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../kernel/proof/action'
-import { applyStep, type ProofStep } from '../../kernel/proof/step'
+import type { ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
-import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
+import { assertProofContext } from '../../kernel/proof/context'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -16,12 +17,9 @@ import { inferFoldArgs } from '../define'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, regionAt, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
-import {
-  ConnectionDragController,
-  type ConnectionEnd,
-} from './connection'
 import { CopyDragController } from './copy'
 import { DrawGestureController } from './draw'
+import { WireOpsDragController } from './wire-ops'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
@@ -91,26 +89,18 @@ export function contextualDeleteStep(
   if (has('vacuousElim')) {
     return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
   }
+  // Delete on a lone wire deletes its ends; the wire itself stays, quantified.
+  const selection = discovery.sel
+  if (
+    selection.nodes.length === 0
+    && selection.regions.length === 0
+    && selection.wires.length === 1
+    && (diagram.wires[selection.wires[0]!]?.endpoints.length ?? 0) > 0
+  ) {
+    return { rule: 'endsDelete', wire: selection.wires[0]! }
+  }
   if (has('erase')) return erasureStep(diagram, discovery.sel)
   return has('deiterate') ? deiterationStep(diagram, discovery.sel, fuel) : null
-}
-
-export function proofConnectionStep(
-  diagram: Diagram,
-  source: ConnectionEnd,
-  target: ConnectionEnd,
-  orientation: ProofOrientation,
-  _fuel: number,
-): ProofStep {
-  if (source.wire === target.wire) {
-    throw new Error(`line '${source.wire}' is already one identity`)
-  }
-  const step: ProofStep = {
-    rule: 'wireJoin',
-    input: { a: source.wire, b: target.wire },
-  }
-  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-  return step
 }
 
 export type ProofMoveControllerOptions = {
@@ -139,9 +129,10 @@ function sameHit(left: Hit, right: Hit): boolean {
 export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
-  readonly #connection: ConnectionDragController
+  readonly #wireOps: WireOpsDragController
   readonly #copy: CopyDragController
   readonly #draw: DrawGestureController
+  #prompt: HTMLDivElement | null = null
   #menu: HTMLDivElement | null = null
   #cycle: CitationCycle | null = null
   #lastPointer: Vec2 = { x: 0, y: 0 }
@@ -151,26 +142,19 @@ export class ProofMoveController {
     assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
-    this.#connection = new ConnectionDragController({
+    this.#wireOps = new WireOpsDragController({
       active: options.active,
       engine: options.engine,
+      diagram: options.diagram,
       viewScale: options.viewScale,
       theme: options.theme,
-      commit: (gesture, pointer) => {
+      context: () => this.#context(),
+      orientation: options.orientation,
+      commit: (label, steps, pointer) => {
         this.#lastPointer = pointer
-        try {
-          return this.#commit(proofConnectionStep(
-            options.diagram(),
-            gesture.source,
-            gesture.target,
-            options.orientation(),
-            options.fuel(),
-          ))
-        } catch (error) {
-          options.refuse(error instanceof Error ? error.message : String(error), pointer)
-          return false
-        }
+        return this.#commitSteps(label, steps)
       },
+      promptSig: (client, apply) => { this.#promptSig(client, apply) },
       refuse: options.refuse,
     })
     this.#draw = new DrawGestureController({
@@ -234,7 +218,7 @@ export class ProofMoveController {
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
     if (sample.button === 2) return this.#draw.claim(sample)
-    return this.#connection.claim(sample) ?? this.#copy.claim(sample)
+    return this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -282,7 +266,7 @@ export class ProofMoveController {
     if (sample.key === 'Escape') {
       const active = this.#menu !== null
         || this.#cycle !== null
-        || this.#connection.hasPendingInteraction
+        || this.#prompt !== null
         || this.#draw.hasPendingInteraction
       this.cancel()
       return active
@@ -374,7 +358,7 @@ export class ProofMoveController {
   overlay(): readonly Shape[] {
     this.#context()
     const result: Shape[] = [
-      ...this.#connection.overlay(),
+      ...this.#wireOps.overlay(),
       ...this.#copy.overlay(),
       ...this.#draw.overlay(),
     ]
@@ -404,7 +388,8 @@ export class ProofMoveController {
     this.#context()
     this.#closeMenu()
     this.#cycle = null
-    this.#connection.cancel()
+    this.#closePrompt()
+    this.#wireOps.cancel()
     this.#copy.cancel()
     this.#draw.cancel()
   }
@@ -594,6 +579,45 @@ export class ProofMoveController {
   #closeMenu(): void {
     this.#menu?.remove()
     this.#menu = null
+  }
+
+  /** The arity prompt: blank means an individual (ι); n means rel(ιⁿ). */
+  #promptSig(client: Vec2, apply: (sig: Sig) => void): void {
+    this.#closePrompt()
+    const box = this.#document.createElement('div')
+    box.className = 'vpa-arity-prompt'
+    box.style.cssText = `position:fixed;left:${client.x + 10}px;top:${client.y + 10}px;z-index:31;padding:8px;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui`
+    const input = this.#document.createElement('input')
+    input.type = 'text'
+    input.placeholder = 'arity (blank = individual)'
+    input.setAttribute('aria-label', "New position's arity")
+    input.style.cssText = 'width:170px;box-sizing:border-box'
+    box.append(input)
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        this.#closePrompt()
+        return
+      }
+      if (event.key !== 'Enter') return
+      const raw = input.value.trim()
+      const arity = raw === '' ? null : Number(raw)
+      if (arity !== null && (!Number.isInteger(arity) || arity < 0)) {
+        this.#options.refuse('enter a non-negative arity or leave blank', client)
+        return
+      }
+      this.#closePrompt()
+      apply(arity === null
+        ? IOTA
+        : relSig(Array.from({ length: arity }, () => IOTA)))
+    })
+    this.#options.host.append(box)
+    this.#prompt = box
+    input.focus()
+  }
+
+  #closePrompt(): void {
+    this.#prompt?.remove()
+    this.#prompt = null
   }
 
   #context(): ProofContext {

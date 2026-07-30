@@ -7,26 +7,21 @@ import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
-import { mkEngine, pkey, type Engine } from '../../src/view/engine'
-import { computeLegs } from '../../src/view/wires'
+import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import type { Vec2 } from '../../src/view/vec'
+import {
+  endpointPoint,
+  farBlank,
+  place,
+  placeRegion,
+  pointerSample,
+} from './helpers/gesture'
 
 const UNARY = relSig([IOTA])
 
 function sample(point: Vec2): PointerSample {
-  return {
-    pointerId: 1,
-    button: 2,
-    client: point,
-    screen: point,
-    world: point,
-    hit: null,
-    shiftKey: false,
-    ctrlKey: false,
-    altKey: false,
-    metaKey: false,
-  }
+  return pointerSample(point, 2)
 }
 
 type Committed = { readonly label: string; readonly steps: readonly ProofStep[] }
@@ -98,45 +93,6 @@ function drop(controller: DrawGestureController, loose: Vec2, to: Vec2): void {
   claim!.release(sample(to), true)
 }
 
-/** World position of a wire's terminal at one endpoint. */
-function endpointPoint(engine: Engine, wire: WireId, endpoint: Endpoint): Vec2 {
-  const key = pkey(endpoint.port)
-  for (const geometry of computeLegs(engine)) {
-    if (geometry.leg.wid !== wire || geometry.pts.length === 0) continue
-    if (geometry.leg.from.body === endpoint.node && geometry.leg.from.key === key) {
-      return geometry.pts[0]!
-    }
-    if (geometry.leg.to.body === endpoint.node && geometry.leg.to.key === key) {
-      return geometry.pts.at(-1)!
-    }
-  }
-  throw new Error(`no leg terminal for ${wire} at ${endpoint.node}`)
-}
-
-function farBlank(): Vec2 {
-  return { x: 4000, y: 4000 }
-}
-
-/**
- * The freshly built engine stacks every body near the origin; spread the
- * fixture out so each probe point touches exactly the intended object.
- */
-function place(engine: Engine, bodyId: string, pos: Vec2): Vec2 {
-  const body = engine.bodies.get(bodyId)
-  if (body === undefined) throw new Error(`no body '${bodyId}'`)
-  body.pos = pos
-  return pos
-}
-
-function placeRegion(
-  engine: Engine,
-  region: RegionId,
-  center: Vec2,
-  radius: number,
-): Vec2 {
-  engine.regions.set(region, { center, radius, support: [] })
-  return center
-}
 
 describe('drawing gesture dispatch', () => {
   it('spawn-ends: blank-site contacts commit vacuousIntro + endsSpawn', () => {
@@ -358,6 +314,67 @@ describe('drawing gesture dispatch', () => {
     expect(h.committed).toEqual([])
     expect(h.refusals).toHaveLength(1)
     expect(h.controller.hasPendingInteraction).toBe(true)
+  })
+
+  it('a closed founding stroke around one end commits cutWrap', () => {
+    const builder = new DiagramBuilder()
+    const atom = builder.atom(builder.root, UNARY)
+    const wire = builder.wire(builder.root, [
+      { node: atom, port: { kind: 'head' } },
+    ], UNARY)
+    builder.wire(builder.root, [
+      { node: atom, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    place(engine, atom, { x: 300, y: 300 })
+    place(engine, `j:${wire}`, { x: 300, y: 80 })
+    const h = harness(diagram, engine)
+
+    const claim = h.controller.claim(sample({ x: 200, y: 200 }))!
+    for (const point of [
+      { x: 400, y: 200 },
+      { x: 400, y: 400 },
+      { x: 200, y: 400 },
+      { x: 202, y: 203 },
+    ]) claim.move(sample(point))
+    claim.release(sample({ x: 202, y: 203 }), true)
+
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    expect(h.committed[0]!.steps).toEqual([{ rule: 'cutWrap', wire }])
+    expect(h.controller.hasPendingInteraction).toBe(false)
+  })
+
+  it('a closed stroke around ends of different wires refuses', () => {
+    const builder = new DiagramBuilder()
+    const atomA = builder.atom(builder.root, UNARY)
+    const atomB = builder.atom(builder.root, UNARY)
+    builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
+    builder.wire(builder.root, [
+      { node: atomA, port: { kind: 'arg', index: 0 } },
+      { node: atomB, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    place(engine, atomA, { x: 280, y: 300 })
+    place(engine, atomB, { x: 320, y: 300 })
+    const h = harness(diagram, engine)
+
+    const claim = h.controller.claim(sample({ x: 200, y: 200 }))!
+    for (const point of [
+      { x: 400, y: 200 },
+      { x: 400, y: 400 },
+      { x: 200, y: 400 },
+      { x: 202, y: 203 },
+    ]) claim.move(sample(point))
+    claim.release(sample({ x: 202, y: 203 }), true)
+
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toHaveLength(1)
+    expect(h.refusals[0]).toMatch(/one wire/)
+    expect(h.controller.hasPendingInteraction).toBe(false)
   })
 
   it('a plain right-click with no drawing pending is not claimed as a gesture', () => {

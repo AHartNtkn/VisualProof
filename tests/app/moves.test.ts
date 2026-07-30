@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { applicableActions } from '../../src/app/actions'
 import type { Hit } from '../../src/app/hittest'
-import {
-  ProofMoveController,
-  proofConnectionStep,
-} from '../../src/app/interact/moves'
+import { ProofMoveController } from '../../src/app/interact/moves'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
-import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import { relSig } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
@@ -83,44 +80,6 @@ describe('proof move vocabulary', () => {
     expect(kinds).not.toContain('abstract')
     expect(kinds).not.toContain('relationJoin')
     expect(kinds).not.toContain('relationSever')
-  })
-
-  it('constructs direct connection drags only as durable IOTA joins', () => {
-    const builder = new DiagramBuilder()
-    const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [], IOTA)
-    const right = builder.wire(negative, [], IOTA)
-    const diagram = builder.build()
-
-    expect(proofConnectionStep(
-      diagram,
-      { wire: left, endpoint: null },
-      { wire: right, endpoint: null },
-      'forward',
-      0,
-    )).toEqual({
-      rule: 'wireJoin',
-      input: { a: left, b: right },
-    })
-  })
-
-  it('builds relation-wire merges through the same connection gesture', () => {
-    const builder = new DiagramBuilder()
-    const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [], relSig([]))
-    const right = builder.wire(negative, [], relSig([]))
-    const diagram = builder.build()
-
-    expect(proofConnectionStep(
-      diagram,
-      { wire: left, endpoint: null },
-      { wire: right, endpoint: null },
-      'forward',
-      0,
-    )).toEqual({
-      rule: 'wireJoin',
-      input: { a: left, b: right },
-    })
   })
 
   it('W with an empty selection spawns a double cut at the hovered region', () => {

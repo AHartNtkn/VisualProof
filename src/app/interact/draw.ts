@@ -18,6 +18,7 @@ import {
   wireManipulationHitTest,
 } from '../hittest'
 import type { PointerClaim, PointerSample } from './viewport'
+import { headWireOf } from './wire-ops'
 
 /**
  * One touched site of the drawing gesture. Contacts are a set: the committed
@@ -54,6 +55,20 @@ export type DrawGestureOptions = {
 }
 
 const HIT_RADIUS_PX = 6
+
+/** Ray-cast point-in-polygon over the stroke's sampled path. */
+function strokeEncloses(point: Vec2, polygon: readonly Vec2[]): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i]!
+    const b = polygon[j]!
+    if (
+      (a.y > point.y) !== (b.y > point.y)
+      && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x
+    ) inside = !inside
+  }
+  return inside
+}
 
 function contactKey(contact: DrawContact): string {
   switch (contact.kind) {
@@ -197,12 +212,14 @@ export class DrawGestureController {
     start: Vec2,
   ): PointerClaim | null {
     const stroke = { from: start, at: start }
+    const path: Vec2[] = [start]
     this.#stroke = stroke
     return this.#issueClaim({
       still: 'claim',
       blocksPassiveRelaxation: true,
       move: (sample) => {
         stroke.at = sample.world
+        path.push(sample.world)
       },
       release: (sample, moved) => {
         this.#stroke = null
@@ -210,6 +227,7 @@ export class DrawGestureController {
         if (pending === null) {
           // A plain right-click founds nothing; the palette stays reachable.
           if (!moved) return
+          if (this.#lassoCommit(start, sample, path)) return
           this.#suppressMenu = true
           this.#pending = {
             contacts: contact === null
@@ -235,6 +253,41 @@ export class DrawGestureController {
         this.#stroke = null
       },
     })
+  }
+
+  /**
+   * A founding stroke that returns to its start is a drawn cut: enclosing
+   * end nodes of exactly one wire commits cutWrap on it. True when this
+   * stroke was consumed as a lasso (committed or refused).
+   */
+  #lassoCommit(
+    start: Vec2,
+    sample: PointerSample,
+    path: readonly Vec2[],
+  ): boolean {
+    const radius = HIT_RADIUS_PX / this.#options.viewScale()
+    if (length(sub(sample.world, start)) > 2 * radius) return false
+    const engine = this.#options.engine()
+    const diagram = this.#options.diagram()
+    const wires = new Set<WireId>()
+    for (const body of engine.bodies.values()) {
+      if (body.kind !== 'atom' && body.kind !== 'ref') continue
+      if (!strokeEncloses(body.pos, path)) continue
+      const wire = headWireOf(diagram, body.id)
+      if (wire !== null) wires.add(wire)
+    }
+    if (wires.size === 0) return false
+    this.#suppressMenu = true
+    if (wires.size > 1) {
+      this.#options.refuse(
+        "the lasso must enclose one wire's end",
+        sample.client,
+      )
+      return true
+    }
+    const [wire] = wires
+    this.#options.commit('cutWrap', [{ rule: 'cutWrap', wire: wire! }], sample.client)
+    return true
   }
 
   /** What one probe point touches, in contact vocabulary. */
