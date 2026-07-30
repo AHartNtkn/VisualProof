@@ -1,5 +1,5 @@
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemoval
-import VisualProof.Diagram.Concrete.Subgraph.Factorization
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrame
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrameSupport
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalitySupport
 import VisualProof.Diagram.ContextZipper

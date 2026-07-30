@@ -10,7 +10,8 @@ import VisualProof.Diagram.Context
 import VisualProof.Diagram.Concrete.Subgraph.Splice
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
 import VisualProof.Diagram.Concrete.Subgraph.SpliceExamples
-import VisualProof.Diagram.Concrete.Subgraph.Factorization
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrame
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationInsertion
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationStructure
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityFixtures

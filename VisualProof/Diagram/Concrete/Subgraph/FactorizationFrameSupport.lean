@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Subgraph.Factorization
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrame
 import VisualProof.Diagram.ContextOuter
 
 namespace VisualProof
