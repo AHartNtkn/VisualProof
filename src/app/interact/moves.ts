@@ -155,6 +155,7 @@ export class ProofMoveController {
   #menu: HTMLDivElement | null = null
   #cycle: CitationCycle | null = null
   #lastPointer: Vec2 = { x: 0, y: 0 }
+  #lastWorld: Vec2 | null = null
 
   constructor(options: ProofMoveControllerOptions) {
     assertProofContext(options.context())
@@ -206,6 +207,16 @@ export class ProofMoveController {
       destinationPreview: (destination) =>
         copyDestinationPreview(options.engine(), destination.region, options.theme()),
     })
+  }
+
+  /** Track the hovered world point for pointer-located keyboard actions. */
+  passiveSample(sample: PointerSample | null): void {
+    if (sample === null) {
+      this.#lastWorld = null
+      return
+    }
+    this.#lastPointer = sample.client
+    this.#lastWorld = sample.world
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -285,9 +296,32 @@ export class ProofMoveController {
       && sample.key !== 'Backspace'
       && sample.key !== 'w'
       && sample.key !== 'W'
-      && sample.key !== 'i'
-      && sample.key !== 'I'
     ) return false
+    if (
+      (sample.key === 'w' || sample.key === 'W')
+      && this.#options.selection().length === 0
+    ) {
+      // W with nothing highlighted spawns an empty double cut at the region
+      // under the pointer (2026-07-10 approved design; 2026-07-30 ruling).
+      if (this.#lastWorld === null) {
+        this.#options.refuse('point at a region first', this.#lastPointer)
+        return true
+      }
+      this.#commit({
+        rule: 'doubleCutIntro',
+        sel: {
+          region: regionAt(
+            this.#options.engine(),
+            this.#options.diagram(),
+            this.#lastWorld,
+          ),
+          regions: [],
+          nodes: [],
+          wires: [],
+        },
+      })
+      return true
+    }
     const discovery = discoverProofActions(
       this.#options.diagram(),
       this.#options.selection(),
@@ -318,18 +352,6 @@ export class ProofMoveController {
           error instanceof Error ? error.message : String(error),
           this.#lastPointer,
         )
-      }
-      return true
-    }
-    if (sample.key === 'i' || sample.key === 'I') {
-      if (!discovery.actions.some((action) => action.kind === 'identityInsert')) {
-        this.#options.refuse('identity insertion is not valid for this selection', this.#lastPointer)
-      } else {
-        this.#commit({
-          rule: 'identityInsert',
-          region: discovery.sel.region,
-          wires: discovery.sel.wires,
-        })
       }
       return true
     }
@@ -432,8 +454,15 @@ export class ProofMoveController {
       this.#options.orientation(),
     )
     if (discovery !== null) {
-      row('Actions', null)
-      for (const action of discovery.actions) {
+      // Rules with dedicated direct gestures never appear as menu rows; the
+      // palette keeps only the flows that still need it (fold, unfold,
+      // citation). Retiring these too is recorded debt.
+      const paletteRows = discovery.actions.filter((action) =>
+        action.kind === 'relUnfold'
+        || action.kind === 'relFold'
+        || action.kind === 'citeTheorem')
+      if (paletteRows.length > 0) row('Actions', null)
+      for (const action of paletteRows) {
         this.#appendAction(row, action, discovery.sel)
       }
     }

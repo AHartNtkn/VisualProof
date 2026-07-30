@@ -182,6 +182,7 @@ export class ProofFrontViewport {
       doubleClick: (sample) => this.#moves.doubleClick(sample),
       contextMenu: (sample) => { this.#moves.contextMenu(sample) },
       pointerChanged: () => {},
+      passiveSample: (sample) => this.#moves.passiveSample(sample),
       modifiersChanged: (ctrlHeld) => this.#moves.modifiersChanged(ctrlHeld),
       keyDown: (sample) => {
         const routed = frontKeyRoute(model.focused(), sample)

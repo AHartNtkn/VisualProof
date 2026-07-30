@@ -1535,6 +1535,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
     },
     pointerChanged: rememberPointer,
+    passiveSample: (sample) => proofMoves.passiveSample(sample),
     modifiersChanged: (ctrlHeld) => {
       construct.modifiersChanged(ctrlHeld)
       proofMoves.modifiersChanged(ctrlHeld)
