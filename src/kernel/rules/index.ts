@@ -20,3 +20,12 @@ export { applyIdentityInsertion } from './identity'
 export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'
 export { applyUnfold, applyFold } from './fold'
 export { applyVacuousIntro, applyVacuousElim } from './vacuous'
+export {
+  applyCutAbsorb,
+  applyCutWrap,
+  applyEndsDelete,
+  applyEndsSpawn,
+  applyParallelFuse,
+  applyParallelSplit,
+} from './wire-content'
+export type { EndSite } from './wire-content'

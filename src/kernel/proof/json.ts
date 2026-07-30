@@ -391,6 +391,22 @@ export function stepToJson(step: ProofStep): unknown {
         args: [...step.args],
         defId: step.defId,
       }
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+      return { rule: step.rule, wire: step.wire }
+    case 'parallelFuse':
+      return { rule: step.rule, a: step.a, b: step.b }
+    case 'endsSpawn':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        sites: step.sites.map((site) => ({
+          region: site.region,
+          args: [...site.args],
+        })),
+      }
   }
 }
 
@@ -505,6 +521,34 @@ export function stepFromJson(value: unknown): ProofStep {
         args: strArray(value.args, 'args'),
         defId: str(value.defId, 'defId'),
       }
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+      assertOnlyKeys(value, ['rule', 'wire'], `${rule} step`)
+      return { rule, wire: str(value.wire, 'wire') }
+    case 'parallelFuse':
+      assertOnlyKeys(value, ['rule', 'a', 'b'], 'parallelFuse step')
+      return { rule, a: str(value.a, 'a'), b: str(value.b, 'b') }
+    case 'endsSpawn': {
+      assertOnlyKeys(value, ['rule', 'wire', 'sites'], 'endsSpawn step')
+      if (!Array.isArray(value.sites)) return fail('endsSpawn sites must be an array')
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        sites: value.sites.map((site: unknown, index: number) => {
+          if (typeof site !== 'object' || site === null) {
+            return fail(`endsSpawn site ${index} must be an object`)
+          }
+          const record = site as Record<string, unknown>
+          assertOnlyKeys(record, ['region', 'args'], `endsSpawn site ${index}`)
+          return {
+            region: str(record.region, `site ${index} region`),
+            args: strArray(record.args, `site ${index} args`),
+          }
+        }),
+      }
+    }
     default:
       return fail(`unknown rule '${rule}'`)
   }

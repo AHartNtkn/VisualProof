@@ -223,6 +223,29 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         args: step.args.map((wire) =>
           mapId(iso.wires, wire, 'wire')),
       }
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+      }
+    case 'parallelFuse':
+      return {
+        ...step,
+        a: mapId(iso.wires, step.a, 'wire'),
+        b: mapId(iso.wires, step.b, 'wire'),
+      }
+    case 'endsSpawn':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+        sites: step.sites.map((site) => ({
+          region: mapId(iso.regions, site.region, 'region'),
+          args: site.args.map((wire) => mapId(iso.wires, wire, 'wire')),
+        })),
+      }
   }
 }
 

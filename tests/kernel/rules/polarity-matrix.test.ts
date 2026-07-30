@@ -8,6 +8,10 @@ import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rul
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
+  applyEndsDelete,
+  applyEndsSpawn,
+} from '../../../src/kernel/rules/wire-content'
+import {
   applyDeiteration,
   applyIteration,
   findDeiterationEvidence,
@@ -76,6 +80,31 @@ describe('polarity matrix across depths 0–3', () => {
 
       expect(() => applyIteration(diagram, selection, region)).not.toThrow()
       expect(() => applyDoubleCutIntro(diagram, selection)).not.toThrow()
+    })
+
+    it(`depth ${depth}: ends delete/spawn use complementary polarity`, () => {
+      const builder = new DiagramBuilder()
+      let region = builder.root
+      for (let index = 0; index < depth; index++) region = builder.cut(region)
+      const wire = builder.relWire(region, relSig([]))
+      const diagram = builder.build()
+      const del = () => applyEndsDelete(diagram, wire)
+      const delBackward = () => applyEndsDelete(diagram, wire, 'backward')
+      const spawn = () => applyEndsSpawn(diagram, wire, [{ region, args: [] }])
+      const spawnBackward = () =>
+        applyEndsSpawn(diagram, wire, [{ region, args: [] }], 'backward')
+
+      if (positive) {
+        expect(del).toThrow()
+        expect(delBackward).not.toThrow()
+        expect(spawn).not.toThrow()
+        expect(spawnBackward).toThrow()
+      } else {
+        expect(del).not.toThrow()
+        expect(delBackward).toThrow()
+        expect(spawn).toThrow()
+        expect(spawnBackward).not.toThrow()
+      }
     })
 
     it(`depth ${depth}: sever scope parameter gates on the chosen region`, () => {

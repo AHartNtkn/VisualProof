@@ -29,6 +29,15 @@ import {
 import { applyRefSpawn, applyAtomSpawn } from '../rules/spawn'
 import { applyVacuousElim, applyVacuousIntro } from '../rules/vacuous'
 import {
+  applyCutAbsorb,
+  applyCutWrap,
+  applyEndsDelete,
+  applyEndsSpawn,
+  applyParallelFuse,
+  applyParallelSplit,
+  type EndSite,
+} from '../rules/wire-content'
+import {
   applyWireJoin,
   applyWireSever,
   type WireJoinInput,
@@ -55,6 +64,12 @@ export type ProofStep =
   | { readonly rule: 'vacuousElim'; readonly wireId: WireId }
   | { readonly rule: 'unfold'; readonly nodeId: NodeId }
   | { readonly rule: 'fold'; readonly occurrence: SubgraphSelection; readonly args: readonly WireId[]; readonly defId: string }
+  | { readonly rule: 'cutWrap'; readonly wire: WireId }
+  | { readonly rule: 'cutAbsorb'; readonly wire: WireId }
+  | { readonly rule: 'parallelSplit'; readonly wire: WireId }
+  | { readonly rule: 'parallelFuse'; readonly a: WireId; readonly b: WireId }
+  | { readonly rule: 'endsDelete'; readonly wire: WireId }
+  | { readonly rule: 'endsSpawn'; readonly wire: WireId; readonly sites: readonly EndSite[] }
 
 /** Logical transport of source wire identities through one proof step. */
 export type WireInterfaceTransport = {
@@ -204,6 +219,24 @@ function applyStepRaw(
         step.args,
         step.defId,
         context.relations,
+        reservation,
+      )
+    case 'cutWrap':
+      return applyCutWrap(diagram, step.wire, reservation)
+    case 'cutAbsorb':
+      return applyCutAbsorb(diagram, step.wire, reservation)
+    case 'parallelSplit':
+      return applyParallelSplit(diagram, step.wire, reservation)
+    case 'parallelFuse':
+      return applyParallelFuse(diagram, step.a, step.b, reservation)
+    case 'endsDelete':
+      return applyEndsDelete(diagram, step.wire, orientation)
+    case 'endsSpawn':
+      return applyEndsSpawn(
+        diagram,
+        step.wire,
+        step.sites,
+        orientation,
         reservation,
       )
   }

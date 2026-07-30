@@ -174,6 +174,19 @@ describe('step JSON', () => {
         args: ['w0'],
         defId: 'nat',
       },
+      { rule: 'cutWrap', wire: 'w0' },
+      { rule: 'cutAbsorb', wire: 'w0' },
+      { rule: 'parallelSplit', wire: 'w0' },
+      { rule: 'parallelFuse', a: 'w0', b: 'w1' },
+      { rule: 'endsDelete', wire: 'w0' },
+      {
+        rule: 'endsSpawn',
+        wire: 'w0',
+        sites: [
+          { region: 'r1', args: ['w1'] },
+          { region: 'r0', args: ['w2'] },
+        ],
+      },
     ]
 
     for (const step of steps) roundTrip(step)

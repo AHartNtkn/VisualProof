@@ -9,6 +9,12 @@ import { RuleError } from '../../../src/kernel/rules/error'
 import { applyIteration } from '../../../src/kernel/rules/iteration'
 import { applyAtomSpawn } from '../../../src/kernel/rules/spawn'
 import {
+  applyCutWrap,
+  applyEndsDelete,
+  applyEndsSpawn,
+  applyParallelFuse,
+} from '../../../src/kernel/rules/wire-content'
+import {
   applyWireJoin,
   applyWireSever,
 } from '../../../src/kernel/rules/wire-quantifier'
@@ -120,6 +126,21 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
       wires: [],
     })
     expect(caughtBy(() => applyErasure(diagram, selection)))
+      .toBeInstanceOf(RuleError)
+  })
+
+  it('content primitives follow the same vocabulary', () => {
+    const builder = new DiagramBuilder()
+    const rootWire = builder.relWire(builder.root, relSig([]))
+    const diagram = builder.build()
+
+    expect(caughtBy(() => applyCutWrap(diagram, 'ghost')))
+      .toBeInstanceOf(DiagramError)
+    expect(caughtBy(() => applyEndsSpawn(diagram, 'ghost', [])))
+      .toBeInstanceOf(DiagramError)
+    expect(caughtBy(() => applyEndsDelete(diagram, rootWire)))
+      .toBeInstanceOf(RuleError)
+    expect(caughtBy(() => applyParallelFuse(diagram, rootWire, rootWire)))
       .toBeInstanceOf(RuleError)
   })
 })
