@@ -137,6 +137,32 @@ as landed infrastructure:
   migrated theories. The unit tests for the trigger are recorded in this
   task and get re-applied then.
 
+**Findings (2026-07-30, second attempt, post-migration).** With the
+recorder transport in place, enabling the eager trigger leaves exactly TWO
+one-outer collapse sites in the whole frege build (probe-verified):
+
+1. Forward, `arithmetic-assoc-carrier.ts` label
+   `insert transport first-sum identity`: id(dc_11_vac_0@dc_11,
+   dc_9_vac_1@dc_9) collapses onto dc_9_vac_1. This one is absorbed
+   cleanly by the rename machinery.
+2. Backward, label `finish transport first-sum functionality`:
+   id(w26@r27, w3_1@r29) at r29 collapses onto w26, deleting the body
+   existential w3_1. Downstream, `deriveSteppedAddition` (assoc-carrier
+   ~line 1038) then fails: its copied addition-step premise ends up as
+   succ(w16_1, w3_1′) (w3_1′ a REBORN id — single-step actions carry no
+   reservations, so the freed name is re-minted by a later spawn) while
+   the discharging context holds succ(w26, w16_1) and succ(w21_0, w3_1′) —
+   the first-sum chain the old proof stitched through the identity node
+   now needs the backward derivation itself restructured to work on the
+   merged wire (use w26 directly as the first sum instead of deriving the
+   equality via functionality and keeping both).
+
+Remaining work for this task: restructure the `finish transport first-sum
+functionality` passage (and its analogues in the other carrier scripts if
+they fire) to build on the merged survivor; then delete
+`IdentityRetarget` per Task 3. Everything else in the build already
+tolerates the eager trigger.
+
 ### Task 3: Delete retargets; identity substitution becomes the derivation
 
 **Files:**

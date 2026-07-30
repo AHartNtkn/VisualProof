@@ -647,27 +647,13 @@ export function compileRelationSever(
     const inverse = invertStep(step, pre, post)
     const mapped = mapStepIds(inverse, iso)
     const before = real
-    let receipt
-    try {
-      receipt = applyStepWithReceipt(
-        real,
-        mapped,
-        context,
-        orientation,
-        reservation,
-      )
-    } catch (error) {
-      if (process.env.PROBE_SEVER !== undefined) {
-        console.log('[invert fail]', JSON.stringify({
-          index,
-          planned: step,
-          inverse,
-          mapped,
-          orientation,
-        }))
-      }
-      throw error
-    }
+    const receipt = applyStepWithReceipt(
+      real,
+      mapped,
+      context,
+      orientation,
+      reservation,
+    )
     real = receipt.result
     reservation = extendIdReservation(reservation, receipt.allocation)
     diffs.push({ before, after: real })

@@ -167,16 +167,6 @@ export class PrimitiveStepRecorder {
       sel: occurrence.sel,
       args: occurrence.args.map((wire) => this.#wireRename.get(wire)),
     }))
-    if (process.env.PROBE_SEVER !== undefined) {
-      for (const occurrence of occurrences) {
-        console.log('[sever occurrence]', JSON.stringify(occurrence.sel))
-      }
-      const region = occurrences[0]!.sel.region
-      console.log('[region nodes]', JSON.stringify(
-        Object.entries(this.#diagram.nodes)
-          .filter(([, node]) => node.region === region)
-          .map(([id, node]) => ({ id, kind: node.kind }))))
-    }
     this.#recordAction(compileRelationSeverAction(
       label,
       this.#diagram,
