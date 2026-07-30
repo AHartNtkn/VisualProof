@@ -269,6 +269,52 @@ private theorem castSiteCompilation_visible
   cases same
   rfl
 
+private theorem transportCheckedAboveDecomposition
+    {definitions : List (List Sig)}
+    {left right : CheckedDiagram definitions}
+    (same : left = right)
+    (leftSite : left.val.RegionId)
+    (rightSite : right.val.RegionId)
+    (siteExact :
+      same ▸ leftSite = rightSite)
+    (leftOuter : ConcreteElaboration.WireContext left.val)
+    (leftCompiled : SiteCompilation left leftSite)
+    (leftAbove :
+      DiagramContext definitions leftOuter.sigs [])
+    (leftVisibleExact :
+      leftCompiled.frame.visible = leftOuter.extend leftSite)
+    (leftDecomposition :
+      DiagramContext.StopsAboveBindMany
+        ((left.val.wiresAt leftSite).map
+          (fun wire => (left.val.wires wire).sig))
+        leftAbove
+        (((congrArg ConcreteElaboration.WireContext.sigs
+              leftVisibleExact).trans
+            (ConcreteElaboration.WireContext.sigs_extend
+              leftOuter leftSite)) ▸
+          leftCompiled.frame.context))
+    (rightVisibleExact :
+      (siteExact ▸
+          transportSiteCompilation same leftCompiled).frame.visible =
+        (transportCheckedContext same leftOuter).extend rightSite) :
+    DiagramContext.StopsAboveBindMany
+      ((right.val.wiresAt rightSite).map
+        (fun wire => (right.val.wires wire).sig))
+      ((transport_checked_context_sigs same leftOuter).symm ▸ leftAbove)
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            rightVisibleExact).trans
+          (ConcreteElaboration.WireContext.sigs_extend
+            (transportCheckedContext same leftOuter) rightSite)) ▸
+        (siteExact ▸
+          transportSiteCompilation same leftCompiled).frame.context) := by
+  cases same
+  cases siteExact
+  have visibleProofExact :
+      rightVisibleExact = leftVisibleExact :=
+    Subsingleton.elim _ _
+  cases visibleProofExact
+  exact leftDecomposition
+
 private theorem transportedSiteCompilation_body
     {definitions : List (List Sig)}
     {left right : CheckedDiagram definitions}
@@ -1794,7 +1840,82 @@ private def transportRenaming
     WireRenaming source target :=
   fun {_} value => targetExact.symm ▸ rho (sourceExact ▸ value)
 
-private theorem transportSemanticZipperTargetHole
+private theorem transportRenaming_reindexed_identity
+    {source source' target target' : List Sig}
+    (sourceExact : source = source')
+    (targetExact : target = target')
+    (rawTargetToSource : target' = source')
+    (targetToSource : target = source)
+    (rho : WireRenaming source' target')
+    (rawIdentity :
+      (fun {sig} (value : Var source' sig) =>
+        rawTargetToSource ▸ rho value) =
+        (fun {_} (value : Var source' _) => value)) :
+    (fun {sig} (value : Var source sig) =>
+      targetToSource ▸
+        transportRenaming sourceExact targetExact rho value) =
+      (fun {_} (value : Var source _) => value) := by
+  cases sourceExact
+  cases targetExact
+  have proofExact : targetToSource = rawTargetToSource :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  exact rawIdentity
+
+private theorem envComp_transportRenaming
+    {source source' target target' : List Sig}
+    (sourceExact : source' = source)
+    (targetExact : target' = target)
+    (rho : WireRenaming source' target') :
+    (fun (pre : PreModel.{u}) (env : Env pre target) =>
+      sourceExact ▸ Env.comp (targetExact.symm ▸ env) rho) =
+      (fun (pre : PreModel.{u}) (env : Env pre target) =>
+        Env.comp env
+          (transportRenaming sourceExact.symm targetExact.symm rho)) := by
+  cases sourceExact
+  cases targetExact
+  rfl
+
+private theorem composeRenaming_reindexed_identity
+    {source middle target : List Sig}
+    (middleToSource : middle = source)
+    (targetToMiddle : target = middle)
+    (sourceToMiddle : WireRenaming source middle)
+    (middleToTarget : WireRenaming middle target)
+    (sourceToMiddleIdentity :
+      (fun {sig} (value : Var source sig) =>
+        middleToSource ▸ sourceToMiddle value) =
+        (fun {_} (value : Var source _) => value))
+    (middleToTargetIdentity :
+      (fun {sig} (value : Var middle sig) =>
+        targetToMiddle ▸ middleToTarget value) =
+        (fun {_} (value : Var middle _) => value)) :
+    (fun {sig} (value : Var source sig) =>
+      targetToMiddle.trans middleToSource ▸
+        middleToTarget (sourceToMiddle value)) =
+      (fun {_} (value : Var source _) => value) := by
+  cases middleToSource
+  cases targetToMiddle
+  have sourceExact :
+      (sourceToMiddle : WireRenaming source source) =
+        ((fun {_} (value : Var source _) => value) :
+          WireRenaming source source) :=
+    sourceToMiddleIdentity
+  have targetExact :
+      (middleToTarget : WireRenaming source source) =
+        ((fun {_} (value : Var source _) => value) :
+          WireRenaming source source) :=
+    middleToTargetIdentity
+  funext sig value
+  have sourcePoint :=
+    congrFun (congrFun sourceExact sig) value
+  have targetPoint :=
+    congrFun (congrFun targetExact sig) value
+  simpa using
+    (congrArg (fun mapped => middleToTarget mapped) sourcePoint).trans
+      targetPoint
+
+private noncomputable def transportComposableSemanticZipperTargetHole
     {definitions : List (List Sig)}
     {sourceHole leftHole rightHole : List Sig}
     (same : leftHole = rightHole)
@@ -1804,9 +1925,9 @@ private theorem transportSemanticZipperTargetHole
     (outerMap :
       ∀ pre : PreModel.{u}, Env pre [] → Env pre [])
     (zipper :
-      DiagramContext.SemanticZipper.{u} source target outerMap
+      DiagramContext.ComposableSemanticZipper.{u} source target outerMap
         (fun (_pre : PreModel.{u}) env => Env.comp env rho)) :
-    DiagramContext.SemanticZipper.{u} source (same.symm ▸ target)
+    DiagramContext.ComposableSemanticZipper.{u} source (same.symm ▸ target)
       outerMap
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env (transportRenaming rfl same rho)) := by
@@ -3883,52 +4004,6 @@ theorem relationJoinPriorToCheckedRegion_root
   rw [← transportRegion_root step.base_generated.symm]
   rfl
 
-theorem relationJoinStep_scope_cutDepth
-    {source : CheckedDiagram definitions}
-    {dying : source.val.WireId}
-    {content : CheckedOpenDiagram definitions}
-    (step : RelationJoinStep source dying content)
-    (priorScope :
-      SiteCompilation step.prior
-        (step.priorRegionImage (source.val.wires dying).scope))
-    (checkedScope :
-      SiteCompilation step.checked
-        (step.checkedRegionImage (source.val.wires dying).scope)) :
-    priorScope.frame.context.cutDepth =
-      checkedScope.frame.context.cutDepth := by
-  have sourceClimb :=
-    IotaJoinSemantics.frame_cutDepth_climbs definitions step.prior.val
-      (step.priorRegionImage (source.val.wires dying).scope)
-      _ _ _ _ priorScope.frame_generated
-  have targetClimb :=
-    IotaJoinSemantics.frame_cutDepth_climbs definitions step.checked.val
-      (step.checkedRegionImage (source.val.wires dying).scope)
-      _ _ _ _ checkedScope.frame_generated
-  let targetDepth := checkedScope.frame.context.cutDepth
-  have mappedTarget :
-      step.checked.val.climb targetDepth
-          (relationJoinPriorToCheckedRegion step
-            (step.priorRegionImage (source.val.wires dying).scope)) =
-        some (relationJoinPriorToCheckedRegion step
-          step.prior.val.root) := by
-    rw [relationJoinPriorToCheckedRegion_root]
-    simpa only [step.checkedRegionImageExact,
-      step.baseRegionImageExact, relationJoinPriorToCheckedRegion] using
-        targetClimb
-  rw [relationJoinPriorToCheckedRegion_climb] at mappedTarget
-  cases priorReached :
-      step.prior.val.climb targetDepth
-        (step.priorRegionImage (source.val.wires dying).scope) with
-  | none => simp [priorReached] at mappedTarget
-  | some reached =>
-      rw [priorReached] at mappedTarget
-      have reachedRoot : reached = step.prior.val.root := by
-        apply relationJoinPriorToCheckedRegion_injective step
-        exact Option.some.inj mappedTarget
-      subst reached
-      exact
-        IotaJoinSemantics.climb_to_root_unique definitions step.prior.val
-          step.prior.property sourceClimb priorReached
 
 /--
 The canonical structural boundary for one relation-join step. Both contexts
@@ -3972,6 +4047,32 @@ structure RelationJoinStep.AboveDyingScopeReceipt
     checkedScope.frame.visible =
       checkedSiteOuter.extend
         (step.checkedRegionImage (source.val.wires dying).scope)
+  priorDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((step.prior.val.wiresAt
+          (step.priorRegionImage
+            (source.val.wires dying).scope)).map
+        (fun wire => (step.prior.val.wires wire).sig))
+      priorAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            priorVisibleExact).trans
+          (ConcreteElaboration.WireContext.sigs_extend priorSiteOuter
+            (step.priorRegionImage
+              (source.val.wires dying).scope))) ▸
+        priorScope.frame.context)
+  checkedDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((step.checked.val.wiresAt
+          (step.checkedRegionImage
+            (source.val.wires dying).scope)).map
+        (fun wire => (step.checked.val.wires wire).sig))
+      checkedAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            checkedVisibleExact).trans
+          (ConcreteElaboration.WireContext.sigs_extend checkedSiteOuter
+            (step.checkedRegionImage
+              (source.val.wires dying).scope))) ▸
+        checkedScope.frame.context)
   priorBodyExact :
     congrArg ConcreteElaboration.WireContext.sigs priorVisibleExact ▸
         priorScope.frame.siteBody =
@@ -3993,11 +4094,51 @@ structure RelationJoinStep.AboveDyingScopeReceipt
         (ConcreteElaboration.finishRegion step.checked.val checkedSiteOuter
           (step.checkedRegionImage (source.val.wires dying).scope)
           checkedBody)
-  zipper :
-    DiagramContext.SemanticZipper.{u} priorAbove checkedAbove
+  composable :
+    DiagramContext.ComposableSemanticZipper.{u} priorAbove checkedAbove
       (fun (_pre : PreModel.{u}) env => env)
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env siteProjection)
+
+def RelationJoinStep.AboveDyingScopeReceipt.priorCanonical
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {step : RelationJoinStep source dying content}
+    {priorScope :
+      SiteCompilation step.prior
+        (step.priorRegionImage (source.val.wires dying).scope)}
+    {checkedScope :
+      SiteCompilation step.checked
+        (step.checkedRegionImage (source.val.wires dying).scope)}
+    (receipt :
+      RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
+        checkedScope) :
+    SiteCompilation.AboveScopeDecomposition priorScope where
+  siteOuter := receipt.priorSiteOuter
+  above := receipt.priorAbove
+  visibleExact := receipt.priorVisibleExact
+  contextDecomposition := receipt.priorDecomposition
+
+def RelationJoinStep.AboveDyingScopeReceipt.checkedCanonical
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {step : RelationJoinStep source dying content}
+    {priorScope :
+      SiteCompilation step.prior
+        (step.priorRegionImage (source.val.wires dying).scope)}
+    {checkedScope :
+      SiteCompilation step.checked
+        (step.checkedRegionImage (source.val.wires dying).scope)}
+    (receipt :
+      RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
+        checkedScope) :
+    SiteCompilation.AboveScopeDecomposition checkedScope where
+  siteOuter := receipt.checkedSiteOuter
+  above := receipt.checkedAbove
+  visibleExact := receipt.checkedVisibleExact
+  contextDecomposition := receipt.checkedDecomposition
 
 private theorem RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
     {source : CheckedDiagram definitions}
@@ -4036,6 +4177,32 @@ private theorem RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
       checkedScope.frame.visible =
         checkedSiteOuter.extend
           (step.checkedRegionImage (source.val.wires dying).scope))
+    (priorDecomposition :
+      DiagramContext.StopsAboveBindMany
+        ((step.prior.val.wiresAt
+            (step.priorRegionImage
+              (source.val.wires dying).scope)).map
+          (fun wire => (step.prior.val.wires wire).sig))
+        priorAbove
+        (((congrArg ConcreteElaboration.WireContext.sigs
+              priorVisibleExact).trans
+            (ConcreteElaboration.WireContext.sigs_extend priorSiteOuter
+              (step.priorRegionImage
+                (source.val.wires dying).scope))) ▸
+          priorScope.frame.context))
+    (checkedDecomposition :
+      DiagramContext.StopsAboveBindMany
+        ((step.checked.val.wiresAt
+            (step.checkedRegionImage
+              (source.val.wires dying).scope)).map
+          (fun wire => (step.checked.val.wires wire).sig))
+        checkedAbove
+        (((congrArg ConcreteElaboration.WireContext.sigs
+              checkedVisibleExact).trans
+            (ConcreteElaboration.WireContext.sigs_extend checkedSiteOuter
+              (step.checkedRegionImage
+                (source.val.wires dying).scope))) ▸
+          checkedScope.frame.context))
     (priorBodyExact :
       congrArg ConcreteElaboration.WireContext.sigs priorVisibleExact ▸
           priorScope.frame.siteBody =
@@ -4058,8 +4225,8 @@ private theorem RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
           (ConcreteElaboration.finishRegion step.checked.val checkedSiteOuter
             (step.checkedRegionImage (source.val.wires dying).scope)
             checkedBody))
-    (zipper :
-      DiagramContext.SemanticZipper.{u} priorAbove checkedAbove
+    (composable :
+      DiagramContext.ComposableSemanticZipper.{u} priorAbove checkedAbove
         (fun (_pre : PreModel.{u}) env => env)
         (fun (_pre : PreModel.{u}) env =>
           Env.comp env siteProjection)) :
@@ -4075,12 +4242,14 @@ private theorem RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
     checkedBody := checkedBody
     priorVisibleExact := priorVisibleExact
     checkedVisibleExact := checkedVisibleExact
+    priorDecomposition := priorDecomposition
+    checkedDecomposition := checkedDecomposition
     priorBodyExact := priorBodyExact
     checkedBodyExact := checkedBodyExact
     siteProjection := siteProjection
     priorRootFill := priorRootFill
     checkedRootFill := checkedRootFill
-    zipper := zipper
+    composable := composable
   }⟩
 
 /--
@@ -4089,7 +4258,7 @@ The two transformation-specific sibling laws meet only at the shared checked
 base environment; the resulting zipper is constructed directly between the
 prior and checked contexts.
 -/
-private theorem RelationJoinStep.pairedSiblingSemanticZipper
+private def RelationJoinStep.pairedSiblingComposableZipper
     {priorOuter baseOuter checkedOuter priorHole checkedHole : List Sig}
     (priorToBase : WireRenaming priorOuter baseOuter)
     (baseToChecked : WireRenaming baseOuter checkedOuter)
@@ -4106,7 +4275,7 @@ private theorem RelationJoinStep.pairedSiblingSemanticZipper
     (holeMap : ∀ pre : PreModel.{u},
       Env pre checkedHole → Env pre priorHole)
     (nested :
-      DiagramContext.SemanticZipper priorInner checkedInner
+      DiagramContext.ComposableSemanticZipper priorInner checkedInner
         (fun pre env =>
           Env.comp env
             (fun {_} value => baseToChecked (priorToBase value)))
@@ -4139,7 +4308,7 @@ private theorem RelationJoinStep.pairedSiblingSemanticZipper
         denoteItemSeq pre definitionEnv env checkedSuffix ↔
           denoteItemSeq pre definitionEnv
             (Env.comp env baseToChecked) baseSuffix) :
-    DiagramContext.SemanticZipper
+    DiagramContext.ComposableSemanticZipper
       (.surround priorLeading (.cut priorInner) priorSuffix)
       (.surround checkedLeading (.cut checkedInner) checkedSuffix)
       (fun pre env =>
@@ -4175,8 +4344,8 @@ private theorem RelationJoinStep.pairedSiblingSemanticZipper
         (suffixPriorBase pre definitionEnv
           (Env.comp env baseToChecked))
   exact
-    DiagramContext.SemanticZipper.surround
-      (DiagramContext.SemanticZipper.cut nested)
+    DiagramContext.ComposableSemanticZipper.surround
+      (DiagramContext.ComposableSemanticZipper.cut nested)
       priorLeading priorSuffix checkedLeading checkedSuffix leading suffix
 
 private def singletonErasureBase
@@ -4190,469 +4359,112 @@ private def singletonErasureBase
       source removed,
     candidateWellFormed⟩
 
+private theorem RelationJoinStep.erasureRegionLocalSigs_eq
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (outer : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId) :
+    (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).wiresAt
+          (SingletonRemovalSemantics.targetRegion source removed region)).map
+        fun wire =>
+          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source removed).wires wire).sig) =
+      (source.val.wiresAt region).map
+        (fun wire => (source.val.wires wire).sig) := by
+  have extended :=
+    SingletonRemovalSemantics.targetContext_sigs source removed
+      (outer.extend region)
+  have outerExact :=
+    SingletonRemovalSemantics.targetContext_sigs source removed outer
+  have contextExact :=
+    congrArg ConcreteElaboration.WireContext.sigs
+      (SingletonRemovalSemantics.targetContext_extend source removed outer
+        region)
+  rw [contextExact] at extended
+  have extended' :
+      (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed).wiresAt
+            (SingletonRemovalSemantics.targetRegion source removed region)).map
+          fun wire =>
+            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              source removed).wires wire).sig) ++
+          (SingletonRemovalSemantics.targetContext source removed outer).sigs =
+        (source.val.wiresAt region).map
+            (fun wire => (source.val.wires wire).sig) ++ outer.sigs := by
+    simpa only [ConcreteElaboration.WireContext.extend,
+      ConcreteElaboration.WireContext.sigs, List.map_append] using extended
+  rw [outerExact] at extended'
+  exact List.append_cancel_right extended'
+
+private theorem RelationJoinStep.cast_bind
+    {sourceOuter targetOuter : List Sig}
+    (same : sourceOuter = targetOuter)
+    (sig : Sig)
+    (inner :
+      DiagramContext definitions holeCtx (sig :: sourceOuter)) :
+    same ▸
+        (DiagramContext.bind sig inner :
+          DiagramContext definitions holeCtx sourceOuter) =
+      DiagramContext.bind sig
+        ((congrArg (List.cons sig) same) ▸ inner) := by
+  cases same
+  rfl
+
+private theorem RelationJoinStep.bindContextFor_eq_bindMany
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    (inner : DiagramContext definitions holeCtx
+      ((localIds ++ outerIds).map fun wire =>
+        (diagram.wires wire).sig)) :
+    bindContextFor diagram outerIds localIds inner =
+      DiagramContext.bindMany
+        (localIds.map fun wire => (diagram.wires wire).sig)
+        ((@List.map_append _ _
+          (fun wire => (diagram.wires wire).sig)
+          localIds outerIds) ▸ inner) := by
+  induction localIds with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [bindContextFor, List.map_cons,
+        DiagramContext.bindMany]
+      rw [induction (.bind (diagram.wires head).sig inner)]
+      apply congrArg
+      exact
+        RelationJoinStep.cast_bind
+          (@List.map_append _ _
+            (fun wire => (diagram.wires wire).sig)
+            tail outerIds)
+          (diagram.wires head).sig inner
+
+private theorem RelationJoinStep.cast_context_trans
+    {left middle right hole : List Sig}
+    (leftMiddle : left = middle)
+    (middleRight : middle = right)
+    (context : DiagramContext definitions hole left) :
+    middleRight ▸ (leftMiddle ▸ context) =
+      (leftMiddle.trans middleRight) ▸ context := by
+  cases leftMiddle
+  cases middleRight
+  rfl
+
+private theorem RelationJoinStep.bindMany_reindexBound
+    {leftBound rightBound outer hole : List Sig}
+    (same : leftBound = rightBound)
+    (inner :
+      DiagramContext definitions hole (leftBound ++ outer)) :
+    DiagramContext.bindMany leftBound inner =
+      DiagramContext.bindMany rightBound
+        ((congrArg (fun bound => bound ++ outer) same) ▸ inner) := by
+  cases same
+  rfl
+
 /--
 Cross one ancestor binder block for the two transformations at once.  The
 erased local-wire environment is used only as the exact middle witness between
 the prior and generated extensions; the resulting zipper has the composite
 renaming as its single outer authority.
 -/
-private theorem RelationJoinStep.pairedBindContextZipper
-    (source : CheckedDiagram definitions)
-    (removed : source.val.NodeId)
-    (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-        source removed).WellFormed definitions)
-    {fragment : CheckedOpenDiagram definitions}
-    {fragmentCompiled : OpenCompilation fragment}
-    {site :
-      (singletonErasureBase source removed candidateWellFormed).val.RegionId}
-    {attachment :
-      ConcreteSpliceAttachment
-        (singletonErasureBase source removed candidateWellFormed)
-        site fragment}
-    (compiled : InsertionCompilation fragmentCompiled attachment)
-    (region : source.val.RegionId)
-    (notSite :
-      SingletonRemovalSemantics.targetRegion source removed region ≠ site)
-    (sourceOuter : ConcreteElaboration.WireContext source.val)
-    (sourceExtendedNodup : (sourceOuter.extend region).ids.Nodup)
-    (sourceInner :
-      DiagramContext definitions sourceHole
-        (sourceOuter.extend region).sigs)
-    (targetInner :
-      DiagramContext definitions targetHole
-        ((InsertionCompilation.NaturalityInternal.hostContext attachment
-            (SingletonRemovalSemantics.targetContext source removed
-              sourceOuter)).extend
-          (attachment.hostRegion
-            (SingletonRemovalSemantics.targetRegion source removed
-              region))).sigs)
-    (holeMap : ∀ pre : PreModel.{u},
-      Env pre targetHole → Env pre sourceHole)
-    (inner :
-      DiagramContext.SemanticZipper sourceInner targetInner
-        (fun (pre : PreModel.{u}) env =>
-          Env.comp env
-            (fun {_} value =>
-              InsertionCompilation.NaturalityInternal.hostExtendedRenaming
-                compiled
-                (SingletonRemovalSemantics.targetRegion source removed
-                  region)
-                notSite
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter)
-                (InsertionCompilation.NaturalityInternal.hostContext
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter))
-                (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter))
-                (InsertionCompilation.NaturalityInternal.hostContextRenaming_origin
-                  attachment
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter))
-                (SingletonRemovalSemantics.extendedContextRenaming source
-                  removed sourceOuter region value)))
-        holeMap)
-    (targetAbove :
-      ConcreteElaboration.ContextAbove attachment.diagram
-        (InsertionCompilation.NaturalityInternal.hostContext attachment
-          (SingletonRemovalSemantics.targetContext source removed
-            sourceOuter))
-        (attachment.hostRegion
-          (SingletonRemovalSemantics.targetRegion source removed region))) :
-    DiagramContext.SemanticZipper
-      (bindContextFor source.val sourceOuter.ids
-        (source.val.wiresAt region) sourceInner)
-      (bindContextFor attachment.diagram
-        (InsertionCompilation.NaturalityInternal.hostContext attachment
-          (SingletonRemovalSemantics.targetContext source removed
-            sourceOuter)).ids
-        (attachment.diagram.wiresAt
-          (attachment.hostRegion
-            (SingletonRemovalSemantics.targetRegion source removed region)))
-        targetInner)
-      (fun (pre : PreModel.{u}) env =>
-        Env.comp env
-          (fun {_} value =>
-            InsertionCompilation.NaturalityInternal.hostContextRenaming
-              attachment
-              (SingletonRemovalSemantics.targetContext source removed
-                sourceOuter)
-              (SingletonRemovalSemantics.contextRenaming source removed
-                sourceOuter value)))
-      holeMap := by
-  have bindDepth :
-      ∀ {holeCtx : List Sig}
-        (diagram : ConcreteDiagram definitions.length)
-        (outerIds localIds : List diagram.WireId)
-        (context :
-          DiagramContext definitions holeCtx
-            ((localIds ++ outerIds).map fun wire =>
-              (diagram.wires wire).sig)),
-        (bindContextFor diagram outerIds localIds context).cutDepth =
-          context.cutDepth := by
-    intro holeCtx diagram outerIds localIds context
-    induction localIds with
-    | nil => simp [bindContextFor]
-    | cons head tail induction =>
-        simpa [bindContextFor, DiagramContext.cutDepth] using
-          induction (.bind (diagram.wires head).sig context)
-  constructor
-  · rw [bindDepth, bindDepth]
-    exact inner.cutDepth_eq
-  · intro direction pre definitionEnv sourceBody targetBody fixed localLaw
-    rw [bindDepth]
-    rw [bindContextFor_fill, bindContextFor_fill,
-      finishBodyFor_eq_finishRegion, finishBodyFor_eq_finishRegion]
-    generalize effectiveEq :
-      direction.through sourceInner.cutDepth = effective
-    cases effective with
-    | targetToSource =>
-        refine effectiveEq.symm ▸ ?_
-        simp only [DiagramContext.ContextDirection.holds]
-        intro targetFinished
-        obtain ⟨targetValues, targetCore⟩ :=
-          (ConcreteElaboration.denote_finishRegion definitions
-            attachment.diagram
-            (InsertionCompilation.NaturalityInternal.hostContext attachment
-              (SingletonRemovalSemantics.targetContext source removed
-                sourceOuter))
-            (attachment.hostRegion
-              (SingletonRemovalSemantics.targetRegion source removed region))
-            pre definitionEnv fixed
-            (targetInner.fill targetBody)).mp targetFinished
-        let rawValues :
-            ConcreteElaboration.WireValues pre
-              (((singletonErasureBase source removed
-                candidateWellFormed).val.wiresAt
-                  (SingletonRemovalSemantics.targetRegion source removed
-                    region)).map fun wire =>
-                ((singletonErasureBase source removed
-                  candidateWellFormed).val.wires wire).sig) :=
-          InsertionCompilation.NaturalityInternal.hostRegionLocalSigs_eq
-            compiled
-            (SingletonRemovalSemantics.targetRegion source removed region)
-            notSite ▸ targetValues
-        have targetValuesRoundTrip :
-            (InsertionCompilation.NaturalityInternal.hostRegionLocalSigs_eq
-                compiled
-                (SingletonRemovalSemantics.targetRegion source removed region)
-                notSite).symm ▸ rawValues =
-              targetValues := by
-          unfold rawValues
-          exact
-            InsertionCompilation.NaturalityInternal.wireValues_cast_cancel
-            (InsertionCompilation.NaturalityInternal.hostRegionLocalSigs_eq
-              compiled
-              (SingletonRemovalSemantics.targetRegion source removed region)
-              notSite)
-            targetValues
-        obtain ⟨sourceValues, erasureEnvironments⟩ :=
-          (SingletonRemovalSemantics.extendedEnvironment_correspondence
-            source removed sourceOuter region sourceExtendedNodup pre
-            (Env.comp fixed
-              (fun {_} value =>
-                InsertionCompilation.NaturalityInternal.hostContextRenaming
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter)
-                  (SingletonRemovalSemantics.contextRenaming source removed
-                    sourceOuter value)))
-            (Env.comp fixed
-              (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter)))
-            rfl).2 rawValues
-        have hostEnvironments :=
-          InsertionCompilation.NaturalityInternal.hostExtendedRenaming_extendEnvironment
-            compiled
-              (SingletonRemovalSemantics.targetRegion source removed region)
-              notSite
-              (SingletonRemovalSemantics.targetContext source removed
-                sourceOuter)
-              (InsertionCompilation.NaturalityInternal.hostContext attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter))
-              (ConcreteElaboration.extend_nodup definitions
-                attachment.diagram compiled.generated_wellFormed
-                (InsertionCompilation.NaturalityInternal.hostContext
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter))
-                (attachment.hostRegion
-                  (SingletonRemovalSemantics.targetRegion source removed
-                    region))
-                targetAbove)
-              (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter))
-              (InsertionCompilation.NaturalityInternal.hostContextRenaming_origin
-                attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter))
-              pre rawValues fixed
-        rw [targetValuesRoundTrip] at hostEnvironments
-        dsimp [singletonErasureBase] at hostEnvironments
-        apply
-          (ConcreteElaboration.denote_finishRegion definitions source.val
-            sourceOuter region pre definitionEnv
-            (Env.comp fixed
-              (fun {_} value =>
-                InsertionCompilation.NaturalityInternal.hostContextRenaming
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter)
-                  (SingletonRemovalSemantics.contextRenaming source removed
-                    sourceOuter value)))
-            (sourceInner.fill sourceBody)).mpr
-        refine ⟨sourceValues, ?_⟩
-        rw [erasureEnvironments]
-        have combinedEnvironments :
-            Env.comp
-                (ConcreteElaboration.extendEnvironment attachment.diagram
-                  (InsertionCompilation.NaturalityInternal.hostContext
-                    attachment
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter))
-                  (attachment.hostRegion
-                    (SingletonRemovalSemantics.targetRegion source removed
-                      region))
-                  targetValues fixed)
-                (fun {_} value =>
-                  InsertionCompilation.NaturalityInternal.hostExtendedRenaming
-                    compiled
-                    (SingletonRemovalSemantics.targetRegion source removed
-                      region)
-                    notSite
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter)
-                    (InsertionCompilation.NaturalityInternal.hostContext
-                      attachment
-                      (SingletonRemovalSemantics.targetContext source removed
-                        sourceOuter))
-                    (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                      attachment
-                        (SingletonRemovalSemantics.targetContext source removed
-                          sourceOuter))
-                    (InsertionCompilation.NaturalityInternal.hostContextRenaming_origin
-                      attachment
-                        (SingletonRemovalSemantics.targetContext source removed
-                          sourceOuter))
-                    (SingletonRemovalSemantics.extendedContextRenaming source
-                      removed sourceOuter region value)) =
-              Env.comp
-                (ConcreteElaboration.extendEnvironment
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                    source removed)
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter)
-                  (SingletonRemovalSemantics.targetRegion source removed
-                    region)
-                  rawValues
-                  (Env.comp fixed
-                    (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                      attachment
-                        (SingletonRemovalSemantics.targetContext source removed
-                          sourceOuter))))
-                (SingletonRemovalSemantics.extendedContextRenaming source
-                  removed sourceOuter region) := by
-          funext sig value
-          exact congrFun (congrFun hostEnvironments sig)
-            (SingletonRemovalSemantics.extendedContextRenaming source removed
-              sourceOuter region value)
-        rw [← combinedEnvironments]
-        have middle :=
-          inner.transport direction pre definitionEnv sourceBody targetBody
-            (ConcreteElaboration.extendEnvironment attachment.diagram
-              (InsertionCompilation.NaturalityInternal.hostContext
-                attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter))
-              (attachment.hostRegion
-                (SingletonRemovalSemantics.targetRegion source removed
-                  region))
-              targetValues fixed)
-            (by
-              intro descendant preserves
-              exact localLaw descendant
-                (DiagramContext.preservesOuter_bindContextFor
-                  attachment.diagram
-                  (InsertionCompilation.NaturalityInternal.hostContext
-                    attachment
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter))
-                  (attachment.hostRegion
-                    (SingletonRemovalSemantics.targetRegion source removed
-                      region))
-                  targetInner pre targetValues fixed descendant preserves))
-        have directedMiddle := effectiveEq ▸ middle
-        exact directedMiddle targetCore
-    | sourceToTarget =>
-        refine effectiveEq.symm ▸ ?_
-        simp only [DiagramContext.ContextDirection.holds]
-        intro sourceFinished
-        obtain ⟨sourceValues, sourceCore⟩ :=
-          (ConcreteElaboration.denote_finishRegion definitions source.val
-            sourceOuter region pre definitionEnv
-            (Env.comp fixed
-              (fun {_} value =>
-                InsertionCompilation.NaturalityInternal.hostContextRenaming
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter)
-                  (SingletonRemovalSemantics.contextRenaming source removed
-                    sourceOuter value)))
-            (sourceInner.fill sourceBody)).mp sourceFinished
-        obtain ⟨rawValues, erasureEnvironments⟩ :=
-          (SingletonRemovalSemantics.extendedEnvironment_correspondence
-            source removed sourceOuter region sourceExtendedNodup pre
-            (Env.comp fixed
-              (fun {_} value =>
-                InsertionCompilation.NaturalityInternal.hostContextRenaming
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter)
-                  (SingletonRemovalSemantics.contextRenaming source removed
-                    sourceOuter value)))
-            (Env.comp fixed
-              (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter)))
-            rfl).1 sourceValues
-        let targetValues :=
-          (InsertionCompilation.NaturalityInternal.hostRegionLocalSigs_eq
-            compiled
-            (SingletonRemovalSemantics.targetRegion source removed region)
-            notSite).symm ▸ rawValues
-        have hostEnvironments :=
-          InsertionCompilation.NaturalityInternal.hostExtendedRenaming_extendEnvironment
-            compiled
-              (SingletonRemovalSemantics.targetRegion source removed region)
-              notSite
-              (SingletonRemovalSemantics.targetContext source removed
-                sourceOuter)
-              (InsertionCompilation.NaturalityInternal.hostContext attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter))
-              (ConcreteElaboration.extend_nodup definitions
-                attachment.diagram compiled.generated_wellFormed
-                (InsertionCompilation.NaturalityInternal.hostContext
-                  attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter))
-                (attachment.hostRegion
-                  (SingletonRemovalSemantics.targetRegion source removed
-                    region))
-                targetAbove)
-              (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter))
-              (InsertionCompilation.NaturalityInternal.hostContextRenaming_origin
-                attachment
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter))
-              pre rawValues fixed
-        dsimp [singletonErasureBase] at hostEnvironments
-        apply
-          (ConcreteElaboration.denote_finishRegion definitions
-            attachment.diagram
-            (InsertionCompilation.NaturalityInternal.hostContext attachment
-              (SingletonRemovalSemantics.targetContext source removed
-                sourceOuter))
-            (attachment.hostRegion
-              (SingletonRemovalSemantics.targetRegion source removed region))
-            pre definitionEnv fixed
-            (targetInner.fill targetBody)).mpr
-        refine ⟨targetValues, ?_⟩
-        have middle :=
-          inner.transport direction pre definitionEnv sourceBody targetBody
-            (ConcreteElaboration.extendEnvironment attachment.diagram
-              (InsertionCompilation.NaturalityInternal.hostContext attachment
-                (SingletonRemovalSemantics.targetContext source removed
-                  sourceOuter))
-              (attachment.hostRegion
-                (SingletonRemovalSemantics.targetRegion source removed
-                  region))
-              targetValues fixed)
-            (by
-              intro descendant preserves
-              exact localLaw descendant
-                (DiagramContext.preservesOuter_bindContextFor
-                  attachment.diagram
-                  (InsertionCompilation.NaturalityInternal.hostContext
-                    attachment
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter))
-                  (attachment.hostRegion
-                    (SingletonRemovalSemantics.targetRegion source removed
-                      region))
-                  targetInner pre targetValues fixed descendant preserves))
-        have directedMiddle := effectiveEq ▸ middle
-        apply directedMiddle
-        have combinedEnvironments :
-            Env.comp
-                (ConcreteElaboration.extendEnvironment attachment.diagram
-                  (InsertionCompilation.NaturalityInternal.hostContext
-                    attachment
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter))
-                  (attachment.hostRegion
-                    (SingletonRemovalSemantics.targetRegion source removed
-                      region))
-                  targetValues fixed)
-                (fun {_} value =>
-                  InsertionCompilation.NaturalityInternal.hostExtendedRenaming
-                    compiled
-                    (SingletonRemovalSemantics.targetRegion source removed
-                      region)
-                    notSite
-                    (SingletonRemovalSemantics.targetContext source removed
-                      sourceOuter)
-                    (InsertionCompilation.NaturalityInternal.hostContext
-                      attachment
-                      (SingletonRemovalSemantics.targetContext source removed
-                        sourceOuter))
-                    (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                      attachment
-                        (SingletonRemovalSemantics.targetContext source removed
-                          sourceOuter))
-                    (InsertionCompilation.NaturalityInternal.hostContextRenaming_origin
-                      attachment
-                        (SingletonRemovalSemantics.targetContext source removed
-                          sourceOuter))
-                    (SingletonRemovalSemantics.extendedContextRenaming source
-                      removed sourceOuter region value)) =
-              Env.comp
-                (ConcreteElaboration.extendEnvironment
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
-                    source removed)
-                  (SingletonRemovalSemantics.targetContext source removed
-                    sourceOuter)
-                  (SingletonRemovalSemantics.targetRegion source removed
-                    region)
-                  rawValues
-                  (Env.comp fixed
-                    (InsertionCompilation.NaturalityInternal.hostContextRenaming
-                      attachment
-                        (SingletonRemovalSemantics.targetContext source removed
-                          sourceOuter))))
-                (SingletonRemovalSemantics.extendedContextRenaming source
-                  removed sourceOuter region) := by
-          funext sig value
-          dsimp [targetValues]
-          exact congrFun (congrFun hostEnvironments sig)
-            (SingletonRemovalSemantics.extendedContextRenaming source removed
-              sourceOuter region value)
-        rw [combinedEnvironments, ← erasureEnvironments]
-        exact sourceCore
-
 private theorem RelationJoinStep.compileRegionBody_of_frameBranch
     {diagram : ConcreteDiagram definitions.length}
     {site region selected : diagram.RegionId}
@@ -4876,6 +4688,34 @@ private structure RelationJoinStep.PairedAboveScopeReflection
           sourceSiteOuter)).extend
         (attachment.hostRegion
           (SingletonRemovalSemantics.targetRegion source removed scope))
+  sourceDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((source.val.wiresAt scope).map
+        (fun wire => (source.val.wires wire).sig))
+      sourceAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            sourceStoppedVisible).trans
+          (ConcreteElaboration.WireContext.sigs_extend
+            sourceSiteOuter scope)) ▸
+        sourceStopped.context)
+  targetDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((attachment.diagram.wiresAt
+          (attachment.hostRegion
+            (SingletonRemovalSemantics.targetRegion source removed
+              scope))).map
+        (fun wire => (attachment.diagram.wires wire).sig))
+      targetAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            targetStoppedVisible).trans
+          (ConcreteElaboration.WireContext.sigs_extend
+            (InsertionCompilation.NaturalityInternal.hostContext attachment
+              (SingletonRemovalSemantics.targetContext source removed
+                sourceSiteOuter))
+            (attachment.hostRegion
+              (SingletonRemovalSemantics.targetRegion source removed
+                scope)))) ▸
+        targetStopped.context)
   sourceStoppedBody :
     congrArg ConcreteElaboration.WireContext.sigs sourceStoppedVisible ▸
         sourceStopped.siteBody =
@@ -4899,8 +4739,8 @@ private structure RelationJoinStep.PairedAboveScopeReflection
           (attachment.hostRegion
             (SingletonRemovalSemantics.targetRegion source removed scope))
           targetBody)
-  zipper :
-    DiagramContext.SemanticZipper.{u} sourceAbove targetAbove
+  composable :
+    DiagramContext.ComposableSemanticZipper.{u} sourceAbove targetAbove
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env
           (fun {_} value =>
@@ -4917,7 +4757,7 @@ private structure RelationJoinStep.PairedAboveScopeReflection
               attachment
               (SingletonRemovalSemantics.targetContext source removed
                 sourceSiteOuter)
-              (SingletonRemovalSemantics.contextRenaming source removed
+                (SingletonRemovalSemantics.contextRenaming source removed
                 sourceSiteOuter value)))
 
 /--
@@ -5115,11 +4955,23 @@ private theorem RelationJoinStep.pairedStopAboveCurrent
                     .hole }
             sourceStoppedVisible := rfl
             targetStoppedVisible := rfl
+            sourceDecomposition :=
+              bindContextFor_hole_stopsAboveBindMany source.val sourceOuter
+                (source.val.nodes removed).region
+            targetDecomposition :=
+              bindContextFor_hole_stopsAboveBindMany attachment.diagram
+                (InsertionCompilation.NaturalityInternal.hostContext
+                  attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter))
+                (attachment.hostRegion
+                  (SingletonRemovalSemantics.targetRegion source removed
+                    (source.val.nodes removed).region))
             sourceStoppedBody := rfl
             targetStoppedBody := rfl
             sourceFill := ?_
             targetFill := ?_
-            zipper := ?_
+            composable := ?_
           }, ?_, ?_⟩
         · change
             (bindContextFor source.val sourceOuter.ids
@@ -5153,7 +5005,7 @@ private theorem RelationJoinStep.pairedStopAboveCurrent
           rw [bindContextFor_fill, finishBodyFor_eq_finishRegion]
           rfl
         · simpa using
-            (DiagramContext.SemanticZipper.hole
+            (DiagramContext.ComposableSemanticZipper.hole
               (definitions := definitions)
               (fun (pre : PreModel.{u}) env =>
                 Env.comp env
@@ -5329,11 +5181,23 @@ private theorem RelationJoinStep.pairedStopAboveCurrent
                     .hole }
             sourceStoppedVisible := rfl
             targetStoppedVisible := rfl
+            sourceDecomposition :=
+              bindContextFor_hole_stopsAboveBindMany source.val sourceOuter
+                region
+            targetDecomposition :=
+              bindContextFor_hole_stopsAboveBindMany attachment.diagram
+                (InsertionCompilation.NaturalityInternal.hostContext
+                  attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter))
+                (attachment.hostRegion
+                  (SingletonRemovalSemantics.targetRegion source removed
+                    region))
             sourceStoppedBody := rfl
             targetStoppedBody := rfl
             sourceFill := ?_
             targetFill := ?_
-            zipper := ?_
+            composable := ?_
           }, ?_, ?_⟩
         · change
             (bindContextFor source.val sourceOuter.ids
@@ -5366,7 +5230,7 @@ private theorem RelationJoinStep.pairedStopAboveCurrent
           rw [bindContextFor_fill, finishBodyFor_eq_finishRegion]
           rfl
         · simpa using
-            (DiagramContext.SemanticZipper.hole
+            (DiagramContext.ComposableSemanticZipper.hole
               (definitions := definitions)
               (fun (pre : PreModel.{u}) env =>
                 Env.comp env
@@ -5823,12 +5687,34 @@ private theorem RelationJoinStep.pairedSiblingAboveScope
                     (.cut nested.targetStopped.context) targetSuffix }
             sourceStoppedVisible := nested.sourceStoppedVisible
             targetStoppedVisible := nested.targetStoppedVisible
+            sourceDecomposition :=
+              DiagramContext.StopsAboveBindMany.surroundCut_cast
+                ((congrArg ConcreteElaboration.WireContext.sigs
+                    nested.sourceStoppedVisible).trans
+                  (ConcreteElaboration.WireContext.sigs_extend
+                    nested.sourceSiteOuter scope))
+                sourceLeading sourceSuffix nested.sourceStopped.context
+                nested.sourceAbove nested.sourceDecomposition
+            targetDecomposition :=
+              DiagramContext.StopsAboveBindMany.surroundCut_cast
+                ((congrArg ConcreteElaboration.WireContext.sigs
+                    nested.targetStoppedVisible).trans
+                  (ConcreteElaboration.WireContext.sigs_extend
+                    (InsertionCompilation.NaturalityInternal.hostContext
+                      attachment
+                      (SingletonRemovalSemantics.targetContext source removed
+                        nested.sourceSiteOuter))
+                    (attachment.hostRegion
+                      (SingletonRemovalSemantics.targetRegion source removed
+                        scope))))
+                targetLeading targetSuffix nested.targetStopped.context
+                nested.targetAbove nested.targetDecomposition
             sourceStoppedBody := nested.sourceStoppedBody
             targetStoppedBody := nested.targetStoppedBody
             sourceFill := ?_
             targetFill := ?_
-            zipper :=
-              RelationJoinStep.pairedSiblingSemanticZipper
+            composable :=
+              RelationJoinStep.pairedSiblingComposableZipper
                 (SingletonRemovalSemantics.contextRenaming source removed
                   sourceContext)
                 (InsertionCompilation.NaturalityInternal.hostContextRenaming
@@ -5847,7 +5733,7 @@ private theorem RelationJoinStep.pairedSiblingAboveScope
                             removed nested.sourceSiteOuter)
                           (SingletonRemovalSemantics.contextRenaming source
                             removed nested.sourceSiteOuter value)))
-                nested.zipper leadingPriorBase leadingBaseTarget
+                nested.composable leadingPriorBase leadingBaseTarget
                 suffixPriorBase suffixBaseTarget
           }, ?_, ?_⟩
         · simpa only [DiagramContext.fill] using
@@ -6998,9 +6884,8 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                   baseNotSite)
           let targetOuterSigsExact :=
             congrArg ConcreteElaboration.WireContext.sigs targetContextExact
-          have rebasedZipperRaw :=
-            aroundReceipt.zipper.rebaseTargetOuter targetOuterSigsExact
-              aroundReceipt.targetAbove
+          have rebasedComposableRaw :=
+            aroundReceipt.composable.rebaseTargetOuter targetOuterSigsExact
           have targetCurrentAbove :=
             InsertionCompilation.NaturalityInternal.hostContext_above compiled
               (SingletonRemovalSemantics.targetContext source removed
@@ -7017,8 +6902,8 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                 (SingletonRemovalSemantics.targetRegion source removed
                   region))
               targetCurrentAbove
-          have rebasedZipper :
-              DiagramContext.SemanticZipper
+          have rebasedComposable :
+              DiagramContext.ComposableSemanticZipper
                 aroundReceipt.sourceAbove
                 (targetOuterSigsExact ▸ aroundReceipt.targetAbove)
                 (fun (pre : PreModel.{u}) env =>
@@ -7363,7 +7248,7 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                         rw [throughCompositeExact]
                 _ = _ := by rw [throughExtendedExact]
             rw [← outerMapExact]
-            exact rebasedZipperRaw
+            exact rebasedComposableRaw
           let sourceAncestor :=
             bindContextFor source.val sourceOuter.ids
               (source.val.wiresAt region) aroundReceipt.sourceAbove
@@ -7391,6 +7276,84 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                       sourceOuter)).ids).map
                     (fun wire => (attachment.diagram.wires wire).sig) := by
             exact targetOuterSigsExact
+          let bound :
+              List Sig :=
+            (source.val.wiresAt region).map
+              (fun wire => (source.val.wires wire).sig)
+          let sourceBinderSigsExact :
+              (sourceOuter.extend region).sigs =
+                bound ++ sourceOuter.sigs := by
+            unfold bound ConcreteElaboration.WireContext.extend
+              ConcreteElaboration.WireContext.sigs
+            exact List.map_append
+          let targetLocalSigsExact :
+              (attachment.diagram.wiresAt
+                  (attachment.hostRegion
+                    (SingletonRemovalSemantics.targetRegion source removed
+                      region))).map
+                    (fun wire => (attachment.diagram.wires wire).sig) =
+                bound := by
+            exact
+              (InsertionCompilation.NaturalityInternal.hostRegionLocalSigs_eq
+                compiled
+                (SingletonRemovalSemantics.targetRegion source removed region)
+                baseNotSite).trans
+                (RelationJoinStep.erasureRegionLocalSigs_eq source removed
+                  sourceOuter region)
+          let targetMapAppendExact :
+              ((attachment.diagram.wiresAt
+                  (attachment.hostRegion
+                    (SingletonRemovalSemantics.targetRegion source removed
+                      region))) ++
+                (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter)).ids).map
+                    (fun wire => (attachment.diagram.wires wire).sig) =
+                (attachment.diagram.wiresAt
+                    (attachment.hostRegion
+                      (SingletonRemovalSemantics.targetRegion source removed
+                        region))).map
+                      (fun wire => (attachment.diagram.wires wire).sig) ++
+                  (InsertionCompilation.NaturalityInternal.hostContext
+                    attachment
+                    (SingletonRemovalSemantics.targetContext source removed
+                      sourceOuter)).sigs := by
+            exact List.map_append
+          let targetCanonicalSigsExact :
+              ((InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter)).extend
+                (attachment.hostRegion
+                  (SingletonRemovalSemantics.targetRegion source removed
+                    region))).sigs =
+                bound ++
+                  (InsertionCompilation.NaturalityInternal.hostContext attachment
+                    (SingletonRemovalSemantics.targetContext source removed
+                      sourceOuter)).sigs := by
+            calc
+              _ =
+                  ((attachment.diagram.wiresAt
+                      (attachment.hostRegion
+                        (SingletonRemovalSemantics.targetRegion source removed
+                          region))) ++
+                    (InsertionCompilation.NaturalityInternal.hostContext
+                      attachment
+                      (SingletonRemovalSemantics.targetContext source removed
+                        sourceOuter)).ids).map
+                      (fun wire => (attachment.diagram.wires wire).sig) :=
+                targetOuterSigsExact.symm.trans targetBinderContextExact
+              _ =
+                  (attachment.diagram.wiresAt
+                      (attachment.hostRegion
+                        (SingletonRemovalSemantics.targetRegion source removed
+                          region))).map
+                        (fun wire => (attachment.diagram.wires wire).sig) ++
+                    (InsertionCompilation.NaturalityInternal.hostContext
+                      attachment
+                      (SingletonRemovalSemantics.targetContext source removed
+                        sourceOuter)).sigs := by
+                exact List.map_append
+              _ = _ := by rw [targetLocalSigsExact]
           let sourceStoppedAncestor :
               RegionFrame definitions source.val sourceOuter :=
             { visible := aroundReceipt.sourceStopped.visible
@@ -7419,8 +7382,259 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                         region)))
                   (targetBinderContextExact ▸
                     aroundReceipt.targetStopped.context) }
-          have ancestorZipper :
-              DiagramContext.SemanticZipper sourceAncestor targetAncestor
+          let sourceToBaseExtended :
+              WireRenaming
+                (sourceOuter.extend region).sigs
+                (SingletonRemovalSemantics.targetContext source removed
+                  (sourceOuter.extend region)).sigs :=
+            SingletonRemovalSemantics.contextRenaming source removed
+              (sourceOuter.extend region)
+          let baseToRawExtended :
+              WireRenaming
+                (SingletonRemovalSemantics.targetContext source removed
+                  (sourceOuter.extend region)).sigs
+                (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    (sourceOuter.extend region))).sigs :=
+            InsertionCompilation.NaturalityInternal.hostContextRenaming
+              attachment
+              (SingletonRemovalSemantics.targetContext source removed
+                (sourceOuter.extend region))
+          let rawFullRenaming :
+              WireRenaming
+                (sourceOuter.extend region).sigs
+                (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    (sourceOuter.extend region))).sigs :=
+            fun {_} value =>
+              baseToRawExtended (sourceToBaseExtended value)
+          have rawTargetExtendedNodup :
+              (InsertionCompilation.NaturalityInternal.hostContext attachment
+                (SingletonRemovalSemantics.targetContext source removed
+                  (sourceOuter.extend region))).ids.Nodup := by
+            rw [targetContextExact]
+            exact targetExtendedNodup
+          let rawFullTargetToSource :
+              (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    (sourceOuter.extend region))).sigs =
+                (sourceOuter.extend region).sigs :=
+            (InsertionCompilation.NaturalityInternal.hostContext_sigs
+              attachment
+              (SingletonRemovalSemantics.targetContext source removed
+                (sourceOuter.extend region))).trans
+              (SingletonRemovalSemantics.targetContext_sigs source removed
+                (sourceOuter.extend region))
+          have rawFullIdentity :
+              (fun {sig} (value : Var (sourceOuter.extend region).sigs sig) =>
+                rawFullTargetToSource ▸ rawFullRenaming value) =
+                (fun {_}
+                  (value : Var (sourceOuter.extend region).sigs _) => value) := by
+            exact
+              composeRenaming_reindexed_identity
+                (SingletonRemovalSemantics.targetContext_sigs source removed
+                  (sourceOuter.extend region))
+                (InsertionCompilation.NaturalityInternal.hostContext_sigs
+                  attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    (sourceOuter.extend region)))
+                sourceToBaseExtended baseToRawExtended
+                (SingletonRemovalSemantics.contextRenaming_reindex_identity
+                  source removed (sourceOuter.extend region))
+                (InsertionCompilation.NaturalityInternal.hostContextRenaming_reindex_identity
+                  attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    (sourceOuter.extend region))
+                  rawTargetExtendedNodup)
+          let sourceToBaseOuter :
+              WireRenaming sourceOuter.sigs
+                (SingletonRemovalSemantics.targetContext source removed
+                  sourceOuter).sigs :=
+            SingletonRemovalSemantics.contextRenaming source removed
+              sourceOuter
+          let baseToTargetOuter :
+              WireRenaming
+                (SingletonRemovalSemantics.targetContext source removed
+                  sourceOuter).sigs
+                (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter)).sigs :=
+            InsertionCompilation.NaturalityInternal.hostContextRenaming
+              attachment
+              (SingletonRemovalSemantics.targetContext source removed
+                sourceOuter)
+          let outerRenaming :
+              WireRenaming sourceOuter.sigs
+                (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter)).sigs :=
+            fun {_} value => baseToTargetOuter (sourceToBaseOuter value)
+          let outerTargetToSource :
+              (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter)).sigs =
+                sourceOuter.sigs :=
+            (InsertionCompilation.NaturalityInternal.hostContext_sigs
+              attachment
+              (SingletonRemovalSemantics.targetContext source removed
+                sourceOuter)).trans
+              (SingletonRemovalSemantics.targetContext_sigs source removed
+                sourceOuter)
+          have outerIdentity :
+              (fun {sig} (value : Var sourceOuter.sigs sig) =>
+                outerTargetToSource ▸ outerRenaming value) =
+                (fun {_} (value : Var sourceOuter.sigs _) => value) := by
+            exact
+              composeRenaming_reindexed_identity
+                (SingletonRemovalSemantics.targetContext_sigs source removed
+                  sourceOuter)
+                (InsertionCompilation.NaturalityInternal.hostContext_sigs
+                  attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter))
+                sourceToBaseOuter baseToTargetOuter
+                (SingletonRemovalSemantics.contextRenaming_reindex_identity
+                  source removed sourceOuter)
+                (InsertionCompilation.NaturalityInternal.hostContextRenaming_reindex_identity
+                  attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    sourceOuter)
+                  targetCurrentAbove.1)
+          let rawTargetToCanonical :
+              (InsertionCompilation.NaturalityInternal.hostContext attachment
+                  (SingletonRemovalSemantics.targetContext source removed
+                    (sourceOuter.extend region))).sigs =
+                bound ++
+                  (InsertionCompilation.NaturalityInternal.hostContext attachment
+                    (SingletonRemovalSemantics.targetContext source removed
+                      sourceOuter)).sigs :=
+            targetOuterSigsExact.trans targetCanonicalSigsExact
+          let canonicalFullRenaming :
+              WireRenaming (bound ++ sourceOuter.sigs)
+                (bound ++
+                  (InsertionCompilation.NaturalityInternal.hostContext attachment
+                    (SingletonRemovalSemantics.targetContext source removed
+                      sourceOuter)).sigs) :=
+            transportRenaming sourceBinderSigsExact.symm
+              rawTargetToCanonical.symm rawFullRenaming
+          let canonicalTargetToSource :
+              bound ++
+                    (InsertionCompilation.NaturalityInternal.hostContext attachment
+                      (SingletonRemovalSemantics.targetContext source removed
+                        sourceOuter)).sigs =
+                bound ++ sourceOuter.sigs :=
+            congrArg (List.append bound) outerTargetToSource
+          have canonicalFullIdentity :
+              (fun {sig} (value : Var (bound ++ sourceOuter.sigs) sig) =>
+                canonicalTargetToSource ▸ canonicalFullRenaming value) =
+                (fun {_}
+                  (value : Var (bound ++ sourceOuter.sigs) _) => value) := by
+            exact
+              transportRenaming_reindexed_identity
+                sourceBinderSigsExact.symm rawTargetToCanonical.symm
+                rawFullTargetToSource canonicalTargetToSource rawFullRenaming
+                rawFullIdentity
+          have canonicalFullRenamingExact :
+              (canonicalFullRenaming :
+                WireRenaming (bound ++ sourceOuter.sigs)
+                  (bound ++
+                    (InsertionCompilation.NaturalityInternal.hostContext attachment
+                      (SingletonRemovalSemantics.targetContext source removed
+                        sourceOuter)).sigs)) =
+                (DiagramContext.ComposableSemanticZipper.liftMany
+                  bound outerRenaming :
+                    WireRenaming (bound ++ sourceOuter.sigs)
+                      (bound ++
+                        (InsertionCompilation.NaturalityInternal.hostContext attachment
+                          (SingletonRemovalSemantics.targetContext source removed
+                            sourceOuter)).sigs)) := by
+            exact
+              DiagramContext.ComposableSemanticZipper.eq_liftMany_of_reindexed_identity
+                bound outerTargetToSource outerRenaming canonicalFullRenaming
+                outerIdentity canonicalFullIdentity
+          have canonicalComposableRaw :=
+            (aroundReceipt.composable.rebaseSourceOuter
+                sourceBinderSigsExact).rebaseTargetOuter
+              rawTargetToCanonical
+          have canonicalComposable :
+              DiagramContext.ComposableSemanticZipper
+                (sourceBinderSigsExact ▸ aroundReceipt.sourceAbove)
+                (rawTargetToCanonical ▸ aroundReceipt.targetAbove)
+                (fun (pre : PreModel.{u}) env =>
+                  Env.comp env canonicalFullRenaming)
+                (fun (pre : PreModel.{u}) env =>
+                  Env.comp env
+                    (fun {_} value =>
+                      InsertionCompilation.NaturalityInternal.hostContextRenaming attachment
+                          (SingletonRemovalSemantics.targetContext source
+                            removed aroundReceipt.sourceSiteOuter)
+                          (SingletonRemovalSemantics.contextRenaming source
+                            removed aroundReceipt.sourceSiteOuter value))) := by
+            rw [← envComp_transportRenaming sourceBinderSigsExact
+              rawTargetToCanonical rawFullRenaming]
+            exact canonicalComposableRaw
+          have liftedComposable :
+              DiagramContext.ComposableSemanticZipper
+                (sourceBinderSigsExact ▸ aroundReceipt.sourceAbove)
+                (rawTargetToCanonical ▸ aroundReceipt.targetAbove)
+                (fun (pre : PreModel.{u}) env =>
+                  Env.comp env
+                    (DiagramContext.ComposableSemanticZipper.liftMany
+                      bound outerRenaming))
+                (fun (pre : PreModel.{u}) env =>
+                  Env.comp env
+                    (fun {_} value =>
+                      InsertionCompilation.NaturalityInternal.hostContextRenaming attachment
+                          (SingletonRemovalSemantics.targetContext source
+                            removed aroundReceipt.sourceSiteOuter)
+                          (SingletonRemovalSemantics.contextRenaming source
+                            removed aroundReceipt.sourceSiteOuter value))) := by
+            rw [← canonicalFullRenamingExact]
+            exact canonicalComposable
+          have boundComposable :=
+            DiagramContext.ComposableSemanticZipper.bindMany
+              bound outerRenaming liftedComposable
+          have sourceAncestorExact :
+              sourceAncestor =
+                DiagramContext.bindMany bound
+                  (sourceBinderSigsExact ▸ aroundReceipt.sourceAbove) := by
+            unfold sourceAncestor
+            rw [RelationJoinStep.bindContextFor_eq_bindMany]
+            unfold bound
+            have proofExact :
+                (@List.map_append _ _
+                    (fun wire => (source.val.wires wire).sig)
+                    (source.val.wiresAt region) sourceOuter.ids) =
+                  sourceBinderSigsExact :=
+              Subsingleton.elim _ _
+            rw [proofExact]
+            rfl
+          have targetAncestorExact :
+              targetAncestor =
+                DiagramContext.bindMany bound
+                  (rawTargetToCanonical ▸ aroundReceipt.targetAbove) := by
+            unfold targetAncestor
+            rw [RelationJoinStep.bindContextFor_eq_bindMany]
+            change
+              DiagramContext.bindMany
+                  ((attachment.diagram.wiresAt
+                      (attachment.hostRegion
+                        (SingletonRemovalSemantics.targetRegion source removed
+                          region))).map
+                        (fun wire => (attachment.diagram.wires wire).sig))
+                  (targetMapAppendExact ▸
+                    (targetBinderContextExact ▸
+                      aroundReceipt.targetAbove)) =
+                DiagramContext.bindMany bound
+                  (rawTargetToCanonical ▸ aroundReceipt.targetAbove)
+            rw [RelationJoinStep.cast_context_trans targetBinderContextExact
+              targetMapAppendExact]
+            rw [RelationJoinStep.bindMany_reindexBound
+              targetLocalSigsExact]
+            rw [RelationJoinStep.cast_context_trans]
+          have ancestorComposable :
+              DiagramContext.ComposableSemanticZipper
+                sourceAncestor targetAncestor
                 (fun (pre : PreModel.{u}) env =>
                   Env.comp env
                     (fun {_} value =>
@@ -7437,12 +7651,8 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                             removed aroundReceipt.sourceSiteOuter)
                           (SingletonRemovalSemantics.contextRenaming source
                             removed aroundReceipt.sourceSiteOuter value))) := by
-            apply
-              RelationJoinStep.pairedBindContextZipper source removed
-                candidateWellFormed compiled region baseNotSite sourceOuter
-                sourceExtendedNodup
-            · exact rebasedZipper
-            · exact targetCurrentAbove
+            rw [sourceAncestorExact, targetAncestorExact]
+            simpa only [outerRenaming] using boundComposable
           let rebasedTarget :=
             InsertionCompilation.NaturalityInternal.rebaseRegionFrame
               targetContextExact canonicalTargetAround
@@ -7480,11 +7690,57 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                 aroundReceipt.sourceStoppedVisible
               targetStoppedVisible :=
                 aroundReceipt.targetStoppedVisible
+              sourceDecomposition :=
+                DiagramContext.StopsAboveBindMany.bindContextFor_cast
+                  ((congrArg ConcreteElaboration.WireContext.sigs
+                      aroundReceipt.sourceStoppedVisible).trans
+                    (ConcreteElaboration.WireContext.sigs_extend
+                      aroundReceipt.sourceSiteOuter scope))
+                  source.val sourceOuter.ids (source.val.wiresAt region)
+                  aroundReceipt.sourceStopped.context
+                  aroundReceipt.sourceAbove
+                  aroundReceipt.sourceDecomposition
+              targetDecomposition :=
+                by
+                  let holeExact :=
+                    (congrArg ConcreteElaboration.WireContext.sigs
+                        aroundReceipt.targetStoppedVisible).trans
+                      (ConcreteElaboration.WireContext.sigs_extend
+                        (InsertionCompilation.NaturalityInternal.hostContext
+                          attachment
+                          (SingletonRemovalSemantics.targetContext source
+                            removed aroundReceipt.sourceSiteOuter))
+                        (attachment.hostRegion
+                          (SingletonRemovalSemantics.targetRegion source
+                            removed scope)))
+                  have rebased :=
+                    DiagramContext.StopsAboveBindMany.rebaseOuter_cast
+                      holeExact targetBinderContextExact
+                      aroundReceipt.targetAbove
+                      aroundReceipt.targetStopped.context
+                      aroundReceipt.targetDecomposition
+                  have bound :=
+                    DiagramContext.StopsAboveBindMany.bindContextFor_cast
+                      holeExact attachment.diagram
+                      (InsertionCompilation.NaturalityInternal.hostContext
+                        attachment
+                        (SingletonRemovalSemantics.targetContext source removed
+                          sourceOuter)).ids
+                      (attachment.diagram.wiresAt
+                        (attachment.hostRegion
+                          (SingletonRemovalSemantics.targetRegion source removed
+                            region)))
+                      (targetBinderContextExact ▸
+                        aroundReceipt.targetStopped.context)
+                      (targetBinderContextExact ▸
+                        aroundReceipt.targetAbove)
+                      rebased
+                  simpa only [targetAncestor, targetStoppedAncestor] using bound
               sourceStoppedBody := aroundReceipt.sourceStoppedBody
               targetStoppedBody := aroundReceipt.targetStoppedBody
               sourceFill := ?_
               targetFill := ?_
-              zipper := ancestorZipper
+              composable := ancestorComposable
             }, ?_, ?_⟩
           · change
               (bindContextFor source.val sourceOuter.ids
@@ -8310,8 +8566,8 @@ private theorem RelationJoinStep.aboveDyingScopeReceiptOfExplicitBase
                   value))) := by
     funext pre env sig value
     nomatch value
-  have zipper :
-      DiagramContext.SemanticZipper.{u}
+  have composable :
+      DiagramContext.ComposableSemanticZipper.{u}
         reflected.sourceAbove checkedAbove
         (fun (_pre : PreModel.{u}) env => env)
         (fun (_pre : PreModel.{u}) env =>
@@ -8319,7 +8575,7 @@ private theorem RelationJoinStep.aboveDyingScopeReceiptOfExplicitBase
     rw [outerMapExact]
     unfold checkedAbove siteProjection rawSiteProjection
     exact
-      transportSemanticZipperTargetHole checkedSiteOuterSigs
+      transportComposableSemanticZipperTargetHole checkedSiteOuterSigs
         reflected.sourceAbove reflected.targetAbove
         (fun {_} value =>
           InsertionCompilation.NaturalityInternal.hostContextRenaming
@@ -8328,13 +8584,22 @@ private theorem RelationJoinStep.aboveDyingScopeReceiptOfExplicitBase
               step.priorApplication reflected.sourceSiteOuter)
             (SingletonRemovalSemantics.contextRenaming step.prior
               step.priorApplication reflected.sourceSiteOuter value))
-        _ reflected.zipper
+        _ reflected.composable
   exact
     RelationJoinStep.AboveDyingScopeReceipt.ofNormalized
       reflected.sourceSiteOuter checkedSiteOuter reflected.sourceAbove
       checkedAbove reflected.sourceBody checkedBody priorVisibleExact
-      checkedVisibleExact priorBodyExact checkedBodyExact siteProjection
-      priorRootFill checkedRootFill zipper
+      checkedVisibleExact reflected.sourceDecomposition
+      (by
+        exact
+          transportCheckedAboveDecomposition checkedExact rawTargetScope
+            (step.checkedRegionImage
+              (source.val.wires dying).scope)
+            checkedSiteExact rawCheckedSiteOuter reflectedRawCheckedScope
+            reflected.targetAbove reflected.targetStoppedVisible
+            reflected.targetDecomposition checkedVisibleExact)
+      priorBodyExact checkedBodyExact
+      siteProjection priorRootFill checkedRootFill composable
 
 theorem RelationJoinStep.aboveDyingScopeReceipt
     {source : CheckedDiagram definitions}
@@ -8451,6 +8716,9 @@ private theorem RelationJoinStep.preBinderDenotation
       (checkedScope :
         SiteCompilation step.checked
           (step.checkedRegionImage (source.val.wires dying).scope))
+      (aboveReceipt :
+        RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
+          checkedScope)
       (projection :
         WireRenaming priorScope.frame.visible.sigs
           checkedScope.frame.visible.sigs)
@@ -8476,8 +8744,6 @@ private theorem RelationJoinStep.preBinderDenotation
         step.sourceParameters.map step.checkedWireImage ∧
       projection (sig := .rel step.relationArgs) priorHead = checkedHead ∧
       Vars.rename projection priorParameters = checkedParameters ∧
-      priorScope.frame.context.cutDepth =
-        checkedScope.frame.context.cutDepth ∧
       ∀ checkedEnv :
           Env model.toPreModel checkedScope.frame.visible.sigs,
         checkedEnv (.rel step.relationArgs) checkedHead =
@@ -8927,12 +9193,15 @@ private theorem RelationJoinStep.preBinderDenotation
         (fun sourceWire {_} value sourceOrigin =>
           projectionOrigin sourceWire value sourceOrigin)
         priorParameters step.sourceParameters priorParameterOrigins
+  obtain ⟨aboveReceipt⟩ :=
+    RelationJoinStep.aboveDyingScopeReceipt step contentCompiled compiled
+      priorScope checkedScope
   refine
-    ⟨priorScope, checkedScope, projection, priorHead, checkedHead,
+    ⟨priorScope, checkedScope, aboveReceipt, projection,
+      priorHead, checkedHead,
       priorParameters, checkedParameters, priorHeadOrigin,
       checkedHeadOrigin, priorParameterOrigins, checkedParameterOrigins,
-      rfl, rfl, relationJoinStep_scope_cutDepth step priorScope checkedScope,
-      ?_⟩
+      rfl, rfl, ?_⟩
   intro checkedEnv checkedHeadValue checkedHolds
   let parameterValues := Vars.denote checkedEnv checkedParameters
   have checkedParameterValues :
@@ -10704,6 +10973,147 @@ theorem RelationJoinSemanticTrace.finalDyingScope
       exact step.checked_dying_scope
 
 /--
+The structural part of the sole relation trace. Nil is an indexed identity;
+every nonempty trace carries one constructor-preserving source-to-final
+derivation between canonical above-scope decompositions.
+-/
+inductive RelationJoinSemanticTrace.AboveDyingScopeFold
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    (sourceScope : SiteCompilation source sourceSite) :
+    {final : CheckedDiagram definitions} →
+    {finalSite : final.val.RegionId} →
+    SiteCompilation final finalSite →
+    Type (u + 1)
+  | identity
+      {final : CheckedDiagram definitions}
+      {finalSite : final.val.RegionId}
+      (finalScope : SiteCompilation final finalSite)
+      (same : HEq finalScope sourceScope) :
+      AboveDyingScopeFold sourceScope finalScope
+  | nonempty
+      {actualSource : CheckedDiagram definitions}
+      {actualSourceSite : actualSource.val.RegionId}
+      {actualSourceScope :
+        SiteCompilation actualSource actualSourceSite}
+      {final : CheckedDiagram definitions}
+      {finalSite : final.val.RegionId}
+      {finalScope : SiteCompilation final finalSite}
+      (sourceExact : HEq actualSourceScope sourceScope)
+      (sourceCanonical :
+        SiteCompilation.AboveScopeDecomposition actualSourceScope)
+      (finalCanonical :
+        SiteCompilation.AboveScopeDecomposition finalScope)
+      (holeMap :
+        ∀ pre : PreModel.{u},
+          Env pre finalCanonical.siteOuter.sigs →
+            Env pre sourceCanonical.siteOuter.sigs)
+      (composable :
+        DiagramContext.ComposableSemanticZipper
+          sourceCanonical.above finalCanonical.above
+          (fun (_pre : PreModel.{u}) env => env)
+          holeMap) :
+      AboveDyingScopeFold sourceScope finalScope
+
+private noncomputable def
+    RelationJoinSemanticTrace.AboveDyingScopeFold.composeNonempty
+    {source : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {actualSourceScope : SiteCompilation source sourceSite}
+    {foldSource : CheckedDiagram definitions}
+    {foldSourceSite : foldSource.val.RegionId}
+    {foldSourceScope :
+      SiteCompilation foldSource foldSourceSite}
+    {middle : CheckedDiagram definitions}
+    {middleSite : middle.val.RegionId}
+    {middleScope : SiteCompilation middle middleSite}
+    {final : CheckedDiagram definitions}
+    {finalSite : final.val.RegionId}
+    {finalScope : SiteCompilation final finalSite}
+    (sourceExact : HEq actualSourceScope foldSourceScope)
+    (sourceCanonical :
+      SiteCompilation.AboveScopeDecomposition actualSourceScope)
+    (middleCanonical :
+      SiteCompilation.AboveScopeDecomposition middleScope)
+    (holeMap :
+      ∀ pre : PreModel.{u},
+        Env pre middleCanonical.siteOuter.sigs →
+          Env pre sourceCanonical.siteOuter.sigs)
+    (composable :
+      DiagramContext.ComposableSemanticZipper
+        sourceCanonical.above middleCanonical.above
+        (fun (_pre : PreModel.{u}) env => env)
+        holeMap)
+    (nextCanonical :
+      SiteCompilation.AboveScopeDecomposition middleScope)
+    (finalCanonical :
+      SiteCompilation.AboveScopeDecomposition finalScope)
+    (nextHoleMap :
+      ∀ pre : PreModel.{u},
+        Env pre finalCanonical.siteOuter.sigs →
+          Env pre nextCanonical.siteOuter.sigs)
+    (nextComposable :
+      DiagramContext.ComposableSemanticZipper
+        nextCanonical.above finalCanonical.above
+        (fun (_pre : PreModel.{u}) env => env)
+        nextHoleMap)
+    (aligned :
+      SiteCompilation.AboveScopeDecomposition.Alignment
+        middleCanonical nextCanonical) :
+    RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+      foldSourceScope finalScope := by
+  cases middleCanonical with
+  | mk middleOuter middleAbove middleVisible middleDecomposition =>
+      cases nextCanonical with
+      | mk nextOuter nextAbove nextVisible nextDecomposition =>
+          cases aligned with
+          | mk outerExact aboveExact =>
+              cases outerExact
+              cases aboveExact
+              exact
+                .nonempty sourceExact sourceCanonical finalCanonical
+                  (fun pre env => holeMap pre (nextHoleMap pre env))
+                  (DiagramContext.ComposableSemanticZipper.compose
+                    composable nextComposable)
+
+noncomputable def RelationJoinSemanticTrace.AboveDyingScopeFold.snoc
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {sourceScope :
+      SiteCompilation source (source.val.wires dying).scope}
+    {step : RelationJoinStep source dying content}
+    {priorScope :
+      SiteCompilation step.prior
+        (step.priorRegionImage (source.val.wires dying).scope)}
+    {checkedScope :
+      SiteCompilation step.checked
+        (step.checkedRegionImage (source.val.wires dying).scope)}
+    (fold :
+      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+        sourceScope priorScope)
+    (stepReceipt :
+      RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
+        checkedScope) :
+    RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+      sourceScope checkedScope := by
+  cases fold with
+  | identity =>
+      exact
+        .nonempty (by assumption) stepReceipt.priorCanonical
+          stepReceipt.checkedCanonical
+          (fun _pre env => Env.comp env stepReceipt.siteProjection)
+          stepReceipt.composable
+  | nonempty sourceExact sourceCanonical middleCanonical holeMap
+      composable =>
+      exact
+        .composeNonempty sourceExact sourceCanonical middleCanonical holeMap
+          composable stepReceipt.priorCanonical stepReceipt.checkedCanonical
+          (fun _pre env => Env.comp env stepReceipt.siteProjection)
+          stepReceipt.composable
+          (middleCanonical.alignment stepReceipt.priorCanonical)
+
+/--
 Fold the sole accepted relation-join trace at the dying scope before its
 binders close. Every step uses the same semantic content relation and the same
 ordered parameter tuple.
@@ -10745,6 +11155,9 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
           (source.val.wires dying).scope) :
     ∃ (finalScopeCompiled :
         SiteCompilation final finalScope)
+      (aboveFold :
+        RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+          sourceScope finalScopeCompiled)
       (projection :
         WireRenaming sourceScope.frame.visible.sigs
           finalScopeCompiled.frame.visible.sigs)
@@ -10772,8 +11185,6 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         parameters.map finalWireImage ∧
       projection (sig := .rel args) sourceHead = finalHead ∧
       Vars.rename projection sourceParameters = finalParameters ∧
-      sourceScope.frame.context.cutDepth =
-        finalScopeCompiled.frame.context.cutDepth ∧
       ∀ finalEnv :
           Env model.toPreModel finalScopeCompiled.frame.visible.sigs,
         finalEnv (.rel args) finalHead =
@@ -10845,10 +11256,11 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
         simpa only [projection] using
           vars_rename_identity sourceParameters
       refine
-        ⟨sourceScope, projection, sourceHead, sourceHead,
+        ⟨sourceScope, .identity sourceScope (HEq.rfl), projection,
+          sourceHead, sourceHead,
           sourceParameters, sourceParameters, sourceHeadOrigin,
           sourceHeadOrigin, sourceParameterOrigins, ?_, rfl,
-          projectionParameters, rfl, ?_⟩
+          projectionParameters, ?_⟩
       · simpa using sourceParameterOrigins
       · intro finalEnv _headValue finalHolds
         exact finalHolds
@@ -10862,26 +11274,28 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
       cases eq_of_heq priorScopeExact
       cases relationArgsExact
       cases sourceParametersExact
-      obtain ⟨priorCanonicalScope, priorProjection,
+      obtain ⟨priorCanonicalScope, priorAboveFold, priorProjection,
           sourceHead, priorCanonicalHead, sourceParameters,
           priorCanonicalParameters, sourceHeadOrigin,
           priorCanonicalHeadOrigin, sourceParameterOrigins,
           priorCanonicalParameterOrigins, priorHeadExact,
-          priorParametersExact, priorDepthExact, priorLaw⟩ :=
+          priorParametersExact, priorLaw⟩ :=
         induction
       obtain ⟨compiled, _compiledGenerated⟩ :=
         step.insertionCompilation contentCompiled
-      obtain ⟨priorStepScope, checkedScope, stepProjection,
+      obtain ⟨priorStepScope, checkedScope, stepAboveReceipt, stepProjection,
           priorStepHead, checkedHead, priorStepParameters,
           checkedParameters, priorStepHeadOrigin, checkedHeadOrigin,
           priorStepParameterOrigins, checkedParameterOrigins,
-          stepHeadExact, stepParametersExact, stepDepthExact, stepLaw⟩ :=
+          stepHeadExact, stepParametersExact, stepLaw⟩ :=
         RelationJoinStep.preBinderDenotation step contentCompiled compiled
           model definitionEnv boundaryExact parameterScopes
       have priorScopeExact :
           priorCanonicalScope = priorStepScope :=
         SiteCompilation.unique priorCanonicalScope priorStepScope
       cases priorScopeExact
+      let finalAboveFold :=
+        priorAboveFold.snoc stepAboveReceipt
       have priorHeadsExact :
           priorCanonicalHead = priorStepHead := by
         apply
@@ -10917,12 +11331,11 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
           (vars_rename_compose priorProjection stepProjection
             sourceParameters).symm
       refine
-        ⟨checkedScope, projection, sourceHead, checkedHead,
+        ⟨checkedScope, finalAboveFold, projection, sourceHead, checkedHead,
           sourceParameters, checkedParameters, sourceHeadOrigin,
           checkedHeadOrigin, sourceParameterOrigins,
           checkedParameterOrigins, projectionHeadExact,
-          projectionParametersExact,
-          priorDepthExact.trans stepDepthExact, ?_⟩
+          projectionParametersExact, ?_⟩
       intro checkedEnv checkedHeadValue checkedBody
       have priorParameterValuesExact :
           Vars.denote (Env.comp checkedEnv stepProjection)
@@ -10995,6 +11408,9 @@ private theorem RelationJoinSemanticTrace.preBinderDenotation
           (source.val.wires dying).scope) :
     ∃ (finalScopeCompiled :
         SiteCompilation final (final.val.wires finalDying).scope)
+      (aboveFold :
+        RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
+          sourceScope finalScopeCompiled)
       (projection :
         WireRenaming sourceScope.frame.visible.sigs
           finalScopeCompiled.frame.visible.sigs)
@@ -11020,8 +11436,6 @@ private theorem RelationJoinSemanticTrace.preBinderDenotation
         parameters.map finalWireImage ∧
       projection (sig := .rel args) sourceHead = finalHead ∧
       Vars.rename projection sourceParameters = finalParameters ∧
-      sourceScope.frame.context.cutDepth =
-        finalScopeCompiled.frame.context.cutDepth ∧
       ∀ finalEnv :
           Env model.toPreModel finalScopeCompiled.frame.visible.sigs,
         finalEnv (.rel args) finalHead =

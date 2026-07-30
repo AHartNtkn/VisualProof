@@ -851,6 +851,272 @@ theorem hostContextRenaming_origin
     (fun wire member => List.mem_map.mpr ⟨wire, member, rfl⟩)
     value
 
+private def consHostSigsExact
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail) :
+    leftHead :: leftTail = rightHead :: rightTail := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_consHostSigsExact_here
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail) :
+    consHostSigsExact headExact tailExact ▸
+        (headExact ▸
+          (Var.here : Var (leftHead :: leftTail) leftHead)) =
+      (Var.here : Var (rightHead :: rightTail) rightHead) := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_consHostSigsExact_there
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail)
+    {sig : Sig}
+    (value : Var leftTail sig) :
+    consHostSigsExact headExact tailExact ▸ (Var.there value) =
+      Var.there (tailExact ▸ value) := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private def hostContextSigsStructural
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    (ids : List base.val.WireId) →
+      ((ids.map attachment.hostWire).map
+        fun wire => (attachment.diagram.wires wire).sig) =
+        ids.map fun wire => (base.val.wires wire).sig
+  | [] => rfl
+  | head :: tail =>
+      consHostSigsExact
+        (attachment.diagram_wire_hostWire head)
+        (hostContextSigsStructural attachment tail)
+
+private def positionalHostRenamingFor
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    (ids : List base.val.WireId) →
+      WireRenaming
+        (ids.map fun wire => (base.val.wires wire).sig)
+        ((ids.map attachment.hostWire).map
+          fun wire => (attachment.diagram.wires wire).sig)
+  | [] => fun value => nomatch value
+  | head :: tail =>
+      fun value =>
+        match value with
+        | .here =>
+            castVar (attachment.diagram_wire_hostWire head) .here
+        | .there rest =>
+            .there (positionalHostRenamingFor attachment tail rest)
+
+private theorem positionalHostRenamingFor_origin
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (ids : List base.val.WireId)
+    {sig : Sig}
+    (value :
+      Var (ids.map fun wire => (base.val.wires wire).sig) sig) :
+    ConcreteElaboration.WireContext.origin attachment.diagram
+        (ids.map attachment.hostWire)
+        (positionalHostRenamingFor attachment ids value) =
+      attachment.hostWire
+        (ConcreteElaboration.WireContext.origin base.val ids value) := by
+  induction ids with
+  | nil => nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here =>
+          simp only [positionalHostRenamingFor,
+            ConcreteElaboration.WireContext.origin]
+          exact origin_castVar attachment.diagram
+            (head :: tail |>.map attachment.hostWire)
+            (attachment.diagram_wire_hostWire head) .here
+      | there value =>
+          simpa only [positionalHostRenamingFor,
+            ConcreteElaboration.WireContext.origin] using induction value
+
+private theorem origin_injective_hostContext
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (nodup : ids.Nodup)
+    {sig : Sig} :
+    Function.Injective
+      (ConcreteElaboration.WireContext.origin diagram ids
+        (sig := sig)) := by
+  have originMember :
+      ∀ {ids : List diagram.WireId} {sig : Sig}
+        (value :
+          Var (ids.map fun wire => (diagram.wires wire).sig) sig),
+        ConcreteElaboration.WireContext.origin diagram ids value ∈ ids := by
+    intro ids sig value
+    induction ids with
+    | nil => nomatch value
+    | cons head tail induction =>
+        cases value with
+        | here => simp [ConcreteElaboration.WireContext.origin]
+        | there rest =>
+            exact List.mem_cons_of_mem head (induction rest)
+  intro left right same
+  induction ids with
+  | nil => nomatch left
+  | cons head tail induction =>
+      have parts := List.pairwise_cons.mp nodup
+      cases left with
+      | here =>
+          cases right with
+          | here => rfl
+          | there rest =>
+              exact
+                (parts.1 _
+                  (originMember rest)
+                  same).elim
+      | there leftRest =>
+          cases right with
+          | here =>
+              exact
+                (parts.1 _
+                  (originMember leftRest)
+                  same.symm).elim
+          | there rightRest =>
+              exact congrArg Var.there
+                (induction parts.2 same)
+
+private theorem hostContextRenaming_eq_positional
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (context : ConcreteElaboration.WireContext base.val)
+    (targetNodup : (hostContext attachment context).ids.Nodup) :
+    (hostContextRenaming attachment context :
+      WireRenaming context.sigs (hostContext attachment context).sigs) =
+      (positionalHostRenamingFor attachment context.ids :
+        WireRenaming context.sigs
+          (hostContext attachment context).sigs) := by
+  funext sig value
+  apply origin_injective_hostContext attachment.diagram
+    (hostContext attachment context).ids targetNodup
+  rw [hostContextRenaming_origin]
+  exact positionalHostRenamingFor_origin attachment context.ids value |>.symm
+
+private def hostContextSigsStructuralForContext
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (context : ConcreteElaboration.WireContext base.val) :
+    (hostContext attachment context).sigs = context.sigs :=
+  hostContextSigsStructural attachment context.ids
+
+theorem hostContext_sigs
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (context : ConcreteElaboration.WireContext base.val) :
+    (hostContext attachment context).sigs = context.sigs :=
+  hostContextSigsStructuralForContext attachment context
+
+/--
+The host allocation preserves the ordered variable represented by every base
+wire.  Reindexing its exact mapped signature vector back to the base vector
+turns the canonical host-context renaming into the identity renaming.
+-/
+theorem hostContextRenaming_reindex_identity
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (context : ConcreteElaboration.WireContext base.val)
+    (targetNodup : (hostContext attachment context).ids.Nodup) :
+    (fun {sig} (value : Var context.sigs sig) =>
+      (hostContext_sigs attachment context) ▸
+        hostContextRenaming attachment context value) =
+      (fun {_} (value : Var context.sigs _) => value) := by
+  have sigsExact :
+      hostContext_sigs attachment context =
+        hostContextSigsStructuralForContext attachment context :=
+    Subsingleton.elim _ _
+  rw [sigsExact]
+  funext sig value
+  have renamingExact :=
+    congrFun
+      (congrFun
+        (hostContextRenaming_eq_positional attachment context targetNodup)
+        sig)
+      value
+  rw [renamingExact]
+  cases context with
+  | mk ids =>
+      induction ids with
+      | nil => nomatch value
+      | cons head tail induction =>
+          cases value with
+          | here =>
+              change
+                consHostSigsExact
+                    (attachment.diagram_wire_hostWire head)
+                    (hostContextSigsStructural attachment tail) ▸
+                    castVar (attachment.diagram_wire_hostWire head)
+                      Var.here =
+                  Var.here
+              unfold castVar
+              exact
+                cast_consHostSigsExact_here
+                  (attachment.diagram_wire_hostWire head)
+                  (hostContextSigsStructural attachment tail)
+          | there value =>
+              change
+                consHostSigsExact
+                    (attachment.diagram_wire_hostWire head)
+                    (hostContextSigsStructural attachment tail) ▸
+                    Var.there
+                      (positionalHostRenamingFor attachment tail value) =
+                  Var.there value
+              rw [cast_consHostSigsExact_there
+                (attachment.diagram_wire_hostWire head)
+                (hostContextSigsStructural attachment tail)]
+              have tailNodup :
+                  (hostContext attachment
+                    ({ ids := tail } :
+                      ConcreteElaboration.WireContext base.val)).ids.Nodup := by
+                simpa [hostContext] using
+                  (List.nodup_cons.mp targetNodup).2
+              have tailRenamingExact :=
+                congrFun
+                  (congrFun
+                    (hostContextRenaming_eq_positional attachment
+                      ({ ids := tail } :
+                        ConcreteElaboration.WireContext base.val)
+                      tailNodup)
+                    sig)
+                  value
+              exact
+                congrArg Var.there
+                  (induction tailNodup (Subsingleton.elim _ _) value
+                    tailRenamingExact)
+
 def generatedSiteContext
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}

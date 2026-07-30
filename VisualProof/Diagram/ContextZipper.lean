@@ -547,5 +547,338 @@ theorem SemanticZipper.bind
             ContextDirection.flip, ContextDirection.holds] at middle
           exact ⟨value, mapExtend pre fixed value ▸ middle targetHolds⟩
 
+/--
+A proof-relevant semantic zipper derivation.  Unlike `SemanticZipper`, this
+retains the exact hole/surround/cut/bind construction tree and the pointwise
+item and binder-map laws at each constructor.  The retained tree is the narrow
+surface on which relation traces may compose structural transports without
+ever consuming or manufacturing a hole law.
+-/
+inductive ComposableSemanticZipper :
+    {sourceHole sourceOuter targetHole targetOuter : List Sig} →
+    (source :
+      DiagramContext definitions sourceHole sourceOuter) →
+    (target :
+      DiagramContext definitions targetHole targetOuter) →
+    (outerMap : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre sourceOuter) →
+    (holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole) →
+    Type (u + 1)
+  | hole
+      (map : ∀ pre : PreModel.{u},
+        Env pre targetCtx → Env pre sourceCtx) :
+      ComposableSemanticZipper
+        (.hole : DiagramContext definitions sourceCtx sourceCtx)
+        (.hole : DiagramContext definitions targetCtx targetCtx)
+        map map
+  | surround
+      {sourceInner :
+        DiagramContext definitions sourceHole sourceOuter}
+      {targetInner :
+        DiagramContext definitions targetHole targetOuter}
+      {outerMap : ∀ pre : PreModel.{u},
+        Env pre targetOuter → Env pre sourceOuter}
+      {holeMap : ∀ pre : PreModel.{u},
+        Env pre targetHole → Env pre sourceHole}
+      (inner :
+        ComposableSemanticZipper sourceInner targetInner outerMap holeMap)
+      (sourceLeading sourceSuffix :
+        ItemSeq definitions sourceOuter)
+      (targetLeading targetSuffix :
+        ItemSeq definitions targetOuter)
+      (leadingLaw :
+        ∀ (pre : PreModel.{u})
+          (definitionEnv : DefinitionEnv pre definitions)
+          (env : Env pre targetOuter),
+          denoteItemSeq pre definitionEnv env targetLeading ↔
+            denoteItemSeq pre definitionEnv (outerMap pre env)
+              sourceLeading)
+      (suffixLaw :
+        ∀ (pre : PreModel.{u})
+          (definitionEnv : DefinitionEnv pre definitions)
+          (env : Env pre targetOuter),
+          denoteItemSeq pre definitionEnv env targetSuffix ↔
+            denoteItemSeq pre definitionEnv (outerMap pre env)
+              sourceSuffix) :
+      ComposableSemanticZipper
+        (.surround sourceLeading sourceInner sourceSuffix)
+        (.surround targetLeading targetInner targetSuffix)
+        outerMap holeMap
+  | cut
+      {sourceInner :
+        DiagramContext definitions sourceHole sourceOuter}
+      {targetInner :
+        DiagramContext definitions targetHole targetOuter}
+      {outerMap : ∀ pre : PreModel.{u},
+        Env pre targetOuter → Env pre sourceOuter}
+      {holeMap : ∀ pre : PreModel.{u},
+        Env pre targetHole → Env pre sourceHole}
+      (inner :
+        ComposableSemanticZipper sourceInner targetInner outerMap holeMap) :
+      ComposableSemanticZipper (.cut sourceInner) (.cut targetInner)
+        outerMap holeMap
+  | bind
+      {sourceInner :
+        DiagramContext definitions sourceHole (sig :: sourceOuter)}
+      {targetInner :
+        DiagramContext definitions targetHole (sig :: targetOuter)}
+      {outerMap : ∀ pre : PreModel.{u},
+        Env pre targetOuter → Env pre sourceOuter}
+      {innerOuterMap : ∀ pre : PreModel.{u},
+        Env pre (sig :: targetOuter) → Env pre (sig :: sourceOuter)}
+      {holeMap : ∀ pre : PreModel.{u},
+        Env pre targetHole → Env pre sourceHole}
+      (inner :
+        ComposableSemanticZipper sourceInner targetInner innerOuterMap
+          holeMap)
+      (mapExtend :
+        ∀ (pre : PreModel.{u}) (fixed : Env pre targetOuter)
+          (value : pre.Domain sig),
+          innerOuterMap pre (fixed.extend value) =
+            (outerMap pre fixed).extend value) :
+      ComposableSemanticZipper (.bind sig sourceInner)
+        (.bind sig targetInner) outerMap holeMap
+
+/-- Interpret the retained constructor tree as the existing universal zipper. -/
+theorem ComposableSemanticZipper.toSemanticZipper
+    {source :
+      DiagramContext definitions sourceHole sourceOuter}
+    {target :
+      DiagramContext definitions targetHole targetOuter}
+    {outerMap : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre sourceOuter}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (derivation :
+      ComposableSemanticZipper source target outerMap holeMap) :
+    SemanticZipper source target outerMap holeMap := by
+  induction derivation with
+  | hole map =>
+      exact SemanticZipper.hole map
+  | surround inner sourceLeading sourceSuffix targetLeading targetSuffix
+      leadingLaw suffixLaw induction =>
+      exact
+        SemanticZipper.surround induction sourceLeading sourceSuffix
+          targetLeading targetSuffix leadingLaw suffixLaw
+  | cut inner induction =>
+      exact SemanticZipper.cut induction
+  | bind inner mapExtend induction =>
+      exact SemanticZipper.bind induction mapExtend
+
+/-- Reindex only the target context's exposed outer environment. -/
+noncomputable def ComposableSemanticZipper.rebaseTargetOuter
+    {source :
+      DiagramContext definitions sourceHole sourceOuter}
+    {leftOuter rightOuter : List Sig}
+    (same : leftOuter = rightOuter)
+    {target :
+      DiagramContext definitions targetHole leftOuter}
+    {outerMap : ∀ pre : PreModel.{u},
+      Env pre leftOuter → Env pre sourceOuter}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (derivation :
+      ComposableSemanticZipper source target outerMap holeMap) :
+    ComposableSemanticZipper source (same ▸ target)
+      (fun pre env => outerMap pre (same.symm ▸ env)) holeMap := by
+  cases same
+  exact derivation
+
+/-- Reindex only the source context's exposed outer environment. -/
+noncomputable def ComposableSemanticZipper.rebaseSourceOuter
+    {leftOuter rightOuter : List Sig}
+    (same : leftOuter = rightOuter)
+    {source :
+      DiagramContext definitions sourceHole leftOuter}
+    {target :
+      DiagramContext definitions targetHole targetOuter}
+    {outerMap : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre leftOuter}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (derivation :
+      ComposableSemanticZipper source target outerMap holeMap) :
+    ComposableSemanticZipper (same ▸ source) target
+      (fun pre env => same ▸ outerMap pre env) holeMap := by
+  cases same
+  exact derivation
+
+/--
+Compose two constructor-preserving derivations at one exact shared middle
+context.  The recursion aligns identical middle constructors and composes
+only environment maps, pointwise retained-item equivalences, and binder-map
+equations.  The hole case merely composes the two environment maps; no
+semantic hole law is present or consumed.
+-/
+noncomputable def ComposableSemanticZipper.compose
+    {source :
+      DiagramContext definitions sourceHole sourceOuter}
+    {middle :
+      DiagramContext definitions middleHole middleOuter}
+    {target :
+      DiagramContext definitions targetHole targetOuter}
+    {sourceToMiddleOuter : ∀ pre : PreModel.{u},
+      Env pre middleOuter → Env pre sourceOuter}
+    {middleToTargetOuter : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre middleOuter}
+    {sourceToMiddleHole : ∀ pre : PreModel.{u},
+      Env pre middleHole → Env pre sourceHole}
+    {middleToTargetHole : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre middleHole}
+    (sourceToMiddle :
+      ComposableSemanticZipper source middle sourceToMiddleOuter
+        sourceToMiddleHole)
+    (middleToTarget :
+      ComposableSemanticZipper middle target middleToTargetOuter
+        middleToTargetHole) :
+    ComposableSemanticZipper source target
+      (fun pre env =>
+        sourceToMiddleOuter pre (middleToTargetOuter pre env))
+      (fun pre env =>
+        sourceToMiddleHole pre (middleToTargetHole pre env)) := by
+  induction sourceToMiddle generalizing targetHole targetOuter with
+  | hole sourceMap =>
+      cases middleToTarget with
+      | hole =>
+          exact
+            .hole (fun pre env =>
+              sourceMap pre (middleToTargetHole pre env))
+  | surround inner sourceLeading sourceSuffix middleLeading middleSuffix
+      leadingSourceMiddle suffixSourceMiddle induction =>
+      cases middleToTarget with
+      | surround targetInner _ _ targetLeading targetSuffix
+          leadingMiddleTarget suffixMiddleTarget =>
+          exact
+            .surround
+              (induction targetInner)
+              sourceLeading sourceSuffix targetLeading targetSuffix
+              (fun pre definitionEnv env =>
+                (leadingMiddleTarget pre definitionEnv env).trans
+                  (leadingSourceMiddle pre definitionEnv
+                    (middleToTargetOuter pre env)))
+              (fun pre definitionEnv env =>
+                (suffixMiddleTarget pre definitionEnv env).trans
+                  (suffixSourceMiddle pre definitionEnv
+                    (middleToTargetOuter pre env)))
+  | cut inner induction =>
+      cases middleToTarget with
+      | cut targetInner =>
+          exact .cut (induction targetInner)
+  | bind inner sourceMapExtend induction =>
+      cases middleToTarget with
+      | bind targetInner targetMapExtend =>
+          exact
+            .bind (induction targetInner) (fun pre fixed value => by
+              rw [targetMapExtend pre fixed value,
+                sourceMapExtend pre
+                  (middleToTargetOuter pre fixed) value])
+
+/-- Lift one wire renaming through an ordered block of binders. -/
+def ComposableSemanticZipper.liftMany
+    {sourceOuter targetOuter : List Sig} :
+    (bound : List Sig) →
+      WireRenaming sourceOuter targetOuter →
+      WireRenaming (bound ++ sourceOuter) (bound ++ targetOuter)
+  | [], map => map
+  | sig :: rest, map =>
+      WireRenaming.lift (liftMany rest map) sig
+
+theorem ComposableSemanticZipper.liftMany_identity
+    (bound outer : List Sig) :
+    (liftMany bound
+        (fun {sig} (value : Var outer sig) => value) :
+      WireRenaming (bound ++ outer) (bound ++ outer)) =
+      (fun {sig} (value : Var (bound ++ outer) sig) => value) := by
+  induction bound with
+  | nil => rfl
+  | cons sig rest induction =>
+      funext resultSig value
+      cases value with
+      | here => rfl
+      | there value =>
+          exact congrArg Var.there
+            (congrFun (congrFun induction resultSig) value)
+
+/--
+Two positional renamings on the same ordered binder block agree when
+reindexing each target signature vector back to its source vector makes both
+renamings the identity.
+-/
+private def ComposableSemanticZipper.appendExact
+    (bound : List Sig)
+    (same : targetOuter = sourceOuter) :
+    bound ++ targetOuter = bound ++ sourceOuter :=
+  congrArg (List.append bound) same
+
+theorem ComposableSemanticZipper.eq_liftMany_of_reindexed_identity
+    {sourceOuter targetOuter : List Sig}
+    (bound : List Sig)
+    (targetToSource : targetOuter = sourceOuter)
+    (outerRenaming : WireRenaming sourceOuter targetOuter)
+    (fullRenaming :
+      WireRenaming (bound ++ sourceOuter) (bound ++ targetOuter))
+    (outerIdentity :
+      (fun {sig} (value : Var sourceOuter sig) =>
+        targetToSource ▸ outerRenaming value) =
+        (fun {sig} (value : Var sourceOuter sig) => value))
+    (fullIdentity :
+      (fun {sig} (value : Var (bound ++ sourceOuter) sig) =>
+        appendExact bound targetToSource ▸
+          fullRenaming value) =
+        (fun {sig} (value : Var (bound ++ sourceOuter) sig) => value)) :
+    (fullRenaming :
+      WireRenaming (bound ++ sourceOuter) (bound ++ targetOuter)) =
+      (liftMany bound outerRenaming :
+        WireRenaming (bound ++ sourceOuter) (bound ++ targetOuter)) := by
+  cases targetToSource
+  have outerExact :
+      (outerRenaming : WireRenaming sourceOuter sourceOuter) =
+        ((fun {sig} (value : Var sourceOuter sig) => value) :
+          WireRenaming sourceOuter sourceOuter) :=
+    outerIdentity
+  have fullExact :
+      (fullRenaming :
+        WireRenaming (bound ++ sourceOuter) (bound ++ sourceOuter)) =
+        ((fun {sig} (value : Var (bound ++ sourceOuter) sig) => value) :
+          WireRenaming (bound ++ sourceOuter) (bound ++ sourceOuter)) :=
+    fullIdentity
+  rw [outerExact, fullExact]
+  exact (liftMany_identity bound sourceOuter).symm
+
+/--
+Retain a complete ordered binder block around a composable zipper.  The inner
+renaming fixes every local variable and is therefore precisely the repeated
+lift of the outer renaming.
+-/
+noncomputable def ComposableSemanticZipper.bindMany
+    {sourceHole targetHole sourceOuter targetOuter : List Sig}
+    (bound : List Sig)
+    (outerRenaming : WireRenaming sourceOuter targetOuter)
+    {sourceInner :
+      DiagramContext definitions sourceHole (bound ++ sourceOuter)}
+    {targetInner :
+      DiagramContext definitions targetHole (bound ++ targetOuter)}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (inner :
+      ComposableSemanticZipper sourceInner targetInner
+        (fun _pre env =>
+          Env.comp env (liftMany bound outerRenaming))
+        holeMap) :
+    ComposableSemanticZipper
+      (DiagramContext.bindMany bound sourceInner)
+      (DiagramContext.bindMany bound targetInner)
+      (fun _pre env => Env.comp env outerRenaming)
+      holeMap := by
+  induction bound with
+  | nil =>
+      exact inner
+  | cons sig rest induction =>
+      apply induction
+      exact
+        .bind inner (fun pre fixed value =>
+          Env.comp_extend fixed (liftMany rest outerRenaming) value)
+
 end DiagramContext
 end VisualProof

@@ -45,6 +45,189 @@ def bindContextFor
       bindContextFor diagram outerIds tail
         (.bind (diagram.wires head).sig inner)
 
+private theorem cast_bind
+    {sourceOuter targetOuter : List Sig}
+    (same : sourceOuter = targetOuter)
+    (sig : Sig)
+    (inner :
+      DiagramContext definitions holeCtx (sig :: sourceOuter)) :
+    same ▸
+        (DiagramContext.bind sig inner :
+          DiagramContext definitions holeCtx sourceOuter) =
+      DiagramContext.bind sig
+        ((congrArg (List.cons sig) same) ▸ inner) := by
+  cases same
+  rfl
+
+/--
+The compiler's ordered local binder fold is exactly the context-level
+`bindMany` block over the corresponding ordered signature list.
+-/
+theorem bindContextFor_eq_bindMany
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    (inner : DiagramContext definitions holeCtx
+      ((localIds ++ outerIds).map fun wire =>
+        (diagram.wires wire).sig)) :
+    bindContextFor diagram outerIds localIds inner =
+      DiagramContext.bindMany
+        (localIds.map fun wire => (diagram.wires wire).sig)
+        ((@List.map_append _ _
+          (fun wire => (diagram.wires wire).sig)
+          localIds outerIds) ▸ inner) := by
+  induction localIds with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [bindContextFor, List.map_cons,
+        DiagramContext.bindMany]
+      rw [induction (.bind (diagram.wires head).sig inner)]
+      apply congrArg
+      exact
+        cast_bind
+          (@List.map_append _ _
+            (fun wire => (diagram.wires wire).sig)
+            tail outerIds)
+          (diagram.wires head).sig inner
+
+private theorem cast_bindContextFor_hole
+    (same : leftHole = rightHole)
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    (inner :
+      DiagramContext definitions leftHole
+        ((localIds ++ outerIds).map fun wire =>
+          (diagram.wires wire).sig)) :
+    same ▸ bindContextFor diagram outerIds localIds inner =
+      bindContextFor diagram outerIds localIds (same ▸ inner) := by
+  cases same
+  rfl
+
+private theorem cast_surround_cut_hole
+    (same : leftHole = rightHole)
+    (leading suffix : ItemSeq definitions outer)
+    (inner : DiagramContext definitions leftHole outer) :
+    same ▸
+        (DiagramContext.surround leading (.cut inner) suffix) =
+      DiagramContext.surround leading (.cut (same ▸ inner)) suffix := by
+  cases same
+  rfl
+
+private theorem cast_bindMany_hole
+    (bound outer : List Sig)
+    (same : source = bound ++ outer) :
+    same ▸
+        (DiagramContext.bindMany bound
+          (same ▸
+            (.hole :
+              DiagramContext definitions source source))) =
+      DiagramContext.bindMany bound
+        (.hole :
+          DiagramContext definitions
+            (bound ++ outer) (bound ++ outer)) := by
+  cases same
+  rfl
+
+/--
+The compiler's site case stops immediately outside exactly the site's ordered
+local-signature binder block.
+-/
+theorem bindContextFor_hole_stopsAboveBindMany
+    (diagram : ConcreteDiagram definitionCount)
+    (outer : ConcreteElaboration.WireContext diagram)
+    (site : diagram.RegionId) :
+    DiagramContext.StopsAboveBindMany
+      ((diagram.wiresAt site).map
+        (fun wire => (diagram.wires wire).sig))
+      (.hole : DiagramContext definitions outer.sigs outer.sigs)
+      ((ConcreteElaboration.WireContext.sigs_extend outer site) ▸
+        bindContextFor diagram outer.ids (diagram.wiresAt site)
+          (.hole :
+            DiagramContext definitions
+              (outer.extend site).sigs (outer.extend site).sigs)) := by
+  apply DiagramContext.StopsAboveBindMany.hole
+  let mapAppend :=
+    @List.map_append _ _
+      (fun wire => (diagram.wires wire).sig)
+      (diagram.wiresAt site) outer.ids
+  have sigsProofExact :
+      ConcreteElaboration.WireContext.sigs_extend outer site =
+        mapAppend :=
+    Subsingleton.elim _ _
+  rw [sigsProofExact]
+  calc
+    _ =
+        mapAppend ▸
+          DiagramContext.bindMany
+            ((diagram.wiresAt site).map
+              (fun wire => (diagram.wires wire).sig))
+            (mapAppend ▸
+              (.hole :
+                DiagramContext definitions
+                  ((diagram.wiresAt site ++ outer.ids).map
+                    (fun wire => (diagram.wires wire).sig))
+                  ((diagram.wiresAt site ++ outer.ids).map
+                    (fun wire => (diagram.wires wire).sig)))) :=
+      congrArg
+        (fun context :
+            DiagramContext definitions
+              ((diagram.wiresAt site ++ outer.ids).map
+                (fun wire => (diagram.wires wire).sig))
+              outer.sigs =>
+          (mapAppend ▸ context :
+            DiagramContext definitions
+              ((diagram.wiresAt site).map
+                  (fun wire => (diagram.wires wire).sig) ++
+                outer.sigs)
+              outer.sigs))
+        (bindContextFor_eq_bindMany diagram outer.ids
+          (diagram.wiresAt site) _)
+    _ = _ :=
+      cast_bindMany_hole
+        ((diagram.wiresAt site).map
+          (fun wire => (diagram.wires wire).sig))
+        outer.sigs mapAppend
+
+theorem DiagramContext.StopsAboveBindMany.bindContextFor
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    {stopped :
+      DiagramContext definitions stoppedHole
+        ((localIds ++ outerIds).map fun wire =>
+          (diagram.wires wire).sig)}
+    {full :
+      DiagramContext definitions (bound ++ stoppedHole)
+        ((localIds ++ outerIds).map fun wire =>
+          (diagram.wires wire).sig)}
+    (decomposition : StopsAboveBindMany bound stopped full) :
+    StopsAboveBindMany bound
+      (bindContextFor diagram outerIds localIds stopped)
+      (bindContextFor diagram outerIds localIds full) := by
+  induction localIds with
+  | nil => exact decomposition
+  | cons head tail induction =>
+      apply induction
+      exact .bind decomposition
+
+theorem DiagramContext.StopsAboveBindMany.bindContextFor_cast
+    (same : fullHole = bound ++ stoppedHole)
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    (full :
+      DiagramContext definitions fullHole
+        ((localIds ++ outerIds).map fun wire =>
+          (diagram.wires wire).sig))
+    (stopped :
+      DiagramContext definitions stoppedHole
+        ((localIds ++ outerIds).map fun wire =>
+          (diagram.wires wire).sig))
+    (decomposition :
+      StopsAboveBindMany bound stopped (same ▸ full)) :
+    StopsAboveBindMany bound
+      (VisualProof.bindContextFor diagram outerIds localIds stopped)
+      (same ▸ VisualProof.bindContextFor diagram outerIds localIds full) := by
+  rw [cast_bindContextFor_hole]
+  exact decomposition.bindContextFor diagram outerIds localIds
+
 /-- Compile the unbound conjunction owned by one concrete region. -/
 def compileRegionBody?
     (definitions : List (List Sig))
@@ -2136,6 +2319,346 @@ theorem unique
   cases left
   cases right
   simp_all
+
+/--
+The canonical structural stop immediately outside a compiled site's ordered
+local binder block.  The certificate is tied to the retained generated frame:
+after its visible hole context is identified with the site's local signatures
+followed by `siteOuter`, the existing `frame.context` has exactly one
+`bindMany` suffix at the hole.
+-/
+structure AboveScopeDecomposition
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site) where
+  siteOuter : ConcreteElaboration.WireContext base.val
+  above : DiagramContext definitions siteOuter.sigs []
+  visibleExact :
+    compiled.frame.visible = siteOuter.extend site
+  contextDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((base.val.wiresAt site).map
+        (fun wire => (base.val.wires wire).sig))
+      above
+      (((congrArg ConcreteElaboration.WireContext.sigs visibleExact).trans
+          (ConcreteElaboration.WireContext.sigs_extend siteOuter site)) ▸
+        compiled.frame.context)
+
+private theorem extend_injective
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {left right : ConcreteElaboration.WireContext base.val}
+    (same : left.extend site = right.extend site) :
+    left = right := by
+  cases left with
+  | mk leftIds =>
+      cases right with
+      | mk rightIds =>
+          congr 1
+          exact List.append_cancel_left
+            (congrArg ConcreteElaboration.WireContext.ids same)
+
+/--
+Any two certificates over the same retained generated frame select the same
+stopped context, including its typed site-outer boundary.
+-/
+structure AboveScopeDecomposition.Alignment
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (left right : AboveScopeDecomposition compiled) : Type where
+  siteOuterExact : left.siteOuter = right.siteOuter
+  aboveExact :
+    congrArg ConcreteElaboration.WireContext.sigs siteOuterExact ▸
+        left.above =
+      right.above
+
+def AboveScopeDecomposition.alignment
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (left right : AboveScopeDecomposition compiled) :
+    Alignment left right := by
+  cases left with
+  | mk leftOuter leftAbove leftVisible leftDecomposition =>
+      cases right with
+      | mk rightOuter rightAbove rightVisible rightDecomposition =>
+          have outerExact : leftOuter = rightOuter :=
+            extend_injective (leftVisible.symm.trans rightVisible)
+          cases outerExact
+          refine ⟨rfl, ?_⟩
+          have visibleProofExact :
+              leftVisible = rightVisible :=
+            Subsingleton.elim _ _
+          cases visibleProofExact
+          exact
+            DiagramContext.StopsAboveBindMany.stopped_unique
+              leftDecomposition rightDecomposition
+
+theorem AboveScopeDecomposition.stopped_unique
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (left right : AboveScopeDecomposition compiled) :
+    ∃ same : left.siteOuter = right.siteOuter,
+      congrArg ConcreteElaboration.WireContext.sigs same ▸ left.above =
+        right.above := by
+  exact
+    ⟨(left.alignment right).siteOuterExact,
+      (left.alignment right).aboveExact⟩
+
+private theorem compileSiblingFrame?_stopsAboveBindMany
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat)
+    (outer : ConcreteElaboration.WireContext diagram)
+    (selected : diagram.RegionId)
+    (nested : RegionFrame definitions diagram outer) :
+    ∀ (leading : ItemSeq definitions outer.sigs)
+      (children : List diagram.RegionId)
+      (frame : RegionFrame definitions diagram outer),
+      compileSiblingFrame? definitions diagram fuel outer selected nested
+          leading children =
+        some frame →
+      ∀ {bound stoppedHole : List Sig}
+        (stopped : DiagramContext definitions stoppedHole outer.sigs)
+        (holeExact : nested.visible.sigs = bound ++ stoppedHole),
+        DiagramContext.StopsAboveBindMany bound stopped
+            (holeExact ▸ nested.context) →
+          ∃ (frameStopped :
+              DiagramContext definitions stoppedHole outer.sigs)
+            (visibleExact : frame.visible = nested.visible),
+            DiagramContext.StopsAboveBindMany bound frameStopped
+              (((congrArg ConcreteElaboration.WireContext.sigs
+                    visibleExact).trans holeExact) ▸
+                frame.context) := by
+  intro leading children
+  induction children generalizing leading with
+  | nil =>
+      intro frame compiled
+      simp [compileSiblingFrame?] at compiled
+  | cons child tail induction =>
+      intro frame compiled bound stoppedHole stopped holeExact decomposition
+      unfold compileSiblingFrame? at compiled
+      by_cases same : child = selected
+      · simp only [same, ↓reduceDIte] at compiled
+        obtain ⟨suffix, _suffixCompiled, frameEquation⟩ :=
+          Option.bind_eq_some_iff.mp compiled
+        have frameExact :
+            ({ visible := nested.visible
+               siteBody := nested.siteBody
+               context :=
+                 .surround leading (.cut nested.context) suffix } :
+              RegionFrame definitions diagram outer) =
+            frame :=
+          Option.some.inj frameEquation
+        subst frame
+        refine
+          ⟨.surround leading (.cut stopped) suffix, rfl, ?_⟩
+        rw [cast_surround_cut_hole]
+        exact .surround leading suffix (.cut decomposition)
+      · simp only [same, ↓reduceDIte] at compiled
+        obtain ⟨body, _bodyCompiled, recursive⟩ :=
+          Option.bind_eq_some_iff.mp compiled
+        exact
+          induction
+            (leading.append (.cons (.cut body) .nil))
+            frame recursive stopped holeExact decomposition
+
+private theorem compileRegionFrame?_aboveScopeDecomposition
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (site : diagram.RegionId) :
+    ∀ (fuel : Nat) (region : diagram.RegionId)
+      (outer : ConcreteElaboration.WireContext diagram)
+      (frame : RegionFrame definitions diagram outer),
+      compileRegionFrame? definitions diagram site fuel region outer =
+          some frame →
+        ∃ (siteOuter : ConcreteElaboration.WireContext diagram)
+          (above : DiagramContext definitions siteOuter.sigs outer.sigs)
+          (visibleExact : frame.visible = siteOuter.extend site),
+          DiagramContext.StopsAboveBindMany
+            ((diagram.wiresAt site).map
+              (fun wire => (diagram.wires wire).sig))
+            above
+            (((congrArg ConcreteElaboration.WireContext.sigs
+                  visibleExact).trans
+                (ConcreteElaboration.WireContext.sigs_extend
+                  siteOuter site)) ▸
+              frame.context) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro region outer frame compiled
+      simp [compileRegionFrame?] at compiled
+  | succ childFuel induction =>
+      intro region outer frame compiled
+      unfold compileRegionFrame? at compiled
+      simp only [] at compiled
+      split at compiled
+      · rename_i atSite
+        subst region
+        cases bodyEquation :
+            compileRegionBody? definitions diagram childFuel site outer with
+        | none =>
+            simp [bodyEquation] at compiled
+        | some body =>
+            have frameExact :
+                ({ visible := outer.extend site
+                   siteBody := body
+                   context :=
+                     bindContextFor diagram outer.ids
+                       (diagram.wiresAt site) .hole } :
+                  RegionFrame definitions diagram outer) =
+                frame :=
+              Option.some.inj (by
+                simpa [bodyEquation] using compiled)
+            subst frame
+            refine ⟨outer, .hole, rfl, ?_⟩
+            change
+              DiagramContext.StopsAboveBindMany
+                ((diagram.wiresAt site).map
+                  (fun wire => (diagram.wires wire).sig))
+                (.hole :
+                  DiagramContext definitions outer.sigs outer.sigs)
+                ((ConcreteElaboration.WireContext.sigs_extend
+                    outer site) ▸
+                  bindContextFor diagram outer.ids
+                    (diagram.wiresAt site) .hole)
+            exact
+              bindContextFor_hole_stopsAboveBindMany
+                (definitions := definitions) diagram outer site
+      · cases nodesEquation :
+          compileNodes? definitions diagram (outer.extend region)
+            (diagram.nodesAt region) with
+        | none =>
+            simp [nodesEquation] at compiled
+        | some nodes =>
+            cases childEquation :
+                (diagram.childrenOf region).find?
+                  (fun candidate =>
+                    decide (diagram.Encloses candidate site)) with
+            | none =>
+                simp [nodesEquation, childEquation] at compiled
+            | some child =>
+                cases nestedEquation :
+                    compileRegionFrame? definitions diagram site childFuel
+                      child (outer.extend region) with
+                | none =>
+                    simp [nodesEquation, childEquation, nestedEquation]
+                      at compiled
+                | some nested =>
+                    cases aroundEquation :
+                        compileSiblingFrame? definitions diagram childFuel
+                          (outer.extend region) child nested nodes
+                          (diagram.childrenOf region) with
+                    | none =>
+                        simp [nodesEquation, childEquation, nestedEquation,
+                          aroundEquation] at compiled
+                    | some around =>
+                        have frameExact :
+                            ({ visible := around.visible
+                               siteBody := around.siteBody
+                               context :=
+                                 bindContextFor diagram outer.ids
+                                   (diagram.wiresAt region)
+                                   around.context } :
+                              RegionFrame definitions diagram outer) =
+                            frame :=
+                          Option.some.inj (by
+                            simpa [nodesEquation, childEquation,
+                              nestedEquation, aroundEquation] using compiled)
+                        subst frame
+                        obtain ⟨siteOuter, nestedAbove,
+                            nestedVisibleExact, nestedDecomposition⟩ :=
+                          induction child (outer.extend region) nested
+                            nestedEquation
+                        let nestedHoleExact :
+                            nested.visible.sigs =
+                              (diagram.wiresAt site).map
+                                  (fun wire =>
+                                    (diagram.wires wire).sig) ++
+                                siteOuter.sigs :=
+                          (congrArg
+                              ConcreteElaboration.WireContext.sigs
+                              nestedVisibleExact).trans
+                            (ConcreteElaboration.WireContext.sigs_extend
+                              siteOuter site)
+                        obtain ⟨aroundAbove, aroundVisibleExact,
+                            aroundDecomposition⟩ :=
+                          compileSiblingFrame?_stopsAboveBindMany
+                            definitions diagram childFuel
+                            (outer.extend region) child nested nodes
+                            (diagram.childrenOf region) around aroundEquation
+                            nestedAbove nestedHoleExact
+                            (by
+                              unfold nestedHoleExact
+                              exact nestedDecomposition)
+                        refine
+                          ⟨siteOuter,
+                            bindContextFor diagram outer.ids
+                              (diagram.wiresAt region) aroundAbove,
+                            aroundVisibleExact.trans nestedVisibleExact,
+                            ?_⟩
+                        change
+                          DiagramContext.StopsAboveBindMany
+                            ((diagram.wiresAt site).map
+                              (fun wire => (diagram.wires wire).sig))
+                            (bindContextFor diagram outer.ids
+                              (diagram.wiresAt region) aroundAbove)
+                            ((((congrArg
+                                  ConcreteElaboration.WireContext.sigs
+                                  (aroundVisibleExact.trans
+                                    nestedVisibleExact)).trans
+                                (ConcreteElaboration.WireContext.sigs_extend
+                                  siteOuter site))) ▸
+                              bindContextFor diagram outer.ids
+                                (diagram.wiresAt region) around.context)
+                        rw [cast_bindContextFor_hole]
+                        have holeProofExact :
+                            ((congrArg
+                                ConcreteElaboration.WireContext.sigs
+                                (aroundVisibleExact.trans
+                                  nestedVisibleExact)).trans
+                              (ConcreteElaboration.WireContext.sigs_extend
+                                siteOuter site)) =
+                              ((congrArg
+                                  ConcreteElaboration.WireContext.sigs
+                                  aroundVisibleExact).trans
+                                nestedHoleExact) :=
+                          Subsingleton.elim _ _
+                        rw [holeProofExact]
+                        exact
+                          aroundDecomposition.bindContextFor diagram
+                            outer.ids (diagram.wiresAt region)
+
+/--
+Every retained site compilation carries a canonical structural stop outside
+the selected site's ordered local binder block.
+-/
+theorem aboveScopeDecomposition
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site) :
+    Nonempty (AboveScopeDecomposition compiled) := by
+  obtain ⟨siteOuter, above, visibleExact, contextDecomposition⟩ :=
+    compileRegionFrame?_aboveScopeDecomposition definitions base.val site
+      (base.val.regionCount + 1) base.val.root
+      (ConcreteElaboration.WireContext.empty base.val) compiled.frame
+      compiled.frame_compiles
+  exact
+    ⟨{
+      siteOuter := siteOuter
+      above := above
+      visibleExact := visibleExact
+      contextDecomposition := contextDecomposition
+    }⟩
 
 private theorem covers
     {definitions : List (List Sig)}

@@ -70,6 +70,200 @@ def binderPath : DiagramContext defs holeCtx outerCtx → List Sig
   | .cut inner => inner.binderPath
   | .bind sig inner => sig :: inner.binderPath
 
+/-- Bind an ordered signature block around one context. -/
+def bindMany
+    {hole outer : List Sig} :
+    (bound : List Sig) →
+      DiagramContext definitions hole (bound ++ outer) →
+      DiagramContext definitions hole outer
+  | [], inner => inner
+  | sig :: rest, inner =>
+      bindMany rest (.bind sig inner)
+
+/--
+`full` is exactly `stopped` with the ordered `bound` binder block occupying
+its unique hole.  The constructors retain the complete shared outer spine;
+the terminal constructor is the one permitted local-binder suffix.
+-/
+inductive StopsAboveBindMany (bound : List Sig) :
+    {stoppedHole outer : List Sig} →
+    DiagramContext definitions stoppedHole outer →
+    DiagramContext definitions (bound ++ stoppedHole) outer →
+    Prop
+  | hole :
+      (full :
+        DiagramContext definitions (bound ++ stoppedHole) stoppedHole) →
+      full =
+        bindMany bound
+          (.hole :
+            DiagramContext definitions
+              (bound ++ stoppedHole) (bound ++ stoppedHole)) →
+      StopsAboveBindMany bound
+        (.hole : DiagramContext definitions stoppedHole stoppedHole) full
+  | surround
+      (leading suffix : ItemSeq definitions outer)
+      (inner : StopsAboveBindMany bound stopped full) :
+      StopsAboveBindMany bound
+        (.surround leading stopped suffix)
+        (.surround leading full suffix)
+  | cut
+      (inner : StopsAboveBindMany bound stopped full) :
+      StopsAboveBindMany bound (.cut stopped) (.cut full)
+  | bind
+      {full :
+        DiagramContext definitions (bound ++ stoppedHole) (sig :: outer)}
+      {stopped :
+        DiagramContext definitions stoppedHole (sig :: outer)}
+      (inner : StopsAboveBindMany bound stopped full) :
+      StopsAboveBindMany bound (.bind sig stopped) (.bind sig full)
+
+private def spineLength :
+    DiagramContext definitions holeCtx outer → Nat
+  | .hole => 0
+  | .surround _ inner _ => inner.spineLength + 1
+  | .cut inner => inner.spineLength + 1
+  | .bind _ inner => inner.spineLength + 1
+
+private theorem spineLength_bindMany
+    (bound : List Sig)
+    (inner :
+      DiagramContext definitions holeCtx (bound ++ outer)) :
+    (bindMany bound inner).spineLength =
+      inner.spineLength + bound.length := by
+  induction bound generalizing outer with
+  | nil => rfl
+  | cons sig rest induction =>
+      simp only [bindMany, List.length_cons]
+      rw [induction]
+      simp only [spineLength, Nat.add_assoc, Nat.add_comm]
+      rfl
+
+private theorem StopsAboveBindMany.spineLength_eq
+    {stopped :
+      DiagramContext definitions stoppedHole outer}
+    {full :
+      DiagramContext definitions (bound ++ stoppedHole) outer}
+    (decomposition : StopsAboveBindMany bound stopped full) :
+    full.spineLength = stopped.spineLength + bound.length := by
+  induction decomposition with
+  | hole full exact =>
+      subst full
+      exact spineLength_bindMany bound _
+  | surround _ _ inner induction =>
+      simp only [spineLength]
+      omega
+  | cut inner induction =>
+      simp only [spineLength]
+      omega
+  | bind inner induction =>
+      simp only [spineLength]
+      omega
+
+/--
+The stopped context is determined by the existing complete context and the
+ordered binder block.  The proof follows the unique context spine.
+-/
+theorem StopsAboveBindMany.stopped_unique
+    {full :
+      DiagramContext definitions (bound ++ stoppedHole) outer}
+    {left right :
+      DiagramContext definitions stoppedHole outer}
+    (leftDecomposition : StopsAboveBindMany bound left full)
+    (rightDecomposition : StopsAboveBindMany bound right full) :
+    left = right := by
+  have stoppedLengths :
+      left.spineLength = right.spineLength := by
+    have leftLength := leftDecomposition.spineLength_eq
+    have rightLength := rightDecomposition.spineLength_eq
+    omega
+  induction leftDecomposition with
+  | hole _ _ =>
+      cases rightDecomposition with
+      | hole _ _ => rfl
+      | surround _ _ _ =>
+          simp only [spineLength] at stoppedLengths
+          omega
+      | cut _ =>
+          simp only [spineLength] at stoppedLengths
+          omega
+      | bind _ =>
+          simp only [spineLength] at stoppedLengths
+          omega
+  | surround leading suffix inner induction =>
+      cases rightDecomposition with
+      | hole _ _ =>
+          simp only [spineLength] at stoppedLengths
+          omega
+      | surround _ _ rightInner =>
+          have innerLengths :
+              _ = _ := Nat.add_right_cancel stoppedLengths
+          exact congrArg (fun context =>
+            DiagramContext.surround leading context suffix)
+              (induction rightInner innerLengths)
+  | cut inner induction =>
+      cases rightDecomposition with
+      | hole _ _ =>
+          simp only [spineLength] at stoppedLengths
+          omega
+      | cut rightInner =>
+          have innerLengths :
+              _ = _ := Nat.add_right_cancel stoppedLengths
+          exact congrArg DiagramContext.cut
+            (induction rightInner innerLengths)
+  | bind inner induction =>
+      cases rightDecomposition with
+      | hole _ _ =>
+          simp only [spineLength] at stoppedLengths
+          omega
+      | bind rightInner =>
+          have innerLengths :
+              _ = _ := Nat.add_right_cancel stoppedLengths
+          exact congrArg (DiagramContext.bind _)
+            (induction rightInner innerLengths)
+
+/--
+Transporting a complete context's hole type commutes with retaining one
+sibling surround/cut frame around an existing decomposition.
+-/
+theorem StopsAboveBindMany.surroundCut_cast
+    (same : fullHole = bound ++ stoppedHole)
+    (leading suffix : ItemSeq definitions outer)
+    (full : DiagramContext definitions fullHole outer)
+    (stopped : DiagramContext definitions stoppedHole outer)
+    (decomposition :
+      StopsAboveBindMany bound stopped (same ▸ full)) :
+    StopsAboveBindMany bound
+      (.surround leading (.cut stopped) suffix)
+      (same ▸ (.surround leading (.cut full) suffix)) := by
+  cases same
+  exact .surround leading suffix (.cut decomposition)
+
+/-- Reindex the shared exposed outer context of one decomposition. -/
+theorem StopsAboveBindMany.rebaseOuter
+    (same : leftOuter = rightOuter)
+    (stopped : DiagramContext definitions stoppedHole leftOuter)
+    (full :
+      DiagramContext definitions (bound ++ stoppedHole) leftOuter)
+    (decomposition : StopsAboveBindMany bound stopped full) :
+    StopsAboveBindMany bound (same ▸ stopped) (same ▸ full) := by
+  cases same
+  exact decomposition
+
+/-- Reindex the shared outer context while retaining an existing hole cast. -/
+theorem StopsAboveBindMany.rebaseOuter_cast
+    (holeExact : fullHole = bound ++ stoppedHole)
+    (outerExact : leftOuter = rightOuter)
+    (stopped : DiagramContext definitions stoppedHole leftOuter)
+    (full : DiagramContext definitions fullHole leftOuter)
+    (decomposition :
+      StopsAboveBindMany bound stopped (holeExact ▸ full)) :
+    StopsAboveBindMany bound
+      (outerExact ▸ stopped)
+      (holeExact ▸ (outerExact ▸ full)) := by
+  cases holeExact
+  cases outerExact
+  exact decomposition
+
 private def SemanticDirection (depth : Nat) (left right : Prop) : Prop :=
   if depth % 2 = 0 then left → right else right → left
 

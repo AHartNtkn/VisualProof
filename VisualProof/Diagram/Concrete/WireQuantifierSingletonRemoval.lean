@@ -473,6 +473,124 @@ def contextRenaming
       (targetContext source removed context).sigs :=
   contextRenamingFor source removed context.ids
 
+private def consSigsExact
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail) :
+    leftHead :: leftTail = rightHead :: rightTail := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_consSigsExact_here
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail) :
+    consSigsExact headExact tailExact ▸
+        (headExact ▸
+          (Var.here : Var (leftHead :: leftTail) leftHead)) =
+      (Var.here : Var (rightHead :: rightTail) rightHead) := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_consSigsExact_there
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail)
+    {sig : Sig}
+    (value : Var leftTail sig) :
+    consSigsExact headExact tailExact ▸ (Var.there value) =
+      Var.there (tailExact ▸ value) := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private def targetContextSigsStructural
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId) :
+    (ids : List source.val.WireId) →
+      ((ids.map (targetWire source removed)).map
+        fun wire =>
+          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source removed).wires wire).sig) =
+        ids.map fun wire => (source.val.wires wire).sig
+  | [] => rfl
+  | head :: tail =>
+      consSigsExact
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+          source removed head)
+        (targetContextSigsStructural source removed tail)
+
+private def targetContextSigsStructuralForContext
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val) :
+    (targetContext source removed context).sigs = context.sigs :=
+  targetContextSigsStructural source removed context.ids
+
+/--
+Singleton erasure preserves the ordered variable represented by every visible
+wire.  Reindexing the target signature vector back to the source vector turns
+the canonical context renaming into the identity renaming.
+-/
+theorem contextRenaming_reindex_identity
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (context : ConcreteElaboration.WireContext source.val) :
+    (fun {sig} (value : Var context.sigs sig) =>
+      (targetContext_sigs source removed context) ▸
+        contextRenaming source removed context value) =
+      (fun {_} (value : Var context.sigs _) => value) := by
+  have sigsExact :
+      targetContext_sigs source removed context =
+        targetContextSigsStructuralForContext source removed context :=
+    Subsingleton.elim _ _
+  rw [sigsExact]
+  funext sig value
+  cases context with
+  | mk ids =>
+      unfold contextRenaming
+      induction ids with
+      | nil => nomatch value
+      | cons head tail induction =>
+          cases value with
+          | here =>
+              simp only [contextRenamingFor]
+              change
+                consSigsExact
+                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                      source removed head)
+                    (targetContextSigsStructural source removed tail) ▸
+                    mappedHere
+                      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                        source removed head) =
+                  Var.here
+              unfold mappedHere
+              exact
+                cast_consSigsExact_here
+                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                    source removed head)
+                  (targetContextSigsStructural source removed tail)
+          | there value =>
+              simp only [contextRenamingFor]
+              change
+                consSigsExact
+                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                      source removed head)
+                    (targetContextSigsStructural source removed tail) ▸
+                    Var.there (contextRenamingFor source removed tail value) =
+                  Var.there value
+              rw [cast_consSigsExact_there
+                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                  source removed head)
+                (targetContextSigsStructural source removed tail)]
+              exact congrArg Var.there
+                (induction (Subsingleton.elim _ _) value)
+
 private theorem origin_mem
     (diagram : ConcreteDiagram definitionCount)
     {ids : List diagram.WireId} {sig : Sig}
