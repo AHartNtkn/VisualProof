@@ -516,6 +516,30 @@ contextual-Delete precedence).
   `npm run typecheck`, `npm run e2e`, `npm run formal:size`.
 - [ ] **Step 3:** Commit `test: end-to-end coverage for primitive rule gestures`
 
+## Completion notes (2026-07-30)
+
+All 13 tasks are implemented and committed on this branch; every suite is
+green (unit 677, all-config 761, e2e 23, typecheck, size audit). Deviations
+and additions relative to the plan text, each already reflected in code:
+
+- **Backward erasure exists now** (`src/kernel/rules/erasure.ts`): the gate
+  mirrors every other gated rule (forward positive, backward negative; the
+  reverse reading is hypothesis insertion). The retarget-free substitution
+  derivation requires it to drop a hypothesis the retarget machinery used
+  to remove. Tests updated to pin the mirrored gate.
+- **The palette opens from the gesture, not the contextmenu event**
+  (`draw.ts` stillMenu): Chromium fires contextmenu at press time, so every
+  claimed right press suppresses the raw event and a still release reopens
+  the palette exactly once.
+- **The lasso is a closed founding stroke** in the drawing gesture (a drawn
+  closed curve is a drawn cut), not a separate blank-drag — blank left-drags
+  stay with brush selection.
+- **Task 13's per-dispatch-row browser matrix is NOT implemented.** The
+  e2e adds five flows (W spawn, palette open/suppression, drawing sever,
+  end tear, lasso wrap); the remaining rows are covered at controller level
+  by tests/app/draw.test.ts and tests/app/wire-ops.test.ts (26 tests), not
+  in the browser.
+
 ## Self-review notes
 
 - Spec coverage: kernel changes (Tasks 1, 4, 5, 9), compiler (6),
