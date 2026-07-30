@@ -235,25 +235,22 @@ monolithic rule's output modulo identity normalization and fresh naming.
 Monolithic soundness and primitive-set completeness become corollaries of the
 same statement.
 
-**Insertion redundancy (2026-07-30 addition).** Keep a monolithic insertion
-rule on the Lean side — splice an arbitrary well-formed graph into a negative
-region — and prove two statements. Soundness: negative-region splicing is
-entailment-monotone; this same lemma grounds the backward erasure gate (one
-rule, two readings, per the flipped-polarity law). Redundancy: adding
-monolithic insertion proves no new theorems. Unlike the substitution/
-comprehension theorem this is NOT a stepwise derivability statement — a
-single forward derivation cannot replay an arbitrary insertion (fresh
-opposite-parity content such as a negated ambient application is
-forward-underivable) — but an admissibility statement over composed
-theorems: a final-step insertion shifts to an arbitrary erasure appended at
-the backward half's meet end, and mid-derivation insertions permute toward
-the meet past steps that do not consume the inserted content. This theorem
-is the formal justification for the vocabulary's asymmetry (arbitrary-
-subgraph erasure, per-node-kind insertion) and the precise measure of the
-"definitions are macros" claim: ref-spawn plus unfold is conservative
-exactly if it holds. A companion lemma may pin the forward fragment's
-boundary: cut skeletons, spawn-parity content, and ends of positively
-scoped wires are forward-derivable; negated ambient applications are not.
+**Insertion redundancy (2026-07-30, corrected same day).** Monolithic
+insertion — splice an arbitrary well-formed graph into a negative region —
+is stepwise derivable from the primitives: introduce a vacuous nullary
+relation wire at the region (ungated), spawn its application there
+(negative-gated), and ground the wire to the graph as content through the
+compiled join, whose gate sits at the wire's scope. Insertion is
+comprehension-grounding of a vacuous proposition — the exact hypothesis-
+handle pattern every theory script already uses. The Lean obligation is
+therefore a corollary of the join redundancy theorem plus the soundness of
+the two auxiliary steps; the same derivation shows ref-spawn plus unfold is
+conservative (definitions stay macros). The negative-splice soundness lemma
+is still independently required: it grounds the backward erasure gate (one
+rule, two readings, per the flipped-polarity law). An earlier version of
+this note claimed opposite-parity content is forward-underivable and
+proposed an admissibility-style theorem; that analysis covered only the
+spawn-and-cut fragment and omitted the join family — retracted.
 
 ## Interaction layer
 
