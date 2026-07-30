@@ -31,25 +31,33 @@ afterEach(() => {
 })
 
 describe('source-size audit', () => {
-  test('rejects oversized ignored workflow artifacts', () => {
+  test('rejects an oversized maintained source file', () => {
     const root = fixtureRoot()
-    mkdirSync(join(root, '.superpowers', 'sdd'), { recursive: true })
+    mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(
-      join(root, '.superpowers', 'sdd', 'oversized.diff'),
+      join(root, 'src', 'oversized.ts'),
       `${'line\n'.repeat(3001)}`,
     )
 
     const result = runAudit(root)
 
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain(
-      '3001 .superpowers/sdd/oversized.diff',
-    )
+    expect(result.stderr).toContain('3001 src/oversized.ts')
   })
 
-  test('excludes external dependencies and build outputs', () => {
+  test('excludes external dependencies, build outputs, and workflow artifacts', () => {
     const root = fixtureRoot()
-    for (const directory of ['.lake', 'build', 'coverage', 'dist', 'node_modules']) {
+    for (const directory of [
+      '.lake',
+      '.superpowers',
+      'archive',
+      'build',
+      'coverage',
+      'dist',
+      'examples',
+      'node_modules',
+      'scratchpad',
+    ]) {
       mkdirSync(join(root, directory), { recursive: true })
       writeFileSync(
         join(root, directory, 'oversized.txt'),
