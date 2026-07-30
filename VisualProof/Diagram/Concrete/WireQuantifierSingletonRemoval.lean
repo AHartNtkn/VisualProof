@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifier
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalitySupport
 
 namespace VisualProof

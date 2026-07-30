@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WireQuantifierNaturality
+import VisualProof.Diagram.Concrete.WireQuantifierIota
 
 namespace VisualProof
 

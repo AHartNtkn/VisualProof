@@ -1,0 +1,503 @@
+import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
+
+namespace VisualProof
+
+namespace ConcreteWireQuantifier
+
+/--
+One already-validated exact relation-sever occurrence.  The rule layer owns
+copy matching and policy; this concrete owner consumes only its exact removal
+extent, retained anchor, and ordered formal wires.
+-/
+structure RelationSeverSite
+    (source : CheckedDiagram definitions) where
+  region : source.val.RegionId
+  removedRegions : List source.val.RegionId
+  removedNodes : List source.val.NodeId
+  removedWires : List source.val.WireId
+  formals : List source.val.WireId
+private def relationRemovedRegions
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source)) :
+    List source.val.RegionId :=
+  sites.flatMap RelationSeverSite.removedRegions
+
+private def relationRemovedNodes
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source)) :
+    List source.val.NodeId :=
+  sites.flatMap RelationSeverSite.removedNodes
+
+private def relationRemovedWires
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source)) :
+    List source.val.WireId :=
+  sites.flatMap RelationSeverSite.removedWires
+
+private def relationFormals
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source)) :
+    List source.val.WireId :=
+  sites.flatMap RelationSeverSite.formals
+
+private def relationSeverArgs
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source)) :
+    List Sig :=
+  match sites with
+  | [] => []
+  | first :: _ =>
+      first.formals.map fun wire => (source.val.wires wire).sig
+
+private structure RelationSeverPlan
+    (source : CheckedDiagram definitions)
+    (scope : source.val.RegionId)
+    (sites : List (RelationSeverSite source)) : Type where
+  removal :
+    Internal.BatchRemovalPlan source
+      (relationRemovedRegions sites)
+      (relationRemovedNodes sites)
+      (relationRemovedWires sites)
+  scopeRetained :
+    scope ∈ Internal.retainedRegions source (relationRemovedRegions sites)
+  siteRegionRetained :
+    ∀ site : Fin sites.length,
+      (sites.get site).region ∈
+        Internal.retainedRegions source (relationRemovedRegions sites)
+  formalRetained :
+    ∀ site : Fin sites.length,
+      ∀ position : Fin (sites.get site).formals.length,
+        (sites.get site).formals.get position ∈
+          Internal.retainedWires source (relationRemovedWires sites)
+  signatureExact :
+    ∀ site : Fin sites.length,
+      (sites.get site).formals.map
+          (fun wire => (source.val.wires wire).sig) =
+        relationSeverArgs sites
+
+private def checkRelationSeverPlan
+    (source : CheckedDiagram definitions)
+    (scope : source.val.RegionId)
+    (sites : List (RelationSeverSite source)) :
+    Except Error (RelationSeverPlan source scope sites) := by
+  let removedRegions := relationRemovedRegions sites
+  let removedNodes := relationRemovedNodes sites
+  let removedWires := relationRemovedWires sites
+  if nonempty : sites = [] then
+    exact .error .emptyRelationSites
+  else if disjoint :
+      removedRegions.Nodup ∧
+        removedNodes.Nodup ∧ removedWires.Nodup then
+    if rootRemoved : source.val.root ∈ removedRegions then
+      exact .error .removedRoot
+    else if scopeRetained :
+        scope ∈ Internal.retainedRegions source removedRegions then
+      if sitesRetained :
+          sites.all (fun site =>
+            decide (
+              site.region ∈ Internal.retainedRegions source removedRegions)) =
+            true then
+        if formalsRetained :
+            sites.all (fun site =>
+              site.formals.all (fun wire =>
+                decide (
+                  wire ∈ Internal.retainedWires source removedWires))) = true then
+          if signaturesExact :
+              sites.all (fun site =>
+                decide (
+                  site.formals.map
+                      (fun wire => (source.val.wires wire).sig) =
+                    relationSeverArgs sites)) = true then
+            match removal :
+                Internal.checkBatchRemovalPlan? source
+                  removedRegions removedNodes removedWires with
+            | none =>
+                exact .error .invalidRemoval
+            | some removalPlan =>
+                exact .ok
+                  { removal := by
+                      simpa [removedRegions, removedNodes, removedWires]
+                        using removalPlan
+                    scopeRetained := by
+                      simpa [removedRegions] using scopeRetained
+                    siteRegionRetained := by
+                      intro site
+                      exact of_decide_eq_true
+                        ((List.all_eq_true.mp sitesRetained)
+                          (sites.get site) (List.get_mem _ site))
+                    formalRetained := by
+                      intro site position
+                      have siteAccepted :=
+                        (List.all_eq_true.mp formalsRetained)
+                          (sites.get site) (List.get_mem _ site)
+                      exact of_decide_eq_true
+                        ((List.all_eq_true.mp siteAccepted)
+                          ((sites.get site).formals.get position)
+                          (List.get_mem _ position))
+                    signatureExact := by
+                      intro site
+                      exact of_decide_eq_true
+                        ((List.all_eq_true.mp signaturesExact)
+                          (sites.get site) (List.get_mem _ site)) }
+          else
+            exact .error .relationSignatureMismatch
+        else
+          match (relationFormals sites).find? fun wire =>
+              decide (wire ∉ Internal.retainedWires source removedWires) with
+          | some wire => exact .error (.removedFormal wire.val)
+          | none => exact .error .invalidRemoval
+      else
+        exact .error .removedSite
+    else
+      exact .error .removedScope
+  else
+    exact .error .overlappingRemoval
+
+private def relationSeverEndpoint?
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source))
+    (removedNodes : List source.val.NodeId)
+    (endpoint : CEndpoint source.val.nodeCount) :
+    Option
+      (CEndpoint
+        ((Internal.retainedNodes source removedNodes).length + sites.length)) :=
+  (Internal.batchEndpoint? source removedNodes endpoint).map fun mapped =>
+    { node := Fin.castAdd sites.length mapped.node
+      port := mapped.port }
+
+private def relationSeverAtom
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source))
+    (removedNodes : List source.val.NodeId)
+    (site : Fin sites.length) :
+    Fin ((Internal.retainedNodes source removedNodes).length + sites.length) :=
+  Fin.natAdd (Internal.retainedNodes source removedNodes).length site
+
+private def relationSeverFormalEndpoints
+    {source : CheckedDiagram definitions}
+    (sites : List (RelationSeverSite source))
+    (removedNodes : List source.val.NodeId)
+    (wire : source.val.WireId) :
+    List
+      (CEndpoint
+        ((Internal.retainedNodes source removedNodes).length + sites.length)) :=
+  (Data.Finite.allFin sites.length).flatMap fun site =>
+    (List.range (sites.get site).formals.length).filterMap fun position =>
+      match (sites.get site).formals[position]? with
+      | none => none
+      | some formal =>
+          if formal = wire then
+            some
+              { node := relationSeverAtom sites removedNodes site
+                port := .arg position }
+          else
+            none
+
+private def relationSeverCandidate
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    (scope : source.val.RegionId)
+    (sites : List (RelationSeverSite source))
+    (plan : RelationSeverPlan source scope sites) :
+    ConcreteDiagram definitions.length where
+  regionCount :=
+    (Internal.retainedRegions source (relationRemovedRegions sites)).length
+  nodeCount :=
+    (Internal.retainedNodes source (relationRemovedNodes sites)).length +
+      sites.length
+  wireCount :=
+    (Internal.retainedWires source (relationRemovedWires sites)).length + 1
+  root :=
+    Internal.retainedRegionIndex source (relationRemovedRegions sites)
+      source.val.root plan.removal.rootRetained
+  regions := Internal.batchRegionTable plan.removal
+  nodes :=
+    Fin.addCases
+      (fun node => Internal.batchNodeTable plan.removal node)
+      (fun site =>
+        .atom
+          (Internal.retainedRegionIndex source (relationRemovedRegions sites)
+            (sites.get site).region (plan.siteRegionRetained site))
+          (relationSeverArgs sites))
+  wires :=
+    Fin.addCases
+      (fun wire =>
+        let sourceWire :=
+          Internal.sourceRetainedWire source (relationRemovedWires sites) wire
+        let data := source.val.wires sourceWire
+        { sig := data.sig
+          scope :=
+            Internal.retainedRegionIndex source (relationRemovedRegions sites)
+              data.scope (plan.removal.wireScopeRetained wire)
+          endpoints :=
+            data.endpoints.filterMap
+                (relationSeverEndpoint? sites
+                  (relationRemovedNodes sites)) ++
+              relationSeverFormalEndpoints sites
+                (relationRemovedNodes sites) sourceWire })
+      (fun _ =>
+        { sig := .rel (relationSeverArgs sites)
+          scope :=
+            Internal.retainedRegionIndex source (relationRemovedRegions sites)
+              scope plan.scopeRetained
+          endpoints :=
+            (Data.Finite.allFin sites.length).map fun site =>
+              { node :=
+                  relationSeverAtom sites
+                    (relationRemovedNodes sites) site
+                port := .head } })
+
+/-- Checked output of one exact batch relation-content abstraction. -/
+structure RelationSeverResult
+    (source : CheckedDiagram definitions)
+    (scope : source.val.RegionId)
+    (sites : List (RelationSeverSite source)) : Type where
+  private mk ::
+  checked : CheckedDiagram definitions
+  private plan : RelationSeverPlan source scope sites
+  private generated :
+    checked.val = relationSeverCandidate source scope sites plan
+
+/--
+Replace every supplied exact, disjoint content extent by an atom over one
+fresh relation wire.  Copy identity, ambient coherence, scope policy, and
+orientation remain rule-owned.
+-/
+def severRelation
+    (source : CheckedDiagram definitions)
+    (scope : source.val.RegionId)
+    (sites : List (RelationSeverSite source)) :
+    Except Error (RelationSeverResult source scope sites) := by
+  match prepared : checkRelationSeverPlan source scope sites with
+  | .error error =>
+      exact .error error
+  | .ok plan =>
+      let candidate := relationSeverCandidate source scope sites plan
+      match accepted :
+          ConcreteDiagram.checkWellFormed definitions candidate with
+      | .error error =>
+          exact .error (.wellFormed error)
+      | .ok checked =>
+          exact .ok
+            (RelationSeverResult.mk checked plan
+              (ConcreteDiagram.checkWellFormed_preserves_input accepted))
+
+namespace RelationSeverResult
+
+def regionImage
+    (result : RelationSeverResult source scope sites)
+    (region : source.val.RegionId)
+    (survives :
+      region ∈ Internal.retainedRegions source (relationRemovedRegions sites)) :
+    result.checked.val.RegionId :=
+  Internal.checkedRegion result.generated
+    (Internal.retainedRegionIndex source (relationRemovedRegions sites)
+      region survives)
+
+def nodeImage
+    (result : RelationSeverResult source scope sites)
+    (node : source.val.NodeId)
+    (survives :
+      node ∈ Internal.retainedNodes source (relationRemovedNodes sites)) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (Fin.castAdd sites.length
+      (Internal.retainedNodeIndex source (relationRemovedNodes sites)
+        node survives))
+
+def wireImage
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (survives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites)) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (Fin.castAdd 1
+      (Internal.retainedWireIndex source (relationRemovedWires sites)
+        wire survives))
+
+def atom
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (relationSeverAtom sites (relationRemovedNodes sites) site)
+
+def atoms
+    (result : RelationSeverResult source scope sites) :
+    List result.checked.val.NodeId :=
+  (Data.Finite.allFin sites.length).map result.atom
+
+def relationWire
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (Fin.natAdd
+      (Internal.retainedWires source (relationRemovedWires sites)).length
+      (0 : Fin 1))
+
+def retainedEndpoints
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  ((source.val.wires wire).endpoints.filterMap
+      (relationSeverEndpoint? sites (relationRemovedNodes sites))).map
+    (Internal.checkedEndpoint result.generated)
+
+def formalEndpoints
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  (relationSeverFormalEndpoints sites
+      (relationRemovedNodes sites) wire).map
+    (Internal.checkedEndpoint result.generated)
+
+theorem checked_generated
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val =
+      relationSeverCandidate source scope sites result.plan :=
+  result.generated
+
+@[simp] theorem regionCount
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.regionCount =
+      (Internal.retainedRegions source (relationRemovedRegions sites)).length := by
+  simpa [relationSeverCandidate] using
+    congrArg ConcreteDiagram.regionCount result.generated
+
+@[simp] theorem nodeCount
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.nodeCount =
+      (Internal.retainedNodes source (relationRemovedNodes sites)).length +
+        sites.length := by
+  simpa [relationSeverCandidate] using
+    congrArg ConcreteDiagram.nodeCount result.generated
+
+@[simp] theorem wireCount
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.wireCount =
+      (Internal.retainedWires source (relationRemovedWires sites)).length + 1 := by
+  simpa [relationSeverCandidate] using
+    congrArg ConcreteDiagram.wireCount result.generated
+
+theorem site_formal_signatures
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    (sites.get site).formals.map
+        (fun wire => (source.val.wires wire).sig) =
+      relationSeverArgs sites :=
+  result.plan.signatureExact site
+
+@[simp] theorem relationWire_signature
+    (result : RelationSeverResult source scope sites) :
+    (result.checked.val.wires result.relationWire).sig =
+      .rel (relationSeverArgs sites) := by
+  unfold relationWire
+  rw [Internal.checkedWire_signature_transport]
+  simp only [relationSeverCandidate, Fin.addCases_right]
+
+@[simp] theorem relationWire_scope
+    (result : RelationSeverResult source scope sites) :
+    (result.checked.val.wires result.relationWire).scope =
+      result.regionImage scope result.plan.scopeRetained := by
+  unfold relationWire regionImage
+  rw [Internal.checkedWire_scope_transport]
+  simp only [relationSeverCandidate, Fin.addCases_right]
+
+theorem atom_generated
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    result.checked.val.nodes (result.atom site) =
+      .atom
+        (result.regionImage (sites.get site).region
+          (result.plan.siteRegionRetained site))
+        (relationSeverArgs sites) := by
+  unfold atom regionImage
+  rw [Internal.checkedNode_data_transport]
+  simp only [relationSeverAtom, relationSeverCandidate,
+    Fin.addCases_right, Internal.checkedNodeData]
+
+theorem relationWire_endpoints
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (RelationSeverSite source)}
+    (result : RelationSeverResult source scope sites) :
+    (result.checked.val.wires result.relationWire).endpoints =
+      (Data.Finite.allFin sites.length).map
+        (fun (site : Fin sites.length) =>
+          ({ node := result.atom site
+             port := .head } :
+            CEndpoint result.checked.val.nodeCount)) := by
+  unfold relationWire atom relationSeverAtom
+  rw [Internal.checkedWire_endpoints_transport]
+  simp only [relationSeverCandidate, Fin.addCases_right]
+  simp [List.map_map, Internal.checkedEndpoint, relationSeverAtom]
+
+@[simp] theorem wireImage_signature
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (survives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites)) :
+    (result.checked.val.wires (result.wireImage wire survives)).sig =
+      (source.val.wires wire).sig := by
+  unfold wireImage
+  rw [Internal.checkedWire_signature_transport]
+  simp only [relationSeverCandidate, Fin.addCases_left]
+  unfold Internal.sourceRetainedWire Internal.retainedWireIndex
+  rw [DenseList.get_index]
+
+theorem wireScope_survives
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (survives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites)) :
+    (source.val.wires wire).scope ∈
+      Internal.retainedRegions source (relationRemovedRegions sites) := by
+  have retained :=
+    result.plan.removal.wireScopeRetained
+      (Internal.retainedWireIndex source (relationRemovedWires sites)
+        wire survives)
+  unfold Internal.retainedWireIndex at retained
+  change
+    (source.val.wires
+      ((Internal.retainedWires source (relationRemovedWires sites)).get
+        (DenseList.index
+          (Internal.retainedWires source (relationRemovedWires sites))
+          wire survives))).scope ∈
+      Internal.retainedRegions source (relationRemovedRegions sites) at retained
+  rw [DenseList.get_index] at retained
+  exact retained
+
+@[simp] theorem wireImage_scope
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (survives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites)) :
+    (result.checked.val.wires (result.wireImage wire survives)).scope =
+      result.regionImage (source.val.wires wire).scope
+        (result.wireScope_survives wire survives) := by
+  unfold wireImage regionImage
+  rw [Internal.checkedWire_scope_transport]
+  simp only [relationSeverCandidate, Fin.addCases_left]
+  simp only [Internal.sourceRetainedWire, Internal.retainedWireIndex,
+    DenseList.get_index]
+
+theorem wireImage_endpoints
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (survives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites)) :
+    (result.checked.val.wires (result.wireImage wire survives)).endpoints =
+      result.retainedEndpoints wire ++ result.formalEndpoints wire := by
+  unfold wireImage retainedEndpoints formalEndpoints
+  rw [Internal.checkedWire_endpoints_transport]
+  simp only [relationSeverCandidate, Fin.addCases_left]
+  unfold Internal.sourceRetainedWire Internal.retainedWireIndex
+  rw [DenseList.get_index, List.map_append]
+
+end RelationSeverResult
+
+end ConcreteWireQuantifier
+
+end VisualProof

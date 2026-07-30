@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemoval
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrameSupport
 
 namespace VisualProof

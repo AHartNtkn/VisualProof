@@ -1,3 +1,6 @@
+import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
+import VisualProof.Diagram.Concrete.WireQuantifierIota
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper
 import VisualProof.Diagram.Concrete.WireQuantifierFrameNaturality
 

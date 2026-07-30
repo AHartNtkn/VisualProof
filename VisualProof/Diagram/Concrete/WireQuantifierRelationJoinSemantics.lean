@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WireQuantifierSemantics
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemovalZipper
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper

@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifier
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 
 namespace VisualProof
 

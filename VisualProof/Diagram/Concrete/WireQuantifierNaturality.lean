@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifier
+import VisualProof.Diagram.Concrete.WireQuantifierIota
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
 
 namespace VisualProof

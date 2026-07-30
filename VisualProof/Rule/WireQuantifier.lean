@@ -1,4 +1,7 @@
-import VisualProof.Diagram.Concrete.WireQuantifier
+import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
+import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
+import VisualProof.Diagram.Concrete.WireQuantifierIota
 import VisualProof.Diagram.Concrete.WireQuantifierSemantics
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinSemantics
 import VisualProof.Rule.Structural
