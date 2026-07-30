@@ -415,16 +415,6 @@ describe('relation wire sever', () => {
     })).toThrowError(/recursive|occurrence site.*selected/i)
   })
 
-  it('rejects relation content passed through the iota variant', () => {
-    const builder = new DiagramBuilder()
-    const relation = builder.relWire(builder.root, relSig([]))
-    const diagram = builder.build()
-    expect(() => applyWireSever(diagram, {
-      kind: 'iota',
-      wire: relation,
-      keep: [],
-    })).toThrowError(/iota.*requires.*iota|relation.*iota/i)
-  })
 })
 
 function unaryContent() {
@@ -772,16 +762,4 @@ describe('relation wire join', () => {
     })).toThrowError(/application.*outside.*scope|scope.*does not enclose.*application/i)
   })
 
-  it('rejects relation wires passed through the iota variant', () => {
-    const builder = new DiagramBuilder()
-    const negative = builder.cut(builder.root)
-    const first = builder.relWire(builder.root, relSig([]))
-    const second = builder.relWire(negative, relSig([]))
-    const diagram = builder.build()
-    expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
-      a: first,
-      b: second,
-    })).toThrowError(/iota.*requires.*iota|relation.*iota/i)
-  })
 })

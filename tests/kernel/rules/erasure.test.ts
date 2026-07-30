@@ -158,3 +158,90 @@ describe('applyWireSever', () => {
     })).toThrowError(/'ghost'.*is not an endpoint of wire 'w0'/)
   })
 })
+
+describe('generalized wire sever', () => {
+  it('severs a relation-signature wire', () => {
+    const builder = new DiagramBuilder()
+    const sig = relSig([IOTA])
+    const headA = builder.atom(builder.root, sig)
+    const headB = builder.atom(builder.root, sig)
+    const rel = builder.wire(builder.root, [
+      { node: headA, port: { kind: 'head' } },
+      { node: headB, port: { kind: 'head' } },
+    ], sig)
+    builder.wire(builder.root, [{ node: headA, port: { kind: 'arg', index: 0 } }])
+    builder.wire(builder.root, [{ node: headB, port: { kind: 'arg', index: 0 } }])
+    const diagram = builder.build()
+
+    const severed = applyWireSever(diagram, {
+      kind: 'iota',
+      wire: rel,
+      keep: [{ node: headA, port: { kind: 'head' } }],
+    })
+
+    const fresh = Object.keys(severed.wires).find((id) => diagram.wires[id] === undefined)!
+    expect(severed.wires[rel]!.endpoints).toEqual([
+      { node: headA, port: { kind: 'head' } },
+    ])
+    expect(severed.wires[fresh]!.sig).toEqual(sig)
+    expect(severed.wires[fresh]!.endpoints).toEqual([
+      { node: headB, port: { kind: 'head' } },
+    ])
+  })
+
+  it('scopes the fresh wire at a chosen deeper region and gates on that region', () => {
+    const builder = new DiagramBuilder()
+    const cut1 = builder.cut(builder.root)
+    const cut2 = builder.cut(cut1)
+    const keepNode = builder.ref(builder.root, 'K', relSig([IOTA]))
+    const movedNode = builder.ref(cut2, 'M', relSig([IOTA]))
+    const wire = builder.wire(builder.root, [
+      { node: keepNode, port: { kind: 'arg', index: 0 } },
+      { node: movedNode, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+
+    const severed = applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
+      scope: cut2,
+    })
+    const fresh = Object.keys(severed.wires).find((id) => diagram.wires[id] === undefined)!
+    expect(severed.wires[fresh]!.scope).toBe(cut2)
+    expect(severed.wires[wire]!.scope).toBe(builder.root)
+
+    expect(() => applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
+      scope: cut1,
+    })).toThrowError(/severing a wire requires a positive scope/)
+    expect(() => applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
+      scope: cut1,
+    }, 'backward')).not.toThrow()
+  })
+
+  it('rejects a chosen scope that does not enclose every moved endpoint', () => {
+    const builder = new DiagramBuilder()
+    const cut1 = builder.cut(builder.root)
+    const cut2 = builder.cut(cut1)
+    const keepNode = builder.ref(cut2, 'K', relSig([IOTA]))
+    const movedNode = builder.ref(builder.root, 'M', relSig([IOTA]))
+    const wire = builder.wire(builder.root, [
+      { node: keepNode, port: { kind: 'arg', index: 0 } },
+      { node: movedNode, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+
+    expect(() => applyWireSever(diagram, {
+      kind: 'iota',
+      wire,
+      keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
+      scope: cut2,
+    })).toThrowError(/does not enclose moved endpoint/)
+  })
+})

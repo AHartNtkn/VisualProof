@@ -78,6 +78,30 @@ describe('polarity matrix across depths 0–3', () => {
       expect(() => applyDoubleCutIntro(diagram, selection)).not.toThrow()
     })
 
+    it(`depth ${depth}: sever scope parameter gates on the chosen region`, () => {
+      const { diagram, region, left } = nested(depth)
+      const scoped = () => applyWireSever(diagram, {
+        kind: 'iota',
+        wire: left,
+        keep: [],
+        scope: region,
+      })
+      const scopedBackward = () => applyWireSever(diagram, {
+        kind: 'iota',
+        wire: left,
+        keep: [],
+        scope: region,
+      }, 'backward')
+
+      if (positive) {
+        expect(scoped).not.toThrow()
+        expect(scopedBackward).toThrow()
+      } else {
+        expect(scoped).toThrow()
+        expect(scopedBackward).not.toThrow()
+      }
+    })
+
     it(`depth ${depth}: relation quantifiers use complementary sever/join polarity`, () => {
       const builder = new DiagramBuilder()
       let region = builder.root

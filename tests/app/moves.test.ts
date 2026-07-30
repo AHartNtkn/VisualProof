@@ -53,20 +53,23 @@ describe('proof move vocabulary', () => {
     })
   })
 
-  it('rejects direct relation-wire merges through the kernel IOTA gate', () => {
+  it('builds relation-wire merges through the same connection gesture', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
     const left = builder.wire(negative, [], relSig([]))
     const right = builder.wire(negative, [], relSig([]))
     const diagram = builder.build()
 
-    expect(() => proofConnectionStep(
+    expect(proofConnectionStep(
       diagram,
       { wire: left, endpoint: null },
       { wire: right, endpoint: null },
       'forward',
       0,
-    )).toThrowError(/iota wire join requires IOTA wire/)
+    )).toEqual({
+      rule: 'wireJoin',
+      input: { kind: 'iota', a: left, b: right },
+    })
   })
 
   it('handles Escape when it aborts a pending relation wire', () => {

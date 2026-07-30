@@ -11,7 +11,7 @@ import type {
 } from '../diagram/diagram'
 import { DiagramError, mkDiagram, portKey } from '../diagram/diagram'
 import { isAncestorOrEqual, polarity } from '../diagram/regions'
-import { IOTA, relSig, sigEquals, sigKey } from '../diagram/sig'
+import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import {
   extendIdReservation,
@@ -39,6 +39,11 @@ export type WireSeverInput =
       readonly kind: 'iota'
       readonly wire: WireId
       readonly keep: readonly Endpoint[]
+      /**
+       * Scope for the split-off wire. Must enclose every moved endpoint; the
+       * polarity gate follows this region. Defaults to the wire's own scope.
+       */
+      readonly scope?: RegionId
     }
   | {
       readonly kind: 'relation'
@@ -83,14 +88,6 @@ function wire(d: Diagram, id: WireId): Wire {
   return result
 }
 
-function requireIota(w: Wire, id: WireId, operation: string): void {
-  if (!sigEquals(w.sig, IOTA)) {
-    throw new RuleError(
-      `${operation} requires IOTA wire '${id}', got '${sigKey(w.sig)}'`,
-    )
-  }
-}
-
 function hasEndpoint(
   endpoints: readonly Endpoint[],
   candidate: Endpoint,
@@ -107,14 +104,17 @@ function applyIotaSever(
   reservation?: IdReservation,
 ): Diagram {
   const selected = wire(d, input.wire)
-  requireIota(selected, input.wire, 'iota wire sever')
+  const freshScope = input.scope ?? selected.scope
+  if (d.regions[freshScope] === undefined) {
+    throw new DiagramError(`unknown region '${freshScope}'`)
+  }
   const need = orientation === 'forward' ? 'positive' : 'negative'
-  const have = polarity(d, selected.scope)
+  const have = polarity(d, freshScope)
   if (have !== need) {
     throw new RuleError(
       `${orientation === 'backward' ? 'backward ' : ''}`
       + `severing a wire requires a ${need} scope; `
-      + `'${selected.scope}' is ${have}`,
+      + `'${freshScope}' is ${have}`,
     )
   }
   for (const endpoint of input.keep) {
@@ -129,6 +129,15 @@ function applyIotaSever(
     hasEndpoint(input.keep, endpoint))
   const moved = selected.endpoints.filter((endpoint) =>
     !hasEndpoint(input.keep, endpoint))
+  for (const endpoint of moved) {
+    const region = d.nodes[endpoint.node]!.region
+    if (!isAncestorOrEqual(d, freshScope, region)) {
+      throw new RuleError(
+        `fresh wire scope '${freshScope}' does not enclose moved endpoint `
+        + `'${endpoint.node}' in region '${region}'`,
+      )
+    }
+  }
   const fresh = freshId(
     new Set(Object.keys(d.wires)),
     `${input.wire}_sever`,
@@ -146,7 +155,7 @@ function applyIotaSever(
         endpoints: kept,
       },
       [fresh]: {
-        scope: selected.scope,
+        scope: freshScope,
         sig: selected.sig,
         endpoints: moved,
       },
@@ -164,8 +173,12 @@ function applyIotaJoin(
   if (input.a === input.b) {
     throw new RuleError(`cannot join a wire with itself ('${input.a}')`)
   }
-  requireIota(a, input.a, 'iota wire join')
-  requireIota(b, input.b, 'iota wire join')
+  if (!sigEquals(a.sig, b.sig)) {
+    throw new RuleError(
+      `joining wires requires equal signatures; `
+      + `'${input.a}' has '${sigKey(a.sig)}' but '${input.b}' has '${sigKey(b.sig)}'`,
+    )
+  }
 
   let outerId: WireId
   let innerId: WireId
