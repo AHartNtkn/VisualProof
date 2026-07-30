@@ -42,6 +42,7 @@ import {
   rightIdentityInductionReification,
   successorShiftInductionReification,
   truthReification,
+  explicitMaterialOf,
 } from '../../src/theories/reification'
 
 const UNARY = relSig([IOTA])
@@ -122,18 +123,35 @@ function atomDescriptors(
   }).sort()
 }
 
-function explicitMaterial(theorem: Theorem): DiagramWithBoundary {
-  const grounding = exactlyOne(
-    theorem.actions.flatMap((action) => action.steps)
-      .filter((step) =>
-        step.rule === 'wireJoin'
-        && step.input.kind === 'relation'),
-    `${theorem.name} explicit material grounding`,
-  )
-  if (grounding.rule !== 'wireJoin' || grounding.input.kind !== 'relation') {
-    throw new Error('expected strongest-form relation grounding')
+const explicitMaterial = explicitMaterialOf
+
+/**
+ * Compiled abstraction actions carry a sever-family step: a scoped
+ * single-wire sever, or one of the abstraction leaves (ends spawn on the
+ * fresh witness for empty content, formal/identity/ref abstraction).
+ */
+function isCompiledSeverAction(action: Theorem['actions'][number]): boolean {
+  return action.steps.some((step) =>
+    (step.rule === 'wireSever' && step.input.scope !== undefined)
+    || step.rule === 'endsSpawn'
+    || step.rule === 'abstractFormal'
+    || step.rule === 'identityAbstract'
+    || step.rule === 'refAbstract')
+}
+
+/** The region whose polarity gates a compiled sever action's abstraction. */
+function compiledSeverScope(
+  action: Theorem['actions'][number],
+): string | undefined {
+  for (const step of action.steps) {
+    if (step.rule === 'wireSever' && step.input.scope !== undefined) {
+      return step.input.scope
+    }
+    if (step.rule === 'vacuousIntro') return step.scope
+    if (step.rule === 'abstractFormal' || step.rule === 'identityAbstract'
+      || step.rule === 'refAbstract') return step.scope
   }
-  return grounding.input.content
+  return undefined
 }
 
 function assertAdditionTotality(
@@ -781,8 +799,9 @@ describe('recorded general relation reification', () => {
         ...Object.values(theorem.lhs.diagram.nodes),
         ...Object.values(theorem.rhs.diagram.nodes),
       ].every((node) => node.kind !== 'ref')).toBe(true)
-      expect(theorem.actions.every((action) =>
-        action.steps.length === 1)).toBe(true)
+      expect(theorem.actions.flatMap((action) => action.steps)
+        .every((step) => step.rule !== 'refLeaf' && step.rule !== 'refAbstract'))
+        .toBe(true)
     }
   })
 
@@ -795,8 +814,7 @@ describe('recorded general relation reification', () => {
 
       for (const action of theorem.actions) {
         const receipt = applyActionWithReceipt(diagram, action, context)
-        const step = action.steps[0]!
-        if (step.rule === 'wireSever' && step.input.kind === 'relation') {
+        if (isCompiledSeverAction(action)) {
           const created = receipt.allocation.wires.filter((wire) =>
             receipt.result.wires[wire]?.sig.kind === 'rel')
           expect(created).toHaveLength(1)
@@ -821,8 +839,7 @@ describe('recorded general relation reification', () => {
     for (const testCase of reificationCases) {
       const theorem = testCase.make()
       const severIndexes = theorem.actions
-        .map((action, index) =>
-          action.steps[0]?.rule === 'wireSever' ? index : -1)
+        .map((action, index) => (isCompiledSeverAction(action) ? index : -1))
         .filter((index) => index >= 0)
       expect(severIndexes).toHaveLength(1)
       for (const severIndex of severIndexes) {
@@ -830,7 +847,7 @@ describe('recorded general relation reification', () => {
           ...theorem,
           actions: theorem.actions.filter((_, index) => index !== severIndex),
         }, context)).toThrowError(
-          /proof does not arrive at the stated right-hand side/i,
+          /proof does not arrive at the stated right-hand side|failed/i,
         )
       }
     }
@@ -1015,10 +1032,11 @@ describe('theory surface exclusions', () => {
       let diagram = theorem.lhs.diagram
       let severCount = 0
       for (const action of theorem.actions) {
-        const step = action.steps[0]!
-        if (step.rule === 'wireSever' && step.input.kind === 'relation') {
+        if (isCompiledSeverAction(action)) {
           severCount += 1
-          expect(polarity(diagram, step.input.scope)).toBe('positive')
+          const scope = compiledSeverScope(action)
+          expect(scope).toBeDefined()
+          expect(polarity(diagram, scope!)).toBe('positive')
         }
         diagram = applyActionWithReceipt(diagram, action, context).result
       }

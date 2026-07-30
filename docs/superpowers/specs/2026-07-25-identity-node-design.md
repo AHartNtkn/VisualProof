@@ -137,10 +137,10 @@ is ordinary graph content, so the existing structural rules apply to it unchange
 insert an identity node into a **negative** region (assert an equality — this is
 how `x≠y` and the consequent of a uniqueness statement are built); erase an
 identity node from a **positive** region (discard an equality) in the forward
-direction. There is no backward-erasure insertion action: theorem replay rejects
-an erasure step when replaying backward. When the physical identity-insertion
-operation is replayed backward, its entailment dual requires a **positive**
-region; a backward-negative insertion is invalid. No identity-specific rule is
+direction, from a **negative** region in the backward direction (the ordinary
+flipped-polarity replay every gated rule follows). When the physical
+identity-insertion operation is replayed backward, its entailment dual requires
+a **positive** region; a backward-negative insertion is invalid. No identity-specific rule is
 needed here.
 
 **Rule 5 — substitution / congruence (equals for equals).** This is the one

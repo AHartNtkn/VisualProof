@@ -4,13 +4,12 @@ export {
   applyWireSever,
 } from './wire-quantifier'
 export type {
-  ContentOccurrence,
   WireJoinInput,
   WireSeverInput,
 } from './wire-quantifier'
 export { applyRefSpawn, applyAtomSpawn } from './spawn'
 export { applyErasure } from './erasure'
-export type { DeiterationEvidence, IdentityRetarget } from './iteration'
+export type { DeiterationEvidence } from './iteration'
 export {
   applyIteration,
   applyDeiteration,
@@ -20,3 +19,27 @@ export { applyIdentityInsertion } from './identity'
 export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'
 export { applyUnfold, applyFold } from './fold'
 export { applyVacuousIntro, applyVacuousElim } from './vacuous'
+export {
+  applyCutAbsorb,
+  applyCutWrap,
+  applyEndsDelete,
+  applyEndsSpawn,
+  applyParallelFuse,
+  applyParallelSplit,
+} from './wire-content'
+export type { EndSite } from './wire-content'
+export {
+  applyAbstractFormal,
+  applyApplyFormal,
+  applyArgContract,
+  applyArgDrop,
+  applyArgDuplicate,
+  applyArgExtend,
+  applyArgPermute,
+  applyArityShift,
+  applyArityUnshift,
+  applyIdentityAbstract,
+  applyIdentityLeaf,
+  applyRefAbstract,
+  applyRefLeaf,
+} from './wire-args'

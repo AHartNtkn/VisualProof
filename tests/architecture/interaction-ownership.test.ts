@@ -165,32 +165,27 @@ describe('production interaction ownership', () => {
     for (const kind of ['relationJoin', 'relationSever']) {
       expect(
         connectionSource.match(new RegExp(`kind:\\s*['"]${kind}['"]`, 'g')),
-        `connection must contain only its ${kind} union variant and emission`,
-      ).toHaveLength(2)
+        `connection retains a displaced ${kind} gesture`,
+      ).toBeNull()
       expect(
         movesSource.match(new RegExp(`case\\s+['"]${kind}['"]`, 'g')),
-        `moves must contain exactly one ${kind} durable-step branch`,
-      ).toHaveLength(1)
+        `moves retains a displaced ${kind} branch`,
+      ).toBeNull()
     }
     expect(
       connectionSource.match(/kind:\s*['"]relation['"]/g),
-      'connection must exclusively own two relation input types and two emissions',
-    ).toHaveLength(4)
+      'connection retains a displaced relation input type',
+    ).toBeNull()
     expect(appIndexSource).not.toMatch(
       /ConnectionDragController|ProofMoveController|relationJoin|relationSever/,
     )
   })
 
-  it('keeps structural occurrence designation in the one ordered selection ledger', () => {
+  it('retires the ordered-selection occurrence designation machinery', () => {
     const brushSource = readFileSync('src/app/interact/brush.ts', 'utf8')
-    expect(connectionSource).toContain('prepareSelectedOccurrences')
-    expect(connectionSource).not.toMatch(
-      /export function prepareSelectedOccurrence\s*\(/,
-    )
-    expect(connectionSource).not.toContain('setSelection([])')
-    expect(connectionSource).toContain('relationSelection')
-    expect(movesSource).toContain('selection: options.selection')
-    expect(movesSource).toContain('setSelection: options.setSelection')
+    expect(connectionSource).not.toContain('prepareSelectedOccurrences')
+    expect(connectionSource).not.toContain('relationSelection')
+    expect(connectionSource).not.toContain('PendingRelationState')
     expect(brushSource).toContain('[...selected, hit]')
     expect(displacedRelationInputViolations(productionAppSources)).toEqual([])
   })

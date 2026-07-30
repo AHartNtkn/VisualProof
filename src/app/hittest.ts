@@ -1,4 +1,4 @@
-import type { Endpoint, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, Endpoint, RegionId, WireId } from '../kernel/diagram/diagram'
 import { pkey, resolvedFrameSlot, type Engine, type LegEnd } from '../view/engine'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Vec2 } from '../view/vec'
@@ -249,6 +249,19 @@ export function hitTest(e: Engine, point: Vec2, viewport: HitViewport): Hit | nu
     }
   }
   return best === null ? null : { kind: 'region', id: best.id }
+}
+
+/** The smallest cut disc containing the point, else the diagram's root. */
+export function regionAt(e: Engine, diagram: Diagram, point: Vec2): RegionId {
+  let best: { readonly id: RegionId; readonly radius: number } | null = null
+  for (const [id, geometry] of e.regions) {
+    if (diagram.regions[id]?.kind === 'sheet') continue
+    if (
+      length(sub(point, geometry.center)) <= geometry.radius
+      && (best === null || geometry.radius < best.radius)
+    ) best = { id, radius: geometry.radius }
+  }
+  return best?.id ?? diagram.root
 }
 
 /** Brush-specific pick rule. Stationary clicks retain ordinary full-disc

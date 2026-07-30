@@ -8,14 +8,20 @@ import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rul
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
+  applyEndsDelete,
+  applyEndsSpawn,
+} from '../../../src/kernel/rules/wire-content'
+import {
   applyDeiteration,
   applyIteration,
   findDeiterationEvidence,
 } from '../../../src/kernel/rules/iteration'
+import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
 import {
-  applyWireJoin,
-  applyWireSever,
-} from '../../../src/kernel/rules/wire-quantifier'
+  compileRelationJoin,
+  compileRelationSever,
+} from '../../../src/kernel/proof/compile-content'
+import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 
 function nested(depth: number) {
   const builder = new DiagramBuilder()
@@ -61,8 +67,12 @@ describe('polarity matrix across depths 0–3', () => {
         expect(() => applyErasure(diagram, selection))
           .toThrowError(/erasure requires a positive region/)
       }
-      expect(() => applyErasure(diagram, selection, 'backward'))
-        .toThrowError(/backward erasure is not supported; erasure is forward-only/)
+      if (positive) {
+        expect(() => applyErasure(diagram, selection, 'backward'))
+          .toThrowError(/backward erasure requires a negative region/)
+      } else {
+        expect(() => applyErasure(diagram, selection, 'backward')).not.toThrow()
+      }
     })
 
     it(`depth ${depth}: iteration and double-cut rules remain polarity-free`, () => {
@@ -78,41 +88,86 @@ describe('polarity matrix across depths 0–3', () => {
       expect(() => applyDoubleCutIntro(diagram, selection)).not.toThrow()
     })
 
-    it(`depth ${depth}: relation quantifiers use complementary sever/join polarity`, () => {
+    it(`depth ${depth}: ends delete/spawn use complementary polarity`, () => {
+      const builder = new DiagramBuilder()
+      let region = builder.root
+      for (let index = 0; index < depth; index++) region = builder.cut(region)
+      const wire = builder.relWire(region, relSig([]))
+      const diagram = builder.build()
+      const del = () => applyEndsDelete(diagram, wire)
+      const delBackward = () => applyEndsDelete(diagram, wire, 'backward')
+      const spawn = () => applyEndsSpawn(diagram, wire, [{ region, args: [] }])
+      const spawnBackward = () =>
+        applyEndsSpawn(diagram, wire, [{ region, args: [] }], 'backward')
+
+      if (positive) {
+        expect(del).toThrow()
+        expect(delBackward).not.toThrow()
+        expect(spawn).not.toThrow()
+        expect(spawnBackward).toThrow()
+      } else {
+        expect(del).not.toThrow()
+        expect(delBackward).toThrow()
+        expect(spawn).toThrow()
+        expect(spawnBackward).not.toThrow()
+      }
+    })
+
+    it(`depth ${depth}: sever scope parameter gates on the chosen region`, () => {
+      const { diagram, region, left } = nested(depth)
+      const scoped = () => applyWireSever(diagram, {
+        wire: left,
+        keep: [],
+        scope: region,
+      })
+      const scopedBackward = () => applyWireSever(diagram, {
+        wire: left,
+        keep: [],
+        scope: region,
+      }, 'backward')
+
+      if (positive) {
+        expect(scoped).not.toThrow()
+        expect(scopedBackward).toThrow()
+      } else {
+        expect(scoped).toThrow()
+        expect(scopedBackward).not.toThrow()
+      }
+    })
+
+    it(`depth ${depth}: compiled relation abstraction/grounding use complementary polarity`, () => {
       const builder = new DiagramBuilder()
       let region = builder.root
       for (let index = 0; index < depth; index++) region = builder.cut(region)
       const relation = builder.relWire(region, relSig([]))
       const diagram = builder.build()
       const content = mkDiagramWithBoundary(new DiagramBuilder().build(), [])
-      const sever = () => applyWireSever(diagram, {
-        kind: 'relation',
+      const severInput = {
         scope: region,
         occurrences: [{
           sel: { region, regions: [], nodes: [], wires: [] },
           args: [],
         }],
-      })
-      const severBackward = () => applyWireSever(diagram, {
-        kind: 'relation',
-        scope: region,
-        occurrences: [{
-          sel: { region, regions: [], nodes: [], wires: [] },
-          args: [],
-        }],
-      }, 'backward')
-      const join = () => applyWireJoin(diagram, {
-        kind: 'relation',
-        wire: relation,
+      } as const
+      const sever = () =>
+        compileRelationSever(diagram, severInput, EMPTY_PROOF_CONTEXT)
+      const severBackward = () =>
+        compileRelationSever(diagram, severInput, EMPTY_PROOF_CONTEXT, 'backward')
+      const join = () => compileRelationJoin(
+        diagram,
+        relation,
         content,
-        parameters: [],
-      })
-      const joinBackward = () => applyWireJoin(diagram, {
-        kind: 'relation',
-        wire: relation,
+        [],
+        EMPTY_PROOF_CONTEXT,
+      )
+      const joinBackward = () => compileRelationJoin(
+        diagram,
+        relation,
         content,
-        parameters: [],
-      }, 'backward')
+        [],
+        EMPTY_PROOF_CONTEXT,
+        'backward',
+      )
 
       if (positive) {
         expect(sever).not.toThrow()

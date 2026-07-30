@@ -1,9 +1,10 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
-import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
-import { applyStep, type ProofStep } from '../../kernel/proof/step'
+import type { ProofAction } from '../../kernel/proof/action'
+import type { ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
-import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
+import { assertProofContext } from '../../kernel/proof/context'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -14,13 +15,11 @@ import {
 } from '../actions'
 import { inferFoldArgs } from '../define'
 import { absorbHits, orphanedWires } from '../edit'
-import { buildSelection, type Hit } from '../hittest'
+import { buildSelection, regionAt, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
-import {
-  ConnectionDragController,
-  type ConnectionEnd,
-} from './connection'
 import { CopyDragController } from './copy'
+import { DrawGestureController } from './draw'
+import { WireOpsDragController } from './wire-ops'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
@@ -73,7 +72,6 @@ export function deiterationStep(
     rule: 'deiteration',
     sel: selection,
     ...evidence,
-    retargets: [],
   }
 }
 
@@ -92,24 +90,6 @@ export function contextualDeleteStep(
   }
   if (has('erase')) return erasureStep(diagram, discovery.sel)
   return has('deiterate') ? deiterationStep(diagram, discovery.sel, fuel) : null
-}
-
-export function proofConnectionStep(
-  diagram: Diagram,
-  source: ConnectionEnd,
-  target: ConnectionEnd,
-  orientation: ProofOrientation,
-  _fuel: number,
-): ProofStep {
-  if (source.wire === target.wire) {
-    throw new Error(`line '${source.wire}' is already one identity`)
-  }
-  const step: ProofStep = {
-    rule: 'wireJoin',
-    input: { kind: 'iota', a: source.wire, b: target.wire },
-  }
-  applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-  return step
 }
 
 export type ProofMoveControllerOptions = {
@@ -135,62 +115,51 @@ function sameHit(left: Hit, right: Hit): boolean {
   return left.kind === right.kind && left.id === right.id
 }
 
-function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
-  let best: { readonly id: RegionId; readonly radius: number } | null = null
-  for (const [id, geometry] of engine.regions) {
-    if (diagram.regions[id]?.kind === 'sheet') continue
-    if (
-      Math.hypot(point.x - geometry.center.x, point.y - geometry.center.y) <= geometry.radius
-      && (best === null || geometry.radius < best.radius)
-    ) best = { id, radius: geometry.radius }
-  }
-  return best?.id ?? diagram.root
-}
-
 export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
-  readonly #connection: ConnectionDragController
+  readonly #wireOps: WireOpsDragController
   readonly #copy: CopyDragController
+  readonly #draw: DrawGestureController
+  #prompt: HTMLDivElement | null = null
   #menu: HTMLDivElement | null = null
   #cycle: CitationCycle | null = null
   #lastPointer: Vec2 = { x: 0, y: 0 }
+  #lastWorld: Vec2 | null = null
 
   constructor(options: ProofMoveControllerOptions) {
     assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
-    this.#connection = new ConnectionDragController({
+    this.#wireOps = new WireOpsDragController({
       active: options.active,
       engine: options.engine,
+      diagram: options.diagram,
       viewScale: options.viewScale,
       theme: options.theme,
-      relationSelection: {
-        selection: options.selection,
-        setSelection: options.setSelection,
-      },
-      commit: (gesture, pointer) => {
+      context: () => this.#context(),
+      orientation: options.orientation,
+      commit: (label, steps, pointer) => {
         this.#lastPointer = pointer
-        switch (gesture.kind) {
-          case 'wire':
-            try {
-              return this.#commit(proofConnectionStep(
-                options.diagram(),
-                gesture.source,
-                gesture.target,
-                options.orientation(),
-                options.fuel(),
-              ))
-            } catch (error) {
-              options.refuse(error instanceof Error ? error.message : String(error), pointer)
-              return false
-            }
-          case 'relationJoin':
-            return this.#commit({ rule: 'wireJoin', input: gesture.input })
-          case 'relationSever':
-            return this.#commit({ rule: 'wireSever', input: gesture.input })
-        }
+        return this.#commitSteps(label, steps)
       },
+      promptSig: (client, apply) => { this.#promptSig(client, apply) },
+      refuse: options.refuse,
+    })
+    this.#draw = new DrawGestureController({
+      active: options.active,
+      engine: options.engine,
+      diagram: options.diagram,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      context: () => this.#context(),
+      orientation: options.orientation,
+      commit: (label, steps, pointer) => {
+        this.#lastPointer = pointer
+        return this.#commitSteps(label, steps)
+      },
+      openSpawn: options.openSpawn,
+      stillMenu: (sample) => { this.#openContextMenu(sample) },
       refuse: options.refuse,
     })
     this.#copy = new CopyDragController({
@@ -219,19 +188,41 @@ export class ProofMoveController {
     })
   }
 
+  /** Track the hovered world point for pointer-located keyboard actions. */
+  passiveSample(sample: PointerSample | null): void {
+    if (sample === null) {
+      this.#lastWorld = null
+      return
+    }
+    this.#lastPointer = sample.client
+    this.#lastWorld = sample.world
+  }
+
   claim(sample: PointerSample): PointerClaim | null {
     this.#context()
     this.#lastPointer = sample.client
-    if (!this.#options.active() || sample.button !== 0) return null
+    if (
+      !this.#options.active()
+      || (sample.button !== 0 && sample.button !== 2)
+    ) return null
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
-    return this.#connection.claim(sample) ?? this.#copy.claim(sample)
+    if (sample.button === 2) return this.#draw.claim(sample)
+    return this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
   }
 
   contextMenu(sample: PointerSample): boolean {
     this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active()) return false
+    // Every claimed right press suppresses the browser's contextmenu event
+    // (it can fire at press time); a still release reopens through
+    // stillMenu, so the palette appears exactly once for a plain click.
+    if (this.#draw.consumeMenuSuppression()) return true
+    return this.#openContextMenu(sample)
+  }
+
+  #openContextMenu(sample: PointerSample): boolean {
     this.#closeMenu()
     const selection = this.#options.selection()
     if (
@@ -271,7 +262,8 @@ export class ProofMoveController {
     if (sample.key === 'Escape') {
       const active = this.#menu !== null
         || this.#cycle !== null
-        || this.#connection.hasPendingInteraction
+        || this.#prompt !== null
+        || this.#draw.hasPendingInteraction
       this.cancel()
       return active
     }
@@ -291,14 +283,72 @@ export class ProofMoveController {
         return true
       }
     }
+    // Q spawns a bare quantifier wire at the region under the pointer;
+    // Shift+Q spawns a proposition quantifier (nullary relation) instead
+    // (2026-07-30 rulings: a floating existential is meaningful content —
+    // its presence changes the statement, if only trivially — and the
+    // nullary spawn seeds every relational signature by application,
+    // rim-pull, and extension).
+    if (sample.key === 'q' || sample.key === 'Q') {
+      if (this.#lastWorld === null) {
+        this.#options.refuse('point at a region first', this.#lastPointer)
+        return true
+      }
+      this.#commit({
+        rule: 'vacuousIntro',
+        scope: regionAt(
+          this.#options.engine(),
+          this.#options.diagram(),
+          this.#lastWorld,
+        ),
+        sig: sample.shiftKey ? relSig([]) : IOTA,
+      })
+      return true
+    }
     if (
       sample.key !== 'Delete'
       && sample.key !== 'Backspace'
       && sample.key !== 'w'
       && sample.key !== 'W'
-      && sample.key !== 'i'
-      && sample.key !== 'I'
     ) return false
+    if (
+      (sample.key === 'w' || sample.key === 'W')
+      && this.#options.selection().length === 0
+    ) {
+      // W with nothing highlighted spawns an empty double cut at the region
+      // under the pointer (2026-07-10 approved design; 2026-07-30 ruling).
+      if (this.#lastWorld === null) {
+        this.#options.refuse('point at a region first', this.#lastPointer)
+        return true
+      }
+      this.#commit({
+        rule: 'doubleCutIntro',
+        sel: {
+          region: regionAt(
+            this.#options.engine(),
+            this.#options.diagram(),
+            this.#lastWorld,
+          ),
+          regions: [],
+          nodes: [],
+          wires: [],
+        },
+      })
+      return true
+    }
+    // Delete on a lone attached wire deletes its ends; the wire itself
+    // stays, quantified. This never forms a subgraph selection (the ends
+    // stay behind), so it dispatches before discovery.
+    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+      const hits = this.#options.selection()
+      if (hits.length === 1 && hits[0]!.kind === 'wire') {
+        const wire = this.#options.diagram().wires[hits[0]!.id]
+        if (wire !== undefined && wire.endpoints.length > 0) {
+          this.#commit({ rule: 'endsDelete', wire: hits[0]!.id })
+          return true
+        }
+      }
+    }
     const discovery = discoverProofActions(
       this.#options.diagram(),
       this.#options.selection(),
@@ -332,25 +382,17 @@ export class ProofMoveController {
       }
       return true
     }
-    if (sample.key === 'i' || sample.key === 'I') {
-      if (!discovery.actions.some((action) => action.kind === 'identityInsert')) {
-        this.#options.refuse('identity insertion is not valid for this selection', this.#lastPointer)
-      } else {
-        this.#commit({
-          rule: 'identityInsert',
-          region: discovery.sel.region,
-          wires: discovery.sel.wires,
-        })
-      }
-      return true
-    }
     this.#commit({ rule: 'doubleCutIntro', sel: discovery.sel })
     return true
   }
 
   overlay(): readonly Shape[] {
     this.#context()
-    const result: Shape[] = [...this.#connection.overlay(), ...this.#copy.overlay()]
+    const result: Shape[] = [
+      ...this.#wireOps.overlay(),
+      ...this.#copy.overlay(),
+      ...this.#draw.overlay(),
+    ]
     const cycle = this.#cycle
     if (cycle !== null && cycle.candidate.occurrences !== null) {
       const occurrence = cycle.candidate.occurrences[cycle.index]!
@@ -377,8 +419,10 @@ export class ProofMoveController {
     this.#context()
     this.#closeMenu()
     this.#cycle = null
-    this.#connection.cancel()
+    this.#closePrompt()
+    this.#wireOps.cancel()
     this.#copy.cancel()
+    this.#draw.cancel()
   }
 
   dispose(): void {
@@ -392,11 +436,15 @@ export class ProofMoveController {
   }
 
   #commit(step: ProofStep): boolean {
+    return this.#commitSteps(
+      step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
+      [step],
+    )
+  }
+
+  #commitSteps(label: string, steps: readonly ProofStep[]): boolean {
     try {
-      this.#options.apply(singleStepAction(
-        step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
-        step,
-      ))
+      this.#options.apply({ label, steps, placements: [] })
       this.#options.setSelection([])
       this.#closeMenu()
       return true
@@ -443,8 +491,15 @@ export class ProofMoveController {
       this.#options.orientation(),
     )
     if (discovery !== null) {
-      row('Actions', null)
-      for (const action of discovery.actions) {
+      // Rules with dedicated direct gestures never appear as menu rows
+      // (unfold has double-click). Fold and citation remain: choosing a
+      // stored name is inherently a picker — the diagram cannot determine
+      // it — so these rows are the interface, not debt.
+      const paletteRows = discovery.actions.filter((action) =>
+        action.kind === 'relFold'
+        || action.kind === 'citeTheorem')
+      if (paletteRows.length > 0) row('Actions', null)
+      for (const action of paletteRows) {
         this.#appendAction(row, action, discovery.sel)
       }
     }
@@ -516,12 +571,6 @@ export class ProofMoveController {
           this.#options.fuel(),
         )))
         return
-      case 'relUnfold':
-        row(action.label, () => this.#commit({
-          rule: 'unfold',
-          nodeId: selection.nodes[0]!,
-        }))
-        return
       case 'relFold':
         row('Fold into', null)
         for (const [name] of this.#context().relations) {
@@ -539,6 +588,7 @@ export class ProofMoveController {
         }
         return
       case 'iterate':
+      case 'relUnfold':
       case 'citeTheorem':
         return
     }
@@ -555,6 +605,45 @@ export class ProofMoveController {
   #closeMenu(): void {
     this.#menu?.remove()
     this.#menu = null
+  }
+
+  /** The arity prompt: blank means an individual (ι); n means rel(ιⁿ). */
+  #promptSig(client: Vec2, apply: (sig: Sig) => void): void {
+    this.#closePrompt()
+    const box = this.#document.createElement('div')
+    box.className = 'vpa-arity-prompt'
+    box.style.cssText = `position:fixed;left:${client.x + 10}px;top:${client.y + 10}px;z-index:31;padding:8px;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui`
+    const input = this.#document.createElement('input')
+    input.type = 'text'
+    input.placeholder = 'arity (blank = individual)'
+    input.setAttribute('aria-label', "New position's arity")
+    input.style.cssText = 'width:170px;box-sizing:border-box'
+    box.append(input)
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        this.#closePrompt()
+        return
+      }
+      if (event.key !== 'Enter') return
+      const raw = input.value.trim()
+      const arity = raw === '' ? null : Number(raw)
+      if (arity !== null && (!Number.isInteger(arity) || arity < 0)) {
+        this.#options.refuse('enter a non-negative arity or leave blank', client)
+        return
+      }
+      this.#closePrompt()
+      apply(arity === null
+        ? IOTA
+        : relSig(Array.from({ length: arity }, () => IOTA)))
+    })
+    this.#options.host.append(box)
+    this.#prompt = box
+    input.focus()
+  }
+
+  #closePrompt(): void {
+    this.#prompt?.remove()
+    this.#prompt = null
   }
 
   #context(): ProofContext {

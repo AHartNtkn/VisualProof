@@ -1,16 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Hit } from '../../src/app/hittest'
 import { ProofMoveController } from '../../src/app/interact/moves'
 import { InteractiveViewport } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Diagram, NodeId, RegionId, WireId } from '../../src/kernel/diagram/diagram'
-import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import type { Diagram } from '../../src/kernel/diagram/diagram'
+import { IOTA } from '../../src/kernel/diagram/sig'
 import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { carryOver, mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
-import { UNARY } from '../fixtures/zero-signature'
 
 class TestPointerEvent extends Event {
   readonly pointerId: number
@@ -193,333 +191,13 @@ function pointer(
   harness.canvas.dispatchEvent(new TestPointerEvent(type, point))
 }
 
-function click(harness: GestureHarness, point: Vec2): void {
-  pointer(harness, 'pointerdown', point)
-  pointer(harness, 'pointerup', point)
-}
-
 function drag(harness: GestureHarness, from: Vec2, to: Vec2): void {
   pointer(harness, 'pointerdown', from)
   pointer(harness, 'pointermove', to)
   pointer(harness, 'pointerup', to)
 }
 
-function pressEscape(): TestKeyboardEvent {
-  const event = new TestKeyboardEvent('Escape')
-  dom.window.dispatchEvent(event)
-  return event
-}
-
-function selectionIds(harness: GestureHarness): readonly Hit[] {
-  return harness.viewport.selection
-}
-
-function pendingPoints(harness: GestureHarness): readonly Vec2[] {
-  return harness.moves.overlay()
-    .filter((shape) => shape.kind === 'circle')
-    .map((shape) => shape.center)
-}
-
-function groundingFixture(
-  arity: 0 | 1,
-  orientation: 'forward' | 'backward' = 'forward',
-): {
-  readonly harness: GestureHarness
-  readonly content: NodeId
-  readonly untouched: NodeId
-  readonly formal: WireId | null
-  readonly relation: WireId
-} {
-  const builder = new DiagramBuilder()
-  const negative = builder.cut(builder.root)
-  const separated = builder.cut(negative)
-  const sig = arity === 0 ? relSig([]) : UNARY
-  const application = builder.atom(negative, sig)
-  const content = builder.ref(negative, 'GroundBody', sig)
-  const untouched = builder.ref(separated, 'UntouchedBody', relSig([]))
-  const formal = arity === 0
-    ? null
-    : builder.wire(negative, [
-        { node: application, port: { kind: 'arg', index: 0 } },
-        { node: content, port: { kind: 'arg', index: 0 } },
-      ])
-  const relation = builder.wire(negative, [{
-    node: application,
-    port: { kind: 'head' },
-  }], sig)
-  const diagram = builder.build()
-  const engine = mkEngine(diagram, [])
-  engine.regions.set(negative, {
-    center: vec(300, 200),
-    radius: 150,
-    support: [],
-  })
-  engine.bodies.get(application)!.pos = vec(120, 200)
-  engine.bodies.get(content)!.pos = vec(300, 200)
-  engine.bodies.get(untouched)!.pos = vec(440, 200)
-  engine.bodies.get(`j:${relation}`)!.pos = vec(80, 200)
-  return {
-    harness: createHarness(diagram, engine, orientation),
-    content,
-    untouched,
-    formal,
-    relation,
-  }
-}
-
-function severFixture(count: number): {
-  readonly harness: GestureHarness
-  readonly scope: RegionId
-  readonly regions: readonly RegionId[]
-  readonly nodes: readonly NodeId[]
-  readonly points: readonly Vec2[]
-} {
-  const builder = new DiagramBuilder()
-  const scope = builder.root
-  const regions = Array.from({ length: count }, () => builder.cut(scope))
-  const nodes = regions.map((region) =>
-    builder.ref(region, 'NullaryBody', relSig([])))
-  const diagram = builder.build()
-  const engine = mkEngine(diagram, [])
-  const points = nodes.map((node, index) => {
-    const point = vec(230 + index * 180, 220)
-    engine.bodies.get(node)!.pos = point
-    return point
-  })
-  return {
-    harness: createHarness(diagram, engine),
-    scope,
-    regions,
-    nodes,
-    points,
-  }
-}
-
-function nestedStructuralSeverFixture(): {
-  readonly harness: GestureHarness
-  readonly scope: RegionId
-  readonly nodes: readonly [NodeId, NodeId]
-  readonly points: readonly [Vec2, Vec2]
-  readonly looseScopePoint: Vec2
-} {
-  const builder = new DiagramBuilder()
-  const negative = builder.cut(builder.root)
-  const scope = builder.cut(negative)
-  const first = builder.cut(scope)
-  const second = builder.cut(scope)
-  const firstNode = builder.ref(first, 'NullaryBody', relSig([]))
-  const secondNode = builder.ref(second, 'NullaryBody', relSig([]))
-  const diagram = builder.build()
-  const engine = mkEngine(diagram, [])
-  engine.regions.set(negative, {
-    center: vec(400, 300),
-    radius: 220,
-    support: [],
-  })
-  engine.regions.set(scope, {
-    center: vec(400, 300),
-    radius: 170,
-    support: [],
-  })
-  engine.regions.set(first, {
-    center: vec(300, 230),
-    radius: 45,
-    support: [],
-  })
-  engine.regions.set(second, {
-    center: vec(500, 230),
-    radius: 45,
-    support: [],
-  })
-  engine.bodies.get(firstNode)!.pos = vec(300, 230)
-  engine.bodies.get(secondNode)!.pos = vec(500, 230)
-  return {
-    harness: createHarness(diagram, engine),
-    scope,
-    nodes: [firstNode, secondNode],
-    points: [vec(300, 230), vec(500, 230)],
-    looseScopePoint: vec(400, 400),
-  }
-}
-
-describe('Viewport → ProofMoveController ordered-selection gestures', () => {
-  it('commits grounding from a prepared node selection without a diagram marker', () => {
-    const { harness, content, untouched, relation } = groundingFixture(0)
-    const contentPoint = harness.engine.bodies.get(content)!.pos
-    const untouchedPoint = harness.engine.bodies.get(untouched)!.pos
-    const source = harness.engine.bodies.get(`j:${relation}`)!.pos
-
-    click(harness, untouchedPoint)
-    click(harness, contentPoint)
-    expect(selectionIds(harness)).toEqual([
-      { kind: 'node', id: untouched },
-      { kind: 'node', id: content },
-    ])
-    drag(harness, source, contentPoint)
-
-    expect(harness.refusals).toEqual([])
-    expect(harness.actions).toHaveLength(1)
-    expect(harness.actions[0]?.steps[0]).toMatchObject({
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: relation,
-        parameters: [],
-        content: { boundary: [] },
-      },
-    })
-    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: untouched }])
-  })
-
-  it('routes an invalid grounding through the kernel and keeps the selection', () => {
-    const { harness, content, relation } = groundingFixture(1)
-    const contentPoint = harness.engine.bodies.get(content)!.pos
-    const source = harness.engine.bodies.get(`j:${relation}`)!.pos
-
-    click(harness, contentPoint)
-    drag(harness, source, contentPoint)
-
-    expect(harness.actions).toEqual([])
-    expect(harness.refusals).toHaveLength(1)
-    expect(harness.refusals[0]).toMatch(
-      /relation grounding boundary suffix has 0 positions; parameter count is 1/,
-    )
-    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: content }])
-  })
-
-  it('founds, branches, and scopes one sever from one structurally partitioned selection', () => {
-    const { harness, scope, nodes, points } = severFixture(3)
-    click(harness, points[0]!)
-    click(harness, points[1]!)
-    click(harness, points[2]!)
-    expect(selectionIds(harness)).toEqual([
-      { kind: 'node', id: nodes[0] },
-      { kind: 'node', id: nodes[1] },
-      { kind: 'node', id: nodes[2] },
-    ])
-    drag(harness, points[0]!, vec(230, 340))
-    expect(selectionIds(harness)).toEqual([
-      { kind: 'node', id: nodes[1] },
-      { kind: 'node', id: nodes[2] },
-    ])
-
-    const [body, loose] = [...pendingPoints(harness)]
-      .sort((left, right) => left.y - right.y)
-    drag(harness, body!, points[1]!)
-    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: nodes[2] }])
-
-    const currentLoose = pendingPoints(harness)
-      .find((point) => point.x === loose!.x && point.y === loose!.y)!
-    drag(harness, currentLoose, vec(350, 400))
-
-    expect(harness.refusals).toEqual([])
-    expect(harness.actions).toHaveLength(1)
-    expect(harness.actions[0]?.steps[0]).toMatchObject({
-      rule: 'wireSever',
-      input: {
-        kind: 'relation',
-        scope,
-        occurrences: [
-          { sel: { nodes: [nodes[0]] }, args: [] },
-          { sel: { nodes: [nodes[1]] }, args: [] },
-        ],
-      },
-    })
-    expect(selectionIds(harness)).toEqual([{ kind: 'node', id: nodes[2] }])
-  })
-
-  it('uses structurally split node occurrences and the smallest containing region as sever scope', () => {
-    const {
-      harness,
-      scope,
-      nodes,
-      points,
-      looseScopePoint,
-    } = nestedStructuralSeverFixture()
-
-    click(harness, points[0])
-    click(harness, points[1])
-    expect(selectionIds(harness)).toEqual([
-      { kind: 'node', id: nodes[0] },
-      { kind: 'node', id: nodes[1] },
-    ])
-    drag(harness, points[0], vec(300, 320))
-
-    const [body, loose] = [...pendingPoints(harness)]
-      .sort((left, right) => left.y - right.y)
-    drag(harness, body!, points[1])
-    drag(harness, loose!, looseScopePoint)
-
-    expect(harness.refusals).toEqual([])
-    expect(harness.actions).toHaveLength(1)
-    expect(harness.actions[0]?.steps[0]).toMatchObject({
-      rule: 'wireSever',
-      input: {
-        kind: 'relation',
-        scope,
-        occurrences: [
-          { sel: { nodes: [nodes[0]] }, args: [] },
-          { sel: { nodes: [nodes[1]] }, args: [] },
-        ],
-      },
-    })
-  })
-
-  it('Escape cancels grounding, pending-body, and pending-loose claims', () => {
-    const ground = groundingFixture(0)
-    const contentPoint = ground.harness.engine.bodies.get(ground.content)!.pos
-    const source = ground.harness.engine.bodies.get(`j:${ground.relation}`)!.pos
-    click(ground.harness, contentPoint)
-    pointer(ground.harness, 'pointerdown', source)
-    pointer(ground.harness, 'pointermove', contentPoint)
-    expect(pressEscape().defaultPrevented).toBe(true)
-    expect(() => pointer(ground.harness, 'pointerup', contentPoint)).not.toThrow()
-    expect(ground.harness.actions).toEqual([])
-
-    const sever = severFixture(2)
-    click(sever.harness, sever.points[0]!)
-    drag(sever.harness, sever.points[0]!, vec(230, 340))
-    click(sever.harness, sever.points[1]!)
-    const [body] = [...pendingPoints(sever.harness)]
-      .sort((left, right) => left.y - right.y)
-    pointer(sever.harness, 'pointerdown', body!)
-    pointer(sever.harness, 'pointermove', sever.points[1]!)
-    pressEscape()
-    expect(() => pointer(sever.harness, 'pointerup', sever.points[1]!)).not.toThrow()
-    expect(sever.harness.actions).toEqual([])
-
-    const looseSever = severFixture(1)
-    click(looseSever.harness, looseSever.points[0]!)
-    drag(looseSever.harness, looseSever.points[0]!, vec(230, 340))
-    const activeLoose = [...pendingPoints(looseSever.harness)]
-      .sort((left, right) => right.y - left.y)[0]!
-    pointer(looseSever.harness, 'pointerdown', activeLoose)
-    pointer(looseSever.harness, 'pointermove', vec(350, 400))
-    pressEscape()
-    expect(() =>
-      pointer(looseSever.harness, 'pointerup', vec(350, 400)),
-    ).not.toThrow()
-    expect(looseSever.harness.actions).toEqual([])
-    expect(looseSever.harness.moves.overlay()).toEqual([])
-  })
-
-  it('keeps pending contact/body geometry attached to a moved selected node', () => {
-    const { harness, nodes, points } = severFixture(2)
-    click(harness, points[0]!)
-    drag(harness, points[0]!, vec(230, 340))
-    const oldBody = [...pendingPoints(harness)]
-      .sort((left, right) => left.y - right.y)[0]!
-
-    harness.engine.bodies.get(nodes[0]!)!.pos = vec(380, 180)
-    const movedBody = pendingPoints(harness)
-      .find((point) => point.x !== 230 || point.y !== 340)!
-
-    expect(movedBody).not.toEqual(oldBody)
-    click(harness, points[1]!)
-    drag(harness, movedBody, points[1]!)
-    expect(harness.refusals).toEqual([])
-  })
-
+describe('Viewport → ProofMoveController wire connection', () => {
   it('preserves ordinary iota wire-to-wire dragging through the production route', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
@@ -544,7 +222,7 @@ describe('Viewport → ProofMoveController ordered-selection gestures', () => {
 
     expect(harness.actions[0]?.steps[0]).toEqual({
       rule: 'wireJoin',
-      input: { kind: 'iota', a: left, b: right },
+      input: { a: left, b: right },
     })
   })
 })

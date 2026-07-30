@@ -13,7 +13,6 @@ describe('iota wire join', () => {
     const diagram = builder.build()
 
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: first,
       b: second,
     })).toThrowError(/incomparable scopes/)
@@ -29,26 +28,26 @@ describe('iota wire join', () => {
     const diagram = builder.build()
 
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: negativeInner,
     })).not.toThrow()
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: positiveInner,
     })).toThrowError(/inner wire's scope to be negative/)
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: positiveInner,
     }, 'backward')).not.toThrow()
   })
 
   it('retains the outer wire and re-normalizes affected identity content', () => {
+    // The identity sits below both wire scopes so it survives the build
+    // (two outer wires); the join then degenerates it to one wire.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const identity = builder.identity(cut, IOTA, 2)
+    const deep = builder.cut(cut)
+    const identity = builder.identity(deep, IOTA, 2)
     const outerNode = builder.ref(builder.root, 'outer', relSig([IOTA]))
     const innerNode = builder.ref(cut, 'inner', relSig([IOTA]))
     const outer = builder.wire(builder.root, [
@@ -63,7 +62,6 @@ describe('iota wire join', () => {
     expect(diagram.nodes[identity]).toBeDefined()
 
     const joined = applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: inner,
     })
@@ -75,5 +73,43 @@ describe('iota wire join', () => {
       { node: innerNode, port: { kind: 'arg', index: 0 } },
     ]))
     expect(joined.nodes[identity]).toBeUndefined()
+  })
+})
+
+describe('generalized wire join', () => {
+  it('merges relation wires of equal signature under a negative inner scope', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const sig = relSig([IOTA])
+    const outerAtom = builder.atom(builder.root, sig)
+    const innerAtom = builder.atom(cut, sig)
+    const outer = builder.wire(builder.root, [
+      { node: outerAtom, port: { kind: 'head' } },
+    ], sig)
+    const inner = builder.wire(cut, [
+      { node: innerAtom, port: { kind: 'head' } },
+    ], sig)
+    builder.wire(builder.root, [{ node: outerAtom, port: { kind: 'arg', index: 0 } }])
+    builder.wire(cut, [{ node: innerAtom, port: { kind: 'arg', index: 0 } }])
+    const diagram = builder.build()
+
+    const joined = applyWireJoin(diagram, { a: outer, b: inner })
+
+    expect(joined.wires[inner]).toBeUndefined()
+    expect(joined.wires[outer]!.endpoints).toEqual(expect.arrayContaining([
+      { node: outerAtom, port: { kind: 'head' } },
+      { node: innerAtom, port: { kind: 'head' } },
+    ]))
+  })
+
+  it('rejects joining wires of different signatures', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const unary = builder.relWire(builder.root, relSig([IOTA]))
+    const binary = builder.relWire(cut, relSig([IOTA, IOTA]))
+    const diagram = builder.build()
+
+    expect(() => applyWireJoin(diagram, { a: unary, b: binary }))
+      .toThrowError(/equal signatures/)
   })
 })

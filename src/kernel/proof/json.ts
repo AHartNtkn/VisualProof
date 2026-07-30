@@ -10,9 +10,7 @@ import {
 } from '../diagram/json'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import type { IdentityRetarget } from '../rules/iteration'
 import type {
-  ContentOccurrence,
   WireJoinInput,
   WireSeverInput,
 } from '../rules/wire-quantifier'
@@ -97,128 +95,40 @@ function endpointFromJson(value: unknown, what: string): Endpoint {
   }
 }
 
-function contentOccurrenceToJson(
-  occurrence: ContentOccurrence,
-): unknown {
-  return {
-    sel: selectionToJson(occurrence.sel),
-    args: [...occurrence.args],
-  }
-}
-
-function contentOccurrenceFromJson(
-  value: unknown,
-  what: string,
-): ContentOccurrence {
-  if (!isRecord(value)) fail(`${what} must be an object`)
-  assertOnlyKeys(value, ['sel', 'args'], what)
-  return {
-    sel: selectionFromJson(value.sel, `${what}.sel`),
-    args: strArray(value.args, `${what}.args`),
-  }
-}
-
 function wireSeverInputToJson(input: WireSeverInput): unknown {
-  switch (input.kind) {
-    case 'iota':
-      return {
-        kind: input.kind,
-        wire: input.wire,
-        keep: input.keep.map(endpointToJson),
-      }
-    case 'relation':
-      return {
-        kind: input.kind,
-        scope: input.scope,
-        occurrences: input.occurrences.map(contentOccurrenceToJson),
-      }
+  return {
+    wire: input.wire,
+    keep: input.keep.map(endpointToJson),
+    ...(input.scope !== undefined ? { scope: input.scope } : {}),
   }
 }
 
 function wireSeverInputFromJson(value: unknown): WireSeverInput {
   if (!isRecord(value)) fail('wireSever input must be an object')
-  const kind = str(value.kind, 'wireSever input.kind')
-  switch (kind) {
-    case 'iota':
-      assertOnlyKeys(
-        value,
-        ['kind', 'wire', 'keep'],
-        'wireSever iota input',
-      )
-      if (!Array.isArray(value.keep)) {
-        fail('wireSever iota input.keep must be an array')
-      }
-      return {
-        kind,
-        wire: str(value.wire, 'wireSever input.wire'),
-        keep: value.keep.map((endpoint, index) =>
-          endpointFromJson(endpoint, `wireSever input.keep[${index}]`)),
-      }
-    case 'relation':
-      assertOnlyKeys(
-        value,
-        ['kind', 'scope', 'occurrences'],
-        'wireSever relation input',
-      )
-      if (!Array.isArray(value.occurrences)) {
-        fail('wireSever relation input.occurrences must be an array')
-      }
-      return {
-        kind,
-        scope: str(value.scope, 'wireSever input.scope'),
-        occurrences: value.occurrences.map((occurrence, index) =>
-          contentOccurrenceFromJson(
-            occurrence,
-            `wireSever input.occurrences[${index}]`,
-          )),
-      }
-    default:
-      fail("wireSever input.kind must be 'iota'|'relation'")
+  assertOnlyKeys(value, ['wire', 'keep', 'scope'], 'wireSever input')
+  if (!Array.isArray(value.keep)) {
+    fail('wireSever input.keep must be an array')
+  }
+  return {
+    wire: str(value.wire, 'wireSever input.wire'),
+    keep: value.keep.map((endpoint, index) =>
+      endpointFromJson(endpoint, `wireSever input.keep[${index}]`)),
+    ...(value.scope !== undefined
+      ? { scope: str(value.scope, 'wireSever input.scope') }
+      : {}),
   }
 }
 
 function wireJoinInputToJson(input: WireJoinInput): unknown {
-  switch (input.kind) {
-    case 'iota':
-      return { kind: input.kind, a: input.a, b: input.b }
-    case 'relation':
-      return {
-        kind: input.kind,
-        wire: input.wire,
-        content: dwbToJson(input.content),
-        parameters: [...input.parameters],
-      }
-  }
+  return { a: input.a, b: input.b }
 }
 
 function wireJoinInputFromJson(value: unknown): WireJoinInput {
   if (!isRecord(value)) fail('wireJoin input must be an object')
-  const kind = str(value.kind, 'wireJoin input.kind')
-  switch (kind) {
-    case 'iota':
-      assertOnlyKeys(value, ['kind', 'a', 'b'], 'wireJoin iota input')
-      return {
-        kind,
-        a: str(value.a, 'wireJoin input.a'),
-        b: str(value.b, 'wireJoin input.b'),
-      }
-    case 'relation':
-      assertOnlyKeys(
-        value,
-        ['kind', 'wire', 'content', 'parameters'],
-        'wireJoin relation input',
-      )
-      return {
-        kind,
-        wire: str(value.wire, 'wireJoin input.wire'),
-        content: dwbFromJson(value.content, 'wireJoin input.content'),
-        parameters: strArray(
-          value.parameters,
-          'wireJoin input.parameters',
-        ),
-      }
-    default:
-      fail("wireJoin input.kind must be 'iota'|'relation'")
+  assertOnlyKeys(value, ['a', 'b'], 'wireJoin input')
+  return {
+    a: str(value.a, 'wireJoin input.a'),
+    b: str(value.b, 'wireJoin input.b'),
   }
 }
 
@@ -274,32 +184,6 @@ function occurrenceCertificateFromJson(
   }
 }
 
-function retargetToJson(retarget: IdentityRetarget): unknown {
-  return {
-    boundary: retarget.boundary,
-    identity: retarget.identity,
-    from: retarget.from,
-    to: retarget.to,
-  }
-}
-
-function retargetFromJson(value: unknown, what: string): IdentityRetarget {
-  if (!isRecord(value)) fail(`${what} must be an object`)
-  assertOnlyKeys(value, ['boundary', 'identity', 'from', 'to'], what)
-  return {
-    boundary: nonNegativeSafeInteger(value.boundary, `${what}.boundary`),
-    identity: str(value.identity, `${what}.identity`),
-    from: str(value.from, `${what}.from`),
-    to: str(value.to, `${what}.to`),
-  }
-}
-
-function retargetsFromJson(value: unknown, what: string): IdentityRetarget[] {
-  if (!Array.isArray(value)) fail(`${what} must be an array`)
-  return value.map((retarget, index) =>
-    retargetFromJson(retarget, `${what}[${index}]`))
-}
-
 function applicationToJson(application: TheoremApplication): unknown {
   return {
     sel: selectionToJson(application.sel),
@@ -353,7 +237,6 @@ export function stepToJson(step: ProofStep): unknown {
         rule: step.rule,
         sel: selectionToJson(step.sel),
         target: step.target,
-        retargets: step.retargets.map(retargetToJson),
       }
     case 'deiteration':
       return {
@@ -361,7 +244,6 @@ export function stepToJson(step: ProofStep): unknown {
         sel: selectionToJson(step.sel),
         justifier: selectionToJson(step.justifier),
         certificate: occurrenceCertificateToJson(step.certificate),
-        retargets: step.retargets.map(retargetToJson),
       }
     case 'doubleCutIntro':
       return { rule: step.rule, sel: selectionToJson(step.sel) }
@@ -391,6 +273,58 @@ export function stepToJson(step: ProofStep): unknown {
         args: [...step.args],
         defId: step.defId,
       }
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+      return { rule: step.rule, wire: step.wire }
+    case 'parallelFuse':
+      return { rule: step.rule, a: step.a, b: step.b }
+    case 'endsSpawn':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        sites: step.sites.map((site) => ({
+          region: site.region,
+          args: [...site.args],
+        })),
+      }
+    case 'arityShift':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        newArgSig: sigToJson(step.newArgSig),
+      }
+    case 'arityUnshift':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'applyFormal':
+      return { rule: step.rule, wire: step.wire, position: step.position }
+    case 'argPermute':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        permutation: [...step.permutation],
+      }
+    case 'argExtend':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        position: step.position,
+        newArgSig: sigToJson(step.newArgSig),
+        attachments: { ...step.attachments },
+      }
+    case 'abstractFormal':
+      return { rule: step.rule, ends: [...step.ends], scope: step.scope }
+    case 'identityLeaf':
+      return { rule: step.rule, wire: step.wire }
+    case 'identityAbstract':
+      return { rule: step.rule, nodes: [...step.nodes], scope: step.scope }
+    case 'refLeaf':
+      return { rule: step.rule, wire: step.wire, defId: step.defId }
+    case 'refAbstract':
+      return { rule: step.rule, nodes: [...step.nodes], scope: step.scope }
   }
 }
 
@@ -430,21 +364,16 @@ export function stepFromJson(value: unknown): ProofStep {
       assertOnlyKeys(value, ['rule', 'input'], 'wireSever step')
       return { rule, input: wireSeverInputFromJson(value.input) }
     case 'iteration':
-      assertOnlyKeys(
-        value,
-        ['rule', 'sel', 'target', 'retargets'],
-        'iteration step',
-      )
+      assertOnlyKeys(value, ['rule', 'sel', 'target'], 'iteration step')
       return {
         rule,
         sel: selectionFromJson(value.sel, 'sel'),
         target: str(value.target, 'target'),
-        retargets: retargetsFromJson(value.retargets, 'retargets'),
       }
     case 'deiteration':
       assertOnlyKeys(
         value,
-        ['rule', 'sel', 'justifier', 'certificate', 'retargets'],
+        ['rule', 'sel', 'justifier', 'certificate'],
         'deiteration step',
       )
       return {
@@ -455,7 +384,6 @@ export function stepFromJson(value: unknown): ProofStep {
           value.certificate,
           'certificate',
         ),
-        retargets: retargetsFromJson(value.retargets, 'retargets'),
       }
     case 'doubleCutIntro':
       assertOnlyKeys(value, ['rule', 'sel'], 'doubleCutIntro step')
@@ -504,6 +432,115 @@ export function stepFromJson(value: unknown): ProofStep {
         occurrence: selectionFromJson(value.occurrence, 'occurrence'),
         args: strArray(value.args, 'args'),
         defId: str(value.defId, 'defId'),
+      }
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+      assertOnlyKeys(value, ['rule', 'wire'], `${rule} step`)
+      return { rule, wire: str(value.wire, 'wire') }
+    case 'parallelFuse':
+      assertOnlyKeys(value, ['rule', 'a', 'b'], 'parallelFuse step')
+      return { rule, a: str(value.a, 'a'), b: str(value.b, 'b') }
+    case 'endsSpawn': {
+      assertOnlyKeys(value, ['rule', 'wire', 'sites'], 'endsSpawn step')
+      if (!Array.isArray(value.sites)) return fail('endsSpawn sites must be an array')
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        sites: value.sites.map((site: unknown, index: number) => {
+          if (typeof site !== 'object' || site === null) {
+            return fail(`endsSpawn site ${index} must be an object`)
+          }
+          const record = site as Record<string, unknown>
+          assertOnlyKeys(record, ['region', 'args'], `endsSpawn site ${index}`)
+          return {
+            region: str(record.region, `site ${index} region`),
+            args: strArray(record.args, `site ${index} args`),
+          }
+        }),
+      }
+    }
+    case 'arityShift':
+      assertOnlyKeys(value, ['rule', 'wire', 'newArgSig'], 'arityShift step')
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        newArgSig: sigFromJson(value.newArgSig, 'newArgSig'),
+      }
+    case 'arityUnshift':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'applyFormal':
+      assertOnlyKeys(value, ['rule', 'wire', 'position'], `${rule} step`)
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        position: nonNegativeSafeInteger(value.position, 'position'),
+      }
+    case 'argPermute': {
+      assertOnlyKeys(value, ['rule', 'wire', 'permutation'], 'argPermute step')
+      if (!Array.isArray(value.permutation)) {
+        return fail('argPermute permutation must be an array')
+      }
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        permutation: value.permutation.map((entry: unknown, index: number) =>
+          nonNegativeSafeInteger(entry, `permutation[${index}]`)),
+      }
+    }
+    case 'argExtend': {
+      assertOnlyKeys(
+        value,
+        ['rule', 'wire', 'position', 'newArgSig', 'attachments'],
+        'argExtend step',
+      )
+      if (!isRecord(value.attachments)) {
+        return fail('argExtend attachments must be an object')
+      }
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        position: nonNegativeSafeInteger(value.position, 'position'),
+        newArgSig: sigFromJson(value.newArgSig, 'newArgSig'),
+        attachments: Object.fromEntries(
+          Object.entries(value.attachments).map(([node, wire]) =>
+            [node, str(wire, `attachments['${node}']`)]),
+        ),
+      }
+    }
+    case 'abstractFormal':
+      assertOnlyKeys(value, ['rule', 'ends', 'scope'], 'abstractFormal step')
+      return {
+        rule,
+        ends: strArray(value.ends, 'ends'),
+        scope: str(value.scope, 'scope'),
+      }
+    case 'identityLeaf':
+      assertOnlyKeys(value, ['rule', 'wire'], 'identityLeaf step')
+      return { rule, wire: str(value.wire, 'wire') }
+    case 'identityAbstract':
+      assertOnlyKeys(value, ['rule', 'nodes', 'scope'], 'identityAbstract step')
+      return {
+        rule,
+        nodes: strArray(value.nodes, 'nodes'),
+        scope: str(value.scope, 'scope'),
+      }
+    case 'refLeaf':
+      assertOnlyKeys(value, ['rule', 'wire', 'defId'], 'refLeaf step')
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        defId: str(value.defId, 'defId'),
+      }
+    case 'refAbstract':
+      assertOnlyKeys(value, ['rule', 'nodes', 'scope'], 'refAbstract step')
+      return {
+        rule,
+        nodes: strArray(value.nodes, 'nodes'),
+        scope: str(value.scope, 'scope'),
       }
     default:
       return fail(`unknown rule '${rule}'`)

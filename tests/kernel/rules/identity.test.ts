@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import type { Diagram, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
+import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { mkSelection, type SubgraphSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { EMPTY_PROOF_CONTEXT, registerTheorem } from '../../../src/kernel/proof/context'
 import { replayProof } from '../../../src/kernel/proof/step'
 import { checkTheorem, type Theorem } from '../../../src/kernel/proof/theorem'
@@ -17,7 +17,6 @@ import {
   applyDeiteration,
   applyIteration,
   findDeiterationEvidence,
-  type IdentityRetarget,
 } from '../../../src/kernel/rules/iteration'
 
 type IdentityNode = Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>
@@ -28,75 +27,6 @@ function identityNodes(
   return Object.entries(diagram.nodes)
     .filter((entry): entry is [NodeId, IdentityNode] =>
       entry[1].kind === 'identity')
-}
-
-function boundaryOf(diagram: Diagram, selection: SubgraphSelection, wire: WireId): number {
-  const boundary = extractSubgraph(diagram, selection).attachments.indexOf(wire)
-  if (boundary < 0) throw new Error(`fixture wire '${wire}' is not an extracted boundary`)
-  return boundary
-}
-
-function hasArgEndpoint(diagram: Diagram, wire: WireId, node: NodeId, index: number): boolean {
-  return diagram.wires[wire]!.endpoints.some(
-    (endpoint) =>
-      endpoint.node === node
-      && endpoint.port.kind === 'arg'
-      && endpoint.port.index === index,
-  )
-}
-
-function substitutionHost(source: 'from' | 'to' = 'from') {
-  const builder = new DiagramBuilder()
-  const ancestor = builder.cut(builder.root)
-  const target = builder.cut(ancestor)
-  const identity = builder.identity(ancestor, IOTA, 2)
-  const atom = builder.atom(ancestor, relSig([IOTA]))
-  const from = builder.wire(builder.root, [
-    { node: identity, port: { kind: 'identity', index: 0 } },
-    ...(source === 'from' ? [{ node: atom, port: { kind: 'arg' as const, index: 0 } }] : []),
-  ])
-  const to = builder.wire(builder.root, [
-    { node: identity, port: { kind: 'identity', index: 1 } },
-    ...(source === 'to' ? [{ node: atom, port: { kind: 'arg' as const, index: 0 } }] : []),
-  ])
-  const unlinked = builder.wire(builder.root, [])
-  const mismatched = builder.wire(builder.root, [], relSig([]))
-  const diagram = builder.build()
-  const selection = mkSelection(diagram, {
-    region: ancestor,
-    regions: [],
-    nodes: [atom],
-    wires: [],
-  })
-  const sourceWire = source === 'from' ? from : to
-  const destinationWire = source === 'from' ? to : from
-  const retarget: IdentityRetarget = {
-    boundary: boundaryOf(diagram, selection, sourceWire),
-    identity,
-    from: sourceWire,
-    to: destinationWire,
-  }
-  return {
-    diagram,
-    ancestor,
-    target,
-    identity,
-    atom,
-    from,
-    to,
-    unlinked,
-    mismatched,
-    selection,
-    retarget,
-  }
-}
-
-function copiedAtom(diagram: Diagram, region: string, original: NodeId): NodeId {
-  const copy = Object.entries(diagram.nodes).find(
-    ([nodeId, node]) => nodeId !== original && node.kind === 'atom' && node.region === region,
-  )
-  if (copy === undefined) throw new Error(`fixture has no copied atom in '${region}'`)
-  return copy[0]
 }
 
 describe('identity Rules 1–3 are canonicalizer-owned', () => {
@@ -328,226 +258,67 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
     expect(permuted).toEqual(ordinary)
   })
 
-  it('retargets exactly the named atom argument from an outer wire to an equal wire', () => {
-    const host = substitutionHost()
+  it('derives P(b) from P(a): iterate the identity, sever, one-point collapse', () => {
+    const derive = (orientation: 'forward' | 'backward') => {
+      const builder = new DiagramBuilder()
+      const home = builder.cut(builder.root)
+      // Forward severing needs a positive site; backward a negative one.
+      const site = orientation === 'forward'
+        ? builder.cut(home)
+        : builder.cut(builder.cut(home))
+      const identity = builder.identity(home, IOTA, 2)
+      const atom = builder.atom(site, relSig([IOTA]))
+      builder.wire(site, [{ node: atom, port: { kind: 'head' } }], relSig([IOTA]))
+      const a = builder.wire(builder.root, [
+        { node: identity, port: { kind: 'identity', index: 0 } },
+        { node: atom, port: { kind: 'arg', index: 0 } },
+      ])
+      builder.wire(builder.root, [
+        { node: identity, port: { kind: 'identity', index: 1 } },
+      ])
+      const diagram = builder.build()
 
-    const iterated = applyIteration(
-      host.diagram,
-      host.selection,
-      host.target,
-      [host.retarget],
-    )
-    const copy = copiedAtom(iterated, host.target, host.atom)
+      const withCopy = applyIteration(diagram, mkSelection(diagram, {
+        region: home,
+        regions: [],
+        nodes: [identity],
+        wires: [],
+      }), site)
+      const copied = Object.keys(withCopy.nodes).find((id) =>
+        id !== identity && withCopy.nodes[id]!.kind === 'identity')!
+      // Severing `a` so the copied identity keeps one co-scoped end makes
+      // the one-point collapse land the atom's argument on `b`.
+      const substituted = rules.applyWireSever(withCopy, {
+        wire: a,
+        keep: withCopy.wires[a]!.endpoints.filter((endpoint) =>
+          endpoint.node !== copied && endpoint.node !== atom),
+        scope: site,
+      }, orientation)
 
-    expect(hasArgEndpoint(iterated, host.to, copy, 0)).toBe(true)
-    expect(hasArgEndpoint(iterated, host.from, copy, 0)).toBe(false)
-    expect(hasArgEndpoint(iterated, host.from, host.atom, 0)).toBe(true)
-  })
+      const expectedBuilder = new DiagramBuilder()
+      const expectedHome = expectedBuilder.cut(expectedBuilder.root)
+      const expectedSite = orientation === 'forward'
+        ? expectedBuilder.cut(expectedHome)
+        : expectedBuilder.cut(expectedBuilder.cut(expectedHome))
+      const expectedIdentity = expectedBuilder.identity(expectedHome, IOTA, 2)
+      const expectedAtom = expectedBuilder.atom(expectedSite, relSig([IOTA]))
+      expectedBuilder.wire(expectedSite, [
+        { node: expectedAtom, port: { kind: 'head' } },
+      ], relSig([IOTA]))
+      expectedBuilder.wire(expectedBuilder.root, [
+        { node: expectedIdentity, port: { kind: 'identity', index: 0 } },
+      ])
+      expectedBuilder.wire(expectedBuilder.root, [
+        { node: expectedIdentity, port: { kind: 'identity', index: 1 } },
+        { node: expectedAtom, port: { kind: 'arg', index: 0 } },
+      ])
 
-  it('supports symmetry by retargeting in the reverse wire direction', () => {
-    const host = substitutionHost('to')
-
-    const iterated = applyIteration(
-      host.diagram,
-      host.selection,
-      host.target,
-      [host.retarget],
-    )
-    const copy = copiedAtom(iterated, host.target, host.atom)
-
-    expect(hasArgEndpoint(iterated, host.from, copy, 0)).toBe(true)
-    expect(hasArgEndpoint(iterated, host.to, host.atom, 0)).toBe(true)
-  })
-
-  it('retargets multiple named boundary positions without changing the head attachment', () => {
-    const builder = new DiagramBuilder()
-    const ancestor = builder.cut(builder.root)
-    const target = builder.cut(ancestor)
-    const firstIdentity = builder.identity(ancestor, IOTA, 2)
-    const secondIdentity = builder.identity(ancestor, IOTA, 2)
-    const atom = builder.atom(ancestor, relSig([IOTA, IOTA]))
-    const firstFrom = builder.wire(builder.root, [
-      { node: firstIdentity, port: { kind: 'identity', index: 0 } },
-      { node: atom, port: { kind: 'arg', index: 0 } },
-    ])
-    const firstTo = builder.wire(builder.root, [
-      { node: firstIdentity, port: { kind: 'identity', index: 1 } },
-    ])
-    const secondFrom = builder.wire(builder.root, [
-      { node: secondIdentity, port: { kind: 'identity', index: 0 } },
-      { node: atom, port: { kind: 'arg', index: 1 } },
-    ])
-    const secondTo = builder.wire(builder.root, [
-      { node: secondIdentity, port: { kind: 'identity', index: 1 } },
-    ])
-    const diagram = builder.build()
-    const selection = mkSelection(diagram, {
-      region: ancestor,
-      regions: [],
-      nodes: [atom],
-      wires: [],
-    })
-    const extracted = extractSubgraph(diagram, selection)
-    const untouched = extracted.attachments.find(
-      (wire) => wire !== firstFrom && wire !== secondFrom,
-    )!
-    const retargets: IdentityRetarget[] = [
-      {
-        boundary: boundaryOf(diagram, selection, firstFrom),
-        identity: firstIdentity,
-        from: firstFrom,
-        to: firstTo,
-      },
-      {
-        boundary: boundaryOf(diagram, selection, secondFrom),
-        identity: secondIdentity,
-        from: secondFrom,
-        to: secondTo,
-      },
-    ]
-
-    const iterated = applyIteration(diagram, selection, target, retargets)
-    const copy = copiedAtom(iterated, target, atom)
-
-    expect(hasArgEndpoint(iterated, firstTo, copy, 0)).toBe(true)
-    expect(hasArgEndpoint(iterated, secondTo, copy, 1)).toBe(true)
-    expect(iterated.wires[untouched]!.endpoints.some((endpoint) => endpoint.node === copy))
-      .toBe(true)
-  })
-
-  it('round-trips retargeted iteration through exact deiteration evidence', () => {
-    const host = substitutionHost()
-    const iterated = applyIteration(
-      host.diagram,
-      host.selection,
-      host.target,
-      [host.retarget],
-    )
-    const copy = copiedAtom(iterated, host.target, host.atom)
-    const copySelection = mkSelection(iterated, {
-      region: host.target,
-      regions: [],
-      nodes: [copy],
-      wires: [],
-    })
-
-    const evidence = findDeiterationEvidence(
-      iterated,
-      copySelection,
-      10_000,
-      [host.retarget],
-    )
-    const restored = applyDeiteration(
-      iterated,
-      copySelection,
-      evidence.justifier,
-      evidence.certificate,
-      [host.retarget],
-    )
-
-    expect(exploreForm(restored)).toBe(exploreForm(host.diagram))
-  })
-
-  it('rejects wrong identity IDs, unlinked wires, and signature mismatches', () => {
-    const host = substitutionHost()
-
-    expect(() => applyIteration(host.diagram, host.selection, host.target, [{
-      ...host.retarget,
-      identity: host.atom,
-    }])).toThrowError(/does not name an identity node/)
-    expect(() => applyIteration(host.diagram, host.selection, host.target, [{
-      ...host.retarget,
-      to: host.unlinked,
-    }])).toThrowError(/does not contain both/)
-    expect(() => applyIteration(host.diagram, host.selection, host.target, [{
-      ...host.retarget,
-      to: host.mismatched,
-    }])).toThrowError(/signature/)
-  })
-
-  it('rejects unsafe, duplicate, and mismatched boundary positions', () => {
-    const host = substitutionHost()
-    const attachments = extractSubgraph(host.diagram, host.selection).attachments
-    const otherBoundary = attachments.findIndex((wire) => wire !== host.from)
-
-    expect(() => applyIteration(host.diagram, host.selection, host.target, [{
-      ...host.retarget,
-      boundary: -1,
-    }])).toThrowError(/safe boundary index/)
-    expect(() => applyIteration(host.diagram, host.selection, host.target, [{
-      ...host.retarget,
-      boundary: otherBoundary,
-    }])).toThrowError(/source attachment/)
-    expect(() => applyIteration(host.diagram, host.selection, host.target, [
-      host.retarget,
-      host.retarget,
-    ])).toThrowError(/duplicate retarget boundary/)
-  })
-
-  it('rejects an identity that does not dominate the copy region', () => {
-    const builder = new DiagramBuilder()
-    const source = builder.cut(builder.root)
-    const target = builder.cut(source)
-    const sibling = builder.cut(builder.root)
-    const identity = builder.identity(sibling, IOTA, 2)
-    const atom = builder.atom(source, relSig([IOTA]))
-    const from = builder.wire(builder.root, [
-      { node: identity, port: { kind: 'identity', index: 0 } },
-      { node: atom, port: { kind: 'arg', index: 0 } },
-    ])
-    const to = builder.wire(builder.root, [
-      { node: identity, port: { kind: 'identity', index: 1 } },
-    ])
-    const diagram = builder.build()
-    const selection = mkSelection(diagram, {
-      region: source,
-      regions: [],
-      nodes: [atom],
-      wires: [],
-    })
-
-    expect(() => applyIteration(diagram, selection, target, [{
-      boundary: boundaryOf(diagram, selection, from),
-      identity,
-      from,
-      to,
-    }])).toThrowError(/does not dominate/)
-  })
-
-  it('rejects reversed deiteration source/target evidence', () => {
-    const host = substitutionHost()
-    const iterated = applyIteration(
-      host.diagram,
-      host.selection,
-      host.target,
-      [host.retarget],
-    )
-    const copy = copiedAtom(iterated, host.target, host.atom)
-    const copySelection = mkSelection(iterated, {
-      region: host.target,
-      regions: [],
-      nodes: [copy],
-      wires: [],
-    })
-    const evidence = findDeiterationEvidence(
-      iterated,
-      copySelection,
-      10_000,
-      [host.retarget],
-    )
-    const reversed: IdentityRetarget = {
-      ...host.retarget,
-      from: host.retarget.to,
-      to: host.retarget.from,
+      expect(exploreForm(substituted))
+        .toBe(exploreForm(expectedBuilder.build()))
     }
 
-    expect(() => applyDeiteration(
-      iterated,
-      copySelection,
-      evidence.justifier,
-      evidence.certificate,
-      [reversed],
-    )).toThrowError(/copy attachment/)
+    derive('forward')
+    derive('backward')
   })
 })
 
@@ -590,8 +361,7 @@ function ordinaryEqualityCutTheorem(): Theorem {
         rule: 'iteration',
         sel: { region: 'dc', regions: [], nodes: ['identity'], wires: [] },
         target: 'dc_0',
-        retargets: [],
-      }],
+          }],
     }],
   }
 }

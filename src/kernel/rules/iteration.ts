@@ -1,6 +1,5 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../diagram/diagram'
+import type { Diagram, RegionId } from '../diagram/diagram'
 import { isAncestorOrEqual } from '../diagram/regions'
-import { sigEquals, sigKey } from '../diagram/sig'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -12,122 +11,16 @@ import { checkOccurrenceCertificate } from '../diagram/subgraph/occurrence-certi
 import { occurrenceToSelection } from '../diagram/subgraph/occurrence'
 import { RuleError } from './error'
 
-export type IdentityRetarget = {
-  readonly boundary: number
-  readonly identity: NodeId
-  readonly from: WireId
-  readonly to: WireId
-}
-
-type RetargetDirection = 'iteration' | 'deiteration'
-
 /**
- * Validate every field of endpoint-level equality evidence and return the
- * attachment vector appropriate to the other side of the rule.
- *
- * Evidence is always oriented outer justifier (`from`) to inner copy (`to`).
- * Iteration therefore consumes `from` attachments and produces `to`;
- * deiteration observes `to` on the copy and reconstructs `from` for its
- * justifying occurrence.
- */
-function retargetAttachments(
-  diagram: Diagram,
-  attachments: readonly WireId[],
-  copyRegion: RegionId,
-  retargets: readonly IdentityRetarget[],
-  direction: RetargetDirection,
-): readonly WireId[] {
-  const result = [...attachments]
-  const seen = new Set<number>()
-  for (const retarget of retargets) {
-    if (
-      !Number.isSafeInteger(retarget.boundary)
-      || retarget.boundary < 0
-      || retarget.boundary >= attachments.length
-    ) {
-      throw new RuleError(
-        `identity retarget boundary '${retarget.boundary}' must be a safe boundary index `
-        + `below ${attachments.length}`,
-      )
-    }
-    if (seen.has(retarget.boundary)) {
-      throw new RuleError(`duplicate retarget boundary '${retarget.boundary}'`)
-    }
-    seen.add(retarget.boundary)
-
-    const expected = direction === 'iteration' ? retarget.from : retarget.to
-    if (attachments[retarget.boundary] !== expected) {
-      const side = direction === 'iteration' ? 'source' : 'copy'
-      throw new RuleError(
-        `identity retarget boundary '${retarget.boundary}' ${side} attachment `
-        + `'${attachments[retarget.boundary]}' does not equal '${expected}'`,
-      )
-    }
-    if (retarget.from === retarget.to) {
-      throw new RuleError('identity retarget source and target wires must be distinct')
-    }
-
-    const identity = diagram.nodes[retarget.identity]
-    if (identity === undefined || identity.kind !== 'identity') {
-      throw new RuleError(
-        `identity retarget evidence '${retarget.identity}' does not name an identity node`,
-      )
-    }
-    const fromWire = diagram.wires[retarget.from]
-    const toWire = diagram.wires[retarget.to]
-    if (fromWire === undefined) {
-      throw new RuleError(`identity retarget source wire '${retarget.from}' does not exist`)
-    }
-    if (toWire === undefined) {
-      throw new RuleError(`identity retarget target wire '${retarget.to}' does not exist`)
-    }
-    if (
-      !sigEquals(fromWire.sig, identity.sig)
-      || !sigEquals(toWire.sig, identity.sig)
-    ) {
-      throw new RuleError(
-        `identity retarget wire signature must equal identity '${retarget.identity}' `
-        + `signature '${sigKey(identity.sig)}'`,
-      )
-    }
-
-    const incidences = new Set(
-      Object.entries(diagram.wires)
-        .filter(([, wire]) =>
-          wire.endpoints.some((endpoint) => endpoint.node === retarget.identity))
-        .map(([wireId]) => wireId),
-    )
-    if (!incidences.has(retarget.from) || !incidences.has(retarget.to)) {
-      throw new RuleError(
-        `identity '${retarget.identity}' does not contain both retarget wires `
-        + `'${retarget.from}' and '${retarget.to}'`,
-      )
-    }
-    if (!isAncestorOrEqual(diagram, identity.region, copyRegion)) {
-      throw new RuleError(
-        `identity '${retarget.identity}' in '${identity.region}' does not dominate `
-        + `copy region '${copyRegion}'`,
-      )
-    }
-
-    result[retarget.boundary] = direction === 'iteration'
-      ? retarget.to
-      : retarget.from
-  }
-  return Object.freeze(result)
-}
-
-/**
- * Rule 5 extends ordinary iteration: copy a subgraph into its own region or a
- * descendant not inside the copy. Named boundary positions may be retargeted
- * through dominating identities; all other positions preserve their exact
- * attachments.
+ * Rule 5, ordinary iteration: copy a subgraph into its own region or a
+ * descendant not inside the copy; every boundary position preserves its
+ * exact attachment. Substitution through an identity is a derivation
+ * (iterate the identity, sever, one-point collapse), never a parameter.
  */
 export function applyIteration(
   diagram: Diagram,
   selection: SubgraphSelection,
   targetRegion: RegionId,
-  retargets: readonly IdentityRetarget[] = [],
   reservation?: IdReservation,
 ): Diagram {
   const contents = selectionContents(diagram, selection)
@@ -140,18 +33,11 @@ export function applyIteration(
     throw new RuleError(`iteration target '${targetRegion}' lies inside the iterated subgraph`)
   }
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  const mappedAttachments = retargetAttachments(
-    diagram,
-    attachments,
-    targetRegion,
-    retargets,
-    'iteration',
-  )
   return spliceSubgraphMapped(
     diagram,
     targetRegion,
     pattern,
-    mappedAttachments,
+    attachments,
     { reserved: reservation },
   ).diagram
 }
@@ -179,17 +65,9 @@ function evidenceGate(
   selection: SubgraphSelection,
   justifier: SubgraphSelection,
   certificate: OccurrenceCertificate,
-  retargets: readonly IdentityRetarget[],
 ): { readonly contents: ReturnType<typeof selectionContents> } {
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  const expectedJustifierAttachments = retargetAttachments(
-    diagram,
-    attachments,
-    selection.region,
-    retargets,
-    'deiteration',
-  )
   const checked = checkOccurrenceCertificate(diagram, pattern, certificate)
   if (!checked.ok) {
     throw new RuleError(`invalid deiteration occurrence certificate: ${checked.reason}`)
@@ -207,13 +85,13 @@ function evidenceGate(
     )
   }
   if (
-    certificate.attachments.length !== expectedJustifierAttachments.length
+    certificate.attachments.length !== attachments.length
     || certificate.attachments.some(
-      (wire, index) => wire !== expectedJustifierAttachments[index],
+      (wire, index) => wire !== attachments[index],
     )
   ) {
     throw new RuleError(
-      'deiteration justifier does not preserve the identity-retargeted ordered attachments',
+      'deiteration justifier does not preserve the ordered attachments',
     )
   }
   for (const region of certificate.regionMap.values()) {
@@ -252,20 +130,12 @@ export function findDeiterationEvidence(
   diagram: Diagram,
   selection: SubgraphSelection,
   explorationFuel: number,
-  retargets: readonly IdentityRetarget[] = [],
 ): DeiterationEvidence {
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  const justifierAttachments = retargetAttachments(
-    diagram,
-    attachments,
-    selection.region,
-    retargets,
-    'deiteration',
-  )
   const result = findOccurrences(diagram, pattern, {
     explorationFuel,
-    attachments: justifierAttachments,
+    attachments,
   })
   const disjoint = (occurrence: Occurrence): boolean => {
     for (const region of occurrence.regionMap.values()) {
@@ -282,9 +152,9 @@ export function findDeiterationEvidence(
     return true
   }
   const sameAttachments = (occurrence: Occurrence): boolean =>
-    occurrence.attachments.length === justifierAttachments.length
+    occurrence.attachments.length === attachments.length
     && occurrence.attachments.every(
-      (wire, index) => wire === justifierAttachments[index],
+      (wire, index) => wire === attachments[index],
     )
   const justifying = result.matches.find(
     (occurrence) =>
@@ -305,7 +175,7 @@ export function findDeiterationEvidence(
   }
 
   const justifier = occurrenceToSelection(diagram, pattern, justifying)
-  evidenceGate(diagram, selection, justifier, justifying, retargets)
+  evidenceGate(diagram, selection, justifier, justifying)
   return { justifier, certificate: justifying }
 }
 
@@ -317,8 +187,7 @@ export function applyDeiteration(
   selection: SubgraphSelection,
   justifier: SubgraphSelection,
   certificate: OccurrenceCertificate,
-  retargets: readonly IdentityRetarget[] = [],
 ): Diagram {
-  evidenceGate(diagram, selection, justifier, certificate, retargets)
+  evidenceGate(diagram, selection, justifier, certificate)
   return removeSubgraph(diagram, selection)
 }

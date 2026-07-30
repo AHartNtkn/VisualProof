@@ -5,8 +5,6 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyAction,
-  applyActionWithReceipt,
-  introducedNodeIds,
   replayActions,
   singleStepAction,
   type ProofAction,
@@ -160,77 +158,6 @@ describe('proof actions', () => {
     )
     expect(Object.keys(result.regions).filter((id) =>
       diagram.regions[id] === undefined)).toEqual(['dc_1', 'dc_2'])
-  })
-
-  it('captures normalized-away and surviving repeated-pin mints once in application order', () => {
-    const contentBuilder = new DiagramBuilder()
-    const formal = contentBuilder.wire(contentBuilder.root, [])
-    const content = mkDiagramWithBoundary(
-      contentBuilder.build(),
-      [formal, formal],
-    )
-
-    const builder = new DiagramBuilder()
-    const nested = builder.cut(builder.root)
-    const first = builder.atom(builder.root, relSig([IOTA, IOTA]))
-    const second = builder.atom(nested, relSig([IOTA, IOTA]))
-    const firstA = builder.wire(builder.root, [{
-      node: first,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const firstB = builder.wire(builder.root, [{
-      node: first,
-      port: { kind: 'arg', index: 1 },
-    }])
-    const secondA = builder.wire(builder.root, [{
-      node: second,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const secondB = builder.wire(builder.root, [{
-      node: second,
-      port: { kind: 'arg', index: 1 },
-    }])
-    const relation = builder.wire(builder.root, [
-      { node: first, port: { kind: 'head' } },
-      { node: second, port: { kind: 'head' } },
-    ], relSig([IOTA, IOTA]))
-    const diagram = builder.build()
-    const action: ProofAction = {
-      label: 'ground both applications',
-      steps: [{
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: relation,
-          content,
-          parameters: [],
-        },
-      }],
-      placements: [],
-    }
-
-    const receipt = applyActionWithReceipt(
-      diagram,
-      action,
-      EMPTY_PROOF_CONTEXT,
-      'backward',
-    )
-    expect(receipt.allocation).toEqual({
-      regions: [],
-      nodes: ['identity_0', 'identity_0_0'],
-      wires: [],
-    })
-    expect(receipt.result.nodes.identity_0).toBeUndefined()
-    expect(receipt.result.nodes.identity_0_0).toMatchObject({
-      kind: 'identity',
-      region: nested,
-    })
-    expect(introducedNodeIds(diagram, receipt.result))
-      .toEqual(['identity_0_0'])
-    expect(receipt.result.wires[firstA]).toBeDefined()
-    expect(receipt.result.wires[firstB]).toBeUndefined()
-    expect(receipt.result.wires[secondA]).toBeDefined()
-    expect(receipt.result.wires[secondB]).toBeDefined()
   })
 
   it('identifies both action and constituent step on failure', () => {

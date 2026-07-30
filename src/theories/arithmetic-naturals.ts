@@ -159,7 +159,6 @@ function buildZeroForward(context: ProofContext) {
     rule: 'iteration',
     sel: { region: antecedent, regions: [], nodes: [zeroAnchor], wires: [] },
     target: conclusion,
-    retargets: [],
   })
 
   before = forward.diagram
@@ -207,14 +206,10 @@ function buildZeroForward(context: ProofContext) {
     region: hereditary,
     wire: temporaryConditions,
   })
-  forward.record('ground exact Nat base and closure conditions', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryConditions,
+  forward.recordRelationJoin('ground exact Nat base and closure conditions', {
+    wire: temporaryConditions,
       content: hereditaryConditionsContent(),
       parameters: [zero, successor, property],
-    },
   })
 
   before = forward.diagram
@@ -227,7 +222,6 @@ function buildZeroForward(context: ProofContext) {
   forward.record('identify base consequence with zero witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: zeroValue,
       b: endpointWire(forward.diagram, propertyAtZero, 'arg', 0),
     },
@@ -242,7 +236,6 @@ function buildZeroForward(context: ProofContext) {
       wires: [],
     },
     target: inherited,
-    retargets: [],
   })
 
   return { recorder: forward }
@@ -291,7 +284,6 @@ function buildZeroBackward(
   backward.record('identify conclusion witness with antecedent zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: existingZeroWire,
       b: endpointWire(backward.diagram, conclusionZero, 'arg', 0),
     },
@@ -326,7 +318,6 @@ function buildZeroBackward(
       wires: [],
     },
     target: unfoldedHereditary,
-    retargets: [],
   })
   const specializedBaseCondition = onlyNewCut(
     before,
@@ -353,7 +344,7 @@ function buildZeroBackward(
   )) {
     backward.record('specialize Nat base at zero witness', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: existingZeroWire, b: variable },
+      input: { a: existingZeroWire, b: variable },
     })
   }
   backward.record(
@@ -558,14 +549,10 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   })
 
   before = forward.diagram
-  forward.record('ground predecessor Nat on supplied primitives', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryNat,
+  forward.recordRelationJoin('ground predecessor Nat on supplied primitives', {
+    wire: temporaryNat,
       content: natRelation(),
       parameters: [zero, successor, predecessor],
-    },
   })
   const predecessorNatMaterial = introducedContentSelection(
     before,
@@ -600,7 +587,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   forward.record('attach supplied successor predecessor', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessor,
       b: endpointWire(forward.diagram, successorPremise, 'arg', 0),
     },
@@ -608,7 +594,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   forward.record('attach supplied successor result', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorResult,
       b: endpointWire(forward.diagram, successorPremise, 'arg', 1),
     },
@@ -624,7 +609,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
       wires: [],
     },
     target: claimConsequent,
-    retargets: [],
   })
   const copiedNat = onlyNewNode(
     before,
@@ -658,7 +642,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
       wires: [],
     },
     target: meeting.inherited,
-    retargets: [],
   })
   const copiedClosureScope = onlyNewCut(
     before,
@@ -709,7 +692,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
     forward.record('specialize copied hereditary closure', {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: target,
         b: variable,
       },

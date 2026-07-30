@@ -4,7 +4,6 @@ import type {
   RegionId,
   WireId,
 } from '../kernel/diagram/diagram'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import {
   registerTheorem,
@@ -63,18 +62,7 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
-}
-
-function boundaryIndex(
-  diagram: Parameters<typeof extractSubgraph>[0],
-  selection: Parameters<typeof extractSubgraph>[1],
-  wire: WireId,
-): number {
-  const index = extractSubgraph(diagram, selection).attachments.indexOf(wire)
-  if (index < 0) throw new Error(`wire '${wire}' is not a selection boundary`)
-  return index
 }
 
 /**
@@ -222,8 +210,7 @@ function succShiftS(
         wires: [],
       },
       target: forwardClaimAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive carrier-support sources', {
     rule: 'erasure',
@@ -255,7 +242,6 @@ function succShiftS(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -316,13 +302,13 @@ function succShiftS(
     ],
   )
 
-  before = forward.diagram
+  // id(claimed output, predecessor-sum successor) has one outer wire; the
+  // one-point collapse merges them on the spot, leaving no identity node.
   forward.record('insert midpoint output identity', {
     rule: 'identityInsert',
     region: forwardClaimAntecedent,
     wires: [forwardOutput, forwardPredecessorSumSuccessor],
   })
-  onlyNewNode(before, forward.diagram, forwardClaimAntecedent)
   void forwardZero
   void forwardClaimConsequent
 
@@ -446,15 +432,11 @@ function succShiftS(
       TERNARY,
     ],
   ] as const) {
-    backward.record('specialize cited primitive relation', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    backward.recordRelationJoin('specialize cited primitive relation', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
 
   for (const citedHypothesis of directCuts(
@@ -477,8 +459,7 @@ function succShiftS(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose cited carrier-support conclusion', {
     rule: 'doubleCutElim',
@@ -528,14 +509,10 @@ function succShiftS(
     propertyScope,
     UNARY,
   )
-  backward.record('ground Nat property directly to successor shift', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground Nat property directly to successor shift', {
+    wire: property,
       content: successorShiftCarrierContent(),
       parameters: [reviewedSuccessor, reviewedPlus],
-    },
   })
 
   const hereditary = exactOne(
@@ -573,8 +550,7 @@ function succShiftS(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited direct carrier', {
     rule: 'doubleCutElim',
@@ -605,7 +581,6 @@ function succShiftS(
   backward.record('specialize inherited totality at claim right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: claimRight,
       b: exactOne(
         scopedWires(backward.diagram, inheritedTotality),
@@ -647,7 +622,6 @@ function succShiftS(
       wires: [],
     },
     target: claimAntecedent,
-    retargets: [],
   })
   const copiedSuccessorTotal = onlyNewCut(
     before,
@@ -665,7 +639,6 @@ function succShiftS(
   backward.record('specialize predecessor-sum successor input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorSum,
       b: endpointWire(
         backward.diagram,
@@ -758,7 +731,7 @@ function succShiftS(
   ] as const) {
     backward.record(`specialize inherited transport ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of [
@@ -796,7 +769,6 @@ function succShiftS(
       wires: [],
     },
     target: claimAntecedent,
-    retargets: [],
   })
   const copiedFunctional = onlyNewCut(
     before,
@@ -831,7 +803,6 @@ function succShiftS(
     backward.record(`specialize addition-functional ${label}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: outer,
         b: inner,
       },
@@ -848,7 +819,7 @@ function succShiftS(
       node,
     )
   }
-  const outputIdentity = exactOne(
+  exactOne(
     directNodes(backward.diagram, copiedFunctionalConsequent),
     'output identity',
   )
@@ -856,6 +827,9 @@ function succShiftS(
     rule: 'doubleCutElim',
     region: copiedFunctionalAntecedent,
   })
+  // Removing the functionality shell exposes id(predecessor-sum successor,
+  // claim output) with one outer wire; the one-point collapse merges them
+  // on the spot, so the successor goal discharges directly below.
   backward.record('remove copied addition functionality', {
     rule: 'doubleCutElim',
     region: copiedFunctional,
@@ -875,7 +849,6 @@ function succShiftS(
   backward.record('choose inherited predecessor sum as claim witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorSum,
       b: endpointWire(
         backward.diagram,
@@ -891,37 +864,12 @@ function succShiftS(
     claimConsequent,
     claimPredecessorAddition,
   )
-  {
-    const selection = {
-      region: claimConsequent,
-      regions: [],
-      nodes: [claimPredecessorSuccessor],
-      wires: [],
-    } as const
-    const retargets = [{
-      boundary: boundaryIndex(
-        backward.diagram,
-        selection,
-        claimOutput,
-      ),
-      identity: outputIdentity,
-      from: predecessorSumSuccessor,
-      to: claimOutput,
-    }] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge claim predecessor successor', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
-    })
-  }
+  deiterateNode(
+    backward,
+    'discharge claim predecessor successor',
+    claimConsequent,
+    claimPredecessorSuccessor,
+  )
 
   void externalBase
   void externalClosure

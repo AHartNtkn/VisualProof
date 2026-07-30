@@ -1,19 +1,67 @@
 import { describe, expect, it } from 'vitest'
 import { applicableActions } from '../../src/app/actions'
 import type { Hit } from '../../src/app/hittest'
-import {
-  ProofMoveController,
-  proofConnectionStep,
-} from '../../src/app/interact/moves'
+import { ProofMoveController } from '../../src/app/interact/moves'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import type { Diagram } from '../../src/kernel/diagram/diagram'
+import { relSig } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import type { ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
-import { vec } from '../../src/view/vec'
+import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
+
+function keySample(key: string, shiftKey = false) {
+  return {
+    key,
+    shiftKey,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    repeat: false,
+  }
+}
+
+function pointerSample(point: Vec2, hit: Hit | null = null): PointerSample {
+  return {
+    pointerId: 1,
+    button: 0,
+    client: point,
+    screen: point,
+    world: point,
+    hit,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  }
+}
+
+function harness(diagram: Diagram, selection: readonly Hit[] = []) {
+  const engine = mkEngine(diagram, [])
+  const applied: ProofAction[] = []
+  const refusals: string[] = []
+  const moves = new ProofMoveController({
+    host: { ownerDocument: {} } as unknown as HTMLElement,
+    active: () => true,
+    diagram: () => diagram,
+    engine: () => engine,
+    viewScale: () => 1,
+    selection: () => selection,
+    setSelection: () => undefined,
+    context: () => EMPTY_PROOF_CONTEXT,
+    orientation: () => 'forward',
+    apply: (action) => { applied.push(action) },
+    refuse: (text) => { refusals.push(text) },
+    theme: () => LIGHT,
+    fuel: () => 0,
+    openSpawn: () => undefined,
+  })
+  return { moves, engine, applied, refusals }
+}
 
 describe('proof move vocabulary', () => {
   it('discovers only structural descriptors', () => {
@@ -34,91 +82,129 @@ describe('proof move vocabulary', () => {
     expect(kinds).not.toContain('relationSever')
   })
 
-  it('constructs direct connection drags only as durable IOTA joins', () => {
+  it('W with an empty selection spawns a double cut at the hovered region', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.ref(cut, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    engine.regions.set(cut, {
+      center: vec(300, 200),
+      radius: 120,
+      support: [],
+    })
+
+    moves.passiveSample(pointerSample(vec(300, 200)))
+    expect(moves.keyDown(keySample('w'))).toBe(true)
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps).toEqual([{
+      rule: 'doubleCutIntro',
+      sel: { region: cut, regions: [], nodes: [], wires: [] },
+    }])
+  })
+
+  it('W with a selection still wraps the selection', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.ref(builder.root, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, applied } = harness(diagram, [{ kind: 'node', id: node }])
+
+    expect(moves.keyDown(keySample('w'))).toBe(true)
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps[0]).toMatchObject({ rule: 'doubleCutIntro' })
+  })
+
+  it('Delete on a lone wire deletes its ends; endpoint-free wires vacuous-eliminate', () => {
+    const builder = new DiagramBuilder()
+    const atomA = builder.atom(builder.root, UNARY)
+    const atomB = builder.atom(builder.root, UNARY)
+    builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
+    const shared = builder.wire(builder.root, [
+      { node: atomA, port: { kind: 'arg', index: 0 } },
+      { node: atomB, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const withEnds = harness(diagram, [{ kind: 'wire', id: shared }])
+
+    expect(withEnds.moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(withEnds.refusals).toEqual([])
+    expect(withEnds.applied).toHaveLength(1)
+    expect(withEnds.applied[0]!.steps).toEqual([
+      { rule: 'endsDelete', wire: shared },
+    ])
+
+    const bareBuilder = new DiagramBuilder()
+    const bare = bareBuilder.wire(bareBuilder.root, [])
+    const bareDiagram = bareBuilder.build()
+    const bareCase = harness(bareDiagram, [{ kind: 'wire', id: bare }])
+
+    expect(bareCase.moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(bareCase.applied).toHaveLength(1)
+    expect(bareCase.applied[0]!.steps).toEqual([
+      { rule: 'vacuousElim', wireId: bare },
+    ])
+  })
+
+  it('Q spawns a bare quantifier wire at the hovered region', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.ref(cut, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    engine.regions.set(cut, {
+      center: vec(300, 200),
+      radius: 120,
+      support: [],
+    })
+
+    moves.passiveSample(pointerSample(vec(300, 200)))
+    expect(moves.keyDown(keySample('q'))).toBe(true)
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps).toEqual([{
+      rule: 'vacuousIntro',
+      scope: cut,
+      sig: { kind: 'iota' },
+    }])
+  })
+
+  it('Shift+Q spawns a floating proposition quantifier there', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.ref(cut, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    engine.regions.set(cut, {
+      center: vec(300, 200),
+      radius: 120,
+      support: [],
+    })
+
+    moves.passiveSample(pointerSample(vec(300, 200)))
+    expect(moves.keyDown(keySample('Q', true))).toBe(true)
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps).toEqual([{
+      rule: 'vacuousIntro',
+      scope: cut,
+      sig: relSig([]),
+    }])
+  })
+
+  it('the i key is retired', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [], IOTA)
-    const right = builder.wire(negative, [], IOTA)
+    const left = builder.wire(negative, [])
+    const right = builder.wire(negative, [])
+    void left
+    void right
     const diagram = builder.build()
+    const { moves, applied } = harness(diagram)
 
-    expect(proofConnectionStep(
-      diagram,
-      { wire: left, endpoint: null },
-      { wire: right, endpoint: null },
-      'forward',
-      0,
-    )).toEqual({
-      rule: 'wireJoin',
-      input: { kind: 'iota', a: left, b: right },
-    })
+    expect(moves.keyDown(keySample('i'))).toBe(false)
+    expect(applied).toEqual([])
   })
-
-  it('rejects direct relation-wire merges through the kernel IOTA gate', () => {
-    const builder = new DiagramBuilder()
-    const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [], relSig([]))
-    const right = builder.wire(negative, [], relSig([]))
-    const diagram = builder.build()
-
-    expect(() => proofConnectionStep(
-      diagram,
-      { wire: left, endpoint: null },
-      { wire: right, endpoint: null },
-      'forward',
-      0,
-    )).toThrowError(/iota wire join requires IOTA wire/)
-  })
-
-  it('handles Escape when it aborts a pending relation wire', () => {
-    const builder = new DiagramBuilder()
-    const content = builder.ref(builder.root, 'NullaryBody', relSig([]))
-    const diagram = builder.build()
-    const engine = mkEngine(diagram, [])
-    engine.bodies.get(content)!.pos = vec(0, 0)
-    let selection: readonly Hit[] = [{ kind: 'node', id: content }]
-    const point = vec(0, 0)
-    const pointer: PointerSample = {
-      pointerId: 1,
-      button: 0,
-      client: point,
-      screen: point,
-      world: point,
-      hit: { kind: 'node', id: content },
-      shiftKey: false,
-      ctrlKey: false,
-      altKey: false,
-      metaKey: false,
-    }
-    const moves = new ProofMoveController({
-      host: { ownerDocument: {} } as unknown as HTMLElement,
-      active: () => true,
-      diagram: () => diagram,
-      engine: () => engine,
-      viewScale: () => 1,
-      selection: () => selection,
-      setSelection: (hits) => { selection = hits },
-      context: () => EMPTY_PROOF_CONTEXT,
-      orientation: () => 'forward',
-      apply: () => undefined,
-      refuse: () => undefined,
-      theme: () => LIGHT,
-      fuel: () => 0,
-      openSpawn: () => undefined,
-    })
-    const claim = moves.claim(pointer)!
-    const loosePoint = { ...pointer, world: vec(0, 80), client: vec(0, 80) }
-    claim.move(loosePoint)
-    claim.release(loosePoint, true)
-    const escape = {
-      key: 'Escape',
-      shiftKey: false,
-      ctrlKey: false,
-      altKey: false,
-      metaKey: false,
-      repeat: false,
-    }
-    expect(moves.keyDown(escape)).toBe(true)
-    expect(moves.keyDown(escape)).toBe(false)
-  })
-
 })

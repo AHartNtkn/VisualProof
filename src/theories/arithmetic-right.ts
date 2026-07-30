@@ -101,7 +101,6 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -188,14 +187,10 @@ function plusRightUnit(
     region: forwardHypotheses,
     wire: plusSingleValued,
   })
-  forward.record('ground exact plusSingleValued hypothesis', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: plusSingleValued,
+  forward.recordRelationJoin('ground exact plusSingleValued hypothesis', {
+    wire: plusSingleValued,
       content: plusSingleValuedContent(),
       parameters: [forwardPlus],
-    },
   })
 
   forward.record('open right-unit claim scope and body', {
@@ -264,8 +259,7 @@ function plusRightUnit(
         wires: [],
       },
       target: forwardClaimAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive carrier-support sources', {
     rule: 'erasure',
@@ -291,7 +285,6 @@ function plusRightUnit(
   forward.record('attach midpoint claim Zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: forwardClaimZero,
       b: endpointWire(
         forward.diagram,
@@ -325,7 +318,6 @@ function plusRightUnit(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -356,7 +348,6 @@ function plusRightUnit(
       wires: [],
     },
     target: forwardClaimConsequent,
-    retargets: [],
   })
 
   const rhs = statements.plusRightUnit
@@ -474,15 +465,11 @@ function plusRightUnit(
       TERNARY,
     ],
   ] as const) {
-    backward.record('specialize cited primitive relation', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    backward.recordRelationJoin('specialize cited primitive relation', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
 
   for (const citedHypothesis of directCuts(
@@ -505,8 +492,7 @@ function plusRightUnit(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose cited carrier-support conclusion', {
     rule: 'doubleCutElim',
@@ -552,14 +538,10 @@ function plusRightUnit(
     propertyScope,
     UNARY,
   )
-  backward.record('ground Nat property directly to right identity', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground Nat property directly to right identity', {
+    wire: property,
       content: rightIdentityCarrierContent(),
       parameters: [reviewedZero, reviewedPlus],
-    },
   })
 
   const hereditary = exactOne(
@@ -597,8 +579,7 @@ function plusRightUnit(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited direct carrier', {
     rule: 'doubleCutElim',
@@ -641,7 +622,6 @@ function plusRightUnit(
   backward.record('specialize inherited E at claim zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: claimZero,
       b: inheritedLocalZero,
     },
@@ -674,7 +654,6 @@ function plusRightUnit(
       wires: [],
     },
     target: claimAntecedent,
-    retargets: [],
   })
   const copiedFunctional = onlyNewCut(
     before,
@@ -705,7 +684,6 @@ function plusRightUnit(
     backward.record(`specialize addition-functional ${label}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: outer,
         b: inner,
       },

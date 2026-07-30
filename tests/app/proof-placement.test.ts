@@ -118,6 +118,11 @@ describe('replay placement reconstruction', () => {
       { node: existing[1]!, port: { kind: 'arg', index: 0 } },
       { node: existing[2]!, port: { kind: 'identity', index: 0 } },
     ])
+    // A second outer wire keeps the identity semantic (the one-point rule
+    // collapses an identity with at most one wire scoped above its region).
+    builder.wire(builder.root, [
+      { node: existing[2]!, port: { kind: 'identity', index: 1 } },
+    ])
     const boundaryWire = builder.wire(builder.root, [])
     const lhsDiagram = builder.build()
     const action = singleStepAction(

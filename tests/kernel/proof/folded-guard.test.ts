@@ -47,8 +47,7 @@ describe('folded-guard integration proof', () => {
         wires: [],
       }),
       target: current.root,
-      retargets: [],
-    }
+      }
     current = applyStep(current, iterate, context)
     steps.push(iterate)
     expect(Object.values(current.nodes).filter((node) =>

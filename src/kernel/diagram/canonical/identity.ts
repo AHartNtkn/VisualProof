@@ -65,10 +65,10 @@ function collapseIdentity(
   diagram: Diagram,
   nodeId: NodeId,
   image: Map<WireId, WireId | undefined>,
+  survivor: WireId,
 ): Diagram {
   const incident = incidentWireIds(diagram, nodeId)
-  const survivor = incident[0]!
-  const absorbed = new Set(incident.slice(1))
+  const absorbed = new Set(incident.filter((wireId) => wireId !== survivor))
   const endpoints: Endpoint[] = []
   for (const wireId of incident) {
     for (const endpoint of diagram.wires[wireId]!.endpoints) {
@@ -140,11 +140,17 @@ function normalizeOneIdentity(
     }
   }
 
+  // One-point rule ∃x@R (x = t ∧ Φx) ≡ Φt, valid at any polarity: an
+  // identity with at most one wire scoped above its own region changes no
+  // semantics, so it collapses onto that outer wire (or, all co-scoped,
+  // onto the lexicographically first incident wire).
   for (const nodeId of ids) {
     const node = diagram.nodes[nodeId] as IdentityDiagramNode
     const incident = incidentWireIds(diagram, nodeId)
-    if (incident.every((wireId) => diagram.wires[wireId]!.scope === node.region)) {
-      return collapseIdentity(diagram, nodeId, image)
+    const outer = incident.filter((wireId) =>
+      diagram.wires[wireId]!.scope !== node.region)
+    if (outer.length <= 1) {
+      return collapseIdentity(diagram, nodeId, image, outer[0] ?? incident[0]!)
     }
   }
 

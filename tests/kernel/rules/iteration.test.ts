@@ -73,7 +73,7 @@ describe('applyIteration', () => {
       wires: [],
     })
 
-    const iterated = applyIteration(diagram, selection, cut, [], {
+    const iterated = applyIteration(diagram, selection, cut, {
       regions: new Set(),
       nodes: new Set([`${node}_0`]),
       wires: new Set(),

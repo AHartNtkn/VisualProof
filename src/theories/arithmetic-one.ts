@@ -147,7 +147,6 @@ function spawnAttached(
     recorder.record(`attach ${label} argument ${index}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: wire,
         b: endpointWire(recorder.diagram, node, 'arg', index),
       },
@@ -228,14 +227,10 @@ function buildForward(context: ProofContext) {
     region: antecedent,
     wire: temporaryHypotheses,
   })
-  forward.record('ground exact zeroExists and successorTotal hypotheses', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryHypotheses,
+  forward.recordRelationJoin('ground exact zeroExists and successorTotal hypotheses', {
+    wire: temporaryHypotheses,
       content: exactHypothesesContent(),
       parameters: [zero, successor],
-    },
   })
 
   const zeroAnchor = nodeWithHead(forward.diagram, antecedent, zero)
@@ -268,7 +263,6 @@ function buildForward(context: ProofContext) {
       wires: [],
     },
     target: conclusion,
-    retargets: [],
   })
   forward.record('iterate successor witness into one-is-Nat conclusion', {
     rule: 'iteration',
@@ -279,7 +273,6 @@ function buildForward(context: ProofContext) {
       wires: [],
     },
     target: conclusion,
-    retargets: [],
   })
 
   before = forward.diagram
@@ -350,14 +343,10 @@ function buildForward(context: ProofContext) {
     region: hereditary,
     wire: temporaryConditions,
   })
-  forward.record('ground exact Nat base and closure conditions', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryConditions,
+  forward.recordRelationJoin('ground exact Nat base and closure conditions', {
+    wire: temporaryConditions,
       content: hereditaryConditionsContent(),
       parameters: [zero, successor, property],
-    },
   })
 
   const propertyAtZero = spawnAttached(
@@ -383,7 +372,6 @@ function buildForward(context: ProofContext) {
       wires: [],
     },
     target: inherited,
-    retargets: [],
   })
 
   return {
@@ -456,7 +444,6 @@ function buildBackward(
   backward.record('identify conclusion zero with zeroExists witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: zeroValue,
       b: endpointWire(
         backward.diagram,
@@ -477,7 +464,6 @@ function buildBackward(
       wires: [],
     },
     target: antecedent,
-    retargets: [],
   })
   const copiedTotality = onlyNewCut(
     before,
@@ -496,7 +482,6 @@ function buildBackward(
   backward.record('specialize successorTotal at the zero witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: zeroValue,
       b: endpointWire(
         backward.diagram,
@@ -519,7 +504,6 @@ function buildBackward(
   backward.record('identify conclusion successor with totality witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorValue,
       b: endpointWire(
         backward.diagram,
@@ -568,7 +552,6 @@ function buildBackward(
       wires: [],
     },
     target: hereditary,
-    retargets: [],
   })
   const copiedBase = onlyNewCut(
     before,
@@ -591,7 +574,7 @@ function buildBackward(
   for (const variable of scopedWires(backward.diagram, copiedBase)) {
     backward.record('specialize Nat base at zero witness', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: zeroValue, b: variable },
+      input: { a: zeroValue, b: variable },
     })
   }
   backward.record(
@@ -626,7 +609,6 @@ function buildBackward(
       wires: [],
     },
     target: hereditary,
-    retargets: [],
   })
   const copiedClosure = onlyNewCut(
     before,
@@ -663,7 +645,7 @@ function buildBackward(
       : successorValue
     backward.record('specialize Nat closure at zero successor', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: target, b: variable },
+      input: { a: target, b: variable },
     })
   }
   backward.record(

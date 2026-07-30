@@ -35,7 +35,7 @@ describe('primitive replay', () => {
     ))).toBe(exploreForm(applyErasure(diagram, selection)))
   })
 
-  it('does not replay forward-only erasure backward', () => {
+  it('replays backward erasure only at negative regions', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, relSig([]))
     const diagram = builder.build()
@@ -51,7 +51,7 @@ describe('primitive replay', () => {
       { rule: 'erasure', sel: selection },
       EMPTY_PROOF_CONTEXT,
       'backward',
-    )).toThrowError(/backward erasure is not supported/i)
+    )).toThrowError(/backward erasure requires a negative region/)
   })
 
   it('routes identity insertion through the orientation-aware polarity gate', () => {
@@ -128,9 +128,12 @@ describe('primitive replay', () => {
 
 describe('normalized step receipts', () => {
   it('composes wire-join intent with identity degeneration', () => {
+    // The identity sits below both wire scopes so it survives the build
+    // (two outer wires); the join then degenerates it to one wire.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const identity = builder.identity(cut, IOTA, 2)
+    const deep = builder.cut(cut)
+    const identity = builder.identity(deep, IOTA, 2)
     const outer = builder.wire(builder.root, [{
       node: identity,
       port: { kind: 'identity', index: 0 },
@@ -145,7 +148,7 @@ describe('normalized step receipts', () => {
       diagram,
       {
         rule: 'wireJoin',
-        input: { kind: 'iota', a: outer, b: inner },
+        input: { a: outer, b: inner },
       },
       EMPTY_PROOF_CONTEXT,
     )
@@ -157,155 +160,6 @@ describe('normalized step receipts', () => {
     expect(receipt.interface.image(inner)).toBe(outer)
     expect(transportBoundary(receipt.interface, [inner, outer, inner]))
       .toEqual([outer, outer, outer])
-  })
-
-  it('eliminates a grounded relation identity while preserving application and parameter wires', () => {
-    const contentBuilder = new DiagramBuilder()
-    const body = contentBuilder.ref(
-      contentBuilder.root,
-      'G',
-      relSig([IOTA, IOTA]),
-    )
-    const formal = contentBuilder.wire(contentBuilder.root, [{
-      node: body,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const ambient = contentBuilder.wire(contentBuilder.root, [{
-      node: body,
-      port: { kind: 'arg', index: 1 },
-    }])
-    const content = mkDiagramWithBoundary(
-      contentBuilder.build(),
-      [formal, ambient],
-    )
-    const builder = new DiagramBuilder()
-    const negative = builder.cut(builder.root)
-    const application = builder.atom(negative, relSig([IOTA]))
-    const argument = builder.wire(builder.root, [{
-      node: application,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const relation = builder.wire(negative, [{
-      node: application,
-      port: { kind: 'head' },
-    }], relSig([IOTA]))
-    const parameter = builder.wire(builder.root, [])
-    const diagram = builder.build()
-
-    const receipt = applyStepWithReceipt(
-      diagram,
-      {
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: relation,
-          content,
-          parameters: [parameter],
-        },
-      },
-      EMPTY_PROOF_CONTEXT,
-    )
-
-    expect(receipt.result.wires[relation]).toBeUndefined()
-    expect(receipt.provenance.image(relation)).toBeUndefined()
-    expect(receipt.interface.image(relation)).toBeUndefined()
-    expect(receipt.provenance.image(argument)).toBe(argument)
-    expect(receipt.interface.image(argument)).toBe(argument)
-    expect(receipt.provenance.image(parameter)).toBe(parameter)
-    expect(receipt.interface.image(parameter)).toBe(parameter)
-  })
-
-  it('backward-grounds a positive-root repeated relation and receipts its collapsed alias', () => {
-    const contentBuilder = new DiagramBuilder()
-    const repeated = contentBuilder.wire(contentBuilder.root, [])
-    const content = mkDiagramWithBoundary(
-      contentBuilder.build(),
-      [repeated, repeated],
-    )
-    const builder = new DiagramBuilder()
-    const application = builder.atom(builder.root, relSig([IOTA, IOTA]))
-    const first = builder.wire(builder.root, [{
-      node: application,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const second = builder.wire(builder.root, [{
-      node: application,
-      port: { kind: 'arg', index: 1 },
-    }])
-    const relation = builder.wire(builder.root, [{
-      node: application,
-      port: { kind: 'head' },
-    }], relSig([IOTA, IOTA]))
-    const diagram = builder.build()
-
-    const receipt = applyStepWithReceipt(
-      diagram,
-      {
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: relation,
-          content,
-          parameters: [],
-        },
-      },
-      EMPTY_PROOF_CONTEXT,
-      'backward',
-    )
-    const survivor = [first, second].sort()[0]!
-
-    expect(receipt.allocation).toEqual({
-      regions: [],
-      nodes: ['identity_0'],
-      wires: [],
-    })
-    expect(receipt.result.nodes.identity_0).toBeUndefined()
-    expect(receipt.interface.image(first)).toBe(survivor)
-    expect(receipt.interface.image(second)).toBe(survivor)
-    expect(receipt.interface.image(relation)).toBeUndefined()
-  })
-
-  it('preserves sever boundary identities and gives no source identity to the fresh relation wire', () => {
-    const builder = new DiagramBuilder()
-    const body = builder.ref(builder.root, 'G', relSig([IOTA, IOTA]))
-    const formal = builder.wire(builder.root, [{
-      node: body,
-      port: { kind: 'arg', index: 0 },
-    }])
-    const ambient = builder.wire(builder.root, [{
-      node: body,
-      port: { kind: 'arg', index: 1 },
-    }])
-    const diagram = builder.build()
-    const receipt = applyStepWithReceipt(
-      diagram,
-      {
-        rule: 'wireSever',
-        input: {
-          kind: 'relation',
-          scope: diagram.root,
-          occurrences: [{
-            sel: {
-              region: diagram.root,
-              regions: [],
-              nodes: [body],
-              wires: [],
-            },
-            args: [formal],
-          }],
-        },
-      },
-      EMPTY_PROOF_CONTEXT,
-    )
-    const quantifier = Object.keys(receipt.result.wires)
-      .find((id) => diagram.wires[id] === undefined)!
-
-    expect(receipt.interface.image(formal)).toBe(formal)
-    expect(receipt.interface.image(ambient)).toBe(ambient)
-    expect(receipt.provenance.image(formal)).toBe(formal)
-    expect(receipt.provenance.image(ambient)).toBe(ambient)
-    expect(receipt.interface.image(quantifier)).toBeUndefined()
-    expect(receipt.provenance.image(quantifier)).toBeUndefined()
   })
 
   it('maps both root wires when double-cut elimination co-scopes an identity', () => {

@@ -3,8 +3,6 @@ import type { DiagramIso } from '../diagram/canonical/explore'
 import { exploreIso } from '../diagram/canonical/explore'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import type { IdentityRetarget } from '../rules/iteration'
-import type { ContentOccurrence } from '../rules/wire-quantifier'
 import { allocationReservation, type ProofAction } from './action'
 import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
@@ -60,29 +58,6 @@ function mapEndpoint(iso: DiagramIso, endpoint: Endpoint): Endpoint {
   }
 }
 
-function mapContentOccurrence(
-  iso: DiagramIso,
-  occurrence: ContentOccurrence,
-): ContentOccurrence {
-  return {
-    sel: mapSelection(iso, occurrence.sel),
-    args: occurrence.args.map((wire) =>
-      mapId(iso.wires, wire, 'wire')),
-  }
-}
-
-function mapRetarget(
-  iso: DiagramIso,
-  retarget: IdentityRetarget,
-): IdentityRetarget {
-  return {
-    boundary: retarget.boundary,
-    identity: mapId(iso.nodes, retarget.identity, 'node'),
-    from: mapId(iso.wires, retarget.from, 'wire'),
-    to: mapId(iso.wires, retarget.to, 'wire'),
-  }
-}
-
 function mapOccurrenceCertificate(
   iso: DiagramIso,
   certificate: OccurrenceCertificate,
@@ -128,53 +103,33 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
           mapId(iso.wires, wire, 'wire')),
       }
     case 'wireJoin':
-      return step.input.kind === 'iota'
-        ? {
-            ...step,
-            input: {
-              ...step.input,
-              a: mapId(iso.wires, step.input.a, 'wire'),
-              b: mapId(iso.wires, step.input.b, 'wire'),
-            },
-          }
-        : {
-            ...step,
-            input: {
-              ...step.input,
-              wire: mapId(iso.wires, step.input.wire, 'wire'),
-              parameters: step.input.parameters.map((wire) =>
-                mapId(iso.wires, wire, 'wire')),
-            },
-          }
+      return {
+        ...step,
+        input: {
+          a: mapId(iso.wires, step.input.a, 'wire'),
+          b: mapId(iso.wires, step.input.b, 'wire'),
+        },
+      }
     case 'erasure':
       return { ...step, sel: mapSelection(iso, step.sel) }
     case 'wireSever':
-      return step.input.kind === 'iota'
-        ? {
-            ...step,
-            input: {
-              ...step.input,
-              wire: mapId(iso.wires, step.input.wire, 'wire'),
-              keep: step.input.keep.map((endpoint) =>
-                mapEndpoint(iso, endpoint)),
-            },
-          }
-        : {
-            ...step,
-            input: {
-              ...step.input,
-              scope: mapId(iso.regions, step.input.scope, 'region'),
-              occurrences: step.input.occurrences.map((occurrence) =>
-                mapContentOccurrence(iso, occurrence)),
-            },
-          }
+      return {
+        ...step,
+        input: {
+          ...step.input,
+          wire: mapId(iso.wires, step.input.wire, 'wire'),
+          keep: step.input.keep.map((endpoint) =>
+            mapEndpoint(iso, endpoint)),
+          ...(step.input.scope !== undefined
+            ? { scope: mapId(iso.regions, step.input.scope, 'region') }
+            : {}),
+        },
+      }
     case 'iteration':
       return {
         ...step,
         sel: mapSelection(iso, step.sel),
         target: mapId(iso.regions, step.target, 'region'),
-        retargets: step.retargets.map((retarget) =>
-          mapRetarget(iso, retarget)),
       }
     case 'deiteration':
       return {
@@ -182,8 +137,6 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         sel: mapSelection(iso, step.sel),
         justifier: mapSelection(iso, step.justifier),
         certificate: mapOccurrenceCertificate(iso, step.certificate),
-        retargets: step.retargets.map((retarget) =>
-          mapRetarget(iso, retarget)),
       }
     case 'doubleCutIntro':
       return { ...step, sel: mapSelection(iso, step.sel) }
@@ -222,6 +175,70 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         occurrence: mapSelection(iso, step.occurrence),
         args: step.args.map((wire) =>
           mapId(iso.wires, wire, 'wire')),
+      }
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+      }
+    case 'parallelFuse':
+      return {
+        ...step,
+        a: mapId(iso.wires, step.a, 'wire'),
+        b: mapId(iso.wires, step.b, 'wire'),
+      }
+    case 'endsSpawn':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+        sites: step.sites.map((site) => ({
+          region: mapId(iso.regions, site.region, 'region'),
+          args: site.args.map((wire) => mapId(iso.wires, wire, 'wire')),
+        })),
+      }
+    case 'arityShift':
+    case 'arityUnshift':
+    case 'argPermute':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'applyFormal':
+    case 'identityLeaf':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+      }
+    case 'argExtend':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+        attachments: Object.fromEntries(
+          Object.entries(step.attachments).map(([node, wire]) => [
+            mapId(iso.nodes, node, 'node'),
+            mapId(iso.wires, wire, 'wire'),
+          ]),
+        ),
+      }
+    case 'abstractFormal':
+      return {
+        ...step,
+        ends: step.ends.map((node) => mapId(iso.nodes, node, 'node')),
+        scope: mapId(iso.regions, step.scope, 'region'),
+      }
+    case 'identityAbstract':
+    case 'refAbstract':
+      return {
+        ...step,
+        nodes: step.nodes.map((node) => mapId(iso.nodes, node, 'node')),
+        scope: mapId(iso.regions, step.scope, 'region'),
+      }
+    case 'refLeaf':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
       }
   }
 }

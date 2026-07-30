@@ -1,4 +1,3 @@
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import {
@@ -192,14 +191,10 @@ function plusAssoc(
     region: publicHypotheses,
     wire: plusBase,
   })
-  publicForward.record('ground exact plusBase hypothesis', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: plusBase,
+  publicForward.recordRelationJoin('ground exact plusBase hypothesis', {
+    wire: plusBase,
       content: plusBaseContent(),
       parameters: [publicZero, publicPlus],
-    },
   })
 
   publicBefore = publicForward.diagram
@@ -247,15 +242,11 @@ function plusAssoc(
       TERNARY,
     ],
   ] as const) {
-    publicForward.record('specialize cited base primitive', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    publicForward.recordRelationJoin('specialize cited base primitive', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
   for (const citedHypothesis of directCuts(
     publicForward.diagram,
@@ -277,8 +268,7 @@ function plusAssoc(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   publicForward.record('expose exact cited carrier base', {
     rule: 'doubleCutElim',
@@ -355,8 +345,7 @@ function plusAssoc(
         wires: [],
       },
       target: publicClaimAntecedent,
-      retargets: [],
-    })
+      })
   }
   publicForward.record('copy exact carrier closure into claim', {
     rule: 'iteration',
@@ -367,7 +356,6 @@ function plusAssoc(
       wires: [],
     },
     target: publicClaimAntecedent,
-    retargets: [],
   })
   publicForward.record('erase positive support sources', {
     rule: 'erasure',
@@ -404,7 +392,6 @@ function plusAssoc(
       publicForward.record('attach ' + label + ' argument ' + index, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(publicForward.diagram, node, 'arg', index),
         },
@@ -459,7 +446,6 @@ function plusAssoc(
       wires: [forwardInnerSum],
     },
     target: publicClaimConsequent,
-    retargets: [],
   })
   spawnPublic(
     'transport first result',
@@ -469,17 +455,13 @@ function plusAssoc(
     'transport outer result',
     [forwardLeft!, forwardInnerSum, forwardTransportOutput],
   )
-  publicBefore = publicForward.diagram
+  // The inserted identity has one outer wire (the public output), so the
+  // one-point collapse merges the transport output into it on the spot.
   publicForward.record('insert public/transport output identity', {
     rule: 'identityInsert',
     region: publicClaimAntecedent,
     wires: [forwardPublicOutput!, forwardTransportOutput],
   })
-  onlyNewNode(
-    publicBefore,
-    publicForward.diagram,
-    publicClaimAntecedent,
-  )
 
   publicBefore = publicForward.diagram
   publicForward.record('open residual A(a) totality', {
@@ -544,7 +526,6 @@ function plusAssoc(
         {
           rule: 'wireJoin',
           input: {
-            kind: 'iota',
             a: wire,
             b: endpointWire(publicForward.diagram, node, 'arg', index),
           },
@@ -575,14 +556,10 @@ function plusAssoc(
     publicForward.diagram,
     publicClaimAntecedent,
   )
-  publicForward.record('ground exact residual A(b) transport', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryRightTransport,
+  publicForward.recordRelationJoin('ground exact residual A(b) transport', {
+    wire: temporaryRightTransport,
       content: associativityTransportContent(),
       parameters: [publicForwardRight!, publicPlus],
-    },
   })
   const publicBackward = new PrimitiveStepRecorder(
     statements.plusAssoc.diagram,
@@ -701,15 +678,11 @@ function plusAssoc(
           ],
         ] as const
     for (const [outer, inner, signature] of primitiveSpecializations) {
-      publicBackward.record('specialize ' + name + ' primitive', {
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: inner,
+      publicBackward.recordRelationJoin('specialize ' + name + ' primitive', {
+    wire: inner,
           content: relationApplicationContent(signature),
           parameters: [outer],
-        },
-      })
+  })
     }
     for (const citedHypothesis of directCuts(
       publicBackward.diagram,
@@ -731,8 +704,7 @@ function plusAssoc(
         sel,
         justifier: evidence.justifier,
         certificate: evidence.certificate,
-        retargets: [],
-      })
+          })
     }
     publicBackward.record('expose ' + name + ' conclusion', {
       rule: 'doubleCutElim',
@@ -763,7 +735,6 @@ function plusAssoc(
       wires: [],
     },
     target: backwardClaimAntecedent,
-    retargets: [],
   })
   const secondBackwardBase = onlyNewCut(
     backwardBefore,
@@ -804,14 +775,10 @@ function plusAssoc(
     leftPropertyScope,
     UNARY,
   )
-  publicBackward.record('ground public Nat(a) directly to exact A', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: leftProperty,
+  publicBackward.recordRelationJoin('ground public Nat(a) directly to exact A', {
+    wire: leftProperty,
       content: associativityCarrierContent(),
       parameters: [backwardPlus],
-    },
   })
   const leftHereditary = exactOne(
     directCuts(publicBackward.diagram, leftPropertyBody),
@@ -858,8 +825,7 @@ function plusAssoc(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   publicBackward.record('expose inherited A(a)', {
     rule: 'doubleCutElim',
@@ -905,14 +871,10 @@ function plusAssoc(
     rightPropertyScope,
     UNARY,
   )
-  publicBackward.record('ground public Nat(b) directly to exact A', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: rightProperty,
+  publicBackward.recordRelationJoin('ground public Nat(b) directly to exact A', {
+    wire: rightProperty,
       content: associativityCarrierContent(),
       parameters: [backwardPlus],
-    },
   })
   const rightHereditary = exactOne(
     directCuts(publicBackward.diagram, rightPropertyBody),
@@ -972,8 +934,7 @@ function plusAssoc(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   publicBackward.record('expose inherited A(b)', {
     rule: 'doubleCutElim',
@@ -1011,7 +972,6 @@ function plusAssoc(
   publicBackward.record('specialize A(b) totality at c', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: third,
       b: rightTotalityInput,
     },
@@ -1071,7 +1031,6 @@ function plusAssoc(
     publicBackward.record('specialize A(a) transport ' + label, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: outer,
         b: inner,
       },
@@ -1162,7 +1121,6 @@ function plusAssoc(
       wires: [],
     },
     target: backwardClaimAntecedent,
-    retargets: [],
   })
   const copiedOutputFunctional = onlyNewCut(
     backwardBefore,
@@ -1237,7 +1195,7 @@ function plusAssoc(
   ] as const) {
     publicBackward.record('specialize output functionality ' + label, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const premise of copiedOutputFunctionalPremises) {
@@ -1250,7 +1208,7 @@ function plusAssoc(
       ),
     )
   }
-  const outputIdentity = exactOne(
+  exactOne(
     directNodes(publicBackward.diagram, copiedOutputFunctionalConsequent),
     'public/transport output identity',
   )
@@ -1258,34 +1216,24 @@ function plusAssoc(
     rule: 'doubleCutElim',
     region: copiedOutputFunctionalAntecedent,
   })
+  // Finishing exposes id(public output, transport output) with one outer
+  // wire; the one-point collapse merges the transport output into the
+  // public output on the spot, so the outer result already sits on the
+  // public output and its second copy is a plain iteration.
   publicBackward.record('finish output functionality specialization', {
     rule: 'doubleCutElim',
     region: copiedOutputFunctional,
   })
-  const outerSelection = {
-    region: backwardClaimAntecedent,
-    regions: [],
-    nodes: [transportOuterResult],
-    wires: [],
-  } as const
-  const outerOutputBoundary = extractSubgraph(
-    publicBackward.diagram,
-    outerSelection,
-  ).attachments.indexOf(transportOutput)
-  if (outerOutputBoundary < 0) {
-    throw new Error('transport outer result lost its output boundary')
-  }
   backwardBefore = publicBackward.diagram
-  publicBackward.record('retarget A(a) outer result to public output', {
+  publicBackward.record('copy A(a) outer result beside the public output', {
     rule: 'iteration',
-    sel: outerSelection,
+    sel: {
+      region: backwardClaimAntecedent,
+      regions: [],
+      nodes: [transportOuterResult],
+      wires: [],
+    },
     target: backwardClaimAntecedent,
-    retargets: [{
-      boundary: outerOutputBoundary,
-      identity: outputIdentity,
-      from: transportOutput,
-      to: publicOutput,
-    }],
   })
   const retargetedOuterResult = onlyNewNode(
     backwardBefore,

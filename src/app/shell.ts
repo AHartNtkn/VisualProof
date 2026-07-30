@@ -1535,6 +1535,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
     },
     pointerChanged: rememberPointer,
+    passiveSample: (sample) => proofMoves.passiveSample(sample),
     modifiersChanged: (ctrlHeld) => {
       construct.modifiersChanged(ctrlHeld)
       proofMoves.modifiersChanged(ctrlHeld)
@@ -1856,6 +1857,41 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // Derived region circles (the drawn cut outlines) — the e2e uses these
       // to assert HARD SEMANTIC CONTAINMENT (a dragged node never enters a cut
       // circle it is not a member of).
+      // Geometry and diagram of one fixed-side proof front, for prove-mode
+      // gesture tests (the construction seams above read the edit engine).
+      proofFront(side: 'forward' | 'backward'): unknown {
+        const front = side === 'forward' ? fixedWorkspace?.forward : fixedWorkspace?.backward
+        if (front == null) throw new Error('no fixed-side proof front')
+        const frontEngine = front.engine
+        const binds: { id: string; node: string; x: number; y: number }[] = []
+        for (const geometry of computeLegs(frontEngine)) {
+          for (const candidate of [
+            { end: geometry.leg.from, point: geometry.pts[0] },
+            { end: geometry.leg.to, point: geometry.pts.at(-1) },
+          ]) {
+            if (
+              candidate.point === undefined
+              || frontEngine.d.nodes[candidate.end.body] === undefined
+            ) continue
+            binds.push({
+              id: geometry.leg.wid,
+              node: candidate.end.body,
+              x: candidate.point.x,
+              y: candidate.point.y,
+            })
+          }
+        }
+        return {
+          view: { ...front.view },
+          bodies: [...frontEngine.bodies.values()].map((b) => ({
+            id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region,
+          })),
+          regionCount: Object.keys(frontEngine.d.regions).length,
+          nodeCount: Object.keys(frontEngine.d.nodes).length,
+          wireCount: Object.keys(frontEngine.d.wires).length,
+          binds,
+        }
+      },
       regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[] {
         return [...engine.regions.entries()].map(([id, g]) => {
           const reg = displayed.regions[id]

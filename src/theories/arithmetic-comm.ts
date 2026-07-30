@@ -55,7 +55,6 @@ function deiterateNode(
     sel,
     justifier: evidence.justifier,
     certificate: evidence.certificate,
-    retargets: [],
   })
 }
 
@@ -174,8 +173,7 @@ function plusComm(
         wires: [],
       },
       target: forwardInnerAntecedent,
-      retargets: [],
-    })
+      })
   }
   forward.record('erase positive carrier support', {
     rule: 'erasure',
@@ -216,7 +214,6 @@ function plusComm(
       forward.record(`attach ${label} ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -243,7 +240,6 @@ function plusComm(
       wires: [],
     },
     target: forwardInnerConsequent,
-    retargets: [],
   })
   before = forward.diagram
   forward.record('open residual commutativity totality', {
@@ -483,15 +479,11 @@ function plusComm(
       TERNARY,
     ],
   ] as const) {
-    backward.record('specialize cited primitive', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    backward.recordRelationJoin('specialize cited primitive', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
   for (const citedHypothesis of directCuts(
     backward.diagram,
@@ -513,8 +505,7 @@ function plusComm(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose cited support conclusion', {
     rule: 'doubleCutElim',
@@ -531,7 +522,6 @@ function plusComm(
   backward.record('specialize cited support at outer right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: backwardRight,
       b: citedFixedRight,
     },
@@ -575,8 +565,7 @@ function plusComm(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose local Base and Closure', {
     rule: 'doubleCutElim',
@@ -614,14 +603,10 @@ function plusComm(
     propertyScope,
     UNARY,
   )
-  backward.record('ground Nat(a) directly to commutativity carrier', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground Nat(a) directly to commutativity carrier', {
+    wire: property,
       content: commutativityCarrierContent(),
       parameters: [backwardPlus, backwardRight],
-    },
   })
   const hereditary = exactOne(
     directCuts(backward.diagram, propertyBody),
@@ -657,8 +642,7 @@ function plusComm(
       sel,
       justifier: evidence.justifier,
       certificate: evidence.certificate,
-      retargets: [],
-    })
+      })
   }
   backward.record('expose inherited commutativity carrier', {
     rule: 'doubleCutElim',
@@ -698,7 +682,6 @@ function plusComm(
   backward.record('specialize crossed implication at public output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: backwardOutput,
       b: exactOne(
         scopedWires(backward.diagram, inheritedCross),

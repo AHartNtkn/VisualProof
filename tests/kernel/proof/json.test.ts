@@ -57,13 +57,6 @@ function boundedIdentity(swap: boolean) {
   })).pattern
 }
 
-const retargets = [{
-  boundary: 0,
-  identity: 'n2',
-  from: 'w1',
-  to: 'w2',
-}] as const
-
 describe('action allocation JSON', () => {
   it('round-trips non-logical allocation exclusions', () => {
     const action: ProofAction = {
@@ -106,34 +99,18 @@ describe('action allocation JSON', () => {
 
 describe('step JSON', () => {
   it('round-trips every final Phase-1 primitive', () => {
-    const contentBuilder = new DiagramBuilder()
-    const contentBoundary = contentBuilder.wire(contentBuilder.root, [])
-    const content = mkDiagramWithBoundary(
-      contentBuilder.build(),
-      [contentBoundary],
-    )
     const steps: ProofStep[] = [
       { rule: 'refSpawn', region: 'r1', defId: 'nat', sig: relSig([IOTA]) },
       { rule: 'atomSpawn', region: 'r1', wire: 'w0' },
       { rule: 'identityInsert', region: 'r1', wires: ['w0', 'w1'] },
       {
         rule: 'wireJoin',
-        input: { kind: 'iota', a: 'w0', b: 'w1' },
-      },
-      {
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: 'w0',
-          content,
-          parameters: ['w1'],
-        },
+        input: { a: 'w0', b: 'w1' },
       },
       { rule: 'erasure', sel: selection },
       {
         rule: 'wireSever',
         input: {
-          kind: 'iota',
           wire: 'w0',
           keep: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
         },
@@ -141,21 +118,17 @@ describe('step JSON', () => {
       {
         rule: 'wireSever',
         input: {
-          kind: 'relation',
-          scope: 'r0',
-          occurrences: [{
-            sel: selection,
-            args: ['w0'],
-          }],
+          wire: 'w0',
+          keep: [],
+          scope: 'r1',
         },
       },
-      { rule: 'iteration', sel: selection, target: 'r1', retargets },
+      { rule: 'iteration', sel: selection, target: 'r1' },
       {
         rule: 'deiteration',
         sel: selection,
         justifier: selection,
         certificate: occurrenceCertificate,
-        retargets,
       },
       { rule: 'doubleCutIntro', sel: selection },
       { rule: 'doubleCutElim', region: 'r1' },
@@ -174,6 +147,38 @@ describe('step JSON', () => {
         args: ['w0'],
         defId: 'nat',
       },
+      { rule: 'cutWrap', wire: 'w0' },
+      { rule: 'cutAbsorb', wire: 'w0' },
+      { rule: 'parallelSplit', wire: 'w0' },
+      { rule: 'parallelFuse', a: 'w0', b: 'w1' },
+      { rule: 'endsDelete', wire: 'w0' },
+      {
+        rule: 'endsSpawn',
+        wire: 'w0',
+        sites: [
+          { region: 'r1', args: ['w1'] },
+          { region: 'r0', args: ['w2'] },
+        ],
+      },
+      { rule: 'arityShift', wire: 'w0', newArgSig: relSig([IOTA]) },
+      { rule: 'arityUnshift', wire: 'w0', position: 2 },
+      { rule: 'argPermute', wire: 'w0', permutation: [1, 0] },
+      { rule: 'argDuplicate', wire: 'w0', position: 0 },
+      { rule: 'argContract', wire: 'w0', position: 0 },
+      { rule: 'argDrop', wire: 'w0', position: 1 },
+      {
+        rule: 'argExtend',
+        wire: 'w0',
+        position: 1,
+        newArgSig: IOTA,
+        attachments: { n0: 'w1', n1: 'w2' },
+      },
+      { rule: 'applyFormal', wire: 'w0', position: 0 },
+      { rule: 'abstractFormal', ends: ['n0', 'n1'], scope: 'r1' },
+      { rule: 'identityLeaf', wire: 'w0' },
+      { rule: 'identityAbstract', nodes: ['n0'], scope: 'r0' },
+      { rule: 'refLeaf', wire: 'w0', defId: 'nat' },
+      { rule: 'refAbstract', nodes: ['n0', 'n1'], scope: 'r1' },
     ]
 
     for (const step of steps) roundTrip(step)
@@ -203,32 +208,28 @@ describe('step JSON', () => {
     expect(() => stepFromJson({
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: 'w0',
         b: 'w1',
-        wire: 'legacy',
+        wire: 'displaced',
       },
-    })).toThrowError(/wireJoin iota input has unknown field 'wire'/i)
+    })).toThrowError(/wireJoin input has unknown field 'wire'/i)
     expect(() => stepFromJson({
       rule: 'wireSever',
       input: {
-        kind: 'relation',
-        scope: 'r0',
-        occurrences: [{
-          sel: selection,
-          args: ['w0'],
-          extra: true,
-        }],
+        kind: 'iota',
+        wire: 'w0',
+        keep: [],
       },
-    })).toThrowError(/occurrences\[0\].*unknown field 'extra'/i)
+    })).toThrowError(/wireSever input has unknown field 'kind'/i)
     expect(() => stepFromJson({
-      rule: 'wireSever',
+      rule: 'wireJoin',
       input: {
         kind: 'relation',
-        scope: 'r0',
-        occurrences: [{ sel: selection, args: 'w0' }],
+        wire: 'w0',
+        content: {},
+        parameters: [],
       },
-    })).toThrowError(/occurrences\[0\].args must be an array/i)
+    })).toThrowError(/wireJoin input has unknown field 'kind'/i)
   })
 
   it('omits obsolete term certificates from occurrence-certificate JSON', () => {
@@ -237,8 +238,7 @@ describe('step JSON', () => {
       sel: selection,
       justifier: selection,
       certificate: occurrenceCertificate,
-      retargets: [],
-    }) as {
+      }) as {
       certificate: Record<string, unknown>
     }
 
@@ -282,8 +282,8 @@ describe('step JSON', () => {
       rule: 'iteration',
       sel: selection,
       target: 'r1',
-      retargets: [{ boundary: -1, identity: 'n0', from: 'w0', to: 'w1' }],
-    })).toThrowError(/boundary.*non-negative safe integer/)
+      retargets: [],
+    })).toThrowError(/iteration step/)
     expect(() => stepFromJson({
       rule: 'deiteration',
       sel: selection,
@@ -296,8 +296,7 @@ describe('step JSON', () => {
         attachments: [],
         termCertificates: [],
       },
-      retargets: [],
-    })).toThrowError(/unknown field 'termCertificates'/)
+      })).toThrowError(/unknown field 'termCertificates'/)
     expect(() => stepFromJson({
       rule: 'vacuousIntro',
       scope: 'r0',

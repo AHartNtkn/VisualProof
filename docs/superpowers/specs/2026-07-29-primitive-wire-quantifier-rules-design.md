@@ -235,6 +235,29 @@ monolithic rule's output modulo identity normalization and fresh naming.
 Monolithic soundness and primitive-set completeness become corollaries of the
 same statement.
 
+**Insertion redundancy (2026-07-30, corrected same day).** Monolithic
+insertion — splice an arbitrary well-formed graph into a negative region —
+is stepwise derivable from the primitives: introduce a vacuous nullary
+relation wire at the region (ungated), spawn its application there
+(negative-gated), and ground the wire to the graph as content through the
+compiled join, whose gate sits at the wire's scope. Insertion is
+comprehension-grounding of a vacuous proposition — the exact hypothesis-
+handle pattern every theory script already uses. The Lean obligation is
+therefore a corollary of the join redundancy theorem plus the soundness of
+the two auxiliary steps; the same derivation shows ref-spawn plus unfold is
+conservative (definitions stay macros). The negative-splice soundness lemma
+is still independently required: it grounds the backward erasure gate (one
+rule, two readings, per the flipped-polarity law). One further small
+derivability lemma (2026-07-30): every per-site argument-extend (the
+kernel form, attachments chosen per end) equals a uniform extend followed
+by per-site sever and join at the new position — the witness ignores the
+position, so the choices are free. This licenses the gesture layer's
+uniform-only surface and would license narrowing the kernel input to the
+uniform form if ever wanted. An earlier version of
+this note claimed opposite-parity content is forward-underivable and
+proposed an admissibility-style theorem; that analysis covered only the
+spawn-and-cut fragment and omitted the join family — retracted.
+
 ## Interaction layer
 
 ### Deletions
@@ -279,7 +302,7 @@ selects the rule:
 | applied ends of different wires | abstract-formal (the same-head case derives via sever + extend) |
 | identity nodes | identity abstract |
 | strands of existing wires (≥2) | identity insertion: the stroke materializes as an identity node at the drop region with one port per contacted wire. The drop point selects the region independently of where the wires are rendered (a two-anchor drag cannot; this is why insertion is not a Family 2 row). The committed step orders the wires canonically, never by contact order, so equal contact sets always produce the same diagram. When the drop region is the wires' common scope the kernel's existing collapse yields the shared-wire form. Replaces the `i` key and the menu row. |
-| nothing | vacuous intro |
+| nothing | opens the spawn list (vacuous intro moved to Q/Shift+Q, 2026-07-30; the arity prompt this row once cited is struck) |
 
 In every row but identity insertion the stroke becomes a wire; the drawn
 wire's signature is determined by the rule except for spawn-ends/vacuous
@@ -299,7 +322,7 @@ intro, which reuse the existing arity prompt.
 | argument port → beside itself | duplicate |
 | argument port → its own end's center | apply-formal |
 | end node → one of its own argument ports | identity leaf |
-| wire strand → an end of another wire | extend (uniform parameter); per-site extension accumulates (site, wire) contacts, one commit |
+| wire strand → an end of another wire | extend (uniform parameter; struck 2026-07-30: a one-commit per-site gesture re-bundles local acts — the new position is born semantically inert, and each site's attachment is an ordinary local join afterward) |
 | lasso around one end | cut-wrap |
 | cut boundary → the end it encloses | cut-absorb |
 | Delete on a wire | delete-all-ends; on an endpoint-free wire, vacuous elim |
@@ -315,17 +338,33 @@ design in ways this project fixes because it is already rebuilding this layer:
 
 - **W with an empty selection spawns an empty double cut at the region under
   the pointer** (today it refuses "select something first"); W with a
-  selection wraps it, unchanged. Shift+W (vacuous intro with arity prompt)
-  and the Delete precedence (double-cut elim → vacuous elim → erasure →
-  deiterate) are unchanged.
+  selection wraps it, unchanged. The Delete precedence (double-cut elim →
+  vacuous elim → erasure → deiterate) is unchanged. (A Shift+W arity-prompt
+  binding was wrongly listed here as surviving doctrine; it belonged to the
+  replaced second-order bubble calculus and is not part of this design.)
 - **Menu rows duplicating agreed dedicated interactions are removed**: erase,
   doubleCutWrap, doubleCutElim, vacuousElim, deiterate, identityInsert, and
   iterate (menu-triggered iteration was explicitly removed by the 2026-07-10
   design and regressed).
+- **Q with the pointer over a region spawns a bare quantifier wire there**
+  (an individual existential; 2026-07-30 ruling: a floating existential is
+  meaningful content — its presence changes the statement, if only
+  trivially, unlike identity collapse — so it gets a direct move).
+- **Shift+Q spawns a floating proposition quantifier** (a bare nullary
+  relation wire; 2026-07-30 ruling). This closes the signature-birth gap
+  inductively: ι comes from Q, rel([]) from Shift+Q, and every other
+  signature follows by applying the handle (spawn list), rim-pulling new
+  first-order positions, and extension-dragging wires of already-built
+  signatures — argExtend takes the dragged wire's signature, so nesting
+  recurses. Distinct from the struck Shift+W: no arity prompt, no sig
+  stipulation — the two fixed births plus context-driven growth.
 - **The palette trigger becomes an explicit still right-click** (today it
-  opens on a plain click over a hit). The only remaining rows are relUnfold,
-  relFold, and citeTheorem; retiring those too (per the standing total menu
-  ban) is recorded as debt, not done here.
+  opens on a plain click over a hit). The only remaining rows are relFold
+  and citeTheorem (relUnfold's row is deleted — double-click is its
+  gesture). These two are name-driven: choosing a stored definition or
+  theorem is inherently a picker, which the diagram cannot determine, so
+  the rows are the correct interface rather than debt (2026-07-30 ruling;
+  an earlier revision called their retirement "recorded debt" — struck).
 
 Drag-to-iterate, highlight+Delete erasure, and deiteration gestures are
 untouched.

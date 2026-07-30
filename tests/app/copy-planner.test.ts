@@ -47,8 +47,7 @@ describe('copy planning on three-node graphs', () => {
       rule: 'iteration',
       sel: fixture.selection,
       target: fixture.target,
-      retargets: [],
-    }])
+      }])
   })
 
   it('surfaces the iteration cone gate and rejects stale evidence', () => {

@@ -24,10 +24,33 @@ import { applyIdentityInsertion } from '../rules/identity'
 import {
   applyDeiteration,
   applyIteration,
-  type IdentityRetarget,
 } from '../rules/iteration'
 import { applyRefSpawn, applyAtomSpawn } from '../rules/spawn'
 import { applyVacuousElim, applyVacuousIntro } from '../rules/vacuous'
+import {
+  applyCutAbsorb,
+  applyCutWrap,
+  applyEndsDelete,
+  applyEndsSpawn,
+  applyParallelFuse,
+  applyParallelSplit,
+  type EndSite,
+} from '../rules/wire-content'
+import {
+  applyAbstractFormal,
+  applyApplyFormal,
+  applyArgContract,
+  applyArgDrop,
+  applyArgDuplicate,
+  applyArgExtend,
+  applyArgPermute,
+  applyArityShift,
+  applyArityUnshift,
+  applyIdentityAbstract,
+  applyIdentityLeaf,
+  applyRefAbstract,
+  applyRefLeaf,
+} from '../rules/wire-args'
 import {
   applyWireJoin,
   applyWireSever,
@@ -46,8 +69,8 @@ export type ProofStep =
   | { readonly rule: 'wireJoin'; readonly input: WireJoinInput }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly input: WireSeverInput }
-  | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId; readonly retargets: readonly IdentityRetarget[] }
-  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate; readonly retargets: readonly IdentityRetarget[] }
+  | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId }
+  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
@@ -55,6 +78,25 @@ export type ProofStep =
   | { readonly rule: 'vacuousElim'; readonly wireId: WireId }
   | { readonly rule: 'unfold'; readonly nodeId: NodeId }
   | { readonly rule: 'fold'; readonly occurrence: SubgraphSelection; readonly args: readonly WireId[]; readonly defId: string }
+  | { readonly rule: 'cutWrap'; readonly wire: WireId }
+  | { readonly rule: 'cutAbsorb'; readonly wire: WireId }
+  | { readonly rule: 'parallelSplit'; readonly wire: WireId }
+  | { readonly rule: 'parallelFuse'; readonly a: WireId; readonly b: WireId }
+  | { readonly rule: 'endsDelete'; readonly wire: WireId }
+  | { readonly rule: 'endsSpawn'; readonly wire: WireId; readonly sites: readonly EndSite[] }
+  | { readonly rule: 'arityShift'; readonly wire: WireId; readonly newArgSig: Sig }
+  | { readonly rule: 'arityUnshift'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argPermute'; readonly wire: WireId; readonly permutation: readonly number[] }
+  | { readonly rule: 'argDuplicate'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argContract'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argDrop'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argExtend'; readonly wire: WireId; readonly position: number; readonly newArgSig: Sig; readonly attachments: Readonly<Record<NodeId, WireId>> }
+  | { readonly rule: 'applyFormal'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'abstractFormal'; readonly ends: readonly NodeId[]; readonly scope: RegionId }
+  | { readonly rule: 'identityLeaf'; readonly wire: WireId }
+  | { readonly rule: 'identityAbstract'; readonly nodes: readonly NodeId[]; readonly scope: RegionId }
+  | { readonly rule: 'refLeaf'; readonly wire: WireId; readonly defId: string }
+  | { readonly rule: 'refAbstract'; readonly nodes: readonly NodeId[]; readonly scope: RegionId }
 
 /** Logical transport of source wire identities through one proof step. */
 export type WireInterfaceTransport = {
@@ -72,6 +114,11 @@ export type StepReceipt = {
   readonly allocation: IdMintLog
   readonly provenance: WireProvenance
   readonly interface: WireInterfaceTransport
+  /**
+   * Total wire transport at every scope: the surviving name of any wire the
+   * step consumed or minted, or undefined when nothing survives it.
+   */
+  readonly transport: WireInterfaceTransport
 }
 
 /** Ordered boundary transport. Positions and repeated aliases are preserved. */
@@ -131,12 +178,7 @@ function applyStepRaw(
         reservation,
       )
     case 'wireJoin':
-      return applyWireJoin(
-        diagram,
-        step.input,
-        orientation,
-        reservation,
-      )
+      return applyWireJoin(diagram, step.input, orientation)
     case 'erasure':
       return applyErasure(diagram, step.sel, orientation)
     case 'wireSever':
@@ -151,7 +193,6 @@ function applyStepRaw(
         diagram,
         step.sel,
         step.target,
-        step.retargets,
         reservation,
       )
     case 'deiteration':
@@ -160,7 +201,6 @@ function applyStepRaw(
         step.sel,
         step.justifier,
         step.certificate,
-        step.retargets,
       )
     case 'doubleCutIntro':
       return applyDoubleCutIntro(diagram, step.sel, reservation)
@@ -201,6 +241,95 @@ function applyStepRaw(
         context.relations,
         reservation,
       )
+    case 'cutWrap':
+      return applyCutWrap(diagram, step.wire, reservation)
+    case 'cutAbsorb':
+      return applyCutAbsorb(diagram, step.wire, reservation)
+    case 'parallelSplit':
+      return applyParallelSplit(diagram, step.wire, reservation)
+    case 'parallelFuse':
+      return applyParallelFuse(diagram, step.a, step.b, reservation)
+    case 'endsDelete':
+      return applyEndsDelete(diagram, step.wire, orientation)
+    case 'endsSpawn':
+      return applyEndsSpawn(
+        diagram,
+        step.wire,
+        step.sites,
+        orientation,
+        reservation,
+      )
+    case 'arityShift':
+      return applyArityShift(diagram, step.wire, step.newArgSig, reservation)
+    case 'arityUnshift':
+      return applyArityUnshift(diagram, step.wire, step.position)
+    case 'argPermute':
+      return applyArgPermute(diagram, step.wire, step.permutation, reservation)
+    case 'argDuplicate':
+      return applyArgDuplicate(diagram, step.wire, step.position, reservation)
+    case 'argContract':
+      return applyArgContract(diagram, step.wire, step.position, reservation)
+    case 'argDrop':
+      return applyArgDrop(
+        diagram,
+        step.wire,
+        step.position,
+        orientation,
+        reservation,
+      )
+    case 'argExtend':
+      return applyArgExtend(
+        diagram,
+        step.wire,
+        step.position,
+        step.newArgSig,
+        new Map(Object.entries(step.attachments)),
+        orientation,
+        reservation,
+      )
+    case 'applyFormal':
+      return applyApplyFormal(
+        diagram,
+        step.wire,
+        step.position,
+        orientation,
+        reservation,
+      )
+    case 'abstractFormal':
+      return applyAbstractFormal(
+        diagram,
+        step.ends,
+        step.scope,
+        orientation,
+        reservation,
+      )
+    case 'identityLeaf':
+      return applyIdentityLeaf(diagram, step.wire, orientation, reservation)
+    case 'identityAbstract':
+      return applyIdentityAbstract(
+        diagram,
+        step.nodes,
+        step.scope,
+        orientation,
+        reservation,
+      )
+    case 'refLeaf':
+      return applyRefLeaf(
+        diagram,
+        step.wire,
+        step.defId,
+        context.relations,
+        orientation,
+        reservation,
+      )
+    case 'refAbstract':
+      return applyRefAbstract(
+        diagram,
+        step.nodes,
+        step.scope,
+        orientation,
+        reservation,
+      )
   }
 }
 
@@ -209,7 +338,7 @@ function joinedRepresentative(
   step: ProofStep,
   wire: WireId,
 ): WireId {
-  if (step.rule !== 'wireJoin' || step.input.kind !== 'iota') return wire
+  if (step.rule !== 'wireJoin') return wire
   const a = diagram.wires[step.input.a]
   const b = diagram.wires[step.input.b]
   if (a === undefined || b === undefined) return wire
@@ -271,12 +400,22 @@ export function applyStepWithReceipt(
     && result.wires[source]!.scope === result.root
       ? source
       : undefined
+  const transportImage = (source: WireId): WireId | undefined => {
+    const image = composeNormalizationWireImage(
+      joinedRepresentative(diagram, step, source),
+      captured.normalizations,
+    )
+    return image !== undefined && result.wires[image] !== undefined
+      ? image
+      : undefined
+  }
 
   return {
     result,
     allocation: freezeIdMintLog(allocation),
     provenance: { image: provenanceImage },
     interface: { image: interfaceImage },
+    transport: { image: transportImage },
   }
 }
 
