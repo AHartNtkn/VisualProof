@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Elaborate
+import VisualProof.Diagram.Concrete.ElaborationCompletion
 
 namespace VisualProof
 

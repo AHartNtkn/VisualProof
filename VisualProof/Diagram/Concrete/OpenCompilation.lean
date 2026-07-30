@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.ElaborateCore
+import VisualProof.Diagram.Concrete.ElaborationKernel
 import VisualProof.Diagram.Open
 
 namespace VisualProof

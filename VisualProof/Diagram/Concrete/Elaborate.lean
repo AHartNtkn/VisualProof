@@ -1,2 +1,0 @@
-import VisualProof.Diagram.Concrete.ElaborateCore
-import VisualProof.Diagram.Concrete.ElaborationCompletion

@@ -1,5 +1,5 @@
 import VisualProof.Diagram.Context
-import VisualProof.Diagram.Concrete.Elaborate
+import VisualProof.Diagram.Concrete.ElaborationNodeCompletion
 import VisualProof.Diagram.Concrete.OpenCompilation
 import VisualProof.Diagram.Concrete.Subgraph.Occurrence
 
