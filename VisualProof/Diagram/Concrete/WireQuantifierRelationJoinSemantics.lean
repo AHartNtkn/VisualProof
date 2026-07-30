@@ -11244,24 +11244,6 @@ structure RelationJoinSemanticTrace.AboveDyingScopeTransport
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env outerProjection)
 
-/-- Interpret exactly the structural derivation owned by one trace transport. -/
-theorem RelationJoinSemanticTrace.AboveDyingScopeTransport.toSemanticZipper
-    {source : CheckedDiagram definitions}
-    {sourceSite : source.val.RegionId}
-    {sourceScope : SiteCompilation source sourceSite}
-    {final : CheckedDiagram definitions}
-    {finalSite : final.val.RegionId}
-    {finalScope : SiteCompilation final finalSite}
-    (transport :
-      RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
-        sourceScope finalScope) :
-    DiagramContext.SemanticZipper
-      transport.sourceCanonical.above transport.finalCanonical.above
-      (fun (_pre : PreModel.{u}) env => env)
-      (fun (_pre : PreModel.{u}) env =>
-        Env.comp env transport.outerProjection) :=
-  transport.composable.toSemanticZipper
-
 /--
 The structural part of the sole relation trace. Nil is an indexed identity;
 every nonempty trace carries one constructor-preserving source-to-final
@@ -11323,67 +11305,6 @@ def RelationJoinSemanticTrace.AboveDyingScopeFold.scopeProjection
       fold.transport.sourceCanonical fold.transport.finalCanonical
       fold.transport.outerProjection :=
   fold.transport.scopeProjection
-
-theorem RelationJoinSemanticTrace.AboveDyingScopeFold.toSemanticZipper
-    {source : CheckedDiagram definitions}
-    {sourceSite : source.val.RegionId}
-    {sourceScope : SiteCompilation source sourceSite}
-    {final : CheckedDiagram definitions}
-    {finalSite : final.val.RegionId}
-    {finalScope : SiteCompilation final finalSite}
-    (fold :
-      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
-        sourceScope finalScope) :
-    DiagramContext.SemanticZipper
-      fold.transport.sourceCanonical.above
-      fold.transport.finalCanonical.above
-      (fun (_pre : PreModel.{u}) env => env)
-      (fun (_pre : PreModel.{u}) env =>
-        Env.comp env fold.transport.outerProjection) :=
-  fold.transport.toSemanticZipper
-
-/--
-Consume an endpoint local law through the interpreter owned by this fold.
-Callers close the site's ordered local binders into `sourceBody` and
-`finalBody`; this theorem is the sole above-scope integration surface.
--/
-theorem
-    RelationJoinSemanticTrace.AboveDyingScopeFold.transportEndpointLocalLaw
-    {source : CheckedDiagram definitions}
-    {sourceSite : source.val.RegionId}
-    {sourceScope : SiteCompilation source sourceSite}
-    {final : CheckedDiagram definitions}
-    {finalSite : final.val.RegionId}
-    {finalScope : SiteCompilation final finalSite}
-    (fold :
-      RelationJoinSemanticTrace.AboveDyingScopeFold.{u}
-        sourceScope finalScope)
-    (direction : DiagramContext.ContextDirection)
-    (pre : PreModel.{u})
-    (definitionEnv : DefinitionEnv pre definitions)
-    (sourceBody :
-      Region definitions fold.transport.sourceCanonical.siteOuter.sigs)
-    (finalBody :
-      Region definitions fold.transport.finalCanonical.siteOuter.sigs)
-    (fixed : Env pre [])
-    (localLaw :
-      ∀ descendant :
-          Env pre fold.transport.finalCanonical.siteOuter.sigs,
-        DiagramContext.PreservesOuter
-            fold.transport.finalCanonical.above fixed descendant →
-          direction.holds
-            (denoteRegion pre definitionEnv descendant finalBody)
-            (denoteRegion pre definitionEnv
-              (Env.comp descendant fold.transport.outerProjection)
-              sourceBody)) :
-    (direction.through
-        fold.transport.sourceCanonical.above.cutDepth).holds
-      (denoteRegion pre definitionEnv fixed
-        (fold.transport.finalCanonical.above.fill finalBody))
-      (denoteRegion pre definitionEnv fixed
-        (fold.transport.sourceCanonical.above.fill sourceBody)) :=
-  fold.toSemanticZipper.transport direction pre definitionEnv
-    sourceBody finalBody fixed localLaw
 
 private noncomputable def
     RelationJoinSemanticTrace.AboveDyingScopeTransport.compose
