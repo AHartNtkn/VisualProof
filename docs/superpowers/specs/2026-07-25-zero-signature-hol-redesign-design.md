@@ -47,8 +47,8 @@ deletions.
 >    relation-typed boundary, constructively guarantees its `P` witness and may
 >    therefore be spawned at every scope. Ordinary refs retain their
 >    polarity-gated assertion semantics; same-signature lookalikes do not receive
->    this permission. Erasure remains forward-only and is rejected during
->    backward theorem replay.
+>    this permission. Erasure replays like every gated rule: positive regions
+>    forward, negative regions backward (flipped polarity).
 > 8. **Identity insertion replay is orientation-aware.** Physical insertion
 >    requires a negative region forward and the dual positive region backward.
 >    The checker and contextual action discovery enforce the same matrix, so a
@@ -136,7 +136,7 @@ node** (conditional/negated) — one notion, two forms, per the identity-node sp
 **Rules — keep / add / delete:**
 
 - *Keep:* forward insertion (negative region), backward physical insertion
-  (positive region), forward-only erasure (positive region),
+  (positive region), erasure (positive region forward, negative backward),
   iteration/deiteration, double-cut intro/elim, and the wire-quantifier pair
   `wireJoin`/severing — **restated at strongest sound form below**. Theorem
   replay passes orientation to every directional rule, uses the dual insertion
@@ -318,8 +318,7 @@ creates an identity-retargeted copy in the inner witness scope, discharges the
 temporary connection, exposes the original and substituted occurrences, and
 erases the original witness with the unused biconditional branch. The sole final
 atom is the iteration-created occurrence. It is a kernel-verified theorem, not a
-primitive instantiation, a decorative substitution trace, or a backward-erasure
-shortcut.
+primitive instantiation or a decorative substitution trace.
 
 - **Standing hypotheses = exactly what the target theorems invoke.** A property is
   in the baseline iff some target proof uses it — the only criterion, and one
