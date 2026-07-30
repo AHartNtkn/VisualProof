@@ -50,7 +50,7 @@ bound relation.
 
 | # | Primitive pair | Effect on each end W(x̄) | Class |
 |---|---|---|---|
-| 1 | merge / end-partition sever | ends of two wires become one wire / one wire's end set partitions into two wires (this is today's iota sever/join with the iota-only signature restriction removed) | gated |
+| 1 | merge / end-partition sever | ends of two wires become one wire / one wire's end set partitions into two wires (today's iota sever/join with the iota-only signature restriction removed, and with a fresh-wire-scope parameter: the split-off wire may be scoped at any region enclosing all its endpoints, gated by that region's polarity — see "Identity substitution derived") | gated |
 | 2 | delete-all-ends / spawn-ends | end vanishes / ends appear at chosen sites | gated |
 | 3 | cut-wrap / cut-absorb | becomes ¬W′(x̄), a cut holding one end of a fresh wire | equivalence |
 | 4 | parallel split / parallel fuse | becomes W′(x̄) beside W″(x̄), fresh wires; fuse requires pairwise co-located ends with identical arguments | equivalence |
@@ -64,10 +64,11 @@ Shared side conditions, stated once: all endpoints of the acted-on wire must
 be applied (primitive 1 is the exception — merge tolerates any endpoint kind,
 and merge is also the only way a wire occurring in argument position gets
 instantiated, exactly as with the monolith's `nonAppliedEndpoint` refusal);
-fresh wires are co-scoped with the old wire, except arity-shift's per-site
-wires, which are scoped at each end's current region; every rule takes the
-orientation boolean, and gates follow the existing scheme
-(`joinRequiresNegative` / `severRequiresPositive`, flipped by orientation).
+fresh wires are co-scoped with the old wire, except sever's split-off wire
+(scope chosen, see the table) and arity-shift's per-site wires, which are
+scoped at each end's current region; every rule takes the orientation
+boolean, and gates follow the existing scheme (`joinRequiresNegative` /
+`severRequiresPositive`, flipped by orientation).
 
 Vacuous intro/elim (spawn or discard an endpoint-free wire of any signature,
 ungated) already exists and is the tenth member of the family.
@@ -146,6 +147,51 @@ each site's region) → parallel split → left half merges into signature wire 
 → right half cut-wraps → drop formal 1 → merge into Q. Each site ends as
 ∃yᵢ.(P(xᵢ,yᵢ) ∧ ¬Q(yᵢ)).
 
+## Identity substitution derived (folded in per 2026-07-29/30 rulings)
+
+Substitution — the fifth identity transformation — is implemented today as an
+`IdentityRetarget` array riding iteration and deiteration steps (Rule 5 of the
+2026-07-25 identity-node design). No interaction constructs that evidence:
+both app call sites hard-code `retargets: []` (`copy-planner.ts:156`,
+`moves.ts:76`), so equality substitution is unreachable from the UI. A
+standalone move-one-endpoint rule was considered and **rejected** — the
+system had endpoint-moving rules once (λ-era `fusion`/`congruenceJoin`) and
+removed them deliberately. Instead, substitution becomes **derived** from the
+severing machinery this project already builds:
+
+- **The derivation.** Given id(a, b) at region r and an endpoint P(a) at q
+  inside r: (1) iterate the identity node into q — plain iteration, no
+  retargeting; (2) sever wire a, partitioning the P-endpoint and the copied
+  node's a-port onto a fresh wire scoped at q. The state at q is
+  ∃a′(a′ = b ∧ P(a′)), which the one-point rule collapses to P(b)
+  eagerly. Two user steps; normalization does the landing.
+- **Sever gains a fresh-wire-scope parameter** (an amendment to primitive 1):
+  the split-off wire may be scoped at any region enclosing all the moved
+  endpoints, gated by that region's polarity. Today's same-scope sever is the
+  special case choosing the old scope.
+- **Normalization Rule 2 extends** from "all attached wires co-scoped with
+  the node" to "all but exactly one": an identity node whose attached wires
+  are all scoped at its region except a single outer wire collapses by the
+  one-point rule ∃x@R(x = t ∧ Φx) ≡ Φt — an equivalence at any polarity,
+  which is already the soundness citation Rule 2 carries. Two or more outer
+  wires still decline, exactly as before.
+- **Why derived beats primitive here:** the standalone rule needed a bespoke
+  side condition (never retarget the justifying node's own port, else a
+  false id(a,b) becomes a true id(b,b)). In the derivation that shape is
+  unreachable except through the sever step, whose polarity gate blocks it
+  in precisely the contexts where it would be unsound. The constraint is
+  structural, not bolted on.
+- **Rule 5 of the identity-node design is superseded**: iteration and
+  deiteration lose the `retargets` field and copy exactly; the serialized
+  step schema drops the field; `IdentityRetargetSemantics.lean` support is
+  retired with it. Retargeted steps in the theory scripts
+  (`arithmetic-comm-carrier.ts`) migrate to iterate + sever pairs and their
+  reverses.
+- **No new gestures.** Step 1 is the existing drag-copy; step 2 is the
+  existing Family-1 sever stroke (touch the endpoint and the copied node's
+  port, drop inside the target region). Identity therefore adds expressivity
+  with no interaction surface beyond the insertion row above.
+
 ## TypeScript kernel changes
 
 - Remove the iota-only signature restriction from iota sever/join; the gates
@@ -191,22 +237,98 @@ same statement.
 
 ## Interaction layer
 
-The interactions that existed only to feed the monolithic rules — occurrence
-designation, ordered-formals highlighting, and the sever/join commit gestures
-consuming them — are deleted with no one-for-one successors.
+### Deletions
+
+The interactions that existed only to feed the monolithic rules are deleted
+with no one-for-one successors: the ordered-highlight occurrence-designation
+model (this supersedes "Interaction: designating an occurrence" in the
+2026-07-25 redesign spec, which is retired with the rules it served), the
+pending-relation contact flow's occurrence semantics, and the sever/join
+commit gestures in `connection.ts`/`moves.ts`.
 
 The replacement property is checkable from the kernel signatures alone: every
 primitive's input is a single wire, a specific port, an oriented drag between
-two specific objects, or an unordered set of ends. Nothing takes an ordered
-tuple, so no interaction anywhere can depend on the order in which things were
-highlighted. Argument correspondence in merge and fuse is positional by
-signature; reordering is its own local gesture (drag one port past another).
-Standing interaction laws are unchanged: no menus for proof actions, no editor
-intent encoded as diagram or proof content, matcher validates only at commit.
-Gesture details (which drag means merge versus fuse; how arity-shift picks the
-new position's signature) are a separate design session.
+two specific objects, or an unordered set of contacts. Nothing takes an
+ordered tuple, so no interaction anywhere can depend on the order in which
+things were highlighted.
 
-Iteration, deiteration, erasure, and deletion interactions are untouched.
+### Principles
+
+- **One-site demonstration.** Every primitive acts uniformly on all ends of a
+  wire, so the user demonstrates the change at one end; the kernel applies it
+  everywhere, the overlay previews all ends transforming during the drag, and
+  a failed gate refuses by spring-back at commit, under the existing
+  forward/backward orientation toggle.
+- **Object-typed gestures.** What a gesture means is fixed by which objects it
+  touches — wire strand, end node, argument port, cut boundary, blank region —
+  never by selection order or menus.
+- **Contact sets.** Gestures that need several sites accumulate contacts as
+  transient editor state (the existing pending-contact machinery) and commit
+  one atomic step; contacts are sets.
+
+### Family 1 — the drawing gesture (comprehension direction)
+
+Draw a stroke from blank space, touch contacts, drop the loose end; the drop
+region is where the created thing lives (loose-end law). The contact type
+selects the rule:
+
+| Contacts | Rule |
+|---|---|
+| blank spots in regions | spawn-ends (0-ary; n-ary ends are then built by plumbing gestures, so nothing is unreachable) |
+| ends of one wire | end-partition sever |
+| applied ends of different wires | abstract-formal (the same-head case derives via sever + extend) |
+| identity nodes | identity abstract |
+| strands of existing wires (≥2) | identity insertion: the stroke materializes as an identity node at the drop region with one port per contacted wire. The drop point selects the region independently of where the wires are rendered (a two-anchor drag cannot; this is why insertion is not a Family 2 row). The committed step orders the wires canonically, never by contact order, so equal contact sets always produce the same diagram. When the drop region is the wires' common scope the kernel's existing collapse yields the shared-wire form. Replaces the `i` key and the menu row. |
+| nothing | vacuous intro |
+
+In every row but identity insertion the stroke becomes a wire; the drawn
+wire's signature is determined by the rule except for spawn-ends/vacuous
+intro, which reuse the existing arity prompt.
+
+### Family 2 — object-typed drags (instantiation direction)
+
+| Grab → drop | Rule |
+|---|---|
+| wire strand → another wire's strand | merge |
+| end node → co-located parallel end | parallel fuse |
+| end node → blank beside itself (tear) | parallel split |
+| end node's rim → blank (pull out a dangling stub) | arity-shift (arity prompt for the new position's signature) |
+| argument port → off the node | remove position: arity-unshift when its side condition holds, else argument-drop — identical result diagram, only the gate differs, so preferring the ungated rule is deterministic |
+| argument port → past a sibling port | permute |
+| argument port → sibling port on the same wire | contract |
+| argument port → beside itself | duplicate |
+| argument port → its own end's center | apply-formal |
+| end node → one of its own argument ports | identity leaf |
+| wire strand → an end of another wire | extend (uniform parameter); per-site extension accumulates (site, wire) contacts, one commit |
+| lasso around one end | cut-wrap |
+| cut boundary → the end it encloses | cut-absorb |
+| Delete on a wire | delete-all-ends; on an endpoint-free wire, vacuous elim |
+
+Worked example — instantiating R with ∃y.(P(x,y) ∧ ¬Q(y)) is six drags: pull a
+stub out of one R-end, tear the end, connection-drag the left half onto P,
+lasso the right half's end, rip off its first port, connection-drag onto Q.
+
+### Keyboard and palette conformance fixes (folded in per 2026-07-29 ruling)
+
+The current implementation violates the approved 2026-07-10 proof-interaction
+design in ways this project fixes because it is already rebuilding this layer:
+
+- **W with an empty selection spawns an empty double cut at the region under
+  the pointer** (today it refuses "select something first"); W with a
+  selection wraps it, unchanged. Shift+W (vacuous intro with arity prompt)
+  and the Delete precedence (double-cut elim → vacuous elim → erasure →
+  deiterate) are unchanged.
+- **Menu rows duplicating agreed dedicated interactions are removed**: erase,
+  doubleCutWrap, doubleCutElim, vacuousElim, deiterate, identityInsert, and
+  iterate (menu-triggered iteration was explicitly removed by the 2026-07-10
+  design and regressed).
+- **The palette trigger becomes an explicit still right-click** (today it
+  opens on a plain click over a hit). The only remaining rows are relUnfold,
+  relFold, and citeTheorem; retiring those too (per the standing total menu
+  ban) is recorded as debt, not done here.
+
+Drag-to-iterate, highlight+Delete erasure, and deiteration gestures are
+untouched.
 
 ## Testing
 
@@ -216,6 +338,18 @@ Iteration, deiteration, erasure, and deletion interactions are untouched.
   final diagram equals the old monolithic output.
 - Replay suites (frege, arithmetic) green after migration; error-vocabulary
   tests updated.
+- One browser test per gesture row in both families (commit and spring-back
+  refusal), plus the keyboard fixes: W on an empty selection spawns the double
+  cut at the hovered region; the palette opens only on a still right-click;
+  the removed menu rows are absent.
+- Identity substitution: unit tests for the Rule 2 extension (one outer wire
+  collapses, two or more decline) and the sever scope parameter (gate follows
+  the chosen region's polarity); the two-step derivation produces P(b) from
+  P(a) under an enclosing identity, in both orientations; replay equality for
+  the migrated retargeted theory steps; the flow end to end in the browser.
+- Identity insertion via the drawing gesture: the uniqueness shape (equality
+  asserted inside a cut the wires do not enter), n-ary contact sets, and the
+  pin that permuted contact orders commit structurally identical diagrams.
 
 ## Out of scope
 
@@ -224,4 +358,5 @@ Iteration, deiteration, erasure, and deletion interactions are untouched.
 - Decomposing iteration/deiteration.
 - Any one-gesture "instantiate with content" convenience built on the
   compiler.
-- Gesture design for the new primitives.
+- Retiring the residual palette (relUnfold, relFold, citeTheorem) — recorded
+  debt against the standing menu ban.
