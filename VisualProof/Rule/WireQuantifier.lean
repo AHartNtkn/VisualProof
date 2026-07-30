@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.WireQuantifier
 import VisualProof.Diagram.Concrete.WireQuantifierSemantics
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinSemantics
 import VisualProof.Rule.Structural
 
 namespace VisualProof
@@ -868,11 +869,48 @@ theorem iota_join_sound
           simpa [joinPolarityLegal] using checked.polarity.legal)
       exact sound.1 even
 
+/--
+Relation-content grounding is sound in the direction selected by the
+checker-owned polarity receipt.
+-/
+theorem relation_join_sound
+    {source : CheckedDiagram definitions}
+    (orientation : Orientation)
+    (wire : source.val.WireId)
+    (content : CheckedOpenDiagram definitions)
+    (parameters : List source.val.WireId)
+    (applied :
+      AppliedWireJoin source
+        (.relation orientation wire content parameters))
+    (model : Model.{u})
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) := by
+  let checked := applied.checked
+  have sound :=
+    checked.result.denotes checked.contentCompilation.compilation
+      checked.polarity.compiled model definitionEnv checked.parameterScopes
+  rw [checked.targetExact]
+  cases orientation with
+  | forward =>
+      have odd :
+          checked.polarity.compiled.frame.context.cutDepth % 2 = 1 :=
+        of_decide_eq_true (by
+          simpa [joinPolarityLegal] using checked.polarity.legal)
+      exact sound.2 odd
+  | backward =>
+      have even :
+          checked.polarity.compiled.frame.context.cutDepth % 2 = 0 :=
+        of_decide_eq_true (by
+          simpa [joinPolarityLegal] using checked.polarity.legal)
+      exact sound.1 even
+
 end WireQuantifier
 
 export WireQuantifier
   (ContentOccurrence WireSeverInput WireJoinInput WireQuantifierError
     AppliedWireSever AppliedWireJoin applyWireSever applyWireJoin
-    iota_sever_sound iota_join_sound)
+    iota_sever_sound iota_join_sound relation_join_sound)
 
 end VisualProof

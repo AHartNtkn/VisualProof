@@ -346,6 +346,21 @@ example :
       some (2, 2, 3) := by
   native_decide
 
+private def relationJoinApplied :
+    AppliedWireJoin relationJoinSource relationJoinInput :=
+  (applyWireJoin relationJoinSource relationJoinInput).toOption.get
+    (by native_decide)
+
+example
+    (model : Model.{u})
+    (definitionEnv : DefinitionEnv model.toPreModel []) :
+    Directed .forward
+      (denoteChecked model.toPreModel definitionEnv relationJoinSource)
+      (denoteChecked model.toPreModel definitionEnv relationJoinApplied.target) := by
+  exact
+    relation_join_sound .forward (idx 0) unaryAtomContent [idx 3]
+      relationJoinApplied model definitionEnv
+
 /-! Nullary content and exact refusal gates. -/
 
 private def blankPatternRaw : OpenConcreteDiagram 0 where
