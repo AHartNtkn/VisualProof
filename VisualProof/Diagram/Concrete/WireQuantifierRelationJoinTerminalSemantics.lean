@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinTraceSemantics
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemovalFinal
+import VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
 
 namespace VisualProof
 

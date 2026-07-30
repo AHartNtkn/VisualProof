@@ -226,22 +226,6 @@ private theorem encloses_regionImage
   rw [climb_regionImage, eq_of_beq climbed]
   simp
 
-theorem climb_add
-    (diagram : ConcreteDiagram definitionCount)
-    (first second : Nat)
-    (region : diagram.RegionId) :
-    diagram.climb (first + second) region =
-      (diagram.climb first region).bind (diagram.climb second) := by
-  induction first generalizing region with
-  | zero => simp
-  | succ first induction =>
-      cases regionData : diagram.regions region with
-      | sheet =>
-          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
-      | cut parent =>
-          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
-            induction parent
-
 private theorem climb_succ_root_none
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -323,7 +307,7 @@ private theorem checked_encloses_trans
   have composed :
       diagram.climb (middleSteps.val + outerSteps.val) inner =
         some outer := by
-    rw [climb_add diagram middleSteps.val outerSteps.val inner,
+    rw [ConcreteDiagram.climb_add diagram middleSteps.val outerSteps.val inner,
       middleClimb]
     exact outerClimb
   have composedRoot :
@@ -331,7 +315,7 @@ private theorem checked_encloses_trans
           ((middleSteps.val + outerSteps.val) + rootSteps.val)
           inner =
         some diagram.root := by
-    rw [climb_add diagram
+    rw [ConcreteDiagram.climb_add diagram
       (middleSteps.val + outerSteps.val) rootSteps.val inner,
       composed]
     exact outerRoot

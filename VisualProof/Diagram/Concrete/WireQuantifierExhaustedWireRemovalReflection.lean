@@ -154,22 +154,22 @@ private theorem enclosing_children_unique
   obtain ⟨rootSteps, rootClimb⟩ := checked_reaches_root source region
   have leftRegion :
       source.val.climb (leftSteps.val + 1) site = some region := by
-    rw [climb_add source.val leftSteps.val 1 site, leftClimb]
+    rw [ConcreteDiagram.climb_add source.val leftSteps.val 1 site, leftClimb]
     simp [ConcreteDiagram.climb, leftData]
   have rightRegion :
       source.val.climb (rightSteps.val + 1) site = some region := by
-    rw [climb_add source.val rightSteps.val 1 site, rightClimb]
+    rw [ConcreteDiagram.climb_add source.val rightSteps.val 1 site, rightClimb]
     simp [ConcreteDiagram.climb, rightData]
   have leftRoot :
       source.val.climb ((leftSteps.val + 1) + rootSteps.val) site =
         some source.val.root := by
-    rw [climb_add source.val (leftSteps.val + 1) rootSteps.val site,
+    rw [ConcreteDiagram.climb_add source.val (leftSteps.val + 1) rootSteps.val site,
       leftRegion]
     exact rootClimb
   have rightRoot :
       source.val.climb ((rightSteps.val + 1) + rootSteps.val) site =
         some source.val.root := by
-    rw [climb_add source.val (rightSteps.val + 1) rootSteps.val site,
+    rw [ConcreteDiagram.climb_add source.val (rightSteps.val + 1) rootSteps.val site,
       rightRegion]
     exact rootClimb
   have sameLength :=

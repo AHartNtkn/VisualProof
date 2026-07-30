@@ -835,7 +835,7 @@ theorem frame_cutDepth_climbs
         apply Eq.mpr
           (congrArg (fun depth =>
             diagram.climb depth site = some region) aroundDepth)
-        rw [climb_add diagram nested.context.cutDepth 1 site,
+        rw [ConcreteDiagram.climb_add diagram nested.context.cutDepth 1 site,
           induction selected (outer.extend region) nested nestedCompiled]
         exact by
           have childData :=

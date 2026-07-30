@@ -306,21 +306,6 @@ private theorem child_depth
     diagram.climb (depth + 1) child = some diagram.root := by
   simpa [ConcreteDiagram.climb, childData] using parentDepth
 
-private theorem climb_add
-    (diagram : ConcreteDiagram definitionCount)
-    (first second : Nat) (region : diagram.RegionId) :
-    diagram.climb (first + second) region =
-      (diagram.climb first region).bind (diagram.climb second) := by
-  induction first generalizing region with
-  | zero => simp
-  | succ first induction =>
-      cases regionData : diagram.regions region with
-      | sheet =>
-          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
-      | cut parent =>
-          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
-            induction parent
-
 private theorem climb_positive_ne_self
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -337,7 +322,7 @@ private theorem climb_positive_ne_self
     (encloses_iff_exists diagram diagram.root region).mp reaches
   have combined :
       diagram.climb (steps + depth) region = some diagram.root := by
-    rw [climb_add, loop]
+    rw [ConcreteDiagram.climb_add, loop]
     exact depthClimb
   have unique := climb_to_root_unique definitions diagram wellFormed
     combined depthClimb

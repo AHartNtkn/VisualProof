@@ -22,22 +22,6 @@ private theorem removed_mem_nodesAt
   apply List.mem_filter.mpr
   exact ⟨Data.Finite.mem_allFin removed, by simp⟩
 
-private theorem climb_add
-    (diagram : ConcreteDiagram definitionCount)
-    (first second : Nat)
-    (region : diagram.RegionId) :
-    diagram.climb (first + second) region =
-      (diagram.climb first region).bind (diagram.climb second) := by
-  induction first generalizing region with
-  | zero => simp
-  | succ first induction =>
-      cases regionData : diagram.regions region with
-      | sheet =>
-          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
-      | cut parent =>
-          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
-            induction parent
-
 private theorem climb_succ_root_none
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -114,7 +98,7 @@ private theorem checked_encloses_trans
   have composed :
       source.val.climb (middleSteps.val + outerSteps.val) inner =
         some outer := by
-    rw [climb_add source.val middleSteps.val outerSteps.val inner,
+    rw [ConcreteDiagram.climb_add source.val middleSteps.val outerSteps.val inner,
       middleClimb]
     exact outerClimb
   have composedRoot :
@@ -122,7 +106,7 @@ private theorem checked_encloses_trans
           ((middleSteps.val + outerSteps.val) + rootSteps.val)
           inner =
         some source.val.root := by
-    rw [climb_add source.val
+    rw [ConcreteDiagram.climb_add source.val
       (middleSteps.val + outerSteps.val) rootSteps.val inner,
       composed]
     exact outerRoot
@@ -179,12 +163,12 @@ private theorem child_outside_parent
   obtain ⟨rootSteps, rootClimb⟩ := checked_reaches_root source child
   have cycle :
       source.val.climb (1 + backSteps.val) child = some child := by
-    rw [climb_add source.val 1 backSteps.val child]
+    rw [ConcreteDiagram.climb_add source.val 1 backSteps.val child]
     simp [ConcreteDiagram.climb, childData, backClimb]
   have longRoot :
       source.val.climb ((1 + backSteps.val) + rootSteps.val) child =
         some source.val.root := by
-    rw [climb_add source.val (1 + backSteps.val) rootSteps.val child,
+    rw [ConcreteDiagram.climb_add source.val (1 + backSteps.val) rootSteps.val child,
       cycle]
     exact rootClimb
   have sameLength :=
@@ -213,24 +197,24 @@ theorem enclosing_children_unique
   obtain ⟨rootSteps, rootClimb⟩ := checked_reaches_root source region
   have leftRegion :
       source.val.climb (leftSteps.val + 1) site = some region := by
-    rw [climb_add source.val leftSteps.val 1 site, leftClimb]
+    rw [ConcreteDiagram.climb_add source.val leftSteps.val 1 site, leftClimb]
     simp [ConcreteDiagram.climb, leftData]
   have rightRegion :
       source.val.climb (rightSteps.val + 1) site = some region := by
-    rw [climb_add source.val rightSteps.val 1 site, rightClimb]
+    rw [ConcreteDiagram.climb_add source.val rightSteps.val 1 site, rightClimb]
     simp [ConcreteDiagram.climb, rightData]
   have leftRoot :
       source.val.climb
           ((leftSteps.val + 1) + rootSteps.val) site =
         some source.val.root := by
-    rw [climb_add source.val (leftSteps.val + 1) rootSteps.val site,
+    rw [ConcreteDiagram.climb_add source.val (leftSteps.val + 1) rootSteps.val site,
       leftRegion]
     exact rootClimb
   have rightRoot :
       source.val.climb
           ((rightSteps.val + 1) + rootSteps.val) site =
         some source.val.root := by
-    rw [climb_add source.val (rightSteps.val + 1) rootSteps.val site,
+    rw [ConcreteDiagram.climb_add source.val (rightSteps.val + 1) rootSteps.val site,
       rightRegion]
     exact rootClimb
   have sameLength :=

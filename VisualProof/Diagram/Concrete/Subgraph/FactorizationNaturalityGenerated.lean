@@ -38,22 +38,6 @@ private theorem hostClimb
           simp [ConcreteDiagram.climb, compiled.host_region_source,
             mapRegion, data, hostClimb compiled steps parent]
 
-private theorem climb_add
-    (diagram : ConcreteDiagram definitionCount)
-    (first second : Nat)
-    (region : diagram.RegionId) :
-    diagram.climb (first + second) region =
-      (diagram.climb first region).bind (diagram.climb second) := by
-  induction first generalizing region with
-  | zero => simp
-  | succ first induction =>
-      cases regionData : diagram.regions region with
-      | sheet =>
-          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
-      | cut parent =>
-          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
-            induction parent
-
 private theorem climb_succ_root_none
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -144,13 +128,14 @@ theorem checked_encloses_antisymm
     checked_reaches_root definitions diagram wellFormed left
   have loop :
       diagram.climb (rightSteps.val + leftSteps.val) left = some left := by
-    rw [climb_add diagram rightSteps.val leftSteps.val left, rightClimb]
+    rw [ConcreteDiagram.climb_add diagram rightSteps.val leftSteps.val left,
+      rightClimb]
     exact leftClimb
   have longerRoot :
       diagram.climb ((rightSteps.val + leftSteps.val) + rootSteps.val)
           left =
         some diagram.root := by
-    rw [climb_add diagram
+    rw [ConcreteDiagram.climb_add diagram
       (rightSteps.val + leftSteps.val) rootSteps.val left, loop]
     exact rootClimb
   have sameDepth :=
@@ -181,7 +166,8 @@ private theorem checked_encloses_comparable
     have sum : leftSteps.val + remaining = rightSteps.val := by omega
     refine ⟨⟨remaining, Nat.lt_of_le_of_lt
       (Nat.sub_le _ _) rightSteps.isLt⟩, ?_⟩
-    have composed := climb_add diagram leftSteps.val remaining descendant
+    have composed :=
+      ConcreteDiagram.climb_add diagram leftSteps.val remaining descendant
     rw [sum, leftClimb, rightClimb] at composed
     exact composed.symm
   · left
@@ -191,7 +177,8 @@ private theorem checked_encloses_comparable
     have sum : rightSteps.val + remaining = leftSteps.val := by omega
     refine ⟨⟨remaining, Nat.lt_of_le_of_lt
       (Nat.sub_le _ _) leftSteps.isLt⟩, ?_⟩
-    have composed := climb_add diagram rightSteps.val remaining descendant
+    have composed :=
+      ConcreteDiagram.climb_add diagram rightSteps.val remaining descendant
     rw [sum, rightClimb, leftClimb] at composed
     exact composed.symm
 
@@ -289,7 +276,7 @@ private theorem encloses_trans
   have combined :
       diagram.climb (innerSteps.val + outerSteps.val) inner =
         some outer := by
-    rw [climb_add, innerClimb]
+    rw [ConcreteDiagram.climb_add, innerClimb]
     exact outerClimb
   have bounded :=
     ConcreteElaboration.successfulClimb_le_count definitions diagram wellFormed

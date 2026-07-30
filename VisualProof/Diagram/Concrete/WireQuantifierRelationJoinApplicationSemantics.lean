@@ -1,5 +1,4 @@
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinAlignment
-import VisualProof.Diagram.Concrete.WireQuantifierFrameNaturality
 
 namespace VisualProof
 
@@ -1553,7 +1552,7 @@ private theorem checkedEncloses_trans
   have combined :
       diagram.climb (innerSteps.val + outerSteps.val) inner =
         some outer := by
-    rw [IotaJoinSemantics.climb_add, innerClimb]
+    rw [ConcreteDiagram.climb_add, innerClimb]
     exact outerClimb
   have bounded :=
     ConcreteElaboration.successfulClimb_le_count definitions diagram

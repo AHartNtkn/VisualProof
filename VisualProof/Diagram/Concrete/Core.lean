@@ -85,6 +85,26 @@ def climb (diagram : ConcreteDiagram definitionCount) :
       | .sheet => none
       | .cut parent => climb diagram steps parent
 
+@[simp] theorem climb_zero (diagram : ConcreteDiagram definitionCount)
+    (region : diagram.RegionId) :
+    diagram.climb 0 region = some region := rfl
+
+theorem climb_add
+    (diagram : ConcreteDiagram definitionCount)
+    (first second : Nat)
+    (region : diagram.RegionId) :
+    diagram.climb (first + second) region =
+      (diagram.climb first region).bind (diagram.climb second) := by
+  induction first generalizing region with
+  | zero => simp
+  | succ first induction =>
+      cases regionData : diagram.regions region with
+      | sheet =>
+          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
+      | cut parent =>
+          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
+            induction parent
+
 /-- Bounded ancestry; the bound prevents cycles from masquerading as trees. -/
 def Encloses (diagram : ConcreteDiagram definitionCount)
     (ancestor descendant : diagram.RegionId) : Prop :=
@@ -96,10 +116,6 @@ instance (diagram : ConcreteDiagram definitionCount)
     Decidable (diagram.Encloses ancestor descendant) := by
   unfold Encloses
   infer_instance
-
-@[simp] theorem climb_zero (diagram : ConcreteDiagram definitionCount)
-    (region : diagram.RegionId) :
-    diagram.climb 0 region = some region := rfl
 
 theorem encloses_refl (diagram : ConcreteDiagram definitionCount)
     (region : diagram.RegionId) :
