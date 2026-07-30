@@ -1,6 +1,6 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
-import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
+import type { ProofAction } from '../../kernel/proof/action'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
@@ -14,13 +14,14 @@ import {
 } from '../actions'
 import { inferFoldArgs } from '../define'
 import { absorbHits, orphanedWires } from '../edit'
-import { buildSelection, type Hit } from '../hittest'
+import { buildSelection, regionAt, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import {
   ConnectionDragController,
   type ConnectionEnd,
 } from './connection'
 import { CopyDragController } from './copy'
+import { DrawGestureController } from './draw'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
@@ -135,23 +136,12 @@ function sameHit(left: Hit, right: Hit): boolean {
   return left.kind === right.kind && left.id === right.id
 }
 
-function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
-  let best: { readonly id: RegionId; readonly radius: number } | null = null
-  for (const [id, geometry] of engine.regions) {
-    if (diagram.regions[id]?.kind === 'sheet') continue
-    if (
-      Math.hypot(point.x - geometry.center.x, point.y - geometry.center.y) <= geometry.radius
-      && (best === null || geometry.radius < best.radius)
-    ) best = { id, radius: geometry.radius }
-  }
-  return best?.id ?? diagram.root
-}
-
 export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
   readonly #connection: ConnectionDragController
   readonly #copy: CopyDragController
+  readonly #draw: DrawGestureController
   #menu: HTMLDivElement | null = null
   #cycle: CitationCycle | null = null
   #lastPointer: Vec2 = { x: 0, y: 0 }
@@ -181,6 +171,21 @@ export class ProofMoveController {
           return false
         }
       },
+      refuse: options.refuse,
+    })
+    this.#draw = new DrawGestureController({
+      active: options.active,
+      engine: options.engine,
+      diagram: options.diagram,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      context: () => this.#context(),
+      orientation: options.orientation,
+      commit: (label, steps, pointer) => {
+        this.#lastPointer = pointer
+        return this.#commitSteps(label, steps)
+      },
+      openSpawn: options.openSpawn,
       refuse: options.refuse,
     })
     this.#copy = new CopyDragController({
@@ -222,9 +227,13 @@ export class ProofMoveController {
   claim(sample: PointerSample): PointerClaim | null {
     this.#context()
     this.#lastPointer = sample.client
-    if (!this.#options.active() || sample.button !== 0) return null
+    if (
+      !this.#options.active()
+      || (sample.button !== 0 && sample.button !== 2)
+    ) return null
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
+    if (sample.button === 2) return this.#draw.claim(sample)
     return this.#connection.claim(sample) ?? this.#copy.claim(sample)
   }
 
@@ -232,6 +241,8 @@ export class ProofMoveController {
     this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active()) return false
+    // A right-drag that drew or committed already consumed this press.
+    if (this.#draw.consumeMenuSuppression()) return true
     this.#closeMenu()
     const selection = this.#options.selection()
     if (
@@ -272,6 +283,7 @@ export class ProofMoveController {
       const active = this.#menu !== null
         || this.#cycle !== null
         || this.#connection.hasPendingInteraction
+        || this.#draw.hasPendingInteraction
       this.cancel()
       return active
     }
@@ -361,7 +373,11 @@ export class ProofMoveController {
 
   overlay(): readonly Shape[] {
     this.#context()
-    const result: Shape[] = [...this.#connection.overlay(), ...this.#copy.overlay()]
+    const result: Shape[] = [
+      ...this.#connection.overlay(),
+      ...this.#copy.overlay(),
+      ...this.#draw.overlay(),
+    ]
     const cycle = this.#cycle
     if (cycle !== null && cycle.candidate.occurrences !== null) {
       const occurrence = cycle.candidate.occurrences[cycle.index]!
@@ -390,6 +406,7 @@ export class ProofMoveController {
     this.#cycle = null
     this.#connection.cancel()
     this.#copy.cancel()
+    this.#draw.cancel()
   }
 
   dispose(): void {
@@ -403,11 +420,15 @@ export class ProofMoveController {
   }
 
   #commit(step: ProofStep): boolean {
+    return this.#commitSteps(
+      step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
+      [step],
+    )
+  }
+
+  #commitSteps(label: string, steps: readonly ProofStep[]): boolean {
     try {
-      this.#options.apply(singleStepAction(
-        step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
-        step,
-      ))
+      this.#options.apply({ label, steps, placements: [] })
       this.#options.setSelection([])
       this.#closeMenu()
       return true
