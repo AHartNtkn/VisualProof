@@ -267,7 +267,6 @@ export function rightIdentityCarrierInductive(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -631,7 +630,7 @@ export function rightIdentityCarrierInductive(
     ] as const) {
       backward.record(`specialize ${label} uniqueness`, {
         rule: 'wireJoin',
-        input: { kind: 'iota', a: target, b: variable },
+        input: { a: target, b: variable },
       })
     }
     for (const node of directNodes(backward.diagram, copiedAntecedent)) {
@@ -736,7 +735,7 @@ export function rightIdentityCarrierInductive(
   for (const variable of scopedWires(backward.diagram, copiedBaseScope)) {
     backward.record('specialize carrier-base plusBase at supplied zero', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: baseValue, b: variable },
+      input: { a: baseValue, b: variable },
     })
   }
   deiterateNode(
@@ -940,7 +939,6 @@ export function rightIdentityCarrierInductive(
   backward.record('specialize predecessor E at successor local zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorLocalZero,
       b: copiedPredecessorZero,
     },
@@ -1071,7 +1069,7 @@ export function rightIdentityCarrierInductive(
   ] as const) {
     backward.record(`specialize carrier-support step ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of [copiedStepPlus, ...copiedStepSuccessors]) {

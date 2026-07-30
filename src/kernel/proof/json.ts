@@ -12,7 +12,6 @@ import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certi
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { IdentityRetarget } from '../rules/iteration'
 import type {
-  ContentOccurrence,
   WireJoinInput,
   WireSeverInput,
 } from '../rules/wire-quantifier'
@@ -97,132 +96,40 @@ function endpointFromJson(value: unknown, what: string): Endpoint {
   }
 }
 
-function contentOccurrenceToJson(
-  occurrence: ContentOccurrence,
-): unknown {
-  return {
-    sel: selectionToJson(occurrence.sel),
-    args: [...occurrence.args],
-  }
-}
-
-function contentOccurrenceFromJson(
-  value: unknown,
-  what: string,
-): ContentOccurrence {
-  if (!isRecord(value)) fail(`${what} must be an object`)
-  assertOnlyKeys(value, ['sel', 'args'], what)
-  return {
-    sel: selectionFromJson(value.sel, `${what}.sel`),
-    args: strArray(value.args, `${what}.args`),
-  }
-}
-
 function wireSeverInputToJson(input: WireSeverInput): unknown {
-  switch (input.kind) {
-    case 'iota':
-      return {
-        kind: input.kind,
-        wire: input.wire,
-        keep: input.keep.map(endpointToJson),
-        ...(input.scope !== undefined ? { scope: input.scope } : {}),
-      }
-    case 'relation':
-      return {
-        kind: input.kind,
-        scope: input.scope,
-        occurrences: input.occurrences.map(contentOccurrenceToJson),
-      }
+  return {
+    wire: input.wire,
+    keep: input.keep.map(endpointToJson),
+    ...(input.scope !== undefined ? { scope: input.scope } : {}),
   }
 }
 
 function wireSeverInputFromJson(value: unknown): WireSeverInput {
   if (!isRecord(value)) fail('wireSever input must be an object')
-  const kind = str(value.kind, 'wireSever input.kind')
-  switch (kind) {
-    case 'iota':
-      assertOnlyKeys(
-        value,
-        ['kind', 'wire', 'keep', 'scope'],
-        'wireSever iota input',
-      )
-      if (!Array.isArray(value.keep)) {
-        fail('wireSever iota input.keep must be an array')
-      }
-      return {
-        kind,
-        wire: str(value.wire, 'wireSever input.wire'),
-        keep: value.keep.map((endpoint, index) =>
-          endpointFromJson(endpoint, `wireSever input.keep[${index}]`)),
-        ...(value.scope !== undefined
-          ? { scope: str(value.scope, 'wireSever input.scope') }
-          : {}),
-      }
-    case 'relation':
-      assertOnlyKeys(
-        value,
-        ['kind', 'scope', 'occurrences'],
-        'wireSever relation input',
-      )
-      if (!Array.isArray(value.occurrences)) {
-        fail('wireSever relation input.occurrences must be an array')
-      }
-      return {
-        kind,
-        scope: str(value.scope, 'wireSever input.scope'),
-        occurrences: value.occurrences.map((occurrence, index) =>
-          contentOccurrenceFromJson(
-            occurrence,
-            `wireSever input.occurrences[${index}]`,
-          )),
-      }
-    default:
-      fail("wireSever input.kind must be 'iota'|'relation'")
+  assertOnlyKeys(value, ['wire', 'keep', 'scope'], 'wireSever input')
+  if (!Array.isArray(value.keep)) {
+    fail('wireSever input.keep must be an array')
+  }
+  return {
+    wire: str(value.wire, 'wireSever input.wire'),
+    keep: value.keep.map((endpoint, index) =>
+      endpointFromJson(endpoint, `wireSever input.keep[${index}]`)),
+    ...(value.scope !== undefined
+      ? { scope: str(value.scope, 'wireSever input.scope') }
+      : {}),
   }
 }
 
 function wireJoinInputToJson(input: WireJoinInput): unknown {
-  switch (input.kind) {
-    case 'iota':
-      return { kind: input.kind, a: input.a, b: input.b }
-    case 'relation':
-      return {
-        kind: input.kind,
-        wire: input.wire,
-        content: dwbToJson(input.content),
-        parameters: [...input.parameters],
-      }
-  }
+  return { a: input.a, b: input.b }
 }
 
 function wireJoinInputFromJson(value: unknown): WireJoinInput {
   if (!isRecord(value)) fail('wireJoin input must be an object')
-  const kind = str(value.kind, 'wireJoin input.kind')
-  switch (kind) {
-    case 'iota':
-      assertOnlyKeys(value, ['kind', 'a', 'b'], 'wireJoin iota input')
-      return {
-        kind,
-        a: str(value.a, 'wireJoin input.a'),
-        b: str(value.b, 'wireJoin input.b'),
-      }
-    case 'relation':
-      assertOnlyKeys(
-        value,
-        ['kind', 'wire', 'content', 'parameters'],
-        'wireJoin relation input',
-      )
-      return {
-        kind,
-        wire: str(value.wire, 'wireJoin input.wire'),
-        content: dwbFromJson(value.content, 'wireJoin input.content'),
-        parameters: strArray(
-          value.parameters,
-          'wireJoin input.parameters',
-        ),
-      }
-    default:
-      fail("wireJoin input.kind must be 'iota'|'relation'")
+  assertOnlyKeys(value, ['a', 'b'], 'wireJoin input')
+  return {
+    a: str(value.a, 'wireJoin input.a'),
+    b: str(value.b, 'wireJoin input.b'),
   }
 }
 

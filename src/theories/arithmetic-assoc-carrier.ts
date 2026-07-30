@@ -301,7 +301,6 @@ export function associativityCarrierHereditary(
   forward.record('attach predecessor carrier individual', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessor!,
       b: endpointWire(
         forward.diagram,
@@ -334,7 +333,6 @@ export function associativityCarrierHereditary(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: args[index]!,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -693,7 +691,6 @@ export function associativityCarrierHereditary(
   backward.record('specialize predecessor totality at successor right input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorTotalityInput,
       b: copiedPredecessorTotalityInput,
     },
@@ -745,7 +742,6 @@ export function associativityCarrierHereditary(
   backward.record('specialize successor totality at predecessor sum', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorSum,
       b: copiedSuccessorInput,
     },
@@ -774,7 +770,6 @@ export function associativityCarrierHereditary(
   backward.record('choose successor-totality output witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorSum,
       b: successorTotalityOutput,
     },
@@ -814,7 +809,6 @@ export function associativityCarrierHereditary(
     backward.record('specialize successor-totality addition step', {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: target,
         b: variable,
       },
@@ -966,7 +960,6 @@ export function associativityCarrierHereditary(
       backward.record(`specialize ${label} variable ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: values[index]!,
           b: variables[index]!,
         },
@@ -1179,7 +1172,7 @@ export function associativityCarrierHereditary(
   ] as const) {
     backward.record(`specialize transport functionality ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const premise of directNodes(
@@ -1305,7 +1298,6 @@ export function associativityCarrierHereditary(
   backward.record('choose successor transport output witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorTransportWitness,
       b: successorTransportOutput,
     },

@@ -147,7 +147,6 @@ function spawnAttached(
     recorder.record(`attach ${label} argument ${index}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: wire,
         b: endpointWire(recorder.diagram, node, 'arg', index),
       },
@@ -448,7 +447,6 @@ function buildBackward(
   backward.record('identify conclusion zero with zeroExists witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: zeroValue,
       b: endpointWire(
         backward.diagram,
@@ -488,7 +486,6 @@ function buildBackward(
   backward.record('specialize successorTotal at the zero witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: zeroValue,
       b: endpointWire(
         backward.diagram,
@@ -511,7 +508,6 @@ function buildBackward(
   backward.record('identify conclusion successor with totality witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorValue,
       b: endpointWire(
         backward.diagram,
@@ -583,7 +579,7 @@ function buildBackward(
   for (const variable of scopedWires(backward.diagram, copiedBase)) {
     backward.record('specialize Nat base at zero witness', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: zeroValue, b: variable },
+      input: { a: zeroValue, b: variable },
     })
   }
   backward.record(
@@ -655,7 +651,7 @@ function buildBackward(
       : successorValue
     backward.record('specialize Nat closure at zero successor', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: target, b: variable },
+      input: { a: target, b: variable },
     })
   }
   backward.record(

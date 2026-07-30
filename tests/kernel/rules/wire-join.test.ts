@@ -13,7 +13,6 @@ describe('iota wire join', () => {
     const diagram = builder.build()
 
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: first,
       b: second,
     })).toThrowError(/incomparable scopes/)
@@ -29,17 +28,14 @@ describe('iota wire join', () => {
     const diagram = builder.build()
 
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: negativeInner,
     })).not.toThrow()
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: positiveInner,
     })).toThrowError(/inner wire's scope to be negative/)
     expect(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: positiveInner,
     }, 'backward')).not.toThrow()
@@ -63,7 +59,6 @@ describe('iota wire join', () => {
     expect(diagram.nodes[identity]).toBeDefined()
 
     const joined = applyWireJoin(diagram, {
-      kind: 'iota',
       a: outer,
       b: inner,
     })
@@ -95,7 +90,7 @@ describe('generalized wire join', () => {
     builder.wire(cut, [{ node: innerAtom, port: { kind: 'arg', index: 0 } }])
     const diagram = builder.build()
 
-    const joined = applyWireJoin(diagram, { kind: 'iota', a: outer, b: inner })
+    const joined = applyWireJoin(diagram, { a: outer, b: inner })
 
     expect(joined.wires[inner]).toBeUndefined()
     expect(joined.wires[outer]!.endpoints).toEqual(expect.arrayContaining([
@@ -111,7 +106,7 @@ describe('generalized wire join', () => {
     const binary = builder.relWire(cut, relSig([IOTA, IOTA]))
     const diagram = builder.build()
 
-    expect(() => applyWireJoin(diagram, { kind: 'iota', a: unary, b: binary }))
+    expect(() => applyWireJoin(diagram, { a: unary, b: binary }))
       .toThrowError(/equal signatures/)
   })
 })

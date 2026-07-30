@@ -687,9 +687,7 @@ function wireJoinTouches(
   branch: ProvenanceBranch,
   step: Extract<ProofStep, { readonly rule: 'wireJoin' }>,
 ): boolean {
-  return step.input.kind === 'iota'
-    ? branch.wires.has(step.input.a) || branch.wires.has(step.input.b)
-    : branch.wires.has(step.input.wire)
+  return branch.wires.has(step.input.a) || branch.wires.has(step.input.b)
 }
 
 function assertStructuralProvenanceChain(

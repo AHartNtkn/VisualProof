@@ -46,19 +46,16 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
     const diagram = builder.build()
 
     expect(caughtBy(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: 'ghost',
       b: wire,
     })))
       .toBeInstanceOf(DiagramError)
     expect(caughtBy(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: wire,
       b: 'ghost',
     })))
       .toBeInstanceOf(DiagramError)
     expect(caughtBy(() => applyWireJoin(diagram, {
-      kind: 'iota',
       a: 'ghost',
       b: 'ghost',
     })))
@@ -86,7 +83,6 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
   it('unknown sever, iteration, and double-cut ids are structural', () => {
     const empty = new DiagramBuilder().build()
     expect(caughtBy(() => applyWireSever(empty, {
-      kind: 'iota',
       wire: 'ghost',
       keep: [],
     })))

@@ -396,7 +396,6 @@ function plusAssoc(
       publicForward.record('attach ' + label + ' argument ' + index, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(publicForward.diagram, node, 'arg', index),
         },
@@ -536,7 +535,6 @@ function plusAssoc(
         {
           rule: 'wireJoin',
           input: {
-            kind: 'iota',
             a: wire,
             b: endpointWire(publicForward.diagram, node, 'arg', index),
           },
@@ -987,7 +985,6 @@ function plusAssoc(
   publicBackward.record('specialize A(b) totality at c', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: third,
       b: rightTotalityInput,
     },
@@ -1047,7 +1044,6 @@ function plusAssoc(
     publicBackward.record('specialize A(a) transport ' + label, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: outer,
         b: inner,
       },
@@ -1213,7 +1209,7 @@ function plusAssoc(
   ] as const) {
     publicBackward.record('specialize output functionality ' + label, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const premise of copiedOutputFunctionalPremises) {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import type { DiagramIso } from '../../../src/kernel/diagram/canonical/explore'
@@ -319,14 +318,12 @@ describe('mapStepIds', () => {
     expect(mapStepIds({
       rule: 'wireSever',
       input: {
-        kind: 'iota',
         wire: 'w0',
         keep: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
     }, iso)).toEqual({
       rule: 'wireSever',
       input: {
-        kind: 'iota',
         wire: 'W0',
         keep: [{ node: 'N0', port: { kind: 'arg', index: 0 } }],
       },
@@ -334,19 +331,16 @@ describe('mapStepIds', () => {
     expect(mapStepIds({
       rule: 'wireSever',
       input: {
-        kind: 'relation',
+        wire: 'w0',
+        keep: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
         scope: 'r1',
-        occurrences: [{ sel: selection, args: ['w1', 'w2'] }],
       },
     }, iso)).toEqual({
       rule: 'wireSever',
       input: {
-        kind: 'relation',
+        wire: 'W0',
+        keep: [{ node: 'N0', port: { kind: 'arg', index: 0 } }],
         scope: 'R1',
-        occurrences: [{
-          sel: mappedSelection,
-          args: ['W1', 'W2'],
-        }],
       },
     })
     expect(mapStepIds({
@@ -376,12 +370,6 @@ describe('mapStepIds', () => {
   })
 
   it('maps theorem, vacuity, fold, unfold, and structural operands', () => {
-    const patternBuilder = new DiagramBuilder()
-    const patternWire = patternBuilder.wire(patternBuilder.root, [])
-    const content = mkDiagramWithBoundary(
-      patternBuilder.build(),
-      [patternWire],
-    )
     expect(mapStepIds({
       rule: 'theorem',
       name: 'T',
@@ -429,35 +417,11 @@ describe('mapStepIds', () => {
     })
     expect(mapStepIds({
       rule: 'wireJoin',
-      input: { kind: 'iota', a: 'w0', b: 'w1' },
+      input: { a: 'w0', b: 'w1' },
     }, iso)).toEqual({
       rule: 'wireJoin',
-      input: { kind: 'iota', a: 'W0', b: 'W1' },
+      input: { a: 'W0', b: 'W1' },
     })
-    const mappedRelationJoin = mapStepIds({
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: 'w0',
-        content,
-        parameters: ['w1', 'w2'],
-      },
-    }, iso)
-    expect(mappedRelationJoin).toEqual({
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: 'W0',
-        content,
-        parameters: ['W1', 'W2'],
-      },
-    })
-    expect(
-      mappedRelationJoin.rule === 'wireJoin'
-      && mappedRelationJoin.input.kind === 'relation'
-        ? mappedRelationJoin.input.content
-        : undefined,
-    ).toBe(content)
     expect(mapStepIds({
       rule: 'doubleCutElim',
       region: 'r1',

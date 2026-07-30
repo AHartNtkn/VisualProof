@@ -194,7 +194,6 @@ export function successorShiftCarrierInductive(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -859,7 +858,6 @@ export function successorShiftCarrierInductive(
   backward.record('specialize base-totality zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseValue,
       b: endpointWire(backward.diagram, copiedBaseZero, 'arg', 0),
     },
@@ -867,7 +865,6 @@ export function successorShiftCarrierInductive(
   backward.record('specialize base-totality right input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseTotalityRight,
       b: endpointWire(backward.diagram, copiedBaseResult, 'arg', 1),
     },
@@ -889,7 +886,6 @@ export function successorShiftCarrierInductive(
   backward.record('choose base totality input as its output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseTotalityRight,
       b: baseTotalityOutput,
     },
@@ -1012,7 +1008,6 @@ export function successorShiftCarrierInductive(
     backward.record(`specialize ${label} addition-base zero`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: baseValue,
         b: endpointWire(backward.diagram, zeroPremise, 'arg', 0),
       },
@@ -1020,7 +1015,6 @@ export function successorShiftCarrierInductive(
     backward.record(`specialize ${label} addition-base right`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: right,
         b: endpointWire(backward.diagram, result, 'arg', 1),
       },
@@ -1109,7 +1103,7 @@ export function successorShiftCarrierInductive(
   ] as const) {
     backward.record(`specialize base-transport functionality ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   deiterateNode(
@@ -1240,7 +1234,7 @@ export function successorShiftCarrierInductive(
   ] as const) {
     backward.record(`specialize base successor functionality ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   deiterateNode(
@@ -1405,7 +1399,6 @@ export function successorShiftCarrierInductive(
   backward.record('specialize inherited totality at closure right input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorTotalityRight,
       b: copiedInheritedRight,
     },
@@ -1457,7 +1450,6 @@ export function successorShiftCarrierInductive(
   backward.record('specialize closure output successor input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorOutput,
       b: endpointWire(backward.diagram, outputSuccessor, 'arg', 0),
     },
@@ -1578,7 +1570,7 @@ export function successorShiftCarrierInductive(
   ] as const) {
     backward.record(`specialize closure-totality step ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of [
@@ -1604,7 +1596,6 @@ export function successorShiftCarrierInductive(
   backward.record('choose closure totality successor output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorOutput,
       b: successorTotalityOutput,
     },
@@ -1712,7 +1703,6 @@ export function successorShiftCarrierInductive(
   backward.record('specialize inherited totality at transport right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: closureRight,
       b: copiedTransportRight,
     },
@@ -1764,7 +1754,6 @@ export function successorShiftCarrierInductive(
   backward.record('specialize inherited output successor input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: inheritedTransportOutput,
       b: endpointWire(
         backward.diagram,
@@ -1873,7 +1862,7 @@ export function successorShiftCarrierInductive(
     ] as const) {
       backward.record(`specialize ${label} ${binding}`, {
         rule: 'wireJoin',
-        input: { kind: 'iota', a: outer, b: inner },
+        input: { a: outer, b: inner },
       })
     }
     for (const node of [
@@ -1975,7 +1964,7 @@ export function successorShiftCarrierInductive(
   ] as const) {
     backward.record(`specialize successor-transport functionality ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   deiterateNode(
@@ -2127,7 +2116,7 @@ export function successorShiftCarrierInductive(
   ] as const) {
     backward.record(`specialize inherited shift ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of [

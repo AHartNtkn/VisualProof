@@ -4,7 +4,6 @@ import { exploreIso } from '../diagram/canonical/explore'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { IdentityRetarget } from '../rules/iteration'
-import type { ContentOccurrence } from '../rules/wire-quantifier'
 import { allocationReservation, type ProofAction } from './action'
 import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
@@ -57,17 +56,6 @@ function mapEndpoint(iso: DiagramIso, endpoint: Endpoint): Endpoint {
   return {
     node: mapId(iso.nodes, endpoint.node, 'node'),
     port: endpoint.port,
-  }
-}
-
-function mapContentOccurrence(
-  iso: DiagramIso,
-  occurrence: ContentOccurrence,
-): ContentOccurrence {
-  return {
-    sel: mapSelection(iso, occurrence.sel),
-    args: occurrence.args.map((wire) =>
-      mapId(iso.wires, wire, 'wire')),
   }
 }
 
@@ -128,46 +116,28 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
           mapId(iso.wires, wire, 'wire')),
       }
     case 'wireJoin':
-      return step.input.kind === 'iota'
-        ? {
-            ...step,
-            input: {
-              ...step.input,
-              a: mapId(iso.wires, step.input.a, 'wire'),
-              b: mapId(iso.wires, step.input.b, 'wire'),
-            },
-          }
-        : {
-            ...step,
-            input: {
-              ...step.input,
-              wire: mapId(iso.wires, step.input.wire, 'wire'),
-              parameters: step.input.parameters.map((wire) =>
-                mapId(iso.wires, wire, 'wire')),
-            },
-          }
+      return {
+        ...step,
+        input: {
+          a: mapId(iso.wires, step.input.a, 'wire'),
+          b: mapId(iso.wires, step.input.b, 'wire'),
+        },
+      }
     case 'erasure':
       return { ...step, sel: mapSelection(iso, step.sel) }
     case 'wireSever':
-      return step.input.kind === 'iota'
-        ? {
-            ...step,
-            input: {
-              ...step.input,
-              wire: mapId(iso.wires, step.input.wire, 'wire'),
-              keep: step.input.keep.map((endpoint) =>
-                mapEndpoint(iso, endpoint)),
-            },
-          }
-        : {
-            ...step,
-            input: {
-              ...step.input,
-              scope: mapId(iso.regions, step.input.scope, 'region'),
-              occurrences: step.input.occurrences.map((occurrence) =>
-                mapContentOccurrence(iso, occurrence)),
-            },
-          }
+      return {
+        ...step,
+        input: {
+          ...step.input,
+          wire: mapId(iso.wires, step.input.wire, 'wire'),
+          keep: step.input.keep.map((endpoint) =>
+            mapEndpoint(iso, endpoint)),
+          ...(step.input.scope !== undefined
+            ? { scope: mapId(iso.regions, step.input.scope, 'region') }
+            : {}),
+        },
+      }
     case 'iteration':
       return {
         ...step,

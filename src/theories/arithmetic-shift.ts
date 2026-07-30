@@ -255,7 +255,6 @@ function succShiftS(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -597,7 +596,6 @@ function succShiftS(
   backward.record('specialize inherited totality at claim right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: claimRight,
       b: exactOne(
         scopedWires(backward.diagram, inheritedTotality),
@@ -657,7 +655,6 @@ function succShiftS(
   backward.record('specialize predecessor-sum successor input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorSum,
       b: endpointWire(
         backward.diagram,
@@ -750,7 +747,7 @@ function succShiftS(
   ] as const) {
     backward.record(`specialize inherited transport ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of [
@@ -823,7 +820,6 @@ function succShiftS(
     backward.record(`specialize addition-functional ${label}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: outer,
         b: inner,
       },
@@ -867,7 +863,6 @@ function succShiftS(
   backward.record('choose inherited predecessor sum as claim witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorSum,
       b: endpointWire(
         backward.diagram,

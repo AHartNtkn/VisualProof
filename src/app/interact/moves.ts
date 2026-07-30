@@ -106,7 +106,7 @@ export function proofConnectionStep(
   }
   const step: ProofStep = {
     rule: 'wireJoin',
-    input: { kind: 'iota', a: source.wire, b: target.wire },
+    input: { a: source.wire, b: target.wire },
   }
   applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
   return step
@@ -165,30 +165,19 @@ export class ProofMoveController {
       engine: options.engine,
       viewScale: options.viewScale,
       theme: options.theme,
-      relationSelection: {
-        selection: options.selection,
-        setSelection: options.setSelection,
-      },
       commit: (gesture, pointer) => {
         this.#lastPointer = pointer
-        switch (gesture.kind) {
-          case 'wire':
-            try {
-              return this.#commit(proofConnectionStep(
-                options.diagram(),
-                gesture.source,
-                gesture.target,
-                options.orientation(),
-                options.fuel(),
-              ))
-            } catch (error) {
-              options.refuse(error instanceof Error ? error.message : String(error), pointer)
-              return false
-            }
-          case 'relationJoin':
-            return this.#commit({ rule: 'wireJoin', input: gesture.input })
-          case 'relationSever':
-            return this.#commit({ rule: 'wireSever', input: gesture.input })
+        try {
+          return this.#commit(proofConnectionStep(
+            options.diagram(),
+            gesture.source,
+            gesture.target,
+            options.orientation(),
+            options.fuel(),
+          ))
+        } catch (error) {
+          options.refuse(error instanceof Error ? error.message : String(error), pointer)
+          return false
         }
       },
       refuse: options.refuse,

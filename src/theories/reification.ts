@@ -239,7 +239,6 @@ function insertExplicitMaterial(
     recorder.record(`connect material formal ${index + 1}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: formalVariables[index]!,
         b: local,
       },

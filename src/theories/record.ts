@@ -113,7 +113,6 @@ export class PrimitiveStepRecorder {
     // identity action and is elided. Every other resolved step stays loud.
     if (
       resolved.rule === 'wireJoin'
-      && resolved.input.kind === 'iota'
       && resolved.input.a === resolved.input.b
     ) return
     if (
@@ -170,7 +169,7 @@ export class PrimitiveStepRecorder {
     this.#recordAction(compileRelationSeverAction(
       label,
       this.#diagram,
-      { kind: 'relation', scope: input.scope, occurrences },
+      { scope: input.scope, occurrences },
       this.#context,
       this.#orientation,
     ))

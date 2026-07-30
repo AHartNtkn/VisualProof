@@ -216,7 +216,6 @@ function plusComm(
       forward.record(`attach ${label} ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -527,7 +526,6 @@ function plusComm(
   backward.record('specialize cited support at outer right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: backwardRight,
       b: citedFixedRight,
     },
@@ -690,7 +688,6 @@ function plusComm(
   backward.record('specialize crossed implication at public output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: backwardOutput,
       b: exactOne(
         scopedWires(backward.diagram, inheritedCross),

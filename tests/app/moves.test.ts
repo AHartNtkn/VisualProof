@@ -1,18 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { applicableActions } from '../../src/app/actions'
-import type { Hit } from '../../src/app/hittest'
-import {
-  ProofMoveController,
-  proofConnectionStep,
-} from '../../src/app/interact/moves'
-import type { PointerSample } from '../../src/app/interact/viewport'
+import { proofConnectionStep } from '../../src/app/interact/moves'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
-import { mkEngine } from '../../src/view/engine'
-import { LIGHT } from '../../src/view/paint'
-import { vec } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 
 describe('proof move vocabulary', () => {
@@ -49,7 +41,7 @@ describe('proof move vocabulary', () => {
       0,
     )).toEqual({
       rule: 'wireJoin',
-      input: { kind: 'iota', a: left, b: right },
+      input: { a: left, b: right },
     })
   })
 
@@ -68,60 +60,8 @@ describe('proof move vocabulary', () => {
       0,
     )).toEqual({
       rule: 'wireJoin',
-      input: { kind: 'iota', a: left, b: right },
+      input: { a: left, b: right },
     })
-  })
-
-  it('handles Escape when it aborts a pending relation wire', () => {
-    const builder = new DiagramBuilder()
-    const content = builder.ref(builder.root, 'NullaryBody', relSig([]))
-    const diagram = builder.build()
-    const engine = mkEngine(diagram, [])
-    engine.bodies.get(content)!.pos = vec(0, 0)
-    let selection: readonly Hit[] = [{ kind: 'node', id: content }]
-    const point = vec(0, 0)
-    const pointer: PointerSample = {
-      pointerId: 1,
-      button: 0,
-      client: point,
-      screen: point,
-      world: point,
-      hit: { kind: 'node', id: content },
-      shiftKey: false,
-      ctrlKey: false,
-      altKey: false,
-      metaKey: false,
-    }
-    const moves = new ProofMoveController({
-      host: { ownerDocument: {} } as unknown as HTMLElement,
-      active: () => true,
-      diagram: () => diagram,
-      engine: () => engine,
-      viewScale: () => 1,
-      selection: () => selection,
-      setSelection: (hits) => { selection = hits },
-      context: () => EMPTY_PROOF_CONTEXT,
-      orientation: () => 'forward',
-      apply: () => undefined,
-      refuse: () => undefined,
-      theme: () => LIGHT,
-      fuel: () => 0,
-      openSpawn: () => undefined,
-    })
-    const claim = moves.claim(pointer)!
-    const loosePoint = { ...pointer, world: vec(0, 80), client: vec(0, 80) }
-    claim.move(loosePoint)
-    claim.release(loosePoint, true)
-    const escape = {
-      key: 'Escape',
-      shiftKey: false,
-      ctrlKey: false,
-      altKey: false,
-      metaKey: false,
-      repeat: false,
-    }
-    expect(moves.keyDown(escape)).toBe(true)
-    expect(moves.keyDown(escape)).toBe(false)
   })
 
 })

@@ -212,7 +212,6 @@ export function associativityCarrierBase(
       forward.record('attach ' + label + ' argument ' + index, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -399,7 +398,6 @@ export function associativityCarrierBase(
   backward.record('choose inline-base totality witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseTotalityInput,
       b: baseTotalityOutput,
     },
@@ -457,7 +455,6 @@ export function associativityCarrierBase(
   backward.record('specialize copied addition-base zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseValue,
       b: endpointWire(backward.diagram, copiedAdditionBaseZero, 'arg', 0),
     },
@@ -489,7 +486,6 @@ export function associativityCarrierBase(
   backward.record('collapse residual addition-base input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseValue,
       b: copiedAdditionBaseRight,
     },
@@ -568,7 +564,6 @@ export function associativityCarrierBase(
   backward.record('choose inline-base transport output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseTransportInnerSum,
       b: baseTransportOutput,
     },
@@ -616,7 +611,6 @@ export function associativityCarrierBase(
     backward.record(`specialize ${label} zero`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: baseValue,
         b: endpointWire(backward.diagram, zeroPremise, 'arg', 0),
       },
@@ -624,7 +618,6 @@ export function associativityCarrierBase(
     backward.record(`specialize ${label} right`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: right,
         b: endpointWire(backward.diagram, result, 'arg', 1),
       },
@@ -702,7 +695,7 @@ export function associativityCarrierBase(
   ] as const) {
     backward.record('specialize inline-base functionality', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: target, b: variable },
+      input: { a: target, b: variable },
     })
   }
   backward.record(

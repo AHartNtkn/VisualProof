@@ -179,12 +179,7 @@ function applyStepRaw(
         reservation,
       )
     case 'wireJoin':
-      return applyWireJoin(
-        diagram,
-        step.input,
-        orientation,
-        reservation,
-      )
+      return applyWireJoin(diagram, step.input, orientation)
     case 'erasure':
       return applyErasure(diagram, step.sel, orientation)
     case 'wireSever':
@@ -346,7 +341,7 @@ function joinedRepresentative(
   step: ProofStep,
   wire: WireId,
 ): WireId {
-  if (step.rule !== 'wireJoin' || step.input.kind !== 'iota') return wire
+  if (step.rule !== 'wireJoin') return wire
   const a = diagram.wires[step.input.a]
   const b = diagram.wires[step.input.b]
   if (a === undefined || b === undefined) return wire

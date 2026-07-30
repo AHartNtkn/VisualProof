@@ -88,7 +88,6 @@ describe('applyWireSever', () => {
     const diagram = builder.build()
 
     const severed = applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: first, port: { kind: 'arg', index: 0 } }],
     })
@@ -116,7 +115,6 @@ describe('applyWireSever', () => {
     const diagram = builder.build()
 
     const severed = applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: first, port: { kind: 'arg', index: 0 } }],
     })
@@ -136,7 +134,6 @@ describe('applyWireSever', () => {
     const diagram = builder.build()
 
     expect(() => applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [],
     }))
@@ -152,7 +149,6 @@ describe('applyWireSever', () => {
     const diagram = builder.build()
 
     expect(() => applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: 'ghost', port: { kind: 'arg', index: 0 } }],
     })).toThrowError(/'ghost'.*is not an endpoint of wire 'w0'/)
@@ -174,7 +170,6 @@ describe('generalized wire sever', () => {
     const diagram = builder.build()
 
     const severed = applyWireSever(diagram, {
-      kind: 'iota',
       wire: rel,
       keep: [{ node: headA, port: { kind: 'head' } }],
     })
@@ -202,7 +197,6 @@ describe('generalized wire sever', () => {
     const diagram = builder.build()
 
     const severed = applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
       scope: cut2,
@@ -212,13 +206,11 @@ describe('generalized wire sever', () => {
     expect(severed.wires[wire]!.scope).toBe(builder.root)
 
     expect(() => applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
       scope: cut1,
     })).toThrowError(/severing a wire requires a positive scope/)
     expect(() => applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
       scope: cut1,
@@ -238,7 +230,6 @@ describe('generalized wire sever', () => {
     const diagram = builder.build()
 
     expect(() => applyWireSever(diagram, {
-      kind: 'iota',
       wire,
       keep: [{ node: keepNode, port: { kind: 'arg', index: 0 } }],
       scope: cut2,

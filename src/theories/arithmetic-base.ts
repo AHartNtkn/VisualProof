@@ -236,7 +236,6 @@ function plusLeftUnit(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -414,7 +413,6 @@ function plusLeftUnit(
   backward.record('specialize plusBase zero variable', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: reviewedClaimZero,
       b: endpointWire(
         backward.diagram,
@@ -427,7 +425,6 @@ function plusLeftUnit(
   backward.record('specialize plusBase addend variable', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: reviewedClaimAddend,
       b: endpointWire(
         backward.diagram,
@@ -500,7 +497,6 @@ function plusLeftUnit(
   backward.record('specialize plusSingleValued left variable', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: reviewedClaimZero,
       b: endpointWire(backward.diagram, firstPlus, 'arg', 0),
     },
@@ -508,7 +504,6 @@ function plusLeftUnit(
   backward.record('specialize plusSingleValued right variable', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: reviewedClaimAddend,
       b: endpointWire(backward.diagram, firstPlus, 'arg', 1),
     },
@@ -516,7 +511,6 @@ function plusLeftUnit(
   backward.record('specialize plusSingleValued first output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: reviewedClaimOutput,
       b: endpointWire(backward.diagram, firstPlus, 'arg', 2),
     },
@@ -524,7 +518,6 @@ function plusLeftUnit(
   backward.record('specialize plusSingleValued second output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: reviewedClaimAddend,
       b: endpointWire(backward.diagram, secondPlus, 'arg', 2),
     },

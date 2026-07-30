@@ -409,7 +409,6 @@ export function commutativityCarrierInductive(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -454,7 +453,6 @@ export function commutativityCarrierInductive(
     forward.record(`attach ${label} carrier individual`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: individual,
         b: endpointWire(forward.diagram, application, 'arg', 0),
       },
@@ -1208,11 +1206,11 @@ export function commutativityCarrierInductive(
   const zeroVariables = scopedWires(backward.diagram, copiedZeroUnique)
   backward.record('specialize first commutativity-base zero', {
     rule: 'wireJoin',
-    input: { kind: 'iota', a: baseValue, b: zeroVariables[0]! },
+    input: { a: baseValue, b: zeroVariables[0]! },
   })
   backward.record('specialize second commutativity-base zero', {
     rule: 'wireJoin',
-    input: { kind: 'iota', a: baseValue, b: zeroVariables[1]! },
+    input: { a: baseValue, b: zeroVariables[1]! },
   })
   for (const node of directNodes(backward.diagram, copiedZeroUniqueAntecedent)) {
     deiterateNode(
@@ -1301,7 +1299,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize addition-base zero in commutativity totality', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseValue,
       b: endpointWire(backward.diagram, copiedAdditionBaseZero, 'arg', 0),
     },
@@ -1309,7 +1306,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize addition-base right in commutativity totality', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseTotalityRight,
       b: endpointWire(backward.diagram, copiedAdditionBaseResult, 'arg', 1),
     },
@@ -1331,7 +1327,6 @@ export function commutativityCarrierInductive(
   backward.record('choose base-totality right as output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseTotalityRight,
       b: baseTotalityOutput,
     },
@@ -1453,7 +1448,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize commutativity-base left-unit ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   deiterateNode(
@@ -1527,7 +1522,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize inherited totality at base zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseValue,
       b: exactOne(
         scopedWires(backward.diagram, copiedBaseTotality),
@@ -1616,7 +1610,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize commutativity-base right-unit ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of directNodes(
@@ -1670,7 +1664,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize inherited right identity at base zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: baseValue,
       b: exactOne(
         scopedWires(backward.diagram, copiedInheritedRightCarrier),
@@ -1855,7 +1848,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize inherited closure totality right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: closureGoalRight,
       b: exactOne(
         scopedWires(backward.diagram, copiedClosureInheritedTotality),
@@ -1910,7 +1902,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize closure output successor input', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: inheritedClosureOutput,
       b: endpointWire(
         backward.diagram,
@@ -1996,7 +1987,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize closure step ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of directNodes(
@@ -2031,7 +2022,6 @@ export function commutativityCarrierInductive(
   backward.record('choose closure totality successor output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: closureOutputSuccessor,
       b: endpointWire(
         backward.diagram,
@@ -2096,7 +2086,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize predecessor totality at fixed right', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: fixedRight,
       b: exactOne(
         scopedWires(backward.diagram, copiedCrossPredecessorTotality),
@@ -2151,7 +2140,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize predecessor-output successor', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorOutput,
       b: endpointWire(
         backward.diagram,
@@ -2233,7 +2221,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize crossed addition-step ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of directNodes(
@@ -2292,7 +2280,6 @@ export function commutativityCarrierInductive(
   backward.record('specialize inherited commutativity output', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessorOutput,
       b: exactOne(
         scopedWires(backward.diagram, copiedInheritedCommutativity),
@@ -2409,7 +2396,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize fixed-right transport ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of directNodes(
@@ -2477,7 +2464,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize crossed functionality ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of directNodes(
@@ -2545,7 +2532,7 @@ export function commutativityCarrierInductive(
   ] as const) {
     backward.record(`specialize cited successor shift ${label}`, {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: outer, b: inner },
+      input: { a: outer, b: inner },
     })
   }
   for (const node of directNodes(

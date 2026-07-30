@@ -287,7 +287,6 @@ function plusRightUnit(
   forward.record('attach midpoint claim Zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: forwardClaimZero,
       b: endpointWire(
         forward.diagram,
@@ -321,7 +320,6 @@ function plusRightUnit(
       forward.record(`attach ${label} argument ${index}`, {
         rule: 'wireJoin',
         input: {
-          kind: 'iota',
           a: wire,
           b: endpointWire(forward.diagram, node, 'arg', index),
         },
@@ -629,7 +627,6 @@ function plusRightUnit(
   backward.record('specialize inherited E at claim zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: claimZero,
       b: inheritedLocalZero,
     },
@@ -693,7 +690,6 @@ function plusRightUnit(
     backward.record(`specialize addition-functional ${label}`, {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: outer,
         b: inner,
       },

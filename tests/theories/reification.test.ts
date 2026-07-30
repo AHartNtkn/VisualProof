@@ -132,9 +132,7 @@ const explicitMaterial = explicitMaterialOf
  */
 function isCompiledSeverAction(action: Theorem['actions'][number]): boolean {
   return action.steps.some((step) =>
-    (step.rule === 'wireSever'
-      && step.input.kind === 'iota'
-      && step.input.scope !== undefined)
+    (step.rule === 'wireSever' && step.input.scope !== undefined)
     || step.rule === 'endsSpawn'
     || step.rule === 'abstractFormal'
     || step.rule === 'identityAbstract'
@@ -146,11 +144,9 @@ function compiledSeverScope(
   action: Theorem['actions'][number],
 ): string | undefined {
   for (const step of action.steps) {
-    if (
-      step.rule === 'wireSever'
-      && step.input.kind === 'iota'
-      && step.input.scope !== undefined
-    ) return step.input.scope
+    if (step.rule === 'wireSever' && step.input.scope !== undefined) {
+      return step.input.scope
+    }
     if (step.rule === 'vacuousIntro') return step.scope
     if (step.rule === 'abstractFormal' || step.rule === 'identityAbstract'
       || step.rule === 'refAbstract') return step.scope

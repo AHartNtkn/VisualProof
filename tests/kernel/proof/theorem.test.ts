@@ -4,8 +4,10 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
+import { compileRelationJoinAction } from '../../../src/kernel/proof/compile-content'
 import {
   EMPTY_PROOF_CONTEXT,
+  verifyTheory,
   registerTheorem,
   type ProofContext,
 } from '../../../src/kernel/proof/context'
@@ -97,7 +99,6 @@ function introduceCapturedApplication(): Theorem {
   const connect = action('supply the captured argument', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: argument,
       b: localArgument,
     },
@@ -195,6 +196,18 @@ describe('checkTheorem', () => {
       contentBuilder.build(),
       [formalStub, parameterStub],
     )
+    const definitionBuilder = new DiagramBuilder()
+    const definitionFormals = [
+      definitionBuilder.wire(definitionBuilder.root, []),
+      definitionBuilder.wire(definitionBuilder.root, []),
+    ]
+    const context = verifyTheory({
+      relations: [['G', mkDiagramWithBoundary(
+        definitionBuilder.build(),
+        definitionFormals,
+      )]],
+      theorems: [],
+    })
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
     const application = builder.atom(negative, relSig([IOTA]))
@@ -208,23 +221,18 @@ describe('checkTheorem', () => {
     }], relSig([IOTA]))
     const parameter = builder.wire(builder.root, [])
     const lhsDiagram = builder.build()
-    const grounding: ProofAction = {
-      label: 'ground relation',
-      steps: [{
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: relation,
-          content,
-          parameters: [parameter],
-        },
-      }],
-      placements: [],
-    }
+    const grounding: ProofAction = compileRelationJoinAction(
+      'ground relation',
+      lhsDiagram,
+      relation,
+      content,
+      [parameter],
+      context,
+    )
     const rhsDiagram = applyAction(
       lhsDiagram,
       grounding,
-      EMPTY_PROOF_CONTEXT,
+      context,
     )
     const theorem: Theorem = {
       name: 'grounding-replay',
@@ -233,7 +241,7 @@ describe('checkTheorem', () => {
       actions: [grounding],
     }
 
-    expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
+    expect(() => checkTheorem(theorem, context)).not.toThrow()
   })
 
   it('pins ordered boundary correspondence', () => {

@@ -3,18 +3,27 @@ import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type {
   Diagram,
   DiagramNode,
+  Endpoint,
   NodeId,
   Region,
   RegionId,
   Wire,
   WireId,
 } from '../diagram/diagram'
-import { exploreIso } from '../diagram/canonical/explore'
+import { exploreForm, exploreIso } from '../diagram/canonical/explore'
+import { mkDiagram } from '../diagram/diagram'
 import { isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { applyWireSever, type WireSeverInput } from '../rules/wire-quantifier'
+import {
+  selectionContents,
+  type SelectionContents,
+  type SubgraphSelection,
+} from '../diagram/subgraph/selection'
+import { removeSubgraph } from '../diagram/subgraph/splice'
+import { freshId } from '../diagram/subgraph/freshId'
+import { polarity } from '../diagram/regions'
 import { RuleError } from '../rules/error'
 import { mapStepIds } from './compose'
 import type { ProofContext } from './context'
@@ -365,7 +374,7 @@ function handleLeaf(
           const wire = plumb(emitter, residual, attachments.args)
           emitter.emit({
             rule: 'wireJoin',
-            input: { kind: 'iota', a: host, b: wire },
+            input: { a: host, b: wire },
           })
         } else {
           const wire = plumb(emitter, residual, [head, ...attachments.args])
@@ -551,15 +560,285 @@ export function compileRelationJoin(
   return steps
 }
 
+/** One explicitly designated exact occurrence to abstract. */
+export type SeverOccurrence = {
+  readonly sel: SubgraphSelection
+  readonly args: readonly WireId[]
+}
+
+/** Durable relation-abstraction input: scope plus designated occurrences. */
+export type RelationSeverInput = {
+  readonly scope: RegionId
+  readonly occurrences: readonly SeverOccurrence[]
+}
+
+type PreparedOccurrenceContent = {
+  readonly pattern: DiagramWithBoundary
+  readonly ambientAttachments: readonly WireId[]
+}
+
+function prepareOccurrence(
+  diagram: Diagram,
+  occurrence: SeverOccurrence,
+): PreparedOccurrenceContent {
+  const extracted = extractSubgraph(diagram, occurrence.sel)
+  const stubByAttachment = new Map<WireId, WireId>()
+  extracted.attachments.forEach((attachment, index) => {
+    stubByAttachment.set(attachment, extracted.pattern.boundary[index]!)
+  })
+  const formalBoundary = occurrence.args.map((attachment, index) => {
+    if (diagram.wires[attachment] === undefined) {
+      throw new RuleError(`unknown formal argument wire '${attachment}'`)
+    }
+    const stub = stubByAttachment.get(attachment)
+    if (stub === undefined) {
+      throw new RuleError(
+        `formal argument ${index} wire '${attachment}' does not touch `
+        + 'the selected content',
+      )
+    }
+    return stub
+  })
+  const formalSet = new Set(occurrence.args)
+  const ambientAttachments = extracted.attachments.filter(
+    (attachment) => !formalSet.has(attachment),
+  )
+  return {
+    pattern: mkDiagramWithBoundary(
+      extracted.pattern.diagram,
+      [
+        ...formalBoundary,
+        ...ambientAttachments.map((attachment) =>
+          stubByAttachment.get(attachment)!),
+      ],
+    ),
+    ambientAttachments,
+  }
+}
+
+function intersects<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
+  for (const item of left) {
+    if (right.has(item)) return true
+  }
+  return false
+}
+
+function contentsEmpty(contents: SelectionContents): boolean {
+  return contents.allRegions.size === 0
+    && contents.allNodes.size === 0
+    && contents.internalWires.length === 0
+}
+
+function assertDisjointOccurrences(
+  occurrences: readonly {
+    readonly occurrence: SeverOccurrence
+    readonly contents: SelectionContents
+  }[],
+): void {
+  for (let leftIndex = 0; leftIndex < occurrences.length; leftIndex++) {
+    const left = occurrences[leftIndex]!
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < occurrences.length;
+      rightIndex++
+    ) {
+      const right = occurrences[rightIndex]!
+      if (
+        left.contents.allRegions.has(right.occurrence.sel.region)
+        || right.contents.allRegions.has(left.occurrence.sel.region)
+      ) {
+        throw new RuleError(
+          'an occurrence site is selected recursively inside another occurrence',
+        )
+      }
+      if (
+        left.occurrence.sel.region === right.occurrence.sel.region
+        && contentsEmpty(left.contents)
+        && contentsEmpty(right.contents)
+      ) {
+        throw new RuleError(
+          `duplicate empty content at the same occurrence site `
+          + `'${left.occurrence.sel.region}'`,
+        )
+      }
+      if (
+        intersects(left.contents.allRegions, right.contents.allRegions)
+        || intersects(left.contents.allNodes, right.contents.allNodes)
+        || intersects(
+          new Set(left.contents.internalWires),
+          new Set(right.contents.internalWires),
+        )
+      ) {
+        throw new RuleError(
+          `relation sever occurrences ${leftIndex} and ${rightIndex} overlap`,
+        )
+      }
+    }
+  }
+}
+
 /**
- * Compile a monolithic relation sever into primitive steps: plan the inverse
- * join against the (virtually) severed diagram, then emit each planned
- * step's inverse in reverse order, transporting ids through per-step
- * isomorphisms into the caller's real diagram.
+ * The abstraction result the compiled sequence must reach: occurrences
+ * removed, one fresh relation wire applied at every site.
+ */
+function constructSevered(
+  diagram: Diagram,
+  input: RelationSeverInput,
+  orientation: Orientation,
+): {
+  readonly severed: Diagram
+  readonly wire: WireId
+  readonly pattern: DiagramWithBoundary
+  readonly ambientAttachments: readonly WireId[]
+} {
+  const need = orientation === 'forward' ? 'positive' : 'negative'
+  const have = polarity(diagram, input.scope)
+  if (have !== need) {
+    throw new RuleError(
+      `${orientation === 'backward' ? 'backward ' : ''}`
+      + `relation wire sever requires a ${need} scope; `
+      + `'${input.scope}' is ${have}`,
+    )
+  }
+  if (input.occurrences.length === 0) {
+    throw new RuleError('relation wire sever requires at least one occurrence')
+  }
+  const contents = input.occurrences.map((occurrence) => ({
+    occurrence,
+    contents: selectionContents(diagram, occurrence.sel),
+  }))
+  assertDisjointOccurrences(contents)
+  for (const { occurrence } of contents) {
+    if (!isAncestorOrEqual(diagram, input.scope, occurrence.sel.region)) {
+      throw new RuleError(
+        `occurrence region '${occurrence.sel.region}' must descend from `
+        + `quantifier scope '${input.scope}'`,
+      )
+    }
+  }
+  const prepared = input.occurrences.map((occurrence) =>
+    prepareOccurrence(diagram, occurrence))
+  const first = prepared[0]!
+  const firstFormalSigs = input.occurrences[0]!.args.map((attachment) =>
+    diagram.wires[attachment]!.sig)
+  const firstForm = exploreForm(first.pattern.diagram, first.pattern.boundary)
+  for (const [index, candidate] of prepared.entries()) {
+    if (index === 0) continue
+    const args = input.occurrences[index]!.args
+    if (args.length !== firstFormalSigs.length) {
+      throw new RuleError(
+        `occurrence ${index} has ${args.length} formal arguments; `
+        + `expected ${firstFormalSigs.length}`,
+      )
+    }
+    args.forEach((attachment, argumentIndex) => {
+      const actual = diagram.wires[attachment]!.sig
+      const expected = firstFormalSigs[argumentIndex]!
+      if (!sigEquals(actual, expected)) {
+        throw new RuleError(
+          `formal argument ${argumentIndex} signature differs across `
+          + `occurrences: '${sigKey(expected)}' vs '${sigKey(actual)}'`,
+        )
+      }
+    })
+    if (
+      candidate.ambientAttachments.length !== first.ambientAttachments.length
+      || candidate.ambientAttachments.some((attachment, position) =>
+        attachment !== first.ambientAttachments[position])
+    ) {
+      throw new RuleError(
+        'ambient attachments must be identical host wires in every occurrence',
+      )
+    }
+    if (
+      exploreForm(candidate.pattern.diagram, candidate.pattern.boundary)
+      !== firstForm
+    ) {
+      throw new RuleError(
+        'occurrences are not isomorphic under the same pinned content',
+      )
+    }
+  }
+  for (const attachment of first.ambientAttachments) {
+    const parameter = diagram.wires[attachment]!
+    if (!isAncestorOrEqual(diagram, parameter.scope, input.scope)) {
+      throw new RuleError(
+        `ambient attachment '${attachment}' scope '${parameter.scope}' `
+        + `must enclose quantifier scope '${input.scope}'`,
+      )
+    }
+  }
+
+  let result = diagram
+  for (const occurrence of input.occurrences) {
+    result = removeSubgraph(result, occurrence.sel)
+  }
+  const quantifierSig = relSig(input.occurrences[0]!.args.map((attachment) =>
+    diagram.wires[attachment]!.sig))
+  const takenNodes = new Set(Object.keys(diagram.nodes))
+  const quantifierId = freshId(
+    new Set(Object.keys(diagram.wires)),
+    'wire_quantifier',
+  )
+  const nodes: Record<NodeId, DiagramNode> = { ...result.nodes }
+  const wires: Record<WireId, Wire> = { ...result.wires }
+  const quantifierEndpoints: Endpoint[] = []
+  input.occurrences.forEach((occurrence, occurrenceIndex) => {
+    const nodeId = freshId(
+      takenNodes,
+      `wire_quantifier_atom_${occurrenceIndex}`,
+    )
+    takenNodes.add(nodeId)
+    nodes[nodeId] = {
+      kind: 'atom',
+      region: occurrence.sel.region,
+      sig: quantifierSig,
+    }
+    quantifierEndpoints.push({ node: nodeId, port: { kind: 'head' } })
+    occurrence.args.forEach((attachment, argumentIndex) => {
+      const existing = wires[attachment]
+      if (existing === undefined) {
+        throw new RuleError(
+          `formal argument wire '${attachment}' did not survive content removal`,
+        )
+      }
+      wires[attachment] = {
+        scope: existing.scope,
+        sig: existing.sig,
+        endpoints: [
+          ...existing.endpoints,
+          { node: nodeId, port: { kind: 'arg', index: argumentIndex } },
+        ],
+      }
+    })
+  })
+  wires[quantifierId] = {
+    scope: input.scope,
+    sig: quantifierSig,
+    endpoints: quantifierEndpoints,
+  }
+  return {
+    severed: mkDiagram({
+      root: result.root,
+      regions: { ...result.regions },
+      nodes,
+      wires,
+    }),
+    wire: quantifierId,
+    pattern: first.pattern,
+    ambientAttachments: first.ambientAttachments,
+  }
+}
+
+/**
+ * Compile a relation sever into primitive steps: plan the inverse join
+ * against the (virtually) severed diagram, then emit each planned step's
+ * inverse in reverse order, transporting ids through per-step isomorphisms
+ * into the caller's real diagram.
  */
 export function compileRelationSever(
   diagram: Diagram,
-  input: Extract<WireSeverInput, { readonly kind: 'relation' }>,
+  input: RelationSeverInput,
   context: ProofContext,
   orientation: Orientation = 'forward',
   options: CompileOptions = {},
@@ -567,44 +846,12 @@ export function compileRelationSever(
   readonly steps: ProofStep[]
   readonly diffs: readonly { readonly before: Diagram; readonly after: Diagram }[]
 } {
-  const severed = applyWireSever(diagram, input, orientation)
-  const wire = newWireOfSig(
-    diagram,
+  const {
     severed,
-    relSig(input.occurrences[0]!.args.map((attachment) => {
-      const argWire = diagram.wires[attachment]
-      if (argWire === undefined) {
-        throw new RuleError(`unknown formal argument wire '${attachment}'`)
-      }
-      return argWire.sig
-    })),
-  )
-
-  const extracted = extractSubgraph(diagram, input.occurrences[0]!.sel)
-  const stubByAttachment = new Map<WireId, WireId>()
-  extracted.attachments.forEach((attachment, index) => {
-    stubByAttachment.set(attachment, extracted.pattern.boundary[index]!)
-  })
-  const formalBoundary = input.occurrences[0]!.args.map((attachment) => {
-    const stub = stubByAttachment.get(attachment)
-    if (stub === undefined) {
-      throw new RuleError(
-        `formal argument wire '${attachment}' does not touch the selected content`,
-      )
-    }
-    return stub
-  })
-  const formalSet = new Set(input.occurrences[0]!.args)
-  const ambientAttachments = extracted.attachments.filter(
-    (attachment) => !formalSet.has(attachment),
-  )
-  const pattern = mkDiagramWithBoundary(
-    extracted.pattern.diagram,
-    [
-      ...formalBoundary,
-      ...ambientAttachments.map((attachment) => stubByAttachment.get(attachment)!),
-    ],
-  )
+    wire,
+    pattern,
+    ambientAttachments,
+  } = constructSevered(diagram, input, orientation)
 
   const trace: Array<{ step: ProofStep; pre: Diagram; post: Diagram }> = []
   const joinOrientation: Orientation =
@@ -796,7 +1043,6 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
       }
     }
     case 'wireJoin': {
-      if (step.input.kind !== 'iota') break
       const dying = preWire(step.input.b)
       const survivorPost = post.wires[step.input.a] !== undefined
         ? step.input.a
@@ -810,7 +1056,6 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
       return {
         rule: 'wireSever',
         input: {
-          kind: 'iota',
           wire: survivorPost,
           keep,
           scope: dying.scope,
@@ -903,7 +1148,7 @@ export function compileRelationJoinAction(
 export function compileRelationSeverAction(
   label: string,
   diagram: Diagram,
-  input: Extract<WireSeverInput, { readonly kind: 'relation' }>,
+  input: RelationSeverInput,
   context: ProofContext,
   orientation: Orientation = 'forward',
 ): ProofAction {

@@ -223,7 +223,6 @@ function buildZeroForward(context: ProofContext) {
   forward.record('identify base consequence with zero witness', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: zeroValue,
       b: endpointWire(forward.diagram, propertyAtZero, 'arg', 0),
     },
@@ -287,7 +286,6 @@ function buildZeroBackward(
   backward.record('identify conclusion witness with antecedent zero', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: existingZeroWire,
       b: endpointWire(backward.diagram, conclusionZero, 'arg', 0),
     },
@@ -349,7 +347,7 @@ function buildZeroBackward(
   )) {
     backward.record('specialize Nat base at zero witness', {
       rule: 'wireJoin',
-      input: { kind: 'iota', a: existingZeroWire, b: variable },
+      input: { a: existingZeroWire, b: variable },
     })
   }
   backward.record(
@@ -592,7 +590,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   forward.record('attach supplied successor predecessor', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: predecessor,
       b: endpointWire(forward.diagram, successorPremise, 'arg', 0),
     },
@@ -600,7 +597,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   forward.record('attach supplied successor result', {
     rule: 'wireJoin',
     input: {
-      kind: 'iota',
       a: successorResult,
       b: endpointWire(forward.diagram, successorPremise, 'arg', 1),
     },
@@ -701,7 +697,6 @@ function buildSuccForward(context: ProofContext): ForwardResult {
     forward.record('specialize copied hereditary closure', {
       rule: 'wireJoin',
       input: {
-        kind: 'iota',
         a: target,
         b: variable,
       },

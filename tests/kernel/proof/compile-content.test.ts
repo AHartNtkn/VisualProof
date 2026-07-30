@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import type { Diagram, WireId } from '../../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
-import {
-  applyWireJoin,
-  applyWireSever,
-} from '../../../src/kernel/rules/wire-quantifier'
 import {
   compileRelationJoin,
   compileRelationSever,
@@ -38,8 +33,6 @@ function replay(
 /**
  * A host whose dying wire has the given signature, applied twice inside a
  * negative cut, plus sig-wire parameters P (binary) and Q (unary) at root.
- * Extra argument positions of the dying wire attach to fresh cut-scoped
- * iota wires; a rel-sig position attaches to a shared applied wire.
  */
 function host(dyingSig = UNARY) {
   const builder = new DiagramBuilder()
@@ -65,30 +58,61 @@ function host(dyingSig = UNARY) {
   return { builder, cut, paramP, paramQ, dying, argWires }
 }
 
-function parity(
-  diagram: Diagram,
-  wire: WireId,
-  content: DiagramWithBoundary,
-  parameters: readonly WireId[],
-  context: ProofContext = EMPTY_PROOF_CONTEXT,
-): void {
-  const monolith = applyWireJoin(diagram, {
-    kind: 'relation',
-    wire,
-    content,
-    parameters,
-  })
-  const steps = compileRelationJoin(diagram, wire, content, parameters, context)
-  const compiled = replay(diagram, steps, context)
-  expect(exploreForm(compiled)).toEqual(exploreForm(monolith))
+type SiteParams = { readonly paramP: WireId; readonly paramQ: WireId }
+
+/**
+ * The expected instantiation result: the two end atoms are gone and each
+ * site holds `drawSite`'s content on the site's argument wires.
+ */
+function expectedHost(
+  dyingSig: ReturnType<typeof relSig>,
+  drawSite: (
+    builder: DiagramBuilder,
+    cut: string,
+    args: readonly WireId[],
+    params: SiteParams,
+  ) => void,
+): Diagram {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const siteArgs: WireId[][] = [[], []]
+  for (const bucket of [0, 1]) {
+    for (const argSig of dyingSig.args) {
+      siteArgs[bucket]!.push(builder.wire(cut, [], argSig))
+    }
+  }
+  const paramP = builder.relWire(builder.root, BINARY)
+  const paramQ = builder.relWire(builder.root, UNARY)
+  for (const bucket of [0, 1]) {
+    drawSite(builder, cut, siteArgs[bucket]!, { paramP, paramQ })
+  }
+  return builder.build()
 }
 
-describe('compileRelationJoin parity with the monolith', () => {
+/** Append an endpoint to an already-created builder wire. */
+function attach(
+  builder: DiagramBuilder,
+  wire: WireId,
+  node: string,
+  port: { kind: 'head' } | { kind: 'arg'; index: number }
+    | { kind: 'identity'; index: number },
+): void {
+  const wires = (builder as unknown as {
+    wires: Record<WireId, {
+      scope: string
+      sig: unknown
+      endpoints: Array<{ node: string; port: unknown }>
+    }>
+  }).wires
+  wires[wire]!.endpoints.push({ node, port })
+}
+
+describe('compileRelationJoin against hand-built expectations', () => {
   it('compiles the worked example: ∃y.(P(x,y) ∧ ¬Q(y))', () => {
     const content = new DiagramBuilder()
-    const cut = content.cut(content.root)
+    const contentCut = content.cut(content.root)
     const atomP = content.atom(content.root, BINARY)
-    const atomQ = content.atom(cut, UNARY)
+    const atomQ = content.atom(contentCut, UNARY)
     const formal = content.wire(content.root, [
       { node: atomP, port: { kind: 'arg', index: 0 } },
     ])
@@ -108,12 +132,28 @@ describe('compileRelationJoin parity with the monolith', () => {
     )
 
     const fixture = host()
-    parity(
-      fixture.builder.build(),
+    const diagram = fixture.builder.build()
+    const steps = compileRelationJoin(
+      diagram,
       fixture.dying,
       pattern,
       [fixture.paramP, fixture.paramQ],
+      EMPTY_PROOF_CONTEXT,
     )
+    const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
+
+    const expected = expectedHost(UNARY, (builder, cut, [x], params) => {
+      const y = builder.wire(cut, [])
+      const siteP = builder.atom(cut, BINARY)
+      attach(builder, params.paramP, siteP, { kind: 'head' })
+      attach(builder, x!, siteP, { kind: 'arg', index: 0 })
+      attach(builder, y, siteP, { kind: 'arg', index: 1 })
+      const negation = builder.cut(cut)
+      const siteQ = builder.atom(negation, UNARY)
+      attach(builder, params.paramQ, siteQ, { kind: 'head' })
+      attach(builder, y, siteQ, { kind: 'arg', index: 0 })
+    })
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
   })
 
   it('compiles an applied formal', () => {
@@ -127,14 +167,30 @@ describe('compileRelationJoin parity with the monolith', () => {
     ], UNARY)
     const pattern = mkDiagramWithBoundary(content.build(), [argFormal, relFormal])
 
-    const fixture = host(relSig([IOTA, UNARY]))
-    parity(fixture.builder.build(), fixture.dying, pattern, [])
+    const dyingSig = relSig([IOTA, UNARY])
+    const fixture = host(dyingSig)
+    const diagram = fixture.builder.build()
+    const steps = compileRelationJoin(
+      diagram,
+      fixture.dying,
+      pattern,
+      [],
+      EMPTY_PROOF_CONTEXT,
+    )
+    const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
+
+    const expected = expectedHost(dyingSig, (builder, cut, [x, applied]) => {
+      const site = builder.atom(cut, UNARY)
+      attach(builder, applied!, site, { kind: 'head' })
+      attach(builder, x!, site, { kind: 'arg', index: 0 })
+    })
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
   })
 
   it('compiles negated identity content', () => {
     const content = new DiagramBuilder()
-    const cut = content.cut(content.root)
-    const eq = content.identity(cut, IOTA, 2)
+    const contentCut = content.cut(content.root)
+    const eq = content.identity(contentCut, IOTA, 2)
     const left = content.wire(content.root, [
       { node: eq, port: { kind: 'identity', index: 0 } },
     ])
@@ -144,7 +200,23 @@ describe('compileRelationJoin parity with the monolith', () => {
     const pattern = mkDiagramWithBoundary(content.build(), [left, right])
 
     const fixture = host(BINARY)
-    parity(fixture.builder.build(), fixture.dying, pattern, [])
+    const diagram = fixture.builder.build()
+    const steps = compileRelationJoin(
+      diagram,
+      fixture.dying,
+      pattern,
+      [],
+      EMPTY_PROOF_CONTEXT,
+    )
+    const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
+
+    const expected = expectedHost(BINARY, (builder, cut, [first, second]) => {
+      const negation = builder.cut(cut)
+      const eqSite = builder.identity(negation, IOTA, 2)
+      attach(builder, first!, eqSite, { kind: 'identity', index: 0 })
+      attach(builder, second!, eqSite, { kind: 'identity', index: 1 })
+    })
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
   })
 
   it('compiles ref content against a loaded definition', () => {
@@ -165,12 +237,6 @@ describe('compileRelationJoin parity with the monolith', () => {
 
     const fixture = host()
     const diagram = fixture.builder.build()
-    const monolith = applyWireJoin(diagram, {
-      kind: 'relation',
-      wire: fixture.dying,
-      content: pattern,
-      parameters: [],
-    })
     const steps = compileRelationJoin(
       diagram,
       fixture.dying,
@@ -178,8 +244,13 @@ describe('compileRelationJoin parity with the monolith', () => {
       [],
       context,
     )
-    expect(exploreForm(replay(diagram, steps, context)))
-      .toEqual(exploreForm(monolith))
+    const compiled = replay(diagram, steps, context)
+
+    const expected = expectedHost(UNARY, (builder, cut, [x]) => {
+      const site = builder.ref(cut, 'D', UNARY)
+      attach(builder, x!, site, { kind: 'arg', index: 0 })
+    })
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
   })
 
   it('compiles empty content', () => {
@@ -188,18 +259,28 @@ describe('compileRelationJoin parity with the monolith', () => {
     const pattern = mkDiagramWithBoundary(content.build(), [formal])
 
     const fixture = host()
-    parity(fixture.builder.build(), fixture.dying, pattern, [])
+    const diagram = fixture.builder.build()
+    const steps = compileRelationJoin(
+      diagram,
+      fixture.dying,
+      pattern,
+      [],
+      EMPTY_PROOF_CONTEXT,
+    )
+    const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
+
+    const expected = expectedHost(UNARY, () => {})
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
   })
 
   it('compiles a relation sever as the inverse plan', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const sigWire = builder.wire(builder.root, [
+    builder.wire(builder.root, [
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    void sigWire
     const argA = builder.wire(builder.root, [
       { node: atomA, port: { kind: 'arg', index: 0 } },
     ])
@@ -209,7 +290,6 @@ describe('compileRelationJoin parity with the monolith', () => {
     const diagram = builder.build()
 
     const input = {
-      kind: 'relation',
       scope: builder.root,
       occurrences: [
         {
@@ -223,10 +303,26 @@ describe('compileRelationJoin parity with the monolith', () => {
       ],
     } as const
 
-    const monolith = applyWireSever(diagram, input)
     const { steps } = compileRelationSever(diagram, input, EMPTY_PROOF_CONTEXT)
     const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
-    expect(exploreForm(compiled)).toEqual(exploreForm(monolith))
+
+    // The occurrences are replaced by applications of one fresh existential
+    // relation wire; the original signature wire keeps no heads.
+    const expected = new DiagramBuilder()
+    const expectedAtomA = expected.atom(expected.root, UNARY)
+    const expectedAtomB = expected.atom(expected.root, UNARY)
+    expected.wire(expected.root, [
+      { node: expectedAtomA, port: { kind: 'head' } },
+      { node: expectedAtomB, port: { kind: 'head' } },
+    ], UNARY)
+    expected.wire(expected.root, [
+      { node: expectedAtomA, port: { kind: 'arg', index: 0 } },
+    ])
+    expected.wire(expected.root, [
+      { node: expectedAtomB, port: { kind: 'arg', index: 0 } },
+    ])
+    expected.relWire(expected.root, UNARY)
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected.build()))
   })
 
   it('compiles repeated formals through duplication', () => {
@@ -242,11 +338,22 @@ describe('compileRelationJoin parity with the monolith', () => {
     const pattern = mkDiagramWithBoundary(content.build(), [formal, stubP])
 
     const fixture = host()
-    parity(
-      fixture.builder.build(),
+    const diagram = fixture.builder.build()
+    const steps = compileRelationJoin(
+      diagram,
       fixture.dying,
       pattern,
       [fixture.paramP],
+      EMPTY_PROOF_CONTEXT,
     )
+    const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
+
+    const expected = expectedHost(UNARY, (builder, cut, [x], params) => {
+      const site = builder.atom(cut, BINARY)
+      attach(builder, params.paramP, site, { kind: 'head' })
+      attach(builder, x!, site, { kind: 'arg', index: 0 })
+      attach(builder, x!, site, { kind: 'arg', index: 1 })
+    })
+    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
   })
 })

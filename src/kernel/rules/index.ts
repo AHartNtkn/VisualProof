@@ -4,7 +4,6 @@ export {
   applyWireSever,
 } from './wire-quantifier'
 export type {
-  ContentOccurrence,
   WireJoinInput,
   WireSeverInput,
 } from './wire-quantifier'
