@@ -302,7 +302,7 @@ selects the rule:
 | applied ends of different wires | abstract-formal (the same-head case derives via sever + extend) |
 | identity nodes | identity abstract |
 | strands of existing wires (≥2) | identity insertion: the stroke materializes as an identity node at the drop region with one port per contacted wire. The drop point selects the region independently of where the wires are rendered (a two-anchor drag cannot; this is why insertion is not a Family 2 row). The committed step orders the wires canonically, never by contact order, so equal contact sets always produce the same diagram. When the drop region is the wires' common scope the kernel's existing collapse yields the shared-wire form. Replaces the `i` key and the menu row. |
-| nothing | vacuous intro |
+| nothing | opens the spawn list (vacuous intro moved to Q/Shift+Q, 2026-07-30; the arity prompt this row once cited is struck) |
 
 In every row but identity insertion the stroke becomes a wire; the drawn
 wire's signature is determined by the rule except for spawn-ends/vacuous
