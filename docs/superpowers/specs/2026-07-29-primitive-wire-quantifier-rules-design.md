@@ -346,6 +346,10 @@ design in ways this project fixes because it is already rebuilding this layer:
   doubleCutWrap, doubleCutElim, vacuousElim, deiterate, identityInsert, and
   iterate (menu-triggered iteration was explicitly removed by the 2026-07-10
   design and regressed).
+- **Q with the pointer over a region spawns a bare quantifier wire there**
+  (an individual existential; 2026-07-30 ruling: a floating existential is
+  meaningful content — its presence changes the statement, if only
+  trivially, unlike identity collapse — so it gets a direct move).
 - **The palette trigger becomes an explicit still right-click** (today it
   opens on a plain click over a hit). The only remaining rows are relFold
   and citeTheorem (relUnfold's row is deleted — double-click is its

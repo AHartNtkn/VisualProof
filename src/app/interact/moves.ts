@@ -283,6 +283,25 @@ export class ProofMoveController {
         return true
       }
     }
+    // Q spawns a bare quantifier wire at the region under the pointer
+    // (2026-07-30 ruling: a floating existential is meaningful content —
+    // its presence changes the statement, if only trivially).
+    if (sample.key === 'q' || sample.key === 'Q') {
+      if (this.#lastWorld === null) {
+        this.#options.refuse('point at a region first', this.#lastPointer)
+        return true
+      }
+      this.#commit({
+        rule: 'vacuousIntro',
+        scope: regionAt(
+          this.#options.engine(),
+          this.#options.diagram(),
+          this.#lastWorld,
+        ),
+        sig: IOTA,
+      })
+      return true
+    }
     if (
       sample.key !== 'Delete'
       && sample.key !== 'Backspace'

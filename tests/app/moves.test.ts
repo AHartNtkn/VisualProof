@@ -148,6 +148,29 @@ describe('proof move vocabulary', () => {
     ])
   })
 
+  it('Q spawns a bare quantifier wire at the hovered region', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.ref(cut, 'Marker', relSig([]))
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    engine.regions.set(cut, {
+      center: vec(300, 200),
+      radius: 120,
+      support: [],
+    })
+
+    moves.passiveSample(pointerSample(vec(300, 200)))
+    expect(moves.keyDown(keySample('q'))).toBe(true)
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps).toEqual([{
+      rule: 'vacuousIntro',
+      scope: cut,
+      sig: { kind: 'iota' },
+    }])
+  })
+
   it('the i key is retired', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
