@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
@@ -14,6 +15,8 @@ import {
   applyArityUnshift,
   applyIdentityAbstract,
   applyIdentityLeaf,
+  applyRefAbstract,
+  applyRefLeaf,
 } from '../../../src/kernel/rules/wire-args'
 
 const UNARY = relSig([IOTA])
@@ -365,5 +368,129 @@ describe('identity leaf / abstract', () => {
 
     expect(() => applyIdentityLeaf(diagram, wire))
       .toThrowError(/equal argument signatures/)
+  })
+})
+
+describe('ref leaf / abstract', () => {
+  const unaryDefinition = () => {
+    const definitionBuilder = new DiagramBuilder()
+    const formal = definitionBuilder.wire(definitionBuilder.root, [])
+    return mkDiagramWithBoundary(definitionBuilder.build(), [formal])
+  }
+  const definitions = () => new Map([['D', unaryDefinition()]])
+
+  /** A unary wire applied at one atom inside a cut, argument at the root. */
+  const applied = () => {
+    const builder = new DiagramBuilder()
+    const scope = builder.cut(builder.root)
+    const atom = builder.atom(scope, UNARY)
+    const wire = builder.wire(scope, [
+      { node: atom, port: { kind: 'head' } },
+    ], UNARY)
+    const argument = builder.wire(builder.root, [
+      { node: atom, port: { kind: 'arg', index: 0 } },
+    ])
+    return { builder, scope, atom, wire, argument }
+  }
+
+  it('turns ends into references at a negative scope and abstracts back', () => {
+    const { builder, scope, wire, argument } = applied()
+    const diagram = builder.build()
+
+    const leafed = applyRefLeaf(diagram, wire, 'D', definitions())
+
+    expect(leafed.wires[wire]).toBeUndefined()
+    const references = Object.entries(leafed.nodes)
+      .filter(([, node]) => node.kind === 'ref')
+    expect(references).toHaveLength(1)
+    const [referenceId, reference] = references[0]!
+    if (reference.kind !== 'ref') throw new Error('unreachable')
+    expect(reference.defId).toBe('D')
+    expect(reference.sig).toEqual(UNARY)
+    expect(leafed.wires[argument]!.endpoints).toEqual([
+      { node: referenceId, port: { kind: 'arg', index: 0 } },
+    ])
+
+    const restored = applyRefAbstract(leafed, [referenceId], scope, 'backward')
+    expect(exploreForm(restored)).toEqual(exploreForm(diagram))
+  })
+
+  it('gates both directions on the governing scope polarity', () => {
+    const positiveBuilder = new DiagramBuilder()
+    const positiveAtom = positiveBuilder.atom(positiveBuilder.root, UNARY)
+    const positiveWire = positiveBuilder.wire(positiveBuilder.root, [
+      { node: positiveAtom, port: { kind: 'head' } },
+    ], UNARY)
+    positiveBuilder.wire(positiveBuilder.root, [
+      { node: positiveAtom, port: { kind: 'arg', index: 0 } },
+    ])
+    const positive = positiveBuilder.build()
+
+    expect(() => applyRefLeaf(positive, positiveWire, 'D', definitions()))
+      .toThrowError(/ref leaf requires a negative/)
+    expect(() => applyRefLeaf(positive, positiveWire, 'D', definitions(), 'backward'))
+      .not.toThrow()
+
+    const { builder, scope, wire } = applied()
+    const negative = builder.build()
+    const leafed = applyRefLeaf(negative, wire, 'D', definitions())
+    const reference = Object.entries(leafed.nodes)
+      .find(([, node]) => node.kind === 'ref')![0]
+
+    expect(() => applyRefAbstract(leafed, [reference], scope))
+      .toThrowError(/ref abstract requires a positive/)
+    expect(() => applyRefAbstract(leafed, [reference], scope, 'backward'))
+      .not.toThrow()
+  })
+
+  it('refuses unknown definitions, mismatched signatures, and unapplied ends', () => {
+    const { builder, wire } = applied()
+    const diagram = builder.build()
+
+    expect(() => applyRefLeaf(diagram, wire, 'missing', definitions()))
+      .toThrowError(/no relation named 'missing'/)
+
+    const binaryBuilder = new DiagramBuilder()
+    const binaryFormals = [
+      binaryBuilder.wire(binaryBuilder.root, []),
+      binaryBuilder.wire(binaryBuilder.root, []),
+    ]
+    const binaryDefinition = mkDiagramWithBoundary(
+      binaryBuilder.build(),
+      binaryFormals,
+    )
+    expect(() => applyRefLeaf(diagram, wire, 'D', new Map([['D', binaryDefinition]])))
+      .toThrowError(/does not match/)
+
+    const mixedBuilder = new DiagramBuilder()
+    const mixedScope = mixedBuilder.cut(mixedBuilder.root)
+    const mixedAtom = mixedBuilder.atom(mixedScope, UNARY)
+    const consumer = mixedBuilder.atom(mixedScope, relSig([UNARY]))
+    mixedBuilder.wire(mixedScope, [
+      { node: consumer, port: { kind: 'head' } },
+    ], relSig([UNARY]))
+    const mixedWire = mixedBuilder.wire(mixedScope, [
+      { node: mixedAtom, port: { kind: 'head' } },
+      { node: consumer, port: { kind: 'arg', index: 0 } },
+    ], UNARY)
+    const mixed = mixedBuilder.build()
+    expect(() => applyRefLeaf(mixed, mixedWire, 'D', definitions()))
+      .toThrowError(/applied atom head/)
+  })
+
+  it('refuses abstracting references to different definitions', () => {
+    const builder = new DiagramBuilder()
+    const scope = builder.cut(builder.root)
+    const first = builder.ref(scope, 'D', UNARY)
+    const second = builder.ref(scope, 'E', UNARY)
+    for (const node of [first, second]) {
+      builder.wire(builder.root, [
+        { node, port: { kind: 'arg', index: 0 } },
+      ])
+    }
+    const diagram = builder.build()
+
+    expect(() => applyRefAbstract(diagram, [first, second], builder.root))
+      .toThrowError(/one shared definition/)
   })
 })
