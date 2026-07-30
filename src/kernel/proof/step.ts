@@ -72,6 +72,11 @@ export type StepReceipt = {
   readonly allocation: IdMintLog
   readonly provenance: WireProvenance
   readonly interface: WireInterfaceTransport
+  /**
+   * Total wire transport at every scope: the surviving name of any wire the
+   * step consumed or minted, or undefined when nothing survives it.
+   */
+  readonly transport: WireInterfaceTransport
 }
 
 /** Ordered boundary transport. Positions and repeated aliases are preserved. */
@@ -271,12 +276,22 @@ export function applyStepWithReceipt(
     && result.wires[source]!.scope === result.root
       ? source
       : undefined
+  const transportImage = (source: WireId): WireId | undefined => {
+    const image = composeNormalizationWireImage(
+      joinedRepresentative(diagram, step, source),
+      captured.normalizations,
+    )
+    return image !== undefined && result.wires[image] !== undefined
+      ? image
+      : undefined
+  }
 
   return {
     result,
     allocation: freezeIdMintLog(allocation),
     provenance: { image: provenanceImage },
     interface: { image: interfaceImage },
+    transport: { image: transportImage },
   }
 }
 

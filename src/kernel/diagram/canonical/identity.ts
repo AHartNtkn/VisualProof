@@ -65,10 +65,10 @@ function collapseIdentity(
   diagram: Diagram,
   nodeId: NodeId,
   image: Map<WireId, WireId | undefined>,
+  survivor: WireId,
 ): Diagram {
   const incident = incidentWireIds(diagram, nodeId)
-  const survivor = incident[0]!
-  const absorbed = new Set(incident.slice(1))
+  const absorbed = new Set(incident.filter((wireId) => wireId !== survivor))
   const endpoints: Endpoint[] = []
   for (const wireId of incident) {
     for (const endpoint of diagram.wires[wireId]!.endpoints) {
@@ -144,7 +144,7 @@ function normalizeOneIdentity(
     const node = diagram.nodes[nodeId] as IdentityDiagramNode
     const incident = incidentWireIds(diagram, nodeId)
     if (incident.every((wireId) => diagram.wires[wireId]!.scope === node.region)) {
-      return collapseIdentity(diagram, nodeId, image)
+      return collapseIdentity(diagram, nodeId, image, incident[0]!)
     }
   }
 

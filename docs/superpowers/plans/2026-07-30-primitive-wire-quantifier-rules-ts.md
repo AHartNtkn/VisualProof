@@ -110,6 +110,33 @@ outer wires still decline. Soundness: the one-point rule
   equivalence).
 - [ ] **Step 5: Commit** `feat: extend identity collapse to the one-outer-wire one-point rule`
 
+**Findings (2026-07-30, first attempt) — RESEQUENCED, see below.** The
+eager trigger is confirmed by ruling ("it should self-reduce; the identity
+node should exist only in places where they actually change semantics") and
+its unit tests were written and passed, but enabling it before the theory
+migration broke 22 theory-replay tests. Observed mechanics, all preserved
+as landed infrastructure:
+
+- Theory scripts capture wire ids across steps; normalization renames
+  invalidate them. Fixed permanently: `StepReceipt` gained `transport` — a
+  total every-scope wire image (the old `interface` transport filters to
+  root wires) — and `PrimitiveStepRecorder` now resolves recorded steps
+  through accumulated transports (`mapStepIds` with a defaulting map view).
+  A minted id invalidates any stale rename keyed by it (`freshId` recycles
+  the names of deleted wires — this produced a real corrupted-resolution
+  bug, caught by probe).
+- Steps that degenerate after resolution because normalization already
+  merged their wires (self-join; identity insertion below two distinct
+  wires) are elided by the recorder — the diagram already satisfies them.
+- The remaining breakage sits in shapes produced by the *monolithic*
+  relation join's splices (specialization scaffolding, deiteration
+  exactness against spliced schema instances). Tasks 7–9 rebuild exactly
+  those constructions through the compiler, so repairing them against the
+  monolith's output would be done twice. **Resequencing: the eager trigger
+  and Task 3 land after Task 7**, in one script-fixing pass against the
+  migrated theories. The unit tests for the trigger are recorded in this
+  task and get re-applied then.
+
 ### Task 3: Delete retargets; identity substitution becomes the derivation
 
 **Files:**

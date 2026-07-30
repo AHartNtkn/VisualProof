@@ -9,6 +9,7 @@ import {
   singleStepAction,
   type ProofAction,
 } from '../kernel/proof/action'
+import { mapStepIds } from '../kernel/proof/compose'
 import type { ProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
 
@@ -75,6 +76,7 @@ export class PrimitiveStepRecorder {
   readonly #context: ProofContext
   readonly #orientation: Orientation
   readonly #actions: ProofAction[] = []
+  readonly #wireRename = new ResolvingView()
 
   constructor(
     diagram: Diagram,
@@ -95,14 +97,84 @@ export class PrimitiveStepRecorder {
   }
 
   record(label: string, step: ProofStep): void {
-    const action = singleStepAction(label, step)
+    const resolved = mapStepIds(step, {
+      regions: identityView,
+      nodes: identityView,
+      wires: this.#wireRename,
+    })
+    // An equality assertion whose wires normalization has already merged is
+    // satisfied by the diagram as it stands; the step degenerates to the
+    // identity action and is elided. Every other resolved step stays loud.
+    if (
+      resolved.rule === 'wireJoin'
+      && resolved.input.kind === 'iota'
+      && resolved.input.a === resolved.input.b
+    ) return
+    if (
+      resolved.rule === 'identityInsert'
+      && new Set(resolved.wires).size < 2
+    ) return
+    const action = singleStepAction(label, resolved)
+    const before = this.#diagram
     const next = applyAction(
       this.#diagram,
       action,
       this.#context,
       this.#orientation,
+      (_, __, receipt) => {
+        this.#absorbTransport(before, receipt.allocation.wires, receipt.transport.image)
+      },
     )
     this.#diagram = next
     this.#actions.push(action)
   }
+
+  /**
+   * Fold one step's normalization transport into the persistent rename view,
+   * so scripts keep addressing wires by the ids they captured even after a
+   * later normalization merges them. Wires with no surviving image drop out
+   * and stay loud errors when referenced.
+   */
+  #absorbTransport(
+    before: Diagram,
+    minted: readonly string[],
+    image: (wire: WireId) => WireId | undefined,
+  ): void {
+    // A minted id may recycle the name of a previously absorbed wire; the
+    // name is reborn and now denotes the new wire, so any stale rename keyed
+    // by it is invalid.
+    for (const id of minted) this.#wireRename.delete(id)
+    const stepRename = new Map<WireId, WireId | undefined>()
+    for (const wireId of [...Object.keys(before.wires), ...minted]) {
+      const mapped = image(wireId)
+      if (mapped !== wireId) stepRename.set(wireId, mapped)
+    }
+    if (stepRename.size === 0) return
+    for (const [origin, current] of this.#wireRename) {
+      if (stepRename.has(current)) {
+        const next = stepRename.get(current)
+        if (next === undefined) this.#wireRename.delete(origin)
+        else this.#wireRename.set(origin, next)
+      }
+    }
+    for (const [origin, current] of stepRename) {
+      if (!this.#wireRename.has(origin)) {
+        if (current === undefined) this.#wireRename.delete(origin)
+        else this.#wireRename.set(origin, current)
+      }
+    }
+  }
 }
+
+/**
+ * A total ReadonlyMap view: ids without a recorded rename resolve to
+ * themselves. This is what makes `mapStepIds` usable with the partial rename
+ * relation normalization produces.
+ */
+class ResolvingView extends Map<string, string> {
+  override get(key: string): string {
+    return super.get(key) ?? key
+  }
+}
+
+const identityView: ReadonlyMap<string, string> = new ResolvingView()
