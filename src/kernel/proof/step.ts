@@ -38,6 +38,19 @@ import {
   type EndSite,
 } from '../rules/wire-content'
 import {
+  applyAbstractFormal,
+  applyApplyFormal,
+  applyArgContract,
+  applyArgDrop,
+  applyArgDuplicate,
+  applyArgExtend,
+  applyArgPermute,
+  applyArityShift,
+  applyArityUnshift,
+  applyIdentityAbstract,
+  applyIdentityLeaf,
+} from '../rules/wire-args'
+import {
   applyWireJoin,
   applyWireSever,
   type WireJoinInput,
@@ -70,6 +83,17 @@ export type ProofStep =
   | { readonly rule: 'parallelFuse'; readonly a: WireId; readonly b: WireId }
   | { readonly rule: 'endsDelete'; readonly wire: WireId }
   | { readonly rule: 'endsSpawn'; readonly wire: WireId; readonly sites: readonly EndSite[] }
+  | { readonly rule: 'arityShift'; readonly wire: WireId; readonly newArgSig: Sig }
+  | { readonly rule: 'arityUnshift'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argPermute'; readonly wire: WireId; readonly permutation: readonly number[] }
+  | { readonly rule: 'argDuplicate'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argContract'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argDrop'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'argExtend'; readonly wire: WireId; readonly position: number; readonly newArgSig: Sig; readonly attachments: Readonly<Record<NodeId, WireId>> }
+  | { readonly rule: 'applyFormal'; readonly wire: WireId; readonly position: number }
+  | { readonly rule: 'abstractFormal'; readonly ends: readonly NodeId[]; readonly scope: RegionId }
+  | { readonly rule: 'identityLeaf'; readonly wire: WireId }
+  | { readonly rule: 'identityAbstract'; readonly nodes: readonly NodeId[]; readonly scope: RegionId }
 
 /** Logical transport of source wire identities through one proof step. */
 export type WireInterfaceTransport = {
@@ -236,6 +260,60 @@ function applyStepRaw(
         diagram,
         step.wire,
         step.sites,
+        orientation,
+        reservation,
+      )
+    case 'arityShift':
+      return applyArityShift(diagram, step.wire, step.newArgSig, reservation)
+    case 'arityUnshift':
+      return applyArityUnshift(diagram, step.wire, step.position)
+    case 'argPermute':
+      return applyArgPermute(diagram, step.wire, step.permutation, reservation)
+    case 'argDuplicate':
+      return applyArgDuplicate(diagram, step.wire, step.position, reservation)
+    case 'argContract':
+      return applyArgContract(diagram, step.wire, step.position, reservation)
+    case 'argDrop':
+      return applyArgDrop(
+        diagram,
+        step.wire,
+        step.position,
+        orientation,
+        reservation,
+      )
+    case 'argExtend':
+      return applyArgExtend(
+        diagram,
+        step.wire,
+        step.position,
+        step.newArgSig,
+        new Map(Object.entries(step.attachments)),
+        orientation,
+        reservation,
+      )
+    case 'applyFormal':
+      return applyApplyFormal(
+        diagram,
+        step.wire,
+        step.position,
+        orientation,
+        reservation,
+      )
+    case 'abstractFormal':
+      return applyAbstractFormal(
+        diagram,
+        step.ends,
+        step.scope,
+        orientation,
+        reservation,
+      )
+    case 'identityLeaf':
+      return applyIdentityLeaf(diagram, step.wire, orientation, reservation)
+    case 'identityAbstract':
+      return applyIdentityAbstract(
+        diagram,
+        step.nodes,
+        step.scope,
         orientation,
         reservation,
       )

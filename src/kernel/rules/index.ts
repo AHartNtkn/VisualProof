@@ -29,3 +29,16 @@ export {
   applyParallelSplit,
 } from './wire-content'
 export type { EndSite } from './wire-content'
+export {
+  applyAbstractFormal,
+  applyApplyFormal,
+  applyArgContract,
+  applyArgDrop,
+  applyArgDuplicate,
+  applyArgExtend,
+  applyArgPermute,
+  applyArityShift,
+  applyArityUnshift,
+  applyIdentityAbstract,
+  applyIdentityLeaf,
+} from './wire-args'

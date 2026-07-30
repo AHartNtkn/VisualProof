@@ -187,6 +187,23 @@ describe('step JSON', () => {
           { region: 'r0', args: ['w2'] },
         ],
       },
+      { rule: 'arityShift', wire: 'w0', newArgSig: relSig([IOTA]) },
+      { rule: 'arityUnshift', wire: 'w0', position: 2 },
+      { rule: 'argPermute', wire: 'w0', permutation: [1, 0] },
+      { rule: 'argDuplicate', wire: 'w0', position: 0 },
+      { rule: 'argContract', wire: 'w0', position: 0 },
+      { rule: 'argDrop', wire: 'w0', position: 1 },
+      {
+        rule: 'argExtend',
+        wire: 'w0',
+        position: 1,
+        newArgSig: IOTA,
+        attachments: { n0: 'w1', n1: 'w2' },
+      },
+      { rule: 'applyFormal', wire: 'w0', position: 0 },
+      { rule: 'abstractFormal', ends: ['n0', 'n1'], scope: 'r1' },
+      { rule: 'identityLeaf', wire: 'w0' },
+      { rule: 'identityAbstract', nodes: ['n0'], scope: 'r0' },
     ]
 
     for (const step of steps) roundTrip(step)

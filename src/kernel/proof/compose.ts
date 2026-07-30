@@ -246,6 +246,41 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
           args: site.args.map((wire) => mapId(iso.wires, wire, 'wire')),
         })),
       }
+    case 'arityShift':
+    case 'arityUnshift':
+    case 'argPermute':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'applyFormal':
+    case 'identityLeaf':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+      }
+    case 'argExtend':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+        attachments: Object.fromEntries(
+          Object.entries(step.attachments).map(([node, wire]) => [
+            mapId(iso.nodes, node, 'node'),
+            mapId(iso.wires, wire, 'wire'),
+          ]),
+        ),
+      }
+    case 'abstractFormal':
+      return {
+        ...step,
+        ends: step.ends.map((node) => mapId(iso.nodes, node, 'node')),
+        scope: mapId(iso.regions, step.scope, 'region'),
+      }
+    case 'identityAbstract':
+      return {
+        ...step,
+        nodes: step.nodes.map((node) => mapId(iso.nodes, node, 'node')),
+        scope: mapId(iso.regions, step.scope, 'region'),
+      }
   }
 }
 

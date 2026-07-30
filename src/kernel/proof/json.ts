@@ -407,6 +407,38 @@ export function stepToJson(step: ProofStep): unknown {
           args: [...site.args],
         })),
       }
+    case 'arityShift':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        newArgSig: sigToJson(step.newArgSig),
+      }
+    case 'arityUnshift':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'applyFormal':
+      return { rule: step.rule, wire: step.wire, position: step.position }
+    case 'argPermute':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        permutation: [...step.permutation],
+      }
+    case 'argExtend':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        position: step.position,
+        newArgSig: sigToJson(step.newArgSig),
+        attachments: { ...step.attachments },
+      }
+    case 'abstractFormal':
+      return { rule: step.rule, ends: [...step.ends], scope: step.scope }
+    case 'identityLeaf':
+      return { rule: step.rule, wire: step.wire }
+    case 'identityAbstract':
+      return { rule: step.rule, nodes: [...step.nodes], scope: step.scope }
   }
 }
 
@@ -549,6 +581,73 @@ export function stepFromJson(value: unknown): ProofStep {
         }),
       }
     }
+    case 'arityShift':
+      assertOnlyKeys(value, ['rule', 'wire', 'newArgSig'], 'arityShift step')
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        newArgSig: sigFromJson(value.newArgSig, 'newArgSig'),
+      }
+    case 'arityUnshift':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'applyFormal':
+      assertOnlyKeys(value, ['rule', 'wire', 'position'], `${rule} step`)
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        position: nonNegativeSafeInteger(value.position, 'position'),
+      }
+    case 'argPermute': {
+      assertOnlyKeys(value, ['rule', 'wire', 'permutation'], 'argPermute step')
+      if (!Array.isArray(value.permutation)) {
+        return fail('argPermute permutation must be an array')
+      }
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        permutation: value.permutation.map((entry: unknown, index: number) =>
+          nonNegativeSafeInteger(entry, `permutation[${index}]`)),
+      }
+    }
+    case 'argExtend': {
+      assertOnlyKeys(
+        value,
+        ['rule', 'wire', 'position', 'newArgSig', 'attachments'],
+        'argExtend step',
+      )
+      if (!isRecord(value.attachments)) {
+        return fail('argExtend attachments must be an object')
+      }
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        position: nonNegativeSafeInteger(value.position, 'position'),
+        newArgSig: sigFromJson(value.newArgSig, 'newArgSig'),
+        attachments: Object.fromEntries(
+          Object.entries(value.attachments).map(([node, wire]) =>
+            [node, str(wire, `attachments['${node}']`)]),
+        ),
+      }
+    }
+    case 'abstractFormal':
+      assertOnlyKeys(value, ['rule', 'ends', 'scope'], 'abstractFormal step')
+      return {
+        rule,
+        ends: strArray(value.ends, 'ends'),
+        scope: str(value.scope, 'scope'),
+      }
+    case 'identityLeaf':
+      assertOnlyKeys(value, ['rule', 'wire'], 'identityLeaf step')
+      return { rule, wire: str(value.wire, 'wire') }
+    case 'identityAbstract':
+      assertOnlyKeys(value, ['rule', 'nodes', 'scope'], 'identityAbstract step')
+      return {
+        rule,
+        nodes: strArray(value.nodes, 'nodes'),
+        scope: str(value.scope, 'scope'),
+      }
     default:
       return fail(`unknown rule '${rule}'`)
   }
