@@ -42,9 +42,12 @@ describe('iota wire join', () => {
   })
 
   it('retains the outer wire and re-normalizes affected identity content', () => {
+    // The identity sits below both wire scopes so it survives the build
+    // (two outer wires); the join then degenerates it to one wire.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const identity = builder.identity(cut, IOTA, 2)
+    const deep = builder.cut(cut)
+    const identity = builder.identity(deep, IOTA, 2)
     const outerNode = builder.ref(builder.root, 'outer', relSig([IOTA]))
     const innerNode = builder.ref(cut, 'inner', relSig([IOTA]))
     const outer = builder.wire(builder.root, [

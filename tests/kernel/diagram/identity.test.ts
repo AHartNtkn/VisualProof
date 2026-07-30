@@ -150,10 +150,54 @@ describe('identity diagram nodes', () => {
     expect(normalized.wireImage.get('c')).toBe('a')
   })
 
-  it('keeps an identity when any attached wire is scoped above its region', () => {
+  it('collapses a one-outer identity onto the outer wire (one-point rule)', () => {
+    // ∃x@r1 (x = b ∧ P(x)) ≡ P(b): the identity carries one wire scoped
+    // above its region; every co-scoped wire's content lands on that wire.
+    const normalized = mkDiagramNormalized({
+      root: 'r0',
+      regions: {
+        ...sheet,
+        r1: { kind: 'cut' as const, parent: 'r0' },
+      },
+      nodes: {
+        eq: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+        p: { kind: 'atom', region: 'r1', sig: relSig([IOTA]) },
+      },
+      wires: {
+        b: {
+          scope: 'r0',
+          sig: IOTA,
+          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+        },
+        head: {
+          scope: 'r1',
+          sig: relSig([IOTA]),
+          endpoints: [{ node: 'p', port: { kind: 'head' } }],
+        },
+        x: {
+          scope: 'r1',
+          sig: IOTA,
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 1 } },
+            { node: 'p', port: { kind: 'arg', index: 0 } },
+          ],
+        },
+      },
+    })
+
+    expect(Object.keys(normalized.diagram.nodes)).not.toContain('eq')
+    expect(Object.keys(normalized.diagram.wires)).not.toContain('x')
+    expect(normalized.diagram.wires.b!.endpoints).toEqual([
+      { node: 'p', port: { kind: 'arg', index: 0 } },
+    ])
+    expect(normalized.wireImage.get('x')).toBe('b')
+    expect(normalized.wireImage.get('b')).toBe('b')
+  })
+
+  it('keeps an identity when two or more attached wires are scoped above its region', () => {
     const normalized = mkDiagramNormalized(identityParts(['a', 'b'], {
       region: 'r1',
-      wireScopes: ['r1', 'r0'],
+      wireScopes: ['r0', 'r0'],
     }))
 
     expect(normalized.diagram.nodes.eq?.kind).toBe('identity')

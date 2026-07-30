@@ -1,4 +1,3 @@
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import {
@@ -460,17 +459,13 @@ function plusAssoc(
     'transport outer result',
     [forwardLeft!, forwardInnerSum, forwardTransportOutput],
   )
-  publicBefore = publicForward.diagram
+  // The inserted identity has one outer wire (the public output), so the
+  // one-point collapse merges the transport output into it on the spot.
   publicForward.record('insert public/transport output identity', {
     rule: 'identityInsert',
     region: publicClaimAntecedent,
     wires: [forwardPublicOutput!, forwardTransportOutput],
   })
-  onlyNewNode(
-    publicBefore,
-    publicForward.diagram,
-    publicClaimAntecedent,
-  )
 
   publicBefore = publicForward.diagram
   publicForward.record('open residual A(a) totality', {
@@ -1222,7 +1217,7 @@ function plusAssoc(
       ),
     )
   }
-  const outputIdentity = exactOne(
+  exactOne(
     directNodes(publicBackward.diagram, copiedOutputFunctionalConsequent),
     'public/transport output identity',
   )
@@ -1230,34 +1225,25 @@ function plusAssoc(
     rule: 'doubleCutElim',
     region: copiedOutputFunctionalAntecedent,
   })
+  // Finishing exposes id(public output, transport output) with one outer
+  // wire; the one-point collapse merges the transport output into the
+  // public output on the spot, so the outer result already sits on the
+  // public output and its second copy is a plain iteration.
   publicBackward.record('finish output functionality specialization', {
     rule: 'doubleCutElim',
     region: copiedOutputFunctional,
   })
-  const outerSelection = {
-    region: backwardClaimAntecedent,
-    regions: [],
-    nodes: [transportOuterResult],
-    wires: [],
-  } as const
-  const outerOutputBoundary = extractSubgraph(
-    publicBackward.diagram,
-    outerSelection,
-  ).attachments.indexOf(transportOutput)
-  if (outerOutputBoundary < 0) {
-    throw new Error('transport outer result lost its output boundary')
-  }
   backwardBefore = publicBackward.diagram
-  publicBackward.record('retarget A(a) outer result to public output', {
+  publicBackward.record('copy A(a) outer result beside the public output', {
     rule: 'iteration',
-    sel: outerSelection,
+    sel: {
+      region: backwardClaimAntecedent,
+      regions: [],
+      nodes: [transportOuterResult],
+      wires: [],
+    },
     target: backwardClaimAntecedent,
-    retargets: [{
-      boundary: outerOutputBoundary,
-      identity: outputIdentity,
-      from: transportOutput,
-      to: publicOutput,
-    }],
+    retargets: [],
   })
   const retargetedOuterResult = onlyNewNode(
     backwardBefore,

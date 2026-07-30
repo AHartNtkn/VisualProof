@@ -674,18 +674,20 @@ export function successorShiftCarrierInductive(
       forwardInheritedOutputSuccessor!,
     ],
   )
-  insertForwardIdentity(
-    'forward closure transport output identity',
-    forwardClosureTransportAntecedent,
-    forwardTransportOutput!,
-    forwardInheritedOutputSuccessor!,
-  )
+  // id(transport output, inherited output successor) has one outer wire
+  // (the transport output), so the one-point collapse merges the inherited
+  // successor into it on the spot; everything below uses the survivor.
+  forward.record('insert forward closure transport output identity', {
+    rule: 'identityInsert',
+    region: forwardClosureTransportAntecedent,
+    wires: [forwardTransportOutput!, forwardInheritedOutputSuccessor!],
+  })
   spawnForwardAtom(
     'forward closure retargeted output successor',
     forwardClosureTransportAntecedent,
     forwardSuccessor,
     [
-      forwardInheritedOutputSuccessor!,
+      forwardTransportOutput!,
       forwardTransportOutputSuccessor!,
     ],
   )
@@ -696,7 +698,7 @@ export function successorShiftCarrierInductive(
     [
       forwardPredecessor!,
       forwardTransportRightSuccessor!,
-      forwardInheritedOutputSuccessor!,
+      forwardTransportOutput!,
     ],
   )
   spawnForwardAtom(
@@ -1979,7 +1981,7 @@ export function successorShiftCarrierInductive(
     copiedTransportFunctionalityAntecedent,
     transportFunctionalSecond!,
   )
-  const transportOutputIdentity = exactOne(
+  exactOne(
     directNodes(backward.diagram, copiedTransportFunctionalityConsequent),
     'successor-transport output identity',
   )
@@ -1987,32 +1989,25 @@ export function successorShiftCarrierInductive(
     rule: 'doubleCutElim',
     region: copiedTransportFunctionalityAntecedent,
   })
+  // Finishing exposes id(actual output, canonical output) with one outer
+  // wire; the one-point collapse merges them on the spot, so the output
+  // successor copies as a plain iteration onto the merged wire.
   backward.record('finish successor-transport functionality', {
     rule: 'doubleCutElim',
     region: copiedTransportFunctionality,
   })
 
-  const outputSuccessorSelection = {
-    region: successorTransportAntecedent,
-    regions: [],
-    nodes: [closureOutputSuccessorNode],
-    wires: [],
-  } as const
   before = backward.diagram
   backward.record('transport output successor to inherited output', {
     rule: 'iteration',
-    sel: outputSuccessorSelection,
+    sel: {
+      region: successorTransportAntecedent,
+      regions: [],
+      nodes: [closureOutputSuccessorNode],
+      wires: [],
+    },
     target: successorTransportAntecedent,
-    retargets: [{
-      boundary: boundaryIndex(
-        backward.diagram,
-        outputSuccessorSelection,
-        closureOutput,
-      ),
-      identity: transportOutputIdentity,
-      from: closureOutput,
-      to: inheritedOutputSuccessor,
-    }],
+    retargets: [],
   })
   const transportedOutputSuccessor = onlyNewNode(
     before,

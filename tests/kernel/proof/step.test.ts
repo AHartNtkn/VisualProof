@@ -128,9 +128,12 @@ describe('primitive replay', () => {
 
 describe('normalized step receipts', () => {
   it('composes wire-join intent with identity degeneration', () => {
+    // The identity sits below both wire scopes so it survives the build
+    // (two outer wires); the join then degenerates it to one wire.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const identity = builder.identity(cut, IOTA, 2)
+    const deep = builder.cut(cut)
+    const identity = builder.identity(deep, IOTA, 2)
     const outer = builder.wire(builder.root, [{
       node: identity,
       port: { kind: 'identity', index: 0 },

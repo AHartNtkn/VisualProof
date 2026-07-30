@@ -592,23 +592,21 @@ export function commutativityCarrierInductive(
     forward.diagram,
     forwardBaseCrossBody,
   )
-  const [forwardBaseInheritedOutput] = introduceForward(
-    forwardBaseCrossAntecedent,
-    ['forward commutativity base inherited output'],
-  )
   spawnForward(
     'forward commutativity base premise',
     forwardBaseCrossAntecedent,
     forwardPlus,
     [forwardBaseValue!, forwardFixedRight, forwardBaseOutput!],
   )
+  // The inherited output is not a separate existential: a third identity
+  // port to a co-scoped wire would carry no semantics (one-point rule), so
+  // the inherited totality lands directly on the fixed right.
   insertForwardIdentity(
     'forward commutativity base unit identities',
     forwardBaseCrossAntecedent,
     [
       forwardFixedRight,
       forwardBaseOutput!,
-      forwardBaseInheritedOutput!,
     ],
   )
   spawnForward(
@@ -618,7 +616,7 @@ export function commutativityCarrierInductive(
     [
       forwardFixedRight,
       forwardBaseValue!,
-      forwardBaseInheritedOutput!,
+      forwardFixedRight,
     ],
   )
   spawnForward(
@@ -843,18 +841,21 @@ export function commutativityCarrierInductive(
       forwardPredecessorOutputSuccessor!,
     ],
   )
-  insertForwardIdentity(
-    'forward crossed output identity',
-    forwardClosureCrossAntecedent,
-    [forwardCrossOutput!, forwardPredecessorOutputSuccessor!],
-  )
+  // id(crossed output, predecessor output successor) has one outer wire
+  // (the crossed output), so the one-point collapse merges the successor
+  // into it on the spot; everything below uses the survivor.
+  forward.record('insert forward crossed output identity', {
+    rule: 'identityInsert',
+    region: forwardClosureCrossAntecedent,
+    wires: [forwardCrossOutput!, forwardPredecessorOutputSuccessor!],
+  })
   spawnForward(
     'forward cited-shift predecessor successor',
     forwardClosureCrossAntecedent,
     forwardSuccessor,
     [
       forwardPublicShiftPredecessor!,
-      forwardPredecessorOutputSuccessor!,
+      forwardCrossOutput!,
     ],
   )
   spawnForward(
@@ -2478,7 +2479,7 @@ export function commutativityCarrierInductive(
       node,
     )
   }
-  const crossedOutputIdentity = exactOne(
+  exactOne(
     directNodes(backward.diagram, copiedCrossFunctionalConsequent),
     'crossed output identity',
   )
@@ -2486,6 +2487,9 @@ export function commutativityCarrierInductive(
     rule: 'doubleCutElim',
     region: copiedCrossFunctionalAntecedent,
   })
+  // Finishing exposes id(given output, stepped output) with one outer wire;
+  // the one-point collapse merges them on the spot, so the crossed goal
+  // discharges directly below.
   backward.record('finish crossed functionality specialization', {
     rule: 'doubleCutElim',
     region: copiedCrossFunctional,
@@ -2562,37 +2566,12 @@ export function commutativityCarrierInductive(
     region: copiedPublicShift,
   })
 
-  {
-    const selection = {
-      region: closureCrossConsequent,
-      regions: [],
-      nodes: [closureCrossGoal],
-      wires: [],
-    } as const
-    const retargets = [{
-      boundary: boundaryIndex(
-        backward.diagram,
-        selection,
-        closureCrossOutput,
-      ),
-      identity: crossedOutputIdentity,
-      from: predecessorOutputSuccessor,
-      to: closureCrossOutput,
-    }] as const
-    const evidence = findDeiterationEvidence(
-      backward.diagram,
-      selection,
-      4096,
-      retargets,
-    )
-    backward.record('discharge closure crossed goal', {
-      rule: 'deiteration',
-      sel: selection,
-      justifier: evidence.justifier,
-      certificate: evidence.certificate,
-      retargets,
-    })
-  }
+  deiterateNode(
+    backward,
+    'discharge closure crossed goal',
+    closureCrossConsequent,
+    closureCrossGoal,
+  )
   void steppedCrossPlus
   void inheritedCrossedPlus
   void shiftedCrossedPlus

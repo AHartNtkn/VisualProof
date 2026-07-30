@@ -1,6 +1,4 @@
 import type { WireId } from '../kernel/diagram/diagram'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
-import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import type { ProofContext } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
@@ -1188,7 +1186,7 @@ export function associativityCarrierHereditary(
       ),
     )
   }
-  const transportFirstSumIdentity = exactOne(
+  exactOne(
     directNodes(backward.diagram, transportFunctionalityConsequent),
     'transport first-sum identity',
   )
@@ -1196,6 +1194,10 @@ export function associativityCarrierHereditary(
     rule: 'doubleCutElim',
     region: transportFunctionalityAntecedent,
   })
+  // Finishing exposes id(derived successor sum, supplied first sum) with one
+  // outer wire; the one-point collapse merges the derived sum into the
+  // supplied first-sum wire on the spot, so everything downstream works on
+  // that survivor directly.
   backward.record('finish transport first-sum functionality', {
     rule: 'doubleCutElim',
     region: transportFunctionality.scope,
@@ -1307,7 +1309,7 @@ export function associativityCarrierHereditary(
     transportPredecessorSum,
     transportThird!,
     predecessorTransportOutput,
-    transportSuccessorSum,
+    transportFirstSum!,
     successorTransportWitness,
     'transport first-result addition step',
   )
@@ -1320,39 +1322,20 @@ export function associativityCarrierHereditary(
     'transport outer-result addition step',
   )
 
-  const firstResultSelection = {
-    region: successorTransportAntecedent,
-    regions: [],
-    nodes: [steppedFirstTransportResult],
-    wires: [],
-  } as const
-  const firstResultAttachments = extractSubgraph(
-    backward.diagram,
-    firstResultSelection,
-  ).attachments
-  const firstResultBoundary = firstResultAttachments.indexOf(
-    transportSuccessorSum,
-  )
-  if (firstResultBoundary < 0) {
-    throw new Error('stepped first transport result lost first-sum boundary')
-  }
-  before = backward.diagram
-  backward.record('retarget stepped first transport result', {
+  // The forward half leaves two copies of the stepped first-sum result (the
+  // pre-collapse flow derived one and retargeted a second onto the supplied
+  // first sum; with the sums merged they are plain duplicates).
+  backward.record('copy stepped first transport result', {
     rule: 'iteration',
-    sel: firstResultSelection,
+    sel: {
+      region: successorTransportAntecedent,
+      regions: [],
+      nodes: [steppedFirstTransportResult],
+      wires: [],
+    },
     target: successorTransportAntecedent,
-    retargets: [{
-      boundary: firstResultBoundary,
-      identity: transportFirstSumIdentity,
-      from: transportSuccessorSum,
-      to: transportFirstSum!,
-    }],
+    retargets: [],
   })
-  const retargetedFirstTransportResult = onlyNewNode(
-    before,
-    backward.diagram,
-    successorTransportAntecedent,
-  )
 
   backward.record(
     'discharge successor first-sum transport goal',
@@ -1370,38 +1353,14 @@ export function associativityCarrierHereditary(
       successorOuterGoal,
     ),
   )
-  const successorFirstPremiseSelection = {
-    region: successorTransportAntecedent,
-    regions: [],
-    nodes: [successorFirstPremise],
-    wires: [],
-  } as const
-  const successorFirstPremiseBoundary = extractSubgraph(
-    backward.diagram,
-    successorFirstPremiseSelection,
-  ).attachments.indexOf(transportFirstSum!)
-  if (successorFirstPremiseBoundary < 0) {
-    throw new Error('successor first premise lost first-sum boundary')
-  }
-  const successorFirstPremiseRetargets = [{
-    boundary: successorFirstPremiseBoundary,
-    identity: transportFirstSumIdentity,
-    from: transportSuccessorSum,
-    to: transportFirstSum!,
-  }] as const
-  const successorFirstPremiseEvidence = findDeiterationEvidence(
-    backward.diagram,
-    successorFirstPremiseSelection,
-    4096,
-    successorFirstPremiseRetargets,
+  backward.record(
+    'consume successor first transport premise',
+    deiterationStep(
+      backward.diagram,
+      successorTransportAntecedent,
+      successorFirstPremise,
+    ),
   )
-  backward.record('consume successor first transport premise', {
-    rule: 'deiteration',
-    sel: successorFirstPremiseSelection,
-    justifier: successorFirstPremiseEvidence.justifier,
-    certificate: successorFirstPremiseEvidence.certificate,
-    retargets: successorFirstPremiseRetargets,
-  })
 
 
   void predecessorTotality
@@ -1412,7 +1371,6 @@ export function associativityCarrierHereditary(
   void transportSpecializedFirst
   void successorInnerPremise
   void predecessorFirstResult
-  void retargetedFirstTransportResult
   void steppedOuterTransportResult
   void helperClosureConsequent
   void helperClosurePredecessor

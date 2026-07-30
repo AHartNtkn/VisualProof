@@ -18966,7 +18966,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "dc_11_vac_0",
+                "a": "dc_9_vac_1",
                 "b": "w"
               }
             }
@@ -20415,7 +20415,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w3_2",
+                "a": "w3_1",
                 "b": "w28"
               }
             }
@@ -20486,7 +20486,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w3_1",
+                "a": "w26",
                 "b": "w7_0"
               }
             }
@@ -20499,7 +20499,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w3_2",
+                "a": "w3_1",
                 "b": "w8_0"
               }
             }
@@ -20617,13 +20617,13 @@
                   ],
                   [
                     "b2",
-                    "w3_1"
+                    "w26"
                   ]
                 ],
                 "attachments": [
                   "w0",
                   "w16_1",
-                  "w3_1"
+                  "w26"
                 ]
               },
               "retargets": []
@@ -20677,13 +20677,13 @@
                   ],
                   [
                     "b2",
-                    "w3_2"
+                    "w3_1"
                   ]
                 ],
                 "attachments": [
                   "w0",
                   "w21_0",
-                  "w3_2"
+                  "w3_1"
                 ]
               },
               "retargets": []
@@ -20788,7 +20788,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w3_2",
+                "a": "w3_1",
                 "b": "w8_0"
               }
             }
@@ -20966,13 +20966,13 @@
                   ],
                   [
                     "b2",
-                    "w3_2"
+                    "w3_1"
                   ]
                 ],
                 "attachments": [
                   "w0",
                   "w21_0",
-                  "w3_2"
+                  "w3_1"
                 ]
               },
               "retargets": []
@@ -21001,7 +21001,7 @@
           "placements": []
         },
         {
-          "label": "retarget stepped first transport result",
+          "label": "copy stepped first transport result",
           "steps": [
             {
               "rule": "iteration",
@@ -21014,14 +21014,7 @@
                 "wires": []
               },
               "target": "r29",
-              "retargets": [
-                {
-                  "boundary": 2,
-                  "identity": "n7_0",
-                  "from": "w3_1",
-                  "to": "w26"
-                }
-              ]
+              "retargets": []
             }
           ],
           "placements": []
@@ -21043,7 +21036,7 @@
                 "region": "r29",
                 "regions": [],
                 "nodes": [
-                  "n4_2_0"
+                  "n4_2"
                 ],
                 "wires": []
               },
@@ -21058,7 +21051,7 @@
                 "nodeMap": [
                   [
                     "n17",
-                    "n4_2_0"
+                    "n4_2"
                   ]
                 ],
                 "wireMap": [
@@ -21076,14 +21069,14 @@
                   ],
                   [
                     "b3",
-                    "w3_2"
+                    "w3_1"
                   ]
                 ],
                 "attachments": [
                   "w1",
                   "w25",
                   "w26",
-                  "w3_2"
+                  "w3_1"
                 ]
               },
               "retargets": []
@@ -21141,14 +21134,14 @@
                   ],
                   [
                     "b3",
-                    "w3_2"
+                    "w3_1"
                   ]
                 ],
                 "attachments": [
                   "w1",
                   "w14",
                   "w27",
-                  "w3_2"
+                  "w3_1"
                 ]
               },
               "retargets": []
@@ -21206,24 +21199,17 @@
                   ],
                   [
                     "b3",
-                    "w3_1"
+                    "w26"
                   ]
                 ],
                 "attachments": [
                   "w1",
                   "w14",
                   "w24",
-                  "w3_1"
+                  "w26"
                 ]
               },
-              "retargets": [
-                {
-                  "boundary": 3,
-                  "identity": "n7_0",
-                  "from": "w3_1",
-                  "to": "w26"
-                }
-              ]
+              "retargets": []
             }
           ],
           "placements": []
@@ -23092,7 +23078,7 @@
             {
               "rule": "atomSpawn",
               "region": "dc_1",
-              "wire": "dc_1_vac_2"
+              "wire": "dc_1_vac_0"
             }
           ],
           "placements": []
@@ -23102,70 +23088,70 @@
           "steps": [
             {
               "rule": "cutWrap",
-              "wire": "dc_1_vac_2"
+              "wire": "dc_1_vac_0"
             },
             {
               "rule": "arityShift",
-              "wire": "dc_1_vac_2_wrap",
+              "wire": "dc_1_vac_0_wrap",
               "newArgSig": {
                 "kind": "iota"
               }
             },
             {
               "rule": "arityShift",
-              "wire": "dc_1_vac_2_wrap_shift",
+              "wire": "dc_1_vac_0_wrap_shift",
               "newArgSig": {
                 "kind": "iota"
               }
             },
             {
               "rule": "arityShift",
-              "wire": "dc_1_vac_2_wrap_shift_shift",
+              "wire": "dc_1_vac_0_wrap_shift_shift",
               "newArgSig": {
                 "kind": "iota"
               }
             },
             {
               "rule": "arityShift",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift",
               "newArgSig": {
                 "kind": "iota"
               }
             },
             {
               "rule": "cutWrap",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift"
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift"
             },
             {
               "rule": "cutWrap",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap"
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap"
             },
             {
               "rule": "parallelSplit",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap"
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap"
             },
             {
               "rule": "parallelSplit",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0"
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0"
             },
             {
               "rule": "cutWrap",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0"
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0"
             },
             {
               "rule": "arityShift",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap",
               "newArgSig": {
                 "kind": "iota"
               }
             },
             {
               "rule": "parallelSplit",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift"
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift"
             },
             {
               "rule": "argExtend",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0",
               "position": 5,
               "newArgSig": {
                 "kind": "iota"
@@ -23176,22 +23162,22 @@
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend",
               "position": 2
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop",
               "position": 1
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop_drop",
               "position": 0
             },
             {
               "rule": "argPermute",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop_drop_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop_drop_drop",
               "permutation": [
                 2,
                 0,
@@ -23202,22 +23188,22 @@
               "rule": "wireJoin",
               "input": {
                 "a": "w1",
-                "b": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop_drop_drop_permute"
+                "b": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_0_extend_drop_drop_drop_permute"
               }
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split",
               "position": 3
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_drop",
               "position": 0
             },
             {
               "rule": "argPermute",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_drop_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_drop_drop",
               "permutation": [
                 1,
                 0,
@@ -23228,24 +23214,24 @@
               "rule": "wireJoin",
               "input": {
                 "a": "w1",
-                "b": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_drop_drop_permute"
+                "b": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_shift_split_drop_drop_permute"
               }
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split",
               "position": 2
             },
             {
               "rule": "wireJoin",
               "input": {
                 "a": "w1",
-                "b": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_drop"
+                "b": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_drop"
               }
             },
             {
               "rule": "argExtend",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split",
               "position": 4,
               "newArgSig": {
                 "kind": "iota"
@@ -23256,17 +23242,17 @@
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_extend",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_extend",
               "position": 3
             },
             {
               "rule": "argDrop",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_extend_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_extend_drop",
               "position": 1
             },
             {
               "rule": "argPermute",
-              "wire": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_extend_drop_drop",
+              "wire": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_extend_drop_drop",
               "permutation": [
                 2,
                 0,
@@ -23277,7 +23263,7 @@
               "rule": "wireJoin",
               "input": {
                 "a": "w1",
-                "b": "dc_1_vac_2_wrap_shift_shift_shift_shift_wrap_wrap_split_extend_drop_drop_permute"
+                "b": "dc_1_vac_0_wrap_shift_shift_shift_shift_wrap_wrap_split_extend_drop_drop_permute"
               }
             }
           ],
@@ -23288,7 +23274,7 @@
               "n_6"
             ],
             "wires": [
-              "dc_1_vac_2"
+              "dc_1_vac_0"
             ]
           }
         }
@@ -25554,7 +25540,7 @@
           "placements": []
         },
         {
-          "label": "retarget A(a) outer result to public output",
+          "label": "copy A(a) outer result beside the public output",
           "steps": [
             {
               "rule": "iteration",
@@ -25567,14 +25553,7 @@
                 "wires": []
               },
               "target": "r21",
-              "retargets": [
-                {
-                  "boundary": 2,
-                  "identity": "n9_2",
-                  "from": "w3_0_split_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_local_2",
-                  "to": "w20"
-                }
-              ]
+              "retargets": []
             }
           ],
           "placements": []
@@ -28417,7 +28396,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "dc_17_vac_0",
+                "a": "dc_15_vac_1",
                 "b": "w"
               }
             }
@@ -28480,7 +28459,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "dc_17_vac_0",
+                "a": "dc_15_vac_1",
                 "b": "w_1"
               }
             }
@@ -30725,14 +30704,7 @@
                 "wires": []
               },
               "target": "r47",
-              "retargets": [
-                {
-                  "boundary": 1,
-                  "identity": "n12_1",
-                  "from": "w38",
-                  "to": "w4_1"
-                }
-              ]
+              "retargets": []
             }
           ],
           "placements": []
@@ -30801,7 +30773,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w4_1",
+                "a": "w38",
                 "b": "w33_0"
               }
             }
@@ -30979,13 +30951,13 @@
                   ],
                   [
                     "b2",
-                    "w4_1"
+                    "w38"
                   ]
                 ],
                 "attachments": [
                   "w1",
                   "w29_1",
-                  "w4_1"
+                  "w38"
                 ]
               },
               "retargets": []
@@ -31064,7 +31036,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w4_1",
+                "a": "w38",
                 "b": "w12_0"
               }
             }
@@ -31147,14 +31119,14 @@
                   ],
                   [
                     "b3",
-                    "w4_1"
+                    "w38"
                   ]
                 ],
                 "attachments": [
                   "w2",
                   "w26",
                   "w37",
-                  "w4_1"
+                  "w38"
                 ]
               },
               "retargets": []
@@ -31239,7 +31211,7 @@
                 "region": "r47",
                 "regions": [],
                 "nodes": [
-                  "n28_0"
+                  "n28"
                 ],
                 "wires": []
               },
@@ -31254,7 +31226,7 @@
                 "nodeMap": [
                   [
                     "n8_0",
-                    "n28_0"
+                    "n28"
                   ]
                 ],
                 "wireMap": [
@@ -31264,17 +31236,17 @@
                   ],
                   [
                     "b1",
-                    "w39"
+                    "w38"
                   ],
                   [
                     "b2",
-                    "w4_1"
+                    "w39"
                   ]
                 ],
                 "attachments": [
                   "w1",
-                  "w39",
-                  "w4_1"
+                  "w38",
+                  "w39"
                 ]
               },
               "retargets": []
@@ -34436,7 +34408,7 @@
                   ],
                   [
                     "b1",
-                    "w4_0"
+                    "w22"
                   ],
                   [
                     "b2",
@@ -34445,18 +34417,11 @@
                 ],
                 "attachments": [
                   "w1",
-                  "w4_0",
+                  "w22",
                   "w3_0_split_wrap_shift_wrap_local_2"
                 ]
               },
-              "retargets": [
-                {
-                  "boundary": 1,
-                  "identity": "n12_0",
-                  "from": "w4_0",
-                  "to": "w22"
-                }
-              ]
+              "retargets": []
             }
           ],
           "placements": []
@@ -38319,19 +38284,6 @@
           "placements": []
         },
         {
-          "label": "introduce forward commutativity base inherited output",
-          "steps": [
-            {
-              "rule": "vacuousIntro",
-              "scope": "dc_11",
-              "sig": {
-                "kind": "iota"
-              }
-            }
-          ],
-          "placements": []
-        },
-        {
           "label": "spawn forward commutativity base premise",
           "steps": [
             {
@@ -38389,8 +38341,7 @@
               "region": "dc_11",
               "wires": [
                 "dc_vac",
-                "dc_9_vac",
-                "dc_11_vac"
+                "dc_9_vac"
               ]
             }
           ],
@@ -38439,7 +38390,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "dc_11_vac",
+                "a": "dc_vac",
                 "b": "w_1"
               }
             }
@@ -39364,7 +39315,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "dc_21_vac_0",
+                "a": "dc_19_vac",
                 "b": "w_0"
               }
             }
@@ -43655,7 +43606,7 @@
                 "region": "r39",
                 "regions": [],
                 "nodes": [
-                  "n_34_0"
+                  "n_118_0"
                 ],
                 "wires": []
               },
@@ -43670,7 +43621,7 @@
                 "nodeMap": [
                   [
                     "n20",
-                    "n_34_0"
+                    "n_118_0"
                   ]
                 ],
                 "wireMap": [
@@ -43701,7 +43652,7 @@
               "retargets": [
                 {
                   "boundary": 3,
-                  "identity": "n15_2_0",
+                  "identity": "n7_0_0",
                   "from": "w21",
                   "to": "w25"
                 }
@@ -45212,7 +45163,7 @@
             {
               "rule": "wireJoin",
               "input": {
-                "a": "w6_1",
+                "a": "w33",
                 "b": "w22_1_0"
               }
             }
@@ -45329,14 +45280,14 @@
                   ],
                   [
                     "b3",
-                    "w6_1"
+                    "w33"
                   ]
                 ],
                 "attachments": [
                   "w2",
                   "w21",
                   "w27",
-                  "w6_1"
+                  "w33"
                 ]
               },
               "retargets": []
@@ -45474,24 +45425,17 @@
                   ],
                   [
                     "b3",
-                    "w6_1"
+                    "w33"
                   ]
                 ],
                 "attachments": [
                   "w2",
                   "w21",
                   "w27",
-                  "w6_1"
+                  "w33"
                 ]
               },
-              "retargets": [
-                {
-                  "boundary": 3,
-                  "identity": "n15_4",
-                  "from": "w6_1",
-                  "to": "w33"
-                }
-              ]
+              "retargets": []
             }
           ],
           "placements": []
@@ -45812,7 +45756,7 @@
                     "w14_0"
                   ],
                   [
-                    "w6_2",
+                    "w6_1",
                     "w15_0"
                   ]
                 ],
