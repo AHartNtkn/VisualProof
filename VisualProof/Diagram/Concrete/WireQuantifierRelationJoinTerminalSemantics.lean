@@ -7,6 +7,43 @@ universe u
 
 namespace ConcreteWireQuantifier
 
+namespace RelationJoinResult
+
+/--
+The executable ordered splice trace reaches a raw checked endpoint whose
+canonical eager normalization denotes exactly the public join target.
+-/
+theorem trace_denotes
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : RelationJoinResult source wire content parameters)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions) :
+    ∃ steps : List (RelationJoinStep source wire content),
+      RelationJoinSemanticTrace source wire content parameters result.args
+          steps result.boundFinal result.boundRegionImage
+            result.boundWireImage result.boundDying
+            (result.boundRegionImage (source.val.wires wire).scope) ∧
+        steps.map RelationJoinStep.application =
+          result.applications ∧
+        (denoteChecked pre definitionEnv result.checked ↔
+          denoteChecked pre definitionEnv result.plainFinal) := by
+  obtain ⟨steps, normalization, trace, applicationsExact,
+      normalizationExact, targetExact⟩ :=
+    result.trace_complete
+  refine
+    ⟨steps, trace, applicationsExact, ?_⟩
+  rw [normalizationExact] at targetExact
+  rw [← targetExact]
+  exact
+    ConcreteDiagram.normalizeIdentities_sound result.plainFinal pre
+      definitionEnv
+
+end RelationJoinResult
+
 namespace RelationJoinSemantics
 
 open Internal

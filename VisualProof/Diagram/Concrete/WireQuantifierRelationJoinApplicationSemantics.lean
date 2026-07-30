@@ -1,8 +1,73 @@
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinAlignment
+import VisualProof.Diagram.Concrete.WireQuantifierFrameNaturality
 
 namespace VisualProof
 
 universe u
+
+namespace WireQuantifierSemantics
+
+/-- Concatenate two heterogeneous premodel tuples without changing entries. -/
+def appendArgs
+    {Domain : Sig → Type u} :
+    {left : List Sig} →
+      PreModel.Args Domain left →
+      PreModel.Args Domain right →
+      PreModel.Args Domain (left ++ right)
+  | [], PUnit.unit, suffix => suffix
+  | _ :: _, ⟨head, tail⟩, suffix =>
+      ⟨head, appendArgs tail suffix⟩
+
+/--
+The relation value denoted by checked-open content after fixing its ambient
+parameter tuple.
+-/
+def contentRelation
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions)
+    {content : CheckedOpenDiagram definitions}
+    (contentCompiled : OpenCompilation content)
+    {args parameterSigs : List Sig}
+    (boundaryExact :
+      checkedBoundarySigs content = args ++ parameterSigs)
+    (parameterValues :
+      PreModel.Args model.toPreModel.Domain parameterSigs) :
+    Sig.denote model.Carrier (.rel args) :=
+  fun formalValues =>
+    denoteOpen model.toPreModel definitionEnv contentCompiled.openDiagram
+      (boundaryExact.symm ▸
+        appendArgs (PreModel.Args.ofFull formalValues) parameterValues)
+
+/--
+Applying the canonical relation represented by checked-open content unfolds
+to that content with the supplied formal tuple followed by its fixed
+parameter tuple.
+-/
+theorem contentRelation_applies
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions)
+    {content : CheckedOpenDiagram definitions}
+    (contentCompiled : OpenCompilation content)
+    {args parameterSigs : List Sig}
+    (boundaryExact :
+      checkedBoundarySigs content = args ++ parameterSigs)
+    (parameterValues :
+      PreModel.Args model.toPreModel.Domain parameterSigs)
+    (formalValues :
+      PreModel.Args model.toPreModel.Domain args) :
+    model.toPreModel.apply
+        (contentRelation model definitionEnv contentCompiled
+          boundaryExact parameterValues)
+        formalValues ↔
+      denoteOpen model.toPreModel definitionEnv
+        contentCompiled.openDiagram
+        (boundaryExact.symm ▸
+          appendArgs formalValues parameterValues) := by
+  simp [Model.toPreModel, contentRelation]
+
+end WireQuantifierSemantics
 
 namespace ConcreteWireQuantifier
 

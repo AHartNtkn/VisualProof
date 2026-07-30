@@ -26,6 +26,8 @@ import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.WireQuantifierIota
-import VisualProof.Diagram.Concrete.WireQuantifierSemantics
+import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverSemantics
+import VisualProof.Diagram.Concrete.WireQuantifierIotaSemantics
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinTerminalSemantics
 import VisualProof.Rule.WireQuantifier
 import VisualProof.Rule.WireQuantifierFixtures

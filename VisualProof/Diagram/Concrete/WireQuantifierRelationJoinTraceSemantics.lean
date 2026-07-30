@@ -6,6 +6,52 @@ universe u
 
 namespace ConcreteWireQuantifier
 
+private theorem splice_succeeds_of_wellFormed
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wellFormed : attachment.diagram.WellFormed definitions) :
+    ∃ result, splice attachment = .ok result := by
+  unfold splice
+  split
+  · rename_i error rejected
+    have complete :=
+      ConcreteDiagram.checkWellFormed_complete wellFormed
+    rw [rejected] at complete
+    contradiction
+  · exact ⟨_, rfl⟩
+
+namespace RelationJoinStep
+
+/--
+Recover the unique structural insertion receipt owned by one accepted
+relation-join step. This is the sole compilation-recovery authority for both
+one-step and trace semantics.
+-/
+theorem insertionCompilation
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    (step : RelationJoinStep source dying content)
+    (contentCompiled : OpenCompilation content) :
+    ∃ compiled :
+        InsertionCompilation contentCompiled step.attachment,
+      compileInsertion? contentCompiled step.attachment = some compiled := by
+  have generatedWellFormed :
+      step.attachment.diagram.WellFormed definitions := by
+    rw [← step.checked_generated]
+    exact step.checked.property
+  obtain ⟨spliceResult, spliceAccepted⟩ :=
+    splice_succeeds_of_wellFormed step.attachment generatedWellFormed
+  exact
+    compileInsertion_complete_of_splice contentCompiled step.attachment
+      spliceResult spliceAccepted
+
+end RelationJoinStep
+
 namespace RelationJoinSemantics
 
 open Internal
