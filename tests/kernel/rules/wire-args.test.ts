@@ -159,13 +159,40 @@ describe('argument drop / extend', () => {
     expect(exploreForm(extended)).toEqual(exploreForm(diagram))
   })
 
-  it('gates drop on the wire scope polarity', () => {
-    const { builder, wire } = binaryFixture()
+  it('gates drop on the wire scope polarity for per-end-varying attachments', () => {
+    const builder = new DiagramBuilder()
+    const atomA = builder.atom(builder.root, UNARY)
+    const atomB = builder.atom(builder.root, UNARY)
+    const wire = builder.wire(builder.root, [
+      { node: atomA, port: { kind: 'head' } },
+      { node: atomB, port: { kind: 'head' } },
+    ], UNARY)
+    builder.wire(builder.root, [{ node: atomA, port: { kind: 'arg', index: 0 } }])
+    builder.wire(builder.root, [{ node: atomB, port: { kind: 'arg', index: 0 } }])
     const diagram = builder.build()
 
     expect(() => applyArgDrop(diagram, wire, 0))
       .toThrowError(/dropping an argument requires a negative scope/)
     expect(() => applyArgDrop(diagram, wire, 0, 'backward')).not.toThrow()
+  })
+
+  it('drops and extends ungated when the attachment is uniform and scope-visible', () => {
+    const builder = new DiagramBuilder()
+    const shared = builder.wire(builder.root, [])
+    const atomA = builder.atom(builder.root, UNARY)
+    const atomB = builder.atom(builder.root, UNARY)
+    const wire = builder.wire(builder.root, [
+      { node: atomA, port: { kind: 'head' } },
+      { node: atomB, port: { kind: 'head' } },
+    ], UNARY)
+    builder.wire(builder.root, [
+      { node: atomA, port: { kind: 'arg', index: 0 } },
+      { node: atomB, port: { kind: 'arg', index: 0 } },
+    ])
+    void shared
+    const diagram = builder.build()
+
+    expect(() => applyArgDrop(diagram, wire, 0)).not.toThrow()
   })
 
   it('refuses an extend map that does not cover every end', () => {

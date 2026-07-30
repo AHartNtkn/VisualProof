@@ -292,14 +292,10 @@ export function rightIdentityCarrierInductive(
     region: forwardHypotheses,
     wire: exactHypotheses,
   })
-  forward.record('ground exact zeroUnique, plusBase, and plusStep', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: exactHypotheses,
+  forward.recordRelationJoin('ground exact zeroUnique, plusBase, and plusStep', {
+    wire: exactHypotheses,
       content: exactHypothesesContent(),
       parameters: [forwardZero, forwardSuccessor, forwardPlus],
-    },
   })
 
   before = forward.diagram
@@ -505,14 +501,10 @@ export function rightIdentityCarrierInductive(
     forwardPlus,
     [forwardSuccessorValue, forwardLocalZero, forwardSuccessorValue],
   )
-  forward.record('ground temporary carrier directly to E', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryCarrier,
+  forward.recordRelationJoin('ground temporary carrier directly to E', {
+    wire: temporaryCarrier,
       content: rightIdentityCarrierContent(),
       parameters: [forwardZero, forwardPlus],
-    },
   })
 
   const rhs = statements.rightIdentityCarrierInductive

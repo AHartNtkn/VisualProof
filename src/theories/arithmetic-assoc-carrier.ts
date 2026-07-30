@@ -217,14 +217,10 @@ export function associativityCarrierHereditary(
     wire: temporaryHypotheses,
   })
   onlyNewNode(before, forward.diagram, hypotheses)
-  forward.record('ground exact standing hypotheses', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryHypotheses,
+  forward.recordRelationJoin('ground exact standing hypotheses', {
+    wire: temporaryHypotheses,
       content: exactHypothesesContent(),
       parameters: [successor, plus],
-    },
   })
 
   before = forward.diagram
@@ -315,14 +311,10 @@ export function associativityCarrierHereditary(
       ),
     },
   })
-  forward.record('ground exact predecessor carrier', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryCarrier,
+  forward.recordRelationJoin('ground exact predecessor carrier', {
+    wire: temporaryCarrier,
       content: associativityCarrierContent(),
       parameters: [plus],
-    },
   })
 
   const spawnAtom = (

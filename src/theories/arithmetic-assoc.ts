@@ -192,14 +192,10 @@ function plusAssoc(
     region: publicHypotheses,
     wire: plusBase,
   })
-  publicForward.record('ground exact plusBase hypothesis', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: plusBase,
+  publicForward.recordRelationJoin('ground exact plusBase hypothesis', {
+    wire: plusBase,
       content: plusBaseContent(),
       parameters: [publicZero, publicPlus],
-    },
   })
 
   publicBefore = publicForward.diagram
@@ -247,15 +243,11 @@ function plusAssoc(
       TERNARY,
     ],
   ] as const) {
-    publicForward.record('specialize cited base primitive', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    publicForward.recordRelationJoin('specialize cited base primitive', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
   for (const citedHypothesis of directCuts(
     publicForward.diagram,
@@ -575,14 +567,10 @@ function plusAssoc(
     publicForward.diagram,
     publicClaimAntecedent,
   )
-  publicForward.record('ground exact residual A(b) transport', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryRightTransport,
+  publicForward.recordRelationJoin('ground exact residual A(b) transport', {
+    wire: temporaryRightTransport,
       content: associativityTransportContent(),
       parameters: [publicForwardRight!, publicPlus],
-    },
   })
   const publicBackward = new PrimitiveStepRecorder(
     statements.plusAssoc.diagram,
@@ -701,15 +689,11 @@ function plusAssoc(
           ],
         ] as const
     for (const [outer, inner, signature] of primitiveSpecializations) {
-      publicBackward.record('specialize ' + name + ' primitive', {
-        rule: 'wireJoin',
-        input: {
-          kind: 'relation',
-          wire: inner,
+      publicBackward.recordRelationJoin('specialize ' + name + ' primitive', {
+    wire: inner,
           content: relationApplicationContent(signature),
           parameters: [outer],
-        },
-      })
+  })
     }
     for (const citedHypothesis of directCuts(
       publicBackward.diagram,
@@ -804,14 +788,10 @@ function plusAssoc(
     leftPropertyScope,
     UNARY,
   )
-  publicBackward.record('ground public Nat(a) directly to exact A', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: leftProperty,
+  publicBackward.recordRelationJoin('ground public Nat(a) directly to exact A', {
+    wire: leftProperty,
       content: associativityCarrierContent(),
       parameters: [backwardPlus],
-    },
   })
   const leftHereditary = exactOne(
     directCuts(publicBackward.diagram, leftPropertyBody),
@@ -905,14 +885,10 @@ function plusAssoc(
     rightPropertyScope,
     UNARY,
   )
-  publicBackward.record('ground public Nat(b) directly to exact A', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: rightProperty,
+  publicBackward.recordRelationJoin('ground public Nat(b) directly to exact A', {
+    wire: rightProperty,
       content: associativityCarrierContent(),
       parameters: [backwardPlus],
-    },
   })
   const rightHereditary = exactOne(
     directCuts(publicBackward.diagram, rightPropertyBody),

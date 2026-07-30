@@ -247,16 +247,35 @@ function insertExplicitMaterial(
   })
 
   before = recorder.diagram
-  recorder.record('ground the temporary relation with explicit material', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporary,
+  const applicationEnds = before.wires[temporary]!.endpoints
+    .map((endpoint) => endpoint.node)
+  recorder.recordRelationJoin('ground the temporary relation with explicit material', {
+    wire: temporary,
       content: material,
       parameters,
-    },
   })
-  return introducedContentSelection(before, recorder.diagram, region)
+  // The compiled grounding may satisfy the material by re-heading the
+  // spawned application atoms rather than splicing fresh copies, so the
+  // material occurrence is the introduced content plus those survivors.
+  const introduced = introducedContentSelection(before, recorder.diagram, region)
+  const survivors = applicationEnds.filter((node) =>
+    recorder.diagram.nodes[node]?.region === region
+    && !introduced.nodes.includes(node))
+  return {
+    ...introduced,
+    nodes: [...introduced.nodes, ...survivors].sort(),
+  }
+}
+
+const explicitMaterials = new WeakMap<Theorem, DiagramWithBoundary>()
+
+/** The material diagram one reification theorem actually grounded. */
+export function explicitMaterialOf(theorem: Theorem): DiagramWithBoundary {
+  const material = explicitMaterials.get(theorem)
+  if (material === undefined) {
+    throw new Error(`no explicit material recorded for '${theorem.name}'`)
+  }
+  return material
 }
 
 function recordExplicitReification(
@@ -330,11 +349,8 @@ function recordExplicitReification(
     reverse,
   )
 
-  recorder.record('sever exact copies into one fresh relation witness', {
-    rule: 'wireSever',
-    input: {
-      kind: 'relation',
-      scope: witnessScope,
+  recorder.recordRelationSever('sever exact copies into one fresh relation witness', {
+    scope: witnessScope,
       occurrences: [
         {
           sel: source,
@@ -348,15 +364,16 @@ function recordExplicitReification(
           args: universal.variables,
         },
       ],
-    },
   })
 
-  return {
+  const theorem = {
     name,
     lhs,
     rhs,
     actions: recorder.actions,
   }
+  explicitMaterials.set(theorem, material)
+  return theorem
 }
 
 function captureOnly(

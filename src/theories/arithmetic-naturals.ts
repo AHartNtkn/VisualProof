@@ -207,14 +207,10 @@ function buildZeroForward(context: ProofContext) {
     region: hereditary,
     wire: temporaryConditions,
   })
-  forward.record('ground exact Nat base and closure conditions', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryConditions,
+  forward.recordRelationJoin('ground exact Nat base and closure conditions', {
+    wire: temporaryConditions,
       content: hereditaryConditionsContent(),
       parameters: [zero, successor, property],
-    },
   })
 
   before = forward.diagram
@@ -558,14 +554,10 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   })
 
   before = forward.diagram
-  forward.record('ground predecessor Nat on supplied primitives', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryNat,
+  forward.recordRelationJoin('ground predecessor Nat on supplied primitives', {
+    wire: temporaryNat,
       content: natRelation(),
       parameters: [zero, successor, predecessor],
-    },
   })
   const predecessorNatMaterial = introducedContentSelection(
     before,

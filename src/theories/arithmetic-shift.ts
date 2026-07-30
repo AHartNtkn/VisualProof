@@ -446,15 +446,11 @@ function succShiftS(
       TERNARY,
     ],
   ] as const) {
-    backward.record('specialize cited primitive relation', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    backward.recordRelationJoin('specialize cited primitive relation', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
 
   for (const citedHypothesis of directCuts(
@@ -528,14 +524,10 @@ function succShiftS(
     propertyScope,
     UNARY,
   )
-  backward.record('ground Nat property directly to successor shift', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground Nat property directly to successor shift', {
+    wire: property,
       content: successorShiftCarrierContent(),
       parameters: [reviewedSuccessor, reviewedPlus],
-    },
   })
 
   const hereditary = exactOne(

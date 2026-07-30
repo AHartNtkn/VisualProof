@@ -188,14 +188,10 @@ function plusRightUnit(
     region: forwardHypotheses,
     wire: plusSingleValued,
   })
-  forward.record('ground exact plusSingleValued hypothesis', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: plusSingleValued,
+  forward.recordRelationJoin('ground exact plusSingleValued hypothesis', {
+    wire: plusSingleValued,
       content: plusSingleValuedContent(),
       parameters: [forwardPlus],
-    },
   })
 
   forward.record('open right-unit claim scope and body', {
@@ -474,15 +470,11 @@ function plusRightUnit(
       TERNARY,
     ],
   ] as const) {
-    backward.record('specialize cited primitive relation', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    backward.recordRelationJoin('specialize cited primitive relation', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
 
   for (const citedHypothesis of directCuts(
@@ -552,14 +544,10 @@ function plusRightUnit(
     propertyScope,
     UNARY,
   )
-  backward.record('ground Nat property directly to right identity', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground Nat property directly to right identity', {
+    wire: property,
       content: rightIdentityCarrierContent(),
       parameters: [reviewedZero, reviewedPlus],
-    },
   })
 
   const hereditary = exactOne(

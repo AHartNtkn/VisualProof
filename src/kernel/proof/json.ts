@@ -125,6 +125,7 @@ function wireSeverInputToJson(input: WireSeverInput): unknown {
         kind: input.kind,
         wire: input.wire,
         keep: input.keep.map(endpointToJson),
+        ...(input.scope !== undefined ? { scope: input.scope } : {}),
       }
     case 'relation':
       return {
@@ -142,7 +143,7 @@ function wireSeverInputFromJson(value: unknown): WireSeverInput {
     case 'iota':
       assertOnlyKeys(
         value,
-        ['kind', 'wire', 'keep'],
+        ['kind', 'wire', 'keep', 'scope'],
         'wireSever iota input',
       )
       if (!Array.isArray(value.keep)) {
@@ -153,6 +154,9 @@ function wireSeverInputFromJson(value: unknown): WireSeverInput {
         wire: str(value.wire, 'wireSever input.wire'),
         keep: value.keep.map((endpoint, index) =>
           endpointFromJson(endpoint, `wireSever input.keep[${index}]`)),
+        ...(value.scope !== undefined
+          ? { scope: str(value.scope, 'wireSever input.scope') }
+          : {}),
       }
     case 'relation':
       assertOnlyKeys(

@@ -1,14 +1,20 @@
+import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type {
   Diagram,
   NodeId,
   RegionId,
   WireId,
 } from '../kernel/diagram/diagram'
+import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import {
   applyAction,
   singleStepAction,
   type ProofAction,
 } from '../kernel/proof/action'
+import {
+  compileRelationJoinAction,
+  compileRelationSeverAction,
+} from '../kernel/proof/compile-content'
 import { mapStepIds } from '../kernel/proof/compose'
 import type { ProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
@@ -114,7 +120,73 @@ export class PrimitiveStepRecorder {
       resolved.rule === 'identityInsert'
       && new Set(resolved.wires).size < 2
     ) return
-    const action = singleStepAction(label, resolved)
+    this.#recordAction(singleStepAction(label, resolved))
+  }
+
+  /**
+   * Record one monolithically specified relation grounding as its compiled
+   * primitive sequence, under one labeled action.
+   */
+  recordRelationJoin(
+    label: string,
+    input: {
+      readonly wire: WireId
+      readonly content: DiagramWithBoundary
+      readonly parameters: readonly WireId[]
+    },
+  ): void {
+    const wire = this.#wireRename.get(input.wire)
+    const parameters = input.parameters.map((parameter) =>
+      this.#wireRename.get(parameter))
+    this.#recordAction(compileRelationJoinAction(
+      label,
+      this.#diagram,
+      wire,
+      input.content,
+      parameters,
+      this.#context,
+      this.#orientation,
+    ))
+  }
+
+  /**
+   * Record one monolithically specified relation abstraction as its compiled
+   * primitive sequence, under one labeled action.
+   */
+  recordRelationSever(
+    label: string,
+    input: {
+      readonly scope: RegionId
+      readonly occurrences: readonly {
+        readonly sel: SubgraphSelection
+        readonly args: readonly WireId[]
+      }[]
+    },
+  ): void {
+    const occurrences = input.occurrences.map((occurrence) => ({
+      sel: occurrence.sel,
+      args: occurrence.args.map((wire) => this.#wireRename.get(wire)),
+    }))
+    if (process.env.PROBE_SEVER !== undefined) {
+      for (const occurrence of occurrences) {
+        console.log('[sever occurrence]', JSON.stringify(occurrence.sel))
+      }
+      const region = occurrences[0]!.sel.region
+      console.log('[region nodes]', JSON.stringify(
+        Object.entries(this.#diagram.nodes)
+          .filter(([, node]) => node.region === region)
+          .map(([id, node]) => ({ id, kind: node.kind }))))
+    }
+    this.#recordAction(compileRelationSeverAction(
+      label,
+      this.#diagram,
+      { kind: 'relation', scope: input.scope, occurrences },
+      this.#context,
+      this.#orientation,
+    ))
+  }
+
+  #recordAction(action: ProofAction): void {
     const before = this.#diagram
     const next = applyAction(
       this.#diagram,

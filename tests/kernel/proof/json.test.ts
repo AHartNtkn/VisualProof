@@ -141,6 +141,15 @@ describe('step JSON', () => {
       {
         rule: 'wireSever',
         input: {
+          kind: 'iota',
+          wire: 'w0',
+          keep: [],
+          scope: 'r1',
+        },
+      },
+      {
+        rule: 'wireSever',
+        input: {
           kind: 'relation',
           scope: 'r0',
           occurrences: [{

@@ -18,7 +18,15 @@ import { applyWireSever, type WireSeverInput } from '../rules/wire-quantifier'
 import { RuleError } from '../rules/error'
 import { mapStepIds } from './compose'
 import type { ProofContext } from './context'
-import { applyStep, type ProofStep } from './step'
+import type { ProofAction } from './action'
+import {
+  applyStepWithReceipt,
+  type ProofStep,
+} from './step'
+import {
+  extendIdReservation,
+  type IdReservation,
+} from '../diagram/subgraph/freshId'
 
 /**
  * The authoring-layer compiler: fold a monolithic relation-grounding input
@@ -460,6 +468,11 @@ function handleResidual(emitter: Emitter, residual: Residual): Residual[] {
  * over `parameters` — into primitive steps. The returned list, replayed in
  * order with the same orientation, produces the monolith's result.
  */
+export type CompileOptions = {
+  readonly reservation?: IdReservation
+  readonly onStep?: (step: ProofStep, before: Diagram, after: Diagram) => void
+}
+
 export function compileRelationJoin(
   diagram: Diagram,
   wire: WireId,
@@ -467,6 +480,7 @@ export function compileRelationJoin(
   parameters: readonly WireId[],
   context: ProofContext,
   orientation: Orientation = 'forward',
+  options: CompileOptions = {},
 ): ProofStep[] {
   const relation = diagram.wires[wire]
   if (relation === undefined) {
@@ -504,11 +518,22 @@ export function compileRelationJoin(
 
   const steps: ProofStep[] = []
   let current = diagram
+  let reservation = options.reservation
   const emitter: Emitter = {
     current: () => current,
     emit: (step) => {
-      current = applyStep(current, step, context, orientation)
+      const before = current
+      const receipt = applyStepWithReceipt(
+        current,
+        step,
+        context,
+        orientation,
+        reservation,
+      )
+      current = receipt.result
+      reservation = extendIdReservation(reservation, receipt.allocation)
       steps.push(step)
+      options.onStep?.(step, before, current)
       return current
     },
   }
@@ -537,7 +562,11 @@ export function compileRelationSever(
   input: Extract<WireSeverInput, { readonly kind: 'relation' }>,
   context: ProofContext,
   orientation: Orientation = 'forward',
-): ProofStep[] {
+  options: CompileOptions = {},
+): {
+  readonly steps: ProofStep[]
+  readonly diffs: readonly { readonly before: Diagram; readonly after: Diagram }[]
+} {
   const severed = applyWireSever(diagram, input, orientation)
   const wire = newWireOfSig(
     diagram,
@@ -581,21 +610,21 @@ export function compileRelationSever(
   const joinOrientation: Orientation =
     orientation === 'forward' ? 'backward' : 'forward'
   {
-    let current = severed
-    const steps = compileRelationJoin(
+    compileRelationJoin(
       severed,
       wire,
       pattern,
       ambientAttachments,
       context,
       joinOrientation,
+      {
+        onStep: (step, before, after) => {
+          trace.push({ step, pre: before, post: after })
+        },
+      },
     )
-    for (const step of steps) {
-      const next = applyStep(current, step, context, joinOrientation)
-      trace.push({ step, pre: current, post: next })
-      current = next
-    }
-    const finalIso = exploreIso(current, diagram)
+    const finalState = trace.length > 0 ? trace[trace.length - 1]!.post : severed
+    const finalIso = exploreIso(finalState, diagram)
     if (finalIso === null) {
       throw new RuleError(
         'sever compilation failed: the planned join does not reproduce the diagram',
@@ -604,7 +633,9 @@ export function compileRelationSever(
   }
 
   const output: ProofStep[] = []
+  const diffs: Array<{ before: Diagram; after: Diagram }> = []
   let real = diagram
+  let reservation = options.reservation
   for (let index = trace.length - 1; index >= 0; index -= 1) {
     const { step, pre, post } = trace[index]!
     const iso = exploreIso(post, real)
@@ -615,10 +646,35 @@ export function compileRelationSever(
     }
     const inverse = invertStep(step, pre, post)
     const mapped = mapStepIds(inverse, iso)
-    real = applyStep(real, mapped, context, orientation)
+    const before = real
+    let receipt
+    try {
+      receipt = applyStepWithReceipt(
+        real,
+        mapped,
+        context,
+        orientation,
+        reservation,
+      )
+    } catch (error) {
+      if (process.env.PROBE_SEVER !== undefined) {
+        console.log('[invert fail]', JSON.stringify({
+          index,
+          planned: step,
+          inverse,
+          mapped,
+          orientation,
+        }))
+      }
+      throw error
+    }
+    real = receipt.result
+    reservation = extendIdReservation(reservation, receipt.allocation)
+    diffs.push({ before, after: real })
     output.push(mapped)
+    options.onStep?.(mapped, before, real)
   }
-  return output
+  return { steps: output, diffs }
 }
 
 /** The planning-world inverse of one emitted join step. */
@@ -779,4 +835,102 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
       break
   }
   throw new RuleError(`invert: no inverse for step '${step.rule}'`)
+}
+
+function fullReservation(diagram: Diagram): IdReservation {
+  return {
+    regions: new Set(Object.keys(diagram.regions)),
+    nodes: new Set(Object.keys(diagram.nodes)),
+    wires: new Set(Object.keys(diagram.wires)),
+  }
+}
+
+function deletedStartIds(
+  start: Diagram,
+  traceDiffs: readonly { readonly before: Diagram; readonly after: Diagram }[],
+): { regions: string[]; nodes: string[]; wires: string[] } {
+  const deleted = { regions: new Set<string>(), nodes: new Set<string>(), wires: new Set<string>() }
+  for (const { before, after } of traceDiffs) {
+    for (const id of Object.keys(before.regions)) {
+      if (after.regions[id] === undefined && start.regions[id] !== undefined) {
+        deleted.regions.add(id)
+      }
+    }
+    for (const id of Object.keys(before.nodes)) {
+      if (after.nodes[id] === undefined && start.nodes[id] !== undefined) {
+        deleted.nodes.add(id)
+      }
+    }
+    for (const id of Object.keys(before.wires)) {
+      if (after.wires[id] === undefined && start.wires[id] !== undefined) {
+        deleted.wires.add(id)
+      }
+    }
+  }
+  return {
+    regions: [...deleted.regions].sort(),
+    nodes: [...deleted.nodes].sort(),
+    wires: [...deleted.wires].sort(),
+  }
+}
+
+/**
+ * Compile a relation join as one durable action. Ids the action deletes are
+ * excluded from re-minting via the action's allocation, so an id never
+ * denotes two different objects across one action — diff-based selection
+ * capture in authoring scripts stays sound.
+ */
+export function compileRelationJoinAction(
+  label: string,
+  diagram: Diagram,
+  wire: WireId,
+  content: DiagramWithBoundary,
+  parameters: readonly WireId[],
+  context: ProofContext,
+  orientation: Orientation = 'forward',
+): ProofAction {
+  const diffs: Array<{ before: Diagram; after: Diagram }> = []
+  compileRelationJoin(diagram, wire, content, parameters, context, orientation, {
+    reservation: fullReservation(diagram),
+    onStep: (_, before, after) => diffs.push({ before, after }),
+  })
+  const allocation = deletedStartIds(diagram, diffs)
+  const steps = compileRelationJoin(
+    diagram,
+    wire,
+    content,
+    parameters,
+    context,
+    orientation,
+    {
+      reservation: {
+        regions: new Set(allocation.regions),
+        nodes: new Set(allocation.nodes),
+        wires: new Set(allocation.wires),
+      },
+    },
+  )
+  return { label, steps, placements: [], allocation }
+}
+
+/** The sever counterpart of `compileRelationJoinAction`. */
+export function compileRelationSeverAction(
+  label: string,
+  diagram: Diagram,
+  input: Extract<WireSeverInput, { readonly kind: 'relation' }>,
+  context: ProofContext,
+  orientation: Orientation = 'forward',
+): ProofAction {
+  const first = compileRelationSever(diagram, input, context, orientation, {
+    reservation: fullReservation(diagram),
+  })
+  const allocation = deletedStartIds(diagram, first.diffs)
+  const second = compileRelationSever(diagram, input, context, orientation, {
+    reservation: {
+      regions: new Set(allocation.regions),
+      nodes: new Set(allocation.nodes),
+      wires: new Set(allocation.wires),
+    },
+  })
+  return { label, steps: second.steps, placements: [], allocation }
 }

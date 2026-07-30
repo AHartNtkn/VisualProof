@@ -310,34 +310,26 @@ function traceProofHalf(
     ? theorem.lhs.diagram
     : theorem.rhs.diagram
   const traces: ProofTrace[] = []
-  for (const [state, action] of actions.entries()) {
-    if (action.steps.length !== 1) {
-      throw new Error(
-        `${theorem.name} ${half} action '${action.label}' is not primitive`,
-      )
-    }
-    let receipt: StepReceipt | undefined
+  for (const action of actions) {
+    let stepBefore = diagram
     const after = applyAction(
       diagram,
       action,
       context,
       half,
-      (_next, _stepIndex, stepReceipt) => {
-        receipt = stepReceipt
+      (next, stepIndex, stepReceipt) => {
+        traces.push({
+          half,
+          state: traces.length,
+          before: stepBefore,
+          after: next,
+          step: action.steps[stepIndex]!,
+          receipt: stepReceipt,
+          diagnostic: `${action.label} [${stepIndex}]`,
+        })
+        stepBefore = next
       },
     )
-    if (receipt === undefined) {
-      throw new Error(`${theorem.name} ${half} action has no receipt`)
-    }
-    traces.push({
-      half,
-      state,
-      before: diagram,
-      after,
-      step: action.steps[0]!,
-      receipt,
-      diagnostic: action.label,
-    })
     diagram = after
   }
   return traces
@@ -989,7 +981,7 @@ describe('relational Frege arithmetic proofs', () => {
         ...(theorem!.backActions ?? []),
       ]
       expect(actions.length).toBeGreaterThan(0)
-      expect(actions.every((action) => action.steps.length === 1)).toBe(true)
+      expect(actions.every((action) => action.steps.length >= 1)).toBe(true)
     }
   })
 
@@ -1726,10 +1718,11 @@ describe('relational Frege arithmetic proofs', () => {
         ...(theorem.backActions ?? []),
       ]
       for (const action of allActions) {
-        expect(action.steps).toHaveLength(1)
-        const [step] = action.steps
-        if (step?.rule === 'theorem') {
-          expect(precedingNames.has(step.name)).toBe(true)
+        expect(action.steps.length).toBeGreaterThanOrEqual(1)
+        for (const step of action.steps) {
+          if (step.rule === 'theorem') {
+            expect(precedingNames.has(step.name)).toBe(true)
+          }
         }
       }
 
@@ -1737,17 +1730,12 @@ describe('relational Frege arithmetic proofs', () => {
         theorem.lhs.diagram,
         theorem.actions,
         context,
-        (_diagram, _actionIndex, stepIndex) => {
-          expect(stepIndex).toBe(0)
-        },
       )
       const backward = replayActions(
         theorem.rhs.diagram,
         theorem.backActions ?? [],
         context,
-        (_diagram, _actionIndex, stepIndex) => {
-          expect(stepIndex).toBe(0)
-        },
+        undefined,
         'backward',
       )
       expect(exploreForm(forward)).toBe(exploreForm(backward))

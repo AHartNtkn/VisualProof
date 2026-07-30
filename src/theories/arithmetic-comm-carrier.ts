@@ -172,26 +172,18 @@ function exposeClosedCitation(
     [reviewedZero, relationWire(recorder.diagram, citedScope, UNARY), UNARY],
     [reviewedPlus, relationWire(recorder.diagram, citedScope, TERNARY), TERNARY],
   ] as const) {
-    recorder.record(`specialize ${name} primitive`, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    recorder.recordRelationJoin(`specialize ${name} primitive`, {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
   if (name !== 'plusLeftUnit') {
-    recorder.record(`specialize ${name} successor primitive`, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: relationWire(recorder.diagram, citedScope, BINARY),
+    recorder.recordRelationJoin(`specialize ${name} successor primitive`, {
+    wire: relationWire(recorder.diagram, citedScope, BINARY),
         content: relationApplicationContent(BINARY),
         parameters: [reviewedSuccessor],
-      },
-    })
+  })
   }
   for (const citedNat of citedNats) {
     recorder.record(`refold ${name} cited Nat`, {
@@ -289,14 +281,10 @@ export function commutativityCarrierInductive(
     region: forwardHypotheses,
     wire: forwardZeroUnique,
   })
-  forward.record('ground exact zeroUnique hypothesis', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: forwardZeroUnique,
+  forward.recordRelationJoin('ground exact zeroUnique hypothesis', {
+    wire: forwardZeroUnique,
       content: zeroUniqueContent(),
       parameters: [forwardZero],
-    },
   })
   const forwardLeftUnit = exposeClosedCitation(
     forward,
@@ -471,15 +459,11 @@ export function commutativityCarrierInductive(
         b: endpointWire(forward.diagram, application, 'arg', 0),
       },
     })
-    forward.record(`ground ${label} carrier`, {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: temporary,
+    forward.recordRelationJoin(`ground ${label} carrier`, {
+    wire: temporary,
         content,
         parameters,
-      },
-    })
+  })
   }
 
   materializeForwardCarrier(
@@ -969,14 +953,10 @@ export function commutativityCarrierInductive(
     'support Nat property body',
   )
   const property = relationWire(backward.diagram, propertyScope, UNARY)
-  backward.record('ground support Nat to successor-shift carrier', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground support Nat to successor-shift carrier', {
+    wire: property,
       content: successorShiftCarrierContent(),
       parameters: [reviewedSuccessor, reviewedPlus],
-    },
   })
   const hereditary = exactOne(
     directCuts(backward.diagram, propertyBody),
@@ -1048,14 +1028,10 @@ export function commutativityCarrierInductive(
     rightPropertyScope,
     UNARY,
   )
-  backward.record('ground support Nat to right-identity carrier', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: rightProperty,
+  backward.recordRelationJoin('ground support Nat to right-identity carrier', {
+    wire: rightProperty,
       content: rightIdentityCarrierContent(),
       parameters: [reviewedZero, reviewedPlus],
-    },
   })
   const rightHereditary = exactOne(
     directCuts(backward.diagram, rightPropertyBody),
@@ -2660,14 +2636,10 @@ export function commutativityCarrierInductive(
     retainedPropertyScope,
     UNARY,
   )
-  backward.record('ground retained Nat to right-identity carrier', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: retainedProperty,
+  backward.recordRelationJoin('ground retained Nat to right-identity carrier', {
+    wire: retainedProperty,
       content: rightIdentityCarrierContent(),
       parameters: [reviewedZero, reviewedPlus],
-    },
   })
   const retainedHereditary = exactOne(
     directCuts(backward.diagram, retainedPropertyBody),

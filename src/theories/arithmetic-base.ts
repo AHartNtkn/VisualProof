@@ -171,14 +171,10 @@ function plusLeftUnit(
     region: hypotheses,
     wire: temporaryHypotheses,
   })
-  forward.record('ground exact plusBase and plusSingleValued hypotheses', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryHypotheses,
+  forward.recordRelationJoin('ground exact plusBase and plusSingleValued hypotheses', {
+    wire: temporaryHypotheses,
       content: exactHypothesesContent(),
       parameters: [zero, plus],
-    },
   })
 
   before = forward.diagram

@@ -163,14 +163,10 @@ export function associativityCarrierBase(
     wire: temporaryHypotheses,
   })
   onlyNewNode(before, forward.diagram, forwardHypotheses)
-  forward.record('ground exact standing hypotheses', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryHypotheses,
+  forward.recordRelationJoin('ground exact standing hypotheses', {
+    wire: temporaryHypotheses,
       content: exactHypothesesContent(),
       parameters: [forwardZero!, forwardPlus!],
-    },
   })
   before = forward.diagram
   forward.record('open material base universal', {

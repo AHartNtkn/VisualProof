@@ -291,7 +291,24 @@ export function applyArgContract(
   )
 }
 
-/** Gated (join family): the position drops; per-end wires lose an endpoint. */
+/**
+ * One shared attachment wire visible at the acted wire's scope makes the
+ * dropped/extended position expressible at the binder (W := λx̄.W′(x̄, p)),
+ * so both rewrite directions have witnesses and no polarity gate applies.
+ * Per-site-varying attachments keep the directional gate.
+ */
+function uniformVisibleAttachment(
+  diagram: Diagram,
+  wireScope: RegionId,
+  attachments: readonly WireId[],
+): boolean {
+  if (attachments.length === 0) return true
+  const first = attachments[0]!
+  if (attachments.some((wire) => wire !== first)) return false
+  return isAncestorOrEqual(diagram, wireAt(diagram, first).scope, wireScope)
+}
+
+/** Gated (join family) unless the attachment is uniform and scope-visible. */
 export function applyArgDrop(
   diagram: Diagram,
   wireId: WireId,
@@ -302,13 +319,19 @@ export function applyArgDrop(
   const ends = appliedEnds(diagram, wireId, 'dropping an argument')
   const sig = relSigOf(diagram, wireId, 'dropping an argument')
   requirePosition(sig, position, 'dropping an argument')
-  requireGate(
+  if (!uniformVisibleAttachment(
     diagram,
     wireAt(diagram, wireId).scope,
-    orientation,
-    'negative',
-    'dropping an argument',
-  )
+    ends.map((end) => end.args[position]!),
+  )) {
+    requireGate(
+      diagram,
+      wireAt(diagram, wireId).scope,
+      orientation,
+      'negative',
+      'dropping an argument',
+    )
+  }
 
   return replaceEnds(
     diagram,
@@ -345,13 +368,21 @@ export function applyArgExtend(
       + `'${sigKey(sig)}'`,
     )
   }
-  requireGate(
+  if (!uniformVisibleAttachment(
     diagram,
     wireAt(diagram, wireId).scope,
-    orientation,
-    'positive',
-    'extending an argument',
-  )
+    ends.map((end) => attachments.get(end.node)).filter(
+      (wire): wire is WireId => wire !== undefined,
+    ),
+  )) {
+    requireGate(
+      diagram,
+      wireAt(diagram, wireId).scope,
+      orientation,
+      'positive',
+      'extending an argument',
+    )
+  }
   if (
     attachments.size !== ends.length
     || ends.some((end) => !attachments.has(end.node))

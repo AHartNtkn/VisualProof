@@ -228,14 +228,10 @@ function buildForward(context: ProofContext) {
     region: antecedent,
     wire: temporaryHypotheses,
   })
-  forward.record('ground exact zeroExists and successorTotal hypotheses', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryHypotheses,
+  forward.recordRelationJoin('ground exact zeroExists and successorTotal hypotheses', {
+    wire: temporaryHypotheses,
       content: exactHypothesesContent(),
       parameters: [zero, successor],
-    },
   })
 
   const zeroAnchor = nodeWithHead(forward.diagram, antecedent, zero)
@@ -350,14 +346,10 @@ function buildForward(context: ProofContext) {
     region: hereditary,
     wire: temporaryConditions,
   })
-  forward.record('ground exact Nat base and closure conditions', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryConditions,
+  forward.recordRelationJoin('ground exact Nat base and closure conditions', {
+    wire: temporaryConditions,
       content: hereditaryConditionsContent(),
       parameters: [zero, successor, property],
-    },
   })
 
   const propertyAtZero = spawnAttached(

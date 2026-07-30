@@ -483,15 +483,11 @@ function plusComm(
       TERNARY,
     ],
   ] as const) {
-    backward.record('specialize cited primitive', {
-      rule: 'wireJoin',
-      input: {
-        kind: 'relation',
-        wire: inner,
+    backward.recordRelationJoin('specialize cited primitive', {
+    wire: inner,
         content: relationApplicationContent(signature),
         parameters: [outer],
-      },
-    })
+  })
   }
   for (const citedHypothesis of directCuts(
     backward.diagram,
@@ -614,14 +610,10 @@ function plusComm(
     propertyScope,
     UNARY,
   )
-  backward.record('ground Nat(a) directly to commutativity carrier', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: property,
+  backward.recordRelationJoin('ground Nat(a) directly to commutativity carrier', {
+    wire: property,
       content: commutativityCarrierContent(),
       parameters: [backwardPlus, backwardRight],
-    },
   })
   const hereditary = exactOne(
     directCuts(backward.diagram, propertyBody),

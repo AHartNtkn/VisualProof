@@ -18,7 +18,7 @@ import {
   verifyTheory,
   type ProofContext,
 } from '../../../src/kernel/proof/context'
-import { applyStep } from '../../../src/kernel/proof/step'
+import { applyAction } from '../../../src/kernel/proof/action'
 
 const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
@@ -28,9 +28,11 @@ function replay(
   steps: ReturnType<typeof compileRelationJoin>,
   context: ProofContext,
 ): Diagram {
-  let current = diagram
-  for (const step of steps) current = applyStep(current, step, context)
-  return current
+  return applyAction(
+    diagram,
+    { label: 'replay', steps, placements: [] },
+    context,
+  )
 }
 
 /**
@@ -222,7 +224,7 @@ describe('compileRelationJoin parity with the monolith', () => {
     } as const
 
     const monolith = applyWireSever(diagram, input)
-    const steps = compileRelationSever(diagram, input, EMPTY_PROOF_CONTEXT)
+    const { steps } = compileRelationSever(diagram, input, EMPTY_PROOF_CONTEXT)
     const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
     expect(exploreForm(compiled)).toEqual(exploreForm(monolith))
   })

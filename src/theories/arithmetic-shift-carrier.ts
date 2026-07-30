@@ -219,14 +219,10 @@ export function successorShiftCarrierInductive(
     region: forwardHypotheses,
     wire: forwardSuccessorFunctional,
   })
-  forward.record('ground exact successorSingleValued hypothesis', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: forwardSuccessorFunctional,
+  forward.recordRelationJoin('ground exact successorSingleValued hypothesis', {
+    wire: forwardSuccessorFunctional,
       content: successorSingleValuedContent(),
       parameters: [forwardSuccessor],
-    },
   })
 
   const introduceForwardIndividuals = (
@@ -714,14 +710,10 @@ export function successorShiftCarrierInductive(
       forwardTransportOutputSuccessor!,
     ],
   )
-  forward.record('ground temporary carrier directly to E', {
-    rule: 'wireJoin',
-    input: {
-      kind: 'relation',
-      wire: temporaryCarrier,
+  forward.recordRelationJoin('ground temporary carrier directly to E', {
+    wire: temporaryCarrier,
       content: successorShiftCarrierContent(),
       parameters: [forwardSuccessor, forwardPlus],
-    },
   })
 
   const rhs = statements.successorShiftCarrierInductive

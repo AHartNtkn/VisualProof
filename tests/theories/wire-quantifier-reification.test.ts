@@ -31,6 +31,7 @@ import {
   associativityInductionReification,
   relationIdentityReification,
   truthReification,
+  explicitMaterialOf,
 } from '../../src/theories/reification'
 
 const UNARY = relSig([IOTA])
@@ -362,43 +363,29 @@ describe('strongest-form relation reification construction', () => {
 
   it('uses two distinct branch regions for blank truth occurrences', () => {
     const theorem = truthReification()
-    const sever = exactOne(
+    const spawn = exactOne(
       theorem.actions.flatMap((action) => action.steps)
-        .filter((step) =>
-          step.rule === 'wireSever'
-          && step.input.kind === 'relation'),
-      'truth relation sever',
+        .filter((step) => step.rule === 'endsSpawn'),
+      'truth witness ends spawn',
     )
-    if (sever.rule !== 'wireSever' || sever.input.kind !== 'relation') {
-      throw new Error('unreachable truth sever')
-    }
-    expect(sever.input.occurrences).toHaveLength(2)
-    expect(sever.input.occurrences[0]!.sel.region)
-      .not.toBe(sever.input.occurrences[1]!.sel.region)
-    expect(sever.input.occurrences.every((occurrence) =>
-      occurrence.sel.regions.length === 0
-      && occurrence.sel.nodes.length === 0
-      && occurrence.sel.wires.length === 0
-      && occurrence.args.length === 0)).toBe(true)
+    if (spawn.rule !== 'endsSpawn') throw new Error('unreachable truth spawn')
+    expect(spawn.sites).toHaveLength(2)
+    expect(spawn.sites[0]!.region).not.toBe(spawn.sites[1]!.region)
+    expect(spawn.sites.every((site) => site.args.length === 0)).toBe(true)
   })
 
-  it('embeds arbitrary nested carrier material in join actions, not definitions', () => {
+  it('embeds arbitrary nested carrier material in grounding actions, not definitions', () => {
     const theorem = associativityInductionReification()
-    const grounding = exactOne(
-      theorem.actions.flatMap((action) => action.steps)
-        .filter((step) =>
-          step.rule === 'wireJoin'
-          && step.input.kind === 'relation'),
-      'one explicit material grounding',
-    )
-    if (grounding.rule !== 'wireJoin' || grounding.input.kind !== 'relation') {
-      throw new Error('unreachable grounding')
-    }
-    expect(Object.keys(grounding.input.content.diagram.nodes).length)
-      .toBeGreaterThan(1)
-    expect(Object.keys(grounding.input.content.diagram.regions).length)
-      .toBeGreaterThan(1)
-    expect(Object.values(grounding.input.content.diagram.nodes)
+    const material = explicitMaterialOf(theorem)
+    expect(Object.keys(material.diagram.nodes).length).toBeGreaterThan(1)
+    expect(Object.keys(material.diagram.regions).length).toBeGreaterThan(1)
+    expect(Object.values(material.diagram.nodes)
       .every((node) => node.kind !== 'ref')).toBe(true)
+    const rules = new Set(theorem.actions.flatMap((action) =>
+      action.steps.map((step) => step.rule)))
+    expect(rules.has('refLeaf')).toBe(false)
+    expect(rules.has('refSpawn')).toBe(false)
+    expect(rules.has('unfold')).toBe(false)
+    expect(rules.has('fold')).toBe(false)
   })
 })
