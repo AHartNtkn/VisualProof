@@ -94,8 +94,17 @@ structure AboveScopeReflection
           targetSiteOuter
           (targetRegion source removed
             (source.val.wires removed).scope) targetBody)
-  zipper :
-    DiagramContext.SemanticZipper.{u} sourceAbove targetAbove
+  sourceDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((source.val.wiresAt (source.val.wires removed).scope).map
+        (fun wire => (source.val.wires wire).sig))
+      sourceAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+          sourceVisibleExact).trans
+          (ConcreteElaboration.WireContext.sigs_extend sourceSiteOuter
+            (source.val.wires removed).scope)) ▸ sourceFrame.context)
+  composable :
+    DiagramContext.ComposableSemanticZipper.{u} sourceAbove targetAbove
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env
           (contextProjection source removed targetOuter sourceOuter
@@ -372,9 +381,19 @@ private theorem compileSiblingFrame_reflect_outer
                       congrArg Nat.succ nested.sourceCutDepthExact
                   sourceFill := ?_
                   targetFill := ?_
-                  zipper :=
-                    DiagramContext.SemanticZipper.surround
-                      (DiagramContext.SemanticZipper.cut nested.zipper)
+                  sourceDecomposition :=
+                    DiagramContext.StopsAboveBindMany.surroundCut_cast
+                      ((congrArg ConcreteElaboration.WireContext.sigs
+                          nested.sourceVisibleExact).trans
+                        (ConcreteElaboration.WireContext.sigs_extend
+                          nested.sourceSiteOuter
+                          (source.val.wires removed).scope))
+                      sourceLeading sourceSuffix sourceNested.context
+                      nested.sourceAbove nested.sourceDecomposition
+                  composable :=
+                    DiagramContext.ComposableSemanticZipper.surround
+                      (DiagramContext.ComposableSemanticZipper.cut
+                        nested.composable)
                       sourceLeading sourceSuffix targetLeading targetSuffix
                       leadingLaw
                       (targetSuffixLaw removedAbsent
@@ -570,8 +589,11 @@ private theorem compileRegionFrame_reflect_outer
                           (source.val.wires removed).scope) .hole
                   sourceFill := ?_
                   targetFill := ?_
-                  zipper :=
-                    DiagramContext.SemanticZipper.hole
+                  sourceDecomposition :=
+                    bindContextFor_hole_stopsAboveBindMany source.val
+                      sourceOuter (source.val.wires removed).scope
+                  composable :=
+                    DiagramContext.ComposableSemanticZipper.hole
                       (fun (_pre : PreModel.{u}) env =>
                         Env.comp env
                           (contextProjection source removed targetOuter
@@ -958,8 +980,21 @@ private theorem compileRegionFrame_reflect_outer
                                   aroundReflection.sourceCutDepthExact
                               sourceFill := ?_
                               targetFill := ?_
-                              zipper :=
-                                retainedBindContextZipper removed targetOuter
+                              sourceDecomposition :=
+                                DiagramContext.StopsAboveBindMany.bindContextFor_cast
+                                  ((congrArg
+                                      ConcreteElaboration.WireContext.sigs
+                                      aroundReflection.sourceVisibleExact).trans
+                                    (ConcreteElaboration.WireContext.sigs_extend
+                                      aroundReflection.sourceSiteOuter
+                                      (source.val.wires removed).scope))
+                                  source.val sourceOuter.ids
+                                  (source.val.wiresAt region)
+                                  sourceAround.context
+                                  aroundReflection.sourceAbove
+                                  aroundReflection.sourceDecomposition
+                              composable :=
+                                retainedBindContextComposable removed targetOuter
                                   sourceOuter correspond removedAbsent region
                                   atSite above
                                   aroundReflection.sourceAbove
@@ -971,7 +1006,7 @@ private theorem compileRegionFrame_reflect_outer
                                         aroundReflection.sourceSiteOuter
                                         aroundReflection.siteCorrespond
                                         aroundReflection.siteRemovedAbsent))
-                                  aroundReflection.zipper }
+                                  aroundReflection.composable }
                           · dsimp [sourceGenerated]
                             calc
                               (bindContextFor source.val sourceOuter.ids
@@ -1180,6 +1215,21 @@ theorem siteCompilation_reflect
 
 namespace FinalDeletionOuterReceipt
 
+/-- The exact stopped-above decomposition of the compiled bound source site. -/
+def boundCanonical
+    {source : CheckedDiagram definitions}
+    {removed : source.val.WireId}
+    {targetWellFormed : (Target source removed).WellFormed definitions}
+    {bound :
+      SiteCompilation source (source.val.wires removed).scope}
+    (receipt :
+      FinalDeletionOuterReceipt.{u} source removed targetWellFormed bound) :
+    SiteCompilation.AboveScopeDecomposition bound where
+  siteOuter := receipt.reflected.sourceSiteOuter
+  above := receipt.reflected.sourceAbove
+  visibleExact := receipt.reflected.sourceVisibleExact
+  contextDecomposition := receipt.reflected.sourceDecomposition
+
 /--
 Lift the caller's dying-scope body implication through the retained outer
 contexts. Even cut depth points plain-to-bound; odd depth reverses that outer
@@ -1281,7 +1331,8 @@ theorem scopeParity
               (targetRegion source removed
                 (source.val.wires removed).scope)
               receipt.reflected.targetBody))) := by
-  apply receipt.reflected.zipper.targetToSource pre definitionEnv
+  apply receipt.reflected.composable.toSemanticZipper.targetToSource
+    pre definitionEnv
   intro descendant _preserves targetFinished
   exact
     finishDyingRegion_implication source removed

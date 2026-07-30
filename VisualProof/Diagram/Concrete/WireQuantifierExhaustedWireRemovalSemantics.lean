@@ -6,7 +6,7 @@ import VisualProof.Diagram.ContextZipper
 
 namespace VisualProof
 
-universe u
+universe u v w
 
 namespace ConcreteWireQuantifier
 
@@ -725,6 +725,162 @@ def ContextsCorrespond
   targetContext.ids.map (sourceWire source removed) =
     sourceContext.ids.filter (fun wire => decide (wire ≠ removed))
 
+/--
+Corresponding contexts above the deleted wire have the same ordered
+signature vector.  The equality is structural: singleton deletion preserves
+the order and signature of every surviving wire.
+-/
+theorem corresponding_sigs_eq
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (removedAbsent : removed ∉ sourceContext.ids) :
+    targetContext.sigs = sourceContext.sigs := by
+  unfold ConcreteElaboration.WireContext.sigs
+  calc
+    targetContext.ids.map
+          (fun wire => ((Target source removed).wires wire).sig) =
+        (targetContext.ids.map (sourceWire source removed)).map
+          (fun wire => (source.val.wires wire).sig) := by
+      rw [List.map_map]
+      apply List.map_congr_left
+      intro wire _
+      exact sourceWire_signature source removed wire
+    _ =
+        (sourceContext.ids.filter
+          (fun wire => decide (wire ≠ removed))).map
+            (fun wire => (source.val.wires wire).sig) := by
+      rw [correspond]
+    _ = sourceContext.ids.map
+          (fun wire => (source.val.wires wire).sig) := by
+      rw [List.filter_eq_self.mpr]
+      intro wire member
+      simpa using (fun (same : wire = removed) =>
+        removedAbsent (same ▸ member))
+
+private def consEq
+    (head : leftHead = rightHead)
+    (tail : leftTail = rightTail) :
+    leftHead :: leftTail = rightHead :: rightTail := by
+  cases head
+  cases tail
+  rfl
+
+private theorem consEq_cast_here
+    (head : leftHead = rightHead)
+    (tail : leftTail = rightTail) :
+    consEq head tail ▸
+        (Var.here : Var (leftHead :: leftTail) leftHead) =
+      (head ▸ (Var.here :
+        Var (rightHead :: rightTail) rightHead)) := by
+  cases head
+  cases tail
+  rfl
+
+private theorem consEq_cast_there
+    (head : leftHead = rightHead)
+    (tail : leftTail = rightTail)
+    (value : Var leftTail sig) :
+    consEq head tail ▸ (Var.there value :
+        Var (leftHead :: leftTail) sig) =
+      (Var.there (tail ▸ value) :
+        Var (rightHead :: rightTail) sig) := by
+  cases head
+  cases tail
+  rfl
+
+private def sourceWire_sigs_eq
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId) :
+    (ids : List (Target source removed).WireId) →
+      ids.map (fun wire => ((Target source removed).wires wire).sig) =
+        (ids.map (sourceWire source removed)).map
+          (fun wire => (source.val.wires wire).sig)
+  | [] => rfl
+  | head :: tail =>
+      consEq
+        (sourceWire_signature source removed head).symm
+        (sourceWire_sigs_eq source removed tail)
+
+private theorem origin_cast_sourceWire_sigs
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (ids : List (Target source removed).WireId)
+    {sig : Sig}
+    (value :
+      Var
+        (ids.map
+          (fun wire => ((Target source removed).wires wire).sig)) sig) :
+    ConcreteElaboration.WireContext.origin source.val
+        (ids.map (sourceWire source removed))
+        (sourceWire_sigs_eq source removed ids ▸ value) =
+      sourceWire source removed
+        (ConcreteElaboration.WireContext.origin
+          (Target source removed) ids value) := by
+  induction ids with
+  | nil => exact nomatch value
+  | cons head tail induction =>
+      unfold sourceWire_sigs_eq
+      cases value with
+      | here =>
+          simp [consEq_cast_here,
+            ConcreteElaboration.WireContext.origin]
+          change sourceWire source removed head =
+            sourceWire source removed head
+          rfl
+      | there value =>
+          simpa [consEq_cast_there,
+            ConcreteElaboration.WireContext.origin] using induction value
+
+private theorem cast_corresponding_origin
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (removedAbsent : removed ∉ sourceContext.ids)
+    {sig : Sig}
+    (value : Var targetContext.sigs sig) :
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+        (corresponding_sigs_eq source removed targetContext sourceContext
+          correspond removedAbsent ▸ value) =
+      sourceWire source removed
+        (ConcreteElaboration.WireContext.origin
+          (Target source removed) targetContext.ids value) := by
+  have idsExact :
+      targetContext.ids.map (sourceWire source removed) =
+        sourceContext.ids := by
+    calc
+      _ =
+          sourceContext.ids.filter
+            (fun wire => decide (wire ≠ removed)) := correspond
+      _ = sourceContext.ids := by
+        rw [List.filter_eq_self.mpr]
+        intro wire member
+        simpa using (fun (same : wire = removed) =>
+          removedAbsent (same ▸ member))
+  cases targetContext with
+  | mk targetIds =>
+      cases sourceContext with
+      | mk sourceIds =>
+          dsimp only [ConcreteElaboration.WireContext.ids] at idsExact
+          subst sourceIds
+          have proofExact :
+              corresponding_sigs_eq source removed
+                  ⟨targetIds⟩
+                  ⟨targetIds.map (sourceWire source removed)⟩
+                  correspond removedAbsent =
+                sourceWire_sigs_eq source removed targetIds :=
+            Subsingleton.elim _ _
+          rw [proofExact]
+          exact origin_cast_sourceWire_sigs source removed targetIds value
+
 theorem empty_contexts_correspond
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId) :
@@ -917,6 +1073,30 @@ theorem contextProjection_action
       (targetWire source removed wire survives) targetMember
   simpa only [contextProjection, wire, member, survives, targetMember] using
     castOrigin.trans memberOrigin
+
+theorem contextProjection_reindexed_identity
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond : ContextsCorrespond source removed
+      targetContext sourceContext)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (removedAbsent : removed ∉ sourceContext.ids) :
+    (fun {sig} (value : Var sourceContext.sigs sig) =>
+      corresponding_sigs_eq source removed targetContext sourceContext
+          correspond removedAbsent ▸
+        contextProjection source removed targetContext sourceContext
+          correspond removedAbsent value) =
+      (fun {_} (value : Var sourceContext.sigs _) => value) := by
+  funext sig value
+  apply InsertionCompilation.NaturalityInternal.origin_injective
+    source.val sourceContext.ids sourceNodup
+  rw [cast_corresponding_origin source removed targetContext sourceContext
+      correspond removedAbsent,
+    contextProjection_action]
+  simp
 
 theorem sourceWire_injective
     (source : CheckedDiagram definitions)
@@ -1476,7 +1656,74 @@ Close one retained ancestor binder block around a strict-above zipper. The
 dying scope is excluded explicitly, so this constructor never crosses the
 unequal local binder blocks that deletion changes.
 -/
-theorem retainedBindContextZipper
+private def transportRenaming
+    {source source' target target' : List Sig}
+    (sourceExact : source = source')
+    (targetExact : target = target')
+    (rho : WireRenaming source' target') :
+    WireRenaming source target :=
+  fun {_} value => targetExact.symm ▸ rho (sourceExact ▸ value)
+
+private theorem transportRenaming_reindexed_identity
+    {source source' target target' : List Sig}
+    (sourceExact : source = source')
+    (targetExact : target = target')
+    (rawTargetToSource : target' = source')
+    (targetToSource : target = source)
+    (rho : WireRenaming source' target')
+    (rawIdentity :
+      (fun {sig} (value : Var source' sig) =>
+        rawTargetToSource ▸ rho value) =
+        (fun {_} (value : Var source' _) => value)) :
+    (fun {sig} (value : Var source sig) =>
+      targetToSource ▸
+        transportRenaming sourceExact targetExact rho value) =
+      (fun {_} (value : Var source _) => value) := by
+  cases sourceExact
+  cases targetExact
+  have proofExact : targetToSource = rawTargetToSource :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  exact rawIdentity
+
+private theorem envComp_transportRenaming
+    {source source' target target' : List Sig}
+    (sourceExact : source' = source)
+    (targetExact : target' = target)
+    (rho : WireRenaming source' target') :
+    (fun (pre : PreModel.{u}) (env : Env pre target) =>
+      sourceExact ▸ Env.comp (targetExact.symm ▸ env) rho) =
+      (fun (pre : PreModel.{u}) (env : Env pre target) =>
+        Env.comp env
+          (transportRenaming sourceExact.symm targetExact.symm rho)) := by
+  cases sourceExact
+  cases targetExact
+  rfl
+
+private theorem cast_trans
+    {α : Sort v} {motive : α → Sort w}
+    {left middle right : α}
+    (leftMiddle : left = middle)
+    (middleRight : middle = right)
+    (value : motive left) :
+    middleRight ▸ (leftMiddle ▸ value) =
+      (leftMiddle.trans middleRight) ▸ value := by
+  cases leftMiddle
+  cases middleRight
+  rfl
+
+private theorem bindMany_reindexBound
+    {leftBound rightBound outer hole : List Sig}
+    (same : leftBound = rightBound)
+    (inner :
+      DiagramContext definitions hole (leftBound ++ outer)) :
+    DiagramContext.bindMany leftBound inner =
+      DiagramContext.bindMany rightBound
+        ((congrArg (fun bound => bound ++ outer) same) ▸ inner) := by
+  cases same
+  rfl
+
+noncomputable def retainedBindContextComposable
     {source : CheckedDiagram definitions}
     (removed : source.val.WireId)
     (targetContext :
@@ -1499,7 +1746,7 @@ theorem retainedBindContextZipper
     (holeMap : ∀ pre : PreModel.{u},
       Env pre targetHole → Env pre sourceHole)
     (inner :
-      DiagramContext.SemanticZipper sourceInner targetInner
+      DiagramContext.ComposableSemanticZipper sourceInner targetInner
         (fun _pre env =>
           Env.comp env
             (contextProjection source removed
@@ -1509,7 +1756,7 @@ theorem retainedBindContextZipper
               (removed_absent_extend source removed sourceContext region
                 removedAbsent notScope)))
         holeMap) :
-    DiagramContext.SemanticZipper
+    DiagramContext.ComposableSemanticZipper
       (bindContextFor source.val sourceContext.ids
         (source.val.wiresAt region) sourceInner)
       (bindContextFor (Target source removed) targetContext.ids
@@ -1520,122 +1767,194 @@ theorem retainedBindContextZipper
           (contextProjection source removed targetContext sourceContext
             correspond removedAbsent))
       holeMap := by
+  let bound :=
+    (source.val.wiresAt region).map
+      (fun wire => (source.val.wires wire).sig)
+  let outerRenaming :=
+    (fun {_} value =>
+      contextProjection source removed targetContext sourceContext correspond
+        removedAbsent value :
+      WireRenaming sourceContext.sigs targetContext.sigs)
+  let fullRenaming :=
+    (fun {_} value =>
+      contextProjection source removed
+        (targetContext.extend (targetRegion source removed region))
+        (sourceContext.extend region)
+        (extend_contexts_correspond source removed correspond region)
+        (removed_absent_extend source removed sourceContext region
+          removedAbsent notScope) value :
+      WireRenaming (sourceContext.extend region).sigs
+        (targetContext.extend (targetRegion source removed region)).sigs)
+  let sourceExact :
+      (sourceContext.extend region).sigs =
+        bound ++ sourceContext.sigs :=
+    @List.map_append _ _
+      (fun wire => (source.val.wires wire).sig)
+      (source.val.wiresAt region) sourceContext.ids
+  let targetExact :
+      (targetContext.extend
+          (targetRegion source removed region)).sigs =
+        bound ++ targetContext.sigs :=
+    (@List.map_append _ _
+      (fun wire => ((Target source removed).wires wire).sig)
+      ((Target source removed).wiresAt
+        (targetRegion source removed region))
+      targetContext.ids).trans
+      (congrArg (fun localSigs => localSigs ++ targetContext.sigs)
+        (retainedLocalSigs_eq source removed region notScope))
+  let canonicalFullRenaming :
+      WireRenaming (bound ++ sourceContext.sigs)
+        (bound ++ targetContext.sigs) :=
+    transportRenaming sourceExact.symm targetExact.symm fullRenaming
+  let outerTargetToSource :=
+    corresponding_sigs_eq source removed targetContext sourceContext
+      correspond removedAbsent
+  let fullTargetToSource :=
+    corresponding_sigs_eq source removed
+      (targetContext.extend (targetRegion source removed region))
+      (sourceContext.extend region)
+      (extend_contexts_correspond source removed correspond region)
+      (removed_absent_extend source removed sourceContext region
+        removedAbsent notScope)
+  let canonicalTargetToSource :
+      bound ++ targetContext.sigs = bound ++ sourceContext.sigs :=
+    congrArg (List.append bound) outerTargetToSource
   have sourceExtendedNodup :
       (sourceContext.extend region).ids.Nodup :=
     ConcreteElaboration.extend_nodup definitions source.val source.property
       sourceContext region above
-  have bindDepth :
-      ∀ {holeCtx : List Sig}
-        (diagram : ConcreteDiagram definitions.length)
-        (outerIds localIds : List diagram.WireId)
-        (context :
-          DiagramContext definitions holeCtx
-            ((localIds ++ outerIds).map fun wire =>
-              (diagram.wires wire).sig)),
-        (bindContextFor diagram outerIds localIds context).cutDepth =
-          context.cutDepth := by
-    intro holeCtx diagram outerIds localIds context
-    induction localIds with
-    | nil => simp [bindContextFor]
-    | cons head tail induction =>
-        simp only [bindContextFor]
-        exact induction (.bind (diagram.wires head).sig context)
-  constructor
-  · rw [bindDepth source.val sourceContext.ids
-        (source.val.wiresAt region) sourceInner,
-      bindDepth (Target source removed) targetContext.ids
+  have outerNodup : sourceContext.ids.Nodup := by
+    have parts := sourceExtendedNodup
+    rw [ConcreteElaboration.WireContext.extend,
+      List.nodup_append] at parts
+    exact parts.2.1
+  have rawFullIdentity :
+      (fun {sig} (value : Var (sourceContext.extend region).sigs sig) =>
+        fullTargetToSource ▸ fullRenaming value) =
+        (fun {_}
+          (value : Var (sourceContext.extend region).sigs _) => value) :=
+    by
+      simpa only [fullTargetToSource, fullRenaming] using
+        (contextProjection_reindexed_identity source removed
+          (targetContext.extend (targetRegion source removed region))
+          (sourceContext.extend region)
+          (extend_contexts_correspond source removed correspond region)
+          sourceExtendedNodup
+          (removed_absent_extend source removed sourceContext region
+            removedAbsent notScope))
+  have outerIdentity :
+      (fun {sig} (value : Var sourceContext.sigs sig) =>
+        outerTargetToSource ▸ outerRenaming value) =
+        (fun {_} (value : Var sourceContext.sigs _) => value) :=
+    by
+      simpa only [outerTargetToSource, outerRenaming] using
+        (contextProjection_reindexed_identity source removed targetContext
+          sourceContext correspond outerNodup removedAbsent)
+  have canonicalFullIdentity :
+      (fun {sig} (value : Var (bound ++ sourceContext.sigs) sig) =>
+        canonicalTargetToSource ▸ canonicalFullRenaming value) =
+        (fun {_}
+          (value : Var (bound ++ sourceContext.sigs) _) => value) :=
+    transportRenaming_reindexed_identity sourceExact.symm targetExact.symm
+      fullTargetToSource canonicalTargetToSource fullRenaming
+        rawFullIdentity
+  have canonicalFullExact :
+      (canonicalFullRenaming :
+        WireRenaming (bound ++ sourceContext.sigs)
+          (bound ++ targetContext.sigs)) =
+        (DiagramContext.ComposableSemanticZipper.liftMany
+          bound outerRenaming :
+        WireRenaming (bound ++ sourceContext.sigs)
+          (bound ++ targetContext.sigs)) :=
+    by
+      simpa only using
+        (DiagramContext.ComposableSemanticZipper.eq_liftMany_of_reindexed_identity
+          bound outerTargetToSource outerRenaming canonicalFullRenaming
+            outerIdentity canonicalFullIdentity)
+  have canonicalInnerRaw :=
+    (inner.rebaseSourceOuter sourceExact).rebaseTargetOuter targetExact
+  have canonicalInner :
+      DiagramContext.ComposableSemanticZipper
+        (sourceExact ▸ sourceInner) (targetExact ▸ targetInner)
+        (fun (pre : PreModel.{u}) env =>
+          Env.comp env canonicalFullRenaming)
+        holeMap := by
+    rw [← envComp_transportRenaming sourceExact targetExact fullRenaming]
+    exact canonicalInnerRaw
+  have liftedInner :
+      DiagramContext.ComposableSemanticZipper
+        (sourceExact ▸ sourceInner) (targetExact ▸ targetInner)
+        (fun (pre : PreModel.{u}) env =>
+          Env.comp env
+            (DiagramContext.ComposableSemanticZipper.liftMany
+              bound outerRenaming))
+        holeMap := by
+    rw [← canonicalFullExact]
+    exact canonicalInner
+  have boundComposable :=
+    DiagramContext.ComposableSemanticZipper.bindMany
+      bound outerRenaming liftedInner
+  have sourceAncestorExact :
+      bindContextFor source.val sourceContext.ids
+          (source.val.wiresAt region) sourceInner =
+        DiagramContext.bindMany bound (sourceExact ▸ sourceInner) := by
+    rw [bindContextFor_eq_bindMany]
+    unfold bound
+    have proofExact :
+        (@List.map_append _ _
+            (fun wire => (source.val.wires wire).sig)
+            (source.val.wiresAt region) sourceContext.ids) =
+          sourceExact :=
+      Subsingleton.elim _ _
+    rw [proofExact]
+    rfl
+  have targetAncestorExact :
+      bindContextFor (Target source removed) targetContext.ids
+          ((Target source removed).wiresAt
+            (targetRegion source removed region)) targetInner =
+        DiagramContext.bindMany bound (targetExact ▸ targetInner) := by
+    rw [bindContextFor_eq_bindMany]
+    change
+      DiagramContext.bindMany
+          (((Target source removed).wiresAt
+            (targetRegion source removed region)).map
+              (fun wire => ((Target source removed).wires wire).sig))
+          ((@List.map_append _ _
+            (fun wire => ((Target source removed).wires wire).sig)
+            ((Target source removed).wiresAt
+              (targetRegion source removed region))
+            targetContext.ids) ▸ targetInner) =
+        DiagramContext.bindMany bound (targetExact ▸ targetInner)
+    rw [bindMany_reindexBound
+      (retainedLocalSigs_eq source removed region notScope)]
+    apply congrArg (DiagramContext.bindMany bound)
+    unfold bound
+    let mapAppend :=
+      @List.map_append _ _
+        (fun wire => ((Target source removed).wires wire).sig)
         ((Target source removed).wiresAt
-          (targetRegion source removed region)) targetInner]
-    exact inner.cutDepth_eq
-  · intro direction pre definitionEnv sourceBody targetBody fixed localLaw
-    rw [bindDepth source.val sourceContext.ids
-      (source.val.wiresAt region) sourceInner]
-    rw [bindContextFor_fill, bindContextFor_fill,
-      finishBodyFor_eq_finishRegion, finishBodyFor_eq_finishRegion]
-    generalize effectiveEq :
-      direction.through sourceInner.cutDepth = effective
-    cases effective with
-    | targetToSource =>
-        refine effectiveEq.symm ▸ ?_
-        simp only [DiagramContext.ContextDirection.holds]
-        intro targetFinished
-        obtain ⟨targetValues, targetCore⟩ :=
-          (ConcreteElaboration.denote_finishRegion definitions
-            (Target source removed) targetContext
-            (targetRegion source removed region) pre definitionEnv fixed
-            (targetInner.fill targetBody)).mp targetFinished
-        obtain ⟨sourceValues, environments⟩ :=
-          (extendedEnvironment_correspondence source removed targetContext
-            sourceContext correspond region sourceExtendedNodup
-            removedAbsent notScope pre
-            (Env.comp fixed
-              (contextProjection source removed targetContext sourceContext
-                correspond removedAbsent))
-            fixed rfl).2 targetValues
-        apply
-          (ConcreteElaboration.denote_finishRegion definitions source.val
-            sourceContext region pre definitionEnv
-            (Env.comp fixed
-              (contextProjection source removed targetContext sourceContext
-                correspond removedAbsent))
-            (sourceInner.fill sourceBody)).mpr
-        refine ⟨sourceValues, ?_⟩
-        rw [environments]
-        have middle :=
-          inner.transport direction pre definitionEnv sourceBody targetBody
-            (ConcreteElaboration.extendEnvironment
-              (Target source removed) targetContext
-              (targetRegion source removed region) targetValues fixed)
-            (by
-              intro descendant preserves
-              exact localLaw descendant
-                (DiagramContext.preservesOuter_bindContextFor
-                  (Target source removed) targetContext
-                  (targetRegion source removed region)
-                  targetInner pre targetValues fixed descendant preserves))
-        have directedMiddle := effectiveEq ▸ middle
-        exact directedMiddle targetCore
-    | sourceToTarget =>
-        refine effectiveEq.symm ▸ ?_
-        simp only [DiagramContext.ContextDirection.holds]
-        intro sourceFinished
-        obtain ⟨sourceValues, sourceCore⟩ :=
-          (ConcreteElaboration.denote_finishRegion definitions source.val
-            sourceContext region pre definitionEnv
-            (Env.comp fixed
-              (contextProjection source removed targetContext sourceContext
-                correspond removedAbsent))
-            (sourceInner.fill sourceBody)).mp sourceFinished
-        obtain ⟨targetValues, environments⟩ :=
-          (extendedEnvironment_correspondence source removed targetContext
-            sourceContext correspond region sourceExtendedNodup
-            removedAbsent notScope pre
-            (Env.comp fixed
-              (contextProjection source removed targetContext sourceContext
-                correspond removedAbsent))
-            fixed rfl).1 sourceValues
-        apply
-          (ConcreteElaboration.denote_finishRegion definitions
-            (Target source removed) targetContext
-            (targetRegion source removed region) pre definitionEnv fixed
-            (targetInner.fill targetBody)).mpr
-        refine ⟨targetValues, ?_⟩
-        have middle :=
-          inner.transport direction pre definitionEnv sourceBody targetBody
-            (ConcreteElaboration.extendEnvironment
-              (Target source removed) targetContext
-              (targetRegion source removed region) targetValues fixed)
-            (by
-              intro descendant preserves
-              exact localLaw descendant
-                (DiagramContext.preservesOuter_bindContextFor
-                  (Target source removed) targetContext
-                  (targetRegion source removed region)
-                  targetInner pre targetValues fixed descendant preserves))
-        have directedMiddle := effectiveEq ▸ middle
-        apply directedMiddle
-        rw [environments] at sourceCore
-        exact sourceCore
+          (targetRegion source removed region))
+        targetContext.ids
+    let localExact :
+        (((Target source removed).wiresAt
+          (targetRegion source removed region)).map
+            (fun wire => ((Target source removed).wires wire).sig)) ++
+              targetContext.sigs =
+          (source.val.wiresAt region).map
+              (fun wire => (source.val.wires wire).sig) ++
+                targetContext.sigs :=
+      congrArg (fun localSigs => localSigs ++ targetContext.sigs)
+        (retainedLocalSigs_eq source removed region notScope)
+    calc
+      _ = (mapAppend.trans localExact) ▸ targetInner := by
+        exact cast_trans mapAppend localExact targetInner <;> rfl
+      _ = targetExact ▸ targetInner := by
+        have proofExact : mapAppend.trans localExact = targetExact :=
+          Subsingleton.elim _ _
+        rw [proofExact] <;> rfl
+    all_goals rfl
+  rw [sourceAncestorExact, targetAncestorExact]
+  simpa only [outerRenaming] using boundComposable
 
 private def targetEndpoint
     (source : CheckedDiagram definitions)
