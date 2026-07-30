@@ -469,12 +469,12 @@ export class ProofMoveController {
       this.#options.orientation(),
     )
     if (discovery !== null) {
-      // Rules with dedicated direct gestures never appear as menu rows; the
-      // palette keeps only the flows that still need it (fold, unfold,
-      // citation). Retiring these too is recorded debt.
+      // Rules with dedicated direct gestures never appear as menu rows
+      // (unfold has double-click). Fold and citation remain: choosing a
+      // stored name is inherently a picker — the diagram cannot determine
+      // it — so these rows are the interface, not debt.
       const paletteRows = discovery.actions.filter((action) =>
-        action.kind === 'relUnfold'
-        || action.kind === 'relFold'
+        action.kind === 'relFold'
         || action.kind === 'citeTheorem')
       if (paletteRows.length > 0) row('Actions', null)
       for (const action of paletteRows) {
@@ -549,12 +549,6 @@ export class ProofMoveController {
           this.#options.fuel(),
         )))
         return
-      case 'relUnfold':
-        row(action.label, () => this.#commit({
-          rule: 'unfold',
-          nodeId: selection.nodes[0]!,
-        }))
-        return
       case 'relFold':
         row('Fold into', null)
         for (const [name] of this.#context().relations) {
@@ -572,6 +566,7 @@ export class ProofMoveController {
         }
         return
       case 'iterate':
+      case 'relUnfold':
       case 'citeTheorem':
         return
     }

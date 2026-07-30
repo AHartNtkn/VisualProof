@@ -341,9 +341,12 @@ design in ways this project fixes because it is already rebuilding this layer:
   iterate (menu-triggered iteration was explicitly removed by the 2026-07-10
   design and regressed).
 - **The palette trigger becomes an explicit still right-click** (today it
-  opens on a plain click over a hit). The only remaining rows are relUnfold,
-  relFold, and citeTheorem; retiring those too (per the standing total menu
-  ban) is recorded as debt, not done here.
+  opens on a plain click over a hit). The only remaining rows are relFold
+  and citeTheorem (relUnfold's row is deleted — double-click is its
+  gesture). These two are name-driven: choosing a stored definition or
+  theorem is inherently a picker, which the diagram cannot determine, so
+  the rows are the correct interface rather than debt (2026-07-30 ruling;
+  an earlier revision called their retirement "recorded debt" — struck).
 
 Drag-to-iterate, highlight+Delete erasure, and deiteration gestures are
 untouched.
