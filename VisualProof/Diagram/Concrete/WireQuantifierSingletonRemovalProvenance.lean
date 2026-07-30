@@ -275,6 +275,20 @@ def erasureRebaseRegionFrame
   subst right
   rfl
 
+/-- Filling a frame commutes with reindexing its exposed outer context. -/
+theorem erasureRebaseRegionFrame_fill
+    {definitions : List (List Sig)}
+    {diagram : ConcreteDiagram definitions.length}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (frame : RegionFrame definitions diagram left) :
+    congrArg ConcreteElaboration.WireContext.sigs same ▸
+        frame.context.fill frame.siteBody =
+      (erasureRebaseRegionFrame same frame).context.fill
+        (erasureRebaseRegionFrame same frame).siteBody := by
+  cases same
+  rfl
+
 private theorem compileFrameBranch_cast_context_withProvenance
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
@@ -928,7 +942,8 @@ theorem RelationJoinStep.pairedGeneratedFrame
       sourceOuter sourceFrame :=
   SingletonRemovalSemantics.pairedGeneratedFrame
     step.prior step.priorApplication
-    (relationJoinStepErasure step) site region fuel sourceOuter sourceFrame
+    (SingletonRemovalSemantics.RelationJoinStep.checkedErasure step)
+      site region fuel sourceOuter sourceFrame
     sourceAbove sourceGenerated
 
 end SingletonRemovalSemantics

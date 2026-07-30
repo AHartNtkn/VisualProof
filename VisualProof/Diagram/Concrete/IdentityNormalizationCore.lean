@@ -343,6 +343,72 @@ def eraseNodeRegion
   ⟨region.val, by
     simpa [eraseNodeCandidate] using region.isLt⟩
 
+theorem eraseNodeRegion_injective
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId) :
+    Function.Injective (eraseNodeRegion source node) := by
+  intro left right same
+  apply Fin.ext
+  exact congrArg Fin.val same
+
+theorem eraseNodeRegion_climb
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId) :
+    ∀ (steps : Nat) (region : source.val.RegionId),
+      (eraseNodeCandidate source node).climb steps
+          (eraseNodeRegion source node region) =
+        (source.val.climb steps region).map (eraseNodeRegion source node)
+  | 0, _ => rfl
+  | steps + 1, region => by
+      cases data : source.val.regions region with
+      | sheet =>
+          simp [ConcreteDiagram.climb, eraseNodeCandidate,
+            eraseNodeRegion, data]
+      | cut parent =>
+          simpa [ConcreteDiagram.climb, eraseNodeCandidate,
+            eraseNodeRegion, data] using
+            eraseNodeRegion_climb source node steps parent
+
+theorem eraseNodeRegion_encloses_iff
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (outer inner : source.val.RegionId) :
+    (eraseNodeCandidate source node).Encloses
+        (eraseNodeRegion source node outer)
+        (eraseNodeRegion source node inner) ↔
+      source.val.Encloses outer inner := by
+  unfold ConcreteDiagram.Encloses
+  rw [List.any_eq_true, List.any_eq_true]
+  constructor
+  · rintro ⟨steps, member, climbed⟩
+    have climbedExact :
+        (eraseNodeCandidate source node).climb steps
+            (eraseNodeRegion source node inner) =
+          some (eraseNodeRegion source node outer) := by
+      exact beq_iff_eq.mp climbed
+    rw [eraseNodeRegion_climb] at climbedExact
+    cases sourceClimb : source.val.climb steps inner with
+    | none => simp [sourceClimb] at climbedExact
+    | some reached =>
+        rw [sourceClimb] at climbedExact
+        have same :
+            eraseNodeRegion source node reached =
+              eraseNodeRegion source node outer :=
+          Option.some.inj climbedExact
+        refine ⟨steps, ?_, ?_⟩
+        · simpa [eraseNodeCandidate] using member
+        · apply beq_iff_eq.mpr
+          exact sourceClimb.trans
+            (congrArg some
+              (eraseNodeRegion_injective source node same))
+  · rintro ⟨steps, member, climbed⟩
+    refine ⟨steps, ?_, ?_⟩
+    · simpa [eraseNodeCandidate] using member
+    · apply beq_iff_eq.mpr
+      rw [eraseNodeRegion_climb]
+      exact congrArg (Option.map (eraseNodeRegion source node))
+        (beq_iff_eq.mp climbed)
+
 /-- Count-preserving wire image into a raw singleton-node deletion. -/
 def eraseNodeWire
     (source : CheckedDiagram definitions)
@@ -360,6 +426,23 @@ theorem eraseNodeWire_injective
   intro left right same
   apply Fin.ext
   exact congrArg (fun value => value.val) same
+
+@[simp] theorem eraseNodeWire_signature
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (wire : source.val.WireId) :
+    ((eraseNodeCandidate source removed).wires
+      (eraseNodeWire source removed wire)).sig =
+      (source.val.wires wire).sig := by
+  change
+    (source.val.wires
+      (source.val.wiresList.get
+        (eraseNodeWire source removed wire))).sig =
+      (source.val.wires wire).sig
+  congr 2
+  apply Fin.ext
+  simp [eraseNodeWire, ConcreteDiagram.wiresList,
+    Data.Finite.allFin_eq_finRange]
 
 /-- Dense image of one retained node in a raw singleton-node deletion. -/
 def eraseNodeIndex

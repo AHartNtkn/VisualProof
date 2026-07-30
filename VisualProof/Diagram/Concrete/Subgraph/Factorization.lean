@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationPrelude
+import VisualProof.Diagram.ContextOuter
 namespace VisualProof
 open ConcreteElaboration
 open FactorizationInternal
@@ -124,6 +125,286 @@ def compileRegionFrame?
             context :=
               bindContextFor diagram outer.ids
                 (diagram.wiresAt region) around.context }
+
+private theorem liftOuter_bindContextFor_local
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds : List diagram.WireId)
+    (localIds : List diagram.WireId)
+    (inner : DiagramContext definitions holeCtx
+      ((localIds ++ outerIds).map fun wire =>
+        (diagram.wires wire).sig))
+    {sig : Sig}
+    (value :
+      Var (outerIds.map fun wire => (diagram.wires wire).sig) sig) :
+    DiagramContext.liftOuter
+        (bindContextFor diagram outerIds localIds inner) value =
+      DiagramContext.liftOuter inner
+        (ConcreteElaboration.appendRightVar diagram localIds value) := by
+  induction localIds with
+  | nil => rfl
+  | cons head tail induction =>
+      simpa [bindContextFor, DiagramContext.liftOuter,
+        ConcreteElaboration.appendRightVar] using
+        induction (.bind (diagram.wires head).sig inner)
+
+private theorem bindContextFor_injective_local
+    {definitions : List (List Sig)}
+    (diagram : ConcreteDiagram definitions.length)
+    (outerIds : List diagram.WireId)
+    (localIds : List diagram.WireId) :
+    Function.Injective
+      (bindContextFor (definitions := definitions) diagram outerIds
+        localIds :
+        DiagramContext definitions holeCtx
+            ((localIds ++ outerIds).map fun wire =>
+              (diagram.wires wire).sig) →
+          DiagramContext definitions holeCtx
+            (outerIds.map fun wire => (diagram.wires wire).sig)) := by
+  induction localIds with
+  | nil =>
+      intro left right same
+      exact same
+  | cons head tail induction =>
+      intro left right same
+      have boundSame := induction same
+      injection boundSame
+
+private theorem compileSiblingFrame?_liftOuter_origin
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat)
+    (outer : WireContext diagram)
+    (target : diagram.RegionId)
+    (nested : RegionFrame definitions diagram outer)
+    (nestedLaw :
+      ∀ {sig : Sig} (value : Var outer.sigs sig),
+        WireContext.origin diagram nested.visible.ids
+            (DiagramContext.liftOuter nested.context value) =
+          WireContext.origin diagram outer.ids value) :
+    ∀ (leading : ItemSeq definitions outer.sigs)
+      (children : List diagram.RegionId)
+      {frame : RegionFrame definitions diagram outer},
+      compileSiblingFrame? definitions diagram fuel outer target nested
+          leading children =
+        some frame →
+      ∀ {sig : Sig} (value : Var outer.sigs sig),
+        WireContext.origin diagram frame.visible.ids
+            (DiagramContext.liftOuter frame.context value) =
+          WireContext.origin diagram outer.ids value := by
+  intro leading children
+  induction children generalizing leading with
+  | nil =>
+      intro frame accepted
+      simp [compileSiblingFrame?] at accepted
+  | cons child tail induction =>
+      intro frame accepted sig value
+      unfold compileSiblingFrame? at accepted
+      by_cases same : child = target
+      · simp only [same, ↓reduceDIte] at accepted
+        obtain ⟨suffix, _suffixCompiled, frameEquation⟩ :=
+          Option.bind_eq_some_iff.mp accepted
+        have frameExact :
+            ({ visible := nested.visible
+               siteBody := nested.siteBody
+               context := .surround leading (.cut nested.context) suffix } :
+              RegionFrame definitions diagram outer) =
+              frame :=
+          Option.some.inj frameEquation
+        subst frame
+        exact nestedLaw value
+      · simp only [same, ↓reduceDIte] at accepted
+        obtain ⟨body, _bodyCompiled, recursive⟩ :=
+          Option.bind_eq_some_iff.mp accepted
+        exact induction
+          (leading.append (.cons (.cut body) .nil)) recursive value
+
+private theorem compileRegionFrame?_liftOuter_origin
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (site : diagram.RegionId) :
+    ∀ (fuel : Nat) (region : diagram.RegionId)
+      (outer : WireContext diagram)
+      {frame : RegionFrame definitions diagram outer},
+      compileRegionFrame? definitions diagram site fuel region outer =
+        some frame →
+      ∀ {sig : Sig} (value : Var outer.sigs sig),
+        WireContext.origin diagram frame.visible.ids
+            (DiagramContext.liftOuter frame.context value) =
+          WireContext.origin diagram outer.ids value := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro region outer frame accepted
+      simp [compileRegionFrame?] at accepted
+  | succ childFuel induction =>
+      intro region outer frame accepted sig value
+      unfold compileRegionFrame? at accepted
+      by_cases atSite : region = site
+      · subst region
+        simp only [↓reduceDIte] at accepted
+        obtain ⟨body, _bodyCompiled, frameEquation⟩ :=
+          Option.bind_eq_some_iff.mp accepted
+        have frameExact :
+            ({ visible := outer.extend site
+               siteBody := body
+               context := bindContextFor diagram outer.ids
+                 (diagram.wiresAt site) .hole } :
+              RegionFrame definitions diagram outer) =
+              frame :=
+          Option.some.inj frameEquation
+        subst frame
+        change
+          WireContext.origin diagram (outer.extend site).ids
+              (DiagramContext.liftOuter
+                (bindContextFor diagram outer.ids
+                  (diagram.wiresAt site) .hole) value) =
+            WireContext.origin diagram outer.ids value
+        rw [liftOuter_bindContextFor_local]
+        change
+          WireContext.origin diagram
+              (diagram.wiresAt site ++ outer.ids)
+              (ConcreteElaboration.appendRightVar diagram
+                (diagram.wiresAt site) value) =
+            WireContext.origin diagram outer.ids value
+        exact
+          ConcreteElaboration.origin_appendRightVar diagram
+            (diagram.wiresAt site) value
+      · simp only [atSite, ↓reduceDIte] at accepted
+        obtain ⟨nodes, _nodesCompiled, afterNodes⟩ :=
+          Option.bind_eq_some_iff.mp accepted
+        obtain ⟨child, _childFound, afterChild⟩ :=
+          Option.bind_eq_some_iff.mp afterNodes
+        obtain ⟨nested, nestedCompiled, afterNested⟩ :=
+          Option.bind_eq_some_iff.mp afterChild
+        obtain ⟨around, aroundCompiled, frameEquation⟩ :=
+          Option.bind_eq_some_iff.mp afterNested
+        have nestedLaw :
+            ∀ {nestedSig : Sig}
+              (nestedValue :
+                Var (outer.extend region).sigs nestedSig),
+              WireContext.origin diagram nested.visible.ids
+                  (DiagramContext.liftOuter nested.context nestedValue) =
+                WireContext.origin diagram (outer.extend region).ids
+                  nestedValue :=
+          induction child (outer.extend region) nestedCompiled
+        have aroundLaw :
+            ∀ {aroundSig : Sig}
+              (aroundValue :
+                Var (outer.extend region).sigs aroundSig),
+              WireContext.origin diagram around.visible.ids
+                  (DiagramContext.liftOuter around.context aroundValue) =
+                WireContext.origin diagram (outer.extend region).ids
+                  aroundValue :=
+          compileSiblingFrame?_liftOuter_origin definitions diagram childFuel
+            (outer.extend region) child nested nestedLaw nodes
+            (diagram.childrenOf region) aroundCompiled
+        have frameExact :
+            ({ visible := around.visible
+               siteBody := around.siteBody
+               context := bindContextFor diagram outer.ids
+                 (diagram.wiresAt region) around.context } :
+              RegionFrame definitions diagram outer) =
+              frame :=
+          Option.some.inj frameEquation
+        subst frame
+        change
+          WireContext.origin diagram around.visible.ids
+              (DiagramContext.liftOuter
+                (bindContextFor diagram outer.ids
+                  (diagram.wiresAt region) around.context) value) =
+            WireContext.origin diagram outer.ids value
+        rw [liftOuter_bindContextFor_local]
+        calc
+          _ =
+              WireContext.origin diagram (outer.extend region).ids
+                (ConcreteElaboration.appendRightVar diagram
+                  (diagram.wiresAt region) value) :=
+            aroundLaw
+              (ConcreteElaboration.appendRightVar diagram
+                (diagram.wiresAt region) value)
+          _ = _ :=
+            ConcreteElaboration.origin_appendRightVar diagram
+              (diagram.wiresAt region) value
+
+/--
+The inner context exposed by a strict frame step embeds the complete extended
+outer context with the same concrete-wire origins. This is the structural
+variable projection receipt paired with the existing body factorization.
+-/
+theorem compileRegionFrame?_strict_inner_liftOuter_origin
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (site : diagram.RegionId)
+    (fuel : Nat)
+    (region : diagram.RegionId)
+    (outer : WireContext diagram)
+    (frame : RegionFrame definitions diagram outer)
+    (inner : DiagramContext definitions frame.visible.sigs
+      (outer.extend region).sigs)
+    (notSite : region ≠ site)
+    (compiled :
+      compileRegionFrame? definitions diagram site fuel region outer =
+        some frame)
+    (decomposition :
+      frame.context =
+        bindContextFor diagram outer.ids (diagram.wiresAt region) inner) :
+    ∀ {sig : Sig} (value : Var (outer.extend region).sigs sig),
+      WireContext.origin diagram frame.visible.ids
+          (DiagramContext.liftOuter inner value) =
+        WireContext.origin diagram (outer.extend region).ids value := by
+  cases fuel with
+  | zero => simp [compileRegionFrame?] at compiled
+  | succ childFuel =>
+      unfold compileRegionFrame? at compiled
+      simp only [notSite, ↓reduceDIte] at compiled
+      obtain ⟨nodes, _nodesCompiled, afterNodes⟩ :=
+        Option.bind_eq_some_iff.mp compiled
+      obtain ⟨child, _childFound, afterChild⟩ :=
+        Option.bind_eq_some_iff.mp afterNodes
+      obtain ⟨nested, nestedCompiled, afterNested⟩ :=
+        Option.bind_eq_some_iff.mp afterChild
+      obtain ⟨around, aroundCompiled, frameEquation⟩ :=
+        Option.bind_eq_some_iff.mp afterNested
+      have frameExact :
+          ({ visible := around.visible
+             siteBody := around.siteBody
+             context := bindContextFor diagram outer.ids
+               (diagram.wiresAt region) around.context } :
+            RegionFrame definitions diagram outer) =
+            frame :=
+        Option.some.inj frameEquation
+      subst frame
+      have contextExact :
+          bindContextFor diagram outer.ids (diagram.wiresAt region)
+              around.context =
+            bindContextFor diagram outer.ids (diagram.wiresAt region)
+              inner := by
+        exact decomposition
+      have innerExact : around.context = inner :=
+        bindContextFor_injective_local diagram outer.ids
+          (diagram.wiresAt region) contextExact
+      subst inner
+      have nestedLaw :
+          ∀ {nestedSig : Sig}
+            (nestedValue : Var (outer.extend region).sigs nestedSig),
+            WireContext.origin diagram nested.visible.ids
+                (DiagramContext.liftOuter nested.context nestedValue) =
+              WireContext.origin diagram (outer.extend region).ids
+                nestedValue :=
+        compileRegionFrame?_liftOuter_origin definitions diagram site
+          childFuel child (outer.extend region) nestedCompiled
+      have aroundLaw :
+          ∀ {aroundSig : Sig}
+            (aroundValue : Var (outer.extend region).sigs aroundSig),
+            WireContext.origin diagram around.visible.ids
+                (DiagramContext.liftOuter around.context aroundValue) =
+              WireContext.origin diagram (outer.extend region).ids
+                aroundValue :=
+        compileSiblingFrame?_liftOuter_origin definitions diagram childFuel
+          (outer.extend region) child nested nestedLaw nodes
+          (diagram.childrenOf region) aroundCompiled
+      intro sig value
+      exact aroundLaw value
 
 namespace RegionFrame
 /-- One accepted root factorization retaining its generated scope-to-site path. -/
@@ -841,7 +1122,8 @@ private theorem factor_encloses_trans
   exact
     ⟨⟨middleSteps.val + outerSteps.val, by omega⟩, composed⟩
 
-private theorem factor_encloses_antisymm
+/-- Enclosure is antisymmetric in every checked concrete region tree. -/
+theorem factor_encloses_antisymm
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (wellFormed : diagram.WellFormed definitions)
@@ -911,7 +1193,11 @@ private theorem factor_encloses_comparable
     rw [sum, rightClimb, leftClimb] at composed
     exact composed.symm
 
-private theorem selected_child_encloses_scope
+/--
+The selected child on a checked region path encloses every intermediate scope
+that still encloses the selected site.
+-/
+theorem selected_child_encloses_scope
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (wellFormed : diagram.WellFormed definitions)

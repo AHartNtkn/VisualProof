@@ -377,6 +377,31 @@ private theorem splice_succeeds_of_wellFormed
 namespace RelationJoinStep
 
 /--
+Recover the unique structural insertion receipt owned by one accepted
+relation-join step. This is the sole compilation-recovery authority for both
+one-step and trace semantics.
+-/
+theorem insertionCompilation
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    (step : RelationJoinStep source dying content)
+    (contentCompiled : OpenCompilation content) :
+    ∃ compiled :
+        InsertionCompilation contentCompiled step.attachment,
+      compileInsertion? contentCompiled step.attachment = some compiled := by
+  have generatedWellFormed :
+      step.attachment.diagram.WellFormed definitions := by
+    rw [← step.checked_generated]
+    exact step.checked.property
+  obtain ⟨spliceResult, spliceAccepted⟩ :=
+    splice_succeeds_of_wellFormed step.attachment generatedWellFormed
+  exact
+    compileInsertion_complete_of_splice contentCompiled step.attachment
+      spliceResult spliceAccepted
+
+/--
 One checker-owned raw relation-join splice denotes its intrinsic insertion.
 The step's checked-candidate equality supplies well-formedness.
 -/
@@ -394,15 +419,8 @@ theorem denotes
       compileInsertion? contentCompiled step.attachment = some compiled ∧
         (denoteChecked pre definitionEnv step.checked ↔
           denoteRegion pre definitionEnv Env.empty compiled.inserted) := by
-  have generatedWellFormed :
-      step.attachment.diagram.WellFormed definitions := by
-    rw [← step.checked_generated]
-    exact step.checked.property
-  obtain ⟨spliceResult, spliceAccepted⟩ :=
-    splice_succeeds_of_wellFormed step.attachment generatedWellFormed
   obtain ⟨compiled, compiledAccepted⟩ :=
-    compileInsertion_complete_of_splice contentCompiled step.attachment
-      spliceResult spliceAccepted
+    step.insertionCompilation contentCompiled
   refine ⟨compiled, compiledAccepted, ?_⟩
   have checkedEquality :
       step.checked =
@@ -432,7 +450,8 @@ theorem trace_denotes
     (definitionEnv : DefinitionEnv pre definitions) :
     ∃ steps : List (RelationJoinStep source wire content),
       RelationJoinSemanticTrace source wire content parameters result.args
-          steps result.boundFinal result.boundDying
+          steps result.boundFinal result.boundRegionImage
+            result.boundWireImage result.boundDying
             (result.boundRegionImage (source.val.wires wire).scope) ∧
         steps.map RelationJoinStep.application =
           result.applications ∧

@@ -272,39 +272,6 @@ theorem selected_child_encloses_middle
           regionMiddle middleRegion
       exact False.elim (middleStrict same.symm)
 
-private theorem successfulClimb_le_count
-    (definitions : List (List Sig))
-    (diagram : ConcreteDiagram definitions.length)
-    (wellFormed : diagram.WellFormed definitions)
-    (steps : Nat) (region ancestor : diagram.RegionId)
-    (climbed : diagram.climb steps region = some ancestor) :
-    steps ≤ diagram.regionCount := by
-  have ancestorReaches :
-      diagram.Encloses diagram.root ancestor :=
-    of_decide_eq_true
-      ((List.all_eq_true.mp wellFormed.all_regions_reach_root)
-        ancestor (Data.Finite.mem_allFin ancestor))
-  obtain ⟨rootSteps, ancestorRoot⟩ :=
-    (ConcreteElaboration.encloses_iff_exists diagram diagram.root
-      ancestor).mp ancestorReaches
-  have regionRoot :
-      diagram.climb (steps + rootSteps.val) region =
-        some diagram.root := by
-    rw [climb_add, climbed]
-    exact ancestorRoot
-  have regionReaches :
-      diagram.Encloses diagram.root region :=
-    of_decide_eq_true
-      ((List.all_eq_true.mp wellFormed.all_regions_reach_root)
-        region (Data.Finite.mem_allFin region))
-  obtain ⟨bounded, boundedRoot⟩ :=
-    (ConcreteElaboration.encloses_iff_exists diagram diagram.root
-      region).mp regionReaches
-  have same :=
-    climb_to_root_unique definitions diagram wellFormed regionRoot
-      boundedRoot
-  omega
-
 private theorem encloses_trans
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -325,7 +292,7 @@ private theorem encloses_trans
     rw [climb_add, innerClimb]
     exact outerClimb
   have bounded :=
-    successfulClimb_le_count definitions diagram wellFormed
+    ConcreteElaboration.successfulClimb_le_count definitions diagram wellFormed
       (innerSteps.val + outerSteps.val) inner outer combined
   apply (ConcreteElaboration.encloses_iff_exists diagram outer inner).mpr
   exact ⟨⟨innerSteps.val + outerSteps.val, by omega⟩, combined⟩
@@ -356,7 +323,8 @@ private theorem hostEncloses_iff
           hostRegion_injective attachment (Option.some.inj mapped)
         subst region
         have bounded :=
-          successfulClimb_le_count definitions base.val base.property
+          ConcreteElaboration.successfulClimb_le_count definitions base.val
+            base.property
             steps.val child ancestor source
         exact ⟨⟨steps.val, by omega⟩, source⟩
   · rintro ⟨steps, climbed⟩
@@ -761,6 +729,130 @@ private theorem compileChildren_fuel_mono
       have targetRestCompiled := induction restCompiled
       simp [ConcreteElaboration.compileChildrenWith?, targetHeadCompiled,
         targetRestCompiled]
+
+private theorem compileRegionBody_fuel_mono
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (sourceFuel targetFuel : Nat)
+    (fuelLe : sourceFuel ≤ targetFuel)
+    (region : diagram.RegionId)
+    (outer : ConcreteElaboration.WireContext diagram)
+    {body : Region definitions (outer.extend region).sigs}
+    (compiled :
+      compileRegionBody? definitions diagram sourceFuel region outer =
+        some body) :
+    compileRegionBody? definitions diagram targetFuel region outer =
+      some body := by
+  unfold compileRegionBody? at compiled ⊢
+  obtain ⟨nodes, nodesCompiled, afterNodes⟩ :=
+    Option.bind_eq_some_iff.mp compiled
+  obtain ⟨children, childrenCompiled, bodyCompiled⟩ :=
+    Option.bind_eq_some_iff.mp afterNodes
+  have targetChildren :=
+    compileChildren_fuel_mono definitions diagram sourceFuel targetFuel
+      fuelLe (outer.extend region) (diagram.childrenOf region)
+      childrenCompiled
+  simpa [nodesCompiled, targetChildren] using bodyCompiled
+
+private theorem compileSiblingFrame_fuel_mono
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (sourceFuel targetFuel : Nat)
+    (fuelLe : sourceFuel ≤ targetFuel)
+    (outer : ConcreteElaboration.WireContext diagram)
+    (selected : diagram.RegionId)
+    (nested : RegionFrame definitions diagram outer) :
+    ∀ (leading : ItemSeq definitions outer.sigs)
+      (children : List diagram.RegionId)
+      {frame : RegionFrame definitions diagram outer},
+      compileSiblingFrame? definitions diagram sourceFuel outer selected
+          nested leading children =
+        some frame →
+      compileSiblingFrame? definitions diagram targetFuel outer selected
+          nested leading children =
+        some frame := by
+  intro leading children
+  induction children generalizing leading with
+  | nil =>
+      intro frame compiled
+      simp [compileSiblingFrame?] at compiled
+  | cons child tail induction =>
+      intro frame compiled
+      unfold compileSiblingFrame? at compiled ⊢
+      by_cases same : child = selected
+      · simp only [same, ↓reduceDIte] at compiled ⊢
+        obtain ⟨suffix, suffixCompiled, frameCompiled⟩ :=
+          Option.bind_eq_some_iff.mp compiled
+        have targetSuffix :=
+          compileChildren_fuel_mono definitions diagram sourceFuel targetFuel
+            fuelLe outer tail suffixCompiled
+        rw [targetSuffix]
+        exact frameCompiled
+      · simp only [same, ↓reduceDIte] at compiled ⊢
+        obtain ⟨body, bodyCompiled, recursive⟩ :=
+          Option.bind_eq_some_iff.mp compiled
+        have targetBody :=
+          compileRegion_fuel_mono definitions diagram sourceFuel targetFuel
+            fuelLe child outer bodyCompiled
+        rw [targetBody]
+        exact induction
+          (leading.append (.cons (.cut body) .nil)) recursive
+
+/-- Successful retained-path compilation is stable when compiler fuel grows. -/
+theorem compileRegionFrame_fuel_mono
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (site : diagram.RegionId) :
+    ∀ (sourceFuel targetFuel : Nat),
+      sourceFuel ≤ targetFuel →
+      ∀ (region : diagram.RegionId)
+        (outer : ConcreteElaboration.WireContext diagram)
+        {frame : RegionFrame definitions diagram outer},
+        compileRegionFrame? definitions diagram site sourceFuel region outer =
+            some frame →
+        compileRegionFrame? definitions diagram site targetFuel region outer =
+            some frame := by
+  intro sourceFuel
+  induction sourceFuel with
+  | zero =>
+      intro targetFuel fuelLe region outer frame compiled
+      simp [compileRegionFrame?] at compiled
+  | succ sourceChildFuel induction =>
+      intro targetFuel fuelLe region outer frame compiled
+      cases targetFuel with
+      | zero => omega
+      | succ targetChildFuel =>
+          have childFuelLe : sourceChildFuel ≤ targetChildFuel := by omega
+          by_cases atSite : region = site
+          · subst region
+            simp only [compileRegionFrame?, ↓reduceDIte] at compiled ⊢
+            obtain ⟨body, bodyCompiled, frameCompiled⟩ :=
+              Option.bind_eq_some_iff.mp compiled
+            have targetBody :=
+              compileRegionBody_fuel_mono definitions diagram
+                sourceChildFuel targetChildFuel childFuelLe site outer
+                bodyCompiled
+            rw [targetBody]
+            exact frameCompiled
+          · simp only [compileRegionFrame?, atSite, ↓reduceDIte] at compiled ⊢
+            obtain ⟨nodes, nodesCompiled, afterNodes⟩ :=
+              Option.bind_eq_some_iff.mp compiled
+            obtain ⟨selected, selectedFound, afterSelected⟩ :=
+              Option.bind_eq_some_iff.mp afterNodes
+            obtain ⟨nested, nestedCompiled, afterNested⟩ :=
+              Option.bind_eq_some_iff.mp afterSelected
+            obtain ⟨around, aroundCompiled, frameCompiled⟩ :=
+              Option.bind_eq_some_iff.mp afterNested
+            have targetNested :=
+              induction targetChildFuel childFuelLe selected
+                (outer.extend region) nestedCompiled
+            have targetAround :=
+              compileSiblingFrame_fuel_mono definitions diagram
+                sourceChildFuel targetChildFuel childFuelLe
+                (outer.extend region) selected nested nodes
+                (diagram.childrenOf region) aroundCompiled
+            simpa [nodesCompiled, selectedFound, targetNested, targetAround]
+              using frameCompiled
 
 set_option maxHeartbeats 800000 in
 private theorem fragmentRegion_compile
@@ -1956,6 +2048,20 @@ def rebaseRegionFrame
   subst right
   rfl
 
+/-- Filling a generated frame commutes with outer-context reindexing. -/
+theorem rebaseRegionFrame_fill
+    {definitions : List (List Sig)}
+    {diagram : ConcreteDiagram definitions.length}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (frame : RegionFrame definitions diagram left) :
+    congrArg ConcreteElaboration.WireContext.sigs same ▸
+        frame.context.fill frame.siteBody =
+      (rebaseRegionFrame same frame).context.fill
+        (rebaseRegionFrame same frame).siteBody := by
+  cases same
+  rfl
+
 theorem compileFrameBranch_cast_context
     (diagram : ConcreteDiagram definitions.length)
     {left right : ConcreteElaboration.WireContext diagram}
@@ -2133,6 +2239,43 @@ inductive GeneratedFrameProvenance
             (hostContext_extend_offsite compiled sourceOuter region
                 notSite)
               targetAround).context }
+
+/-- The source region retained by generated provenance encloses the insertion site. -/
+theorem GeneratedFrameProvenance.source_encloses
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {fragmentCompiled : OpenCompilation fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    {compiled : InsertionCompilation fragmentCompiled attachment}
+    {sourceFuel : Nat}
+    {sourceOuter siteOuter :
+      ConcreteElaboration.WireContext base.val}
+    {region : base.val.RegionId}
+    {sourceFrame : RegionFrame definitions base.val sourceOuter}
+    {targetFrame :
+      RegionFrame definitions attachment.diagram
+        (hostContext attachment sourceOuter)}
+    (provenance :
+      GeneratedFrameProvenance compiled sourceFuel sourceOuter siteOuter
+        region sourceFrame targetFrame) :
+    base.val.Encloses region site := by
+  induction provenance with
+  | site =>
+      exact ConcreteDiagram.encloses_refl base.val site
+  | ancestor childFuel sourceOuter siteOuter region selected notSite
+      sourceAbove sourceNodes targetNodes sourceNested targetNested
+      sourceAround targetAround sourceNodesCompiled targetNodesCompiled
+      selectedFound sourceNestedCompiled siblings childrenNodup otherOutside
+      allChildrenAbove nested induction =>
+      have selectedMember :=
+        List.mem_of_find?_eq_some selectedFound
+      exact encloses_trans definitions base.val base.property
+        (parent_encloses_child base.val selected region
+          (ConcreteElaboration.mem_childrenOf base.val region selected
+            selectedMember))
+        induction
 
 /-- Target-frame compilation is a fold over the recursive provenance. -/
 theorem GeneratedFrameProvenance.targetGenerated

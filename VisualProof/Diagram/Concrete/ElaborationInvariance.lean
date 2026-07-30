@@ -6,6 +6,60 @@ universe u
 
 namespace ConcreteElaboration
 
+private theorem compileNodes?_item_for_node
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram) :
+    ∀ {nodes : List diagram.NodeId}
+      {items : ItemSeq definitions context.sigs},
+      compileNodes? definitions diagram context nodes = some items →
+      ∀ node, node ∈ nodes →
+        ∃ item,
+          item ∈ items.toList ∧
+          compileNodes? definitions diagram context [node] =
+            some (.cons item .nil)
+  | [], _, _, _, member => by simp at member
+  | head :: tail, items, compiled, node, member => by
+      obtain ⟨headItem, tailItems, headCompiled, tailCompiled, itemsExact⟩ :=
+        compileNodes?_cons_components definitions diagram context head tail
+          items compiled
+      subst items
+      rcases List.mem_cons.mp member with rfl | tailMember
+      · exact ⟨headItem, by simp [ItemSeq.toList], headCompiled⟩
+      · obtain ⟨item, itemMember, itemCompiled⟩ :=
+          compileNodes?_item_for_node definitions diagram context tailCompiled
+            node tailMember
+        exact ⟨item, by simp [ItemSeq.toList, itemMember], itemCompiled⟩
+
+private theorem compileNodes?_node_for_item
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram) :
+    ∀ {nodes : List diagram.NodeId}
+      {items : ItemSeq definitions context.sigs},
+      compileNodes? definitions diagram context nodes = some items →
+      ∀ item, item ∈ items.toList →
+        ∃ node,
+          node ∈ nodes ∧
+          compileNodes? definitions diagram context [node] =
+            some (.cons item .nil)
+  | [], items, compiled, item, member => by
+      have itemsExact : (.nil : ItemSeq definitions context.sigs) = items :=
+        Option.some.inj (by simpa [compileNodes?] using compiled)
+      subst items
+      simp [ItemSeq.toList] at member
+  | head :: tail, items, compiled, item, member => by
+      obtain ⟨headItem, tailItems, headCompiled, tailCompiled, itemsExact⟩ :=
+        compileNodes?_cons_components definitions diagram context head tail
+          items compiled
+      subst items
+      rcases List.mem_cons.mp member with rfl | tailMember
+      · exact ⟨head, by simp, headCompiled⟩
+      · obtain ⟨node, nodeMember, itemCompiled⟩ :=
+          compileNodes?_node_for_item definitions diagram context tailCompiled
+            item tailMember
+        exact ⟨node, by simp [nodeMember], itemCompiled⟩
+
 theorem compileNodes?_iso_denotation
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
@@ -48,14 +102,16 @@ theorem compileNodes?_iso_denotation
       compileNodes?_item_for_node definitions left leftContext leftCompiled
         leftNode leftNodeMember
     obtain ⟨mappedItem, mappedCompiled, itemDenotation⟩ :=
-      compileNode?_forward_denotation iso leftWellFormed rightWellFormed
+      compileNodes?_singleton_forward_denotation iso leftWellFormed rightWellFormed
         contexts definitionEnv envs leftNode leftItem leftItemCompiled
     have mappedNode : iso.nodes leftNode = rightNode :=
       iso.nodes.right_inv rightNode
     have mappedItemEquality : mappedItem = rightItem := by
-      apply Option.some.inj
       rw [mappedNode] at mappedCompiled
-      exact mappedCompiled.symm.trans rightItemCompiled
+      exact
+        (ItemSeq.cons.inj
+          (Option.some.inj
+            (mappedCompiled.symm.trans rightItemCompiled))).1
     subst mappedItem
     exact itemDenotation.mp (leftDenotes leftItem leftItemMember)
   · intro rightDenotes leftItem leftMember
@@ -63,7 +119,7 @@ theorem compileNodes?_iso_denotation
       compileNodes?_node_for_item definitions left leftContext leftCompiled
         leftItem leftMember
     obtain ⟨rightItem, rightItemCompiled, itemDenotation⟩ :=
-      compileNode?_forward_denotation iso leftWellFormed rightWellFormed
+      compileNodes?_singleton_forward_denotation iso leftWellFormed rightWellFormed
         contexts definitionEnv envs leftNode leftItem leftItemCompiled
     have rightNodeMember : iso.nodes leftNode ∈ rightNodes :=
       forwardNodes leftNode leftNodeMember
@@ -71,7 +127,10 @@ theorem compileNodes?_iso_denotation
       compileNodes?_item_for_node definitions right rightContext rightCompiled
         (iso.nodes leftNode) rightNodeMember
     have storedEquality : storedItem = rightItem := by
-      exact Option.some.inj (storedCompiled.symm.trans rightItemCompiled)
+      exact
+        (ItemSeq.cons.inj
+          (Option.some.inj
+            (storedCompiled.symm.trans rightItemCompiled))).1
     subst storedItem
     exact itemDenotation.mpr (rightDenotes rightItem storedMember)
 

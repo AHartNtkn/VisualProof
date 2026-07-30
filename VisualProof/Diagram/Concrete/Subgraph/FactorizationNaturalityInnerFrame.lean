@@ -89,5 +89,35 @@ def enclosingRenaming
       (hostContextRenaming attachment sourceOuter)
       (hostContextRenaming_origin attachment sourceOuter)
 
+theorem enclosingRenaming_contextAction
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {fragmentCompiled : OpenCompilation fragment}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    (compiled : InsertionCompilation fragmentCompiled attachment)
+    (region : base.val.RegionId)
+    (sourceOuter : ConcreteElaboration.WireContext base.val)
+    {sig : Sig}
+    (value : Var (sourceOuter.extend region).sigs sig) :
+    ConcreteElaboration.WireContext.origin attachment.diagram
+        ((hostContext attachment sourceOuter).extend
+          (attachment.hostRegion region)).ids
+        (enclosingRenaming compiled region sourceOuter value) =
+      attachment.hostWire
+        (ConcreteElaboration.WireContext.origin base.val
+          (sourceOuter.extend region).ids value) := by
+  unfold enclosingRenaming
+  split
+  · subst region
+    exact generatedSiteHostRenaming_contextAction compiled sourceOuter value
+  · rename_i atSite
+    exact
+      hostExtendedRenaming_contextAction compiled region atSite sourceOuter
+        (hostContext attachment sourceOuter)
+        (hostContextRenaming attachment sourceOuter)
+        (hostContextRenaming_origin attachment sourceOuter) value
+
 end InsertionCompilation
 end VisualProof

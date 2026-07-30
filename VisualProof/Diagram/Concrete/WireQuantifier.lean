@@ -547,6 +547,29 @@ private def checkedRegion
   Fin.cast
     (congrArg ConcreteDiagram.regionCount generated).symm region
 
+theorem checkedRegion_injective
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    {left right : candidate.RegionId}
+    (same :
+      checkedRegion generated left = checkedRegion generated right) :
+    left = right := by
+  unfold checkedRegion at same
+  apply Fin.ext
+  simpa using congrArg Fin.val same
+
+private theorem checkedRegion_encloses
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (outer inner : candidate.RegionId) :
+    checked.val.Encloses
+        (checkedRegion generated outer) (checkedRegion generated inner) ↔
+      candidate.Encloses outer inner := by
+  cases generated
+  rfl
+
 private def checkedNode
     {checked : CheckedDiagram definitions}
     {candidate : ConcreteDiagram definitions.length}
@@ -1074,6 +1097,11 @@ structure RelationJoinStep
   prior : CheckedDiagram definitions
   priorApplication : prior.val.NodeId
   priorRegionImage : source.val.RegionId → prior.val.RegionId
+  priorRegionImageEncloses :
+    ∀ outer inner,
+      prior.val.Encloses
+          (priorRegionImage outer) (priorRegionImage inner) ↔
+        source.val.Encloses outer inner
   priorWireImage : source.val.WireId → prior.val.WireId
   priorWireScopeExact :
     ∀ sourceWire,
@@ -1132,7 +1160,24 @@ structure RelationJoinStep
       some attachment
   private generated : checked.val = attachment.diagram
   checkedRegionImage : source.val.RegionId → checked.val.RegionId
+  checkedRegionImageExact :
+    ∀ region,
+      checkedRegionImage region =
+        Fin.cast
+          (congrArg ConcreteDiagram.regionCount generated).symm
+          (attachment.hostRegion (baseRegionImage region))
+  checkedRegionImageEncloses :
+    ∀ outer inner,
+      checked.val.Encloses
+          (checkedRegionImage outer) (checkedRegionImage inner) ↔
+        source.val.Encloses outer inner
   checkedWireImage : source.val.WireId → checked.val.WireId
+  checkedWireImageExact :
+    ∀ sourceWire,
+      checkedWireImage sourceWire =
+        Fin.cast
+          (congrArg ConcreteDiagram.wireCount generated).symm
+          (attachment.hostWire (baseWireImage sourceWire))
   checkedWireScopeExact :
     ∀ sourceWire,
       (checked.val.wires (checkedWireImage sourceWire)).scope =
@@ -1158,6 +1203,29 @@ theorem base_generated
       ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
         step.prior step.priorApplication :=
   step.baseGenerated
+
+theorem baseRegionImageEncloses
+    (step : RelationJoinStep source dying content)
+    (outer inner : source.val.RegionId) :
+    step.base.val.Encloses
+        (step.baseRegionImage outer) (step.baseRegionImage inner) ↔
+      source.val.Encloses outer inner := by
+  rw [step.baseRegionImageExact, step.baseRegionImageExact]
+  rw [checkedRegion_encloses]
+  rw [
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_encloses_iff]
+  exact step.priorRegionImageEncloses outer inner
+
+@[simp] theorem baseWire_signature
+    (step : RelationJoinStep source dying content)
+    (sourceWire : source.val.WireId) :
+    (step.prior.val.wires (step.priorWireImage sourceWire)).sig =
+      (step.base.val.wires (step.baseWireImage sourceWire)).sig := by
+  rw [step.baseWireImageExact, checkedWire_signature_transport]
+  exact
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+      step.prior step.priorApplication
+        (step.priorWireImage sourceWire)).symm
 
 theorem prior_dying_scope_encloses_site
     (step : RelationJoinStep source dying content) :
@@ -1193,24 +1261,31 @@ inductive RelationJoinSemanticTrace
     (content : CheckedOpenDiagram definitions)
     (parameters : List source.val.WireId) (args : List Sig) :
     (steps : List (RelationJoinStep source dying content)) →
-    (final : CheckedDiagram definitions) → final.val.WireId →
-    final.val.RegionId → Prop
+    (final : CheckedDiagram definitions) →
+    (source.val.RegionId → final.val.RegionId) →
+    (source.val.WireId → final.val.WireId) →
+    final.val.WireId → final.val.RegionId → Prop
   | nil :
       RelationJoinSemanticTrace source dying content parameters args []
-        source dying (source.val.wires dying).scope
-  | snoc {steps current currentDying currentScope}
+        source id id dying (source.val.wires dying).scope
+  | snoc
+      {steps current currentRegionImage currentWireImage
+        currentDying currentScope}
       (trace :
         RelationJoinSemanticTrace source dying content parameters args steps
-          current currentDying currentScope)
+          current currentRegionImage currentWireImage currentDying currentScope)
       (step : RelationJoinStep source dying content)
       (_ : step.prior = current)
+      (_ : HEq step.priorRegionImage currentRegionImage)
+      (_ : HEq step.priorWireImage currentWireImage)
       (_ : HEq (step.priorWireImage dying) currentDying)
       (_ : HEq
         (step.priorRegionImage (source.val.wires dying).scope) currentScope)
       (_ : step.relationArgs = args)
       (_ : step.sourceParameters = parameters) :
       RelationJoinSemanticTrace source dying content parameters args
-        (steps ++ [step]) step.checked (step.checkedWireImage dying)
+        (steps ++ [step]) step.checked step.checkedRegionImage
+        step.checkedWireImage (step.checkedWireImage dying)
         (step.checkedRegionImage (source.val.wires dying).scope)
 
 private theorem checkedWire_injective
@@ -1247,6 +1322,10 @@ private structure RelationJoinState
     (args : List Sig) : Type where
   checked : CheckedDiagram definitions
   regionImage : source.val.RegionId → checked.val.RegionId
+  regionImage_encloses :
+    ∀ outer inner,
+      checked.val.Encloses (regionImage outer) (regionImage inner) ↔
+        source.val.Encloses outer inner
   wireImage : source.val.WireId → checked.val.WireId
   wireImage_injective : Function.Injective wireImage
   wireScopeExact :
@@ -1259,8 +1338,9 @@ private structure RelationJoinState
   traceExact :
     steps.map RelationJoinStep.application = processed
   semanticTrace :
-    RelationJoinSemanticTrace source dying content parameters args steps checked
-      (wireImage dying) (regionImage (source.val.wires dying).scope)
+    RelationJoinSemanticTrace source dying content parameters args steps
+      checked regionImage wireImage (wireImage dying)
+        (regionImage (source.val.wires dying).scope)
 
 private structure RelationJoinStepResult
     {source : CheckedDiagram definitions}
@@ -1309,6 +1389,7 @@ private def relationJoinInitialState
   let state : RelationJoinState source wire content parameters plan.args :=
     { checked := source
       regionImage := id
+      regionImage_encloses := fun _ _ => Iff.rfl
       wireImage := id
       wireImage_injective := Function.injective_id
       wireScopeExact := fun _ => rfl
@@ -1509,6 +1590,8 @@ private def spliceRelationApplication
                                           priorApplication
                                         priorRegionImage :=
                                           state.regionImage
+                                        priorRegionImageEncloses :=
+                                          state.regionImage_encloses
                                         priorWireImage := state.wireImage
                                         priorWireScopeExact :=
                                           state.wireScopeExact
@@ -1543,10 +1626,24 @@ private def spliceRelationApplication
                                           checkedRegion generated
                                             (attachment.hostRegion
                                               (baseRegionImage region))
+                                        checkedRegionImageExact :=
+                                          fun _ => rfl
+                                        checkedRegionImageEncloses := by
+                                          intro outer inner
+                                          rw [checkedRegion_encloses]
+                                          rw [ConcreteSpliceAttachment.hostRegion_encloses_iff]
+                                          unfold baseRegionImage
+                                          rw [checkedRegion_encloses]
+                                          rw [ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_encloses_iff]
+                                          exact
+                                            state.regionImage_encloses
+                                              outer inner
                                         checkedWireImage := fun sourceWire =>
                                           checkedWire generated
                                             (attachment.hostWire
                                               (baseWireImage sourceWire))
+                                        checkedWireImageExact :=
+                                          fun _ => rfl
                                         checkedWireScopeExact := by
                                           intro sourceWire
                                           rw [checkedWire_scope_transport,
@@ -1562,6 +1659,8 @@ private def spliceRelationApplication
                                       { checked := next
                                         regionImage :=
                                           step.checkedRegionImage
+                                        regionImage_encloses :=
+                                          step.checkedRegionImageEncloses
                                         wireImage := step.checkedWireImage
                                         wireImage_injective := by
                                           intro left right same
@@ -1594,6 +1693,7 @@ private def spliceRelationApplication
                                         semanticTrace :=
                                           .snoc state.semanticTrace step
                                             rfl (by simp [step]) (by simp [step])
+                                            (by simp [step]) (by simp [step])
                                             rfl rfl }
                                     exact .ok
                                       { next := nextState
@@ -1796,10 +1896,20 @@ def boundRegionImage
     source.val.RegionId → result.boundFinal.val.RegionId :=
   result.finalState.regionImage
 
+def boundWireImage
+    (result : RelationJoinResult source wire content parameters) :
+    source.val.WireId → result.boundFinal.val.WireId :=
+  result.finalState.wireImage
+
+theorem boundWireImage_injective
+    (result : RelationJoinResult source wire content parameters) :
+    Function.Injective result.boundWireImage :=
+  result.finalState.wireImage_injective
+
 def boundDying
     (result : RelationJoinResult source wire content parameters) :
     result.boundFinal.val.WireId :=
-  result.finalState.wireImage wire
+  result.boundWireImage wire
 
 def plainFinal
     (result : RelationJoinResult source wire content parameters) :
@@ -1837,7 +1947,8 @@ theorem final_deletion_exact
 theorem semantic_trace
     (result : RelationJoinResult source wire content parameters) :
     RelationJoinSemanticTrace source wire content parameters result.args
-      result.finalState.steps result.boundFinal result.boundDying
+      result.finalState.steps result.boundFinal result.boundRegionImage
+        result.boundWireImage result.boundDying
         (result.boundRegionImage (source.val.wires wire).scope) :=
   result.finalState.semanticTrace
 
@@ -1916,7 +2027,8 @@ theorem trace_complete
       ∃ normalization :
           ConcreteDiagram.IdentityNormalization result.plainFinal,
         RelationJoinSemanticTrace source wire content parameters result.args
-            steps result.boundFinal result.boundDying
+            steps result.boundFinal result.boundRegionImage
+              result.boundWireImage result.boundDying
               (result.boundRegionImage (source.val.wires wire).scope) ∧
           steps.map RelationJoinStep.application =
             result.applications ∧

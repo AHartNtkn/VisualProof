@@ -1099,6 +1099,62 @@ def diagram
   cases data : base.val.regions region <;>
     simp [mapRegion, data]
 
+theorem hostRegion_injective
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    Function.Injective attachment.hostRegion := by
+  intro left right same
+  apply Fin.ext
+  simpa [hostRegion] using congrArg Fin.val same
+
+theorem hostRegion_climb
+    (attachment : ConcreteSpliceAttachment base site fragment) :
+    ∀ (steps : Nat) (region : base.val.RegionId),
+      attachment.diagram.climb steps (attachment.hostRegion region) =
+        (base.val.climb steps region).map attachment.hostRegion
+  | 0, _ => rfl
+  | steps + 1, region => by
+      cases data : base.val.regions region with
+      | sheet =>
+          simp only [ConcreteDiagram.climb, diagram_region_hostRegion,
+            mapRegion, data]
+          rfl
+      | cut parent =>
+          simp [ConcreteDiagram.climb, diagram_region_hostRegion,
+            mapRegion, data, hostRegion_climb attachment steps parent]
+
+theorem hostRegion_encloses_iff
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (outer inner : base.val.RegionId) :
+    attachment.diagram.Encloses
+        (attachment.hostRegion outer) (attachment.hostRegion inner) ↔
+      base.val.Encloses outer inner := by
+  rw [ConcreteElaboration.encloses_iff_exists,
+    ConcreteElaboration.encloses_iff_exists]
+  constructor
+  · rintro ⟨steps, climbed⟩
+    have mapped := climbed
+    rw [hostRegion_climb attachment] at mapped
+    cases source : base.val.climb steps.val inner with
+    | none => simp [source] at mapped
+    | some region =>
+        rw [source] at mapped
+        have same :=
+          hostRegion_injective attachment (Option.some.inj mapped)
+        subst region
+        have bounded :=
+          ConcreteElaboration.successfulClimb_le_count _
+            base.val base.property steps.val inner outer source
+        exact ⟨⟨steps.val, by omega⟩, source⟩
+  · rintro ⟨steps, climbed⟩
+    let targetSteps : Fin (attachment.diagram.regionCount + 1) :=
+      ⟨steps.val, by
+        change steps.val < attachment.regionCount + 1
+        simp only [ConcreteSpliceAttachment.regionCount]
+        omega⟩
+    refine ⟨targetSteps, ?_⟩
+    rw [hostRegion_climb attachment, climbed]
+    rfl
+
 @[simp] theorem diagram_region_freshRegion
     (attachment : ConcreteSpliceAttachment base site fragment)
     (fresh : Fin attachment.fragmentRegions.length) :

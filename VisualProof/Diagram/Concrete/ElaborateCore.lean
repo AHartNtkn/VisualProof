@@ -279,11 +279,6 @@ def compileChildrenWith?
       let rest ← compileChildrenWith? definitions diagram recurse context tail
       pure (.cons (.cut body) rest)
 
-inductive WireValues (pre : PreModel.{u}) : List Sig → Type u
-  | nil : WireValues pre []
-  | cons (head : pre.Domain sig) (tail : WireValues pre rest) :
-      WireValues pre (sig :: rest)
-
 private def finishRegionFor
     (diagram : ConcreteDiagram definitionCount)
     (outerIds : List diagram.WireId) :
@@ -451,43 +446,6 @@ private abbrev wireOfVar (diagram : ConcreteDiagram definitionCount) :
   fun {ids} {_} value =>
     WireContext.origin diagram ids value
 
-def appendRightVar
-    (diagram : ConcreteDiagram definitionCount)
-    {rightIds : List diagram.WireId} {sig : Sig} :
-    (leftIds : List diagram.WireId) →
-    Var (rightIds.map fun id => (diagram.wires id).sig) sig →
-    Var ((leftIds ++ rightIds).map fun id => (diagram.wires id).sig) sig
-  | [], value => value
-  | _ :: tail, value => .there (appendRightVar diagram tail value)
-
-theorem origin_appendRightVar
-    (diagram : ConcreteDiagram definitionCount)
-    (leftIds : List diagram.WireId)
-    {rightIds : List diagram.WireId} {sig : Sig}
-    (value : Var (rightIds.map fun id => (diagram.wires id).sig) sig) :
-    WireContext.origin diagram (leftIds ++ rightIds)
-        (appendRightVar diagram leftIds value) =
-      WireContext.origin diagram rightIds value := by
-  induction leftIds with
-  | nil => rfl
-  | cons head tail induction =>
-      simpa [appendRightVar, wireOfVar,
-        WireContext.origin] using induction
-/-- Extend an environment by an explicit ordered list of local wire values. -/
-def extendEnvironmentFor
-    (diagram : ConcreteDiagram definitionCount)
-    {pre : PreModel}
-    (outerIds : List diagram.WireId) :
-    (localIds : List diagram.WireId) →
-    WireValues pre
-      (localIds.map fun wire => (diagram.wires wire).sig) →
-    Env pre (outerIds.map fun wire => (diagram.wires wire).sig) →
-    Env pre
-      ((localIds ++ outerIds).map fun wire => (diagram.wires wire).sig)
-  | [], .nil, outerEnv => outerEnv
-  | _ :: tail, .cons head rest, outerEnv =>
-      (extendEnvironmentFor diagram outerIds tail rest outerEnv).extend head
-
 /--
 Extend an open root's boundary-class environment with values for precisely its
 local root wires.  The private general-purpose environment constructor remains
@@ -507,94 +465,6 @@ def extendOpenRootEnvironment
   extendEnvironmentFor openDiagram.diagram
     (openBoundaryWires openDiagram)
     (openRootLocalWires openDiagram) values boundaryEnv
-
-def extendEnvironment
-    (diagram : ConcreteDiagram definitionCount)
-    (context : WireContext diagram) (region : diagram.RegionId)
-    {pre : PreModel}
-    (values : WireValues pre
-      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig))
-    (outerEnv : Env pre context.sigs) :
-    Env pre (context.extend region).sigs :=
-  extendEnvironmentFor diagram context.ids (diagram.wiresAt region)
-    values outerEnv
-
-private theorem extendEnvironmentFor_appendRightVar
-    (diagram : ConcreteDiagram definitionCount)
-    (outerIds localIds : List diagram.WireId)
-    {pre : PreModel}
-    (values : WireValues pre
-      (localIds.map fun wire => (diagram.wires wire).sig))
-    (outerEnv : Env pre
-      (outerIds.map fun wire => (diagram.wires wire).sig))
-    {sig : Sig}
-    (value : Var
-      (outerIds.map fun wire => (diagram.wires wire).sig) sig) :
-    extendEnvironmentFor diagram outerIds localIds values outerEnv sig
-        (appendRightVar diagram localIds value) =
-      outerEnv sig value := by
-  induction localIds with
-  | nil =>
-      cases values
-      rfl
-  | cons head tail induction =>
-      cases values with
-      | cons headValue tailValues =>
-          exact induction tailValues
-
-def valuesFromEnvironmentFor
-    (diagram : ConcreteDiagram definitionCount)
-    (outerIds : List diagram.WireId) :
-    (localIds : List diagram.WireId) →
-    Env pre ((localIds ++ outerIds).map fun wire =>
-      (diagram.wires wire).sig) →
-    WireValues pre (localIds.map fun wire => (diagram.wires wire).sig)
-  | [], _ => .nil
-  | _ :: tail, env =>
-      .cons (env _ .here)
-        (valuesFromEnvironmentFor diagram outerIds tail
-          (fun sig value => env sig (.there value)))
-
-theorem extendEnvironmentFor_from
-    (diagram : ConcreteDiagram definitionCount)
-    (outerIds localIds : List diagram.WireId)
-    (env : Env pre ((localIds ++ outerIds).map fun wire =>
-      (diagram.wires wire).sig))
-    (outerEnv : Env pre (outerIds.map fun wire => (diagram.wires wire).sig))
-    (agrees : ∀ sig (value : Var
-      (outerIds.map fun wire => (diagram.wires wire).sig) sig),
-      env sig (appendRightVar diagram localIds value) = outerEnv sig value) :
-    extendEnvironmentFor diagram outerIds localIds
-        (valuesFromEnvironmentFor diagram outerIds localIds env) outerEnv =
-      env := by
-  induction localIds with
-  | nil =>
-      funext sig value
-      exact (agrees sig value).symm
-  | cons head tail induction =>
-      funext sig value
-      cases value with
-      | here => rfl
-      | there value =>
-          exact congrFun (congrFun
-            (induction (fun sig value => env sig (.there value))
-              (by
-                intro sig outer
-                exact agrees sig outer)) sig) value
-
-theorem extendEnvironment_appendRightVar
-    (diagram : ConcreteDiagram definitionCount)
-    (context : WireContext diagram) (region : diagram.RegionId)
-    {pre : PreModel}
-    (values : WireValues pre
-      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig))
-    (outerEnv : Env pre context.sigs)
-    {sig : Sig} (value : Var context.sigs sig) :
-    extendEnvironment diagram context region values outerEnv sig
-        (appendRightVar diagram (diagram.wiresAt region) value) =
-      outerEnv sig value := by
-  exact extendEnvironmentFor_appendRightVar diagram context.ids
-    (diagram.wiresAt region) values outerEnv value
 
 private theorem denote_finishRegionFor
     (definitions : List (List Sig))
@@ -1307,6 +1177,546 @@ theorem compileNodes?_singleton_natural
         ⟨.cons (sourceItem.renameWires rho) .nil, ?_, rfl⟩
       simp [compileNodes?, targetNodeEquation]
 
+private theorem resolvePort?_reflect
+    {definitions : List (List Sig)}
+    {target source : ConcreteDiagram definitions.length}
+    {targetContext : WireContext target}
+    {sourceContext : WireContext source}
+    (sourceContextNodup : sourceContext.ids.Nodup)
+    (rho : WireRenaming targetContext.sigs sourceContext.sigs)
+    (wireOrigin : target.WireId → source.WireId)
+    (wireSignature : ∀ wire,
+      (source.wires (wireOrigin wire)).sig =
+        (target.wires wire).sig)
+    (contextAction : ∀ {sig} (value : Var targetContext.sigs sig),
+      WireContext.origin source sourceContext.ids (rho value) =
+        wireOrigin
+          (WireContext.origin target targetContext.ids value))
+    {targetNode : target.NodeId}
+    {sourceNode : source.NodeId}
+    {port : CPort}
+    {expected : Sig}
+    (ownerImage : ∀ (sourceWire : source.WireId),
+      source.endpointOwner? ⟨sourceNode, port⟩ = some sourceWire →
+      sourceWire ∈ sourceContext.ids →
+        ∃ targetWire : target.WireId,
+          target.endpointOwner? ⟨targetNode, port⟩ = some targetWire ∧
+          wireOrigin targetWire = sourceWire ∧
+          targetWire ∈ targetContext.ids)
+    {sourceResolved : Var sourceContext.sigs expected}
+    (sourceEquation :
+      resolvePort? source sourceContext sourceNode port expected =
+        some sourceResolved) :
+    ∃ targetResolved : Var targetContext.sigs expected,
+      resolvePort? target targetContext targetNode port expected =
+          some targetResolved ∧
+        sourceResolved = rho targetResolved := by
+  unfold resolvePort? at sourceEquation
+  cases sourceOwner :
+      source.endpointOwner? ⟨sourceNode, port⟩ with
+  | none =>
+      simp [sourceOwner] at sourceEquation
+  | some sourceWire =>
+      have sourceExpected :
+          resolveExpected? source sourceContext sourceWire expected =
+            some sourceResolved := by
+        simpa [sourceOwner] using sourceEquation
+      have sourceMember :=
+        resolveExpected?_sound_member source sourceContext sourceWire
+          expected sourceExpected
+      obtain ⟨targetWire, targetOwner, ownerAction, targetMember⟩ :=
+        ownerImage sourceWire sourceOwner sourceMember
+      have sourceSignature :
+          (source.wires sourceWire).sig = expected :=
+        resolveExpected?_sound_signature source sourceContext
+          sourceWire expected sourceExpected
+      have targetSignature :
+          (target.wires targetWire).sig = expected := by
+        rw [← wireSignature targetWire, ownerAction, sourceSignature]
+      obtain ⟨targetWireVar, targetWireEquation⟩ :=
+        resolveWire?_complete target targetContext targetWire targetMember
+      let targetResolved : Var targetContext.sigs expected :=
+        targetSignature ▸ targetWireVar
+      have targetExpected :
+          resolveExpected? target targetContext targetWire expected =
+            some targetResolved := by
+        unfold resolveExpected?
+        rw [dif_pos targetSignature, targetWireEquation]
+        simp [targetResolved]
+      have targetOrigin :
+          wireOfVar target targetResolved = targetWire :=
+        wireOfVar_resolveExpected target targetContext targetWire expected
+          targetExpected
+      have mappedOrigin := contextAction targetResolved
+      change
+        wireOfVar source (rho targetResolved) =
+          wireOrigin (wireOfVar target targetResolved) at mappedOrigin
+      rw [targetOrigin, ownerAction] at mappedOrigin
+      have sourceReResolved :=
+        resolveExpected?_wireOfVar source sourceContext
+          sourceContextNodup (rho targetResolved)
+      rw [mappedOrigin] at sourceReResolved
+      have resolvedEquality : sourceResolved = rho targetResolved :=
+        Option.some.inj (sourceExpected.symm.trans sourceReResolved)
+      refine ⟨targetResolved, ?_, resolvedEquality⟩
+      simpa [resolvePort?, targetOwner] using targetExpected
+
+private theorem resolveArgs?_reflect
+    {definitions : List (List Sig)}
+    {target source : ConcreteDiagram definitions.length}
+    {targetContext : WireContext target}
+    {sourceContext : WireContext source}
+    (sourceContextNodup : sourceContext.ids.Nodup)
+    (rho : WireRenaming targetContext.sigs sourceContext.sigs)
+    (wireOrigin : target.WireId → source.WireId)
+    (wireSignature : ∀ wire,
+      (source.wires (wireOrigin wire)).sig =
+        (target.wires wire).sig)
+    (contextAction : ∀ {sig} (value : Var targetContext.sigs sig),
+      WireContext.origin source sourceContext.ids (rho value) =
+        wireOrigin
+          (WireContext.origin target targetContext.ids value))
+    {targetNode : target.NodeId}
+    {sourceNode : source.NodeId}
+    (ownerImage : ∀ (port : CPort),
+      port ∈ source.requiredPorts sourceNode →
+        ∀ (sourceWire : source.WireId),
+          source.endpointOwner? ⟨sourceNode, port⟩ = some sourceWire →
+          sourceWire ∈ sourceContext.ids →
+            ∃ targetWire : target.WireId,
+              target.endpointOwner? ⟨targetNode, port⟩ =
+                  some targetWire ∧
+                wireOrigin targetWire = sourceWire ∧
+                targetWire ∈ targetContext.ids)
+    (args : List Sig)
+    (index : Nat)
+    (sourceRequired : ∀ offset (_bound : offset < args.length),
+      CPort.arg (index + offset) ∈
+        source.requiredPorts sourceNode)
+    {sourceResolved : Vars sourceContext.sigs args}
+    (sourceEquation :
+      resolveArgs? source sourceContext sourceNode args index =
+        some sourceResolved) :
+    ∃ targetResolved : Vars targetContext.sigs args,
+      resolveArgs? target targetContext targetNode args index =
+          some targetResolved ∧
+        sourceResolved = targetResolved.rename rho := by
+  induction args generalizing index with
+  | nil =>
+      have sourceEquality :
+          (.nil : Vars sourceContext.sigs []) = sourceResolved :=
+        Option.some.inj sourceEquation
+      subst sourceResolved
+      exact ⟨.nil, rfl, rfl⟩
+  | cons sig rest induction =>
+      cases sourceHeadEquation :
+          resolvePort? source sourceContext sourceNode
+            (.arg index) sig with
+      | none =>
+          simp [resolveArgs?, sourceHeadEquation] at sourceEquation
+      | some sourceHead =>
+          cases sourceTailEquation :
+              resolveArgs? source sourceContext sourceNode rest
+                (index + 1) with
+          | none =>
+              simp [resolveArgs?, sourceHeadEquation,
+                sourceTailEquation] at sourceEquation
+          | some sourceTail =>
+              have sourceEquality :
+                  (Vars.cons sourceHead sourceTail :
+                    Vars sourceContext.sigs (sig :: rest)) =
+                    sourceResolved := by
+                exact Option.some.inj (by
+                  simpa [resolveArgs?, sourceHeadEquation,
+                    sourceTailEquation] using sourceEquation)
+              subst sourceResolved
+              obtain
+                  ⟨targetHead, targetHeadEquation, sourceHeadEquality⟩ :=
+                resolvePort?_reflect sourceContextNodup rho
+                  wireOrigin wireSignature contextAction
+                  (ownerImage (.arg index)
+                    (sourceRequired 0 (by simp)))
+                  sourceHeadEquation
+              obtain
+                  ⟨targetTail, targetTailEquation, sourceTailEquality⟩ :=
+                induction (index := index + 1)
+                  (sourceResolved := sourceTail)
+                  (fun offset bound => by
+                    have required :=
+                      sourceRequired (offset + 1) (by simp; omega)
+                    simpa [Nat.add_assoc, Nat.add_comm,
+                      Nat.add_left_comm] using required)
+                  sourceTailEquation
+              refine ⟨.cons targetHead targetTail, ?_, ?_⟩
+              · have targetHeadEquation' :
+                    resolvePort? target targetContext targetNode
+                        (.arg index) sig =
+                      some targetHead := by
+                    simpa using targetHeadEquation
+                simp [resolveArgs?, targetHeadEquation',
+                  targetTailEquation]
+              · simp [Vars.rename, sourceHeadEquality,
+                  sourceTailEquality]
+
+private theorem resolveIdentityPorts?_reflect
+    {definitions : List (List Sig)}
+    {target source : ConcreteDiagram definitions.length}
+    {targetContext : WireContext target}
+    {sourceContext : WireContext source}
+    (sourceContextNodup : sourceContext.ids.Nodup)
+    (rho : WireRenaming targetContext.sigs sourceContext.sigs)
+    (wireOrigin : target.WireId → source.WireId)
+    (wireSignature : ∀ wire,
+      (source.wires (wireOrigin wire)).sig =
+        (target.wires wire).sig)
+    (contextAction : ∀ {sig} (value : Var targetContext.sigs sig),
+      WireContext.origin source sourceContext.ids (rho value) =
+        wireOrigin
+          (WireContext.origin target targetContext.ids value))
+    {targetNode : target.NodeId}
+    {sourceNode : source.NodeId}
+    (ownerImage : ∀ (port : CPort),
+      port ∈ source.requiredPorts sourceNode →
+        ∀ (sourceWire : source.WireId),
+          source.endpointOwner? ⟨sourceNode, port⟩ = some sourceWire →
+          sourceWire ∈ sourceContext.ids →
+            ∃ targetWire : target.WireId,
+              target.endpointOwner? ⟨targetNode, port⟩ =
+                  some targetWire ∧
+                wireOrigin targetWire = sourceWire ∧
+                targetWire ∈ targetContext.ids)
+    (sig : Sig)
+    (remaining index : Nat)
+    (sourceRequired : ∀ offset (_bound : offset < remaining),
+      CPort.identity (index + offset) ∈
+        source.requiredPorts sourceNode)
+    {sourceResolved : { ports : List (Var sourceContext.sigs sig) //
+      ports.length = remaining }}
+    (sourceEquation :
+      resolveIdentityPorts? source sourceContext sourceNode sig
+          remaining index =
+        some sourceResolved) :
+    ∃ targetResolved :
+        { ports : List (Var targetContext.sigs sig) //
+          ports.length = remaining },
+      resolveIdentityPorts? target targetContext targetNode sig
+          remaining index =
+          some targetResolved ∧
+        sourceResolved.val =
+          targetResolved.val.map (rho (sig := sig)) := by
+  induction remaining generalizing index with
+  | zero =>
+      have sourceEmpty : sourceResolved.val = [] :=
+        List.length_eq_zero_iff.mp sourceResolved.property
+      refine ⟨⟨[], rfl⟩, rfl, ?_⟩
+      simp [sourceEmpty]
+  | succ remaining induction =>
+      cases sourceHeadEquation :
+          resolvePort? source sourceContext sourceNode
+            (.identity index) sig with
+      | none =>
+          simp [resolveIdentityPorts?, sourceHeadEquation]
+            at sourceEquation
+      | some sourceHead =>
+          cases sourceTailEquation :
+              resolveIdentityPorts? source sourceContext sourceNode sig
+                remaining (index + 1) with
+          | none =>
+              simp [resolveIdentityPorts?, sourceHeadEquation,
+                sourceTailEquation] at sourceEquation
+          | some sourceTail =>
+              have sourceEquality :
+                  (⟨sourceHead :: sourceTail.val,
+                    by simp [sourceTail.property]⟩ :
+                    { ports : List (Var sourceContext.sigs sig) //
+                      ports.length = remaining + 1 }) =
+                    sourceResolved := by
+                exact Option.some.inj (by
+                  simpa [resolveIdentityPorts?, sourceHeadEquation,
+                    sourceTailEquation] using sourceEquation)
+              subst sourceResolved
+              obtain
+                  ⟨targetHead, targetHeadEquation, sourceHeadEquality⟩ :=
+                resolvePort?_reflect sourceContextNodup rho
+                  wireOrigin wireSignature contextAction
+                  (ownerImage (.identity index)
+                    (sourceRequired 0 (by omega)))
+                  sourceHeadEquation
+              obtain
+                  ⟨targetTail, targetTailEquation, sourceTailEquality⟩ :=
+                induction (index := index + 1)
+                  (sourceResolved := sourceTail)
+                  (fun offset bound => by
+                    have required :=
+                      sourceRequired (offset + 1) (by omega)
+                    simpa [Nat.add_assoc, Nat.add_comm,
+                      Nat.add_left_comm] using required)
+                  sourceTailEquation
+              let targetResolved :
+                  { ports : List (Var targetContext.sigs sig) //
+                    ports.length = remaining + 1 } :=
+                ⟨targetHead :: targetTail.val,
+                  by simp [targetTail.property]⟩
+              refine ⟨targetResolved, ?_, ?_⟩
+              · simp [resolveIdentityPorts?, targetHeadEquation,
+                  targetTailEquation, targetResolved]
+              · simp [targetResolved, sourceHeadEquality,
+                  sourceTailEquality]
+
+private theorem compileNode?_reflect
+    {definitions : List (List Sig)}
+    {target source : ConcreteDiagram definitions.length}
+    {targetContext : WireContext target}
+    {sourceContext : WireContext source}
+    (sourceContextNodup : sourceContext.ids.Nodup)
+    (rho : WireRenaming targetContext.sigs sourceContext.sigs)
+    (wireOrigin : target.WireId → source.WireId)
+    (wireSignature : ∀ wire,
+      (source.wires (wireOrigin wire)).sig =
+        (target.wires wire).sig)
+    (contextAction : ∀ {sig} (value : Var targetContext.sigs sig),
+      WireContext.origin source sourceContext.ids (rho value) =
+        wireOrigin
+          (WireContext.origin target targetContext.ids value))
+    (regionOrigin : target.RegionId → source.RegionId)
+    {targetNode : target.NodeId}
+    {sourceNode : source.NodeId}
+    (nodeShape :
+      source.nodes sourceNode =
+        match target.nodes targetNode with
+        | .atom region args =>
+            .atom (regionOrigin region) args
+        | .ref region definition args =>
+            .ref (regionOrigin region) definition args
+        | .identity region sig arity =>
+            .identity (regionOrigin region) sig arity)
+    (ownerImage : ∀ (port : CPort),
+      port ∈ source.requiredPorts sourceNode →
+        ∀ (sourceWire : source.WireId),
+          source.endpointOwner? ⟨sourceNode, port⟩ = some sourceWire →
+          sourceWire ∈ sourceContext.ids →
+            ∃ targetWire : target.WireId,
+              target.endpointOwner? ⟨targetNode, port⟩ =
+                  some targetWire ∧
+                wireOrigin targetWire = sourceWire ∧
+                targetWire ∈ targetContext.ids)
+    {sourceItem : Item definitions sourceContext.sigs}
+    (sourceCompiled :
+      compileNode? definitions source sourceContext sourceNode =
+        some sourceItem) :
+    ∃ targetItem : Item definitions targetContext.sigs,
+      compileNode? definitions target targetContext targetNode =
+          some targetItem ∧
+        sourceItem = targetItem.renameWires rho := by
+  cases targetNodeData : target.nodes targetNode with
+  | atom targetRegion args =>
+      have sourceNodeData :
+          source.nodes sourceNode =
+            .atom (regionOrigin targetRegion) args := by
+        rw [nodeShape, targetNodeData]
+      cases sourceHeadEquation :
+          resolvePort? source sourceContext sourceNode .head
+            (.rel args) with
+      | none =>
+          simp [compileNode?, sourceNodeData, sourceHeadEquation]
+            at sourceCompiled
+      | some sourceHead =>
+          cases sourceArgsEquation :
+              resolveArgs? source sourceContext sourceNode args 0 with
+          | none =>
+              simp [compileNode?, sourceNodeData,
+                sourceHeadEquation, sourceArgsEquation]
+                at sourceCompiled
+          | some sourceArgs =>
+              have sourceItemEquality :
+                  (Item.atom sourceHead sourceArgs :
+                    Item definitions sourceContext.sigs) =
+                    sourceItem := by
+                exact Option.some.inj (by
+                  simpa [compileNode?, sourceNodeData,
+                    sourceHeadEquation, sourceArgsEquation] using
+                      sourceCompiled)
+              subst sourceItem
+              obtain
+                  ⟨targetHead, targetHeadEquation,
+                    sourceHeadEquality⟩ :=
+                resolvePort?_reflect sourceContextNodup rho
+                  wireOrigin wireSignature contextAction
+                  (ownerImage .head (by
+                    simp [ConcreteDiagram.requiredPorts,
+                      sourceNodeData]))
+                  sourceHeadEquation
+              obtain
+                  ⟨targetArgs, targetArgsEquation,
+                    sourceArgsEquality⟩ :=
+                resolveArgs?_reflect sourceContextNodup rho
+                  wireOrigin wireSignature contextAction
+                  ownerImage args 0
+                  (by
+                    intro offset bound
+                    simp [ConcreteDiagram.requiredPorts,
+                      sourceNodeData, bound])
+                  sourceArgsEquation
+              refine ⟨.atom targetHead targetArgs, ?_, ?_⟩
+              · simp [compileNode?, targetNodeData,
+                  targetHeadEquation, targetArgsEquation]
+              · simp [Item.renameWires, sourceHeadEquality,
+                  sourceArgsEquality]
+  | ref targetRegion definition args =>
+      have sourceNodeData :
+          source.nodes sourceNode =
+            .ref (regionOrigin targetRegion) definition args := by
+        rw [nodeShape, targetNodeData]
+      simp only [compileNode?, sourceNodeData] at sourceCompiled
+      split at sourceCompiled
+      · rename_i signature
+        cases sourceArgsEquation :
+            resolveArgs? source sourceContext sourceNode args 0 with
+        | none =>
+            simp [sourceArgsEquation] at sourceCompiled
+        | some sourceArgs =>
+            let reference : DefVar definitions args :=
+              signature ▸ definitionVarAt definitions definition
+            have sourceItemEquality :
+                (Item.named reference sourceArgs :
+                  Item definitions sourceContext.sigs) =
+                  sourceItem := by
+              exact Option.some.inj (by
+                simpa [sourceArgsEquation, reference] using
+                  sourceCompiled)
+            subst sourceItem
+            obtain
+                ⟨targetArgs, targetArgsEquation,
+                  sourceArgsEquality⟩ :=
+              resolveArgs?_reflect sourceContextNodup rho
+                wireOrigin wireSignature contextAction
+                ownerImage args 0
+                (by
+                  intro offset bound
+                  simp [ConcreteDiagram.requiredPorts,
+                    sourceNodeData, bound])
+                sourceArgsEquation
+            refine ⟨.named reference targetArgs, ?_, ?_⟩
+            · simp only [compileNode?, targetNodeData]
+              split
+              · simp [targetArgsEquation, reference]
+              · contradiction
+            · simp [Item.renameWires, sourceArgsEquality]
+      · simp at sourceCompiled
+  | identity targetRegion sig arity =>
+      have sourceNodeData :
+          source.nodes sourceNode =
+            .identity (regionOrigin targetRegion) sig arity := by
+        rw [nodeShape, targetNodeData]
+      simp only [compileNode?, sourceNodeData] at sourceCompiled
+      split at sourceCompiled
+      · rename_i arityWitness
+        cases sourcePortsEquation :
+            resolveIdentityPorts? source sourceContext sourceNode
+              sig arity 0 with
+        | none =>
+            simp [sourcePortsEquation] at sourceCompiled
+        | some sourcePorts =>
+            have sourceItemEquality :
+                (Item.identity sig sourcePorts.val (by
+                  simpa [sourcePorts.property] using arityWitness) :
+                  Item definitions sourceContext.sigs) =
+                  sourceItem := by
+              exact Option.some.inj (by
+                simpa [sourcePortsEquation] using sourceCompiled)
+            subst sourceItem
+            obtain
+                ⟨targetPorts, targetPortsEquation,
+                  sourcePortsEquality⟩ :=
+              resolveIdentityPorts?_reflect sourceContextNodup rho
+                wireOrigin wireSignature contextAction ownerImage
+                sig arity 0
+                (by
+                  intro offset bound
+                  simp [ConcreteDiagram.requiredPorts,
+                    sourceNodeData, bound])
+                sourcePortsEquation
+            refine
+              ⟨.identity sig targetPorts.val (by
+                simpa [targetPorts.property] using arityWitness),
+                ?_, ?_⟩
+            · simp [compileNode?, targetNodeData, arityWitness,
+                targetPortsEquation]
+            · simp [Item.renameWires, sourcePortsEquality]
+      · simp at sourceCompiled
+
+/--
+Reflect an accepted singleton compilation through an exact target-to-source
+context embedding.  Endpoint-owner images are required only for ports used by
+the copied node shape.
+-/
+theorem compileNodes?_singleton_reflect
+    {definitions : List (List Sig)}
+    {target source : ConcreteDiagram definitions.length}
+    (_sourceWellFormed : source.WellFormed definitions)
+    {targetContext : WireContext target}
+    {sourceContext : WireContext source}
+    (sourceContextNodup : sourceContext.ids.Nodup)
+    (rho : WireRenaming targetContext.sigs sourceContext.sigs)
+    (wireOrigin : target.WireId → source.WireId)
+    (wireSignature : ∀ wire,
+      (source.wires (wireOrigin wire)).sig =
+        (target.wires wire).sig)
+    (contextAction : ∀ {sig} (value : Var targetContext.sigs sig),
+      WireContext.origin source sourceContext.ids (rho value) =
+        wireOrigin
+          (WireContext.origin target targetContext.ids value))
+    (regionOrigin : target.RegionId → source.RegionId)
+    (targetNode : target.NodeId)
+    (sourceNode : source.NodeId)
+    (nodeShape :
+      source.nodes sourceNode =
+        match target.nodes targetNode with
+        | .atom region args =>
+            .atom (regionOrigin region) args
+        | .ref region definition args =>
+            .ref (regionOrigin region) definition args
+        | .identity region sig arity =>
+            .identity (regionOrigin region) sig arity)
+    (ownerImage : ∀ (port : CPort),
+      port ∈ source.requiredPorts sourceNode →
+        ∀ (sourceWire : source.WireId),
+          source.endpointOwner? ⟨sourceNode, port⟩ = some sourceWire →
+          sourceWire ∈ sourceContext.ids →
+            ∃ targetWire : target.WireId,
+              target.endpointOwner? ⟨targetNode, port⟩ =
+                  some targetWire ∧
+                wireOrigin targetWire = sourceWire ∧
+                targetWire ∈ targetContext.ids)
+    {sourceItems : ItemSeq definitions sourceContext.sigs}
+    (sourceCompiled :
+      compileNodes? definitions source sourceContext [sourceNode] =
+        some sourceItems) :
+    ∃ targetItems : ItemSeq definitions targetContext.sigs,
+      compileNodes? definitions target targetContext [targetNode] =
+          some targetItems ∧
+        sourceItems = targetItems.renameWires rho := by
+  cases sourceNodeEquation :
+      compileNode? definitions source sourceContext sourceNode with
+  | none =>
+      simp [compileNodes?, sourceNodeEquation] at sourceCompiled
+  | some sourceItem =>
+      have sourceItemsEquality :
+          (ItemSeq.cons sourceItem .nil :
+            ItemSeq definitions sourceContext.sigs) =
+            sourceItems := by
+        exact Option.some.inj (by
+          simpa [compileNodes?, sourceNodeEquation] using
+            sourceCompiled)
+      subst sourceItems
+      obtain ⟨targetItem, targetNodeEquation, sourceItemEquality⟩ :=
+        compileNode?_reflect sourceContextNodup rho wireOrigin
+          wireSignature contextAction regionOrigin nodeShape ownerImage
+          sourceNodeEquation
+      refine ⟨.cons targetItem .nil, ?_, ?_⟩
+      · simp [compileNodes?, targetNodeEquation]
+      · simp [sourceItemEquality, ItemSeq.renameWires]
+
 private def binaryIdentityTemplate (definitionCount : Nat) (sig : Sig) :
     ConcreteDiagram definitionCount where
   regionCount := 1
@@ -1594,6 +2004,78 @@ theorem compileNodes?_identity_origins
                 ownerWire).mpr ⟨_, ConcreteDiagram.endpointOwner?_incident
                   diagram _ _ owner, rfl⟩
   · simp at compiled
+
+/--
+A compiled atom singleton retains its exact typed tuple and concrete endpoint
+origins. The receipt exposes observations of the accepted compilation only.
+-/
+theorem compileNodes?_atom_shape
+    {definitions : List (List Sig)}
+    (diagram : ConcreteDiagram definitions.length) (context : WireContext diagram)
+    (node : diagram.NodeId) {region : diagram.RegionId} {args : List Sig}
+    (nodeData : diagram.nodes node = .atom region args)
+    {items : ItemSeq definitions context.sigs}
+    (compiled : compileNodes? definitions diagram context [node] = some items) :
+    ∃ head : Var context.sigs (.rel args), ∃ arguments : Vars context.sigs args,
+      items = .cons (.atom head arguments) .nil ∧
+        diagram.endpointOwner? ⟨node, .head⟩ =
+          some (WireContext.origin diagram context.ids head) ∧
+        ArgumentOrigins diagram context node 0 arguments := by
+  have portOrigin :
+      ∀ (port : CPort) (expected : Sig)
+        (value : Var context.sigs expected),
+        resolvePort? diagram context node port expected = some value →
+          diagram.endpointOwner? ⟨node, port⟩ =
+            some (WireContext.origin diagram context.ids value) := by
+    intro port expected value resolved
+    unfold resolvePort? at resolved
+    cases owner : diagram.endpointOwner? ⟨node, port⟩ with
+    | none => simp [owner] at resolved
+    | some wire =>
+        simp only [owner, Option.bind_some] at resolved
+        rw [← wireOfVar_resolveExpected diagram context wire expected resolved]
+  have argsOrigins :
+      ∀ (remaining : List Sig) (index : Nat)
+        (values : Vars context.sigs remaining),
+        resolveArgs? diagram context node remaining index = some values →
+          ArgumentOrigins diagram context node index values := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro index values resolved
+        cases values
+        trivial
+    | cons sig rest induction =>
+        intro index values resolved
+        cases headEquation :
+            resolvePort? diagram context node (.arg index) sig with
+        | none => simp [resolveArgs?, headEquation] at resolved
+        | some head =>
+            cases tailEquation :
+                resolveArgs? diagram context node rest (index + 1) with
+            | none =>
+                simp [resolveArgs?, headEquation, tailEquation] at resolved
+            | some tail =>
+                have valuesExact : Vars.cons head tail = values :=
+                  Option.some.inj (by
+                    simpa [resolveArgs?, headEquation, tailEquation] using
+                      resolved)
+                subst values
+                exact ⟨portOrigin _ _ _ headEquation,
+                  induction (index + 1) tail tailEquation⟩
+  simp only [compileNodes?, compileNode?, nodeData] at compiled
+  cases headEquation : resolvePort? diagram context node .head (.rel args) with
+  | none => simp [headEquation] at compiled
+  | some head =>
+      cases argumentsEquation : resolveArgs? diagram context node args 0 with
+      | none => simp [headEquation, argumentsEquation] at compiled
+      | some arguments =>
+          exact ⟨head, arguments,
+            (Option.some.inj
+              (by simpa [headEquation, argumentsEquation] using compiled)).symm,
+            portOrigin _ _ _ headEquation,
+            argsOrigins args 0 arguments argumentsEquation⟩
+
 private theorem resolveExpected?_pair
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
@@ -2337,6 +2819,92 @@ theorem encloses_iff_exists
         diagram.climb steps descendant = some ancestor := by
   simp [ConcreteDiagram.Encloses]
 
+/--
+Any successful parent-chain traversal in a well-formed diagram fits within
+the region table. This supports transport of enclosure witnesses into a
+larger region table without exposing a second representation of enclosure.
+-/
+theorem successfulClimb_le_count
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (steps : Nat) (region ancestor : diagram.RegionId)
+    (climbed : diagram.climb steps region = some ancestor) :
+    steps ≤ diagram.regionCount := by
+  have climbAdd :
+      ∀ (first second : Nat) (start : diagram.RegionId),
+        diagram.climb (first + second) start =
+          (diagram.climb first start).bind (diagram.climb second) := by
+    intro first
+    induction first with
+    | zero =>
+        intro second start
+        simp
+    | succ first induction =>
+        intro second start
+        cases regionData : diagram.regions start with
+        | sheet =>
+            simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
+        | cut parent =>
+            simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
+              induction second parent
+  have climbToRootUnique :
+      ∀ {start : diagram.RegionId} {left right : Nat},
+        diagram.climb left start = some diagram.root →
+        diagram.climb right start = some diagram.root →
+        left = right := by
+    intro start left right
+    induction left generalizing right start with
+    | zero =>
+        intro leftClimb rightClimb
+        have startRoot : start = diagram.root := by
+          simpa [ConcreteDiagram.climb] using leftClimb
+        subst start
+        cases right with
+        | zero => rfl
+        | succ right =>
+            rw [ConcreteDiagram.climb, wellFormed.root_is_sheet] at rightClimb
+            contradiction
+    | succ left induction =>
+        intro leftClimb rightClimb
+        cases right with
+        | zero =>
+            have startRoot : start = diagram.root := by
+              simpa [ConcreteDiagram.climb] using rightClimb
+            subst start
+            rw [ConcreteDiagram.climb, wellFormed.root_is_sheet] at leftClimb
+            contradiction
+        | succ right =>
+            cases regionData : diagram.regions start with
+            | sheet =>
+                simp [ConcreteDiagram.climb, regionData] at leftClimb
+            | cut parent =>
+                apply congrArg Nat.succ
+                apply induction
+                · simpa [ConcreteDiagram.climb, regionData] using leftClimb
+                · simpa [ConcreteDiagram.climb, regionData] using rightClimb
+  have ancestorReaches :
+      diagram.Encloses diagram.root ancestor :=
+    of_decide_eq_true
+      ((List.all_eq_true.mp wellFormed.all_regions_reach_root)
+        ancestor (Data.Finite.mem_allFin ancestor))
+  obtain ⟨rootSteps, ancestorRoot⟩ :=
+    (encloses_iff_exists diagram diagram.root ancestor).mp ancestorReaches
+  have regionRoot :
+      diagram.climb (steps + rootSteps.val) region =
+        some diagram.root := by
+    rw [climbAdd, climbed]
+    exact ancestorRoot
+  have regionReaches :
+      diagram.Encloses diagram.root region :=
+    of_decide_eq_true
+      ((List.all_eq_true.mp wellFormed.all_regions_reach_root)
+        region (Data.Finite.mem_allFin region))
+  obtain ⟨bounded, boundedRoot⟩ :=
+    (encloses_iff_exists diagram diagram.root region).mp regionReaches
+  have same := climbToRootUnique regionRoot boundedRoot
+  omega
+
 private theorem root_has_no_strict_ancestor
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -2747,7 +3315,7 @@ private theorem compileIdentityNode?_forward_denotation
               ⟨leftVar, leftMember, valuesEqual.trans rightValue⟩
   · simp at leftCompiled
 
-theorem compileNode?_forward_denotation
+private theorem compileNode?_forward_denotation
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
     (iso : ConcreteIso left right)
@@ -2784,6 +3352,45 @@ theorem compileNode?_forward_denotation
       exact compileIdentityNode?_forward_denotation iso leftWellFormed
         rightWellFormed contexts definitionEnv envs nodeData leftItem
         leftCompiled
+
+/-- Transport one accepted singleton compilation across a concrete isomorphism. -/
+theorem compileNodes?_singleton_forward_denotation
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (leftWellFormed : left.WellFormed definitions)
+    (rightWellFormed : right.WellFormed definitions)
+    {leftContext : WireContext left} {rightContext : WireContext right}
+    (contexts : WireContextsCorrespond iso leftContext rightContext)
+    {pre : PreModel} (definitionEnv : DefinitionEnv pre definitions)
+    {leftEnv : Env pre leftContext.sigs} {rightEnv : Env pre rightContext.sigs}
+    (envs : EnvironmentsCorrespond iso leftContext rightContext
+      leftEnv rightEnv)
+    (node : left.NodeId) (leftItem : Item definitions leftContext.sigs)
+    (leftCompiled :
+      compileNodes? definitions left leftContext [node] =
+        some (.cons leftItem .nil)) :
+    ∃ rightItem,
+      compileNodes? definitions right rightContext [iso.nodes node] =
+          some (.cons rightItem .nil) ∧
+        (denoteItem pre definitionEnv leftEnv leftItem ↔
+          denoteItem pre definitionEnv rightEnv rightItem) := by
+  cases leftEquation : compileNode? definitions left leftContext node with
+  | none => simp [compileNodes?, leftEquation] at leftCompiled
+  | some actual =>
+      have sequenceExact :
+          (ItemSeq.cons actual .nil :
+            ItemSeq definitions leftContext.sigs) =
+          .cons leftItem .nil :=
+        Option.some.inj (by
+          simpa [compileNodes?, leftEquation] using leftCompiled)
+      have actualExact : actual = leftItem :=
+        (ItemSeq.cons.inj sequenceExact).1
+      subst actual
+      obtain ⟨rightItem, rightCompiled, denotation⟩ :=
+        compileNode?_forward_denotation iso leftWellFormed rightWellFormed
+          contexts definitionEnv envs node leftItem leftEquation
+      exact ⟨rightItem, by simp [compileNodes?, rightCompiled], denotation⟩
 
 private theorem reference_signature
     (definitions : List (List Sig))
@@ -2886,84 +3493,30 @@ theorem compileNodes?_complete
       exact ⟨.cons head rest, by
         simp [compileNodes?, headCompiled, restCompiled]⟩
 
-theorem compileNodes?_item_for_node
+/-- Decompose an accepted nonempty node compilation into its singleton head. -/
+theorem compileNodes?_cons_components
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
-    (context : WireContext diagram) :
-    ∀ {nodes : List diagram.NodeId}
-      {items : ItemSeq definitions context.sigs},
-      compileNodes? definitions diagram context nodes = some items →
-      ∀ node, node ∈ nodes →
-        ∃ item,
-          item ∈ items.toList ∧
-          compileNode? definitions diagram context node = some item
-  | [], _, compiled, node, member => by simp at member
-  | head :: tail, items, compiled, node, member => by
-      cases headEquation :
-          compileNode? definitions diagram context head with
-      | none => simp [compileNodes?, headEquation] at compiled
-      | some headItem =>
-          cases tailEquation :
-              compileNodes? definitions diagram context tail with
-          | none =>
-              simp [compileNodes?, headEquation, tailEquation] at compiled
-          | some tailItems =>
-              have itemsEquality :
-                  (ItemSeq.cons headItem tailItems :
-                    ItemSeq definitions context.sigs) = items := by
-                exact Option.some.inj (by
-                  simpa [compileNodes?, headEquation, tailEquation] using
-                    compiled)
-              subst items
-              simp only [List.mem_cons] at member
-              rcases member with rfl | tailMember
-              · exact ⟨headItem, by simp [ItemSeq.toList], headEquation⟩
-              · obtain ⟨item, itemMember, itemCompiled⟩ :=
-                  compileNodes?_item_for_node definitions diagram context
-                    tailEquation node tailMember
-                exact ⟨item, by
-                  simp [ItemSeq.toList, itemMember], itemCompiled⟩
-
-theorem compileNodes?_node_for_item
-    (definitions : List (List Sig))
-    (diagram : ConcreteDiagram definitions.length)
-    (context : WireContext diagram) :
-    ∀ {nodes : List diagram.NodeId}
-      {items : ItemSeq definitions context.sigs},
-      compileNodes? definitions diagram context nodes = some items →
-      ∀ item, item ∈ items.toList →
-        ∃ node,
-          node ∈ nodes ∧
-          compileNode? definitions diagram context node = some item
-  | [], items, compiled, item, member => by
-      have itemsEquality : (.nil : ItemSeq definitions context.sigs) = items :=
-        Option.some.inj (by simpa [compileNodes?] using compiled)
-      subst items
-      simp [ItemSeq.toList] at member
-  | head :: tail, items, compiled, item, member => by
-      cases headEquation :
-          compileNode? definitions diagram context head with
-      | none => simp [compileNodes?, headEquation] at compiled
-      | some headItem =>
-          cases tailEquation :
-              compileNodes? definitions diagram context tail with
-          | none =>
-              simp [compileNodes?, headEquation, tailEquation] at compiled
-          | some tailItems =>
-              have itemsEquality :
-                  (ItemSeq.cons headItem tailItems :
-                    ItemSeq definitions context.sigs) = items := by
-                exact Option.some.inj (by
-                  simpa [compileNodes?, headEquation, tailEquation] using
-                    compiled)
-              subst items
-              simp only [ItemSeq.toList, List.mem_cons] at member
-              rcases member with rfl | tailMember
-              · exact ⟨head, by simp, headEquation⟩
-              · obtain ⟨node, nodeMember, itemCompiled⟩ :=
-                  compileNodes?_node_for_item definitions diagram context
-                    tailEquation item tailMember
-                exact ⟨node, by simp [nodeMember], itemCompiled⟩
+    (context : WireContext diagram) (node : diagram.NodeId)
+    (tail : List diagram.NodeId) (items : ItemSeq definitions context.sigs)
+    (compiled :
+      compileNodes? definitions diagram context (node :: tail) = some items) :
+    ∃ head rest,
+      compileNodes? definitions diagram context [node] =
+          some (.cons head .nil) ∧
+        compileNodes? definitions diagram context tail = some rest ∧
+        items = .cons head rest := by
+  cases headEquation : compileNode? definitions diagram context node with
+  | none => simp [compileNodes?, headEquation] at compiled
+  | some head =>
+      cases tailEquation : compileNodes? definitions diagram context tail with
+      | none => simp [compileNodes?, headEquation, tailEquation] at compiled
+      | some rest =>
+          refine ⟨head, rest, by simp [compileNodes?, headEquation],
+            rfl, ?_⟩
+          exact Option.some.inj
+            (by simpa [compileNodes?, headEquation, tailEquation] using
+              compiled) |>.symm
 
 end ConcreteElaboration
 

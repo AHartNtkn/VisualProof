@@ -71,6 +71,29 @@ theorem DiagramContext.preservesOuter_bindContextFor
       ConcreteElaboration.extendEnvironment_appendRightVar diagram context
         region values fixed value
 
+/-- Binding a fixed ordered local-wire prefix preserves the inner context exactly. -/
+theorem bindContextFor_injective
+    {definitions : List (List Sig)}
+    (diagram : ConcreteDiagram definitions.length)
+    (outerIds : List diagram.WireId)
+    (localIds : List diagram.WireId) :
+    Function.Injective
+      (bindContextFor (definitions := definitions) diagram outerIds
+        localIds :
+        DiagramContext definitions holeCtx
+            ((localIds ++ outerIds).map fun wire =>
+              (diagram.wires wire).sig) →
+          DiagramContext definitions holeCtx
+            (outerIds.map fun wire => (diagram.wires wire).sig)) := by
+  induction localIds with
+  | nil =>
+      intro left right same
+      exact same
+  | cons head tail induction =>
+      intro left right same
+      have boundSame := induction same
+      injection boundSame
+
 /-- Transformation-neutral paired contexts immediately inside two frame binders. -/
 structure RegionFrame.PairedInner
     {definitions : List (List Sig)}

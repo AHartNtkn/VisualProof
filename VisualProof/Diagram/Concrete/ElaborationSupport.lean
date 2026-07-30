@@ -94,6 +94,159 @@ def extend (context : WireContext diagram) (region : diagram.RegionId) :
 
 end WireContext
 
+/-- Concrete wires named by an ordered typed variable tuple. -/
+def variableOrigins
+    (diagram : ConcreteDiagram definitionCount)
+    (context : WireContext diagram) :
+    {args : List Sig} → Vars context.sigs args → List diagram.WireId
+  | [], .nil => []
+  | _ :: _, .cons head tail =>
+      WireContext.origin diagram context.ids head ::
+        variableOrigins diagram context tail
+
+/--
+Exact concrete endpoint ownership retained by one typed relation-argument
+tuple. This is observational compiler evidence; it performs no resolution.
+-/
+def ArgumentOrigins
+    (diagram : ConcreteDiagram definitionCount)
+    (context : WireContext diagram)
+    (node : diagram.NodeId) :
+    (index : Nat) → {args : List Sig} → Vars context.sigs args → Prop
+  | _, [], .nil => True
+  | index, _ :: _, .cons head tail =>
+      diagram.endpointOwner? ⟨node, .arg index⟩ =
+          some (WireContext.origin diagram context.ids head) ∧
+        ArgumentOrigins diagram context node (index + 1) tail
+
+/-- Values for one ordered concrete-wire signature vector. -/
+inductive WireValues (pre : PreModel.{u}) : List Sig → Type u
+  | nil : WireValues pre []
+  | cons (head : pre.Domain sig) (tail : WireValues pre rest) :
+      WireValues pre (sig :: rest)
+
+def appendRightVar
+    (diagram : ConcreteDiagram definitionCount)
+    {rightIds : List diagram.WireId} {sig : Sig} :
+    (leftIds : List diagram.WireId) →
+    Var (rightIds.map fun id => (diagram.wires id).sig) sig →
+    Var ((leftIds ++ rightIds).map fun id => (diagram.wires id).sig) sig
+  | [], value => value
+  | _ :: tail, value => .there (appendRightVar diagram tail value)
+
+theorem origin_appendRightVar
+    (diagram : ConcreteDiagram definitionCount)
+    (leftIds : List diagram.WireId)
+    {rightIds : List diagram.WireId} {sig : Sig}
+    (value : Var (rightIds.map fun id => (diagram.wires id).sig) sig) :
+    WireContext.origin diagram (leftIds ++ rightIds)
+        (appendRightVar diagram leftIds value) =
+      WireContext.origin diagram rightIds value := by
+  induction leftIds with
+  | nil => rfl
+  | cons _ _ induction =>
+      simpa [appendRightVar, WireContext.origin] using induction
+
+/-- Extend an environment by an explicit ordered list of local wire values. -/
+def extendEnvironmentFor
+    (diagram : ConcreteDiagram definitionCount)
+    {pre : PreModel}
+    (outerIds : List diagram.WireId) :
+    (localIds : List diagram.WireId) →
+    WireValues pre
+      (localIds.map fun wire => (diagram.wires wire).sig) →
+    Env pre (outerIds.map fun wire => (diagram.wires wire).sig) →
+    Env pre
+      ((localIds ++ outerIds).map fun wire => (diagram.wires wire).sig)
+  | [], .nil, outerEnv => outerEnv
+  | _ :: tail, .cons head rest, outerEnv =>
+      (extendEnvironmentFor diagram outerIds tail rest outerEnv).extend head
+
+def extendEnvironment
+    (diagram : ConcreteDiagram definitionCount)
+    (context : WireContext diagram) (region : diagram.RegionId)
+    {pre : PreModel}
+    (values : WireValues pre
+      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig))
+    (outerEnv : Env pre context.sigs) :
+    Env pre (context.extend region).sigs :=
+  extendEnvironmentFor diagram context.ids (diagram.wiresAt region)
+    values outerEnv
+
+private theorem extendEnvironmentFor_appendRightVar
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    {pre : PreModel}
+    (values : WireValues pre
+      (localIds.map fun wire => (diagram.wires wire).sig))
+    (outerEnv : Env pre
+      (outerIds.map fun wire => (diagram.wires wire).sig))
+    {sig : Sig}
+    (value : Var
+      (outerIds.map fun wire => (diagram.wires wire).sig) sig) :
+    extendEnvironmentFor diagram outerIds localIds values outerEnv sig
+        (appendRightVar diagram localIds value) =
+      outerEnv sig value := by
+  induction localIds with
+  | nil => cases values; rfl
+  | cons _ _ induction =>
+      cases values with
+      | cons _ tailValues => exact induction tailValues
+
+def valuesFromEnvironmentFor
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds : List diagram.WireId) :
+    (localIds : List diagram.WireId) →
+    Env pre ((localIds ++ outerIds).map fun wire =>
+      (diagram.wires wire).sig) →
+    WireValues pre (localIds.map fun wire => (diagram.wires wire).sig)
+  | [], _ => .nil
+  | _ :: tail, env =>
+      .cons (env _ .here)
+        (valuesFromEnvironmentFor diagram outerIds tail
+          (fun sig value => env sig (.there value)))
+
+theorem extendEnvironmentFor_from
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds localIds : List diagram.WireId)
+    (env : Env pre ((localIds ++ outerIds).map fun wire =>
+      (diagram.wires wire).sig))
+    (outerEnv : Env pre (outerIds.map fun wire => (diagram.wires wire).sig))
+    (agrees : ∀ sig (value : Var
+      (outerIds.map fun wire => (diagram.wires wire).sig) sig),
+      env sig (appendRightVar diagram localIds value) = outerEnv sig value) :
+    extendEnvironmentFor diagram outerIds localIds
+        (valuesFromEnvironmentFor diagram outerIds localIds env) outerEnv =
+      env := by
+  induction localIds with
+  | nil =>
+      funext sig value
+      exact (agrees sig value).symm
+  | cons _ _ induction =>
+      funext sig value
+      cases value with
+      | here => rfl
+      | there value =>
+          exact congrFun (congrFun
+            (induction (fun sig value => env sig (.there value))
+              (by
+                intro sig outer
+                exact agrees sig outer)) sig) value
+
+theorem extendEnvironment_appendRightVar
+    (diagram : ConcreteDiagram definitionCount)
+    (context : WireContext diagram) (region : diagram.RegionId)
+    {pre : PreModel}
+    (values : WireValues pre
+      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig))
+    (outerEnv : Env pre context.sigs)
+    {sig : Sig} (value : Var context.sigs sig) :
+    extendEnvironment diagram context region values outerEnv sig
+        (appendRightVar diagram (diagram.wiresAt region) value) =
+      outerEnv sig value := by
+  exact extendEnvironmentFor_appendRightVar diagram context.ids
+    (diagram.wiresAt region) values outerEnv value
+
 structure WireContextsCorrespond
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}

@@ -769,7 +769,7 @@ theorem root_direction
     have notEven : site.frame.context.cutDepth % 2 ≠ 0 := by omega
     simpa only [PathDirection, notEven] using direction
 
-private theorem frame_cutDepth_climbs
+theorem frame_cutDepth_climbs
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (site : diagram.RegionId) :
