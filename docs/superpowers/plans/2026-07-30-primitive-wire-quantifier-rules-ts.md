@@ -464,8 +464,9 @@ else `argDrop`; port→past sibling port `argPermute` (adjacent
 transposition); port→sibling port on the same wire `argContract`;
 port→beside itself `argDuplicate`; port→its own end's center
 `applyFormal`; end→one of its own argument ports `identityLeaf`;
-strand→end of another wire `argExtend` (uniform target; per-site variant
-accumulates (end, wire) contacts before one commit); lasso around one end
+strand→end of another wire `argExtend` (uniform target; the per-site
+one-commit variant is struck per the 2026-07-30 ruling — local joins
+after a uniform extend cover it); lasso around one end
 `cutWrap`; cut boundary→its enclosed end `cutAbsorb`; Delete on a wire
 `endsDelete` (endpoint-free: `vacuousElim` — extends the existing
 contextual-Delete precedence).
