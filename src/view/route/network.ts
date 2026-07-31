@@ -41,6 +41,14 @@ export const SPLIT_MARGIN = 1e-3
 const posOf = (net: WireNet, terms: readonly Vec2[], v: number): Vec2 =>
   v < terms.length ? terms[v]! : net.junctions[v - terms.length]!
 
+/** Material-improvement epsilon (the same law as the search's publish gate and
+    the greedy descent, 55356f7): at energies of ~1e4 the double-precision ULP
+    is ~1e-12, so an ABSOLUTE 1e-12 acceptance threshold accepts rounding
+    noise and the walk chatters forever instead of resting (measured: frames
+    never fell below ~45 ms because junctions kept "improving" by dust).
+    Accepts must clear noise RELATIVE to the energy's magnitude. */
+const eps = (x: number): number => 1e-9 * (Math.abs(x) + 1)
+
 /** THE network energy: the ROD energy of every edge's DRAWN curve (USER
     ruling 2026-07-24: minimal energy curves are gentle — see route/curve.ts).
     Per edge: route the waypoint skeleton through free space, build the
@@ -263,7 +271,7 @@ export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, ns
     void bi
     net.edges.push([nT + j, nT + jb])
     const L1 = evalE(net)
-    if (L1 < L0 - 1e-12) return true
+    if (L1 < L0 - eps(L0)) return true
     net.junctions = snapshot.junctions
     net.edges = snapshot.edges
   }
@@ -299,7 +307,17 @@ export function advanceNetwork(
   net: WireNet,
   terms: readonly Vec2[],
   fs: FreeSpace,
-  opts: { substeps: number; bound: number; ns: NearSpace; bcs?: readonly CurveBC[]; beta?: number; gate?: (net: WireNet) => number },
+  opts: {
+    substeps: number; bound: number; ns: NearSpace; bcs?: readonly CurveBC[]; beta?: number
+    gate?: (net: WireNet) => number
+    /** Probe the axes when the Weiszfeld target step stalls (rest polish —
+        see below). The SOLVER walk sets this; presentation frames skip it:
+        their job is bounded motion toward targets at frame rate, and rest
+        quality is asserted on the certified rest the solver walk produces.
+        Skipping is not an approximation of the frame's contract — a stalled
+        target step already returns "nothing moved" either way. */
+    probeStalls?: boolean
+  },
 ): boolean {
   const bcs = opts.bcs ?? []
   const beta = opts.beta ?? 0
@@ -350,7 +368,7 @@ export function advanceNetwork(
           if (curL === null) curL = evalE(net)
           net.junctions[j] = { x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }
           const L1 = evalE(net)
-          if (L1 < curL - 1e-12) {
+          if (L1 < curL - eps(curL)) {
             curL = L1
             took = true
             stepMoved = true
@@ -365,7 +383,7 @@ export function advanceNetwork(
         // the target step stalls, probe the axes under the same bound and the
         // same strict gate — the walk is then a true coordinate descent of
         // the one energy, with the proxy step as its accelerator.
-        if (!took) {
+        if (!took && opts.probeStalls === true) {
           const h = opts.bound
           if (curL === null) curL = evalE(net)
           let bestL: number = curL
@@ -373,7 +391,7 @@ export function advanceNetwork(
           for (const [px, py] of [[h, 0], [-h, 0], [0, h], [0, -h]] as const) {
             net.junctions[j] = { x: p.x + px, y: p.y + py }
             const L1 = evalE(net)
-            if (L1 < bestL - 1e-12) { bestL = L1; bestP = net.junctions[j]! }
+            if (L1 < bestL - eps(bestL)) { bestL = L1; bestP = net.junctions[j]! }
           }
           if (bestP !== null) {
             net.junctions[j] = bestP

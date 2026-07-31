@@ -1700,7 +1700,7 @@ function liveScoreAt(e: Engine): number {
     new best snapshot, or a mismatch REAPPEARING after the live layout had
     matched — e.g. a walk topology change unlocked junction approach) — never
     per frame. */
-const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; rematch: boolean; lastAdoptKey: string }>()
+const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; rematch: boolean; lastAdoptKey: string; lastWalkKey: string }>()
 
 /** Same wire topology = same edge list (junction indices correspond). */
 const sameTopology = (a: WireNet, b: WireNet): boolean =>
@@ -1903,7 +1903,7 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     }
     // ONE presentation substep at the presentation bound = the per-frame wire
     // travel equals the body travel; solver walks keep their full budget
-    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, ns, bcs, beta, gate }) || routed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, ns, bcs, beta, gate, probeStalls: !presentation }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
     segsByWid.set(wid, netEval(w.net, terms, fs, ns, bcs, beta).segs)
   }
@@ -1920,7 +1920,7 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
 function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: LayoutSearch): boolean {
   search.sync(e, pinned)
   const best = search.best()
-  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, rematch: false, lastAdoptKey: '' }
+  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, rematch: false, lastAdoptKey: '', lastWalkKey: '' }
   searchFrameState.set(e, st)
   let approached = false
   let owned: ReadonlySet<WireId> | null = null
@@ -1946,7 +1946,16 @@ function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: La
     st.approach = false
     st.rematch = true
   }
-  const walked = walkWires(e, true, owned)
+  // WALK REST CERTIFICATE (exact-snapshot, self-healing — the same pattern as
+  // the interactive rest certificate): the walk is a deterministic function
+  // of body poses + wire nets + frame/scale, so if the LAST walk on exactly
+  // this state moved nothing, re-running it is a proven no-op — and at rest
+  // it was the whole frame cost (measured 46 ms/frame of re-derived seeds,
+  // gates, separation grids, and tangent graphs concluding "nothing to do").
+  // Any mutation from any path changes the key and the walk resumes.
+  const walkKey = approached ? '' : liveKey(e)
+  const walked = !approached && walkKey === st.lastWalkKey ? false : walkWires(e, true, owned)
+  st.lastWalkKey = !walked && !approached ? walkKey : ''
   const acted = approached || walked
   if (!acted) {
     // live rest: offer the layout to the searcher once per configuration

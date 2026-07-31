@@ -327,6 +327,27 @@ export function solveEdgeCurve(
     }),
     bounds: frameNear ? ns.bounds : null, R: ns.R, slope: ns.slope,
   }
+  // EXACT MEMO. The solve is a pure function of (boundary data, hugs, the
+  // prefiltered discs, the frame when in reach, R, slope, β) — everything
+  // else is provably irrelevant to every candidate it evaluates. Interactive
+  // frames re-solve every wire against identical inputs whenever nothing
+  // moved (the walk's separation grids, its junction probes, the renderer),
+  // so the memo turns a resting frame's wire work into key lookups. A memo,
+  // not state: hits are bit-identical to recomputation, and the table drops
+  // wholesale at the size cap.
+  const key: (string | number)[] = [
+    u === null ? 'n' : `${u.p.x},${u.p.y},${u.n.x},${u.n.y}`,
+    v === null ? 'n' : `${v.p.x},${v.p.y},${v.n.x},${v.n.y}`,
+    start.x, start.y, end.x, end.y, ns.R, ns.slope, beta,
+    frameNear && ns.bounds !== null ? `${ns.bounds.minX},${ns.bounds.minY},${ns.bounds.maxX},${ns.bounds.maxY}` : 'nf',
+  ]
+  for (const h of hugs) key.push(h.c.x, h.c.y, h.r, h.from, h.sweep)
+  key.push('|')
+  for (const D of near.discs) key.push(D.c.x, D.c.y, D.r)
+  const memoKey = key.join(';')
+  const hit = solveMemo.get(memoKey)
+  if (hit !== undefined) return hit
+
   // Fixed-budget deterministic coordinate descent; when no filtered disc and
   // no frame wall is in reach the seed already minimizes (tension+bending is
   // what built it), so the budget is spent only where the nearness term acts.
@@ -437,8 +458,15 @@ export function solveEdgeCurve(
     for (let j = 1; j <= K; j++) anchors[j - 1] = A[j]!
   }
   const cubics = chainThroughAnchors(u, v, [a0, ...anchors, a1])
-  return { cubics, pts: sampleCubics(cubics), anchors }
+  const result = { cubics, pts: sampleCubics(cubics), anchors }
+  if (solveMemo.size >= SOLVE_MEMO_CAP) solveMemo.clear()
+  solveMemo.set(memoKey, result)
+  return result
 }
+
+/** Pure-function memo for `solveEdgeCurve` (see the EXACT MEMO note there). */
+const solveMemo = new Map<string, { cubics: Cubic[]; pts: Vec2[]; anchors: Vec2[] }>()
+const SOLVE_MEMO_CAP = 16384
 
 /**
  * THE NEARNESS SPACE (energy-drawn wires, USER-confirmed design 2026-07-31):
