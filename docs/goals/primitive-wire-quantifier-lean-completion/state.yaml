@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T004
+active_task: T005
 
 tasks:
   - id: T001
@@ -214,7 +214,7 @@ tasks:
   - id: T004
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 3: rebuild sever/join as generic signature-indexed partition/merge."
     inputs:
@@ -245,11 +245,36 @@ tasks:
     stop_if:
       - "Generic soundness would require Model.reify."
       - "A displaced iota authority would remain."
-    receipt: null
+    receipt:
+      result: done
+      harness: codex
+      commit: 648f494
+      summary: "Rebuilt wire sever/join as generic signature-indexed partition/merge, made the selected sever scope and comparable outer/inner join scopes authoritative, proved both operations sound over every PreModel without reification, migrated all consumers, and deleted the iota-only facade and modules."
+      changed_files:
+        - VisualProof.lean
+        - VisualProof/Diagram/Concrete/WirePartition.lean
+        - VisualProof/Diagram/Concrete/WirePartitionSemantics.lean
+        - VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean
+        - VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean
+        - VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean
+        - VisualProof/Rule/WirePrimitive.lean
+        - VisualProof/Rule/WirePrimitive/Partition.lean
+        - VisualProof/Rule/WirePrimitive/PartitionFixtures.lean
+        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
+      commands:
+        - cmd: lake build
+          status: pass
+        - cmd: npm run formal:size
+          status: pass
+        - cmd: "! rg -n \"WireQuantifierIota|iota_sever_sound|iota_join_sound|Rule.WireQuantifier\" VisualProof VisualProof.lean"
+          status: pass
+        - cmd: "! rg -n \"Model\\.reify|sorry|admit\" VisualProof/Diagram/Concrete/WirePartition.lean VisualProof/Diagram/Concrete/WirePartitionSemantics.lean VisualProof/Rule/WirePrimitive/Partition.lean"
+          status: pass
+      review: "PASS: exact interfaces, generic signatures, endpoint partitioning, moved-endpoint enclosure, selected-scope polarity, comparable equal-signature outer-scope merge, inner-scope join polarity, generic PreModel soundness, fixture coverage, obsolete-authority deletion, full build, size gate, and unrelated-file preservation verified."
   - id: T005
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 4: replace identity retargeting with derived substitution."
     inputs:
