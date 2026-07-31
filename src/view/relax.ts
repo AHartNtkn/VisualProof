@@ -1,13 +1,13 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, StoredFrame, WireView } from './engine'
-import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace, route, segSoftCost } from './route/freespace'
-import type { Disc as RouteDisc, Bounds, FreeSpace, HugArc } from './route/freespace'
+import type { Body, Engine, StoredFrame, WireSpaces, WireView } from './engine'
+import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, drawnObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
+import { mkFreeSpace, route } from './route/freespace'
+import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
 import { advanceNetwork, netEval, solveTarget, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
-import type { CurveBC } from './route/curve'
-import { edgeCurvePts, rodCost } from './route/curve'
+import type { CurveBC, NearSpace } from './route/curve'
+import { chainThroughAnchors, curveEnergy, sampleCubics, segNearness, solveEdgeCurve } from './route/curve'
 import { layoutScore } from './optimize'
 import { mkScoreState, applyMove } from './score-delta'
 import type { ScoreState } from './score-delta'
@@ -737,6 +737,29 @@ export function wireEnergy(e: Engine): number {
   return wireEnergyCapture(e).E
 }
 
+/** Per-wire nearness spaces (energy-drawn wires): DRAWN node discs + the
+    wire's DRAWN forbidden cut circles + the frame, under the ONE clearance
+    law (WIREP.sepR/sepSlope — the same falloff wires pay against each
+    other). Shares the composed disc arrays per forbidden-set signature. */
+export function wireNearSpaces(e: Engine, spaces: WireSpaces): (wid: WireId) => NearSpace {
+  const nodes = drawnObstacles(e)
+  const bounds = routeBounds(e)
+  const R = WIREP.sepR * e.scale
+  const slope = WIREP.sepSlope
+  const plain: NearSpace = { discs: nodes, bounds, R, slope }
+  const bySet = new Map<readonly RouteDisc[], NearSpace>()
+  return (wid: WireId): NearSpace => {
+    const forb = spaces.forbiddenDrawn.get(wid)
+    if (forb === undefined || forb.length === 0) return plain
+    let ns = bySet.get(forb)
+    if (ns === undefined) {
+      ns = { discs: [...nodes, ...forb], bounds, R, slope }
+      bySet.set(forb, ns)
+    }
+    return ns
+  }
+}
+
 /** Region-circle patch band (drawn units): a probe displaces one coordinate by
     FD_PROBE, and a minimal enclosing circle's centre and radius are each
     1-Lipschitz in a support disc's position, so the circle boundary moves at
@@ -745,14 +768,16 @@ export function wireEnergy(e: Engine): number {
     the surcharge delta. 2× safety margin. */
 const PROBE_BAND = 4 * FD_PROBE
 
-/** A routed edge's frozen path: its interior waypoints at the captured
-    optimum (endpoints re-derived live at probe time). */
-export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly hugs: readonly HugArc[] }
+/** A routed edge's frozen curve: its SOLVED interior anchors at the captured
+    optimum (endpoints re-derived live at probe time; the family chain through
+    live endpoints + frozen anchors is the envelope-theorem majorizer). */
+export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly anchors: readonly Vec2[] }
 
 /** Exact wire energy PLUS the frozen-path capture the probe evaluator needs and
     the drawn curve segments (the same ones `segSeparationE` sums over). */
 export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[] } {
   const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = rodBeta(e)
   let E = 0
   const edges: FrozenEdge[] = []
@@ -761,15 +786,16 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
     const fs = spaces.space(wid)
+    const ns = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const pu = pos(u), pv = pos(v)
       const r = route(fs, pu, pv)
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
-      E += rodCost(pts, fs, beta)
-      edges.push({ wid, u, v, hugs: r.hugs })
-      for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
+      const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, ns, beta)
+      E += curveEnergy(sol.pts, ns, beta)
+      edges.push({ wid, u, v, anchors: sol.anchors })
+      for (let i = 0; i + 1 < sol.pts.length; i++) segs.push({ wid, a: sol.pts[i]!, b: sol.pts[i + 1]! })
     }
   }
   return { E: E + segSeparationE(segs, e.scale), edges, segs }
@@ -789,27 +815,29 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
  */
 export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): number {
   const spaces = wireRouteSpaces(e)
-  const nodes = routeObstacles(e)
-  const bounds = routeBounds(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = rodBeta(e)
   let E = 0
   const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
-  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[]; space: { discs: readonly RouteDisc[]; bounds: Bounds | null } }>()
+  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[]; ns: NearSpace }>()
   for (const fe of edges) {
     let c = perWire.get(fe.wid)
     if (c === undefined) {
       const w = e.wires.get(fe.wid)!
-      const forb = spaces.forbidden.get(fe.wid)
       c = {
         terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions,
-        space: { discs: forb !== undefined && forb.length > 0 ? [...nodes, ...forb] : nodes, bounds },
+        ns: nsOf(fe.wid),
       }
       perWire.set(fe.wid, c)
     }
     const cc = c
     const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
-    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, pos(fe.u), pos(fe.v), fe.hugs, Math.sqrt(beta))
-    E += rodCost(pts, cc.space, beta)
+    const bu = fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null
+    const bv = fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null
+    // a clamped end's rim anchor REPLACES the terminal point, exactly as the
+    // solve's own chain construction does — same anchors ⇒ same curve
+    const pts = sampleCubics(chainThroughAnchors(bu, bv, [bu !== null ? bu.p : pos(fe.u), ...fe.anchors, bv !== null ? bv.p : pos(fe.v)]))
+    E += curveEnergy(pts, cc.ns, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
   return E + segSeparationE(segs, e.scale)
@@ -854,6 +882,8 @@ export type FrozenState = {
   readonly ridBandSegs: Map<RegionId, number[]>
   readonly grid: SepGrid
   readonly R: number
+  /** Nearness falloff slope (WIREP.sepSlope) — the one clearance law. */
+  readonly nearSlope: number
   readonly beta: number
   readonly sc: number
   readonly bounds: Bounds | null
@@ -869,6 +899,7 @@ export type FrozenState = {
     exact eval (the routing solve), so it replaces the step's wireEnergyCapture. */
 export function mkFrozenState(e: Engine): FrozenState {
   const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const bounds = routeBounds(e)
   const beta = rodBeta(e)
   const sc = e.scale
@@ -883,6 +914,7 @@ export function mkFrozenState(e: Engine): FrozenState {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
     const fs = spaces.space(wid)
+    const ns = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     const wi = wires.length
@@ -892,10 +924,10 @@ export function mkFrozenState(e: Engine): FrozenState {
     for (const [u, v] of w.net.edges) {
       const pu = pos(u), pv = pos(v)
       const r = route(fs, pu, pv)
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
-      rod += rodCost(pts, fs, beta)
-      edges.push({ wid, u, v, hugs: r.hugs })
-      for (let i = 0; i + 1 < pts.length; i++) { segs.push({ wid, a: pts[i]!, b: pts[i + 1]! }); segWire.push(wi) }
+      const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, ns, beta)
+      rod += curveEnergy(sol.pts, ns, beta)
+      edges.push({ wid, u, v, anchors: sol.anchors })
+      for (let i = 0; i + 1 < sol.pts.length; i++) { segs.push({ wid, a: sol.pts[i]!, b: sol.pts[i + 1]! }); segWire.push(wi) }
     }
     wires.push({ wid, edges, segStart: start, segEnd: segs.length, rod })
     rodTotal += rod
@@ -907,14 +939,14 @@ export function mkFrozenState(e: Engine): FrozenState {
     if (b.kind === 'ref' || b.kind === 'atom' || b.kind === 'identity') {
       obstacle.set(b.id, {
         c: { x: b.pos.x, y: b.pos.y },
-        r: (b.discR + ROUTE_CLEAR) * sc,
+        r: b.discR * sc,
       })
     }
   }
   const regionDiscs = new Map<RegionId, RouteDisc>()
   for (const [rid, g] of e.regions) {
     if (e.d.regions[rid]!.kind === 'sheet') continue
-    regionDiscs.set(rid, { c: { x: g.center.x, y: g.center.y }, r: g.radius + ROUTE_CLEAR * sc })
+    regionDiscs.set(rid, { c: { x: g.center.x, y: g.center.y }, r: g.radius })
   }
   const ridWires = new Map<RegionId, number[]>()
   for (let wi = 0; wi < wires.length; wi++) {
@@ -933,11 +965,12 @@ export function mkFrozenState(e: Engine): FrozenState {
       const cap = wires[wi]!
       for (let si = cap.segStart; si < cap.segEnd; si++) {
         const seg = segs[si]!
-        const d0 = Math.hypot(seg.a.x - D.c.x, seg.a.y - D.c.y)
-        const d1 = Math.hypot(seg.b.x - D.c.x, seg.b.y - D.c.y)
-        const lo = Math.min(d0, d1) - Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y)
-        const hi = Math.max(d0, d1)
-        if (lo <= D.r + PROBE_BAND && hi >= D.r - PROBE_BAND) band.push(si)
+        // nearness reaches R beyond the boundary and ALL depths inside (the
+        // quadratic keeps a nonzero gradient at any depth), so the band is
+        // every seg whose MIDPOINT (the quadrature point) is within R of the
+        // capture disc, plus the probe-scale Lipschitz margin.
+        const mx = (seg.a.x + seg.b.x) / 2, my = (seg.a.y + seg.b.y) / 2
+        if (Math.hypot(mx - D.c.x, my - D.c.y) <= D.r + R + PROBE_BAND) band.push(si)
       }
     }
     ridBandSegs.set(rid, band)
@@ -955,7 +988,7 @@ export function mkFrozenState(e: Engine): FrozenState {
   return {
     segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle,
     forbiddenRids: spaces.forbiddenRids, regionDiscs, ridWires, ridBandSegs,
-    grid, R, beta, sc, bounds,
+    grid, R, nearSlope: WIREP.sepSlope, beta, sc, bounds,
     frozenTotal: rodTotal + sepTotal, wireSep, seen: new Int32Array(segs.length), stamp: 0,
   }
 }
@@ -1019,26 +1052,32 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
   let dRod = 0
   const newSegs: WireSeg[] = []
 
-  // (1) rebuild the curves of wires terminating on bodyId; full rodCost delta.
-  // current inflated forbidden circles (regions were recomputed by the caller)
+  // (1) rebuild the curves of wires terminating on bodyId (frozen anchors,
+  // live endpoints — the envelope majorizer); full curveEnergy delta against
+  // the LIVE drawn discs (regions were recomputed by the caller).
   const curRegionDisc = (rid: RegionId): RouteDisc => {
     const g = e.regions.get(rid)!
-    return { c: g.center, r: g.radius + ROUTE_CLEAR * fst.sc }
+    return { c: g.center, r: g.radius }
   }
   if (affSet !== null) {
-    const nodes = routeObstacles(e)
+    const nodes = drawnObstacles(e)
     for (const wi of affSet) {
       const cap = fst.wires[wi]!
       const w = e.wires.get(cap.wid)!
       const terms = wireTerminalPoints(e, w)
       const bcs = wireTerminalBCs(e, w)
       const rids = fst.forbiddenRids.get(cap.wid) ?? []
-      const space = { discs: rids.length > 0 ? [...nodes, ...rids.map(curRegionDisc)] : nodes, bounds: fst.bounds }
+      const ns: NearSpace = {
+        discs: rids.length > 0 ? [...nodes, ...rids.map(curRegionDisc)] : nodes,
+        bounds: fst.bounds, R: fst.R, slope: fst.nearSlope,
+      }
       const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
       let newRod = 0
       for (const fe of cap.edges) {
-        const pts = edgeCurvePts(fe.u < bcs.length ? bcs[fe.u]! : null, fe.v < bcs.length ? bcs[fe.v]! : null, pos(fe.u), pos(fe.v), fe.hugs, Math.sqrt(fst.beta))
-        newRod += rodCost(pts, space, fst.beta)
+        const bu = fe.u < bcs.length ? bcs[fe.u]! : null
+        const bv = fe.v < bcs.length ? bcs[fe.v]! : null
+        const pts = sampleCubics(chainThroughAnchors(bu, bv, [bu !== null ? bu.p : pos(fe.u), ...fe.anchors, bv !== null ? bv.p : pos(fe.v)]))
+        newRod += curveEnergy(pts, ns, fst.beta)
         for (let i = 0; i + 1 < pts.length; i++) newSegs.push({ wid: cap.wid, a: pts[i]!, b: pts[i + 1]! })
       }
       dRod += newRod - cap.rod
@@ -1054,23 +1093,23 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
     const b = e.bodies.get(bodyId)!
     if (b.pos.x !== baseDisc.c.x || b.pos.y !== baseDisc.c.y) {
       const r = baseDisc.r, o = baseDisc.c, p = b.pos
-      const oldSpace = { discs: [baseDisc], bounds: null }
-      const newSpace = { discs: [{ c: p, r }], bounds: null }
-      // A segment's surcharge is nonzero only where it enters the disc, so a
-      // segment whose bbox is farther than r from BOTH the old and new centre
-      // contributes exactly 0 to the difference — skip it (bbox-to-point clamp).
-      const r2 = r * r
+      const oldD = baseDisc
+      const newD = { c: p, r }
+      // A segment's nearness against this disc is nonzero only within R of its
+      // boundary, so a segment whose bbox is farther than r+R from BOTH the
+      // old and new centre contributes exactly 0 to the difference — skip it.
+      const reach = (r + fst.R) * (r + fst.R)
       const farFrom = (seg: WireSeg, c: Vec2): boolean => {
         const x0 = Math.min(seg.a.x, seg.b.x), x1 = Math.max(seg.a.x, seg.b.x)
         const y0 = Math.min(seg.a.y, seg.b.y), y1 = Math.max(seg.a.y, seg.b.y)
         const dx = c.x - Math.max(x0, Math.min(c.x, x1)), dy = c.y - Math.max(y0, Math.min(c.y, y1))
-        return dx * dx + dy * dy > r2
+        return dx * dx + dy * dy > reach
       }
       for (let s = 0; s < fst.segs.length; s++) {
         if (affSet !== null && affSet.has(fst.segWire[s]!)) continue
         const seg = fst.segs[s]!
         if (farFrom(seg, o) && farFrom(seg, p)) continue
-        dRod += segSoftCost(seg.a, seg.b, newSpace) - segSoftCost(seg.a, seg.b, oldSpace)
+        dRod += segNearness(seg.a, seg.b, newD, fst.R, fst.nearSlope) - segNearness(seg.a, seg.b, oldD, fst.R, fst.nearSlope)
       }
     }
   }
@@ -1088,12 +1127,10 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
     const newD = curRegionDisc(rid)
     const w = Math.hypot(newD.c.x - oldD.c.x, newD.c.y - oldD.c.y) + Math.abs(newD.r - oldD.r)
     if (w === 0) continue
-    const oldSpace = { discs: [oldD], bounds: null }
-    const newSpace = { discs: [newD], bounds: null }
     const patchSeg = (si: number): void => {
       if (affSet !== null && affSet.has(fst.segWire[si]!)) return
       const seg = fst.segs[si]!
-      dRod += segSoftCost(seg.a, seg.b, newSpace) - segSoftCost(seg.a, seg.b, oldSpace)
+      dRod += segNearness(seg.a, seg.b, newD, fst.R, fst.nearSlope) - segNearness(seg.a, seg.b, oldD, fst.R, fst.nearSlope)
     }
     if (w <= PROBE_BAND) {
       for (const si of fst.ridBandSegs.get(rid) ?? []) patchSeg(si)
@@ -1813,24 +1850,26 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     other wires' segments (they do not move while this wire walks). */
 function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | null = null): boolean {
   const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = rodBeta(e), sc = e.scale, R = WIREP.sepR * sc
   // the walk moves VISIBLE junction state: presentation frames use the one
   // presentation bound (the same per-frame pace every visible DOF gets);
   // solver walks keep the full trust region (descent is optimization, not
   // simulation — 2026-07-25)
   const bound = presentation ? (WIREP.travelCap / PRESENT_SLOW) * sc : WIREP.travelCap * sc
-  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[]; fs: FreeSpace }[] = []
+  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[]; fs: FreeSpace; ns: NearSpace }[] = []
   const segsByWid = new Map<WireId, Seg2[]>()
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
     const fsW = spaces.space(wid)
+    const nsW = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
-    walkers.push({ wid, w, terms, bcs, fs: fsW })
-    segsByWid.set(wid, netEval(w.net, terms, fsW, bcs, beta).segs)
+    walkers.push({ wid, w, terms, bcs, fs: fsW, ns: nsW })
+    segsByWid.set(wid, netEval(w.net, terms, fsW, nsW, bcs, beta).segs)
   }
   let routed = false
-  for (const { wid, w, terms, bcs, fs } of walkers) {
+  for (const { wid, w, terms, bcs, fs, ns } of walkers) {
     if (skip !== null && skip.has(wid)) continue
     // grid of every OTHER wire's current segments (fixed while this wire walks).
     const others: Seg2[] = []
@@ -1840,7 +1879,7 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     let stamp = 0
     const inv = 1 / R
     const gate = (n: WireNet): number => {
-      const { L, segs } = netEval(n, terms, fs, bcs, beta)
+      const { L, segs } = netEval(n, terms, fs, ns, bcs, beta)
       let sep = 0
       for (const s of segs) {
         stamp++
@@ -1864,9 +1903,9 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     }
     // ONE presentation substep at the presentation bound = the per-frame wire
     // travel equals the body travel; solver walks keep their full budget
-    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, bcs, beta, gate }) || routed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, ns, bcs, beta, gate }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
-    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta).segs)
+    segsByWid.set(wid, netEval(w.net, terms, fs, ns, bcs, beta).segs)
   }
   return routed
 }

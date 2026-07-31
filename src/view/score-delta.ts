@@ -1,11 +1,12 @@
 import type { RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, WireView, WireSpaces } from './engine'
-import { ROUTE_CLEAR, wireRouteSpaces, wireTerminalPoints, wireTerminalBCs } from './engine'
+import { wireRouteSpaces, wireTerminalPoints, wireTerminalBCs } from './engine'
 import { route } from './route/freespace'
 import type { Disc } from './route/freespace'
-import { edgeCurvePts, rodCost } from './route/curve'
-import { rodBeta, contentEnergy, segSeparationBetween } from './relax'
+import { curveEnergy, solveEdgeCurve } from './route/curve'
+import type { NearSpace } from './route/curve'
+import { rodBeta, contentEnergy, segSeparationBetween, wireNearSpaces, WIREP } from './relax'
 import type { FrozenEdge } from './relax'
 
 /**
@@ -81,13 +82,14 @@ const f2 = (a: Vec2, c: Vec2, b: Vec2): number =>
 
 const isObstacle = (kind: string): boolean => kind === 'ref' || kind === 'atom' || kind === 'identity'
 
-/** The engine's current inflated forbidden circles, one per non-sheet region. */
+/** The engine's current DRAWN forbidden circles, one per non-sheet region
+    (the nearness energy measures against drawn geometry; the reach margin in
+    `discReaches` covers the routing clearance). */
 function currentRegionDiscs(e: Engine): Map<RegionId, Disc> {
-  const pad = ROUTE_CLEAR * e.scale
   const out = new Map<RegionId, Disc>()
   for (const [rid, g] of e.regions) {
     if (e.d.regions[rid]!.kind === 'sheet') continue
-    out.set(rid, { c: { x: g.center.x, y: g.center.y }, r: g.radius + pad })
+    out.set(rid, { c: { x: g.center.x, y: g.center.y }, r: g.radius })
   }
   return out
 }
@@ -95,7 +97,7 @@ function currentRegionDiscs(e: Engine): Map<RegionId, Disc> {
 /** Evaluate one wire against ITS routing space: routed rod energy, drawn curve
     segments, and per-edge reach data. The exact per-wire slice of
     `wireEnergyCapture` (relax.ts) — the same route → curve → rodCost pipeline. */
-function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta: number): WireCache {
+function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, ns: NearSpace, beta: number): WireCache {
   const terms = wireTerminalPoints(e, w)
   if (terms.length < 2) return { E: 0, segs: [], edges: [], frozen: [] }
   const fs = spaces.space(wid)
@@ -108,12 +110,12 @@ function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta:
   for (const [u, v] of w.net.edges) {
     const pu = pos(u), pv = pos(v)
     const r = route(fs, pu, pv)
-    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
-    E += rodCost(pts, fs, beta)
-    for (let i = 0; i + 1 < pts.length; i++) segs.push({ a: pts[i]!, b: pts[i + 1]! })
-    frozen.push({ wid, u, v, hugs: r.hugs })
+    const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, ns, beta)
+    E += curveEnergy(sol.pts, ns, beta)
+    for (let i = 0; i + 1 < sol.pts.length; i++) segs.push({ a: sol.pts[i]!, b: sol.pts[i + 1]! })
+    frozen.push({ wid, u, v, anchors: sol.anchors })
     let L = r.cost
-    for (const q of pts) { const fq = f2(pu, q, pv); if (fq > L) L = fq }
+    for (const q of sol.pts) { const fq = f2(pu, q, pv); if (fq > L) L = fq }
     edges.push({ pu, pv, L })
   }
   return { E, segs, edges, frozen }
@@ -123,13 +125,14 @@ function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta:
     recomputed regions. */
 export function mkScoreState(e: Engine): ScoreState {
   const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = rodBeta(e)
   const wires = new Map<WireId, WireCache>()
   const order: WireId[] = []
   const frozen: FrozenEdge[] = []
   let wireETotal = 0
   for (const [wid, w] of e.wires) {
-    const c = evalWire(e, wid, w, spaces, beta)
+    const c = evalWire(e, wid, w, spaces, nsOf(wid), beta)
     wires.set(wid, c)
     order.push(wid)
     wireETotal += c.E
@@ -164,8 +167,14 @@ export type MoveResult = { readonly dE: number; commit(): void; abort(): void }
     for region circles). */
 type MovedDisc = { readonly o: Vec2; readonly ro: number; readonly p: Vec2; readonly rn: number }
 
-const discReaches = (ed: EdgeReach, D: MovedDisc): boolean =>
-  f2(ed.pu, D.o, ed.pv) <= ed.L + 2 * D.ro || f2(ed.pu, D.p, ed.pv) <= ed.L + 2 * D.rn
+/** Unchanged-wire skip test, with the energy-drawn margin M: nearness reads a
+    disc up to R beyond its boundary, and the curve solve's descent can move
+    an anchor by at most Σ(R/2ᵏ) < 2R off its seed, so a disc farther than
+    L + 2(r + 3R) from the edge's ellipse cannot touch the seed, any state the
+    descent visits, or the nearness reach of either — the wire's solved curve
+    and energy are bit-identical. */
+const discReaches = (ed: EdgeReach, D: MovedDisc, M: number): boolean =>
+  f2(ed.pu, D.o, ed.pv) <= ed.L + 2 * (D.ro + M) || f2(ed.pu, D.p, ed.pv) <= ed.L + 2 * (D.rn + M)
 
 /**
  * Exact energy delta for a body pose change (position and/or rotation).
@@ -189,14 +198,17 @@ export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>,
     if (hit) affected.add(wid)
   }
 
-  // moved node obstacle discs: old centre (cached), new centre (live).
+  // moved node obstacle discs: old centre (cached), new centre (live). The
+  // reach margin M covers both the routing clearance (< R) and the nearness
+  // reach + solver wander, so the DRAWN radius is the right base.
+  const M = 3 * WIREP.sepR * sc
   const movedObs: MovedDisc[] = []
   for (const id of moved) {
     const b = e.bodies.get(id)
     if (b === undefined || !isObstacle(b.kind)) continue
     const o = st.pos.get(id)!
     if (o.x === b.pos.x && o.y === b.pos.y) continue // rotation-only: disc unmoved
-    const r = (b.discR + ROUTE_CLEAR) * sc
+    const r = b.discR * sc
     movedObs.push({ o, ro: r, p: b.pos, rn: r })
   }
 
@@ -221,12 +233,12 @@ export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>,
       const edges = st.wires.get(wid)!.edges
       let hit = false
       for (const ed of edges) {
-        for (const D of movedObs) { if (discReaches(ed, D)) { hit = true; break } }
+        for (const D of movedObs) { if (discReaches(ed, D, M)) { hit = true; break } }
         if (hit) break
         if (changedRegions.size > 0) {
           for (const rid of st.forbiddenRids.get(wid) ?? []) {
             const D = changedRegions.get(rid)
-            if (D !== undefined && discReaches(ed, D)) { hit = true; break }
+            if (D !== undefined && discReaches(ed, D, M)) { hit = true; break }
           }
         }
         if (hit) break
@@ -243,8 +255,9 @@ export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>,
   let dWireE = 0
   if (affected.size > 0) {
     const spaces = wireRouteSpaces(e)
+    const nsOf = wireNearSpaces(e, spaces)
     for (const wid of affected) {
-      const c = evalWire(e, wid, e.wires.get(wid)!, spaces, beta)
+      const c = evalWire(e, wid, e.wires.get(wid)!, spaces, nsOf(wid), beta)
       newWire.set(wid, c)
       dWireE += c.E - st.wires.get(wid)!.E
     }

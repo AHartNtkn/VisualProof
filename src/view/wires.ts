@@ -1,9 +1,10 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { DISC_R, wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
+import { wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { route, type FreeSpace } from './route/freespace'
-import { edgeCurveCubics, sampleCubics } from './route/curve'
+import { rodBeta, wireNearSpaces } from './relax'
+import { solveEdgeCurve } from './route/curve'
 import type { Cubic } from './route/curve'
 
 /**
@@ -61,17 +62,20 @@ export function computeLegs(e: Engine): LegGeom[] {
 
 function computeLegsUncached(e: Engine): LegGeom[] {
   const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
+  const beta = rodBeta(e)
   const out: LegGeom[] = []
   for (const [wid, w] of e.wires) {
     const fs: FreeSpace = spaces.space(wid)
+    const ns = nsOf(wid)
     const terms = wireTerminalPoints(e, w)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const pu = pos(u), pv = pos(v)
       const rt = route(fs, pu, pv)
-      const cubics = edgeCurveCubics(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, rt.hugs, DISC_R * e.scale)
-      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: sampleCubics(cubics), cubics })
+      const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, rt.hugs, ns, beta)
+      out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: sol.pts, cubics: sol.cubics })
     }
   }
   return out

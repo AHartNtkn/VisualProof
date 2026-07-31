@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
-import { DISC_R, mkEngine, escapePoint, routeObstacles, routeBounds, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
+import { DISC_R, mkEngine, escapePoint, wireRouteSpaces, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { wireEnergy, settleStep, recomputeRegions, resolveOverlaps, segSeparationE } from '../../src/view/relax'
+import { wireEnergy, wireNearSpaces, settleStep, recomputeRegions, resolveOverlaps, segSeparationE } from '../../src/view/relax'
 import type { Vec2 } from '../../src/view/vec'
-import { mkFreeSpace, route } from '../../src/view/route/freespace'
-import { edgeCurvePts, rodCost } from '../../src/view/route/curve'
+import { route } from '../../src/view/route/freespace'
+import { curveEnergy, solveEdgeCurve } from '../../src/view/route/curve'
 import { computeLegs } from '../../src/view/wires'
 import { identityJunctionScene, identityRefScene } from '../fixtures/zero-signature'
 
@@ -22,25 +22,27 @@ import { identityJunctionScene, identityRefScene } from '../fixtures/zero-signat
  */
 
 /** The expected energy recomputed from primitives exactly as the renderer
-    assembles the stroke: per edge, the Hermite curve through the route
-    waypoints with the terminal boundary conditions, charged by rodCost. */
+    assembles the stroke: per edge, the SOLVED energy-drawn curve with the
+    terminal boundary conditions, charged by curveEnergy. */
 function drawnWireCost(e: Engine): number {
-  const space = { discs: routeObstacles(e), bounds: routeBounds(e) }
-  const fs = mkFreeSpace(space.discs, space.bounds)
+  const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = (DISC_R * e.scale) ** 2
   let E = 0
   const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fs = spaces.space(wid)
+    const ns = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
       const pu = pos(u), pv = pos(v)
       const r = route(fs, pu, pv)
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
-      E += rodCost(pts, space, beta)
-      for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
+      const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, ns, beta)
+      E += curveEnergy(sol.pts, ns, beta)
+      for (let i = 0; i + 1 < sol.pts.length; i++) segs.push({ wid, a: sol.pts[i]!, b: sol.pts[i + 1]! })
     }
   }
   return E + segSeparationE(segs, e.scale)

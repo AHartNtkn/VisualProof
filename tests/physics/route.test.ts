@@ -12,6 +12,7 @@ import { advanceNetwork, contract, netLength, netPaths, solveTarget, trySplit, t
  */
 
 const empty = mkFreeSpace([])
+const emptyNs = { discs: [], bounds: null, R: 5, slope: 1.4 }
 
 describe('free-space routing', () => {
   it('routes around a hard obstacle disc — never through it, with a bounded detour', () => {
@@ -79,11 +80,11 @@ describe('topology operations are real graph operations', () => {
   it('a degree-4 vertex splits only by the descending partition derivative, and the split lowers routed length', () => {
     const terms: Vec2[] = [{ x: -20, y: -6 }, { x: -20, y: 6 }, { x: 20, y: -6 }, { x: 20, y: 6 }]
     const net: WireNet = { junctions: [{ x: 0, y: 0 }], edges: [[0, 4], [1, 4], [2, 4], [3, 4]] }
-    const L0 = netLength(net, terms, empty)
-    expect(trySplit(net, terms, empty), 'the wide rectangle star must split').toBe(true)
+    const L0 = netLength(net, terms, empty, emptyNs)
+    expect(trySplit(net, terms, empty, emptyNs), 'the wide rectangle star must split').toBe(true)
     expect(net.junctions.length).toBe(2)
     expect(net.edges.length, 'four terminal edges + one connector').toBe(5)
-    expect(netLength(net, terms, empty)).toBeLessThan(L0)
+    expect(netLength(net, terms, empty, emptyNs)).toBeLessThan(L0)
     // and it converges to the Steiner pairing: left terminals on one junction
     solveTarget(net, terms, empty)
     const nT = 4
@@ -97,7 +98,7 @@ describe('topology operations are real graph operations', () => {
   it('a degree-3 junction never splits (both split sides need degree ≥ 3)', () => {
     const terms: Vec2[] = [{ x: 0, y: 20 }, { x: -17, y: -10 }, { x: 17, y: -10 }]
     const net: WireNet = { junctions: [{ x: 0, y: 0 }], edges: [[0, 3], [1, 3], [2, 3]] }
-    expect(trySplit(net, terms, empty)).toBe(false)
+    expect(trySplit(net, terms, empty, emptyNs)).toBe(false)
   })
 })
 
@@ -106,15 +107,15 @@ describe('presentation continuation', () => {
     const terms: Vec2[] = [{ x: 0, y: 20 }, { x: -17.32, y: -10 }, { x: 17.32, y: -10 }]
     const net: WireNet = { junctions: [{ x: 15, y: 15 }], edges: [[0, 3], [1, 3], [2, 3]] }
     const before = { ...net.junctions[0]! }
-    advanceNetwork(net, terms, empty, { substeps: 1, bound: 0.5 })
+    advanceNetwork(net, terms, empty, { substeps: 1, bound: 0.5, ns: emptyNs })
     const after = net.junctions[0]!
     const moved = Math.hypot(after.x - before.x, after.y - before.y)
     expect(moved, 'one substep moves at most the bound').toBeLessThanOrEqual(0.5 + 1e-9)
     expect(moved).toBeGreaterThan(0)
     // run to rest
-    for (let i = 0; i < 400; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5 })) break
+    for (let i = 0; i < 400; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs })) break
     const rest = JSON.stringify(net)
-    expect(advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5 }), 'settled input is a no-op').toBe(false)
+    expect(advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs }), 'settled input is a no-op').toBe(false)
     expect(JSON.stringify(net), 'no-op is EXACT').toBe(rest)
   })
 
@@ -122,7 +123,7 @@ describe('presentation continuation', () => {
     // wide rectangle, correct columns pairing
     let terms: Vec2[] = [{ x: -20, y: -6 }, { x: -20, y: 6 }, { x: 20, y: -6 }, { x: 20, y: 6 }]
     const net: WireNet = { junctions: [{ x: -10, y: 0 }, { x: 10, y: 0 }], edges: [[0, 4], [1, 4], [2, 5], [3, 5], [4, 5]] }
-    for (let i = 0; i < 200; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5 })) break
+    for (let i = 0; i < 200; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs })) break
     // PINCH the wire flat (the user's squeeze gesture): width → ~0 drives the
     // junctions together — the connector reaches numerical zero and the edge
     // record is deleted; then growing the rows apart re-splits the degree-4
@@ -134,16 +135,16 @@ describe('presentation continuation', () => {
       const t = step / 120
       const w = 20 - 19.8 * t
       terms = [{ x: -w, y: -6 }, { x: -w, y: 6 }, { x: w, y: -6 }, { x: w, y: 6 }]
-      advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5 })
+      advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs })
     }
     // pull apart vertically: rows pairing must emerge
     for (let step = 0; step <= 120; step++) {
       const t = step / 120
       const h = 6 + 14 * t
       terms = [{ x: -0.2, y: -h }, { x: -0.2, y: h }, { x: 0.2, y: -h }, { x: 0.2, y: h }]
-      advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5 })
+      advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs })
     }
-    for (let i = 0; i < 400; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5 })) break
+    for (let i = 0; i < 400; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs })) break
     expect(net.junctions.length, 're-split into two junctions').toBe(2)
     const side = (j: number): string => net.edges
       .filter(([u, v]) => u === 4 + j || v === 4 + j)
@@ -271,7 +272,7 @@ describe('routing feasibility composes with the network', () => {
     const fs = mkFreeSpace([{ c: { x: 0, y: 0 }, r: 4 }])
     const terms: Vec2[] = [{ x: -15, y: -8 }, { x: -15, y: 8 }, { x: 16, y: 0 }]
     const net: WireNet = { junctions: [{ x: -8, y: 0 }], edges: [[0, 3], [1, 3], [2, 3]] }
-    for (let i = 0; i < 300; i++) if (!advanceNetwork(net, terms, fs, { substeps: 20, bound: 0.5 })) break
+    for (let i = 0; i < 300; i++) if (!advanceNetwork(net, terms, fs, { substeps: 20, bound: 0.5, ns: emptyNs })) break
     // routed polyline points ride the disc boundary or stay outside; chords may
     // sag inside only within the ARC_STEP chord band
     const band = 4 * (1 - Math.cos(Math.PI / 16)) + 1e-9

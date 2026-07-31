@@ -614,6 +614,18 @@ export function routeObstacles(e: Engine): Disc[] {
   return out
 }
 
+/** The DRAWN obstacle discs for the nearness energy (energy-drawn wires,
+    2026-07-31): node discs at their drawn radii — no routing clearance folded
+    in, because the standoff is the energy's job, not an inflation's. */
+export function drawnObstacles(e: Engine): Disc[] {
+  const out: Disc[] = []
+  for (const b of e.bodies.values()) {
+    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'identity') continue
+    out.push({ c: b.pos, r: b.discR * e.scale })
+  }
+  return out
+}
+
 /** Per-wire routing spaces (2026-07-30 design): the drawn circle of every cut
     a wire is NOT inside is an obstacle disc for that wire, exactly like a
     node disc — same clearance inflation, same soft surcharge, same tangent-
@@ -625,6 +637,10 @@ export function routeObstacles(e: Engine): Disc[] {
 export type WireSpaces = {
   space(wid: WireId): FreeSpace
   readonly forbidden: ReadonlyMap<WireId, readonly Disc[]>
+  /** The same forbidden circles at their DRAWN radii (no clearance pad) — the
+      nearness energy measures against what the user sees. Shares array
+      identity per forbidden-set signature like `forbidden`. */
+  readonly forbiddenDrawn: ReadonlyMap<WireId, readonly Disc[]>
   /** The region ids behind each wire's forbidden discs (same order, same
       shared-array identity) — the incremental evaluator diffs region circles
       per wire through this. */
@@ -646,8 +662,9 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
     if (e.d.regions[rid]!.kind !== 'sheet') nonSheet.push(rid)
   }
   const pad = ROUTE_CLEAR * e.scale
-  const bySig = new Map<string, { discs: Disc[]; rids: RegionId[] }>()
+  const bySig = new Map<string, { discs: Disc[]; drawn: Disc[]; rids: RegionId[] }>()
   const forbidden = new Map<WireId, readonly Disc[]>()
+  const forbiddenDrawn = new Map<WireId, readonly Disc[]>()
   const forbiddenRids = new Map<WireId, readonly RegionId[]>()
   for (const [wid, w] of e.wires) {
     const allowed = new Set<RegionId>()
@@ -664,10 +681,15 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
           const g = e.regions.get(rid)!
           return { c: { x: g.center.x, y: g.center.y }, r: g.radius + pad }
         }),
+        drawn: forb.map((rid) => {
+          const g = e.regions.get(rid)!
+          return { c: { x: g.center.x, y: g.center.y }, r: g.radius }
+        }),
       }
       bySig.set(key, entry)
     }
     forbidden.set(wid, entry.discs)
+    forbiddenDrawn.set(wid, entry.drawn)
     forbiddenRids.set(wid, entry.rids)
   }
   const nodes = routeObstacles(e)
@@ -676,6 +698,7 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
   const spaces = new Map<readonly Disc[], FreeSpace>()
   return {
     forbidden,
+    forbiddenDrawn,
     forbiddenRids,
     space(wid: WireId): FreeSpace {
       const forb = forbidden.get(wid)
