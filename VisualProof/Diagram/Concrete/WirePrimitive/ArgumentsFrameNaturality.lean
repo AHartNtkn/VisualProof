@@ -6,6 +6,163 @@ namespace VisualProof
 namespace ConcreteWirePrimitive
 
 open ConcreteElaboration
+open ConcreteWireQuantifier
+
+/-- Total carrier used by compiler contexts.  Its removed-wire branch is
+unobservable: retained-context receipts prove every visible id takes the
+canonical retained-image branch. -/
+def ArgumentResult.contextWireMap
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId) : result.checked.val.WireId :=
+  if retained : sourceWire ∉ result.sourceRemovedWires then
+    result.retainedWireImage sourceWire retained
+  else
+    result.targetWire
+
+theorem ArgumentResult.contextWireMap_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.contextWireMap sourceWire =
+      result.retainedWireImage sourceWire retained := by
+  unfold ArgumentResult.contextWireMap
+  rw [dif_pos retained]
+
+theorem ArgumentResult.contextWireMap_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires (result.contextWireMap sourceWire)).sig =
+      (source.val.wires sourceWire).sig := by
+  rw [result.contextWireMap_retained sourceWire retained]
+  exact result.retainedWireImage_signature sourceWire retained
+
+/-- A wire local to a strict ancestor of a localized replacement cannot be
+among the replacement's removed wires. -/
+theorem ArgumentResult.wireAt_strictlyAbove_not_removed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope)
+    (sourceWire : source.val.WireId)
+    (member : sourceWire ∈ source.val.wiresAt outer) :
+    sourceWire ∉ result.sourceRemovedWires := by
+  intro removed
+  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member
+  have localScope := eq_of_beq member.2
+  have actedEnclosesOuter :
+      source.val.Encloses (source.val.wires wire).scope outer := by
+    rw [← localScope]
+    exact localized.removed_enclosed sourceWire removed
+  have same := factor_encloses_antisymm definitions source.val
+    source.property outerEncloses actedEnclosesOuter
+  exact strict same
+
+/-- At a strict ancestor of the acted scope, ordered local wire identifiers
+are exactly the canonical images of the source identifiers. -/
+theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    result.checked.val.wiresAt (result.regionImage outer) =
+      (source.val.wiresAt outer).map result.contextWireMap := by
+  rw [result.wiresAt_decomposition outer]
+  have retainedFilter :
+      (source.val.wiresAt outer).filter
+          (fun sourceWire =>
+            decide (sourceWire ∉ result.sourceRemovedWires)) =
+        source.val.wiresAt outer := by
+    apply List.filter_eq_self.mpr
+    intro sourceWire member
+    exact decide_eq_true
+      (result.wireAt_strictlyAbove_not_removed localized outer
+        outerEncloses strict sourceWire member)
+  have headEmpty :
+      (Data.Finite.allFin 1).filter (fun _head =>
+          retainedRegion source (source.val.wires wire).scope ==
+            retainedRegion source outer) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro _head _member accepted
+    apply strict
+    apply (Internal.noRegionRemovalEquiv source).injective
+    rw [← retainedRegion_eq_noRegionRemovalEquiv,
+      ← retainedRegion_eq_noRegionRemovalEquiv]
+    exact (eq_of_beq accepted).symm
+  have localEmpty :
+      (Data.Finite.allFin result.spec.localCount).filter (fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source outer) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro fresh _member accepted
+    have localExact : result.spec.localScope fresh = outer := by
+      apply (Internal.noRegionRemovalEquiv source).injective
+      rw [← retainedRegion_eq_noRegionRemovalEquiv,
+        ← retainedRegion_eq_noRegionRemovalEquiv]
+      exact eq_of_beq accepted
+    have actedEnclosesOuter :
+        source.val.Encloses (source.val.wires wire).scope outer := by
+      rw [← localExact]
+      exact localized.local_enclosed fresh
+    have same := factor_encloses_antisymm definitions source.val
+      source.property outerEncloses actedEnclosesOuter
+    exact strict same
+  rw [headEmpty, localEmpty]
+  simp only [List.map_nil, List.append_nil]
+  have baseSources := batchRemovalCandidate_wiresAt_sources
+    result.plan.removal outer
+  rw [← retainedRegion_eq_noRegionRemovalEquiv] at baseSources
+  change
+    ((replacementBase result.plan).wiresAt
+        (retainedRegion source outer)).map
+          (Internal.sourceRetainedWire source result.sourceRemovedWires) =
+      (source.val.wiresAt outer).filter
+        (fun sourceWire =>
+          decide (sourceWire ∉ result.sourceRemovedWires)) at baseSources
+  rw [retainedFilter] at baseSources
+  calc
+    _ = ((replacementBase result.plan).wiresAt
+          (retainedRegion source outer)).map (fun retained =>
+            result.contextWireMap
+              (Internal.sourceRetainedWire source
+                result.sourceRemovedWires retained)) := by
+        apply List.map_congr_left
+        intro retained _member
+        have sourceRetained :
+            Internal.sourceRetainedWire source result.sourceRemovedWires
+                retained ∉ result.sourceRemovedWires := by
+          have member := List.get_mem
+            (Internal.retainedWires source result.sourceRemovedWires) retained
+          exact of_decide_eq_true (List.mem_filter.mp member).2
+        rw [result.contextWireMap_retained _ sourceRetained]
+        unfold ArgumentResult.retainedWireImage
+        apply congrArg (Internal.checkedWire result.generated)
+        exact congrArg (Fin.castAdd (1 + result.spec.localCount))
+          (Internal.retainedWireIndex_sourceRetainedWire source
+            result.sourceRemovedWires retained).symm
+    _ = (((replacementBase result.plan).wiresAt
+          (retainedRegion source outer)).map
+            (Internal.sourceRetainedWire source
+              result.sourceRemovedWires)).map result.contextWireMap := by
+        rw [List.map_map]
+        apply List.map_congr_left
+        intro retained _member
+        rfl
+    _ = _ := by rw [baseSources]
 
 private def contextEmbeddingVisible
     (source : ConcreteDiagram sourceCount)
@@ -81,14 +238,68 @@ structure ArgumentResult.RetainedContext
     (result : ArgumentResult source wire)
     (sourceContext : WireContext source.val)
     (targetContext : WireContext result.checked.val) where
-  wireMap : source.val.WireId → result.checked.val.WireId
-  ids_exact : targetContext.ids = sourceContext.ids.map wireMap
-  signature_exact :
+  source_retained :
     ∀ sourceWire, sourceWire ∈ sourceContext.ids →
-      (result.checked.val.wires (wireMap sourceWire)).sig =
-        (source.val.wires sourceWire).sig
+      sourceWire ∉ result.sourceRemovedWires
+  ids_exact :
+    targetContext.ids = sourceContext.ids.map result.contextWireMap
 
 namespace ArgumentResult.RetainedContext
+
+/-- Empty root contexts correspond before the compiler descends through any
+region. -/
+def empty
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    result.RetainedContext (WireContext.empty source.val)
+      (WireContext.empty result.checked.val) :=
+  { ids_exact := rfl
+    source_retained := by
+      intro sourceWire member
+      simp [WireContext.empty] at member }
+
+theorem signature_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (sourceWire : source.val.WireId)
+    (member : sourceWire ∈ sourceContext.ids) :
+    (result.checked.val.wires (result.contextWireMap sourceWire)).sig =
+      (source.val.wires sourceWire).sig :=
+  result.contextWireMap_signature sourceWire
+    (context.source_retained sourceWire member)
+
+/-- Descending through a strict ancestor extends both compiler contexts by
+the corresponding ordered local-wire blocks. -/
+def extendStrictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (localized : result.ScopeLocalization)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    result.RetainedContext (sourceContext.extend outer)
+      (targetContext.extend (result.regionImage outer)) :=
+  { source_retained := by
+      intro sourceWire member
+      simp only [WireContext.extend, List.mem_append] at member
+      rcases member with localMember | previous
+      · exact result.wireAt_strictlyAbove_not_removed localized outer
+          outerEncloses strict sourceWire localMember
+      · exact context.source_retained sourceWire previous
+    ids_exact := by
+      unfold WireContext.extend
+      rw [result.wiresAt_contextWireMap_strictlyAbove localized outer
+        outerEncloses strict, context.ids_exact, List.map_append] }
 
 /-- Corresponding visible contexts have definitionally ordered equal
 signature lists, even though their concrete wire identifiers differ. -/
@@ -117,7 +328,7 @@ def wireRenaming
     (context : result.RetainedContext sourceContext targetContext) :
     WireRenaming sourceContext.sigs targetContext.sigs :=
   contextEmbeddingVisible source.val result.checked.val sourceContext.ids
-    targetContext.ids context.wireMap context.signature_exact (by
+    targetContext.ids result.contextWireMap context.signature_exact (by
       intro sourceWire member
       rw [context.ids_exact]
       exact List.mem_map.mpr ⟨sourceWire, member, rfl⟩)
@@ -134,10 +345,10 @@ theorem wireRenaming_origin
     {sig : Sig} (value : Var sourceContext.sigs sig) :
     WireContext.origin result.checked.val targetContext.ids
         (context.wireRenaming value) =
-      context.wireMap
+      result.contextWireMap
         (WireContext.origin source.val sourceContext.ids value) := by
   exact contextEmbeddingVisible_origin source.val result.checked.val
-    sourceContext.ids targetContext.ids context.wireMap
+    sourceContext.ids targetContext.ids result.contextWireMap
     context.signature_exact (by
       intro sourceWire member
       rw [context.ids_exact]
