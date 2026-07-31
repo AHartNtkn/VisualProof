@@ -9,6 +9,8 @@ import type { WireNet } from './route/network'
 import type { CurveBC } from './route/curve'
 import { edgeCurvePts, rodCost } from './route/curve'
 import { layoutScore } from './optimize'
+import { mkScoreState, applyMove } from './score-delta'
+import type { ScoreState } from './score-delta'
 import type { LayoutBest } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
@@ -699,6 +701,18 @@ function eachNearPair(segs: readonly WireSeg[], sg: SepGrid, R: number, cb: (i: 
   }
 }
 
+/** The separation energy BETWEEN two wires' segment sets (no same-wire skip —
+    the caller guarantees distinct wires). The incremental delta (score-delta)
+    re-evaluates exactly the wire pairs a move touches; this is their exact
+    cross contribution. Grid-free all-pairs is exact: segPairSepE is zero
+    beyond the separation radius, so the grid total and this sum agree. */
+export function segSeparationBetween(segsA: readonly { a: Vec2; b: Vec2 }[], segsB: readonly { a: Vec2; b: Vec2 }[], sc: number): number {
+  const R = WIREP.sepR * sc
+  let E = 0
+  for (const A of segsA) for (const B of segsB) E += segPairSepE(A, B, R)
+  return E
+}
+
 export function segSeparationE(segs: readonly WireSeg[], sc: number): number {
   const R = WIREP.sepR * sc
   if (segs.length < 2 || !(R > 0)) return 0
@@ -1379,19 +1393,40 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   }
   // ── COORDINATE FALLBACK: a crease from coordinate interactions can block the
   // joint direction while single coordinates still descend — try them in
-  // steepest order under the same gate, each under its own drawn ceiling. ──
+  // steepest order under the same gate, each under its own drawn ceiling.
+  //
+  // GATE VIA THE EXACT INCREMENTAL DELTA (annealing redesign D1): each trial
+  // here is base + ONE coordinate — the incremental evaluator's best case —
+  // so the gate reads applyMove's exact dE against a ScoreState captured once
+  // at the base, instead of a whole-scene routed eval per trial (the measured
+  // ~890 whole-scene evaluations per settle step on large scenes). The gate
+  // stays EXACT: dE is proven exact (score-delta.test), so acceptance is
+  // bit-for-bit the strict-descent criterion. The JOINT trials above keep
+  // fresh full evals (all coordinates move → the delta degenerates to a full
+  // eval; measured to regress). The ScoreState is built lazily — a joint
+  // accept never pays for it. ──
   const order = coords.map((_, i) => i).filter((i) => g[i] !== 0)
   order.sort((x, y) => Math.abs(g[y]! / coords[y]!.m) - Math.abs(g[x]! / coords[x]!.m) || x - y)
+  let st: ScoreState | null = null
   for (const i of order) {
     const c = coords[i]!
     const dir = -Math.sign(g[i]!)
     for (let delta = ceilDrawn(c); delta >= FD_PROBE; delta /= 2) {
       if ((delta * Math.abs(g[i]!)) / c.m < EPS) break
+      if (st === null) st = mkScoreState(e)
       c.set(c.get() + (dir * delta) / c.m)
       for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
       recomputeRegions(e)
-      const E1 = wireEnergy(e) + contentEnergy(e)
-      if (E1 < E0 - EPS) return true
+      // the actual moved set: the trial coordinate's body plus anything the
+      // legality projection displaced (compared against the base snapshot)
+      const moved = new Set<string>()
+      for (const b of e.bodies.values()) {
+        const sn = bodySnap.get(b.id)!
+        if (b.pos.x !== sn.pos.x || b.pos.y !== sn.pos.y || b.theta !== sn.theta) moved.add(b.id)
+      }
+      const mr = applyMove(e, st, moved)
+      if (mr.dE < -EPS) return true
+      mr.abort()
       restore()
       recomputeRegions(e)
     }

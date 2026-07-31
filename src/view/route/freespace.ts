@@ -507,30 +507,54 @@ export function route(fs: FreeSpace, p: Vec2, q: Vec2): Route {
   // bitangent runs + exact arc lengths R·Δθ), which is ≤ any polygon path in the
   // same free space; the drawn `pts` expand each arc into ARC_STEP chord samples
   // (slightly shorter as a polyline, but that is only the rendering resolution).
+  //
+  // CANONICAL DRAWING: consecutive arc edges on the SAME disc are COALESCED into
+  // one arc before sampling. Graph nodes subdividing a hug (touch points of
+  // bitangents to unrelated discs) are representation, not geometry — sampling
+  // each sub-arc separately made the drawn polyline (and its rod cost) depend on
+  // cost-irrelevant far discs, which broke the incremental evaluator's
+  // unchanged-wire lemma (exactness contract, score-delta.test.ts).
   const nodes: number[] = []
   for (let u = Q; u !== -1; u = prev[u]!) nodes.push(u)
   nodes.reverse()
+  type Prim = { kind: 'seg'; to: number } | { kind: 'arc'; disc: number; from: number; sweep: number; to: number }
+  const prims: Prim[] = []
+  for (let k = 1; k < nodes.length; k++) {
+    const arc = prevArc[nodes[k]!]!
+    if (arc !== null) {
+      const last = prims[prims.length - 1]
+      if (last !== undefined && last.kind === 'arc' && last.disc === arc.disc
+        && Math.abs(norm2pi(last.from + last.sweep) - norm2pi(arc.from)) < 1e-9
+        && (last.sweep === 0 || arc.sweep === 0 || Math.sign(last.sweep) === Math.sign(arc.sweep))) {
+        prims[prims.length - 1] = { kind: 'arc', disc: last.disc, from: last.from, sweep: last.sweep + arc.sweep, to: nodes[k]! }
+      } else {
+        prims.push({ kind: 'arc', disc: arc.disc, from: arc.from, sweep: arc.sweep, to: nodes[k]! })
+      }
+    } else {
+      prims.push({ kind: 'seg', to: nodes[k]! })
+    }
+  }
   const pts: Vec2[] = [p]
   const push = (v: Vec2): void => {
     const last = pts[pts.length - 1]!
     if (Math.hypot(v.x - last.x, v.y - last.y) >= 1e-9) pts.push(v)
   }
   let detourLen = 0, detourCost = 0
-  for (let k = 1; k < nodes.length; k++) {
-    const arc = prevArc[nodes[k]!]!
-    const prevPt = coordOf(nodes[k - 1]!)
-    const cur = coordOf(nodes[k]!)
-    if (arc !== null) {
-      const D = discs[arc.disc]!
-      detourLen += D.r * Math.abs(arc.sweep)
-      detourCost += arcSoftCost(D.c, D.r, arc.from, arc.sweep, fs.bounds)
-      for (const s of arcDrawSamples(D.c, D.r, arc.from, arc.sweep)) push(s)
+  let at: Vec2 = p
+  for (const pr of prims) {
+    const cur = coordOf(pr.to)
+    if (pr.kind === 'arc') {
+      const D = discs[pr.disc]!
+      detourLen += D.r * Math.abs(pr.sweep)
+      detourCost += arcSoftCost(D.c, D.r, pr.from, pr.sweep, fs.bounds)
+      for (const s of arcDrawSamples(D.c, D.r, pr.from, pr.sweep)) push(s)
       push(cur) // the true tangent endpoint — closes the radial jog off the draw circle
     } else {
-      detourLen += Math.hypot(cur.x - prevPt.x, cur.y - prevPt.y)
-      detourCost += segSoftCost(prevPt, cur, fs)
+      detourLen += Math.hypot(cur.x - at.x, cur.y - at.y)
+      detourCost += segSoftCost(at, cur, fs)
       push(cur)
     }
+    at = cur
   }
   const result: Route = detourCost < directCost ? { length: detourLen, cost: detourCost, pts } : direct
   fs.memo.set(key, result)

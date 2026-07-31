@@ -625,6 +625,10 @@ export function routeObstacles(e: Engine): Disc[] {
 export type WireSpaces = {
   space(wid: WireId): FreeSpace
   readonly forbidden: ReadonlyMap<WireId, readonly Disc[]>
+  /** The region ids behind each wire's forbidden discs (same order, same
+      shared-array identity) — the incremental evaluator diffs region circles
+      per wire through this. */
+  readonly forbiddenRids: ReadonlyMap<WireId, readonly RegionId[]>
 }
 
 export function wireRouteSpaces(e: Engine): WireSpaces {
@@ -642,8 +646,9 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
     if (e.d.regions[rid]!.kind !== 'sheet') nonSheet.push(rid)
   }
   const pad = ROUTE_CLEAR * e.scale
-  const bySig = new Map<string, Disc[]>()
+  const bySig = new Map<string, { discs: Disc[]; rids: RegionId[] }>()
   const forbidden = new Map<WireId, readonly Disc[]>()
+  const forbiddenRids = new Map<WireId, readonly RegionId[]>()
   for (const [wid, w] of e.wires) {
     const allowed = new Set<RegionId>()
     chainInto(e.d.wires[wid]!.scope, allowed)
@@ -651,15 +656,19 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
     if (w.endBodyId !== null) chainInto(e.bodies.get(w.endBodyId)!.region, allowed)
     const forb = nonSheet.filter((rid) => !allowed.has(rid))
     const key = JSON.stringify(forb)
-    let discs = bySig.get(key)
-    if (discs === undefined) {
-      discs = forb.map((rid) => {
-        const g = e.regions.get(rid)!
-        return { c: { x: g.center.x, y: g.center.y }, r: g.radius + pad }
-      })
-      bySig.set(key, discs)
+    let entry = bySig.get(key)
+    if (entry === undefined) {
+      entry = {
+        rids: forb,
+        discs: forb.map((rid) => {
+          const g = e.regions.get(rid)!
+          return { c: { x: g.center.x, y: g.center.y }, r: g.radius + pad }
+        }),
+      }
+      bySig.set(key, entry)
     }
-    forbidden.set(wid, discs)
+    forbidden.set(wid, entry.discs)
+    forbiddenRids.set(wid, entry.rids)
   }
   const nodes = routeObstacles(e)
   const bounds = routeBounds(e)
@@ -667,6 +676,7 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
   const spaces = new Map<readonly Disc[], FreeSpace>()
   return {
     forbidden,
+    forbiddenRids,
     space(wid: WireId): FreeSpace {
       const forb = forbidden.get(wid)
       if (forb === undefined || forb.length === 0) return plain
