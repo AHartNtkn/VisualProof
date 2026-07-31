@@ -2478,6 +2478,61 @@ theorem regionImage_data
       rw [← retainedRegion_eq_noRegionRemovalEquiv]
       exact result.regionImage_exact parent
 
+/-- Canonical checked image of a source node retained by argument replacement. -/
+def retainedNodeImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ siteNodes result.sites) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (Fin.castAdd result.sites.sites.length
+      (Internal.retainedNodeIndex source (siteNodes result.sites) node (by
+        unfold Internal.retainedNodes
+        apply List.mem_filter.mpr
+        exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩)))
+
+/-- Retained node constructors and payloads are transported exactly through
+the canonical region equivalence. -/
+theorem retainedNodeImage_data
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ siteNodes result.sites) :
+    result.checked.val.nodes (result.retainedNodeImage node retained) =
+      (source.val.nodes node).rename result.regionEquiv := by
+  unfold retainedNodeImage
+  rw [Internal.checkedNode_data_transport]
+  unfold replacementCandidate
+  rw [assigned_node]
+  let member : node ∈ Internal.retainedNodes source
+      (siteNodes result.sites) := by
+    unfold Internal.retainedNodes
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩
+  let retainedIndex :=
+    Internal.retainedNodeIndex source (siteNodes result.sites) node member
+  simp only [replacementSkeleton, Fin.addCases_left]
+  change
+    Internal.checkedNodeData result.generated
+        (Internal.batchNodeTable result.plan.removal retainedIndex) =
+      (source.val.nodes node).rename result.regionEquiv
+  rw [Internal.batchNodeTable_noRegions]
+  have sourceExact :
+      Internal.sourceRetainedNode source (siteNodes result.sites)
+          retainedIndex = node :=
+    Internal.sourceRetainedNode_retainedNodeIndex source
+      (siteNodes result.sites) node member
+  rw [sourceExact]
+  cases data : source.val.nodes node <;>
+    simp only [CNode.rename, Internal.checkedNodeData]
+  all_goals
+    rw [← retainedRegion_eq_noRegionRemovalEquiv]
+    congr 1
+    exact result.regionImage_exact _
+
 /-- Canonical checked node generated for one ordered source application. -/
 def targetNode
     {source : CheckedDiagram definitions}
@@ -2487,6 +2542,22 @@ def targetNode
     result.checked.val.NodeId :=
   Internal.checkedNode result.generated
     (replacementNode result.plan site)
+
+/-- Generated replacement-node payloads are exact, including their canonical
+source-region images and checker-selected target argument vectors. -/
+theorem targetNode_data
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.nodes (result.targetNode site) =
+      .atom (result.regionImage (result.sites.sites.get site).region)
+        result.targetArguments := by
+  unfold targetNode regionImage targetArguments
+  rw [Internal.checkedNode_data_transport]
+  unfold replacementCandidate
+  rw [assigned_node, replacementSkeleton_replacementNode]
+  rfl
 
 /-- Canonical checked operation-local wire at one replacement-local index. -/
 def targetLocalWire
@@ -2505,6 +2576,63 @@ def sourceRemovedWires
     (result : ArgumentResult source wire) :
     List source.val.WireId :=
   wire :: result.spec.removedWires
+
+/-- Canonical checked image of a source wire retained by argument replacement. -/
+def retainedWireImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (Fin.castAdd (1 + result.spec.localCount)
+      (Internal.retainedWireIndex source result.sourceRemovedWires sourceWire
+        (by
+          unfold Internal.retainedWires
+          apply List.mem_filter.mpr
+          exact ⟨Data.Finite.mem_allFin sourceWire,
+            decide_eq_true retained⟩)))
+
+/-- Retained wire signatures are unchanged. -/
+theorem retainedWireImage_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+        (result.retainedWireImage sourceWire retained)).sig =
+      (source.val.wires sourceWire).sig := by
+  unfold retainedWireImage
+  rw [Internal.checkedWire_signature_transport]
+  unfold replacementCandidate
+  rw [assigned_wire_signature,
+    replacementSkeleton_retained_wire_signature]
+  exact congrArg (fun candidate => (source.val.wires candidate).sig)
+    (Internal.sourceRetainedWire_retainedWireIndex source
+      result.sourceRemovedWires sourceWire (by
+        unfold Internal.retainedWires
+        apply List.mem_filter.mpr
+        exact ⟨Data.Finite.mem_allFin sourceWire,
+          decide_eq_true retained⟩))
+
+/-- Retained wire scopes are transported by the canonical region image. -/
+theorem retainedWireImage_scope
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+        (result.retainedWireImage sourceWire retained)).scope =
+      result.regionImage (source.val.wires sourceWire).scope := by
+  unfold retainedWireImage regionImage
+  rw [Internal.checkedWire_scope_transport]
+  unfold replacementCandidate
+  rw [assigned_wire_scope, replacementSkeleton_retained_wire_scope]
+  simp only [sourceRemovedWires]
+  rw [Internal.sourceRetainedWire_retainedWireIndex]
 
 /-- Fresh target-local argument wires introduced by arity shift. -/
 def targetLocalWires
