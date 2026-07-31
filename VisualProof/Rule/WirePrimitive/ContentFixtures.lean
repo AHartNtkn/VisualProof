@@ -82,6 +82,14 @@ example :
     spawned.inverse.checkSiteLedger.isSome = true := by
   native_decide
 
+private def deleteLedger :=
+  spawned.inverse.checkSiteLedger.get (by native_decide)
+
+example :
+    deleteLedger.sourceScope.frame.context.cutDepth =
+      deleteLedger.targetScope.frame.context.cutDepth :=
+  deleteLedger.cutDepth
+
 /-! Cut wrapping and exact absorption act on both mixed-parity sites. -/
 private def wrapped :
     CutWrapResult spawned.checked spawned.inverseWire :=
@@ -112,6 +120,14 @@ example :
 example :
     wrapped.checkSiteLedger.isSome = true := by
   native_decide
+
+private def wrappedLedger :=
+  wrapped.checkSiteLedger.get (by native_decide)
+
+example :
+    wrappedLedger.sourceScope.frame.context.cutDepth =
+      wrappedLedger.targetScope.frame.context.cutDepth :=
+  wrappedLedger.cutDepth
 
 example :
     (ConcreteIsoSearch.findConcreteIso?
@@ -148,6 +164,19 @@ example :
 example :
     split.checkSiteLedger.isSome = true := by
   native_decide
+
+private def splitLedger :=
+  split.checkSiteLedger.get (by native_decide)
+
+example :
+    splitLedger.sourceScope.frame.context.cutDepth =
+      splitLedger.firstScope.frame.context.cutDepth :=
+  splitLedger.firstCutDepth
+
+example :
+    splitLedger.sourceScope.frame.context.cutDepth =
+      splitLedger.secondScope.frame.context.cutDepth :=
+  splitLedger.secondCutDepth
 
 example :
     (ConcreteIsoSearch.findConcreteIso?

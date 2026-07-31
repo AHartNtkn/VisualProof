@@ -123,8 +123,19 @@ structure SiteLedger
   private mk ::
   targetSites : AllAppliedSites result.checked result.targetWire
   commonCore : CommonCoreReceipt source result.checked
+  sourceScope :
+    SiteCompilation source (source.val.wires wire).scope
+  targetScope :
+    SiteCompilation result.checked
+      (result.checked.val.wires result.targetWire).scope
   private sites_correspond :
     SitesCorrespond result targetSites commonCore
+  private scope_corresponds :
+    regionsCorrespond commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.targetWire).scope = true
+  private cut_depth_exact :
+    sourceScope.frame.context.cutDepth =
+      targetScope.frame.context.cutDepth
 
 /-- Check the complete positional wrap ledger; no caller supplies a pairing. -/
 def checkSiteLedger
@@ -135,6 +146,11 @@ def checkSiteLedger
   let targetSites ←
     checkAllAppliedSites result.checked result.targetWire
   let commonCore ← result.checkCommonCore
+  let sourceScope ←
+    compileSite? source (source.val.wires wire).scope
+  let targetScope ←
+    compileSite? result.checked
+      (result.checked.val.wires result.targetWire).scope
   if exact :
       result.sites.sites.length = targetSites.sites.length ∧
         (List.zip result.sites.sites targetSites.sites).all (fun pair =>
@@ -145,7 +161,16 @@ def checkSiteLedger
                 argumentsCorrespond commonCore pair.1.arguments
                   pair.2.arguments) =
         true then
-    pure ⟨targetSites, commonCore, exact⟩
+    if scopeExact :
+        regionsCorrespond commonCore (source.val.wires wire).scope
+              (result.checked.val.wires result.targetWire).scope = true ∧
+          sourceScope.frame.context.cutDepth =
+            targetScope.frame.context.cutDepth then
+      pure
+        ⟨targetSites, commonCore, sourceScope, targetScope, exact,
+          scopeExact.1, scopeExact.2⟩
+    else
+      none
   else
     none
 
@@ -159,6 +184,26 @@ theorem correspondence
     (ledger : SiteLedger result) :
     SitesCorrespond result ledger.targetSites ledger.commonCore :=
   ledger.sites_correspond
+
+/-- The checker identifies the acted binder scope through the common core. -/
+theorem scopeCorrespondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : CutWrapResult source wire}
+    (ledger : SiteLedger result) :
+    regionsCorrespond ledger.commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.targetWire).scope = true :=
+  ledger.scope_corresponds
+
+/-- Wrap source and target binder contexts have one exact outer cut depth. -/
+theorem cutDepth
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : CutWrapResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.sourceScope.frame.context.cutDepth =
+      ledger.targetScope.frame.context.cutDepth :=
+  ledger.cut_depth_exact
 
 end SiteLedger
 
@@ -215,8 +260,28 @@ structure SiteLedger
   firstSites : AllAppliedSites result.checked result.firstWire
   secondSites : AllAppliedSites result.checked result.secondWire
   commonCore : CommonCoreReceipt source result.checked
+  sourceScope :
+    SiteCompilation source (source.val.wires wire).scope
+  firstScope :
+    SiteCompilation result.checked
+      (result.checked.val.wires result.firstWire).scope
+  secondScope :
+    SiteCompilation result.checked
+      (result.checked.val.wires result.secondWire).scope
   private sites_correspond :
     SitesCorrespond result firstSites secondSites commonCore
+  private first_scope_corresponds :
+    regionsCorrespond commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.firstWire).scope = true
+  private second_scope_corresponds :
+    regionsCorrespond commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.secondWire).scope = true
+  private first_cut_depth_exact :
+    sourceScope.frame.context.cutDepth =
+      firstScope.frame.context.cutDepth
+  private second_cut_depth_exact :
+    sourceScope.frame.context.cutDepth =
+      secondScope.frame.context.cutDepth
 
 /-- Check the complete positional split ledger; no caller supplies a pairing. -/
 def checkSiteLedger
@@ -229,6 +294,14 @@ def checkSiteLedger
   let secondSites ←
     checkAllAppliedSites result.checked result.secondWire
   let commonCore ← result.checkCommonCore
+  let sourceScope ←
+    compileSite? source (source.val.wires wire).scope
+  let firstScope ←
+    compileSite? result.checked
+      (result.checked.val.wires result.firstWire).scope
+  let secondScope ←
+    compileSite? result.checked
+      (result.checked.val.wires result.secondWire).scope
   if exact :
       result.sites.sites.length = firstSites.sites.length ∧
         result.sites.sites.length = secondSites.sites.length ∧
@@ -241,7 +314,21 @@ def checkSiteLedger
               argumentsCorrespond commonCore pair.1.arguments
                 pair.2.2.arguments) =
           true then
-    pure ⟨firstSites, secondSites, commonCore, exact⟩
+    if scopeExact :
+        regionsCorrespond commonCore (source.val.wires wire).scope
+              (result.checked.val.wires result.firstWire).scope = true ∧
+          regionsCorrespond commonCore (source.val.wires wire).scope
+              (result.checked.val.wires result.secondWire).scope = true ∧
+          sourceScope.frame.context.cutDepth =
+              firstScope.frame.context.cutDepth ∧
+          sourceScope.frame.context.cutDepth =
+              secondScope.frame.context.cutDepth then
+      pure
+        ⟨firstSites, secondSites, commonCore, sourceScope, firstScope,
+          secondScope, exact, scopeExact.1, scopeExact.2.1,
+          scopeExact.2.2.1, scopeExact.2.2.2⟩
+    else
+      none
   else
     none
 
@@ -256,6 +343,46 @@ theorem correspondence
     SitesCorrespond result ledger.firstSites ledger.secondSites
       ledger.commonCore :=
   ledger.sites_correspond
+
+/-- The first generated binder occupies the transported acted scope. -/
+theorem firstScopeCorrespondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    regionsCorrespond ledger.commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.firstWire).scope = true :=
+  ledger.first_scope_corresponds
+
+/-- The second generated binder occupies the transported acted scope. -/
+theorem secondScopeCorrespondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    regionsCorrespond ledger.commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.secondWire).scope = true :=
+  ledger.second_scope_corresponds
+
+/-- Source and first generated binder contexts have equal outer cut depth. -/
+theorem firstCutDepth
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.sourceScope.frame.context.cutDepth =
+      ledger.firstScope.frame.context.cutDepth :=
+  ledger.first_cut_depth_exact
+
+/-- Source and second generated binder contexts have equal outer cut depth. -/
+theorem secondCutDepth
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.sourceScope.frame.context.cutDepth =
+      ledger.secondScope.frame.context.cutDepth :=
+  ledger.second_cut_depth_exact
 
 end SiteLedger
 
@@ -291,7 +418,18 @@ structure SiteLedger
     (result : EndsDeleteResult source wire) where
   private mk ::
   commonCore : CommonCoreReceipt source result.checked
+  sourceScope :
+    SiteCompilation source (source.val.wires wire).scope
+  targetScope :
+    SiteCompilation result.checked
+      (result.checked.val.wires result.targetWire).scope
   private sites_retained : SitesRetained result commonCore
+  private scope_corresponds :
+    regionsCorrespond commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.targetWire).scope = true
+  private cut_depth_exact :
+    sourceScope.frame.context.cutDepth =
+      targetScope.frame.context.cutDepth
 
 /-- Check every deleted site's retained free boundary. -/
 def checkSiteLedger
@@ -300,9 +438,23 @@ def checkSiteLedger
     (result : EndsDeleteResult source wire) :
     Option (SiteLedger result) := do
   let commonCore ← result.checkCommonCore
+  let sourceScope ←
+    compileSite? source (source.val.wires wire).scope
+  let targetScope ←
+    compileSite? result.checked
+      (result.checked.val.wires result.targetWire).scope
   if exact :
       result.sites.sites.all (sourceBoundaryRetained commonCore) = true then
-    pure ⟨commonCore, exact⟩
+    if scopeExact :
+        regionsCorrespond commonCore (source.val.wires wire).scope
+              (result.checked.val.wires result.targetWire).scope = true ∧
+          sourceScope.frame.context.cutDepth =
+            targetScope.frame.context.cutDepth then
+      pure
+        ⟨commonCore, sourceScope, targetScope, exact, scopeExact.1,
+          scopeExact.2⟩
+    else
+      none
   else
     none
 
@@ -316,6 +468,26 @@ theorem retained
     (ledger : SiteLedger result) :
     SitesRetained result ledger.commonCore :=
   ledger.sites_retained
+
+/-- The retained acted binder occupies the transported source scope. -/
+theorem scopeCorrespondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : EndsDeleteResult source wire}
+    (ledger : SiteLedger result) :
+    regionsCorrespond ledger.commonCore (source.val.wires wire).scope
+      (result.checked.val.wires result.targetWire).scope = true :=
+  ledger.scope_corresponds
+
+/-- Deletion source and target binder contexts have equal outer cut depth. -/
+theorem cutDepth
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : EndsDeleteResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.sourceScope.frame.context.cutDepth =
+      ledger.targetScope.frame.context.cutDepth :=
+  ledger.cut_depth_exact
 
 end SiteLedger
 

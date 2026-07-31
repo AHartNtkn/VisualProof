@@ -978,6 +978,23 @@ def deleteEnds
                 (EndsDeleteResult.mk sites checked plan
                   (ConcreteDiagram.checkWellFormed_preserves_input accepted))
 
+namespace EndsDeleteResult
+
+/-- Image of the retained acted wire in the exact dense deletion target. -/
+def targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    result.checked.val.WireId :=
+  have retained : wire ∈ Internal.retainedWires source [] := by
+    unfold Internal.retainedWires
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin _, by simp⟩
+  Internal.checkedWire result.generated
+    (Internal.retainedWireIndex source [] wire retained)
+
+end EndsDeleteResult
+
 private def spawnNode
     {definitions : List (List Sig)}
     (source : CheckedDiagram definitions)
