@@ -66,16 +66,11 @@ private def abstractRewrite
     UniformSiteRewrite
       (Fin siteCount) (Fin siteCount)
       SourceWitness TargetWitness PUnit :=
-  Internal.uniformSiteRewriteOfChecked
-    (.rel []) 0 scopeContext.cutDepth siteCount
+  UniformSiteRewrite.abstractLogical
+    (.rel []) 0 siteCount
     (List.finRange siteCount) (List.finRange siteCount)
     id id (by simp) (by simp)
-    siteContext scopeContext rfl sourceAt targetAt
-    (scopeContext.fill
-      (∃ witness, siteContext.fill (sourceAt witness)))
-    (scopeContext.fill
-      (∃ witness, siteContext.fill (targetAt witness)))
-    Iff.rfl Iff.rfl id PUnit.unit PUnit.unit rfl
+    siteContext scopeContext sourceAt targetAt
 
 private def sameNullaryAt (value : Bool) (_ : Fin 1) : Prop :=
   value = true
