@@ -275,6 +275,35 @@ def erasureRebaseRegionFrame
   subst right
   rfl
 
+theorem erasureRebaseRegionFrame_context
+    {definitions : List (List Sig)}
+    {diagram : ConcreteDiagram definitions.length}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (frame : RegionFrame definitions diagram left) :
+    congrArg ConcreteElaboration.WireContext.sigs
+          (erasureRebaseRegionFrame_visible same frame) ▸
+        (erasureRebaseRegionFrame same frame).context =
+      congrArg ConcreteElaboration.WireContext.sigs same ▸
+        frame.context := by
+  subst right
+  rfl
+
+theorem erasureRebaseRegionFrame_eq
+    {definitions : List (List Sig)}
+    {diagram : ConcreteDiagram definitions.length}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (frame : RegionFrame definitions diagram left) :
+    erasureRebaseRegionFrame same frame =
+      { visible := frame.visible
+        siteBody := frame.siteBody
+        context :=
+          congrArg ConcreteElaboration.WireContext.sigs same ▸
+            frame.context } := by
+  subst right
+  rfl
+
 /-- Filling a frame commutes with reindexing its exposed outer context. -/
 theorem erasureRebaseRegionFrame_fill
     {definitions : List (List Sig)}
@@ -289,7 +318,7 @@ theorem erasureRebaseRegionFrame_fill
   cases same
   rfl
 
-private theorem compileFrameBranch_cast_context_withProvenance
+theorem compileFrameBranch_cast_context_withProvenance
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (sourceOuter : ConcreteElaboration.WireContext source.val)
@@ -369,6 +398,48 @@ private theorem compileFrameBranch_cast_context_withProvenance
   exact
     ⟨targetLeading, targetNested, targetFrame, targetLeadingCompiled,
       targetNestedCompiled, targetFrameCompiled, rfl, rfl, rfl⟩
+
+/--
+Reindex the three accepted branches of a frame compilation along equality of
+their outer wire context.
+-/
+theorem compileFrameBranch_cast_context
+    (diagram : ConcreteDiagram definitions.length)
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (site : diagram.RegionId)
+    (fuel : Nat)
+    (selected : diagram.RegionId)
+    (nodes : List diagram.NodeId)
+    (children : List diagram.RegionId)
+    {leading : ItemSeq definitions left.sigs}
+    {nested frame : RegionFrame definitions diagram left}
+    (leadingCompiled :
+      ConcreteElaboration.compileNodes? definitions diagram left nodes =
+        some leading)
+    (nestedCompiled :
+      compileRegionFrame? definitions diagram site fuel selected left =
+        some nested)
+    (frameCompiled :
+      compileSiblingFrame? definitions diagram fuel left selected nested
+          leading children =
+        some frame) :
+    ∃ (rightLeading : ItemSeq definitions right.sigs)
+      (rightNested rightFrame : RegionFrame definitions diagram right),
+      ConcreteElaboration.compileNodes? definitions diagram right nodes =
+          some rightLeading ∧
+      compileRegionFrame? definitions diagram site fuel selected right =
+          some rightNested ∧
+      compileSiblingFrame? definitions diagram fuel right selected
+          rightNested rightLeading children =
+          some rightFrame ∧
+      rightLeading = erasureRebaseItemSeq same leading ∧
+      rightNested = erasureRebaseRegionFrame same nested ∧
+      rightFrame = erasureRebaseRegionFrame same frame := by
+  subst right
+  exact
+    ⟨leading, nested, frame, leadingCompiled, nestedCompiled,
+      frameCompiled, rfl, rfl, rfl⟩
 
 /--
 Single recursive authority for a source-generated singleton-erasure frame.

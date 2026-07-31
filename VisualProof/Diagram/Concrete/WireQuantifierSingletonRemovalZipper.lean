@@ -40,6 +40,47 @@ structure ErasureAboveScopeReceipt
     Region definitions
       ((targetContext source removed sourceSiteOuter).extend
         (targetRegion source removed scope)).sigs
+  sourceStopped :
+    RegionFrame definitions source.val sourceOuter
+  targetStopped :
+    RegionFrame definitions (Target source removed)
+      (targetContext source removed sourceOuter)
+  sourceStoppedVisible :
+    sourceStopped.visible = sourceSiteOuter.extend scope
+  targetStoppedVisible :
+    targetStopped.visible =
+      (targetContext source removed sourceSiteOuter).extend
+        (targetRegion source removed scope)
+  sourceDecomposition :
+    DiagramContext.StopsAboveBindMany
+      ((source.val.wiresAt scope).map
+        (fun wire => (source.val.wires wire).sig))
+      sourceAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            sourceStoppedVisible).trans
+          (ConcreteElaboration.WireContext.sigs_extend
+            sourceSiteOuter scope)) ▸
+        sourceStopped.context)
+  targetDecomposition :
+    DiagramContext.StopsAboveBindMany
+      (((Target source removed).wiresAt
+          (targetRegion source removed scope)).map
+        (fun wire => ((Target source removed).wires wire).sig))
+      targetAbove
+      (((congrArg ConcreteElaboration.WireContext.sigs
+            targetStoppedVisible).trans
+          (ConcreteElaboration.WireContext.sigs_extend
+            (targetContext source removed sourceSiteOuter)
+            (targetRegion source removed scope))) ▸
+        targetStopped.context)
+  sourceStoppedBody :
+    congrArg ConcreteElaboration.WireContext.sigs sourceStoppedVisible ▸
+        sourceStopped.siteBody =
+      sourceBody
+  targetStoppedBody :
+    congrArg ConcreteElaboration.WireContext.sigs targetStoppedVisible ▸
+        targetStopped.siteBody =
+      targetBody
   sourceFill :
     sourceFrame.context.fill sourceFrame.siteBody =
       sourceAbove.fill
@@ -76,9 +117,17 @@ theorem ErasureFrameProvenance.stopAboveCurrent
     (provenance :
       ErasureFrameProvenance source removed site fuel sourceOuter region
         sourceFrame targetFrame) :
-    Nonempty
-      (ErasureAboveScopeReceipt.{u} source removed region sourceOuter
-        sourceFrame targetFrame) := by
+    ∃ receipt :
+        ErasureAboveScopeReceipt.{u} source removed region sourceOuter
+          sourceFrame targetFrame,
+      compileRegionFrame? definitions source.val region fuel region
+          sourceOuter =
+        some receipt.sourceStopped ∧
+      compileRegionFrame? definitions (Target source removed)
+          (targetRegion source removed region) fuel
+          (targetRegion source removed region)
+          (targetContext source removed sourceOuter) =
+        some receipt.targetStopped := by
   cases provenance with
   | site childFuel sourceOuter sourceBody targetBody sourceAbove
       sourceBodyCompiled targetBodyCompiled =>
@@ -89,10 +138,36 @@ theorem ErasureFrameProvenance.stopAboveCurrent
           targetAbove := .hole
           sourceBody := sourceBody
           targetBody := targetBody
+          sourceStopped :=
+            { visible := sourceOuter.extend site
+              siteBody := sourceBody
+              context :=
+                bindContextFor source.val sourceOuter.ids
+                  (source.val.wiresAt site) .hole }
+          targetStopped :=
+            { visible :=
+                (targetContext source removed sourceOuter).extend
+                  (targetRegion source removed site)
+              siteBody := targetBody
+              context :=
+                bindContextFor (Target source removed)
+                  (targetContext source removed sourceOuter).ids
+                  ((Target source removed).wiresAt
+                    (targetRegion source removed site)) .hole }
+          sourceStoppedVisible := rfl
+          targetStoppedVisible := rfl
+          sourceDecomposition :=
+            bindContextFor_hole_stopsAboveBindMany source.val sourceOuter site
+          targetDecomposition :=
+            bindContextFor_hole_stopsAboveBindMany (Target source removed)
+              (targetContext source removed sourceOuter)
+              (targetRegion source removed site)
+          sourceStoppedBody := rfl
+          targetStoppedBody := rfl
           sourceFill := ?_
           targetFill := ?_
           zipper := ?_
-        }⟩
+        }, ?_, ?_⟩
       · change
           (bindContextFor source.val sourceOuter.ids
               (source.val.wiresAt site) .hole).fill sourceBody =
@@ -116,6 +191,8 @@ theorem ErasureFrameProvenance.stopAboveCurrent
             (fun (pre : PreModel.{u}) env =>
               Env.comp env
                 (contextRenaming source removed sourceOuter)))
+      · simp [compileRegionFrame?, sourceBodyCompiled]
+      · simp [compileRegionFrame?, targetBodyCompiled]
   | ancestor childFuel sourceOuter region selected notSite sourceAbove
       sourceNodes targetNodes sourceNested sourceAround targetNested
       targetAround sourceNodesCompiled targetNodesCompiled selectedFound
@@ -134,10 +211,38 @@ theorem ErasureFrameProvenance.stopAboveCurrent
             sourceAround.context.fill sourceAround.siteBody
           targetBody :=
             rebasedTarget.context.fill rebasedTarget.siteBody
+          sourceStopped :=
+            { visible := sourceOuter.extend region
+              siteBody := sourceAround.context.fill sourceAround.siteBody
+              context :=
+                bindContextFor source.val sourceOuter.ids
+                  (source.val.wiresAt region) .hole }
+          targetStopped :=
+            { visible :=
+                (targetContext source removed sourceOuter).extend
+                  (targetRegion source removed region)
+              siteBody :=
+                rebasedTarget.context.fill rebasedTarget.siteBody
+              context :=
+                bindContextFor (Target source removed)
+                  (targetContext source removed sourceOuter).ids
+                  ((Target source removed).wiresAt
+                    (targetRegion source removed region)) .hole }
+          sourceStoppedVisible := rfl
+          targetStoppedVisible := rfl
+          sourceDecomposition :=
+            bindContextFor_hole_stopsAboveBindMany source.val sourceOuter
+              region
+          targetDecomposition :=
+            bindContextFor_hole_stopsAboveBindMany (Target source removed)
+              (targetContext source removed sourceOuter)
+              (targetRegion source removed region)
+          sourceStoppedBody := rfl
+          targetStoppedBody := rfl
           sourceFill := ?_
           targetFill := ?_
           zipper := ?_
-        }⟩
+        }, ?_, ?_⟩
       · change
           (bindContextFor source.val sourceOuter.ids
               (source.val.wiresAt region) sourceAround.context).fill
@@ -164,6 +269,42 @@ theorem ErasureFrameProvenance.stopAboveCurrent
             (fun (pre : PreModel.{u}) env =>
               Env.comp env
                 (contextRenaming source removed sourceOuter)))
+      · have sourceBodyGenerated :=
+          compileRegionBody?_of_frame_branch sourceNodesCompiled
+            sourceNestedCompiled sourceAroundCompiled
+        simp [compileRegionFrame?, sourceBodyGenerated]
+      · have targetNestedCompiled := nested.targetGenerated
+        obtain ⟨targetNodes', targetNested', targetAround',
+            targetNodesCompiled', targetNestedCompiled',
+            targetAroundCompiled', targetNodesExact, targetNestedExact,
+            targetAroundExact⟩ :=
+          compileFrameBranch_cast_context_withProvenance source removed
+            (sourceOuter.extend region) contextExact
+            site childFuel selected selected
+            ((Target source removed).nodesAt
+              (targetRegion source removed region))
+            (source.val.childrenOf region) targetNodesCompiled
+            targetNestedCompiled targetAroundCompiled siblings
+        subst targetNodes'
+        subst targetNested'
+        subst targetAround'
+        have targetAroundCompiled'' :
+            compileSiblingFrame? definitions (Target source removed)
+                childFuel
+                ((targetContext source removed sourceOuter).extend
+                  (targetRegion source removed region))
+                (targetRegion source removed selected)
+                (erasureRebaseRegionFrame contextExact targetNested)
+                (erasureRebaseItemSeq contextExact targetNodes)
+                ((Target source removed).childrenOf
+                  (targetRegion source removed region)) =
+              some (erasureRebaseRegionFrame contextExact targetAround) := by
+          rw [target_childrenOf]
+          exact targetAroundCompiled'
+        have targetBodyGenerated :=
+          compileRegionBody?_of_frame_branch targetNodesCompiled'
+            targetNestedCompiled' targetAroundCompiled''
+        simpa [compileRegionFrame?, targetBodyGenerated, rebasedTarget]
 
 /-- Transport the complete binder context of one retained erasure region. -/
 theorem erasureBindContextZipper
@@ -530,9 +671,18 @@ private theorem ErasureSiblingProvenance.aboveScope
             (Env.comp env
               (contextRenaming source removed (context.extend region)))
             sourceLeading) :
-    Nonempty
-      (ErasureAboveScopeReceipt.{u} source removed scope
-        (context.extend region) sourceFrame targetFrame) := by
+    ∃ receipt :
+        ErasureAboveScopeReceipt.{u} source removed scope
+          (context.extend region) sourceFrame targetFrame,
+      compileSiblingFrame? definitions source.val fuel
+          (context.extend region) selected nestedReceipt.sourceStopped
+          sourceLeading children =
+        some receipt.sourceStopped ∧
+      compileSiblingFrame? definitions (Target source removed) fuel
+          (targetContext source removed (context.extend region))
+          (targetRegion source removed selected) nestedReceipt.targetStopped
+          targetLeading (children.map (targetRegion source removed)) =
+        some receipt.targetStopped := by
   induction provenance with
   | selected sourceLeading targetLeading tail sourceSuffix targetSuffix
       sourceSuffixCompiled targetSuffixCompiled =>
@@ -587,6 +737,40 @@ private theorem ErasureSiblingProvenance.aboveScope
               targetSuffix
           sourceBody := nestedReceipt.sourceBody
           targetBody := nestedReceipt.targetBody
+          sourceStopped :=
+            { visible := nestedReceipt.sourceStopped.visible
+              siteBody := nestedReceipt.sourceStopped.siteBody
+              context :=
+                .surround sourceLeading
+                  (.cut nestedReceipt.sourceStopped.context) sourceSuffix }
+          targetStopped :=
+            { visible := nestedReceipt.targetStopped.visible
+              siteBody := nestedReceipt.targetStopped.siteBody
+              context :=
+                .surround targetLeading
+                  (.cut nestedReceipt.targetStopped.context) targetSuffix }
+          sourceStoppedVisible := nestedReceipt.sourceStoppedVisible
+          targetStoppedVisible := nestedReceipt.targetStoppedVisible
+          sourceDecomposition :=
+            DiagramContext.StopsAboveBindMany.surroundCut_cast
+              ((congrArg ConcreteElaboration.WireContext.sigs
+                  nestedReceipt.sourceStoppedVisible).trans
+                (ConcreteElaboration.WireContext.sigs_extend
+                  nestedReceipt.sourceSiteOuter scope))
+              sourceLeading sourceSuffix nestedReceipt.sourceStopped.context
+              nestedReceipt.sourceAbove nestedReceipt.sourceDecomposition
+          targetDecomposition :=
+            DiagramContext.StopsAboveBindMany.surroundCut_cast
+              ((congrArg ConcreteElaboration.WireContext.sigs
+                  nestedReceipt.targetStoppedVisible).trans
+                (ConcreteElaboration.WireContext.sigs_extend
+                  (targetContext source removed
+                    nestedReceipt.sourceSiteOuter)
+                  (targetRegion source removed scope)))
+              targetLeading targetSuffix nestedReceipt.targetStopped.context
+              nestedReceipt.targetAbove nestedReceipt.targetDecomposition
+          sourceStoppedBody := nestedReceipt.sourceStoppedBody
+          targetStoppedBody := nestedReceipt.targetStoppedBody
           sourceFill := ?_
           targetFill := ?_
           zipper :=
@@ -594,7 +778,7 @@ private theorem ErasureSiblingProvenance.aboveScope
               (DiagramContext.SemanticZipper.cut nestedReceipt.zipper)
               sourceLeading sourceSuffix targetLeading targetSuffix
               leadingLaw suffixLaw
-        }⟩
+        }, ?_, ?_⟩
       · simpa only [DiagramContext.fill] using
           congrArg
             (fun body =>
@@ -607,6 +791,8 @@ private theorem ErasureSiblingProvenance.aboveScope
               Region.surround targetLeading (.mk (.cons (.cut body) .nil))
                 targetSuffix)
             nestedReceipt.targetFill
+      · simp [compileSiblingFrame?, sourceSuffixCompiled]
+      · simp [compileSiblingFrame?, targetSuffixCompiled]
   | outside sourceLeading targetLeading child tail different sourceBody
       targetBody sourceBodyCompiled targetBodyCompiled rest induction =>
       rw [List.nodup_cons] at childrenNodup
@@ -627,7 +813,7 @@ private theorem ErasureSiblingProvenance.aboveScope
           (context.extend region) child (allAbove child childMember)
           (outsideOther child childMember different)
           sourceBodyCompiled targetBodyCompiled
-      exact
+      obtain ⟨receipt, sourceGenerated, targetGenerated⟩ :=
         induction
           (fun candidate member =>
             childrenSubset candidate
@@ -640,6 +826,20 @@ private theorem ErasureSiblingProvenance.aboveScope
               denoteItemSeq_nil, and_true, cut_denotes_negation]
             exact and_congr (leadingLaw pre definitionEnv env)
               (not_congr (bodyLaw pre definitionEnv env)))
+      refine ⟨receipt, ?_, ?_⟩
+      · simp [compileSiblingFrame?, different, sourceBodyCompiled,
+          sourceGenerated]
+      · have targetDifferent :
+            targetRegion source removed child ≠
+              targetRegion source removed selected :=
+          fun same =>
+            different (targetRegion_injective source removed same)
+        have childExact := targetRegion_eq source removed child
+        have selectedExact := targetRegion_eq source removed selected
+        rw [childExact] at targetBodyCompiled
+        rw [selectedExact] at targetGenerated
+        simp [compileSiblingFrame?, different, targetBodyCompiled,
+          targetGenerated]
 
 private theorem envComp_erasureRebaseAbove
     {left right sourceSigs : List Sig}
@@ -675,9 +875,17 @@ theorem ErasureFrameProvenance.aboveScope
     (regionScope : source.val.Encloses region scope)
     (scopeSite :
       source.val.Encloses scope (source.val.nodes removed).region) :
-    Nonempty
-      (ErasureAboveScopeReceipt.{u} source removed scope sourceOuter
-        sourceFrame targetFrame) := by
+    ∃ receipt :
+        ErasureAboveScopeReceipt.{u} source removed scope sourceOuter
+          sourceFrame targetFrame,
+      compileRegionFrame? definitions source.val scope fuel region
+          sourceOuter =
+        some receipt.sourceStopped ∧
+      compileRegionFrame? definitions (Target source removed)
+          (targetRegion source removed scope) fuel
+          (targetRegion source removed region)
+          (targetContext source removed sourceOuter) =
+        some receipt.targetStopped := by
   induction provenance generalizing scope with
   | site childFuel sourceOuter sourceBody targetBody sourceAbove
       sourceBodyCompiled targetBodyCompiled =>
@@ -726,7 +934,8 @@ theorem ErasureFrameProvenance.aboveScope
           selected_child_encloses_scope definitions source.val
             source.property regionScope (Ne.symm currentScope) selectedData
             selectedSite scopeSite
-        obtain ⟨nestedReceipt⟩ :=
+        obtain ⟨nestedReceipt, sourceNestedGenerated,
+            targetNestedGenerated⟩ :=
           induction scope selectedScope scopeSite
         have sourceExtendedNodup :
             (sourceOuter.extend region).ids.Nodup :=
@@ -785,7 +994,8 @@ theorem ErasureFrameProvenance.aboveScope
               (sourceOuter.extend region) sourceExtendedNodup region
               (removed_not_mem_nodesAt_of_ne source removed region notSite)
               sourceNodesCompiled targetNodesCompiled pre definitionEnv env
-        obtain ⟨aroundReceipt⟩ :=
+        obtain ⟨aroundReceipt, sourceAroundGenerated,
+            targetAroundGenerated⟩ :=
           siblings.aboveScope candidateWellFormed sourceOuter region selected
             scope (fun _ member => member) childrenNodup selectedMember
             allAbove outsideOther nestedReceipt leadingLaw
@@ -793,6 +1003,22 @@ theorem ErasureFrameProvenance.aboveScope
           targetContext_extend source removed sourceOuter region
         let outerSigsExact :=
           congrArg ConcreteElaboration.WireContext.sigs contextExact
+        let targetBinderSigsExact :
+            (targetContext source removed
+                (sourceOuter.extend region)).sigs =
+              (((Target source removed).wiresAt
+                    (targetRegion source removed region)) ++
+                (targetContext source removed sourceOuter).ids).map
+                  (fun wire => ((Target source removed).wires wire).sig) := by
+          exact outerSigsExact.trans
+            ((ConcreteElaboration.WireContext.sigs_extend
+                (targetContext source removed sourceOuter)
+                (targetRegion source removed region)).trans
+              (@List.map_append _ _
+                (fun wire => ((Target source removed).wires wire).sig)
+                ((Target source removed).wiresAt
+                  (targetRegion source removed region))
+                (targetContext source removed sourceOuter).ids).symm)
         let rebasedTarget :=
           erasureRebaseRegionFrame contextExact targetAround
         have rebasedZipperRaw :=
@@ -843,6 +1069,33 @@ theorem ErasureFrameProvenance.aboveScope
             ((Target source removed).wiresAt
               (targetRegion source removed region))
             (outerSigsExact ▸ aroundReceipt.targetAbove)
+        let sourceStoppedAncestor :
+            RegionFrame definitions source.val sourceOuter :=
+          { visible := aroundReceipt.sourceStopped.visible
+            siteBody := aroundReceipt.sourceStopped.siteBody
+            context :=
+              bindContextFor source.val sourceOuter.ids
+                (source.val.wiresAt region)
+                aroundReceipt.sourceStopped.context }
+        let targetStoppedInner :
+            RegionFrame definitions (Target source removed)
+              ((targetContext source removed sourceOuter).extend
+                (targetRegion source removed region)) :=
+          { visible := aroundReceipt.targetStopped.visible
+            siteBody := aroundReceipt.targetStopped.siteBody
+            context :=
+              outerSigsExact ▸ aroundReceipt.targetStopped.context }
+        let targetStoppedAncestor :
+            RegionFrame definitions (Target source removed)
+              (targetContext source removed sourceOuter) :=
+          { visible := targetStoppedInner.visible
+            siteBody := targetStoppedInner.siteBody
+            context :=
+              bindContextFor (Target source removed)
+                (targetContext source removed sourceOuter).ids
+                ((Target source removed).wiresAt
+                  (targetRegion source removed region))
+                targetStoppedInner.context }
         have ancestorZipper :
             DiagramContext.SemanticZipper sourceAncestor targetAncestor
               (fun (pre : PreModel.{u}) env =>
@@ -862,10 +1115,62 @@ theorem ErasureFrameProvenance.aboveScope
             targetAbove := targetAncestor
             sourceBody := aroundReceipt.sourceBody
             targetBody := aroundReceipt.targetBody
+            sourceStopped := sourceStoppedAncestor
+            targetStopped := targetStoppedAncestor
+            sourceStoppedVisible :=
+              aroundReceipt.sourceStoppedVisible
+            targetStoppedVisible :=
+              aroundReceipt.targetStoppedVisible
+            sourceDecomposition :=
+              DiagramContext.StopsAboveBindMany.bindContextFor_cast
+                ((congrArg ConcreteElaboration.WireContext.sigs
+                    aroundReceipt.sourceStoppedVisible).trans
+                  (ConcreteElaboration.WireContext.sigs_extend
+                    aroundReceipt.sourceSiteOuter scope))
+                source.val sourceOuter.ids (source.val.wiresAt region)
+                aroundReceipt.sourceStopped.context
+                aroundReceipt.sourceAbove
+                aroundReceipt.sourceDecomposition
+            targetDecomposition :=
+              by
+                let holeExact :=
+                  (congrArg ConcreteElaboration.WireContext.sigs
+                      aroundReceipt.targetStoppedVisible).trans
+                    (ConcreteElaboration.WireContext.sigs_extend
+                      (targetContext source removed
+                        aroundReceipt.sourceSiteOuter)
+                      (targetRegion source removed scope))
+                have rebased :=
+                  DiagramContext.StopsAboveBindMany.rebaseOuter_cast
+                    holeExact targetBinderSigsExact
+                    aroundReceipt.targetAbove
+                    aroundReceipt.targetStopped.context
+                    aroundReceipt.targetDecomposition
+                have bound :=
+                  DiagramContext.StopsAboveBindMany.bindContextFor_cast
+                    holeExact (Target source removed)
+                    (targetContext source removed sourceOuter).ids
+                    ((Target source removed).wiresAt
+                      (targetRegion source removed region))
+                    (targetBinderSigsExact ▸
+                      aroundReceipt.targetStopped.context)
+                    (targetBinderSigsExact ▸
+                      aroundReceipt.targetAbove) rebased
+                have contextRebased :=
+                  erasureRebaseRegionFrame_context contextExact
+                    aroundReceipt.targetStopped
+                have outerProofExact :
+                    targetBinderSigsExact = outerSigsExact :=
+                  Subsingleton.elim _ _
+                rw [outerProofExact] at bound
+                simpa only [targetAncestor, targetStoppedAncestor,
+                  targetStoppedInner] using bound
+            sourceStoppedBody := aroundReceipt.sourceStoppedBody
+            targetStoppedBody := aroundReceipt.targetStoppedBody
             sourceFill := ?_
             targetFill := ?_
             zipper := ancestorZipper
-          }⟩
+          }, ?_, ?_⟩
         · change
             (bindContextFor source.val sourceOuter.ids
                 (source.val.wiresAt region) sourceAround.context).fill
@@ -939,6 +1244,92 @@ theorem ErasureFrameProvenance.aboveScope
                       (targetRegion source removed scope)
                       aroundReceipt.targetBody))
           all_goals rfl
+        · have scopeFound :=
+            find?_enclosing_scope definitions source.val source.property
+              (source.val.childrenOf region) selected scope
+              (source.val.nodes removed).region selectedFound selectedScope
+              scopeSite
+          simp [compileRegionFrame?, currentScope, sourceNodesCompiled,
+            scopeFound, sourceNestedGenerated, sourceAroundGenerated,
+            sourceStoppedAncestor]
+        · have targetCurrentNotScope :
+              targetRegion source removed region ≠
+                targetRegion source removed scope :=
+            fun same =>
+              currentScope (targetRegion_injective source removed same)
+          have scopeFound :=
+            find?_enclosing_scope definitions source.val source.property
+              (source.val.childrenOf region) selected scope
+              (source.val.nodes removed).region selectedFound selectedScope
+              scopeSite
+          obtain ⟨canonicalNodes, canonicalNested, canonicalAround,
+              canonicalNodesCompiled, canonicalNestedCompiled,
+              canonicalAroundCompiled, canonicalNodesExact,
+              canonicalNestedExact, canonicalAroundExact⟩ :=
+            compileFrameBranch_cast_context (Target source removed)
+              contextExact (targetRegion source removed scope) childFuel
+              (targetRegion source removed selected)
+              ((Target source removed).nodesAt
+                (targetRegion source removed region))
+              ((source.val.childrenOf region).map
+                (targetRegion source removed))
+              targetNodesCompiled targetNestedGenerated
+              targetAroundGenerated
+          subst canonicalNodes
+          subst canonicalNested
+          subst canonicalAround
+          have rebasedStoppedExact :
+              erasureRebaseRegionFrame contextExact
+                  aroundReceipt.targetStopped =
+                targetStoppedInner := by
+            simpa [targetStoppedInner] using
+              (erasureRebaseRegionFrame_eq contextExact
+                aroundReceipt.targetStopped)
+          rw [rebasedStoppedExact] at canonicalAroundCompiled
+          have targetScopeFound :
+              ((Target source removed).childrenOf
+                    (targetRegion source removed region)).find?
+                  (fun candidate =>
+                    decide
+                      ((Target source removed).Encloses candidate
+                        (targetRegion source removed scope))) =
+                some (targetRegion source removed selected) := by
+            rw [target_childrenOf, target_find_enclosing, scopeFound]
+            rfl
+          simp only [compileRegionFrame?, targetCurrentNotScope,
+            ↓reduceDIte]
+          rw [canonicalNodesCompiled, targetScopeFound]
+          have canonicalNestedCompiled' :
+              compileRegionFrame? definitions (Target source removed)
+                  scope childFuel selected
+                  ((targetContext source removed sourceOuter).extend
+                    (targetRegion source removed region)) =
+                some
+                  (erasureRebaseRegionFrame contextExact
+                    nestedReceipt.targetStopped) := by
+            simpa only [targetRegion_eq] using canonicalNestedCompiled
+          have canonicalAroundCompiled' :
+              compileSiblingFrame? definitions (Target source removed)
+                  childFuel
+                  ((targetContext source removed sourceOuter).extend
+                    (targetRegion source removed region))
+                  selected
+                  (erasureRebaseRegionFrame contextExact
+                    nestedReceipt.targetStopped)
+                  (erasureRebaseItemSeq contextExact targetNodes)
+                  ((Target source removed).childrenOf region) =
+                some targetStoppedInner := by
+            have targetChildrenExact :
+                (Target source removed).childrenOf region =
+                  (source.val.childrenOf region).map
+                    (targetRegion source removed) := by
+              simpa only [targetRegion_eq] using
+                (target_childrenOf source removed region)
+            rw [targetChildrenExact]
+            simpa only [targetRegion_eq] using canonicalAroundCompiled
+          simp only [targetRegion_eq]
+          simp [canonicalNestedCompiled', canonicalAroundCompiled',
+            targetStoppedAncestor]
 
 /-- Canonical source-visible to target-visible erasure renaming. -/
 def erasureVisibleRenaming

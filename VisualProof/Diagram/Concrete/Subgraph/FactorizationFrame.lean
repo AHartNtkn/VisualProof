@@ -1170,6 +1170,44 @@ private theorem compileSiblingFrame?_complete_of_children
                   simp [compileSiblingFrame?, same, bodyEquation,
                     frameCompiled], visibleEquality⟩
 
+/--
+Recover the ordinary compiled region body from the three accepted branches of
+an ancestor frame compilation.
+-/
+theorem compileRegionBody?_of_frame_branch
+    {diagram : ConcreteDiagram definitions.length}
+    {site region selected : diagram.RegionId}
+    {fuel : Nat}
+    {outer : WireContext diagram}
+    {nodes : ItemSeq definitions (outer.extend region).sigs}
+    {nested around :
+      RegionFrame definitions diagram (outer.extend region)}
+    (nodesCompiled :
+      compileNodes? definitions diagram (outer.extend region)
+          (diagram.nodesAt region) =
+        some nodes)
+    (nestedCompiled :
+      compileRegionFrame? definitions diagram site fuel selected
+          (outer.extend region) =
+        some nested)
+    (aroundCompiled :
+      compileSiblingFrame? definitions diagram fuel
+          (outer.extend region) selected nested nodes
+          (diagram.childrenOf region) =
+        some around) :
+    compileRegionBody? definitions diagram fuel region outer =
+      some (around.context.fill around.siteBody) := by
+  have nestedBodyCompiled :=
+    compileRegionFrame?_sound definitions diagram site fuel selected
+      (outer.extend region) nested nestedCompiled
+  obtain ⟨children, childrenCompiled, bodyExact⟩ :=
+    compileSiblingFrame?_sound definitions diagram fuel
+      (outer.extend region) selected nested around nodes
+      (diagram.childrenOf region) nestedBodyCompiled aroundCompiled
+  simp only [compileRegionBody?, nodesCompiled, childrenCompiled,
+    Option.bind_some]
+  exact congrArg some bodyExact
+
 private theorem encloses_child_split_local
     (diagram : ConcreteDiagram definitionCount)
     (ancestor child parent : diagram.RegionId)
@@ -1403,7 +1441,7 @@ theorem selected_child_encloses_scope
           regionScope scopeRegion
       exact (scopeStrict same.symm).elim
 
-private theorem find?_enclosing_scope
+theorem find?_enclosing_scope
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (wellFormed : diagram.WellFormed definitions)
