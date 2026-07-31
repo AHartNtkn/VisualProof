@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T007
+active_task: T016
 
 tasks:
   - id: T001
@@ -384,7 +384,7 @@ tasks:
   - id: T007
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Execute plan Task 6: formalize content-shape primitive pairs."
     inputs:
@@ -418,7 +418,23 @@ tasks:
     stop_if:
       - "A primitive would act on only some endpoints."
       - "Round-trip equality cannot be expressed by checked isomorphism and transport."
-    receipt: null
+    receipt:
+      result: blocked
+      harness: codex
+      blocked_reason: "The next denotational induction step must eliminate the private AppliedSiteErasure.Trace, whose owner VisualProof/Rule/WirePrimitive/Site.lean is outside T007.allowed_files."
+      changed_files:
+        - "VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean"
+        - "VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
+      commands:
+        - cmd: "lake build"
+          status: pass
+        - cmd: "npm run formal:size"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Committed checker-derived applied-site replacement semantics as 058ae0b: the theorem exposes the exact compiled atom and acted-wire origin, canonical singleton-erasure target frame, and whole-root replacement denotation. Task 6 remains incomplete; T016 continues with the required trace owner in scope."
+      spawned_tasks:
+        - T016
   - id: T008
     type: worker
     assignee: Worker
@@ -446,6 +462,48 @@ tasks:
     stop_if:
       - "The TypeScript uniform-visible gate cannot be matched."
       - "A full-model dependency is hidden behind PreModel."
+    receipt: null
+  - id: T016
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Continue plan Task 6: fold the private applied-site erasure trace, instantiate all content witnesses, and expose the six public soundness receipts."
+    inputs:
+      - "Plan Task 6"
+      - "T007 structural receipts and commit 058ae0b"
+      - "AppliedSite.replacement_denotation"
+      - "Merged src/kernel/rules/wire-content.ts"
+    constraints:
+      - "Every primitive transforms all applied-head endpoints."
+      - "Use the private checked trace; do not add a caller-supplied semantic premise."
+      - "Do not use the monolithic relation rule as the primitive proof path."
+    allowed_files:
+      - "VisualProof.lean"
+      - "VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean"
+      - "VisualProof/Diagram/Concrete/IsomorphismSearch.lean"
+      - "VisualProof/Diagram/Concrete/WirePrimitive/Content.lean"
+      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean"
+      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean"
+      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalProvenance.lean"
+      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinSingletonRemoval.lean"
+      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinAlignment.lean"
+      - "VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean"
+      - "VisualProof/Rule/MonolithicWireQuantifier.lean"
+      - "VisualProof/Rule/WirePrimitive.lean"
+      - "VisualProof/Rule/WirePrimitive/Site.lean"
+      - "VisualProof/Rule/WirePrimitive/Witness.lean"
+      - "VisualProof/Rule/WirePrimitive/WitnessFixtures.lean"
+      - "VisualProof/Rule/WirePrimitive/Content.lean"
+      - "VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
+      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+    verify:
+      - "lake build"
+      - "npm run formal:size"
+    stop_if:
+      - "A primitive would act on only some endpoints."
+      - "Round-trip equality cannot be expressed by checked isomorphism and transport."
+      - "The semantic induction requires a monolithic-rule premise."
     receipt: null
   - id: T009
     type: worker
