@@ -394,6 +394,7 @@ structure ScopedArityShiftLedger
   insertion :
     TypedArguments.InsertionEvidence result.targetArguments
       sourceArguments fixedSignature
+  position_exact : insertion.position = sourceArguments.length
   frame : LocalCylindricalFrame result sourceArguments
   accepted :
     CheckedCylindricalShape insertion
@@ -440,7 +441,7 @@ def checkScopedArityShiftLedger
       checkCylindricalShape insertion
         (fun {_} value => value)
         frame.sourceShape frame.targetShape
-    pure ⟨insertion, frame, accepted⟩
+    pure ⟨insertion, rfl, frame, accepted⟩
   else
     none
 
@@ -470,7 +471,7 @@ private def checkScopedArityShiftLedgerFromSites
       checkCylindricalShape insertion
         (fun {_} value => value)
         frame.sourceShape frame.targetShape
-    pure ⟨insertion, frame, accepted⟩
+    pure ⟨insertion, rfl, frame, accepted⟩
   else
     none
 

@@ -268,6 +268,33 @@ theorem arityShift_complete_with_targetSites
     (arityShiftSpec_valid source wire relationArguments sourceSignature sites
       newArgument)
 
+/-- Arity shift deletes exactly the acted source head and no ambient wire. -/
+theorem arityShift_sourceRemovedWires_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    result.sourceRemovedWires = [wire] := by
+  unfold arityShift at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      cases sitesAccepted : checkedArgumentSites source wire with
+      | error error =>
+          rw [sitesAccepted] at accepted
+          contradiction
+      | ok sites =>
+          rw [sitesAccepted] at accepted
+          have exact :=
+            replaceAppliedEnds_sourceRemovedWires_exact source wire sites
+              (arityShiftSpec source wire relationArguments sites newArgument)
+              _ result accepted
+          simpa [arityShiftSpec] using exact
+
 private structure LocalUnshiftWiresReceipt
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}

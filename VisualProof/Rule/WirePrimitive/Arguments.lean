@@ -222,6 +222,7 @@ structure AppliedArityShift
   private ledger :
     ArgumentsSemantics.ScopedArityShiftLedger result sourceArguments
       newArgument
+  private source_removed_exact : result.sourceRemovedWires = [wire]
 
 structure AppliedArityUnshift
     (source : CheckedDiagram definitions)
@@ -318,6 +319,23 @@ def source
     {newArgument : Sig}
     (_ : AppliedArityShift source wire newArgument) := source
 
+/-- The exact source relation argument vector selected by the checker. -/
+def sourceArgumentList
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) : List Sig :=
+  applied.sourceArguments
+
+/-- Exact relation signature of the live source wire. -/
+theorem sourceWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    (source.val.wires wire).sig = .rel applied.sourceArgumentList :=
+  applied.sourceSignature
+
 def target
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -342,6 +360,84 @@ def targetSites
     (applied : AppliedArityShift source wire newArgument) :
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.frame.targetSites
+
+/-- Arity shift appends exactly one argument signature. -/
+theorem targetArguments_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    applied.result.targetArguments =
+      applied.sourceArgumentList ++ [newArgument] := by
+  unfold sourceArgumentList
+  calc
+    applied.result.targetArguments =
+        ConcreteWirePrimitive.insertAt applied.sourceArguments
+          applied.ledger.insertion.position newArgument :=
+      applied.ledger.insertion.largerExact.symm
+    _ = ConcreteWirePrimitive.insertAt applied.sourceArguments
+          applied.sourceArguments.length newArgument := by
+      rw [applied.ledger.position_exact]
+    _ = applied.sourceArguments ++ [newArgument] := by
+      induction applied.sourceArguments with
+      | nil => rfl
+      | cons head tail induction =>
+          simp [ConcreteWirePrimitive.insertAt, induction]
+
+/-- Exact relation signature of the fresh live wire. -/
+theorem targetWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    (applied.target.val.wires applied.targetWire).sig =
+      .rel (applied.sourceArgumentList ++ [newArgument]) := by
+  change
+    (applied.result.checked.val.wires applied.result.targetWire).sig =
+      .rel (applied.sourceArgumentList ++ [newArgument])
+  rw [applied.result.targetWire_signature,
+    applied.targetArguments_exact]
+
+/-- Exact target image of a retained source wire. -/
+def transportRetainedWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    applied.target.val.WireId :=
+  applied.result.retainedWire sourceWire (by
+    unfold ConcreteWireQuantifier.Internal.retainedWires
+    apply List.mem_filter.mpr
+    refine ⟨Data.Finite.mem_allFin sourceWire, ?_⟩
+    rw [applied.source_removed_exact]
+    simp [different])
+
+/-- Arity-shift ambient transport preserves the exact wire signature. -/
+theorem transportRetainedWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    (applied.target.val.wires
+        (applied.transportRetainedWire sourceWire different)).sig =
+      (source.val.wires sourceWire).sig :=
+  applied.result.retainedWire_signature sourceWire _
+
+/-- The image of a retained ambient wire cannot be the fresh live head. -/
+theorem transportRetainedWire_ne_targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    applied.transportRetainedWire sourceWire different ≠
+      applied.targetWire :=
+  applied.result.retainedWire_ne_targetWire sourceWire _
 
 def tag
     {source : CheckedDiagram definitions}
@@ -626,18 +722,23 @@ def applyArityShift
     (wire : source.val.WireId)
     (newArgument : Sig) :
     Except WireArgumentError
-      (AppliedArityShift source wire newArgument) := do
-  let result ←
-    (ConcreteWirePrimitive.arityShift source wire newArgument).mapError
-      .concreteRejected
-  match sourceSignature : (source.val.wires wire).sig with
-  | .iota => throw .semanticLedgerRejected
-  | .rel sourceArguments =>
-      let ledger ←
-        optionToExcept .semanticLedgerRejected <|
-          ArgumentsSemantics.checkScopedArityShiftLedger result
-            sourceArguments sourceSignature newArgument
-      pure ⟨result, sourceArguments, sourceSignature, ledger⟩
+      (AppliedArityShift source wire newArgument) := by
+  match accepted :
+      ConcreteWirePrimitive.arityShift source wire newArgument with
+  | .error error => exact .error (.concreteRejected error)
+  | .ok result =>
+      match sourceSignature : (source.val.wires wire).sig with
+      | .iota => exact .error .semanticLedgerRejected
+      | .rel sourceArguments =>
+          match ledgerAccepted :
+              ArgumentsSemantics.checkScopedArityShiftLedger result
+                sourceArguments sourceSignature newArgument with
+          | none => exact .error .semanticLedgerRejected
+          | some ledger =>
+              exact .ok
+                ⟨result, sourceArguments, sourceSignature, ledger,
+                  ConcreteWirePrimitive.arityShift_sourceRemovedWires_exact
+                    source wire newArgument result accepted⟩
 
 def applyArityUnshift
     (source : CheckedDiagram definitions)

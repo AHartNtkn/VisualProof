@@ -886,6 +886,70 @@ def commonCoreIso
     rw [← candidateExact]
     exact portCorresponds baseWire endpoint baseIncident
 
+/-- Exact target image of one source wire retained by an argument
+replacement.  Compiler ambient transport consumes this construction-owned
+map instead of rediscovering dense identifiers arithmetically. -/
+def retainedWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∈
+      Internal.retainedWires source result.sourceRemovedWires) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (Fin.castAdd (1 + result.spec.localCount)
+      (Internal.retainedWireIndex source result.sourceRemovedWires
+        sourceWire retained))
+
+/-- Retained ambient transport preserves its exact signature. -/
+theorem retainedWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∈
+      Internal.retainedWires source result.sourceRemovedWires) :
+    (result.checked.val.wires
+        (result.retainedWire sourceWire retained)).sig =
+      (source.val.wires sourceWire).sig := by
+  unfold retainedWire
+  rw [Internal.checkedWire_signature_transport]
+  unfold replacementCandidate
+  rw [assigned_wire_signature]
+  rw [replacementSkeleton_retained_wire_signature]
+  change sourceWire ∈
+    Internal.retainedWires source (wire :: result.spec.removedWires) at retained
+  change
+    (source.val.wires
+      (Internal.sourceRetainedWire source
+        (wire :: result.spec.removedWires)
+        (Internal.retainedWireIndex source
+          (wire :: result.spec.removedWires) sourceWire retained))).sig =
+      (source.val.wires sourceWire).sig
+  rw [Internal.sourceRetainedWire_retainedWireIndex source
+    (wire :: result.spec.removedWires) sourceWire retained]
+
+/-- A retained ambient wire is never the freshly allocated relation head. -/
+theorem retainedWire_ne_targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∈
+      Internal.retainedWires source result.sourceRemovedWires) :
+    result.retainedWire sourceWire retained ≠ result.targetWire := by
+  intro same
+  have values := congrArg Fin.val same
+  unfold retainedWire at values
+  rw [result.targetWire_exact] at values
+  simp [Internal.checkedWire, replacementCandidateWire,
+    replacementHeadWire] at values
+  have bound :=
+    (Internal.retainedWireIndex source result.sourceRemovedWires
+      sourceWire retained).isLt
+  omega
+
 end ArgumentResult
 
 end ConcreteWirePrimitive

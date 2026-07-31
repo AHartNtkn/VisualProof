@@ -491,7 +491,7 @@ private structure OwnerTyped
       diagram.Encloses (diagram.wires (owner endpoint)).scope
         (diagram.nodes endpoint.node).region
 
-private theorem assigned_wire_signature
+theorem assigned_wire_signature
     (diagram : ConcreteDiagram definitionCount)
     (owner : CEndpoint diagram.nodeCount → diagram.WireId)
     (wire : diagram.WireId) :
@@ -2470,6 +2470,34 @@ theorem replaceAppliedEnds_complete_with_targetSites
     replaceAppliedEnds_complete source wire sites spec valid
   refine ⟨result, accepted, result.targetSites, ?_⟩
   exact result.targetSites.checked
+
+/-- A successful replacement retains the caller's exact ordered source-wire
+removal list; the checker does not substitute a second operation model. -/
+theorem replaceAppliedEnds_sourceRemovedWires_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result) :
+    result.sourceRemovedWires = wire :: spec.removedWires := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
 
 def checkedArgumentSites
     (source : CheckedDiagram definitions)
