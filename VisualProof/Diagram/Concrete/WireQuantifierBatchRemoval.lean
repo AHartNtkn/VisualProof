@@ -1997,6 +1997,28 @@ theorem checkedWire_endpoints_transport
   unfold checkedWire checkedEndpoint checkedNode
   simp
 
+/-- Endpoint ownership is transported exactly when a checked well-formed
+candidate is reindexed. -/
+theorem checkedEndpoint_owner_transport
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (endpoint : CEndpoint candidate.nodeCount) :
+    checked.val.endpointOwner? (checkedEndpoint generated endpoint) =
+      (candidate.endpointOwner? endpoint).map
+        (checkedWire generated) := by
+  subst candidate
+  have endpointExact : checkedEndpoint rfl endpoint = endpoint := by
+    cases endpoint
+    congr
+  rw [endpointExact]
+  cases owner : checked.val.endpointOwner? endpoint with
+  | none => rfl
+  | some wire =>
+      simp only [Option.map_some, Option.some.injEq]
+      apply Fin.ext
+      rfl
+
 def checkedNodeData
     {checked : CheckedDiagram definitions}
     {candidate : ConcreteDiagram definitions.length}

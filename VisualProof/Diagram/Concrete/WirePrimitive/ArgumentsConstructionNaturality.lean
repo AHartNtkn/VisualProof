@@ -390,6 +390,118 @@ theorem ArgumentResult.retainedNodeImage_sourceRetainedNode
     (Internal.retainedNodeIndex_sourceRetainedNode source
       (argumentSiteNodes result.sites) retained)
 
+/-- A wire owning a required port of a retained source node is itself
+retained.  Exhaustiveness rules out every removed wire because each endpoint
+of such a wire belongs to an acted site. -/
+theorem ArgumentResult.ownerOfRetainedNode_not_removed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (node : source.val.NodeId)
+    (nodeRetained : node ∉ argumentSiteNodes result.sites)
+    (port : CPort)
+    (sourceWire : source.val.WireId)
+    (sourceOwner :
+      source.val.endpointOwner? ⟨node, port⟩ = some sourceWire) :
+    sourceWire ∉ result.sourceRemovedWires := by
+  intro removed
+  have incident := ConcreteDiagram.endpointOwner?_incident source.val
+    ⟨node, port⟩ sourceWire sourceOwner
+  have removedNode := result.source_removed_exhausted sourceWire removed
+    ⟨node, port⟩ incident
+  exact nodeRetained removedNode
+
+/-- Endpoint ownership at a retained node is transported through the exact
+retained node and wire images. -/
+theorem ArgumentResult.retainedNodeImage_endpointOwner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (node : source.val.NodeId)
+    (nodeRetained : node ∉ argumentSiteNodes result.sites)
+    (port : CPort)
+    (required : port ∈ source.val.requiredPorts node)
+    (sourceWire : source.val.WireId)
+    (sourceOwner :
+      source.val.endpointOwner? ⟨node, port⟩ = some sourceWire) :
+    result.checked.val.endpointOwner?
+        ⟨result.retainedNodeImage node nodeRetained, port⟩ =
+      some (result.retainedWireImage sourceWire
+        (result.ownerOfRetainedNode_not_removed node nodeRetained port
+          sourceWire sourceOwner)) := by
+  let nodeMember : node ∈ Internal.retainedNodes source
+      (argumentSiteNodes result.sites) := by
+    unfold Internal.retainedNodes
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin node, decide_eq_true nodeRetained⟩
+  let retainedNode := Internal.retainedNodeIndex source
+    (argumentSiteNodes result.sites) node nodeMember
+  have sourceNodeExact :
+      Internal.sourceRetainedNode source
+          (argumentSiteNodes result.sites) retainedNode = node :=
+    Internal.sourceRetainedNode_retainedNodeIndex source
+      (argumentSiteNodes result.sites) node nodeMember
+  have skeletonRequired :
+      port ∈ (replacementSkeleton result.plan).requiredPorts
+        (Fin.castAdd result.sites.sites.length retainedNode) := by
+    rw [replacementSkeleton_retained_requiredPorts]
+    rw [sourceNodeExact]
+    exact required
+  have candidateRequired :
+      port ∈ (replacementCandidate result.plan).requiredPorts
+        (Fin.castAdd result.sites.sites.length retainedNode) := by
+    unfold replacementCandidate
+    rw [assigned_requiredPorts]
+    exact skeletonRequired
+  let wireNotRemoved := result.ownerOfRetainedNode_not_removed node
+    nodeRetained port sourceWire sourceOwner
+  let wireMember : sourceWire ∈
+      Internal.retainedWires source result.sourceRemovedWires := by
+    unfold Internal.retainedWires
+    exact List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin sourceWire, decide_eq_true wireNotRemoved⟩
+  let retainedWire := Internal.retainedWireIndex source
+    result.sourceRemovedWires sourceWire wireMember
+  have candidateOwner :
+      (replacementCandidate result.plan).endpointOwner?
+          ⟨Fin.castAdd result.sites.sites.length retainedNode, port⟩ =
+        some (Fin.castAdd (1 + result.spec.localCount) retainedWire) := by
+    calc
+      _ = some (replacementOwner result.plan
+            ⟨Fin.castAdd result.sites.sites.length retainedNode, port⟩) :=
+        assigned_endpointOwner_required
+          (replacementSkeleton result.plan) (replacementOwner result.plan)
+          (Fin.castAdd result.sites.sites.length retainedNode) port
+          candidateRequired
+      _ = _ := by
+        congr 1
+        unfold replacementOwner
+        simp only [Fin.addCases_left]
+        rw [sourceNodeExact, sourceOwner]
+        change (retainedReplacementWire? result.plan sourceWire).getD
+            (replacementHeadWire result.plan) = _
+        rw [retainedReplacementWire?_some result.plan sourceWire wireMember]
+        rfl
+  have transported := Internal.checkedEndpoint_owner_transport
+    result.generated
+    (⟨Fin.castAdd result.sites.sites.length retainedNode, port⟩ :
+      CEndpoint (replacementCandidate result.plan).nodeCount)
+  rw [candidateOwner] at transported
+  have nodeImageExact :
+      result.retainedNodeImage node nodeRetained =
+        Internal.checkedNode result.generated
+          (Fin.castAdd result.sites.sites.length retainedNode) := by
+    unfold ArgumentResult.retainedNodeImage retainedNode nodeMember
+    congr
+  have wireImageExact :
+      result.retainedWireImage sourceWire wireNotRemoved =
+        Internal.checkedWire result.generated
+          (Fin.castAdd (1 + result.spec.localCount) retainedWire) := by
+    unfold ArgumentResult.retainedWireImage retainedWire wireMember
+    congr
+  rw [nodeImageExact, wireImageExact]
+  exact transported
+
 /-- Exact ordered node-payload decomposition at every source region.  Retained
 payloads are renamed only by the canonical region equivalence; generated
 payloads are precisely the replacement atoms selected by the operation. -/

@@ -142,7 +142,7 @@ private def assignEndpoints
           (requiredEndpoints diagram).filter fun endpoint =>
             owner endpoint == wire } }
 
-private theorem assigned_requiredPorts
+theorem assigned_requiredPorts
     (diagram : ConcreteDiagram definitionCount)
     (owner : CEndpoint diagram.nodeCount → diagram.WireId)
     (node : diagram.NodeId) :
@@ -316,7 +316,7 @@ theorem required_endpoint_mem
   refine ⟨node, Data.Finite.mem_allFin _, ?_⟩
   exact List.mem_map.mpr ⟨port, required, rfl⟩
 
-private theorem assigned_endpointOwner_required
+theorem assigned_endpointOwner_required
     (diagram : ConcreteDiagram definitionCount)
     (owner : CEndpoint diagram.nodeCount → diagram.WireId)
     (node : (assignEndpoints diagram owner).NodeId)
