@@ -195,70 +195,247 @@ theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
         rfl
     _ = _ := by rw [baseSources]
 
-private def contextEmbeddingVisible
-    (source : ConcreteDiagram sourceCount)
-    (target : ConcreteDiagram targetCount) :
-    (sourceIds : List source.WireId) →
-    (targetIds : List target.WireId) →
-    (mapWire : source.WireId → target.WireId) →
-    (signature : ∀ wire, wire ∈ sourceIds →
-      (target.wires (mapWire wire)).sig = (source.wires wire).sig) →
-    (visible : ∀ wire, wire ∈ sourceIds → mapWire wire ∈ targetIds) →
-    WireRenaming
-      (sourceIds.map fun wire => (source.wires wire).sig)
-      (targetIds.map fun wire => (target.wires wire).sig)
-  | [], _, _, _, _ => fun value => nomatch value
-  | head :: tail, targetIds, mapWire, signature, visible =>
-      fun value =>
-        match value with
-        | .here =>
-            InsertionCompilation.NaturalityInternal.castVar
-              (signature head (by simp))
-              (InsertionCompilation.NaturalityInternal.varForMember target
-                targetIds (mapWire head) (visible head (by simp)))
-        | .there rest =>
-            contextEmbeddingVisible source target tail targetIds mapWire
-              (fun wire member => signature wire
-                (List.mem_cons_of_mem head member))
-              (fun wire member => visible wire
-                (List.mem_cons_of_mem head member)) rest
-
-private theorem contextEmbeddingVisible_origin
+private def contextEmbeddingMapped
     (source : ConcreteDiagram sourceCount)
     (target : ConcreteDiagram targetCount)
-    (sourceIds : List source.WireId)
-    (targetIds : List target.WireId)
+    (mapWire : source.WireId → target.WireId) :
+    (sourceIds : List source.WireId) →
+    (signature : ∀ wire, wire ∈ sourceIds →
+      (target.wires (mapWire wire)).sig = (source.wires wire).sig) →
+    WireRenaming
+      (sourceIds.map fun sourceWire => (source.wires sourceWire).sig)
+      ((sourceIds.map mapWire).map fun targetWire =>
+        (target.wires targetWire).sig)
+  | [], _ => fun value => nomatch value
+  | head :: tail, signature => fun value =>
+      match value with
+      | .here =>
+          InsertionCompilation.NaturalityInternal.castVar
+            (signature head (by simp)) .here
+      | .there rest =>
+          .there (contextEmbeddingMapped source target mapWire tail
+            (fun wire member => signature wire
+              (List.mem_cons_of_mem head member)) rest)
+
+private def consSigsExact
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail) :
+    leftHead :: leftTail = rightHead :: rightTail := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_consSigsExact_here
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail) :
+    consSigsExact headExact tailExact ▸
+        (headExact ▸
+          (Var.here : Var (leftHead :: leftTail) leftHead)) =
+      (Var.here : Var (rightHead :: rightTail) rightHead) := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_consSigsExact_there
+    {leftHead rightHead : Sig}
+    {leftTail rightTail : List Sig}
+    (headExact : leftHead = rightHead)
+    (tailExact : leftTail = rightTail)
+    {sig : Sig}
+    (value : Var leftTail sig) :
+    consSigsExact headExact tailExact ▸
+        (Var.there value : Var (leftHead :: leftTail) sig) =
+      Var.there (tailExact ▸ value) := by
+  cases headExact
+  cases tailExact
+  rfl
+
+private theorem cast_symm_cast
+    (same : source = target)
+    (value : Var source sig) :
+    same.symm ▸ (same ▸ value) = value := by
+  cases same
+  rfl
+
+private theorem cast_cast_symm
+    (same : source = target)
+    (value : Var target sig) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+private def mappedContextSigsExact
+    (source : ConcreteDiagram sourceCount)
+    (target : ConcreteDiagram targetCount)
+    (mapWire : source.WireId → target.WireId) :
+    (sourceIds : List source.WireId) →
+    (signature : ∀ wire, wire ∈ sourceIds →
+      (target.wires (mapWire wire)).sig = (source.wires wire).sig) →
+    (sourceIds.map mapWire).map (fun targetWire =>
+        (target.wires targetWire).sig) =
+      sourceIds.map fun sourceWire => (source.wires sourceWire).sig
+  | [], _ => rfl
+  | head :: tail, signature =>
+      consSigsExact (signature head (by simp))
+        (mappedContextSigsExact source target mapWire tail
+          (fun wire member => signature wire
+            (List.mem_cons_of_mem head member)))
+
+private theorem contextEmbeddingMapped_origin
+    (source : ConcreteDiagram sourceCount)
+    (target : ConcreteDiagram targetCount)
     (mapWire : source.WireId → target.WireId)
+    (sourceIds : List source.WireId)
     (signature : ∀ wire, wire ∈ sourceIds →
       (target.wires (mapWire wire)).sig = (source.wires wire).sig)
-    (visible : ∀ wire, wire ∈ sourceIds → mapWire wire ∈ targetIds)
     {sig : Sig}
-    (value : Var (sourceIds.map fun wire => (source.wires wire).sig) sig) :
-    WireContext.origin target targetIds
-        (contextEmbeddingVisible source target sourceIds targetIds mapWire
-          signature visible value) =
+    (value : Var
+      (sourceIds.map fun sourceWire => (source.wires sourceWire).sig) sig) :
+    WireContext.origin target (sourceIds.map mapWire)
+        (contextEmbeddingMapped source target mapWire sourceIds signature
+          value) =
       mapWire (WireContext.origin source sourceIds value) := by
   induction sourceIds with
   | nil => nomatch value
   | cons head tail induction =>
       cases value with
       | here =>
-          unfold contextEmbeddingVisible
-          change
-            WireContext.origin target targetIds
-                (InsertionCompilation.NaturalityInternal.castVar
-                  (signature head (by simp))
-                  (InsertionCompilation.NaturalityInternal.varForMember target
-                    targetIds (mapWire head) (visible head (by simp)))) =
-              mapWire head
-          rw [InsertionCompilation.NaturalityInternal.origin_castVar,
-            InsertionCompilation.NaturalityInternal.varForMember_origin]
+          simp only [contextEmbeddingMapped, WireContext.origin]
+          exact InsertionCompilation.NaturalityInternal.origin_castVar
+            target (mapWire head :: tail.map mapWire)
+              (signature head (by simp)) .here
       | there rest =>
           exact induction
             (fun wire member => signature wire
-              (List.mem_cons_of_mem head member))
-            (fun wire member => visible wire
               (List.mem_cons_of_mem head member)) rest
+
+private theorem contextEmbeddingMapped_reindex_identity
+    (source : ConcreteDiagram sourceCount)
+    (target : ConcreteDiagram targetCount)
+    (mapWire : source.WireId → target.WireId)
+    (sourceIds : List source.WireId)
+    (signature : ∀ wire, wire ∈ sourceIds →
+      (target.wires (mapWire wire)).sig = (source.wires wire).sig) :
+    (fun {sig} (value : Var
+        (sourceIds.map fun sourceWire => (source.wires sourceWire).sig) sig) =>
+      mappedContextSigsExact source target mapWire sourceIds signature ▸
+        contextEmbeddingMapped source target mapWire sourceIds signature
+          value) =
+      (fun {_} value => value) := by
+  funext sig value
+  induction sourceIds with
+  | nil => nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here =>
+          exact cast_consSigsExact_here
+            (signature head (by simp))
+            (mappedContextSigsExact source target mapWire tail
+              (fun wire member => signature wire
+                (List.mem_cons_of_mem head member)))
+      | there rest =>
+          simp only [contextEmbeddingMapped]
+          change
+            consSigsExact (signature head (by simp))
+                (mappedContextSigsExact source target mapWire tail
+                  (fun wire member => signature wire
+                    (List.mem_cons_of_mem head member))) ▸
+              (Var.there
+                (contextEmbeddingMapped source target mapWire tail
+                  (fun wire member => signature wire
+                    (List.mem_cons_of_mem head member)) rest)) =
+              Var.there rest
+          rw [cast_consSigsExact_there
+            (signature head (by simp))
+            (mappedContextSigsExact source target mapWire tail
+              (fun wire member => signature wire
+                (List.mem_cons_of_mem head member)))]
+          exact congrArg Var.there (induction
+            (fun wire member => signature wire
+              (List.mem_cons_of_mem head member)) rest)
+
+private theorem Vars.rename_eq_of_pointwise
+    (rho : WireRenaming context context)
+    (pointwise : ∀ {signature : Sig} (value : Var context signature),
+      rho value = value) :
+    ∀ values : Vars context arguments, values.rename rho = values
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [Vars.rename]
+      rw [pointwise head, Vars.rename_eq_of_pointwise rho pointwise tail]
+
+mutual
+
+private theorem Region.renameWires_eq_of_pointwise
+    (rho : WireRenaming context context)
+    (pointwise : ∀ {signature : Sig} (value : Var context signature),
+      rho value = value) :
+    ∀ body : Region definitions context, body.renameWires rho = body
+  | .mk items => by
+      exact congrArg Region.mk
+        (ItemSeq.renameWires_eq_of_pointwise rho pointwise items)
+
+private theorem Item.renameWires_eq_of_pointwise
+    (rho : WireRenaming context context)
+    (pointwise : ∀ {signature : Sig} (value : Var context signature),
+      rho value = value) :
+    ∀ item : Item definitions context, item.renameWires rho = item
+  | .atom head arguments => by
+      simp only [Item.renameWires]
+      rw [pointwise head,
+        Vars.rename_eq_of_pointwise rho pointwise arguments]
+  | .named definition arguments => by
+      simp only [Item.renameWires]
+      rw [Vars.rename_eq_of_pointwise rho pointwise arguments]
+  | .identity signature ports atLeastTwo => by
+      simp only [Item.renameWires]
+      have portsExact : ports.map (rho (sig := signature)) = ports := by
+        calc
+          ports.map (rho (sig := signature)) =
+              ports.map (fun value => value) := by
+            apply List.map_congr_left
+            intro value _member
+            exact pointwise value
+          _ = ports := by simp
+      simp [portsExact]
+  | .cut body => by
+      exact congrArg Item.cut
+        (Region.renameWires_eq_of_pointwise rho pointwise body)
+  | .bind signature body => by
+      apply congrArg (Item.bind signature)
+      apply Region.renameWires_eq_of_pointwise
+      intro _ value
+      cases value with
+      | here => rfl
+      | there outer =>
+          exact congrArg Var.there (pointwise outer)
+
+private theorem ItemSeq.renameWires_eq_of_pointwise
+    (rho : WireRenaming context context)
+    (pointwise : ∀ {signature : Sig} (value : Var context signature),
+      rho value = value) :
+    ∀ items : ItemSeq definitions context, items.renameWires rho = items
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [ItemSeq.renameWires]
+      rw [Item.renameWires_eq_of_pointwise rho pointwise head,
+        ItemSeq.renameWires_eq_of_pointwise rho pointwise tail]
+
+end
+
+private theorem ItemSeq.renameWires_reindex_identity
+    (rho : WireRenaming source target)
+    (same : target = source)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      same ▸ rho value = value)
+    (items : ItemSeq definitions source) :
+    same ▸ items.renameWires rho = items := by
+  cases same
+  exact ItemSeq.renameWires_eq_of_pointwise rho pointwise items
 
 /-- Context-local correspondence used above an argument replacement.  The
 wire action is intentionally constrained only on the visible source ids:
@@ -358,11 +535,23 @@ def wireRenaming
     {targetContext : WireContext result.checked.val}
     (context : result.RetainedContext sourceContext targetContext) :
     WireRenaming sourceContext.sigs targetContext.sigs :=
-  contextEmbeddingVisible source.val result.checked.val sourceContext.ids
-    targetContext.ids result.contextWireMap context.signature_exact (by
-      intro sourceWire member
-      rw [context.ids_exact]
-      exact List.mem_map.mpr ⟨sourceWire, member, rfl⟩)
+  fun {_} value => context.sigs_exact.symm ▸ value
+
+/-- Reindexing the exact mapped target signature vector back to the source
+vector turns retained-context renaming into positional identity. -/
+theorem wireRenaming_reindex_identity
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext) :
+    (fun {sig} (value : Var sourceContext.sigs sig) =>
+      context.sigs_exact ▸ context.wireRenaming value) =
+      (fun {_} value => value) := by
+  funext sig value
+  unfold wireRenaming
+  exact cast_cast_symm context.sigs_exact value
 
 /-- The retained-context renaming acts on concrete origins by the recorded
 wire map. -/
@@ -378,12 +567,59 @@ theorem wireRenaming_origin
         (context.wireRenaming value) =
       result.contextWireMap
         (WireContext.origin source.val sourceContext.ids value) := by
-  exact contextEmbeddingVisible_origin source.val result.checked.val
-    sourceContext.ids targetContext.ids result.contextWireMap
-    context.signature_exact (by
-      intro sourceWire member
-      rw [context.ids_exact]
-      exact List.mem_map.mpr ⟨sourceWire, member, rfl⟩) value
+  cases sourceContext with
+  | mk sourceIds =>
+      cases targetContext with
+      | mk targetIds =>
+          have idsExact := context.ids_exact
+          dsimp only at idsExact
+          subst targetIds
+          have positional := contextEmbeddingMapped_origin source.val
+            result.checked.val result.contextWireMap sourceIds
+            context.signature_exact value
+          have renamingExact :
+              context.wireRenaming value =
+                contextEmbeddingMapped source.val result.checked.val
+                  result.contextWireMap sourceIds context.signature_exact
+                  value := by
+            unfold wireRenaming
+            have mappedExact :=
+              mappedContextSigsExact source.val result.checked.val
+                result.contextWireMap sourceIds context.signature_exact
+            have sourceExact := context.sigs_exact
+            have same : sourceExact = mappedExact := Subsingleton.elim _ _
+            have reindexed := congrFun
+              (congrFun
+                (contextEmbeddingMapped_reindex_identity source.val
+                  result.checked.val result.contextWireMap sourceIds
+                  context.signature_exact) sig) value
+            have mappedProofSame :
+                mappedContextSigsExact source.val result.checked.val
+                    result.contextWireMap sourceIds
+                    context.signature_exact = mappedExact :=
+              Subsingleton.elim _ _
+            rw [mappedProofSame] at reindexed
+            have embeddedExact :
+                contextEmbeddingMapped source.val result.checked.val
+                    result.contextWireMap sourceIds context.signature_exact
+                    value =
+                  mappedExact.symm ▸ value := by
+              calc
+                _ = mappedExact.symm ▸
+                      (mappedExact ▸
+                        contextEmbeddingMapped source.val result.checked.val
+                          result.contextWireMap sourceIds
+                          context.signature_exact value) :=
+                    (cast_symm_cast mappedExact _).symm
+                _ = _ := congrArg
+                  (fun mappedValue => mappedExact.symm ▸ mappedValue)
+                  reindexed
+            change context.sigs_exact.symm ▸ value = _
+            rw [show context.sigs_exact = mappedExact from
+              Subsingleton.elim _ _]
+            exact embeddedExact.symm
+          rw [renamingExact]
+          exact positional
 
 /-- One retained source node compiles to the renamed target item under
 corresponding visible contexts. -/
@@ -562,6 +798,37 @@ theorem compileNodes_natural
                 targetRest, ?_, ?_⟩
               · simp [targetHeadEquation, targetTailEquation]
               · simp [ItemSeq.renameWires, targetRestExact]
+
+/-- Ordered retained node compilation is literally shared after reindexing
+the exact target signature vector back to the source vector. -/
+theorem compileNodes_reindexed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (targetNodup : targetContext.ids.Nodup)
+    {sourceNodes : List source.val.NodeId}
+    {targetNodes : List result.checked.val.NodeId}
+    (nodes : RetainedNodeList result sourceNodes targetNodes)
+    {sourceItems : ItemSeq definitions sourceContext.sigs}
+    (sourceCompiled :
+      compileNodes? definitions source.val sourceContext sourceNodes =
+        some sourceItems) :
+    ∃ targetItems : ItemSeq definitions targetContext.sigs,
+      compileNodes? definitions result.checked.val targetContext targetNodes =
+          some targetItems ∧
+        context.sigs_exact ▸ targetItems = sourceItems := by
+  obtain ⟨targetItems, targetCompiled, targetExact⟩ :=
+    context.compileNodes_natural targetNodup nodes sourceCompiled
+  refine ⟨targetItems, targetCompiled, ?_⟩
+  rw [targetExact]
+  apply ItemSeq.renameWires_reindex_identity context.wireRenaming
+    context.sigs_exact
+  intro _ value
+  exact congrFun
+    (congrFun context.wireRenaming_reindex_identity _) value
 
 end ArgumentResult.RetainedContext
 
