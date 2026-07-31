@@ -269,6 +269,44 @@ def compileChildrenWith?
       let rest ← compileChildrenWith? definitions diagram recurse context tail
       pure (.cons (.cut body) rest)
 
+/-- Discharge one ordered block of local signatures as nested binders.  The
+finisher is intentionally independent of concrete wire identifiers. -/
+def finishRegionSignatures (outer : List Sig) :
+    (localSigs : List Sig) →
+    Region definitions (localSigs ++ outer) → Region definitions outer
+  | [], body => body
+  | head :: tail, body =>
+      finishRegionSignatures outer tail
+        (.mk (.cons (.bind head body) .nil))
+
+private def appendSignaturesExact
+    {targetOuter sourceOuter targetLocal sourceLocal : List Sig}
+    (outerExact : targetOuter = sourceOuter)
+    (localExact : targetLocal = sourceLocal) :
+    targetLocal ++ targetOuter = sourceLocal ++ sourceOuter := by
+  cases outerExact
+  cases localExact
+  rfl
+
+/-- Reindexing both signature blocks commutes exactly with region finishing. -/
+theorem finishRegionSignatures_reindex
+    (outerExact : targetOuter = sourceOuter)
+    (localExact : targetLocal = sourceLocal)
+    (sourceBody : Region definitions (sourceLocal ++ sourceOuter))
+    (targetBody : Region definitions (targetLocal ++ targetOuter))
+    (bodyExact :
+      appendSignaturesExact outerExact localExact ▸ targetBody =
+        sourceBody) :
+    outerExact ▸
+        finishRegionSignatures targetOuter targetLocal targetBody =
+      finishRegionSignatures sourceOuter sourceLocal sourceBody := by
+  cases outerExact
+  cases localExact
+  have targetExact : targetBody = sourceBody := by
+    simpa using bodyExact
+  subst targetBody
+  rfl
+
 private def finishRegionFor
     (diagram : ConcreteDiagram definitionCount)
     (outerIds : List diagram.WireId) :
@@ -287,6 +325,75 @@ def finishRegion (diagram : ConcreteDiagram definitionCount)
     (body : Region definitions (context.extend region).sigs) :
     Region definitions context.sigs :=
   finishRegionFor diagram context.ids (diagram.wiresAt region) body
+
+private theorem cast_bound_region
+    (head : Sig)
+    (same : sourceTail = targetTail)
+    (body : Region definitions (head :: sourceTail)) :
+    same ▸
+        (.mk (.cons (.bind head body) .nil) : Region definitions sourceTail) =
+      (.mk (.cons
+        (.bind head (congrArg (List.cons head) same ▸ body)) .nil) :
+        Region definitions targetTail) := by
+  cases same
+  rfl
+
+private theorem finishRegionFor_eq_signatures
+    (diagram : ConcreteDiagram definitionCount)
+    (outerIds : List diagram.WireId) :
+    ∀ (localIds : List diagram.WireId)
+      (body : Region definitions
+        ((localIds ++ outerIds).map
+          (fun wire => (diagram.wires wire).sig))),
+      finishRegionFor diagram outerIds localIds body =
+        finishRegionSignatures
+          (outerIds.map fun wire => (diagram.wires wire).sig)
+          (localIds.map fun wire => (diagram.wires wire).sig)
+          (List.map_append ▸ body)
+  | [], body => rfl
+  | head :: tail, body => by
+      simp only [finishRegionFor, List.map_cons, finishRegionSignatures]
+      rw [finishRegionFor_eq_signatures diagram outerIds tail]
+      let tailProof :
+          (tail ++ outerIds).map
+              (fun wire => (diagram.wires wire).sig) =
+            tail.map (fun wire => (diagram.wires wire).sig) ++
+              outerIds.map (fun wire => (diagram.wires wire).sig) :=
+        List.map_append
+      have fullProofExact :
+          (List.map_append :
+            ((head :: tail ++ outerIds).map
+                (fun wire => (diagram.wires wire).sig) =
+              (diagram.wires head).sig ::
+                (tail.map (fun wire => (diagram.wires wire).sig) ++
+                  outerIds.map (fun wire => (diagram.wires wire).sig)))) =
+            congrArg (List.cons (diagram.wires head).sig) tailProof :=
+        Subsingleton.elim _ _
+      rw [fullProofExact]
+      rw [cast_bound_region]
+      congr 4
+
+/-- Concrete region finishing is exactly the signature-only finisher. -/
+theorem finishRegion_eq_signatures
+    (diagram : ConcreteDiagram definitionCount)
+    (context : WireContext diagram)
+    (region : diagram.RegionId)
+    (body : Region definitions (context.extend region).sigs) :
+    finishRegion diagram context region body =
+      finishRegionSignatures context.sigs
+        ((diagram.wiresAt region).map
+          (fun wire => (diagram.wires wire).sig))
+        (WireContext.sigs_extend context region ▸ body) := by
+  unfold finishRegion
+  rw [finishRegionFor_eq_signatures]
+  have proofExact :
+      (List.map_append :
+        ((diagram.wiresAt region ++ context.ids).map
+          (fun wire => (diagram.wires wire).sig) = _)) =
+        WireContext.sigs_extend context region :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  rfl
 
 def compileRegion? (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length) :
