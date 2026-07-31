@@ -205,26 +205,26 @@ order, matching `src/kernel/proof/step.ts`:
 - `VisualProof/Rule/WireQuantifier.lean` temporarily owns only the still-live
   iota partition/merge API; relation-content variants no longer occur there.
 
-- [ ] **Step 1: Add RED relation-sever semantics.** Cover multiple disjoint
+- [x] **Step 1: Add RED relation-sever semantics.** Cover multiple disjoint
   exact copies at mixed parities, nullary content, ordered repeated formals,
   coherent ambient parameters, mismatched occurrences, overlap, parameter
   visibility, and fresh relation scope.
-- [ ] **Step 2: Complete concrete relation-sever soundness.** Reuse the landed
+- [x] **Step 2: Complete concrete relation-sever soundness.** Reuse the landed
   occurrence extraction, singleton-removal, factorization, negative-splice,
   and relation-join receipt machinery. Construct the reified relation witness
   exactly once through `Model.reify`.
-- [ ] **Step 3: Isolate the specification API.** Move relation sever/join
+- [x] **Step 3: Isolate the specification API.** Move relation sever/join
   inputs, applied receipts, checkers, exports, theorems, and fixtures from the
   mixed facade to `MonolithicWireQuantifier`. Leave only the current iota
   partition/merge in `WireQuantifier` until Task 3 replaces it.
-- [ ] **Step 4: Audit specification-only reachability.**
+- [x] **Step 4: Audit specification-only reachability.**
 
   ```bash
   ! rg -n "MonolithicRelation|ContentOccurrence" \
     VisualProof/Rule/Tag.lean VisualProof/Rule/WireQuantifier.lean
   ```
 
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build
