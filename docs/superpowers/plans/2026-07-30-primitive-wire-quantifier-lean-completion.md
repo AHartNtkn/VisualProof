@@ -413,22 +413,22 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 All construction fields are private and are populated only by primitive
 checkers.
 
-- [ ] **Step 1: Add RED abstract examples.** Instantiate the statement with a
+- [x] **Step 1: Add RED abstract examples.** Instantiate the statement with a
   nullary site under positive and negative contexts, mixed-parity sites, and a
   two-site shared witness. Add a negative example showing that separate
   per-site witnesses do not satisfy the API.
-- [ ] **Step 2: Define one site/frame authority.** An applied site records its
+- [x] **Step 2: Define one site/frame authority.** An applied site records its
   atom-head endpoint, region, ordered arguments, and checked factorization.
   The all-sites collection proves it exhausts the acted-on wire.
-- [ ] **Step 3: Prove pointwise replacement.** Show one semantic witness makes
+- [x] **Step 3: Prove pointwise replacement.** Show one semantic witness makes
   every source/target site pair pointwise equal and that equality composes
   through all checked contexts. Mixed site polarity must disappear from the
   final obligation; only binder-scope polarity selects entailment direction.
-- [ ] **Step 4: Prove the three public forms.** A supplied eliminating witness
+- [x] **Step 4: Prove the three public forms.** A supplied eliminating witness
   gives join-family soundness, an introducing witness gives sever-family
   soundness, and both give an ungated equivalence. Keep this theorem generic
   over `PreModel`; later full-model instantiations construct the witnesses.
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build
