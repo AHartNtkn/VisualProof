@@ -177,11 +177,13 @@ const discReaches = (ed: EdgeReach, D: MovedDisc): boolean =>
  * those wires touch, and (d) contentEnergy in full (cheap). Everything else is
  * provably identical and stays cached.
  */
-export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>): MoveResult {
+export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>, movedWires: ReadonlySet<WireId> | null = null): MoveResult {
   const sc = e.scale
 
-  // (a) terminal-affected: a wire with a bind body or end body among the moved.
+  // (a) terminal-affected: a wire with a bind body or end body among the moved,
+  // plus wires whose OWN state the caller changed (junction proposals).
   const affected = new Set<WireId>()
+  if (movedWires !== null) for (const wid of movedWires) affected.add(wid)
   for (const [wid, w] of e.wires) {
     let hit = w.endBodyId !== null && moved.has(w.endBodyId)
     if (!hit) for (const bd of w.binds) { if (moved.has(bd.body)) { hit = true; break } }

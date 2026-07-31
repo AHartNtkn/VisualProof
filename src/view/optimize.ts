@@ -5,29 +5,30 @@ import {
   settleStep, contentEnergy, wireEnergy, recomputeRegions, resolveOverlaps, establishFrame,
 } from './relax'
 import type { WireNet } from './route/network'
+import { FD_PROBE } from './route/network'
+import { mkScoreState, applyMove } from './score-delta'
+import type { ScoreState } from './score-delta'
 import type { Vec2 } from './vec'
 
 /**
- * WHOLE-LAYOUT GLOBAL OPTIMIZATION (USER ruling 2026-07-24): the system seeks
- * a GLOBAL optimum of the entire layout, asynchronously; only the best layout
- * found so far is stored; each frame the visible layout approaches the best
- * known. The searcher is BASIN HOPPING (Wales–Doye, USER ruling): the Monte
- * Carlo chain runs on the TRANSFORMED landscape E(localmin(x)) — every proposal
- * is relaxed to its local minimum by plain descent BEFORE acceptance, so the
- * heavy machinery only ever JUMPS BETWEEN WELLS and never descends slopes. This
- * replaces the raw-landscape annealer whose intermediate published states were
- * un-relaxed and absurd; here every accepted state is a rest, so every published
- * best is a sensible layout.
+ * WHOLE-LAYOUT GLOBAL OPTIMIZATION (USER rulings 2026-07-24 and 2026-07-31):
+ * the system seeks a global optimum asynchronously; only the best layout found
+ * so far is stored; each frame the visible layout approaches the best known.
  *
- * The search runs on a SCRATCH engine (never the visible one). One hop takes the
- * current basin minimum, applies ONE hierarchical move (single body, rotation,
- * body swap, rigid subtree shift, sibling-subtree swap) from a seeded
- * xorshift128 stream (NO Math.random, NO Date.now), relaxes the perturbed
- * layout to rest, and accepts by the Metropolis rule comparing BASIN-FLOOR
- * energies only. An accepted hop's rest state becomes the new basin minimum and
- * is published immediately if it beats the best. There is NO exhaustion state:
- * after 8 fruitless reheats the searcher drops to a low duty (one epoch per few
- * seconds) but never claims optimality.
+ * THE UNIFIED CHAIN (2026-07-31 spec, user-approved — supersedes basin
+ * hopping): the worker runs ONE seeded Metropolis chain over multi-scale
+ * moves (single body, rotation, windowed swaps, rigid subtree, junction),
+ * every proposal priced by the EXACT incremental delta (score-delta) — no
+ * whole-scene evaluations, no quench between moves, no gradient probes. A
+ * RANGE FACTOR D scales every move kind's natural amplitude and adapts to
+ * the measured acceptance rate by VPR's published rule (target 0.44), so
+ * descent emerges as the low-temperature, small-range tail of the same
+ * chain that explores at high temperature. The deterministic solver
+ * (settleStep) survives as the streamed SEED POLISH and as the REST
+ * CERTIFICATE a candidate best passes before publishing — so every
+ * published best past the seed's own monotone descent is a certified rest.
+ * Seeded xorshift128 throughout (NO Math.random, NO Date.now); after 8
+ * fruitless reheats the chain drops to low duty but never claims optimality.
  */
 
 /** The one full-layout score: THE wire energy (soft routed cost + turning +
@@ -116,11 +117,9 @@ export function movableUnits(e: Engine): MovableUnit[] {
     move library's own contract, unchanged from the annealer. */
 type Proposal = {
   readonly moved: Set<string>
-  /** The RELAX BLOCK for this move (annealing redesign D2): the bodies allowed
-      to settle after the perturbation; everything else is frozen. Defaults to
-      `moved`. A junction hop names its wire's terminal bodies (the junction is
-      not a body, but its wire must walk and its neighborhood may adapt). */
-  readonly block?: ReadonlySet<string>
+  /** Wires whose OWN state (junctions) the move changed — forced into the
+      delta evaluator's affected set. */
+  readonly wids?: ReadonlySet<WireId>
   undo(): void
 }
 
@@ -130,20 +129,18 @@ export type MoveKind = {
   covers(u: MovableUnit): boolean
   /** Is at least one valid (non-pinned) target of this kind present? */
   applicable(e: Engine, pinned: ReadonlySet<string>): boolean
-  /** Mutate the engine with one seeded move and return its undo, or null if no
-      target is available (applicable() false). */
-  propose(e: Engine, pinned: ReadonlySet<string>, rng: Rng): Proposal | null
+  /** Mutate the engine with one seeded move at range factor D ∈ (0, 1] and
+      return its undo, or null if no target is available. Displacements are
+      D × the kind's natural unit, floored at FD_PROBE (the sensing floor),
+      sampled AT that radius (Davidson–Harel perimeter sampling); swaps are
+      eligible only within the D-window (VPR's interchange rule). */
+  propose(e: Engine, pinned: ReadonlySet<string>, rng: Rng, D: number): Proposal | null
 }
 
-/** Octave ladder for displacement magnitude. On the TRANSFORMED (basin-hopping)
-    landscape a sub-basin jitter is pointless — the relaxation that follows every
-    move maps any within-well displacement straight back to the same floor, so a
-    fraction-of-a-disc hop is wasted work (measured on the acceptance trap: only
-    the ≥1× subtree hops that clear a disc change the basin at all). So the
-    smallest amplitude is 1×(discR+2)×scale; the ladder is {1, 2, 4}, four→three
-    octaves, still bounded above by the frame half-extent (~8 disc radii). */
-const OCTAVES = [1, 2, 4] as const
-const octaveBase = (rng: Rng): number => OCTAVES[Math.floor(rng() * OCTAVES.length)]!
+/** Range-limited amplitude: D × the move kind's natural unit, floored at the
+    sensing floor (a displacement below FD_PROBE is below what any gate can
+    resolve from noise). */
+const rangeAmp = (D: number, unit: number): number => Math.max(FD_PROBE, D * unit)
 
 const isPortBearing = (kind: BodyKind): boolean =>
   kind === 'ref' || kind === 'atom' || kind === 'identity'
@@ -203,14 +200,6 @@ const siblingGroups = (e: Engine, pinned: ReadonlySet<string>): RegionId[][] => 
   }
   return groups
 }
-/** Two distinct uniform indices in [0, n) (n ≥ 2), drawn in a fixed order. */
-const twoDistinct = (rng: Rng, n: number): [number, number] => {
-  const i = Math.floor(rng() * n)
-  let j = Math.floor(rng() * (n - 1))
-  if (j >= i) j++
-  return [i, j]
-}
-
 /** The move registry — DATA the search proposes from and the coverage test
     checks. Displacement covers every body and end dot; subtree moves cover
     every region; rotation covers port-bearing bodies; body/subtree swaps add
@@ -220,13 +209,13 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
     name: 'displaceBody',
     covers: (u) => u.kind === 'carrier' || u.kind === 'endDot',
     applicable: (e, pinned) => nonPinnedIds(e, pinned).length >= 1,
-    propose: (e, pinned, rng) => {
+    propose: (e, pinned, rng, D) => {
       const ids = nonPinnedIds(e, pinned)
       if (ids.length === 0) return null
       const id = ids[Math.floor(rng() * ids.length)]!
       const b = e.bodies.get(id)!
       const undo = savePoses(e, [id])
-      const r = octaveBase(rng) * (b.discR + 2) * e.scale
+      const r = rangeAmp(D, (b.discR + 2) * e.scale)
       const a = rng() * 2 * Math.PI
       b.pos = { x: b.pos.x + Math.cos(a) * r, y: b.pos.y + Math.sin(a) * r }
       return { moved: new Set([id]), undo }
@@ -236,13 +225,14 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
     name: 'rotateBody',
     covers: (u) => u.kind === 'carrier' && isPortBearing(u.carrierKind),
     applicable: (e, pinned) => portBearingIds(e, pinned).length >= 1,
-    propose: (e, pinned, rng) => {
+    propose: (e, pinned, rng, D) => {
       const ids = portBearingIds(e, pinned)
       if (ids.length === 0) return null
       const id = ids[Math.floor(rng() * ids.length)]!
       const b = e.bodies.get(id)!
       const undo = savePoses(e, [id])
-      b.theta += (rng() * 2 - 1) * Math.PI
+      const m = Math.max(b.discR * e.scale, 1e-6)
+      b.theta += (rng() < 0.5 ? 1 : -1) * Math.max(FD_PROBE / m, D * Math.PI)
       return { moved: new Set([id]), undo }
     },
   },
@@ -250,30 +240,42 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
     name: 'swapBodies',
     covers: (u) => u.kind === 'carrier' || u.kind === 'endDot',
     applicable: (e, pinned) => nonPinnedIds(e, pinned).length >= 2,
-    propose: (e, pinned, rng) => {
+    propose: (e, pinned, rng, D) => {
       const ids = nonPinnedIds(e, pinned)
       if (ids.length < 2) return null
-      const [i, j] = twoDistinct(rng, ids.length)
-      const a = e.bodies.get(ids[i]!)!, b = e.bodies.get(ids[j]!)!
-      const undo = savePoses(e, [ids[i]!, ids[j]!])
+      const i = Math.floor(rng() * ids.length)
+      const a = e.bodies.get(ids[i]!)!
+      // VPR interchange rule: swap only within the D-window; the floor is the
+      // pair's own span so adjacent swaps stay possible at any range
+      const win = (other: { pos: Vec2; discR: number }): number =>
+        Math.max((a.discR + other.discR + 4) * e.scale, D * 4 * frameHalf(e))
+      const near = ids.filter((oid, k) => {
+        if (k === i) return false
+        const o = e.bodies.get(oid)!
+        return Math.hypot(o.pos.x - a.pos.x, o.pos.y - a.pos.y) <= win(o)
+      })
+      if (near.length === 0) return null
+      const jid = near[Math.floor(rng() * near.length)]!
+      const b = e.bodies.get(jid)!
+      const undo = savePoses(e, [ids[i]!, jid])
       const ap = a.pos, at = a.theta
       a.pos = b.pos; a.theta = b.theta
       b.pos = ap; b.theta = at
-      return { moved: new Set([ids[i]!, ids[j]!]), undo }
+      return { moved: new Set([ids[i]!, jid]), undo }
     },
   },
   {
     name: 'displaceSubtree',
     covers: (u) => u.kind === 'region',
     applicable: (e, pinned) => movableRegionIds(e, pinned).length >= 1,
-    propose: (e, pinned, rng) => {
+    propose: (e, pinned, rng, D) => {
       const rids = movableRegionIds(e, pinned)
       if (rids.length === 0) return null
       const rid = rids[Math.floor(rng() * rids.length)]!
       const carriers = subtreeCarriers(e, rid)
       const undo = savePoses(e, carriers)
       const radius = e.regions.get(rid)?.radius ?? 10 * e.scale
-      const r = octaveBase(rng) * radius
+      const r = rangeAmp(D, radius)
       const a = rng() * 2 * Math.PI
       const dx = Math.cos(a) * r, dy = Math.sin(a) * r
       for (const c of carriers) { const b = e.bodies.get(c)!; b.pos = { x: b.pos.x + dx, y: b.pos.y + dy } }
@@ -286,38 +288,40 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
     // junctions are internal routing DOFs with no body id — `pinned` (a body-id
     // set) never pins them; a junction is movable whenever any wire has one.
     applicable: (e) => { for (const [, w] of e.wires) if (w.net.junctions.length > 0) return true; return false },
-    propose: (e, _pinned, rng) => {
-      const targets: { w: WireView; j: number }[] = []
-      for (const [, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) targets.push({ w, j })
+    propose: (e, _pinned, rng, D) => {
+      const targets: { wid: WireId; w: WireView; j: number }[] = []
+      for (const [wid, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) targets.push({ wid, w, j })
       if (targets.length === 0) return null
-      const { w, j } = targets[Math.floor(rng() * targets.length)]!
+      const { wid, w, j } = targets[Math.floor(rng() * targets.length)]!
       const saved = { ...w.net.junctions[j]! }
       const undo = (): void => { w.net.junctions[j] = { ...saved } }
-      // octave ladder over the wire's own extent: a positional hop big enough to
-      // clear a routing barrier (the junction cusp is a barrier-separated basin);
-      // the relaxation that follows settles the junction into the new basin, and
-      // Metropolis keeps it only if that basin is lower. `moved` is empty — a
-      // junction is not a body — and the rejected-hop restore comes from the
-      // whole-basin snapshot (which captures junctions), not this undo.
-      const r = octaveBase(rng) * wireBoundRadius(e, w)
+      const r = rangeAmp(D, wireBoundRadius(e, w))
       const a = rng() * 2 * Math.PI
       w.net.junctions[j] = { x: saved.x + Math.cos(a) * r, y: saved.y + Math.sin(a) * r }
-      const block = new Set<string>(w.binds.map((bd) => bd.body))
-      if (w.endBodyId !== null) block.add(w.endBodyId)
-      return { moved: new Set<string>(), block, undo }
+      return { moved: new Set<string>(), wids: new Set([wid]), undo }
     },
   },
   {
     name: 'swapSubtrees',
     covers: (u) => u.kind === 'region',
     applicable: (e, pinned) => siblingGroups(e, pinned).length >= 1,
-    propose: (e, pinned, rng) => {
+    propose: (e, pinned, rng, D) => {
       const groups = siblingGroups(e, pinned)
       if (groups.length === 0) return null
       const g = groups[Math.floor(rng() * groups.length)]!
-      const [i, j] = twoDistinct(rng, g.length)
-      const r1 = g[i]!, r2 = g[j]!
-      const c1 = e.regions.get(r1)!.center, c2 = e.regions.get(r2)!.center
+      const i = Math.floor(rng() * g.length)
+      const r1 = g[i]!
+      const c1 = e.regions.get(r1)!.center
+      // VPR interchange rule at subtree scale: swap siblings within the D-window
+      const near = g.filter((rid, k) => {
+        if (k === i) return false
+        const c = e.regions.get(rid)!.center
+        const span = e.regions.get(r1)!.radius + e.regions.get(rid)!.radius
+        return Math.hypot(c.x - c1.x, c.y - c1.y) <= Math.max(2 * span, D * 4 * frameHalf(e))
+      })
+      if (near.length === 0) return null
+      const r2 = near[Math.floor(rng() * near.length)]!
+      const c2 = e.regions.get(r2)!.center
       const dx = c2.x - c1.x, dy = c2.y - c1.y
       const car1 = subtreeCarriers(e, r1), car2 = subtreeCarriers(e, r2)
       const undo = savePoses(e, [...car1, ...car2])
@@ -327,6 +331,12 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
     },
   },
 ]
+
+/** The frame half-extent (the D-window's full-range scale); falls back to the
+    content's own extent before a frame exists. */
+function frameHalf(e: Engine): number {
+  return e.frame?.half ?? 40 * e.scale
+}
 
 // ---- the basin-hopping search ----------------------------------------------
 
@@ -342,24 +352,16 @@ const DEFAULT_SEED = 0x1234abcd
 const PROBE_BATCH = 16
 /** Per-epoch geometric cooling: T ← 0.95·T. */
 const COOL = 0.95
-/** Hops per movable DOF per temperature. On the transformed landscape ONE hop
-    is a whole relaxation (hundreds of settle steps), so 8×DOF hops per
-    temperature is wall-prohibitive; one hop per DOF per temperature is the
-    smallest schedule that still visits every DOF once before cooling. */
-const EPOCH_PER_DOF = 1
+/** Chain moves per movable DOF per temperature. Moves are delta-priced
+    (milliseconds), so the epoch returns to the pre-basin-hopping ratified
+    value: enough samples per DOF for the epoch's acceptance-rate statistic
+    (the range limiter's input) to be meaningful. */
+const EPOCH_PER_DOF = 8
 /** Reheat floor: reheat once T falls below T0/1000. */
 const REHEAT_FLOOR = 1 / 1000
 /** Consecutive fruitless reheats before dropping to low duty. 8 covers both
     restart flavors (best-perturb / fresh) four times each. */
 const LOW_DUTY_REHEATS = 8
-/** Relaxation backstop: a hop relaxes the perturbed layout to rest (settleStep
-    until it reports no motion), bounded here so a hop that scattered into a
-    slowly-converging configuration abandons it and stays cheap. A good basin
-    settles in a few hundred steps (measured 758 on the acceptance escape); any
-    value above that yields the same basins, it only caps wasted work — not a
-    quality knob. A wall-clock cap is rejected: it would make the accepted
-    sequence machine-dependent and break determinism. */
-const RELAX_REST_CAP = 2000
 /** Settle steps per incremental-descent PUBLISH quantum (Phase 0). Relaxing the
     seed / incumbent publishes its monotone descent every this-many steps so the
     app shows it settling from the first frames (app-mode frames run no node
@@ -381,8 +383,6 @@ export class LayoutOptimizer {
   readonly #seed: number
   #rng: Rng
   #scratch: Engine | null = null
-  /** Energy of the current basin floor (layoutScore of #scratch, at rest). */
-  #basinE = 0
   #best: LayoutBest | null = null
   #diagram: unknown = null
   #pinsKey = ''
@@ -394,23 +394,30 @@ export class LayoutOptimizer {
   #restartParity = 0
   #reheatsSinceImprove = 0
   #lowDuty = false
-  /** The search phase. Every tick advances ONE atomic unit of the current phase
-      (one descent quantum, one calibration probe, or one hop) so a worker
-      message handler never blocks for many relaxations:
-      - 'descend': relax the seed / adopted incumbent to its basin floor,
-        publishing its monotone descent per RELAX_PUBLISH_STEPS quantum;
-        no publish) — they cannot all live in one handler;
-      - 'hop': basin hopping (publish on Metropolis acceptance). */
-  #phase: 'descend' | 'hop' = 'descend'
-  /** Warmup |ΔE_basin| magnitudes: the FIRST PROBE_BATCH hops are accepted
+  /** The search phase. Every tick advances ONE atomic unit of the current
+      phase so a worker message handler never blocks:
+      - 'descend': streamed seed/incumbent polish — deterministic solver in
+        RELAX_PUBLISH_STEPS quanta, each quantum published (monotone, on the
+        scene's own downhill path);
+      - 'polish': SILENT rest-certification of a chain candidate or restart
+        (same solver, no intermediate publishes — chain states are not on a
+        monotone path); publishes only its certified rest;
+      - 'chain': the unified Metropolis chain, one move per unit. */
+  #phase: 'descend' | 'polish' | 'chain' = 'descend'
+  /** The persistent exact-delta evaluator over the scratch (rebuilt whenever a
+      solver phase or restart moves the scratch outside the chain's commits). */
+  #st: ScoreState | null = null
+  /** Range factor D ∈ (0, 1]: every move kind's amplitude scale, adapted per
+      epoch by VPR's rule toward the published 0.44 acceptance target. */
+  #D = 1
+  /** Warmup |dE| magnitudes: the FIRST PROBE_BATCH chain moves are accepted
       unconditionally (the standard T=∞ annealing start) and their magnitudes
-      calibrate T0 — the same median statistic as dedicated probes, but the
-      relaxations ADVANCE the chain instead of being discarded, so there is no
-      dead window between the descent floor and the first hop. */
+      calibrate T0 (median — |dE| is heavy-tailed). */
   #warmupMags: number[] = []
-  /** Hops taken at the current temperature; cool + maybe reheat at #epochLen. */
-  #hopsThisEpoch = 0
-  /** Accepts at the current temperature (reheat when an epoch accepts nothing). */
+  /** Moves taken at the current temperature; cool + adapt D at epoch end. */
+  #movesThisEpoch = 0
+  /** Accepts at the current temperature (the range limiter's statistic; an
+      epoch accepting nothing also triggers a reheat). */
   #epochAccepts = 0
 
   constructor(seed: number = DEFAULT_SEED) {
@@ -460,7 +467,6 @@ export class LayoutOptimizer {
     if (scratch === null) { this.#best = layoutSnapshot(e, score); return }
     applyLayoutSnapshot(scratch, layoutSnapshot(e, 0))
     recomputeRegions(scratch)
-    this.#basinE = score
     this.#best = layoutSnapshot(e, score)
     this.#T = 0
     this.#T0 = 0
@@ -504,21 +510,24 @@ export class LayoutOptimizer {
   #stepUnit(): boolean {
     switch (this.#phase) {
       case 'descend': return this.#descentQuantum()
-      case 'hop': return this.#hopUnit()
+      case 'polish': return this.#polishQuantum()
+      case 'chain': return this.#chainMove()
     }
   }
 
   #enterDescent(): void {
     this.#phase = 'descend'
+    this.#st = null
     this.#warmupMags = []
-    this.#hopsThisEpoch = 0
+    this.#movesThisEpoch = 0
     this.#epochAccepts = 0
   }
 
-  /** One PUBLISH quantum of incremental descent (Phase 0): RELAX_PUBLISH_STEPS
-      plain settle steps, then publish the improved state. Every published state
-      is on the scene's own monotone downhill path — never a random perturbation.
-      At rest, fixes the basin floor and advances to the calibration phase. */
+  /** One PUBLISH quantum of the streamed seed/incumbent polish: plain settle
+      steps, each quantum published. Every published state is on the scene's
+      own monotone downhill path — never a random perturbation. The rest this
+      reaches is CERTIFIED (settleStep's final sweep proves no
+      single-coordinate improvement remains) and seeds the chain. */
   #descentQuantum(): boolean {
     const scratch = this.#scratch!, pinned = this.#pinned
     let atRest = false
@@ -528,8 +537,34 @@ export class LayoutOptimizer {
     recomputeRegions(scratch)
     const score = layoutScore(scratch)
     const improved = this.#publishIfBetter(score)
-    if (atRest) { this.#basinE = score; this.#phase = 'hop'; this.#warmupMags = []; this.#T0 = 0; this.#T = 0 }
+    if (atRest) this.#enterChain()
     return improved
+  }
+
+  /** One SILENT quantum of candidate/restart polishing: same solver, no
+      intermediate publishes. At rest: publish the certified score if it beats
+      the best, and resume the chain from the polished state. */
+  #polishQuantum(): boolean {
+    const scratch = this.#scratch!, pinned = this.#pinned
+    let atRest = false
+    for (let s = 0; s < RELAX_PUBLISH_STEPS; s++) {
+      if (!settleStep(scratch, pinned)) { atRest = true; break }
+    }
+    if (!atRest) return false
+    recomputeRegions(scratch)
+    const score = layoutScore(scratch)
+    const improved = this.#publishIfBetter(score)
+    if (improved) { this.#reheatsSinceImprove = 0; this.#lowDuty = false }
+    this.#enterChain()
+    return improved
+  }
+
+  /** Enter (or re-enter) the chain from a certified rest: rebuild the exact
+      evaluator; keep the schedule (T, T0, D) unless it was never calibrated. */
+  #enterChain(): void {
+    recomputeRegions(this.#scratch!)
+    this.#st = mkScoreState(this.#scratch!)
+    this.#phase = 'chain'
   }
 
   #reseedFrom(e: Engine): void {
@@ -545,8 +580,8 @@ export class LayoutOptimizer {
     // Enter Phase 0: publish the seed as the initial best (= the live layout, no
     // jump), then relax it incrementally in tick() so the app sees it settle —
     // the seed is NOT relaxed here (that would block sync and hide the descent).
-    this.#basinE = layoutScore(scratch)
-    this.#best = layoutSnapshot(scratch, this.#basinE)
+    const seedScore = layoutScore(scratch)
+    this.#best = layoutSnapshot(scratch, seedScore)
     this.#rng = mkRng(this.#seed)
     this.#T = 0
     this.#T0 = 0
@@ -556,104 +591,66 @@ export class LayoutOptimizer {
     this.#lowDuty = false
   }
 
-  /** Relax the scratch to a local minimum by plain descent (settleStep until no
-      motion, bounded by the backstop) — the core of the transformed landscape. */
-  #relaxToRest(): void {
-    const scratch = this.#scratch!, pinned = this.#pinned
-    for (let s = 0; s < RELAX_REST_CAP; s++) {
-      if (!settleStep(scratch, pinned)) break
-    }
-    recomputeRegions(scratch)
-  }
-
-  /** BLOCK-LOCAL relaxation (annealing redesign D2): settle ONLY the block the
-      hop perturbed, with every other body totally frozen. The measured defect
-      this kills: a hop's GLOBAL relaxation moved bodies the move never touched
-      as far as the ones it did (median 5.81 vs 5.53 wu, 2026-07-28), so
-      accepting a hop scrambled organized regions it never addressed — and the
-      relaxation cost scaled with the scene instead of the block. Wales–Doye's
-      original freezing idiom, on the existing pinned plumbing. */
-  #relaxBlock(block: ReadonlySet<string>): void {
-    const scratch = this.#scratch!, pinned = this.#pinned
-    const frozen = new Set<string>()
-    for (const id of scratch.bodies.keys()) if (!block.has(id)) frozen.add(id)
-    for (let s = 0; s < RELAX_REST_CAP; s++) {
-      if (!settleStep(scratch, pinned, frozen)) break
-    }
-    recomputeRegions(scratch)
-  }
-
   /** The DOF count driving the epoch length and reheat cadence. */
   #dofCount(): number {
     return nonPinnedIds(this.#scratch!, this.#pinned).length + this.#scratch!.childrenOf.size
   }
 
-  /** One hop of the proposal phase, with per-hop epoch bookkeeping: after an
-      epoch's worth of hops (EPOCH_PER_DOF·DOF) cool the temperature and reheat
-      if it fell through the floor or the epoch accepted nothing. Slicing to one
-      hop per unit keeps a tick from blocking for a whole epoch of relaxations. */
-  #hopUnit(): boolean {
-    const r = this.#hop()
-    this.#hopsThisEpoch++
-    if (r.accepted) this.#epochAccepts++
-    if (this.#warmupMags.length >= PROBE_BATCH && this.#hopsThisEpoch >= EPOCH_PER_DOF * this.#dofCount()) {
+  /** One move of the unified chain: propose at range D, price by the EXACT
+      incremental delta, Metropolis-accept, commit or undo. Epoch bookkeeping
+      at EPOCH_PER_DOF·DOF moves: adapt D by the measured acceptance rate
+      (VPR's rule, target 0.44 — fpl97, verified), cool T, reheat on the floor
+      or a zero-accept epoch. A committed state strictly below the published
+      best enters the SILENT polish phase for rest certification. */
+  #chainMove(): boolean {
+    const scratch = this.#scratch!, pinned = this.#pinned, rng = this.#rng
+    const st = this.#st!
+    const kinds = MOVE_REGISTRY.filter((m) => m.applicable(scratch, pinned))
+    if (kinds.length === 0) return false
+    const kind = kinds[Math.floor(rng() * kinds.length)]!
+    const p = kind.propose(scratch, pinned, rng, this.#D)
+    this.#movesThisEpoch++
+    let improvedCandidate = false
+    if (p !== null) {
+      recomputeRegions(scratch)
+      const mr = applyMove(scratch, st, p.moved, p.wids ?? null)
+      const dE = mr.dE
+      const warming = this.#warmupMags.length < PROBE_BATCH
+      if (warming) {
+        this.#warmupMags.push(Math.abs(dE))
+        if (this.#warmupMags.length >= PROBE_BATCH) {
+          const mags = [...this.#warmupMags].sort((a, b) => a - b)
+          this.#T0 = mags[mags.length >> 1]!
+          this.#T = this.#T0
+        }
+      }
+      const T = this.#T
+      const accept = warming || dE < 0 || (T > 0 && rng() < Math.exp(-dE / T))
+      if (accept) {
+        mr.commit()
+        this.#epochAccepts++
+        if (this.#best !== null && st.total < this.#best.score - eps(this.#best.score)) {
+          // rest-certify before any publish (USER law: published bests are
+          // sensible layouts — here, PROVEN rests)
+          this.#phase = 'polish'
+          improvedCandidate = false
+        }
+      } else {
+        p.undo()
+        mr.abort()
+      }
+    }
+    if (this.#warmupMags.length >= PROBE_BATCH && this.#movesThisEpoch >= EPOCH_PER_DOF * this.#dofCount()) {
+      const R = this.#epochAccepts / this.#movesThisEpoch
+      // the RANGE LIMITER: Dlimit_new = Dlimit_old · (1 − 0.44 + R_accept),
+      // clamped — VPR's published rule and target
+      this.#D = Math.min(1, Math.max(1e-3, this.#D * (1 - 0.44 + R)))
       this.#T *= COOL
       if (this.#T < this.#T0 * REHEAT_FLOOR || this.#epochAccepts === 0) this.#reheat()
-      this.#hopsThisEpoch = 0
+      this.#movesThisEpoch = 0
       this.#epochAccepts = 0
     }
-    return r.improved
-  }
-
-  /** One basin hop: perturb the current basin minimum by one move, relax to
-      rest, and accept by Metropolis on the basin-floor energy delta. An accepted
-      rest state becomes the new basin minimum (and is published if it beats the
-      best); a rejected hop restores the previous basin from its snapshot. */
-  #hop(): { accepted: boolean; improved: boolean } {
-    const scratch = this.#scratch!, pinned = this.#pinned, rng = this.#rng
-    const kinds = MOVE_REGISTRY.filter((m) => m.applicable(scratch, pinned))
-    if (kinds.length === 0) return { accepted: false, improved: false }
-    const saved = layoutSnapshot(scratch, 0)
-    const kind = kinds[Math.floor(rng() * kinds.length)]!
-    const p = kind.propose(scratch, pinned, rng)
-    if (p === null) return { accepted: false, improved: false }
-    recomputeRegions(scratch)
-    const block = p.block ?? p.moved
-    if (block.size > 0 && block.size < scratch.bodies.size) this.#relaxBlock(block)
-    else this.#relaxToRest()
-    let newE = layoutScore(scratch)
-    const dE = newE - this.#basinE
-    // warmup: the first PROBE_BATCH hops accept unconditionally (T = ∞ start)
-    // and their |ΔE| magnitudes fix T0 = median — no dedicated probe phase
-    const warming = this.#warmupMags.length < PROBE_BATCH
-    if (warming) {
-      this.#warmupMags.push(Math.abs(dE))
-      if (this.#warmupMags.length >= PROBE_BATCH) {
-        const mags = [...this.#warmupMags].sort((a, b) => a - b)
-        this.#T0 = mags[mags.length >> 1]!
-        this.#T = this.#T0
-      }
-    }
-    const T = this.#T
-    const accept = warming || dE < 0 || (T > 0 && rng() < Math.exp(-dE / T))
-    if (accept) {
-      // an accepted block-hop's state is a BLOCK rest. Published bests must be
-      // GLOBAL rests (USER law: every published best is a sensible layout), so
-      // a candidate improvement is POLISHED — fully relaxed — before the
-      // publish gate; the chain adopts the polished floor either way (a free
-      // strict improvement, and accommodation the block freeze deferred).
-      if (this.#best !== null && newE < this.#best.score - eps(this.#best.score)) {
-        this.#relaxToRest()
-        newE = layoutScore(scratch)
-      }
-      this.#basinE = newE
-      const improved = this.#publishIfBetter(newE)
-      if (improved) { this.#reheatsSinceImprove = 0; this.#lowDuty = false }
-      return { accepted: true, improved }
-    }
-    applyLayoutSnapshot(scratch, saved)
-    recomputeRegions(scratch)
-    return { accepted: false, improved: false }
+    return improvedCandidate
   }
 
   /** Reheat: alternate seeded restarts — (a) the incumbent best (the following
@@ -668,13 +665,16 @@ export class LayoutOptimizer {
       applyLayoutSnapshot(this.#scratch!, this.#best!)
       recomputeRegions(this.#scratch!)
       this.#restorePinned()
-      this.#basinE = this.#best!.score
+      this.#enterChain()
     } else {
+      // a fresh arrangement is raw — certify it through the silent polish
+      // before the chain continues from it
       this.#freshArrangement()
-      this.#relaxToRest()
-      this.#basinE = layoutScore(this.#scratch!)
+      this.#st = null
+      this.#phase = 'polish'
     }
     this.#T = this.#T0
+    this.#D = 1
   }
 
   #restorePinned(): void {

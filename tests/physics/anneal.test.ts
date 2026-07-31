@@ -9,27 +9,25 @@ import { layoutScore, LayoutOptimizer, MOVE_REGISTRY, movableUnits } from '../..
 import type { LayoutBest } from '../../src/view/optimize'
 
 /**
- * THE BASIN-HOPPING SEARCH (plan Task 6). Four contracts:
- *  1. ACCEPTANCE — a cut whose subtree is wedged between two wired nodes is
+ * THE UNIFIED-CHAIN SEARCH (plan Task 6 contracts, re-derived for the
+ * 2026-07-31 unified chain — one Metropolis chain over multi-scale
+ * delta-priced moves; the deterministic solver survives as the streamed seed
+ * polish and the publish-time rest certificate). Four contracts:
+ *  1. ACCEPTANCE — a cut whose subtree is wedged between crossing wires is
  *     moved aside; only a coordinated subtree displacement relocates the
- *     multi-body cut, and the search's `displaceSubtree` hop (relaxed to rest)
- *     escapes to a basin ≤ 0.6× the trapped floor.
+ *     multi-body cut, and the chain reaches the measured aside floor.
  *  2. DETERMINISM — same seed ⇒ identical published-best sequence; a different
- *     seed ⇒ a different one (the search is a pure function of its seed). Under
- *     basin hopping every published best is an accepted relaxed basin floor.
+ *     seed ⇒ a different one (the search is a pure function of its seed).
+ *     Every published best past the streamed seed descent is a certified rest.
  *  3. MOVE COVERAGE — every movable unit of a nested scene is covered by some
  *     registered move; adding a unit kind without a mover fails the test.
  *  4. PHASE 0 — sync does not block on the seed relaxation; the incumbent's
  *     descent is published incrementally (a monotone stream), so the app sees
  *     the seed settle from the first slices rather than sitting raw-kinked.
  *
- * Fixture size note (Task 6): basin hopping relaxes EVERY hop to rest, so a hop
- * costs a full local settle (~2.9 s on the Task-4 K=4 star-wired cut). The
- * acceptance fixture is therefore the 3-ref cut — the largest wedged cut-subtree
- * whose 16-probe calibration + escape fits the 30 s suite cap (measured K=4 63 s,
- * K=3 ~16 s); it is still a genuine multi-body subtree that only displaceSubtree
- * relocates. Determinism uses the cheapest seed-divergent scene. See
- * task6-report.md.
+ * Fixture note: the 3-ref cut is a genuine multi-body subtree that only
+ * displaceSubtree relocates; determinism uses the cheapest seed-divergent
+ * scene.
  */
 
 /** Cut holding K star-wired refs (a heavy cohesive obstacle subtree — no
@@ -75,11 +73,10 @@ function settledSeed(t: { d: Diagram; cut: string; left: string[]; right: string
   return e
 }
 
-/** Drive the search one atomic unit per tick until the best reaches `target` or
-    `maxUnits` is spent, returning the best. `tick(null, 0)` advances exactly one
-    unit (one descent quantum / one calibration probe / one hop) — the sliced
-    granularity the worker uses so no single tick blocks for the whole 16-probe
-    calibration or an epoch of hops. */
+/** Drive the search one atomic unit per tick until the best reaches `target`
+    or `maxUnits` is spent. `tick(null, 0)` advances exactly one unit (one
+    streamed-descent quantum, one silent polish quantum, or one chain move) —
+    the sliced granularity the worker uses so no single tick blocks. */
 function anneal(e: Engine, seed: number, target: number, maxUnits: number): LayoutBest {
   const opt = new LayoutOptimizer(seed)
   opt.sync(e, null)
@@ -98,7 +95,7 @@ function bestSequence(e: Engine, seed: number, units: number): number[] {
   return seq
 }
 
-describe('basin hopping escapes the wedged-cut trap (plan Task 6 acceptance)', () => {
+describe('the chain escapes the wedged-cut trap (plan Task 6 acceptance)', () => {
   it('a cut subtree wedged between two crossing wires is moved aside, reaching the measured aside floor', () => {
     const trap = buildTrap(3, 2)
     const e = settledSeed(trap, false)
@@ -111,26 +108,26 @@ describe('basin hopping escapes the wedged-cut trap (plan Task 6 acceptance)', (
     expect(asideFloor, `aside ${asideFloor.toFixed(1)} must undercut trapped ${trapped.toFixed(1)} decisively`)
       .toBeLessThan(0.5 * trapped)
 
-    // Basin hopping escapes a few hops after the sliced 16-probe calibration
-    // (measured 17 units, ~8 s; safety cap 40). The target is the measured
+    // Under the unified chain a UNIT is one delta-priced move (or one silent
+    // polish quantum), not a full quench — the same escape now spans thousands
+    // of cheap units instead of ~17 expensive ones. The target is the measured
     // aside floor itself (+2% relaxation slack): the search must actually find
     // the basin the reference seed settles into, not merely improve.
-    const best = anneal(e, 0xace4, asideFloor * 1.02, 40)
+    const best = anneal(e, 0xace4, asideFloor * 1.02, 60000)
 
     expect(best.score, `best ${best.score.toFixed(1)} vs aside floor ${asideFloor.toFixed(1)} (trapped ${trapped.toFixed(1)})`)
       .toBeLessThanOrEqual(asideFloor * 1.02)
   })
 })
 
-describe('the basin-hopping search is deterministic in its seed (plan Task 6)', () => {
+describe('the chain is deterministic in its seed (plan Task 6)', () => {
   it('same seed ⇒ identical published sequence (phase-0 quanta included); a different seed ⇒ a different one', () => {
     // A RAW (un-settled) two-ref scene — the cheapest scene with a wire (2 bodies,
     // fast relaxations). The published sequence over single-unit ticks is: the
     // phase-0 descent quantum(s) (seed-INDEPENDENT — descent has no randomness),
-    // then 16 flat calibration units, then the accepted hops, which escape a
-    // misaligned-port basin (182) to the aligned one (30.99) at a SEED-DEPENDENT
-    // unit. Publishing on a fixed step quantum (RELAX_PUBLISH_STEPS) makes the
-    // sequence a pure function of the seed, robust to how ticks slice wall-time.
+    // then chain moves whose first certified improvement lands at a
+    // SEED-DEPENDENT unit. Publishing on fixed unit quanta makes the sequence
+    // a pure function of the seed, robust to how ticks slice wall-time.
     const rawTwoRef = (): Engine => {
       const b0 = new DiagramBuilder()
       const n0 = b0.ref(b0.root, 'R', relSig([IOTA]))
@@ -142,9 +139,11 @@ describe('the basin-hopping search is deterministic in its seed (plan Task 6)', 
       recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
       return e
     }
-    const a1 = bestSequence(rawTwoRef(), 0xace4, 30)
-    const a2 = bestSequence(rawTwoRef(), 0xace4, 30)
-    const b = bestSequence(rawTwoRef(), 0x0111, 30)
+    // units are chain moves now (ms-scale): run enough for the seeded chains
+    // to publish their first seed-dependent improvements
+    const a1 = bestSequence(rawTwoRef(), 0xace4, 2500)
+    const a2 = bestSequence(rawTwoRef(), 0xace4, 2500)
+    const b = bestSequence(rawTwoRef(), 0x0111, 2500)
 
     expect(a1, 'same seed must reproduce the published sequence bit-for-bit').toEqual(a2)
     expect(a1, 'a different seed must produce a different sequence').not.toEqual(b)

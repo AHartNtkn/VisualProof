@@ -1350,7 +1350,7 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
  * bounded trial per Δ halving with legality projection and a strict gate,
  * then single-coordinate fallback. Memoryless and deterministic.
  */
-function operatorStep(e: Engine, pinned: ReadonlySet<string> | null, frozen: ReadonlySet<string> | null = null): boolean {
+function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   const sc = e.scale
   recomputeRegions(e)
   const wiredBodies = new Set<string>()
@@ -1384,12 +1384,6 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null, frozen: Rea
   const coords: Coord[] = []
   const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
-    // the searcher's block freeze is TOTAL (position AND rotation): a frozen
-    // body contributes no coordinates at all, so the block relaxation's cost
-    // and effect are confined to the block (annealing redesign D2). Distinct
-    // from `pinned`, which is the user drag's POSITION pin (rotation free —
-    // USER 2026-07-07).
-    if (frozen !== null && frozen.has(b.id)) continue
     const dirty = new Set<RegionId>([b.region])
     const localE = (): number => { recomputeRegions(e, dirty); return fst.frozenTotal + frozenProbe(fst, e, b.id) + contentEnergy(e) }
     if (pinned === null || !pinned.has(b.id)) {
@@ -1872,32 +1866,18 @@ function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: La
   return acted || search.searching
 }
 
-export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null, frozen: ReadonlySet<string> | null = null): boolean {
+export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): boolean {
   recomputeRegions(e)
   if (e.frame === null) establishFrame(e)
 
   const search = LAYOUT_SEARCH.get(e)
   if (search !== undefined) return searchedFrame(e, pinned, search)
 
-  let moved = operatorStep(e, pinned, frozen)
-  moved = walkWires(e, false, frozen === null ? null : frozenWires(e, frozen)) || moved
+  let moved = operatorStep(e, pinned)
+  moved = walkWires(e) || moved
   recomputeRegions(e)
   e.tick++
   return moved
-}
-
-/** Wires whose EVERY terminal body is frozen: outside the relax block, so the
-    walk leaves their junctions untouched (a wire with any terminal in the
-    block adapts along with it). */
-function frozenWires(e: Engine, frozen: ReadonlySet<string>): Set<WireId> {
-  const out = new Set<WireId>()
-  for (const [wid, w] of e.wires) {
-    let all = true
-    for (const bd of w.binds) { if (!frozen.has(bd.body)) { all = false; break } }
-    if (all && w.endBodyId !== null && !frozen.has(w.endBodyId)) all = false
-    if (all) out.add(wid)
-  }
-  return out
 }
 
 /** Run a tick budget of strict descent, bracketed by the DISCRETE construction-
