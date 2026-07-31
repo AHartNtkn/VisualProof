@@ -7,10 +7,11 @@ namespace ConcreteWireQuantifier
 
 /-- Concrete construction failures owned below the rule-policy boundary. -/
 inductive Error
-  | expectedIota (wire : Nat)
   | expectedRelation (wire : Nat)
   | sameWire
+  | signatureMismatch
   | invalidEndpointPartition
+  | invalidSeverScope
   | emptyRelationSites
   | overlappingRemoval
   | invalidRemoval

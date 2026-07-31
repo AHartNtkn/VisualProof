@@ -4,10 +4,11 @@ namespace VisualProof
 
 namespace ConcreteWireQuantifier
 
-private def iotaSeverCandidate
+private def wireSeverCandidate
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
-    (keep : List (CEndpoint source.val.nodeCount)) :
+    (keep : List (CEndpoint source.val.nodeCount))
+    (scope : source.val.RegionId) :
     ConcreteDiagram definitions.length where
   regionCount := source.val.regionCount
   nodeCount := source.val.nodeCount
@@ -28,10 +29,11 @@ private def iotaSeverCandidate
       (fun _ =>
         let data := source.val.wires wire
         { data with
+          scope := scope
           endpoints := data.endpoints.filter fun endpoint =>
             decide (endpoint ∉ keep) })
 
-private def iotaJoinWires
+private def wireJoinWires
     (source : CheckedDiagram definitions)
     (inner : source.val.WireId) :
     List source.val.WireId :=
@@ -73,18 +75,18 @@ private theorem filter_ne_length_of_nodup_mem
             simp at tailMember)
         omega
 
-private def iotaJoinCandidate
+private def wireJoinCandidate
     (source : CheckedDiagram definitions)
     (outer inner : source.val.WireId) :
     ConcreteDiagram definitions.length where
   regionCount := source.val.regionCount
   nodeCount := source.val.nodeCount
-  wireCount := (iotaJoinWires source inner).length
+  wireCount := (wireJoinWires source inner).length
   root := source.val.root
   regions := source.val.regions
   nodes := source.val.nodes
   wires := fun target =>
-    let sourceWire := (iotaJoinWires source inner).get target
+    let sourceWire := (wireJoinWires source inner).get target
     let data := source.val.wires sourceWire
     if sourceWire = outer then
       { data with
@@ -94,57 +96,59 @@ private def iotaJoinCandidate
       data
 
 /-- Checked output of one individual-wire endpoint partition. -/
-structure IotaSeverResult
+structure WireSeverResult
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
-    (keep : List (CEndpoint source.val.nodeCount)) : Type where
+    (keep : List (CEndpoint source.val.nodeCount))
+    (scope : source.val.RegionId) : Type where
   private mk ::
   checked : CheckedDiagram definitions
-  private sourceSignature : (source.val.wires wire).sig = .iota
+  private scopeInside :
+    source.val.Encloses (source.val.wires wire).scope scope
   private generated :
-    checked.val = iotaSeverCandidate source wire keep
+    checked.val = wireSeverCandidate source wire keep scope
   private rejoined : CheckedDiagram definitions
   private rejoinedGenerated :
     rejoined.val =
-      iotaJoinCandidate checked
+      wireJoinCandidate checked
         (Internal.checkedWire generated (Fin.castAdd 1 wire))
         (Internal.checkedWire generated
           (Fin.natAdd source.val.wireCount (0 : Fin 1)))
 
-namespace IotaSeverResult
+namespace WireSeverResult
 
 def regionImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (region : source.val.RegionId) :
     result.checked.val.RegionId :=
   Internal.checkedRegion result.generated region
 
 def nodeImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (node : source.val.NodeId) :
     result.checked.val.NodeId :=
   Internal.checkedNode result.generated node
 
 def wireImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     result.checked.val.WireId :=
   Internal.checkedWire result.generated (Fin.castAdd 1 sourceWire)
 
 def freshWire
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.checked.val.WireId :=
   Internal.checkedWire result.generated
     (Fin.natAdd source.val.wireCount (0 : Fin 1))
 
 def endpointImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (endpoint : CEndpoint source.val.nodeCount) :
     CEndpoint result.checked.val.nodeCount :=
   Internal.checkedEndpoint result.generated endpoint
 
 def renameRegion
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     CRegion source.val.regionCount →
       CRegion result.checked.val.regionCount
   | .sheet => .sheet
@@ -155,7 +159,8 @@ def renameNode
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {keep : List (CEndpoint source.val.nodeCount)}
-    (result : IotaSeverResult source wire keep) :
+    {scope : source.val.RegionId}
+    (result : WireSeverResult source wire keep scope) :
     CNode source.val.regionCount definitions.length →
       CNode result.checked.val.regionCount definitions.length
   | .atom region args => .atom (result.regionImage region) args
@@ -165,50 +170,50 @@ def renameNode
       .identity (result.regionImage region) sig arity
 
 theorem checked_generated
-    (result : IotaSeverResult source wire keep) :
-    result.checked.val = iotaSeverCandidate source wire keep :=
+    (result : WireSeverResult source wire keep scope) :
+    result.checked.val = wireSeverCandidate source wire keep scope :=
   result.generated
 
 @[simp] theorem regionCount
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.checked.val.regionCount = source.val.regionCount :=
   by
-    simpa [iotaSeverCandidate] using
+    simpa [wireSeverCandidate] using
       congrArg ConcreteDiagram.regionCount result.generated
 
 @[simp] theorem nodeCount
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.checked.val.nodeCount = source.val.nodeCount :=
   by
-    simpa [iotaSeverCandidate] using
+    simpa [wireSeverCandidate] using
       congrArg ConcreteDiagram.nodeCount result.generated
 
 @[simp] theorem wireCount
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.checked.val.wireCount = source.val.wireCount + 1 :=
   by
-    simpa [iotaSeverCandidate] using
+    simpa [wireSeverCandidate] using
       congrArg ConcreteDiagram.wireCount result.generated
 
 @[simp] theorem root_generated
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.checked.val.root = result.regionImage source.val.root := by
   unfold regionImage
   rw [Internal.checkedRoot_transport]
   rfl
 
 @[simp] theorem region_generated
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (region : source.val.RegionId) :
     result.checked.val.regions (result.regionImage region) =
       result.renameRegion (source.val.regions region) := by
   unfold regionImage renameRegion
   rw [Internal.checkedRegion_data_transport]
-  simp only [iotaSeverCandidate]
+  simp only [wireSeverCandidate]
   cases source.val.regions region <;> rfl
 
 theorem climb_regionImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (steps : Nat) (region : source.val.RegionId) :
     result.checked.val.climb steps (result.regionImage region) =
       (source.val.climb steps region).map result.regionImage := by
@@ -220,56 +225,79 @@ theorem climb_regionImage
       cases data : source.val.regions region with
       | sheet => rfl
       | cut parent =>
-          simp only [IotaSeverResult.renameRegion]
+          simp only [WireSeverResult.renameRegion]
           exact induction parent
 
+/-- Source enclosure is preserved by the partition's region embedding. -/
+theorem encloses_regionImage
+    (result : WireSeverResult source wire keep scope)
+    {ancestor descendant : source.val.RegionId}
+    (encloses : source.val.Encloses ancestor descendant) :
+    result.checked.val.Encloses
+      (result.regionImage ancestor) (result.regionImage descendant) := by
+  unfold ConcreteDiagram.Encloses at encloses ⊢
+  rw [List.any_eq_true] at encloses ⊢
+  obtain ⟨steps, _, climbed⟩ := encloses
+  let targetSteps : Fin (result.checked.val.regionCount + 1) :=
+    Fin.cast
+      (congrArg (fun count => count + 1) result.regionCount.symm)
+      steps
+  refine ⟨targetSteps, Data.Finite.mem_allFin targetSteps, ?_⟩
+  change
+    (result.checked.val.climb steps.val
+      (result.regionImage descendant) ==
+        some (result.regionImage ancestor)) = true
+  rw [result.climb_regionImage, eq_of_beq climbed]
+  simp
+
 @[simp] theorem node_generated
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (node : source.val.NodeId) :
     result.checked.val.nodes (result.nodeImage node) =
       result.renameNode (source.val.nodes node) := by
   unfold nodeImage renameNode
   rw [Internal.checkedNode_data_transport]
-  simp only [iotaSeverCandidate]
+  simp only [wireSeverCandidate]
   cases source.val.nodes node <;> rfl
 
 @[simp] theorem wireImage_signature
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     (result.checked.val.wires (result.wireImage sourceWire)).sig =
       (source.val.wires sourceWire).sig := by
   unfold wireImage
   rw [Internal.checkedWire_signature_transport]
-  simp [iotaSeverCandidate]
+  simp [wireSeverCandidate]
   split <;> rfl
 
 @[simp] theorem freshWire_signature
-    (result : IotaSeverResult source wire keep) :
-    (result.checked.val.wires result.freshWire).sig = .iota := by
+    (result : WireSeverResult source wire keep scope) :
+    (result.checked.val.wires result.freshWire).sig =
+      (source.val.wires wire).sig := by
   unfold freshWire
   rw [Internal.checkedWire_signature_transport]
-  simpa [iotaSeverCandidate] using result.sourceSignature
+  simp only [wireSeverCandidate, Fin.addCases_right]
 
 @[simp] theorem wireImage_scope
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     (result.checked.val.wires (result.wireImage sourceWire)).scope =
       result.regionImage (source.val.wires sourceWire).scope := by
   unfold wireImage regionImage
   rw [Internal.checkedWire_scope_transport]
-  simp [iotaSeverCandidate]
+  simp [wireSeverCandidate]
   split <;> rfl
 
 @[simp] theorem freshWire_scope
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     (result.checked.val.wires result.freshWire).scope =
-      result.regionImage (source.val.wires wire).scope := by
+      result.regionImage scope := by
   unfold freshWire regionImage
   rw [Internal.checkedWire_scope_transport]
-  simp only [iotaSeverCandidate, Fin.addCases_right]
+  simp only [wireSeverCandidate, Fin.addCases_right]
 
 theorem wireImage_endpoints
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     (result.checked.val.wires (result.wireImage sourceWire)).endpoints =
       (if sourceWire = wire then
@@ -279,34 +307,42 @@ theorem wireImage_endpoints
         (source.val.wires sourceWire).endpoints).map result.endpointImage := by
   unfold wireImage endpointImage
   rw [Internal.checkedWire_endpoints_transport]
-  simp only [iotaSeverCandidate, Fin.addCases_left]
+  simp only [wireSeverCandidate, Fin.addCases_left]
   split <;> rfl
 
 theorem freshWire_endpoints
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     (result.checked.val.wires result.freshWire).endpoints =
       ((source.val.wires wire).endpoints.filter fun endpoint =>
         decide (endpoint ∉ keep)).map result.endpointImage := by
   unfold freshWire endpointImage
   rw [Internal.checkedWire_endpoints_transport]
-  simp only [iotaSeverCandidate, Fin.addCases_right]
+  simp only [wireSeverCandidate, Fin.addCases_right]
 
-end IotaSeverResult
+/-- The chosen fresh-wire scope lies inside the original wire scope. -/
+theorem sourceScope_encloses_scope
+    (result : WireSeverResult source wire keep scope) :
+    source.val.Encloses (source.val.wires wire).scope scope :=
+  result.scopeInside
+
+end WireSeverResult
 
 /--
-Split one individual wire into two co-scoped wires according to an exact
-endpoint partition. Polarity and orientation are intentionally rule-owned.
+Split one wire by an exact endpoint partition. The new wire uses the chosen
+scope, which must lie inside the old scope; polarity remains rule-owned.
 -/
-def severIota
+def severWire
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
-    (keep : List (CEndpoint source.val.nodeCount)) :
-    Except Error (IotaSeverResult source wire keep) := by
-  if signature : (source.val.wires wire).sig = .iota then
-    if partition :
+    (keep : List (CEndpoint source.val.nodeCount))
+    (scope : source.val.RegionId) :
+    Except Error (WireSeverResult source wire keep scope) := by
+  if partition :
         ∀ endpoint, endpoint ∈ keep →
           endpoint ∈ (source.val.wires wire).endpoints then
-      let candidate := iotaSeverCandidate source wire keep
+    if scopeInside :
+        source.val.Encloses (source.val.wires wire).scope scope then
+      let candidate := wireSeverCandidate source wire keep scope
       match accepted :
           ConcreteDiagram.checkWellFormed definitions candidate with
       | .error error =>
@@ -320,70 +356,70 @@ def severIota
             Internal.checkedWire generated
               (Fin.natAdd source.val.wireCount (0 : Fin 1))
           let rejoinCandidate :=
-            iotaJoinCandidate checked retained fresh
+            wireJoinCandidate checked retained fresh
           match rejoinAccepted :
               ConcreteDiagram.checkWellFormed definitions rejoinCandidate with
           | .error error =>
               exact .error (.wellFormed error)
           | .ok rejoined =>
               exact .ok
-                (IotaSeverResult.mk checked signature generated rejoined
+                (WireSeverResult.mk checked scopeInside generated rejoined
                   (ConcreteDiagram.checkWellFormed_preserves_input
                     rejoinAccepted))
     else
-      exact .error .invalidEndpointPartition
+      exact .error .invalidSeverScope
   else
-    exact .error (.expectedIota wire.val)
+    exact .error .invalidEndpointPartition
 
 /-- Checked output of one comparable-scope individual-wire merge. -/
-structure IotaJoinResult
+structure WireJoinResult
     (source : CheckedDiagram definitions)
     (outer inner : source.val.WireId) : Type where
   private mk ::
   checked : CheckedDiagram definitions
   private different : outer ≠ inner
-  private outerSignature : (source.val.wires outer).sig = .iota
-  private innerSignature : (source.val.wires inner).sig = .iota
+  private signaturesEqual :
+    (source.val.wires outer).sig = (source.val.wires inner).sig
   private generated :
-    checked.val = iotaJoinCandidate source outer inner
+    checked.val = wireJoinCandidate source outer inner
 
-namespace IotaJoinResult
+namespace WireJoinResult
 
 def regionImage
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : source.val.RegionId) :
     result.checked.val.RegionId :=
   Internal.checkedRegion result.generated region
 
 def nodeImage
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (node : source.val.NodeId) :
     result.checked.val.NodeId :=
   Internal.checkedNode result.generated node
 
 def wireImage
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceWire : source.val.WireId)
     (survives : sourceWire ≠ inner) :
     result.checked.val.WireId :=
   Internal.checkedWire result.generated
-    (DenseList.index (iotaJoinWires source inner) sourceWire (by
-      simp [iotaJoinWires, ConcreteDiagram.wiresList,
+    (DenseList.index (wireJoinWires source inner) sourceWire (by
+      simp [wireJoinWires, ConcreteDiagram.wiresList,
         Data.Finite.mem_allFin, survives]))
 
 def outerWire
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     result.checked.val.WireId :=
   result.wireImage outer result.different
 
 def endpointImage
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (endpoint : CEndpoint source.val.nodeCount) :
     CEndpoint result.checked.val.nodeCount :=
   Internal.checkedEndpoint result.generated endpoint
 
 def renameRegion
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     CRegion source.val.regionCount →
       CRegion result.checked.val.regionCount
   | .sheet => .sheet
@@ -393,7 +429,7 @@ def renameNode
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     CNode source.val.regionCount definitions.length →
       CNode result.checked.val.regionCount definitions.length
   | .atom region args => .atom (result.regionImage region) args
@@ -403,72 +439,67 @@ def renameNode
       .identity (result.regionImage region) sig arity
 
 theorem checked_generated
-    (result : IotaJoinResult source outer inner) :
-    result.checked.val = iotaJoinCandidate source outer inner :=
+    (result : WireJoinResult source outer inner) :
+    result.checked.val = wireJoinCandidate source outer inner :=
   result.generated
 
 theorem outer_ne_inner
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     outer ≠ inner :=
   result.different
 
-@[simp] theorem source_outer_signature
-    (result : IotaJoinResult source outer inner) :
-    (source.val.wires outer).sig = .iota :=
-  result.outerSignature
-
-@[simp] theorem source_inner_signature
-    (result : IotaJoinResult source outer inner) :
-    (source.val.wires inner).sig = .iota :=
-  result.innerSignature
+@[simp] theorem source_signatures_equal
+    (result : WireJoinResult source outer inner) :
+    (source.val.wires outer).sig = (source.val.wires inner).sig :=
+  result.signaturesEqual
 
 @[simp] theorem regionCount
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     result.checked.val.regionCount = source.val.regionCount := by
-  simpa [iotaJoinCandidate] using
+  simpa [wireJoinCandidate] using
     congrArg ConcreteDiagram.regionCount result.generated
 
 @[simp] theorem nodeCount
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     result.checked.val.nodeCount = source.val.nodeCount := by
-  simpa [iotaJoinCandidate] using
+  simpa [wireJoinCandidate] using
     congrArg ConcreteDiagram.nodeCount result.generated
 
 @[simp] theorem wireCount
-    (result : IotaJoinResult source outer inner) :
-    result.checked.val.wireCount = (iotaJoinWires source inner).length := by
-  simpa [iotaJoinCandidate] using
+    (result : WireJoinResult source outer inner) :
+    result.checked.val.wireCount = (wireJoinWires source inner).length := by
+  simpa [wireJoinCandidate] using
     congrArg ConcreteDiagram.wireCount result.generated
 
 @[simp] theorem root_generated
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     result.checked.val.root = result.regionImage source.val.root := by
   unfold regionImage
   rw [Internal.checkedRoot_transport]
   rfl
 
 @[simp] theorem region_generated
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : source.val.RegionId) :
     result.checked.val.regions (result.regionImage region) =
       result.renameRegion (source.val.regions region) := by
   unfold regionImage renameRegion
   rw [Internal.checkedRegion_data_transport]
-  simp only [iotaJoinCandidate]
+  simp only [wireJoinCandidate]
   cases source.val.regions region <;> rfl
 
 @[simp] theorem node_generated
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (node : source.val.NodeId) :
     result.checked.val.nodes (result.nodeImage node) =
       result.renameNode (source.val.nodes node) := by
   unfold nodeImage renameNode
   rw [Internal.checkedNode_data_transport]
-  simp only [iotaJoinCandidate]
+  simp only [wireJoinCandidate]
   cases source.val.nodes node <;> rfl
 
 @[simp] theorem wireImage_signature
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceWire : source.val.WireId)
     (survives : sourceWire ≠ inner) :
     (result.checked.val.wires
@@ -476,12 +507,12 @@ theorem outer_ne_inner
       (source.val.wires sourceWire).sig := by
   unfold wireImage
   rw [Internal.checkedWire_signature_transport]
-  simp only [iotaJoinCandidate]
+  simp only [wireJoinCandidate]
   rw [DenseList.get_index]
   split <;> rfl
 
 @[simp] theorem wireImage_scope
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceWire : source.val.WireId)
     (survives : sourceWire ≠ inner) :
     (result.checked.val.wires
@@ -489,12 +520,12 @@ theorem outer_ne_inner
       result.regionImage (source.val.wires sourceWire).scope := by
   unfold wireImage regionImage
   rw [Internal.checkedWire_scope_transport]
-  simp only [iotaJoinCandidate]
+  simp only [wireJoinCandidate]
   rw [DenseList.get_index]
   split <;> rfl
 
 theorem wireImage_endpoints
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceWire : source.val.WireId)
     (survives : sourceWire ≠ inner) :
     (result.checked.val.wires
@@ -507,7 +538,7 @@ theorem wireImage_endpoints
           result.endpointImage := by
   unfold wireImage endpointImage
   rw [Internal.checkedWire_endpoints_transport]
-  simp only [iotaJoinCandidate]
+  simp only [wireJoinCandidate]
   rw [DenseList.get_index]
   split
   · rename_i same
@@ -515,51 +546,49 @@ theorem wireImage_endpoints
     rfl
   · rfl
 
-end IotaJoinResult
+end WireJoinResult
 
-namespace IotaSeverResult
+namespace WireSeverResult
 
 /--
-The checker-owned inverse join of an accepted iota sever. Its checked target
+The checker-owned inverse join of an accepted wire sever. Its checked target
 is the canonical stable-partition rejoin retained by the sever receipt.
 -/
 def inverseJoin
-    (result : IotaSeverResult source wire keep) :
-    IotaJoinResult result.checked (result.wireImage wire)
+    (result : WireSeverResult source wire keep scope) :
+    WireJoinResult result.checked (result.wireImage wire)
       result.freshWire :=
-  IotaJoinResult.mk result.rejoined (by
+  WireJoinResult.mk result.rejoined (by
     intro same
     have values := congrArg Fin.val same
     unfold wireImage freshWire Internal.checkedWire at values
     simp only [Fin.coe_cast, Fin.val_castAdd, Fin.val_natAdd] at values
     omega)
     (by
-      rw [result.wireImage_signature]
-      exact result.sourceSignature)
-    result.freshWire_signature
+      rw [result.wireImage_signature, result.freshWire_signature])
     (by
       simpa [wireImage, freshWire] using result.rejoinedGenerated)
 
 @[simp] theorem inverseJoin_checked
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.inverseJoin.checked = result.rejoined :=
   rfl
 
 @[simp] theorem inverseJoin_regionCount
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.inverseJoin.checked.val.regionCount = source.val.regionCount := by
   rw [result.inverseJoin.regionCount, result.regionCount]
 
 @[simp] theorem inverseJoin_nodeCount
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.inverseJoin.checked.val.nodeCount = source.val.nodeCount := by
   rw [result.inverseJoin.nodeCount, result.nodeCount]
 
 @[simp] theorem inverseJoin_wireCount
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     result.inverseJoin.checked.val.wireCount = source.val.wireCount := by
   rw [result.inverseJoin.wireCount]
-  unfold iotaJoinWires
+  unfold wireJoinWires
   unfold ConcreteDiagram.wiresList
   rw [filter_ne_length_of_nodup_mem
     (Data.Finite.allFin_nodup result.checked.val.wireCount)
@@ -570,19 +599,19 @@ def inverseJoin
   omega
 
 private def inverseRegion
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (region : source.val.RegionId) :
     result.inverseJoin.checked.val.RegionId :=
   Fin.cast result.inverseJoin_regionCount.symm region
 
 private def inverseNode
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (node : source.val.NodeId) :
     result.inverseJoin.checked.val.NodeId :=
   Fin.cast result.inverseJoin_nodeCount.symm node
 
 @[simp] private theorem inverse_regionImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (region : source.val.RegionId) :
     result.inverseJoin.regionImage (result.regionImage region) =
       result.inverseRegion region := by
@@ -590,7 +619,7 @@ private def inverseNode
   rfl
 
 @[simp] private theorem inverse_nodeImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (node : source.val.NodeId) :
     result.inverseJoin.nodeImage (result.nodeImage node) =
       result.inverseNode node := by
@@ -598,7 +627,7 @@ private def inverseNode
   rfl
 
 private theorem retained_ne_fresh
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     result.wireImage sourceWire ≠ result.freshWire := by
   intro same
@@ -608,65 +637,65 @@ private theorem retained_ne_fresh
   omega
 
 private def rejoinSourceWire
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (target : result.inverseJoin.checked.val.WireId) :
     result.checked.val.WireId :=
-  (iotaJoinWires result.checked result.freshWire).get
+  (wireJoinWires result.checked result.freshWire).get
     (Fin.cast result.inverseJoin.wireCount target)
 
 private theorem rejoinSourceWire_survives
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (target : result.inverseJoin.checked.val.WireId) :
     result.rejoinSourceWire target ≠ result.freshWire := by
   have member :
       result.rejoinSourceWire target ∈
-        iotaJoinWires result.checked result.freshWire :=
+        wireJoinWires result.checked result.freshWire :=
     List.get_mem _ _
   exact of_decide_eq_true (List.mem_filter.mp member).2
 
 @[simp] private theorem inverseJoin_wireImage_sourceWire
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (target : result.inverseJoin.checked.val.WireId) :
     result.inverseJoin.wireImage (result.rejoinSourceWire target)
         (result.rejoinSourceWire_survives target) =
       target := by
-  unfold IotaJoinResult.wireImage rejoinSourceWire
+  unfold WireJoinResult.wireImage rejoinSourceWire
   apply Fin.ext
   change
     (DenseList.index
-      (iotaJoinWires result.checked result.freshWire)
-      ((iotaJoinWires result.checked result.freshWire).get
+      (wireJoinWires result.checked result.freshWire)
+      ((wireJoinWires result.checked result.freshWire).get
         (Fin.cast result.inverseJoin.wireCount target)) _).val =
       target.val
   rw [DenseList.index_get
-    (iotaJoinWires result.checked result.freshWire)
+    (wireJoinWires result.checked result.freshWire)
     ((Data.Finite.allFin_nodup result.checked.val.wireCount).filter _)
     (Fin.cast result.inverseJoin.wireCount target)]
   rfl
 
 @[simp] private theorem rejoinSourceWire_wireImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (splitWire : result.checked.val.WireId)
     (survives : splitWire ≠ result.freshWire) :
     result.rejoinSourceWire
         (result.inverseJoin.wireImage splitWire survives) =
       splitWire := by
   have member :
-      splitWire ∈ iotaJoinWires result.checked result.freshWire := by
-    simp [iotaJoinWires, ConcreteDiagram.wiresList,
+      splitWire ∈ wireJoinWires result.checked result.freshWire := by
+    simp [wireJoinWires, ConcreteDiagram.wiresList,
       Data.Finite.mem_allFin, survives]
-  unfold rejoinSourceWire IotaJoinResult.wireImage
+  unfold rejoinSourceWire WireJoinResult.wireImage
   apply Fin.ext
   change
-    ((iotaJoinWires result.checked result.freshWire).get
+    ((wireJoinWires result.checked result.freshWire).get
       (DenseList.index
-        (iotaJoinWires result.checked result.freshWire)
+        (wireJoinWires result.checked result.freshWire)
         splitWire member)).val =
       splitWire.val
   rw [DenseList.get_index]
 
 private def sourceWireOfRetained
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (splitWire : result.checked.val.WireId)
     (survives : splitWire ≠ result.freshWire) :
     source.val.WireId :=
@@ -685,7 +714,7 @@ private def sourceWireOfRetained
     omega⟩
 
 @[simp] private theorem wireImage_sourceWireOfRetained
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (splitWire : result.checked.val.WireId)
     (survives : splitWire ≠ result.freshWire) :
     result.wireImage (result.sourceWireOfRetained splitWire survives) =
@@ -694,7 +723,7 @@ private def sourceWireOfRetained
   rfl
 
 @[simp] private theorem sourceWireOfRetained_wireImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     result.sourceWireOfRetained (result.wireImage sourceWire)
         (retained_ne_fresh result sourceWire) =
@@ -703,21 +732,21 @@ private def sourceWireOfRetained
   rfl
 
 private def inverseWire
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     result.inverseJoin.checked.val.WireId :=
   result.inverseJoin.wireImage (result.wireImage sourceWire)
     (retained_ne_fresh result sourceWire)
 
 private def originalWire
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (target : result.inverseJoin.checked.val.WireId) :
     source.val.WireId :=
   result.sourceWireOfRetained (result.rejoinSourceWire target)
     (result.rejoinSourceWire_survives target)
 
 private def regionEquiv
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     Data.Finite.FiniteEquiv source.val.RegionId
       result.inverseJoin.checked.val.RegionId where
   toFun := result.inverseRegion
@@ -732,7 +761,7 @@ private def regionEquiv
     rfl
 
 private def nodeEquiv
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     Data.Finite.FiniteEquiv source.val.NodeId
       result.inverseJoin.checked.val.NodeId where
   toFun := result.inverseNode
@@ -747,7 +776,7 @@ private def nodeEquiv
     rfl
 
 private def wireEquiv
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     Data.Finite.FiniteEquiv source.val.WireId
       result.inverseJoin.checked.val.WireId where
   toFun := result.inverseWire
@@ -780,13 +809,13 @@ private def wireEquiv
       _ = target := result.inverseJoin_wireImage_sourceWire target
 
 private def inverseEndpoint
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (endpoint : CEndpoint source.val.nodeCount) :
     CEndpoint result.inverseJoin.checked.val.nodeCount :=
   ⟨result.inverseNode endpoint.node, endpoint.port⟩
 
 private theorem inverseEndpoint_injective
-    (result : IotaSeverResult source wire keep) :
+    (result : WireSeverResult source wire keep scope) :
     Function.Injective result.inverseEndpoint := by
   intro left right same
   cases left with
@@ -803,7 +832,7 @@ private theorem inverseEndpoint_injective
           rfl
 
 @[simp] private theorem inverse_endpointImage
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (endpoint : CEndpoint source.val.nodeCount) :
     result.inverseJoin.endpointImage (result.endpointImage endpoint) =
       result.inverseEndpoint endpoint := by
@@ -822,7 +851,7 @@ private theorem mem_map_injective
   · exact fun member => List.mem_map.mpr ⟨value, member, rfl⟩
 
 private theorem inverse_region_table
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (region : source.val.RegionId) :
     result.inverseJoin.checked.val.regions (result.inverseRegion region) =
       (source.val.regions region).rename result.regionEquiv := by
@@ -831,7 +860,7 @@ private theorem inverse_region_table
   cases source.val.regions region <;> rfl
 
 private theorem inverse_node_table
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (node : source.val.NodeId) :
     result.inverseJoin.checked.val.nodes (result.inverseNode node) =
       (source.val.nodes node).rename result.regionEquiv := by
@@ -840,7 +869,7 @@ private theorem inverse_node_table
   cases source.val.nodes node <;> rfl
 
 private theorem inverseEndpoint_corresponds
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (endpoint : CEndpoint source.val.nodeCount)
     (required :
       endpoint.port ∈ source.val.requiredPorts endpoint.node) :
@@ -859,7 +888,7 @@ private theorem inverseEndpoint_corresponds
     exact ⟨index, port⟩
 
 private theorem inverseEndpoint_mem
-    (result : IotaSeverResult source wire keep)
+    (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId)
     (endpoint : CEndpoint source.val.nodeCount) :
     result.inverseEndpoint endpoint ∈
@@ -893,7 +922,7 @@ private theorem inverseEndpoint_mem
       intro equal
       apply same
       apply Fin.ext
-      simpa [IotaSeverResult.wireImage, Internal.checkedWire] using
+      simpa [WireSeverResult.wireImage, Internal.checkedWire] using
         congrArg Fin.val equal
     rw [if_neg splitDifferent, result.wireImage_endpoints,
       if_neg same, List.map_map]
@@ -916,7 +945,8 @@ def inverseIso
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {keep : List (CEndpoint source.val.nodeCount)}
-    (result : IotaSeverResult source wire keep) :
+    {scope : source.val.RegionId}
+    (result : WireSeverResult source wire keep scope) :
     ConcreteIso source.val result.inverseJoin.checked.val where
   regions := result.regionEquiv
   nodes := result.nodeEquiv
@@ -978,33 +1008,31 @@ def inverseIso
           source.property sourceWire endpoint sourceIncident)
     exact endpointImage ▸ corresponds
 
-end IotaSeverResult
+end WireSeverResult
 
 /--
 Merge the inner individual wire into the retained outer wire and delete the
 inner identifier. Scope comparability is intentionally rule-owned.
 -/
-def joinIota
+def joinWires
     (source : CheckedDiagram definitions)
     (outer inner : source.val.WireId) :
-    Except Error (IotaJoinResult source outer inner) := by
+    Except Error (WireJoinResult source outer inner) := by
   if same : outer = inner then
     exact .error .sameWire
-  else if outerSignature : (source.val.wires outer).sig = .iota then
-    if innerSignature : (source.val.wires inner).sig = .iota then
-      let candidate := iotaJoinCandidate source outer inner
-      match accepted :
-          ConcreteDiagram.checkWellFormed definitions candidate with
-      | .error error =>
-          exact .error (.wellFormed error)
-      | .ok checked =>
-          exact .ok
-            (IotaJoinResult.mk checked same outerSignature innerSignature
-              (ConcreteDiagram.checkWellFormed_preserves_input accepted))
-    else
-      exact .error (.expectedIota inner.val)
+  else if signaturesEqual :
+      (source.val.wires outer).sig = (source.val.wires inner).sig then
+    let candidate := wireJoinCandidate source outer inner
+    match accepted :
+        ConcreteDiagram.checkWellFormed definitions candidate with
+    | .error error =>
+        exact .error (.wellFormed error)
+    | .ok checked =>
+        exact .ok
+          (WireJoinResult.mk checked same signaturesEqual
+            (ConcreteDiagram.checkWellFormed_preserves_input accepted))
   else
-    exact .error (.expectedIota outer.val)
+    exact .error .signatureMismatch
 
 end ConcreteWireQuantifier
 

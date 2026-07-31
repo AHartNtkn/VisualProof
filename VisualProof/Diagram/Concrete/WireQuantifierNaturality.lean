@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifierIota
+import VisualProof.Diagram.Concrete.WirePartition
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
 
 namespace VisualProof
@@ -15,14 +15,14 @@ receipt.
 
 namespace ConcreteWireQuantifier
 
-namespace IotaJoinSemantics
+namespace WireJoinSemantics
 
 /-- The non-injective wire quotient: the deleted inner wire maps to the outer. -/
 private def targetWire
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : source.val.WireId) :
     result.checked.val.WireId :=
   if survives : wire ≠ inner then
@@ -35,7 +35,7 @@ def sourceRegion
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : result.checked.val.RegionId) :
     source.val.RegionId :=
   Fin.cast result.regionCount region
@@ -44,7 +44,7 @@ def sourceRegion
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : result.checked.val.RegionId) :
     result.regionImage (sourceRegion result region) = region := by
   apply Fin.ext
@@ -54,7 +54,7 @@ def sourceRegion
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : source.val.RegionId) :
     sourceRegion result (result.regionImage region) = region := by
   apply Fin.ext
@@ -71,7 +71,7 @@ private def sourceWire
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : result.checked.val.WireId) :
     source.val.WireId :=
   (source.val.wiresList.filter fun candidate =>
@@ -82,7 +82,7 @@ private theorem sourceWire_survives
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : result.checked.val.WireId) :
     sourceWire result wire ≠ inner := by
   have member :
@@ -97,12 +97,12 @@ private theorem wireImage_sourceWire
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : result.checked.val.WireId) :
     result.wireImage (sourceWire result wire)
         (sourceWire_survives result wire) =
       wire := by
-  unfold IotaJoinResult.wireImage sourceWire
+  unfold WireJoinResult.wireImage sourceWire
   apply Fin.ext
   change
     (DenseList.index
@@ -123,7 +123,7 @@ private theorem wireImage_sourceWire
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : result.checked.val.WireId) :
     targetWire result (sourceWire result wire) = wire := by
   rw [targetWire, dif_pos (sourceWire_survives result wire)]
@@ -133,7 +133,7 @@ private theorem wireImage_sourceWire
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : source.val.WireId)
     (survives : wire ≠ inner) :
     sourceWire result (result.wireImage wire survives) = wire := by
@@ -143,7 +143,7 @@ private theorem wireImage_sourceWire
           decide (candidate ≠ inner) := by
     simp [ConcreteDiagram.wiresList,
       Data.Finite.mem_allFin, survives]
-  unfold sourceWire IotaJoinResult.wireImage
+  unfold sourceWire WireJoinResult.wireImage
   apply Fin.ext
   change
     ((source.val.wiresList.filter fun candidate =>
@@ -159,7 +159,7 @@ private theorem sourceWire_targetWire_of_survives
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : source.val.WireId)
     (survives : wire ≠ inner) :
     sourceWire result (targetWire result wire) = wire := by
@@ -170,7 +170,7 @@ private theorem sourceWire_targetWire_of_survives
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : source.val.WireId) :
     (result.checked.val.wires (targetWire result wire)).sig =
       (source.val.wires wire).sig := by
@@ -178,15 +178,15 @@ private theorem sourceWire_targetWire_of_survives
   · simp [targetWire, survives]
   · have same : wire = inner := by simpa using survives
     subst wire
-    rw [targetWire, dif_neg (by simp), IotaJoinResult.outerWire,
+    rw [targetWire, dif_neg (by simp), WireJoinResult.outerWire,
       result.wireImage_signature]
-    rw [result.source_outer_signature, result.source_inner_signature]
+    exact result.source_signatures_equal
 
 private theorem climb_regionImage
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (steps : Nat)
     (region : source.val.RegionId) :
     result.checked.val.climb steps (result.regionImage region) =
@@ -199,14 +199,14 @@ private theorem climb_regionImage
       cases data : source.val.regions region with
       | sheet => rfl
       | cut parent =>
-          simp only [IotaJoinResult.renameRegion]
+          simp only [WireJoinResult.renameRegion]
           exact induction parent
 
 private theorem encloses_regionImage
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {ancestor descendant : source.val.RegionId}
     (encloses : source.val.Encloses ancestor descendant) :
     result.checked.val.Encloses
@@ -335,7 +335,7 @@ private theorem targetWire_scope_encloses
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses
         (source.val.wires outer).scope
@@ -349,7 +349,7 @@ private theorem targetWire_scope_encloses
     exact result.checked.val.encloses_refl _
   · have same : wire = inner := by simpa using survives
     subst wire
-    rw [targetWire, dif_neg (by simp), IotaJoinResult.outerWire,
+    rw [targetWire, dif_neg (by simp), WireJoinResult.outerWire,
       result.wireImage_scope]
     exact encloses_regionImage result comparable
 
@@ -357,7 +357,7 @@ private theorem targetWire_scope_encloses
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : result.checked.val.WireId) :
     (source.val.wires (sourceWire result wire)).sig =
       (result.checked.val.wires wire).sig := by
@@ -370,7 +370,7 @@ private theorem sourceWire_scope
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (wire : result.checked.val.WireId) :
     (result.checked.val.wires wire).scope =
       result.regionImage
@@ -385,7 +385,7 @@ structure ContextsRelated
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceContext : ConcreteElaboration.WireContext source.val)
     (targetContext :
       ConcreteElaboration.WireContext result.checked.val) : Prop where
@@ -400,7 +400,7 @@ theorem empty_contexts_related
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner) :
+    (result : WireJoinResult source outer inner) :
     ContextsRelated result
       (ConcreteElaboration.WireContext.empty source.val)
       (ConcreteElaboration.WireContext.empty result.checked.val) := by
@@ -412,7 +412,7 @@ theorem empty_contexts_related
 
 /--
 Comparable-scope extension is the point where this proof differs from the
-co-scoped identity-collapse proof: the source-local inner wire maps to the
+comparable-scope identity-collapse proof: the source-local inner wire maps to the
 already visible outer wire.  Target coverage, rather than local-list equality,
 supplies that visibility.
 -/
@@ -420,7 +420,7 @@ theorem extend_contexts_related
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses
         (source.val.wires outer).scope
@@ -477,7 +477,7 @@ def contextRenaming
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -492,7 +492,7 @@ private theorem contextRenaming_origin
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -513,7 +513,7 @@ def contextSection
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -528,7 +528,7 @@ private theorem contextSection_origin
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -549,7 +549,7 @@ private theorem targetEndpoint_incident
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (endpoint : CEndpoint source.val.nodeCount)
     (wire : source.val.WireId)
     (incident : endpoint ∈ (source.val.wires wire).endpoints) :
@@ -567,7 +567,7 @@ private theorem targetEndpoint_incident
       exact List.mem_map.mpr ⟨endpoint, incident, rfl⟩
   · have same : wire = inner := by simpa using survives
     subst wire
-    rw [targetWire, dif_neg (by simp), IotaJoinResult.outerWire,
+    rw [targetWire, dif_neg (by simp), WireJoinResult.outerWire,
       result.wireImage_endpoints, if_pos rfl]
     exact List.mem_map.mpr
       ⟨endpoint, List.mem_append_right _ incident, rfl⟩
@@ -576,7 +576,7 @@ private theorem compile_singleton_natural
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -610,7 +610,7 @@ private def sourceNode
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (node : result.checked.val.NodeId) :
     source.val.NodeId :=
   Fin.cast result.nodeCount node
@@ -619,7 +619,7 @@ private def sourceNode
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (node : result.checked.val.NodeId) :
     result.nodeImage (sourceNode result node) = node := by
   apply Fin.ext
@@ -629,7 +629,7 @@ private def sourceNode
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (node : source.val.NodeId) :
     sourceNode result (result.nodeImage node) = node := by
   apply Fin.ext
@@ -639,7 +639,7 @@ private theorem nodeImage_mem_nodesAt
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : source.val.RegionId)
     (node : source.val.NodeId)
     (member : node ∈ source.val.nodesAt region) :
@@ -655,13 +655,13 @@ private theorem nodeImage_mem_nodesAt
       congrArg result.regionImage sourceRegion
     rw [result.node_generated]
     cases data : source.val.nodes node <;>
-      simpa [data, IotaJoinResult.renameNode] using mappedRegion
+      simpa [data, WireJoinResult.renameNode] using mappedRegion
 
 private theorem sourceNode_mem_nodesAt
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : source.val.RegionId)
     (node : result.checked.val.NodeId)
     (member :
@@ -681,7 +681,7 @@ private theorem sourceNode_mem_nodesAt
     have pulledRegion :=
       congrArg (sourceRegion result) targetRegion
     cases data : source.val.nodes (sourceNode result node) <;>
-      simpa [data, IotaJoinResult.renameNode] using pulledRegion
+      simpa [data, WireJoinResult.renameNode] using pulledRegion
 
 private theorem denote_compileNodes_iff_singletons
     (definitions : List (List Sig))
@@ -762,7 +762,7 @@ private theorem singleton_denotation
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -814,7 +814,7 @@ theorem compiled_nodes_under_pullback
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -908,7 +908,7 @@ private theorem contextRenaming_appendRight
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -952,7 +952,7 @@ private theorem contextSection_appendRight
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -992,7 +992,7 @@ private theorem contextRenaming_section
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -1012,7 +1012,7 @@ theorem target_extended_realizes_source
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -1067,7 +1067,7 @@ theorem source_extended_realizes_target
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -1130,7 +1130,7 @@ theorem pullback_one_point
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -1158,7 +1158,7 @@ theorem extended_one_point_without_local_inner
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     {sourceContext : ConcreteElaboration.WireContext source.val}
     {targetContext :
       ConcreteElaboration.WireContext result.checked.val}
@@ -1292,7 +1292,7 @@ theorem regionImage_mem_childrenOf
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region child : source.val.RegionId)
     (member : child ∈ source.val.childrenOf region) :
     result.regionImage child ∈
@@ -1305,13 +1305,13 @@ theorem regionImage_mem_childrenOf
   · have childData := (List.mem_filter.mp member).2
     rw [result.region_generated]
     cases data : source.val.regions child <;>
-      simp_all [IotaJoinResult.renameRegion]
+      simp_all [WireJoinResult.renameRegion]
 
 theorem sourceRegion_mem_childrenOf
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (region : source.val.RegionId)
     (child : result.checked.val.RegionId)
     (member :
@@ -1330,9 +1330,9 @@ theorem sourceRegion_mem_childrenOf
     rw [generated] at childData
     cases data : source.val.regions (sourceRegion result child) with
     | sheet =>
-        simp [data, IotaJoinResult.renameRegion] at childData
+        simp [data, WireJoinResult.renameRegion] at childData
     | cut parent =>
-        simp [data, IotaJoinResult.renameRegion] at childData
+        simp [data, WireJoinResult.renameRegion] at childData
         have pulled :=
           congrArg (sourceRegion result) childData
         simpa using pulled
@@ -1418,7 +1418,7 @@ private theorem compiled_children_equiv
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceRecurse : (region : source.val.RegionId) →
       (context : ConcreteElaboration.WireContext source.val) →
         Option (Region definitions context.sigs))
@@ -1508,7 +1508,7 @@ theorem compileRegion_equiv_below
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses
         (source.val.wires outer).scope
@@ -1719,7 +1719,7 @@ theorem compileRegion_equiv_below
                                 .cut (result.regionImage region) := by
                             rw [result.region_generated]
                             simp [sourceChildData,
-                              IotaJoinResult.renameRegion]
+                              WireJoinResult.renameRegion]
                           have sourceChildAbove :=
                             ConcreteElaboration.extend_above_child definitions
                               source.val source.property sourceContext region
@@ -1838,7 +1838,7 @@ theorem compileRegion_equiv_below
                                 .cut (result.regionImage region) := by
                             rw [result.region_generated]
                             simp [sourceChildData,
-                              IotaJoinResult.renameRegion]
+                              WireJoinResult.renameRegion]
                           have sourceChildAbove :=
                             ConcreteElaboration.extend_above_child definitions
                               source.val source.property sourceContext region
@@ -1885,7 +1885,7 @@ theorem compileRegion_target_implies_source_at_inner
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses
         (source.val.wires outer).scope
@@ -2105,7 +2105,7 @@ theorem compileRegion_target_implies_source_at_inner
                                   (source.val.wires inner).scope) := by
                           rw [result.region_generated]
                           simp [sourceChildData,
-                            IotaJoinResult.renameRegion]
+                            WireJoinResult.renameRegion]
                         have sourceChildAbove :=
                           ConcreteElaboration.extend_above_child definitions
                             source.val source.property sourceContext
@@ -2138,7 +2138,7 @@ theorem compileRegion_target_implies_source_at_inner
                             targetExtended rfl extendedOnePoint
                             sourceChildCompiled targetChildCompiled
 
-end IotaJoinSemantics
+end WireJoinSemantics
 
 end ConcreteWireQuantifier
 

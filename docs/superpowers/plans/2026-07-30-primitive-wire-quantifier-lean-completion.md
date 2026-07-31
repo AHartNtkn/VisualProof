@@ -279,25 +279,25 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 - `wire_sever_sound`, `wire_join_sound` over `PreModel`.
 - `identity_substitution_derived_sound` completed in Task 4.
 
-- [ ] **Step 1: Add RED generic fixtures.** Cover `.iota`, `rel []`, nested
+- [x] **Step 1: Add RED generic fixtures.** Cover `.iota`, `rel []`, nested
   relation signatures, moved-endpoint scope enclosure, chosen sever scope
   polarity, equal-signature join, incomparable scopes, and merge of a
   non-head endpoint. Require content primitives to reject the same non-head
   fixture later.
-- [ ] **Step 2: Rebuild the concrete owner.** Partition one wire's exact
+- [x] **Step 2: Rebuild the concrete owner.** Partition one wire's exact
   endpoint set into retained and moved endpoints. The fresh scope must be
   inside the old scope and enclose every moved endpoint. Merge comparable,
   equal-signature wires at the outer scope. Gate sever on the fresh scope and
   join on the inner scope.
-- [ ] **Step 3: Prove generic soundness.** Use the one-point quantifier laws
+- [x] **Step 3: Prove generic soundness.** Use the one-point quantifier laws
   for the selected `Sig`; no `Model.reify` or relation-content splice is
   permitted.
-- [ ] **Step 4: Remove iota authority.** Migrate all consumers and fixtures to
+- [x] **Step 4: Remove iota authority.** Migrate all consumers and fixtures to
   the generic API, delete both iota modules, and remove `iota_sever_sound` /
   `iota_join_sound`. Delete the old mixed rule facade and make
   `Rule/WirePrimitive.lean` the sole primitive facade; the monolithic
   specification remains separately named.
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build

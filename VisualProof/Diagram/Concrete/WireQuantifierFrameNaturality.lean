@@ -1,5 +1,5 @@
 import VisualProof.Diagram.Concrete.WireQuantifierNaturality
-import VisualProof.Diagram.Concrete.WireQuantifierIota
+import VisualProof.Diagram.Concrete.WirePartition
 
 namespace VisualProof
 
@@ -7,7 +7,7 @@ universe u
 
 namespace ConcreteWireQuantifier
 
-namespace IotaJoinSemantics
+namespace WireJoinSemantics
 
 private def PathDirection (depth : Nat) (target source : Prop) : Prop :=
   if depth % 2 = 0 then target → source else source → target
@@ -120,7 +120,7 @@ private theorem compiled_children_direction
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (sourceRecurse : (region : source.val.RegionId) →
       (context : ConcreteElaboration.WireContext source.val) →
         Option (Region definitions context.sigs))
@@ -265,7 +265,7 @@ private theorem compileRegionFrame_direction
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses (source.val.wires outer).scope
         (source.val.wires inner).scope)
@@ -459,7 +459,7 @@ private theorem compileRegionFrame_direction
                     (result.regionImage selected) =
                   .cut (result.regionImage region) := by
               rw [result.region_generated]
-              simp [sourceSelectedData, IotaJoinResult.renameRegion]
+              simp [sourceSelectedData, WireJoinResult.renameRegion]
             have sourceSelectedAbove :=
               ConcreteElaboration.extend_above_child definitions source.val
                 source.property sourceContext region selected sourceAbove
@@ -571,7 +571,7 @@ private theorem compileRegionFrame_direction
                             (result.regionImage child) =
                           .cut (result.regionImage region) := by
                       rw [result.region_generated]
-                      simp [childData, IotaJoinResult.renameRegion]
+                      simp [childData, WireJoinResult.renameRegion]
                     have sourceChildAbove :=
                       ConcreteElaboration.extend_above_child definitions
                         source.val source.property sourceContext region child
@@ -688,7 +688,7 @@ private theorem compileRegionFrame_direction
               exact core targetCoreDenotes
 
 /--
-Transport denotation through a comparable iota join at the generated source
+Transport denotation through a comparable-signature join at the generated source
 site.  The semantic facade converts this root-frame statement to checked
 denotation.
 -/
@@ -696,7 +696,7 @@ theorem root_direction
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses (source.val.wires outer).scope
         (source.val.wires inner).scope)
@@ -847,15 +847,16 @@ theorem sever_site_cutDepth
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {keep : List (CEndpoint source.val.nodeCount)}
-    (result : IotaSeverResult source wire keep)
-    (sourceSite : SiteCompilation source (source.val.wires wire).scope)
+    {scope : source.val.RegionId}
+    (result : WireSeverResult source wire keep scope)
+    (sourceSite : SiteCompilation source scope)
     (targetSite : SiteCompilation result.checked
       (result.checked.val.wires result.freshWire).scope) :
     targetSite.frame.context.cutDepth =
       sourceSite.frame.context.cutDepth := by
   have sourceClimb :=
     frame_cutDepth_climbs definitions source.val
-      (source.val.wires wire).scope _ _ _ _ sourceSite.frame_generated
+      scope _ _ _ _ sourceSite.frame_generated
   have targetClimb :=
     frame_cutDepth_climbs definitions result.checked.val
       (result.checked.val.wires result.freshWire).scope _ _ _ _
@@ -863,14 +864,14 @@ theorem sever_site_cutDepth
   let targetDepth := targetSite.frame.context.cutDepth
   have targetClimb' :
       result.checked.val.climb targetDepth
-          (result.regionImage (source.val.wires wire).scope) =
+          (result.regionImage scope) =
         some (result.regionImage source.val.root) := by
     simpa only [result.freshWire_scope, result.root_generated] using
       targetClimb
   rw [result.climb_regionImage] at targetClimb'
   cases reachedEquation :
       source.val.climb targetDepth
-        (source.val.wires wire).scope with
+        scope with
   | none => simp [reachedEquation] at targetClimb'
   | some reached =>
       rw [reachedEquation] at targetClimb'
@@ -886,7 +887,7 @@ theorem sever_site_cutDepth
       exact climb_to_root_unique definitions source.val source.property
         reachedEquation sourceClimb
 
-end IotaJoinSemantics
+end WireJoinSemantics
 
 end ConcreteWireQuantifier
 

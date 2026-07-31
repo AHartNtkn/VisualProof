@@ -1,21 +1,21 @@
-import VisualProof.Diagram.Concrete.WireQuantifierIota
+import VisualProof.Diagram.Concrete.WirePartition
 import VisualProof.Diagram.Concrete.WireQuantifierFrameNaturality
 
 namespace VisualProof
 
 namespace ConcreteWireQuantifier
 
-namespace IotaJoinResult
+namespace WireJoinResult
 
 /--
-A checked comparable-scope iota join is sound in the polarity determined by
-the checker-generated site frame.
+A checked equal-signature comparable-scope join is sound in the polarity
+determined by the checker-generated site frame.
 -/
 theorem denotes
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {outer inner : source.val.WireId}
-    (result : IotaJoinResult source outer inner)
+    (result : WireJoinResult source outer inner)
     (comparable :
       source.val.Encloses (source.val.wires outer).scope
         (source.val.wires inner).scope)
@@ -29,26 +29,27 @@ theorem denotes
       denoteChecked pre definitionEnv source →
         denoteChecked pre definitionEnv result.checked) := by
   have direction :=
-    IotaJoinSemantics.root_direction result comparable site pre definitionEnv
+    WireJoinSemantics.root_direction result comparable site pre definitionEnv
   rw [site.frame_fills_checked] at direction
   simpa only [elaborate_denotes_checked] using direction
 
-end IotaJoinResult
+end WireJoinResult
 
-namespace IotaSeverResult
+namespace WireSeverResult
 
 /--
-A checked iota sever is sound in the polarity of its source wire scope.
-The target site receipt, comparable inverse join, and parity transport are
-derived from the checker-owned sever receipt.
+A checked signature-indexed sever is sound in the polarity of its chosen
+fresh scope. The target site receipt, comparable inverse join, and parity
+transport are derived from the checker-owned sever receipt.
 -/
 theorem denotes
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {keep : List (CEndpoint source.val.nodeCount)}
-    (result : IotaSeverResult source wire keep)
-    (sourceSite : SiteCompilation source (source.val.wires wire).scope)
+    {scope : source.val.RegionId}
+    (result : WireSeverResult source wire keep scope)
+    (sourceSite : SiteCompilation source scope)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions) :
     (sourceSite.frame.context.cutDepth % 2 = 0 →
@@ -64,13 +65,13 @@ theorem denotes
       result.checked.val.Encloses
         (result.checked.val.wires (result.wireImage wire)).scope
         (result.checked.val.wires result.freshWire).scope := by
-    simpa using result.checked.val.encloses_refl
-      (result.regionImage (source.val.wires wire).scope)
+    simpa using
+      result.encloses_regionImage result.sourceScope_encloses_scope
   have joined :=
-    IotaJoinResult.denotes result.inverseJoin comparable targetSite
+    WireJoinResult.denotes result.inverseJoin comparable targetSite
       pre definitionEnv
   have sameDepth :=
-    IotaJoinSemantics.sever_site_cutDepth result sourceSite targetSite
+    WireJoinSemantics.sever_site_cutDepth result sourceSite targetSite
   have rejoined :=
     iso_denotation result.inverseIso pre definitionEnv
   constructor
@@ -87,7 +88,7 @@ theorem denotes
       exact sourceOdd
     exact rejoined.mpr (joined.2 targetOdd targetHolds)
 
-end IotaSeverResult
+end WireSeverResult
 
 end ConcreteWireQuantifier
 
