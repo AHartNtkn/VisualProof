@@ -246,6 +246,21 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     expect(new Set([c0, c1, c2]).size).toBe(3) // three distinct ladder entries
   })
 
+  it('a relational wire’s ∃ end dot is filled in the wire’s rung, not the iota colour', () => {
+    // The dot IS a point of the wire (the outermost quantifier point of the
+    // line of identity), so it carries the wire's colour like every stroke —
+    // a propositional ∃ dot in the base iota colour reads as the wrong sort
+    // (USER 2026-07-30).
+    const { d, e, head } = wireAtom()
+    const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
+    const at = e.bodies.get(e.wires.get(head)!.endBodyId!)!.pos
+    const shapes = paint(e, LIGHT)
+    const inner = shapes.find((s) =>
+      s.kind === 'dot' && s.center.x === at.x && s.center.y === at.y && s.fill !== LIGHT.paper)
+    expect(inner, 'the ∃ end dot is painted').toBeDefined()
+    expect(inner!.kind === 'dot' && inner!.fill, 'the ∃ dot carries its wire’s ladder rung').toBe(hue)
+  })
+
   it('Dark: the relation wire AND atom anatomy glow in the order hue; Light does not glow', () => {
     const { d, e, head } = wireAtom()
     const darkShapes = paint(e, DARK)

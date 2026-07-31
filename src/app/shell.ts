@@ -621,8 +621,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       displayed = d
       const next = mkEngine(d, currentBoundary())
       if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
-      carryOver(previous, next)
-      seedProject(next)
+      const carried = carryOver(previous, next)
+      seedProject(next, false, carried)
       mainMotion.observeSwap(previous, next, performance.now())
       engine = next
       if (mode === 'prove' && proof?.kind === 'track') {
@@ -755,12 +755,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     displayed = replay.diagramAt(replayK)
     const next = mkEngine(displayed, replay.boundaryAt(replayK))
     if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
-    carryOver(
+    const carried = carryOver(
       prevEngine,
       next,
       replay.layoutIdentityBetween(previousReplayK, replayK) ?? undefined,
     )
-    seedProject(next)
+    seedProject(next, false, carried)
     engine = next
     seedReplayPlacements(engine, replay, replayK, ctx)
     interaction.reconcileDiagram()
@@ -1151,8 +1151,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const prev = companionEngine
       const next = mkEngine(comp.diagram, comp.boundary)
       if (companionSearch !== null) attachLayoutSearch(next, companionSearch)
-      if (prev !== null) carryOver(prev, next)
-      seedProject(next)
+      const carried = prev !== null ? carryOver(prev, next) : null
+      seedProject(next, false, carried)
       companionEngine = next
       companionShownDiagram = comp.diagram
       companionRebuilds++

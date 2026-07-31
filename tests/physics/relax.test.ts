@@ -343,8 +343,8 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
     expect(first.wires.get(wire)!.net.junctions).toHaveLength(1)
 
     const rebuilt = mkEngine(diagram, [])
-    carryOver(first, rebuilt)
-    seedProject(rebuilt)
+    const carried = carryOver(first, rebuilt)
+    seedProject(rebuilt, false, carried)
     const rebuiltBranch = rebuilt.wires.get(wire)!.net.junctions[0]!
 
     expect(rebuilt.scale).toBeCloseTo(first.scale, 10)

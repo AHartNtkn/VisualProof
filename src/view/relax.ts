@@ -4,7 +4,7 @@ import type { Body, Engine, StoredFrame, WireView } from './engine'
 import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
 import { route, segSoftCost } from './route/freespace'
 import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
-import { advanceNetwork, netEval, FD_PROBE } from './route/network'
+import { advanceNetwork, netEval, solveTarget, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
 import type { CurveBC } from './route/curve'
 import { edgeCurvePts, rodCost } from './route/curve'
@@ -445,11 +445,32 @@ export function applyContentScale(e: Engine): void {
     is a variant (establishProofFrame + establishProofSlotShift over all steps);
     see seedProjectReplay. `noScale` skips the content scale for scale-invariant
     measurements (frame box / slots) that must read natural geometry. */
-export function seedProject(e: Engine, noScale = false): void {
+export function seedProject(e: Engine, noScale = false, carriedNets: ReadonlySet<WireId> | null = null): void {
   recomputeRegions(e)
   resolveOverlaps(e)
   establishFrame(e)
   if (!noScale) { applyContentScale(e); clampContentToFrame(e) }
+  seedWireJunctions(e, carriedNets)
+}
+
+/** Junction SPAWN positions are solved, never stale seeds (USER 2026-07-30:
+    fresh wires' junctions spawned near the diagram centre — the mkEngine
+    centroid of the SEED body layout — and spent the whole opening walking to
+    their optimum; the same time can spawn them AT it). A discrete
+    construction event like the rest of seedProject: every wire whose net was
+    NOT carried from a previous engine gets its fixed-topology target solved
+    from the CURRENT terminals. Carried nets keep their glide state untouched
+    (re-deriving them would be argmin-tracking of state that must follow its
+    basin). */
+function seedWireJunctions(e: Engine, carriedNets: ReadonlySet<WireId> | null): void {
+  const spaces = wireRouteSpaces(e)
+  for (const [wid, w] of e.wires) {
+    if (w.net.junctions.length === 0) continue
+    if (carriedNets !== null && carriedNets.has(wid)) continue
+    const terms = wireTerminalPoints(e, w)
+    if (terms.length < 2) continue
+    solveTarget(w.net, terms, spaces.space(wid), 60)
+  }
 }
 
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {

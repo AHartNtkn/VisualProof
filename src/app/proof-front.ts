@@ -223,8 +223,8 @@ export class ProofFrontViewport {
 
   reconcileDiagram(): void {
     const next = mkEngine(this.#model.diagram(), this.#model.boundary())
-    carryOver(this.#engine, next)
-    seedProject(next)
+    const carried = carryOver(this.#engine, next)
+    seedProject(next, false, carried)
     this.motion.observeSwap(this.#engine, next, performance.now())
     this.#engine = next
     this.#rebuilds++

@@ -348,7 +348,8 @@ export function carryOver(
   prev: Engine,
   next: Engine,
   identity?: LayoutIdentity,
-): void {
+): Set<WireId> {
+  const carriedNets = new Set<WireId>()
   // The border NEVER resizes for the diagram's lifetime (USER RULING 2026-07-06):
   // a rewrite keeps the SAME frame — content reflows inside the unchanged box, the
   // box is not recomputed. Carrying prev.frame makes `establishFrame` a no-op on the
@@ -446,6 +447,7 @@ export function carryOver(
       if (sig(pv) !== sig(nv)) continue
       nv.net.junctions = pv.net.junctions.map((p) => denorm(p, prev.scale))
       nv.net.edges = pv.net.edges.map(([u, v]) => [u, v])
+      carriedNets.add(targetWire)
       continue
     }
     const terminalMap = terminalImage(pv, nv)
@@ -462,7 +464,9 @@ export function carryOver(
       vertexImage(u),
       vertexImage(v),
     ])
+    carriedNets.add(targetWire)
   }
+  return carriedNets
 }
 
 /** Map an anatomy-local point (before ascale) into world space through the

@@ -174,7 +174,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     if (w === undefined || w.binds.length !== 0) continue
     const slot = resolvedFrameSlot(e, position)
     if (slot === null) continue
-    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: STUB_DOT_R, fill: st.wire })
+    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: STUB_DOT_R, fill: wireStroke(wid) })
   }
   // Port 0 is always the single prominent reading origin whenever the sheet has
   // a boundary. All remaining ports are read clockwise from this logical port,
@@ -188,10 +188,21 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // Task 5 gallery ruling on the ∀ glyph), or a bare wire. Wire-owned Steiner branch
   // vertices are not bodies and are never dotted (USER 2026-07-07: branch points are
   // unmarked; where legs meet is downstream of the tree).
+  // The dot is a point OF the wire (the outermost quantifier point of the line
+  // of identity), so it carries the wire's colour like every stroke — a
+  // propositional ∃ dot in the base iota colour reads as the wrong sort.
+  const endWire = new Map<string, WireId>()
+  for (const [wid, w] of e.wires) {
+    if (w.endBodyId !== null) endWire.set(w.endBodyId, wid)
+  }
+  for (const [wid, w] of Object.entries(e.d.wires)) {
+    if (w.endpoints.length === 0) endWire.set(`j:${wid}`, wid) // bare ∃ — the dot IS the wire
+  }
   for (const b of e.bodies.values()) {
     if (b.kind !== 'end') continue
+    const owner = endWire.get(b.id)
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
-    shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
+    shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: owner === undefined ? st.wire : wireStroke(owner) })
   }
   return shapes
 }
