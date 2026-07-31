@@ -302,6 +302,17 @@ private theorem cast_cast_symm
   cases same
   rfl
 
+private theorem cast_trans_region
+    {left middle right : List Sig}
+    (leftMiddle : left = middle)
+    (middleRight : middle = right)
+    (body : Region definitions left) :
+    middleRight ▸ (leftMiddle ▸ body) =
+      leftMiddle.trans middleRight ▸ body := by
+  cases leftMiddle
+  cases middleRight
+  rfl
+
 private def mappedContextSigsExact
     (source : ConcreteDiagram sourceCount)
     (target : ConcreteDiagram targetCount)
@@ -579,6 +590,92 @@ theorem sigs_exact
   apply List.map_congr_left
   intro sourceWire member
   exact context.signature_exact sourceWire member
+
+/-- The ordered local signature block is shared at every region not enclosed
+by the acted scope. -/
+theorem localSigs_exact_not_below
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    (localized : result.ScopeLocalization)
+    (region : source.val.RegionId)
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope region) :
+    (result.checked.val.wiresAt (result.regionImage region)).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      (source.val.wiresAt region).map
+        (fun sourceWire => (source.val.wires sourceWire).sig) := by
+  rw [result.wiresAt_contextWireMap_not_below localized region notBelow,
+    List.map_map]
+  apply List.map_congr_left
+  intro sourceWire member
+  exact result.contextWireMap_signature sourceWire
+    (result.wireAt_not_below_not_removed localized region notBelow
+      sourceWire member)
+
+/-- Exact core equality survives discharge of the corresponding ordered local
+signature blocks. -/
+theorem finishRegion_reindexed_not_below
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (localized : result.ScopeLocalization)
+    (region : source.val.RegionId)
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope region)
+    (sourceCore : Region definitions (sourceContext.extend region).sigs)
+    (targetCore : Region definitions
+      (targetContext.extend (result.regionImage region)).sigs)
+    (coreExact :
+      (context.extendNotBelow localized region notBelow).sigs_exact ▸
+          targetCore =
+        sourceCore) :
+    context.sigs_exact ▸
+        ConcreteElaboration.finishRegion result.checked.val targetContext
+          (result.regionImage region) targetCore =
+      ConcreteElaboration.finishRegion source.val sourceContext region
+        sourceCore := by
+  rw [ConcreteElaboration.finishRegion_eq_signatures,
+    ConcreteElaboration.finishRegion_eq_signatures]
+  apply ConcreteElaboration.finishRegionSignatures_reindex
+    context.sigs_exact
+    (localSigs_exact_not_below (result := result) localized region notBelow)
+  let targetExtend :=
+    ConcreteElaboration.WireContext.sigs_extend targetContext
+      (result.regionImage region)
+  let sourceExtend :=
+    ConcreteElaboration.WireContext.sigs_extend sourceContext region
+  let blockExact :=
+    targetExtend.trans
+      ((ConcreteElaboration.appendSignaturesExact context.sigs_exact
+        (localSigs_exact_not_below (result := result) localized region
+          notBelow)).trans
+        sourceExtend.symm)
+  have extendedProofExact :
+      (context.extendNotBelow localized region notBelow).sigs_exact =
+        blockExact :=
+    Subsingleton.elim _ _
+  rw [extendedProofExact] at coreExact
+  have transported := congrArg (fun body => sourceExtend ▸ body) coreExact
+  rw [cast_trans_region targetExtend
+    (ConcreteElaboration.appendSignaturesExact context.sigs_exact
+      (localSigs_exact_not_below (result := result) localized region
+        notBelow))]
+  change sourceExtend ▸ (blockExact ▸ targetCore) =
+    sourceExtend ▸ sourceCore at transported
+  rw [cast_trans_region blockExact sourceExtend] at transported
+  have proofExact :
+      targetExtend.trans
+          (ConcreteElaboration.appendSignaturesExact context.sigs_exact
+            (localSigs_exact_not_below (result := result) localized region
+              notBelow)) =
+        blockExact.trans sourceExtend :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  exact transported
 
 /-- Rename typed variables from a source visible context to its retained
 target context. -/

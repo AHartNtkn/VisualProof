@@ -279,7 +279,7 @@ def finishRegionSignatures (outer : List Sig) :
       finishRegionSignatures outer tail
         (.mk (.cons (.bind head body) .nil))
 
-private def appendSignaturesExact
+def appendSignaturesExact
     {targetOuter sourceOuter targetLocal sourceLocal : List Sig}
     (outerExact : targetOuter = sourceOuter)
     (localExact : targetLocal = sourceLocal) :
