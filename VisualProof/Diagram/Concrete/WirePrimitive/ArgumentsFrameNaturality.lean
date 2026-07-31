@@ -68,6 +68,37 @@ theorem ArgumentResult.wireAt_strictlyAbove_not_removed
     source.property outerEncloses actedEnclosesOuter
   exact strict same
 
+/-- Every incidence of a retained source node is reproduced on the
+canonical target node and wire images. -/
+theorem ArgumentResult.retainedNode_forwardIncident
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (node : source.val.NodeId)
+    (nodeRetained : node ∉ argumentSiteNodes result.sites)
+    (port : CPort)
+    (sourceWire : source.val.WireId)
+    (incident :
+      (⟨node, port⟩ : CEndpoint source.val.nodeCount) ∈
+        (source.val.wires sourceWire).endpoints) :
+    (⟨result.retainedNodeImage node nodeRetained, port⟩ :
+        CEndpoint result.checked.val.nodeCount) ∈
+      (result.checked.val.wires
+        (result.contextWireMap sourceWire)).endpoints := by
+  have required := ConcreteDiagram.incident_port_required definitions
+    source.val source.property sourceWire ⟨node, port⟩ incident
+  have sourceOwner := ConcreteDiagram.endpointOwner?_eq_of_incident
+    definitions source.val source.property node port required sourceWire
+    incident
+  have sourceWireRetained := result.ownerOfRetainedNode_not_removed node
+    nodeRetained port sourceWire sourceOwner
+  have targetOwner := result.retainedNodeImage_endpointOwner node
+    nodeRetained port required sourceWire sourceOwner
+  rw [result.contextWireMap_retained sourceWire sourceWireRetained]
+  exact ConcreteDiagram.endpointOwner?_incident result.checked.val
+    ⟨result.retainedNodeImage node nodeRetained, port⟩
+    (result.retainedWireImage sourceWire sourceWireRetained) targetOwner
+
 /-- At a strict ancestor of the acted scope, ordered local wire identifiers
 are exactly the canonical images of the source identifiers. -/
 theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
@@ -353,6 +384,105 @@ theorem wireRenaming_origin
       intro sourceWire member
       rw [context.ids_exact]
       exact List.mem_map.mpr ⟨sourceWire, member, rfl⟩) value
+
+/-- One retained source node compiles to the renamed target item under
+corresponding visible contexts. -/
+theorem compileNode_natural
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (targetNodup : targetContext.ids.Nodup)
+    (sourceNode : source.val.NodeId)
+    (nodeRetained : sourceNode ∉ argumentSiteNodes result.sites)
+    (sourceItem : Item definitions sourceContext.sigs)
+    (sourceCompiled :
+      ConcreteElaboration.Internal.compileNode? definitions source.val
+          sourceContext sourceNode = some sourceItem) :
+    ConcreteElaboration.Internal.compileNode? definitions result.checked.val
+        targetContext (result.retainedNodeImage sourceNode nodeRetained) =
+      some (sourceItem.renameWires context.wireRenaming) := by
+  exact ConcreteElaboration.compileNode?_natural
+    (leftNode := sourceNode)
+    (rightNode := result.retainedNodeImage sourceNode nodeRetained)
+    result.checked.property targetNodup context.wireRenaming
+    result.contextWireMap context.wireRenaming_origin result.regionEquiv
+    (by
+      rw [result.retainedNodeImage_data sourceNode nodeRetained]
+      cases source.val.nodes sourceNode <;> rfl)
+    (by
+      intro port sourceWire incident
+      exact result.retainedNode_forwardIncident sourceNode nodeRetained port
+        sourceWire incident)
+    sourceCompiled
+
+/-- Pointwise ordered correspondence between retained source nodes and their
+canonical checked images. -/
+inductive RetainedNodeList
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    List source.val.NodeId → List result.checked.val.NodeId → Type
+  | nil : RetainedNodeList result [] []
+  | cons
+      (sourceNode : source.val.NodeId)
+      (retained : sourceNode ∉ argumentSiteNodes result.sites)
+      (tail : RetainedNodeList result sourceTail targetTail) :
+      RetainedNodeList result (sourceNode :: sourceTail)
+        (result.retainedNodeImage sourceNode retained :: targetTail)
+
+/-- Ordered retained node sequences compile by pointwise renaming. -/
+theorem compileNodes_natural
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (targetNodup : targetContext.ids.Nodup)
+    {sourceNodes : List source.val.NodeId}
+    {targetNodes : List result.checked.val.NodeId}
+    (nodes : RetainedNodeList result sourceNodes targetNodes)
+    {sourceItems : ItemSeq definitions sourceContext.sigs}
+    (sourceCompiled :
+      compileNodes? definitions source.val sourceContext sourceNodes =
+        some sourceItems) :
+    ∃ targetItems : ItemSeq definitions targetContext.sigs,
+      compileNodes? definitions result.checked.val targetContext targetNodes =
+          some targetItems ∧
+        targetItems = sourceItems.renameWires context.wireRenaming := by
+  induction nodes generalizing sourceItems with
+  | nil =>
+      simp only [compileNodes?, Option.some.injEq] at sourceCompiled ⊢
+      subst sourceItems
+      exact ⟨.nil, rfl, rfl⟩
+  | @cons sourceTail targetTail sourceNode retained tail induction =>
+      simp only [compileNodes?] at sourceCompiled ⊢
+      cases sourceHeadEquation :
+          ConcreteElaboration.Internal.compileNode? definitions source.val
+            sourceContext sourceNode with
+      | none => simp [sourceHeadEquation] at sourceCompiled
+      | some sourceHead =>
+          cases sourceTailEquation :
+              compileNodes? definitions source.val sourceContext sourceTail with
+          | none => simp [sourceHeadEquation, sourceTailEquation] at sourceCompiled
+          | some sourceRest =>
+              have sourceItemsExact :
+                  sourceItems = .cons sourceHead sourceRest := by
+                exact (Option.some.inj (by
+                  simpa [sourceHeadEquation, sourceTailEquation] using
+                    sourceCompiled)).symm
+              subst sourceItems
+              have targetHeadEquation := context.compileNode_natural
+                targetNodup sourceNode retained sourceHead sourceHeadEquation
+              obtain ⟨targetRest, targetTailEquation, targetRestExact⟩ :=
+                induction sourceTailEquation
+              refine ⟨.cons (sourceHead.renameWires context.wireRenaming)
+                targetRest, ?_, ?_⟩
+              · simp [targetHeadEquation, targetTailEquation]
+              · simp [ItemSeq.renameWires, targetRestExact]
 
 end ArgumentResult.RetainedContext
 
