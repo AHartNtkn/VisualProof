@@ -12,13 +12,13 @@ import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine, carryOver, routeObstacles, routeBounds, wireTerminalPoints } from '../view/engine'
-import { mkFreeSpace, route } from '../view/route/freespace'
+import { mkEngine, carryOver, wireRouteSpaces, wireTerminalPoints } from '../view/engine'
+import { route } from '../view/route/freespace'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, attachLayoutSearch } from '../view/relax'
 import { mkWorkerSearch } from '../view/optimize-client'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
-import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
+import { paint, highlightGroup, wireOverlayShapes, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
@@ -621,8 +621,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       displayed = d
       const next = mkEngine(d, currentBoundary())
       if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
-      carryOver(previous, next)
-      seedProject(next)
+      const carried = carryOver(previous, next)
+      seedProject(next, false, carried)
       mainMotion.observeSwap(previous, next, performance.now())
       engine = next
       if (mode === 'prove' && proof?.kind === 'track') {
@@ -755,12 +755,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     displayed = replay.diagramAt(replayK)
     const next = mkEngine(displayed, replay.boundaryAt(replayK))
     if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
-    carryOver(
+    const carried = carryOver(
       prevEngine,
       next,
       replay.layoutIdentityBetween(previousReplayK, replayK) ?? undefined,
     )
-    seedProject(next)
+    seedProject(next, false, carried)
     engine = next
     seedReplayPlacements(engine, replay, replayK, ctx)
     interaction.reconcileDiagram()
@@ -1096,16 +1096,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const g = engine.regions.get(hit.id)
       return g === undefined ? [] : [{ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke, width: 2, insetColor: null, glow: null }]
     }
-    const out: Shape[] = []
-    // Every wire (junctions included) is its routed strokes — trace the SAME strokes
-    // paint draws, so the hover outline matches exactly.
-    for (const l of legPaths(engine)) {
-      if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
-    }
-    for (const s of existentialStubs(engine)) {
-      if (s.wid === hit.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: 3, glow: null })
-    }
-    return out
+    // Every wire (junctions included) is its routed strokes — restroke the SAME
+    // cubics paint draws (wireOverlayShapes), so the hover outline matches exactly.
+    return wireOverlayShapes(engine, hit.id, stroke, 3)
   }
 
   // Position/show the companion wrapper for the current display mode. Plain CSS
@@ -1158,8 +1151,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const prev = companionEngine
       const next = mkEngine(comp.diagram, comp.boundary)
       if (companionSearch !== null) attachLayoutSearch(next, companionSearch)
-      if (prev !== null) carryOver(prev, next)
-      seedProject(next)
+      const carried = prev !== null ? carryOver(prev, next) : null
+      seedProject(next, false, carried)
       companionEngine = next
       companionShownDiagram = comp.diagram
       companionRebuilds++
@@ -1819,8 +1812,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       legSolves(): unknown[] {
         const out: unknown[] = []
-        const fs = mkFreeSpace(routeObstacles(engine), routeBounds(engine))
+        const spaces = wireRouteSpaces(engine)
         for (const [wid, w] of engine.wires) {
+          const fs = spaces.space(wid)
           const terms = wireTerminalPoints(engine, w)
           const pos = (v: number): { x: number; y: number } => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
           for (const [u, v] of w.net.edges) {

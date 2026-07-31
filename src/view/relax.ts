@@ -1,14 +1,16 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, StoredFrame, WireView } from './engine'
-import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace, route, segSoftCost } from './route/freespace'
-import type { Disc as RouteDisc, Bounds } from './route/freespace'
-import { advanceNetwork, netEval, FD_PROBE } from './route/network'
+import type { Body, Engine, StoredFrame, WireSpaces, WireView } from './engine'
+import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, drawnObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
+import { mkFreeSpace, route } from './route/freespace'
+import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
+import { advanceNetwork, netEval, solveTarget, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
-import type { CurveBC } from './route/curve'
-import { edgeCurvePts, rodCost } from './route/curve'
+import type { CurveBC, NearSpace } from './route/curve'
+import { chainThroughAnchors, curveEnergy, sampleCubics, segNearness, solveEdgeCurve } from './route/curve'
 import { layoutScore } from './optimize'
+import { mkScoreState, applyMove } from './score-delta'
+import type { ScoreState } from './score-delta'
 import type { LayoutBest } from './optimize'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
@@ -445,11 +447,32 @@ export function applyContentScale(e: Engine): void {
     is a variant (establishProofFrame + establishProofSlotShift over all steps);
     see seedProjectReplay. `noScale` skips the content scale for scale-invariant
     measurements (frame box / slots) that must read natural geometry. */
-export function seedProject(e: Engine, noScale = false): void {
+export function seedProject(e: Engine, noScale = false, carriedNets: ReadonlySet<WireId> | null = null): void {
   recomputeRegions(e)
   resolveOverlaps(e)
   establishFrame(e)
   if (!noScale) { applyContentScale(e); clampContentToFrame(e) }
+  seedWireJunctions(e, carriedNets)
+}
+
+/** Junction SPAWN positions are solved, never stale seeds (USER 2026-07-30:
+    fresh wires' junctions spawned near the diagram centre — the mkEngine
+    centroid of the SEED body layout — and spent the whole opening walking to
+    their optimum; the same time can spawn them AT it). A discrete
+    construction event like the rest of seedProject: every wire whose net was
+    NOT carried from a previous engine gets its fixed-topology target solved
+    from the CURRENT terminals. Carried nets keep their glide state untouched
+    (re-deriving them would be argmin-tracking of state that must follow its
+    basin). */
+function seedWireJunctions(e: Engine, carriedNets: ReadonlySet<WireId> | null): void {
+  const spaces = wireRouteSpaces(e)
+  for (const [wid, w] of e.wires) {
+    if (w.net.junctions.length === 0) continue
+    if (carriedNets !== null && carriedNets.has(wid)) continue
+    const terms = wireTerminalPoints(e, w)
+    if (terms.length < 2) continue
+    solveTarget(w.net, terms, spaces.space(wid), 60)
+  }
 }
 
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {
@@ -678,6 +701,18 @@ function eachNearPair(segs: readonly WireSeg[], sg: SepGrid, R: number, cb: (i: 
   }
 }
 
+/** The separation energy BETWEEN two wires' segment sets (no same-wire skip —
+    the caller guarantees distinct wires). The incremental delta (score-delta)
+    re-evaluates exactly the wire pairs a move touches; this is their exact
+    cross contribution. Grid-free all-pairs is exact: segPairSepE is zero
+    beyond the separation radius, so the grid total and this sum agree. */
+export function segSeparationBetween(segsA: readonly { a: Vec2; b: Vec2 }[], segsB: readonly { a: Vec2; b: Vec2 }[], sc: number): number {
+  const R = WIREP.sepR * sc
+  let E = 0
+  for (const A of segsA) for (const B of segsB) E += segPairSepE(A, B, R)
+  return E
+}
+
 export function segSeparationE(segs: readonly WireSeg[], sc: number): number {
   const R = WIREP.sepR * sc
   if (segs.length < 2 || !(R > 0)) return 0
@@ -702,14 +737,47 @@ export function wireEnergy(e: Engine): number {
   return wireEnergyCapture(e).E
 }
 
-/** A routed edge's frozen path: its interior waypoints at the captured
-    optimum (endpoints re-derived live at probe time). */
-export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly interior: readonly Vec2[] }
+/** Per-wire nearness spaces (energy-drawn wires): DRAWN node discs + the
+    wire's DRAWN forbidden cut circles + the frame, under the ONE clearance
+    law (WIREP.sepR/sepSlope — the same falloff wires pay against each
+    other). Shares the composed disc arrays per forbidden-set signature. */
+export function wireNearSpaces(e: Engine, spaces: WireSpaces): (wid: WireId) => NearSpace {
+  const nodes = drawnObstacles(e)
+  const bounds = routeBounds(e)
+  const R = WIREP.sepR * e.scale
+  const slope = WIREP.sepSlope
+  const plain: NearSpace = { discs: nodes, bounds, R, slope }
+  const bySet = new Map<readonly RouteDisc[], NearSpace>()
+  return (wid: WireId): NearSpace => {
+    const forb = spaces.forbiddenDrawn.get(wid)
+    if (forb === undefined || forb.length === 0) return plain
+    let ns = bySet.get(forb)
+    if (ns === undefined) {
+      ns = { discs: [...nodes, ...forb], bounds, R, slope }
+      bySet.set(forb, ns)
+    }
+    return ns
+  }
+}
+
+/** Region-circle patch band (drawn units): a probe displaces one coordinate by
+    FD_PROBE, and a minimal enclosing circle's centre and radius are each
+    1-Lipschitz in a support disc's position, so the circle boundary moves at
+    most 2·FD_PROBE; segs farther than that from the capture boundary keep
+    their inside/outside status on BOTH sides and contribute exactly zero to
+    the surcharge delta. 2× safety margin. */
+const PROBE_BAND = 4 * FD_PROBE
+
+/** A routed edge's frozen curve: its SOLVED interior anchors at the captured
+    optimum (endpoints re-derived live at probe time; the family chain through
+    live endpoints + frozen anchors is the envelope-theorem majorizer). */
+export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly anchors: readonly Vec2[] }
 
 /** Exact wire energy PLUS the frozen-path capture the probe evaluator needs and
     the drawn curve segments (the same ones `segSeparationE` sums over). */
 export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[] } {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = rodBeta(e)
   let E = 0
   const edges: FrozenEdge[] = []
@@ -717,14 +785,17 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fs = spaces.space(wid)
+    const ns = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
-      const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * e.scale)
-      E += rodCost(pts, fs, beta)
-      edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
-      for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
+      const pu = pos(u), pv = pos(v)
+      const r = route(fs, pu, pv)
+      const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, ns, beta)
+      E += curveEnergy(sol.pts, ns, beta)
+      edges.push({ wid, u, v, anchors: sol.anchors })
+      for (let i = 0; i + 1 < sol.pts.length; i++) segs.push({ wid, a: sol.pts[i]!, b: sol.pts[i + 1]! })
     }
   }
   return { E: E + segSeparationE(segs, e.scale), edges, segs }
@@ -743,23 +814,30 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
  * majorizer.
  */
 export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): number {
-  const space = { discs: routeObstacles(e), bounds: routeBounds(e) }
+  const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const beta = rodBeta(e)
   let E = 0
   const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
-  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[] }>()
+  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[]; ns: NearSpace }>()
   for (const fe of edges) {
     let c = perWire.get(fe.wid)
     if (c === undefined) {
       const w = e.wires.get(fe.wid)!
-      c = { terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions }
+      c = {
+        terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions,
+        ns: nsOf(fe.wid),
+      }
       perWire.set(fe.wid, c)
     }
     const cc = c
     const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
-    const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
-    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, way, ROUTE_CLEAR * e.scale)
-    E += rodCost(pts, space, beta)
+    const bu = fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null
+    const bv = fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null
+    // a clamped end's rim anchor REPLACES the terminal point, exactly as the
+    // solve's own chain construction does — same anchors ⇒ same curve
+    const pts = sampleCubics(chainThroughAnchors(bu, bv, [bu !== null ? bu.p : pos(fe.u), ...fe.anchors, bv !== null ? bv.p : pos(fe.v)]))
+    E += curveEnergy(pts, cc.ns, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
   return E + segSeparationE(segs, e.scale)
@@ -785,8 +863,27 @@ export type FrozenState = {
   readonly wires: FrozenWireCap[]
   readonly termWires: Map<string, number[]>
   readonly obstacle: Map<string, RouteDisc>
+  /** Per-wire forbidden region ids (shared arrays from wireRouteSpaces). The
+      frozen model freezes CORRIDORS only; discs — node AND region — are LIVE,
+      so probe directions see the cut-obstacle coupling a body move creates by
+      dragging its ancestor circles (without this the probes reported downhill
+      where the true energy rose on every cut-heavy trial — measured 100% of
+      1360 fallback trials uphill, 2026-07-31). */
+  readonly forbiddenRids: ReadonlyMap<WireId, readonly RegionId[]>
+  /** Inflated forbidden circles at capture (r = drawn + ROUTE_CLEAR·scale). */
+  readonly regionDiscs: Map<RegionId, RouteDisc>
+  /** Wire indices whose forbidden set contains each region (patch fan-out). */
+  readonly ridWires: Map<RegionId, number[]>
+  /** Per region, the cached seg indices within PROBE_BAND of the capture
+      circle's boundary — the only segs whose surcharge a probe-scale circle
+      change can touch (Lipschitz: |Δcentre|+|Δradius| ≤ 2·FD_PROBE per moved
+      support disc, band = 4·FD_PROBE with a 2× margin). Larger displacements
+      fall back to the wire's full seg range. */
+  readonly ridBandSegs: Map<RegionId, number[]>
   readonly grid: SepGrid
   readonly R: number
+  /** Nearness falloff slope (WIREP.sepSlope) — the one clearance law. */
+  readonly nearSlope: number
   readonly beta: number
   readonly sc: number
   readonly bounds: Bounds | null
@@ -801,7 +898,8 @@ export type FrozenState = {
 /** Build the frozen state ONCE per operatorStep from a base capture. It IS a full
     exact eval (the routing solve), so it replaces the step's wireEnergyCapture. */
 export function mkFrozenState(e: Engine): FrozenState {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
   const bounds = routeBounds(e)
   const beta = rodBeta(e)
   const sc = e.scale
@@ -815,6 +913,8 @@ export function mkFrozenState(e: Engine): FrozenState {
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fs = spaces.space(wid)
+    const ns = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     const wi = wires.length
@@ -822,11 +922,12 @@ export function mkFrozenState(e: Engine): FrozenState {
     const edges: FrozenEdge[] = []
     let rod = 0
     for (const [u, v] of w.net.edges) {
-      const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * sc)
-      rod += rodCost(pts, fs, beta)
-      edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
-      for (let i = 0; i + 1 < pts.length; i++) { segs.push({ wid, a: pts[i]!, b: pts[i + 1]! }); segWire.push(wi) }
+      const pu = pos(u), pv = pos(v)
+      const r = route(fs, pu, pv)
+      const sol = solveEdgeCurve(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, ns, beta)
+      rod += curveEnergy(sol.pts, ns, beta)
+      edges.push({ wid, u, v, anchors: sol.anchors })
+      for (let i = 0; i + 1 < sol.pts.length; i++) { segs.push({ wid, a: sol.pts[i]!, b: sol.pts[i + 1]! }); segWire.push(wi) }
     }
     wires.push({ wid, edges, segStart: start, segEnd: segs.length, rod })
     rodTotal += rod
@@ -838,9 +939,41 @@ export function mkFrozenState(e: Engine): FrozenState {
     if (b.kind === 'ref' || b.kind === 'atom' || b.kind === 'identity') {
       obstacle.set(b.id, {
         c: { x: b.pos.x, y: b.pos.y },
-        r: (b.discR + ROUTE_CLEAR) * sc,
+        r: b.discR * sc,
       })
     }
+  }
+  const regionDiscs = new Map<RegionId, RouteDisc>()
+  for (const [rid, g] of e.regions) {
+    if (e.d.regions[rid]!.kind === 'sheet') continue
+    regionDiscs.set(rid, { c: { x: g.center.x, y: g.center.y }, r: g.radius })
+  }
+  const ridWires = new Map<RegionId, number[]>()
+  for (let wi = 0; wi < wires.length; wi++) {
+    for (const rid of spaces.forbiddenRids.get(wires[wi]!.wid) ?? []) {
+      const l = ridWires.get(rid)
+      if (l !== undefined) l.push(wi)
+      else ridWires.set(rid, [wi])
+    }
+  }
+  const ridBandSegs = new Map<RegionId, number[]>()
+  for (const [rid, D] of regionDiscs) {
+    const wl = ridWires.get(rid)
+    if (wl === undefined) continue
+    const band: number[] = []
+    for (const wi of wl) {
+      const cap = wires[wi]!
+      for (let si = cap.segStart; si < cap.segEnd; si++) {
+        const seg = segs[si]!
+        // nearness reaches R beyond the boundary and ALL depths inside (the
+        // quadratic keeps a nonzero gradient at any depth), so the band is
+        // every seg whose MIDPOINT (the quadrature point) is within R of the
+        // capture disc, plus the probe-scale Lipschitz margin.
+        const mx = (seg.a.x + seg.b.x) / 2, my = (seg.a.y + seg.b.y) / 2
+        if (Math.hypot(mx - D.c.x, my - D.c.y) <= D.r + R + PROBE_BAND) band.push(si)
+      }
+    }
+    ridBandSegs.set(rid, band)
   }
   const grid = buildSepGrid(segs, R)
   // one near-pair pass yields both the total and each wire's contribution.
@@ -853,7 +986,9 @@ export function mkFrozenState(e: Engine): FrozenState {
     wireSep[segWire[j]!]! += ePair
   })
   return {
-    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle, grid, R, beta, sc, bounds,
+    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle,
+    forbiddenRids: spaces.forbiddenRids, regionDiscs, ridWires, ridBandSegs,
+    grid, R, nearSlope: WIREP.sepSlope, beta, sc, bounds,
     frozenTotal: rodTotal + sepTotal, wireSep, seen: new Int32Array(segs.length), stamp: 0,
   }
 }
@@ -917,20 +1052,32 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
   let dRod = 0
   const newSegs: WireSeg[] = []
 
-  // (1) rebuild the curves of wires terminating on bodyId; full rodCost delta.
+  // (1) rebuild the curves of wires terminating on bodyId (frozen anchors,
+  // live endpoints — the envelope majorizer); full curveEnergy delta against
+  // the LIVE drawn discs (regions were recomputed by the caller).
+  const curRegionDisc = (rid: RegionId): RouteDisc => {
+    const g = e.regions.get(rid)!
+    return { c: g.center, r: g.radius }
+  }
   if (affSet !== null) {
-    const space = { discs: routeObstacles(e), bounds: fst.bounds }
+    const nodes = drawnObstacles(e)
     for (const wi of affSet) {
       const cap = fst.wires[wi]!
       const w = e.wires.get(cap.wid)!
       const terms = wireTerminalPoints(e, w)
       const bcs = wireTerminalBCs(e, w)
+      const rids = fst.forbiddenRids.get(cap.wid) ?? []
+      const ns: NearSpace = {
+        discs: rids.length > 0 ? [...nodes, ...rids.map(curRegionDisc)] : nodes,
+        bounds: fst.bounds, R: fst.R, slope: fst.nearSlope,
+      }
       const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
       let newRod = 0
       for (const fe of cap.edges) {
-        const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
-        const pts = edgeCurvePts(fe.u < bcs.length ? bcs[fe.u]! : null, fe.v < bcs.length ? bcs[fe.v]! : null, way, ROUTE_CLEAR * fst.sc)
-        newRod += rodCost(pts, space, fst.beta)
+        const bu = fe.u < bcs.length ? bcs[fe.u]! : null
+        const bv = fe.v < bcs.length ? bcs[fe.v]! : null
+        const pts = sampleCubics(chainThroughAnchors(bu, bv, [bu !== null ? bu.p : pos(fe.u), ...fe.anchors, bv !== null ? bv.p : pos(fe.v)]))
+        newRod += curveEnergy(pts, ns, fst.beta)
         for (let i = 0; i + 1 < pts.length; i++) newSegs.push({ wid: cap.wid, a: pts[i]!, b: pts[i + 1]! })
       }
       dRod += newRod - cap.rod
@@ -946,23 +1093,51 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
     const b = e.bodies.get(bodyId)!
     if (b.pos.x !== baseDisc.c.x || b.pos.y !== baseDisc.c.y) {
       const r = baseDisc.r, o = baseDisc.c, p = b.pos
-      const oldSpace = { discs: [baseDisc], bounds: null }
-      const newSpace = { discs: [{ c: p, r }], bounds: null }
-      // A segment's surcharge is nonzero only where it enters the disc, so a
-      // segment whose bbox is farther than r from BOTH the old and new centre
-      // contributes exactly 0 to the difference — skip it (bbox-to-point clamp).
-      const r2 = r * r
+      const oldD = baseDisc
+      const newD = { c: p, r }
+      // A segment's nearness against this disc is nonzero only within R of its
+      // boundary, so a segment whose bbox is farther than r+R from BOTH the
+      // old and new centre contributes exactly 0 to the difference — skip it.
+      const reach = (r + fst.R) * (r + fst.R)
       const farFrom = (seg: WireSeg, c: Vec2): boolean => {
         const x0 = Math.min(seg.a.x, seg.b.x), x1 = Math.max(seg.a.x, seg.b.x)
         const y0 = Math.min(seg.a.y, seg.b.y), y1 = Math.max(seg.a.y, seg.b.y)
         const dx = c.x - Math.max(x0, Math.min(c.x, x1)), dy = c.y - Math.max(y0, Math.min(c.y, y1))
-        return dx * dx + dy * dy > r2
+        return dx * dx + dy * dy > reach
       }
       for (let s = 0; s < fst.segs.length; s++) {
         if (affSet !== null && affSet.has(fst.segWire[s]!)) continue
         const seg = fst.segs[s]!
         if (farFrom(seg, o) && farFrom(seg, p)) continue
-        dRod += segSoftCost(seg.a, seg.b, newSpace) - segSoftCost(seg.a, seg.b, oldSpace)
+        dRod += segNearness(seg.a, seg.b, newD, fst.R, fst.nearSlope) - segNearness(seg.a, seg.b, oldD, fst.R, fst.nearSlope)
+      }
+    }
+  }
+
+  // (2b) region-circle surcharge patch: the displaced body drags its ancestor
+  // circles, and every NON-affected wire whose forbidden set contains a changed
+  // circle keeps its frozen curve while that curve's obstacle surcharge
+  // changes. Single-disc segSoftCost differences (the |seg| term cancels), over
+  // the precomputed boundary-band segs for probe-scale changes, or the wires'
+  // full seg ranges for larger ones — exact either way (out-of-band segs keep
+  // their inside/outside status by the Lipschitz bound).
+  for (const [rid, oldD] of fst.regionDiscs) {
+    const wl = fst.ridWires.get(rid)
+    if (wl === undefined) continue
+    const newD = curRegionDisc(rid)
+    const w = Math.hypot(newD.c.x - oldD.c.x, newD.c.y - oldD.c.y) + Math.abs(newD.r - oldD.r)
+    if (w === 0) continue
+    const patchSeg = (si: number): void => {
+      if (affSet !== null && affSet.has(fst.segWire[si]!)) return
+      const seg = fst.segs[si]!
+      dRod += segNearness(seg.a, seg.b, newD, fst.R, fst.nearSlope) - segNearness(seg.a, seg.b, oldD, fst.R, fst.nearSlope)
+    }
+    if (w <= PROBE_BAND) {
+      for (const si of fst.ridBandSegs.get(rid) ?? []) patchSeg(si)
+    } else {
+      for (const wi of wl) {
+        const cap = fst.wires[wi]!
+        for (let si = cap.segStart; si < cap.segEnd; si++) patchSeg(si)
       }
     }
   }
@@ -1156,29 +1331,43 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     r = reg.parent
   }
   const owned = b.kind === 'end'
+  const wall = b.kind !== 'end' ? e.frame : null
+  const saved = b.pos
+  const dirty = new Set<RegionId>([b.region])
   let x = p.x, y = p.y
-  for (const [rid, g] of e.regions) {
-    if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
-    const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
-    const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
-    if (d >= need) continue
-    const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
-    x = g.center.x + ux * need; y = g.center.y + uy * need
-  }
-  // the fixed frame is a hard wall (plan 24): a drag meets the edge and stops —
-  // the node never crosses out and the frame never grows to chase the cursor
-  const c0 = clampToFrame(e, b, { x, y })
-  x = c0.x; y = c0.y
-  // CUT hard wall (USER 2026-07-06): the border contains the CUTS too, not just the
-  // discs. The dragged body is PINNED (the settle gate cannot relax it), so if its
-  // own cut's circle would exit the border, pull the body in until every ancestor
-  // region circle fits — the cut stops at the wall, so the dragged node stops with
-  // it. Iterated because moving the body in shrinks/shifts the derived circle.
-  const f = e.frame
-  if (f !== null && b.kind !== 'end') {
-    const saved = b.pos
-    const dirty = new Set<RegionId>([b.region])
-    for (let it = 0; it < 8; it++) {
+  let pull = true
+  let lastOver = Infinity
+  let prePull = { x, y }
+  // The three hard walls — foreign region circles, the fixed frame (plan 24),
+  // and the CUT wall (USER 2026-07-06: the border contains the cuts too, so the
+  // dragged body is pulled in until every ancestor circle fits) — are projected
+  // ALTERNATELY to a joint fixed point. One sequential pass is wrong: the
+  // cut-wall pull can drive the body straight through a foreign circle it was
+  // pushed out of moments before (measured 4.75 wu deep), which both violates
+  // hard semantic containment and freezes the drag frontier. Alternation makes
+  // the pull and the push compose into a slide around the foreign clearance.
+  // All bounds here are SEMANTIC (disc against drawn circle), not aesthetic:
+  // a gap-inclusive push moves bodies that rest legally inside their gap, and
+  // that sideways "healing" both surprises the cursor and reads as a worsening
+  // to the frontier's strict no-deepening gate. Gap restoration is the live
+  // settle's job. Terminates when a full round moves the point less than the
+  // cut-wall tolerance (0.05 wu); measured on the wall-pull-through-circle
+  // fixture the joint residual hits zero in 9–12 rounds, so the cap of 16 is
+  // that plus margin — any residual past it is caught by the drag frontier's
+  // relative gate rather than accepted.
+  for (let it = 0; it < 16; it++) {
+    const px = x, py = y
+    for (const [rid, g] of e.regions) {
+      if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+      const need = owned ? g.radius : b.discR * e.scale + g.radius
+      const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
+      if (d >= need) continue
+      const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
+      x = g.center.x + ux * need; y = g.center.y + uy * need
+    }
+    const c0 = clampToFrame(e, b, { x, y })
+    x = c0.x; y = c0.y
+    if (wall !== null && pull) {
       b.pos = { x, y }
       recomputeRegions(e, dirty)
       let rt = 0, lf = 0, bt = 0, tp = 0
@@ -1186,16 +1375,51 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
         if (e.d.regions[rid]!.kind === 'sheet') continue
         const g = e.regions.get(rid)
         if (g === undefined) continue
-        rt = Math.max(rt, g.center.x + g.radius - (f.center.x + f.half))
-        lf = Math.max(lf, (f.center.x - f.half) - (g.center.x - g.radius))
-        bt = Math.max(bt, g.center.y + g.radius - (f.center.y + f.half))
-        tp = Math.max(tp, (f.center.y - f.half) - (g.center.y - g.radius))
+        rt = Math.max(rt, g.center.x + g.radius - (wall.center.x + wall.half))
+        lf = Math.max(lf, (wall.center.x - wall.half) - (g.center.x - g.radius))
+        bt = Math.max(bt, g.center.y + g.radius - (wall.center.y + wall.half))
+        tp = Math.max(tp, (wall.center.y - wall.half) - (g.center.y - g.radius))
       }
-      const dx = rt > lf ? -rt : lf, dy = bt > tp ? -bt : tp
-      if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) break
-      const c = clampToFrame(e, b, { x: x + dx, y: y + dy })
-      x = c.x; y = c.y
+      // A pull is only valid while it WORKS: an ancestor circle can spill
+      // because of content that is not this body at all (its edge supported by
+      // a sibling subtree), and pulling then just marches the body across the
+      // scene by the spill amount every round without moving the circle
+      // (measured: a 0.73 wu residual spill dragged the body 11 wu off the
+      // cursor). If a round fails to reduce the worst overshoot, undo that
+      // round's pull and stop pulling — the residual is not this drag's to fix
+      // and the frontier's relative gate tolerates it at its baseline.
+      const over = Math.max(rt, lf, bt, tp, 0)
+      if (over >= lastOver - 0.01) {
+        x = prePull.x; y = prePull.y
+        pull = false
+      } else {
+        lastOver = over
+        prePull = { x, y }
+        const dx = rt > lf ? -rt : lf, dy = bt > tp ? -bt : tp
+        const c = clampToFrame(e, b, { x: x + dx, y: y + dy })
+        x = c.x; y = c.y
+        // If the pull landed inside a foreign circle, slide ALONG that circle
+        // to the pulled axis line (the joint projection for the pair) instead
+        // of leaving the radial push to fight the pull — plain alternation
+        // drifts tangentially by a sliver per round and never resolves a
+        // head-on pull (measured 3.7 wu penetration left after 16 rounds).
+        for (const [rid, g] of e.regions) {
+          if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+          const need = owned ? g.radius : b.discR * e.scale + g.radius
+          if (Math.hypot(x - g.center.x, y - g.center.y) >= need) continue
+          if (dx !== 0 && Math.abs(x - g.center.x) < need) {
+            const h = Math.sqrt(need * need - (x - g.center.x) * (x - g.center.x))
+            y = g.center.y + (y >= g.center.y ? h : -h)
+          } else if (dy !== 0 && Math.abs(y - g.center.y) < need) {
+            const h = Math.sqrt(need * need - (y - g.center.y) * (y - g.center.y))
+            x = g.center.x + (x >= g.center.x ? h : -h)
+          }
+        }
+      }
     }
+    if (Math.hypot(x - px, y - py) < 0.05) break
+  }
+  if (wall !== null) {
     b.pos = saved
     recomputeRegions(e, dirty)
   }
@@ -1227,7 +1451,22 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   // frozenWireEnergy rebuild — no routing solves, and no whole-scene re-eval.
   const fst = mkFrozenState(e)
 
-  type Coord = { get(): number; set(v: number): void; readonly m: number; readonly rot: boolean; localE(): number }
+  type Coord = {
+    get(): number
+    set(v: number): void
+    /** Probe application: set + the SAME legality projection the trial gates
+        apply (propose -> project -> evaluate). Probes that skip the projection
+        measure a map the gates never test: on a packed seed every
+        single-coordinate move violates a sibling gap, the projection cancels
+        it, and the un-projected probes kept promising descent — the fallback
+        then exhaustively disproved them at full-eval cost, ~336 trials/step,
+        100% rejected (measured 2026-07-31). Rotation needs no projection. */
+    probe(v: number): void
+    probeRestore(): void
+    readonly m: number
+    readonly rot: boolean
+    localE(): number
+  }
   const coords: Coord[] = []
   const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
@@ -1235,13 +1474,31 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     const localE = (): number => { recomputeRegions(e, dirty); return fst.frozenTotal + frozenProbe(fst, e, b.id) + contentEnergy(e) }
     if (pinned === null || !pinned.has(b.id)) {
       movedBodies.push(b)
-      coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, rot: false, localE })
-      coords.push({ get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } }, m: 1, rot: false, localE })
+      let saved: Vec2 | null = null
+      const probeAt = (p: Vec2): void => {
+        if (saved === null) saved = b.pos
+        b.pos = projectBodyPos(e, b, p)
+      }
+      const probeRestore = (): void => { if (saved !== null) { b.pos = saved; saved = null } }
+      coords.push({
+        get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } },
+        probe: (v) => probeAt({ x: v, y: b.pos.y }), probeRestore,
+        m: 1, rot: false, localE,
+      })
+      coords.push({
+        get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } },
+        probe: (v) => probeAt({ x: b.pos.x, y: v }), probeRestore,
+        m: 1, rot: false, localE,
+      })
     }
     // rotation: an ordinary coordinate under the same budget (2026-07-24 law);
     // only port-bearing wired bodies feel it (content is rotation-invariant)
     if (wiredBodies.has(b.id) && b.localAnchor.size > 0) {
-      coords.push({ get: () => b.theta, set: (v) => { b.theta = v }, m: Math.max(b.discR * sc, 1e-6), rot: true, localE })
+      coords.push({
+        get: () => b.theta, set: (v) => { b.theta = v },
+        probe: (v) => { b.theta = v }, probeRestore: () => {},
+        m: Math.max(b.discR * sc, 1e-6), rot: true, localE,
+      })
     }
   }
 
@@ -1259,8 +1516,10 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     const v0 = c.get()
     const h = FD_PROBE / c.m
     const e0 = baseOf(c)
-    c.set(v0 + h); const ep = c.localE()
-    c.set(v0 - h); const em = c.localE()
+    c.probe(v0 + h); const ep = c.localE()
+    c.probeRestore()
+    c.probe(v0 - h); const em = c.localE()
+    c.probeRestore()
     c.set(v0)
     const slopeP = (ep - e0) / h
     const slopeM = (e0 - em) / h
@@ -1342,19 +1601,40 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   }
   // ── COORDINATE FALLBACK: a crease from coordinate interactions can block the
   // joint direction while single coordinates still descend — try them in
-  // steepest order under the same gate, each under its own drawn ceiling. ──
+  // steepest order under the same gate, each under its own drawn ceiling.
+  //
+  // GATE VIA THE EXACT INCREMENTAL DELTA (annealing redesign D1): each trial
+  // here is base + ONE coordinate — the incremental evaluator's best case —
+  // so the gate reads applyMove's exact dE against a ScoreState captured once
+  // at the base, instead of a whole-scene routed eval per trial (the measured
+  // ~890 whole-scene evaluations per settle step on large scenes). The gate
+  // stays EXACT: dE is proven exact (score-delta.test), so acceptance is
+  // bit-for-bit the strict-descent criterion. The JOINT trials above keep
+  // fresh full evals (all coordinates move → the delta degenerates to a full
+  // eval; measured to regress). The ScoreState is built lazily — a joint
+  // accept never pays for it. ──
   const order = coords.map((_, i) => i).filter((i) => g[i] !== 0)
   order.sort((x, y) => Math.abs(g[y]! / coords[y]!.m) - Math.abs(g[x]! / coords[x]!.m) || x - y)
+  let st: ScoreState | null = null
   for (const i of order) {
     const c = coords[i]!
     const dir = -Math.sign(g[i]!)
     for (let delta = ceilDrawn(c); delta >= FD_PROBE; delta /= 2) {
       if ((delta * Math.abs(g[i]!)) / c.m < EPS) break
+      if (st === null) st = mkScoreState(e)
       c.set(c.get() + (dir * delta) / c.m)
       for (const b of movedBodies) b.pos = projectBodyPos(e, b, b.pos)
       recomputeRegions(e)
-      const E1 = wireEnergy(e) + contentEnergy(e)
-      if (E1 < E0 - EPS) return true
+      // the actual moved set: the trial coordinate's body plus anything the
+      // legality projection displaced (compared against the base snapshot)
+      const moved = new Set<string>()
+      for (const b of e.bodies.values()) {
+        const sn = bodySnap.get(b.id)!
+        if (b.pos.x !== sn.pos.x || b.pos.y !== sn.pos.y || b.theta !== sn.theta) moved.add(b.id)
+      }
+      const mr = applyMove(e, st, moved)
+      if (mr.dE < -EPS) return true
+      mr.abort()
       restore()
       recomputeRegions(e)
     }
@@ -1416,13 +1696,21 @@ function liveScoreAt(e: Engine): number {
   return score
 }
 
-/** Per-engine sticky approach decision: re-scored only when the best snapshot
-    changes (event-driven — approaching/walking frames never evaluate the full
-    energy). */
-const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; lastAdoptKey: string }>()
+/** Per-engine sticky approach decision: re-scored only at DECISION EVENTS (a
+    new best snapshot, or a mismatch REAPPEARING after the live layout had
+    matched — e.g. a walk topology change unlocked junction approach) — never
+    per frame. */
+const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; rematch: boolean; lastAdoptKey: string; lastWalkKey: string }>()
+
+/** Same wire topology = same edge list (junction indices correspond). */
+const sameTopology = (a: WireNet, b: WireNet): boolean =>
+  a.junctions.length === b.junctions.length && JSON.stringify(a.edges) === JSON.stringify(b.edges)
 
 /** Does the live layout differ (beyond float dust) from the best snapshot on
-    any coordinate the approach may move? */
+    any coordinate the approach may move? Junctions of topology-matched wires
+    are approach coordinates like body poses: the approach must carry them all
+    the way into the searcher's basin (a gated walk cannot cross the barrier
+    the searcher's hop crossed). */
 function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): boolean {
   for (const [id, b] of e.bodies) {
     if (pinned !== null && pinned.has(id)) continue
@@ -1431,44 +1719,120 @@ function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     if (Math.abs(t.pos.x - b.pos.x) > 1e-6 || Math.abs(t.pos.y - b.pos.y) > 1e-6) return true
     if (Math.abs(Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))) > 1e-6) return true
   }
+  for (const [wid, w] of e.wires) {
+    const n = best.nets.get(wid)
+    if (n === undefined || !sameTopology(w.net, n)) continue
+    for (let j = 0; j < w.net.junctions.length; j++) {
+      const p = w.net.junctions[j]!, q = n.junctions[j]!
+      if (Math.abs(q.x - p.x) > 1e-6 || Math.abs(q.y - p.y) > 1e-6) return true
+    }
+  }
   return false
 }
 
-/** One bounded approach step toward the best snapshot: positions and angles
-    move under the travel cap; a differing wire topology is adopted whole (the
-    walk re-settles junctions afterward). */
+/** The shortest path from a body's position to `target` that respects
+    semantic containment, as a polyline: the body's non-ancestor region circles
+    are routing obstacles inflated to the aesthetic clearance (sibGap included,
+    shrunk by a hair so a body resting ON that boundary routes from a feasible
+    point) — the path PREFERS keeping the gap where room exists, while the drag
+    clamp and the frontier gate enforce only the tighter semantic bound. The
+    frame participates as the route's bounds (steep soft cost outside), so the
+    path picks a side with a real corridor instead of wedging into the pocket
+    between a circle and the wall; the wall itself stays hard via the drag
+    clamp. With no blocking circle this is the straight segment at the same
+    cost. Both the presentation approach and the drag frontier move bodies
+    ALONG this path — the straight chord to a target on the far side of a cut
+    passes through the cut, so any straight-line interpolation either violates
+    containment or wedges radially against it. */
+export function containedPath(e: Engine, b: Body, target: Vec2): readonly Vec2[] {
+  const ancestors = new Set<RegionId>()
+  for (let r = b.region; ;) {
+    ancestors.add(r)
+    const reg = e.d.regions[r]!
+    if (reg.kind === 'sheet') break
+    r = reg.parent
+  }
+  const owned = b.kind === 'end'
+  const discs: RouteDisc[] = []
+  for (const [rid, g] of e.regions) {
+    if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+    const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
+    discs.push({ c: g.center, r: need - 1e-3 })
+  }
+  return route(mkFreeSpace(discs, routeBounds(e)), b.pos, target).pts
+}
+
+/** One bounded step from a body toward `target` along `containedPath`. */
+function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Vec2 {
+  const pts = containedPath(e, b, target)
+  let remaining = st
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!, q = pts[i]!
+    const seg = Math.hypot(q.x - a.x, q.y - a.y)
+    if (seg >= remaining) {
+      const f = seg < 1e-12 ? 0 : remaining / seg
+      return { x: a.x + (q.x - a.x) * f, y: a.y + (q.y - a.y) * f }
+    }
+    remaining -= seg
+  }
+  return { x: target.x, y: target.y }
+}
+
 /** PRESENTATION pace (USER ruling 2026-07-25): the visible settling should
     read as a GENTLE approach to the minimum, not a rapid jerk — on-screen
     motion runs ~5× slower than the solver's trust region. Presentation-only:
     the worker's relaxations and the local solver path are untouched. The
     value is user-calibrated ("a slow down of maybe around five x… let's see
     if that looks good"), re-judged visually, never tuned blindly. */
-const PRESENT_SLOW = 5
+export const PRESENT_SLOW = 5
 
-function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): void {
+/** One bounded approach step toward the best snapshot. EVERY visible DOF moves
+    under the ONE presentation bound — body positions, body angles, and the
+    junctions of wires whose topology matches the best's (their indices
+    correspond, so each junction has a target). A differing topology is NEVER
+    adopted (adopting a net whole teleports junction state — the measured
+    ~10 wu snap): the presentation walk evolves those wires through its own
+    coincidence-scale contract/split events instead. Returns the set of wires
+    the approach owns this frame, so the walk leaves them alone (running both
+    on one wire is the measured approach-vs-descent tug-of-war). */
+function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): Set<WireId> {
   const bound = (WIREP.travelCap / PRESENT_SLOW) * e.scale
   for (const [id, b] of e.bodies) {
     if (pinned !== null && pinned.has(id)) continue
     const t = best.poses.get(id)
     if (t === undefined) continue
-    const dx = t.pos.x - b.pos.x, dy = t.pos.y - b.pos.y
-    const d = Math.hypot(dx, dy)
+    const d = Math.hypot(t.pos.x - b.pos.x, t.pos.y - b.pos.y)
     if (d > 1e-9) {
-      const st = Math.min(d, bound)
-      b.pos = { x: b.pos.x + (dx / d) * st, y: b.pos.y + (dy / d) * st }
+      // HARD SEMANTIC CONTAINMENT (USER LAW, restated 2026-07-30 for the
+      // approach): a node never enters a cut it is not part of, not even
+      // transiently. A straight step clamped by the drag projection STALLS
+      // when the target lies radially behind a circle (no tangential
+      // component), so the step instead follows the shortest FEASIBLE path:
+      // the same deterministic route() the wires use, over the body's
+      // semantic obstacle circles. The drag clamp remains the hard backstop
+      // (frame wall, derived-circle fit).
+      b.pos = clampDragToFeasible(e, b, stepAroundForeignCuts(e, b, t.pos, Math.min(d, bound)))
     }
     const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
     const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
     if (Math.abs(dth) > 1e-9) b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
   }
+  const owned = new Set<WireId>()
   for (const [wid, w] of e.wires) {
     const n = best.nets.get(wid)
-    if (n === undefined) continue
-    if (JSON.stringify(w.net.edges) !== JSON.stringify(n.edges)) {
-      w.net.edges = n.edges.map(([u, v]) => [u, v])
-      w.net.junctions = n.junctions.map((pt) => ({ ...pt }))
+    if (n === undefined || !sameTopology(w.net, n)) continue
+    owned.add(wid)
+    for (let j = 0; j < w.net.junctions.length; j++) {
+      const p = w.net.junctions[j]!, q = n.junctions[j]!
+      const dx = q.x - p.x, dy = q.y - p.y
+      const d = Math.hypot(dx, dy)
+      if (d > 1e-9) {
+        const st = Math.min(d, bound)
+        w.net.junctions[j] = { x: p.x + (dx / d) * st, y: p.y + (dy / d) * st }
+      }
     }
   }
+  return owned
 }
 
 /** The wire presentation walk: bounded continuation toward each wire's own routed
@@ -1484,20 +1848,29 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     let the walk trade rod down while pushing separation up without bound — a limit
     cycle that never rested. The Δsep term is charged via the spatial grid of the
     other wires' segments (they do not move while this wire walks). */
-function walkWires(e: Engine, presentation = false): boolean {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
-  const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc, bound = WIREP.travelCap * sc
-  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[] }[] = []
+function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | null = null): boolean {
+  const spaces = wireRouteSpaces(e)
+  const nsOf = wireNearSpaces(e, spaces)
+  const beta = rodBeta(e), sc = e.scale, R = WIREP.sepR * sc
+  // the walk moves VISIBLE junction state: presentation frames use the one
+  // presentation bound (the same per-frame pace every visible DOF gets);
+  // solver walks keep the full trust region (descent is optimization, not
+  // simulation — 2026-07-25)
+  const bound = presentation ? (WIREP.travelCap / PRESENT_SLOW) * sc : WIREP.travelCap * sc
+  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[]; fs: FreeSpace; ns: NearSpace }[] = []
   const segsByWid = new Map<WireId, Seg2[]>()
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fsW = spaces.space(wid)
+    const nsW = nsOf(wid)
     const bcs = wireTerminalBCs(e, w)
-    walkers.push({ wid, w, terms, bcs })
-    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
+    walkers.push({ wid, w, terms, bcs, fs: fsW, ns: nsW })
+    segsByWid.set(wid, netEval(w.net, terms, fsW, nsW, bcs, beta).segs)
   }
   let routed = false
-  for (const { wid, w, terms, bcs } of walkers) {
+  for (const { wid, w, terms, bcs, fs, ns } of walkers) {
+    if (skip !== null && skip.has(wid)) continue
     // grid of every OTHER wire's current segments (fixed while this wire walks).
     const others: Seg2[] = []
     for (const [owid, segs] of segsByWid) if (owid !== wid) for (const s of segs) others.push(s)
@@ -1506,7 +1879,7 @@ function walkWires(e: Engine, presentation = false): boolean {
     let stamp = 0
     const inv = 1 / R
     const gate = (n: WireNet): number => {
-      const { L, segs } = netEval(n, terms, fs, bcs, beta, tol)
+      const { L, segs } = netEval(n, terms, fs, ns, bcs, beta)
       let sep = 0
       for (const s of segs) {
         stamp++
@@ -1528,27 +1901,31 @@ function walkWires(e: Engine, presentation = false): boolean {
       }
       return L + sep
     }
-    // presentation frames divide the per-frame wire travel by PRESENT_SLOW
-    // (fewer substeps at the same gated bound); solver walks keep full speed
-    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? Math.max(1, Math.round(20 / PRESENT_SLOW)) : 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
+    // ONE presentation substep at the presentation bound = the per-frame wire
+    // travel equals the body travel; solver walks keep their full budget
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, ns, bcs, beta, gate }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
-    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
+    segsByWid.set(wid, netEval(w.net, terms, fs, ns, bcs, beta).segs)
   }
   return routed
 }
 
-/** The searched frame: strictly bounded per-frame work. Approach owns motion
-    when a strictly better layout is known (running approach and local descent
-    together is a measured permanent tug-of-war); otherwise the walk keeps the
-    wires settling. The full energy is evaluated only at decision events. */
+/** The searched frame: strictly bounded per-frame work. The approach owns the
+    coordinates with a known target (body poses + junctions of topology-matched
+    wires) when a strictly better layout is known; the presentation walk keeps
+    every OTHER wire settling on the SAME frame — wires never freeze while
+    bodies move (the measured lag-then-snap), and no coordinate is moved by
+    both (the measured tug-of-war). The full energy is evaluated only at
+    decision events. */
 function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: LayoutSearch): boolean {
   search.sync(e, pinned)
   const best = search.best()
-  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, lastAdoptKey: '' }
+  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, rematch: false, lastAdoptKey: '', lastWalkKey: '' }
   searchFrameState.set(e, st)
-  let acted = false
+  let approached = false
+  let owned: ReadonlySet<WireId> | null = null
   if (best !== null && bestMismatch(e, best, pinned)) {
-    if (st.decidedFor !== best) {
+    if (st.decidedFor !== best || st.rematch) {
       const live = liveScoreAt(e)
       const EPS = 1e-6 * (Math.abs(live) + 1)
       if (live < best.score - EPS) {
@@ -1558,26 +1935,36 @@ function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: La
         st.approach = best.score < live - EPS
       }
       st.decidedFor = best
+      st.rematch = false
     }
     if (st.approach) {
-      approachStep(e, best, pinned)
-      acted = true
+      owned = approachStep(e, best, pinned)
+      approached = true
     }
   } else {
     st.decidedFor = best
     st.approach = false
+    st.rematch = true
   }
+  // WALK REST CERTIFICATE (exact-snapshot, self-healing — the same pattern as
+  // the interactive rest certificate): the walk is a deterministic function
+  // of body poses + wire nets + frame/scale, so if the LAST walk on exactly
+  // this state moved nothing, re-running it is a proven no-op — and at rest
+  // it was the whole frame cost (measured 46 ms/frame of re-derived seeds,
+  // gates, separation grids, and tangent graphs concluding "nothing to do").
+  // Any mutation from any path changes the key and the walk resumes.
+  const walkKey = approached ? '' : liveKey(e)
+  const walked = !approached && walkKey === st.lastWalkKey ? false : walkWires(e, true, owned)
+  st.lastWalkKey = !walked && !approached ? walkKey : ''
+  const acted = approached || walked
   if (!acted) {
-    acted = walkWires(e, true)
-    if (!acted) {
-      // live rest: offer the layout to the searcher once per configuration
-      const key = liveKey(e)
-      if (key !== st.lastAdoptKey) {
-        st.lastAdoptKey = key
-        const live = liveScoreAt(e)
-        const b = search.best()
-        if (b === null || live < b.score - 1e-6 * (Math.abs(live) + 1)) search.adoptLive(e, live)
-      }
+    // live rest: offer the layout to the searcher once per configuration
+    const key = liveKey(e)
+    if (key !== st.lastAdoptKey) {
+      st.lastAdoptKey = key
+      const live = liveScoreAt(e)
+      const b = search.best()
+      if (b === null || live < b.score - 1e-6 * (Math.abs(live) + 1)) search.adoptLive(e, live)
     }
   }
   recomputeRegions(e)

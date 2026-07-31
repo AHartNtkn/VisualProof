@@ -151,19 +151,6 @@ export function drawShapes(
         ctx.shadowBlur = 0
         break
       }
-      case 'polyline': {
-        if (s.pts.length < 2) break
-        setGlow(s.glow)
-        ctx.beginPath()
-        const p0 = P(s.pts[0]!)
-        ctx.moveTo(p0.x, p0.y)
-        for (let i = 1; i < s.pts.length; i++) { const q = P(s.pts[i]!); ctx.lineTo(q.x, q.y) }
-        ctx.strokeStyle = s.stroke
-        ctx.lineWidth = s.width
-        ctx.stroke()
-        ctx.shadowBlur = 0
-        break
-      }
       case 'bezierPath': {
         if (s.cubics.length === 0) break
         setGlow(s.glow)

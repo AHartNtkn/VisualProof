@@ -56,5 +56,39 @@ describe('clampDragToFeasible — HARD SEMANTIC CONTAINMENT (USER LAW: a drag ca
     expect(worst, `mid-drag: the cut circle must not cross the border (worst overshoot ${worst.toFixed(1)} wu)`).toBeLessThan(0.5)
   })
 
+  it('the frame-fit pull may not shove the body into a foreign cut (projections must reach a JOINT fixed point)', () => {
+    // Two sibling cuts inside an outer cut. Dragging M hard past the +x wall
+    // makes the outer circle spill, so the cut-wall pull drags M back toward
+    // the interior — straight through the foreign cut D2's clearance. A clamp
+    // that runs "circles, then wall" as one sequential pass returns that
+    // penetrated point (measured 4.75 wu deep); the constraints must instead be
+    // alternated until they hold together, which here means sliding M around
+    // D2's clearance instead of through it.
+    const h = new DiagramBuilder()
+    const outer = h.cut(h.root)
+    const d1 = h.cut(outer)
+    const m = h.ref(d1, 'M', UNARY)
+    const d2 = h.cut(outer)
+    const f1 = h.ref(d2, 'F1', UNARY)
+    const f2 = h.ref(d2, 'F2', UNARY)
+    const e = mkEngine(h.build(), [])
+    e.bodies.get(m)!.pos = { x: 50, y: 0 }
+    e.bodies.get(f1)!.pos = { x: 10, y: -10 }
+    e.bodies.get(f2)!.pos = { x: 10, y: 10 }
+    e.frame = { center: { x: 0, y: 0 }, half: 60 }
+    recomputeRegions(e)
+    const bm = e.bodies.get(m)!
+    const g2 = e.regions.get(d2)!
+    const need = g2.radius + bm.discR * e.scale
+    const basePen = need - Math.hypot(bm.pos.x - g2.center.x, bm.pos.y - g2.center.y)
+    expect(basePen, 'the start position is legal').toBeLessThan(0)
 
+    const out = clampDragToFeasible(e, bm, { x: 200, y: 0 })
+    const pen = need - Math.hypot(out.x - g2.center.x, out.y - g2.center.y)
+    expect(pen, `clamped position penetrates the foreign cut clearance by ${pen.toFixed(2)} wu`).toBeLessThan(0.05)
+    // and the frame stayed hard for the body disc itself
+    const f = e.frame!
+    expect(Math.abs(out.x - f.center.x)).toBeLessThanOrEqual(f.half - bm.discR * e.scale + 1e-6)
+    expect(Math.abs(out.y - f.center.y)).toBeLessThanOrEqual(f.half - bm.discR * e.scale + 1e-6)
+  })
 })

@@ -29,19 +29,12 @@ export const OBSTACLE_COST = 3
     as energy, not a clamp). */
 export const FRAME_COST = 30
 
-/** Arc output resolution: a hugging arc is DRAWN as chords no wider than this
-    angular step. */
+/** Polyline resolution of `Route.pts`: a hugging arc is EXPANDED into chords no
+    wider than this angular step. `pts` is a MOTION PATH (route walkers, the drag
+    frontier, junction seeding) — the drawn curve never reads it (it anchors on
+    `Route.hugs`, the contact structure), so chord clearance is nobody's
+    contract and the chords ride the true hug radius. */
 const ARC_STEP = Math.PI / 8
-/** Draw-circumscription factor. The geodesic hugs the true disc boundary (radius
-    r) — that is the shortest clear path and the length/cost this reports — but ANY
-    inscribed chord of the r-circle dips inside it and would fail `segmentClear`
-    (the behavioral contract). So the DRAWN arc rides a slightly larger circle of
-    radius r·ROUTE_INFLATE, on which an ARC_STEP-wide chord is tangent to r (chord
-    of circle R, half-angle ARC_STEP/2, sags to R·cos(ARC_STEP/2) = r ⇒
-    ROUTE_INFLATE = 1/cos(ARC_STEP/2) ≈ 1.0196), joined to the true tangent points
-    by tiny (≈0.02·r) radial jogs that the downstream clearance-tolerance
-    simplification erases. Rendering only — never the routed length. */
-const ROUTE_INFLATE = 1 / Math.cos(ARC_STEP / 2)
 
 /** Optional rectangular containment (the fixed proof frame): junctions and
     route corners stay inside — nothing is drawn outside the border. */
@@ -153,28 +146,6 @@ export function insideAnyDisc(p: Vec2, discs: readonly Disc[]): number {
     if (Math.hypot(p.x - D.c.x, p.y - D.c.y) < D.r - EPS_BLOCK) return i
   }
   return -1
-}
-
-/** Push a point out of every disc interior (feasibility projection for
-    junction coordinates). Deterministic; at most one pass per disc in index
-    order, repeated until clear (bounded by disc count). */
-export function projectFeasible(p: Vec2, discs: readonly Disc[], bounds: Bounds | null = null): Vec2 {
-  let x = p.x, y = p.y
-  if (bounds !== null) {
-    x = Math.max(bounds.minX, Math.min(bounds.maxX, x))
-    y = Math.max(bounds.minY, Math.min(bounds.maxY, y))
-  }
-  for (let pass = 0; pass < discs.length + 1; pass++) {
-    const i = insideAnyDisc({ x, y }, discs)
-    if (i < 0) break
-    const D = discs[i]!
-    const dx = x - D.c.x, dy = y - D.c.y
-    const d = Math.hypot(dx, dy)
-    const ux = d < 1e-12 ? 1 : dx / d, uy = d < 1e-12 ? 0 : dy / d
-    x = D.c.x + ux * (D.r + 1e-6)
-    y = D.c.y + uy * (D.r + 1e-6)
-  }
-  return { x, y }
 }
 
 export function mkFreeSpace(discs: readonly Disc[], bounds: Bounds | null = null): FreeSpace {
@@ -291,18 +262,15 @@ function arcSoftCost(c: Vec2, rho: number, from: number, sweep: number, bounds: 
   return L + FRAME_COST * L * (out / (N + 1))
 }
 
-/** DRAWN samples of a hugging arc, on the circumscribed circle (radius
-    r·ROUTE_INFLATE) so chords are clear of the true disc. Emits both endpoints
-    (k = 0..steps) at the circumscribed radius; the caller brackets them with the
-    true tangent points, giving the ≈0.02·r radial jogs. */
+/** Chord samples of a hugging arc for the motion-path polyline, on the true
+    hug circle (endpoints included, k = 0..steps). */
 function arcDrawSamples(c: Vec2, r: number, from: number, sweep: number): Vec2[] {
-  const rho = r * ROUTE_INFLATE
   const steps = Math.max(1, Math.ceil(Math.abs(sweep) / ARC_STEP))
   const dA = sweep / steps
   const out: Vec2[] = []
   for (let k = 0; k <= steps; k++) {
     const a = from + dA * k
-    out.push({ x: c.x + rho * Math.cos(a), y: c.y + rho * Math.sin(a) })
+    out.push({ x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) })
   }
   return out
 }
@@ -358,7 +326,19 @@ function buildTangentGraph(fs: FreeSpace): TangentGraph {
   return { points, adj0, perDisc, blocked }
 }
 
-export type Route = { readonly length: number; readonly cost: number; readonly pts: readonly Vec2[] }
+/** One maximal hugging arc of a route, in route order: the CONTACT of the
+    geodesic with an obstacle circle. The drawn curve anchors on these (spec
+    2026-07-31 contact-anchored drawing) — hugs are the route's geometry; the
+    sampled `pts` are only its motion-path rendering. */
+export type HugArc = { readonly c: Vec2; readonly r: number; readonly from: number; readonly sweep: number }
+
+export type Route = {
+  readonly length: number
+  readonly cost: number
+  readonly pts: readonly Vec2[]
+  /** Maximal coalesced hugging arcs, in route order (empty for a direct route). */
+  readonly hugs: readonly HugArc[]
+}
 
 /** Binary min-heap of node indices keyed by distance, ties broken by index
     (determinism). */
@@ -406,7 +386,7 @@ class Heap {
 export function route(fs: FreeSpace, p: Vec2, q: Vec2): Route {
   const directLen = Math.hypot(q.x - p.x, q.y - p.y)
   const directCost = segSoftCost(p, q, fs)
-  const direct: Route = { length: directLen, cost: directCost, pts: [p, q] }
+  const direct: Route = { length: directLen, cost: directCost, pts: [p, q], hugs: [] }
   if (segmentClear(p, q, fs.discs)) return direct
   const key = `${p.x},${p.y},${q.x},${q.y}`
   const hit = fs.memo.get(key)
@@ -527,34 +507,60 @@ export function route(fs: FreeSpace, p: Vec2, q: Vec2): Route {
 
   // reconstruct P → Q; the reported length/cost is the true GEODESIC (straight
   // bitangent runs + exact arc lengths R·Δθ), which is ≤ any polygon path in the
-  // same free space; the drawn `pts` expand each arc into ARC_STEP chord samples
-  // (slightly shorter as a polyline, but that is only the rendering resolution).
+  // same free space; `pts` expands each arc into ARC_STEP chord samples (the
+  // motion-path polyline), and `hugs` reports the arcs themselves — the drawn
+  // curve's anchors.
+  //
+  // CANONICAL HUGS: consecutive arc edges on the SAME disc are COALESCED into
+  // one maximal arc. Graph nodes subdividing a hug (touch points of bitangents
+  // to unrelated discs) are representation, not geometry — exposing each
+  // sub-arc separately made the drawn curve (and its rod cost) depend on
+  // cost-irrelevant far discs, which broke the incremental evaluator's
+  // unchanged-wire lemma (exactness contract, score-delta.test.ts).
   const nodes: number[] = []
   for (let u = Q; u !== -1; u = prev[u]!) nodes.push(u)
   nodes.reverse()
+  type Prim = { kind: 'seg'; to: number } | { kind: 'arc'; disc: number; from: number; sweep: number; to: number }
+  const prims: Prim[] = []
+  for (let k = 1; k < nodes.length; k++) {
+    const arc = prevArc[nodes[k]!]!
+    if (arc !== null) {
+      const last = prims[prims.length - 1]
+      if (last !== undefined && last.kind === 'arc' && last.disc === arc.disc
+        && Math.abs(norm2pi(last.from + last.sweep) - norm2pi(arc.from)) < 1e-9
+        && (last.sweep === 0 || arc.sweep === 0 || Math.sign(last.sweep) === Math.sign(arc.sweep))) {
+        prims[prims.length - 1] = { kind: 'arc', disc: last.disc, from: last.from, sweep: last.sweep + arc.sweep, to: nodes[k]! }
+      } else {
+        prims.push({ kind: 'arc', disc: arc.disc, from: arc.from, sweep: arc.sweep, to: nodes[k]! })
+      }
+    } else {
+      prims.push({ kind: 'seg', to: nodes[k]! })
+    }
+  }
   const pts: Vec2[] = [p]
   const push = (v: Vec2): void => {
     const last = pts[pts.length - 1]!
     if (Math.hypot(v.x - last.x, v.y - last.y) >= 1e-9) pts.push(v)
   }
+  const hugs: HugArc[] = []
   let detourLen = 0, detourCost = 0
-  for (let k = 1; k < nodes.length; k++) {
-    const arc = prevArc[nodes[k]!]!
-    const prevPt = coordOf(nodes[k - 1]!)
-    const cur = coordOf(nodes[k]!)
-    if (arc !== null) {
-      const D = discs[arc.disc]!
-      detourLen += D.r * Math.abs(arc.sweep)
-      detourCost += arcSoftCost(D.c, D.r, arc.from, arc.sweep, fs.bounds)
-      for (const s of arcDrawSamples(D.c, D.r, arc.from, arc.sweep)) push(s)
-      push(cur) // the true tangent endpoint — closes the radial jog off the draw circle
+  let at: Vec2 = p
+  for (const pr of prims) {
+    const cur = coordOf(pr.to)
+    if (pr.kind === 'arc') {
+      const D = discs[pr.disc]!
+      detourLen += D.r * Math.abs(pr.sweep)
+      detourCost += arcSoftCost(D.c, D.r, pr.from, pr.sweep, fs.bounds)
+      hugs.push({ c: D.c, r: D.r, from: pr.from, sweep: pr.sweep })
+      for (const s of arcDrawSamples(D.c, D.r, pr.from, pr.sweep)) push(s)
     } else {
-      detourLen += Math.hypot(cur.x - prevPt.x, cur.y - prevPt.y)
-      detourCost += segSoftCost(prevPt, cur, fs)
+      detourLen += Math.hypot(cur.x - at.x, cur.y - at.y)
+      detourCost += segSoftCost(at, cur, fs)
       push(cur)
     }
+    at = cur
   }
-  const result: Route = detourCost < directCost ? { length: detourLen, cost: detourCost, pts } : direct
+  const result: Route = detourCost < directCost ? { length: detourLen, cost: detourCost, pts, hugs } : direct
   fs.memo.set(key, result)
   return result
 }

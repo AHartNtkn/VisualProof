@@ -7,11 +7,10 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
-import { highlightGroup, paint, relationWireHues } from '../view/paint'
+import { highlightGroup, paint, relationWireHues, wireOverlayShapes } from '../view/paint'
 import { seedBodyPlacement } from '../view/placement'
 import { seedProject } from '../view/relax'
 import type { Vec2 } from '../view/vec'
-import { existentialStubs, legPaths } from '../view/wires'
 import type { FixedSide } from './fixed-side-layout'
 import type { Hit } from './hittest'
 import { isHitSelected } from './interact/brush'
@@ -224,8 +223,8 @@ export class ProofFrontViewport {
 
   reconcileDiagram(): void {
     const next = mkEngine(this.#model.diagram(), this.#model.boundary())
-    carryOver(this.#engine, next)
-    seedProject(next)
+    const carried = carryOver(this.#engine, next)
+    seedProject(next, false, carried)
     this.motion.observeSwap(this.#engine, next, performance.now())
     this.#engine = next
     this.#rebuilds++
@@ -386,30 +385,6 @@ export class ProofFrontViewport {
         glow: null,
       }]
     }
-    const shapes: Shape[] = []
-    for (const leg of legPaths(this.#engine)) {
-      if (leg.wid === hit.id) {
-        shapes.push({
-          kind: 'polyline',
-          pts: leg.pts,
-          stroke,
-          width: 3,
-          glow: null,
-        })
-      }
-    }
-    for (const stub of existentialStubs(this.#engine)) {
-      if (stub.wid === hit.id) {
-        shapes.push({
-          kind: 'segment',
-          from: stub.from,
-          to: stub.to,
-          stroke,
-          width: 3,
-          glow: null,
-        })
-      }
-    }
-    return shapes
+    return wireOverlayShapes(this.#engine, hit.id, stroke, 3)
   }
 }

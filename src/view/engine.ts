@@ -5,7 +5,8 @@ import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
 import { atomGeometry, identityGeometry, refGeometry } from './bend'
-import type { Disc } from './route/freespace'
+import type { Disc, FreeSpace } from './route/freespace'
+import { mkFreeSpace } from './route/freespace'
 import type { CurveBC } from './route/curve'
 import type { WireNet } from './route/network'
 
@@ -347,7 +348,8 @@ export function carryOver(
   prev: Engine,
   next: Engine,
   identity?: LayoutIdentity,
-): void {
+): Set<WireId> {
+  const carriedNets = new Set<WireId>()
   // The border NEVER resizes for the diagram's lifetime (USER RULING 2026-07-06):
   // a rewrite keeps the SAME frame — content reflows inside the unchanged box, the
   // box is not recomputed. Carrying prev.frame makes `establishFrame` a no-op on the
@@ -445,6 +447,7 @@ export function carryOver(
       if (sig(pv) !== sig(nv)) continue
       nv.net.junctions = pv.net.junctions.map((p) => denorm(p, prev.scale))
       nv.net.edges = pv.net.edges.map(([u, v]) => [u, v])
+      carriedNets.add(targetWire)
       continue
     }
     const terminalMap = terminalImage(pv, nv)
@@ -461,7 +464,9 @@ export function carryOver(
       vertexImage(u),
       vertexImage(v),
     ])
+    carriedNets.add(targetWire)
   }
+  return carriedNets
 }
 
 /** Map an anatomy-local point (before ascale) into world space through the
@@ -607,6 +612,105 @@ export function routeObstacles(e: Engine): Disc[] {
     out.push({ c: b.pos, r: (b.discR + ROUTE_CLEAR) * e.scale })
   }
   return out
+}
+
+/** The DRAWN obstacle discs for the nearness energy (energy-drawn wires,
+    2026-07-31): node discs at their drawn radii — no routing clearance folded
+    in, because the standoff is the energy's job, not an inflation's. */
+export function drawnObstacles(e: Engine): Disc[] {
+  const out: Disc[] = []
+  for (const b of e.bodies.values()) {
+    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'identity') continue
+    out.push({ c: b.pos, r: b.discR * e.scale })
+  }
+  return out
+}
+
+/** Per-wire routing spaces (2026-07-30 design): the drawn circle of every cut
+    a wire is NOT inside is an obstacle disc for that wire, exactly like a
+    node disc — same clearance inflation, same soft surcharge, same tangent-
+    graph detours. A wire is inside a region iff the region is an ancestor of
+    a terminal's region or of the wire's scope, so wires legitimately entering
+    a cut to reach a node keep free passage. `forbidden` arrays and FreeSpaces
+    (tangent graph + route memo) are SHARED between wires with the same
+    forbidden set. */
+export type WireSpaces = {
+  space(wid: WireId): FreeSpace
+  readonly forbidden: ReadonlyMap<WireId, readonly Disc[]>
+  /** The same forbidden circles at their DRAWN radii (no clearance pad) — the
+      nearness energy measures against what the user sees. Shares array
+      identity per forbidden-set signature like `forbidden`. */
+  readonly forbiddenDrawn: ReadonlyMap<WireId, readonly Disc[]>
+  /** The region ids behind each wire's forbidden discs (same order, same
+      shared-array identity) — the incremental evaluator diffs region circles
+      per wire through this. */
+  readonly forbiddenRids: ReadonlyMap<WireId, readonly RegionId[]>
+}
+
+export function wireRouteSpaces(e: Engine): WireSpaces {
+  const chainInto = (rid: RegionId, into: Set<RegionId>): void => {
+    for (let cur = rid; ;) {
+      if (into.has(cur)) break
+      into.add(cur)
+      const reg = e.d.regions[cur]!
+      if (reg.kind === 'sheet') break
+      cur = reg.parent
+    }
+  }
+  const nonSheet: RegionId[] = []
+  for (const rid of e.regions.keys()) {
+    if (e.d.regions[rid]!.kind !== 'sheet') nonSheet.push(rid)
+  }
+  const pad = ROUTE_CLEAR * e.scale
+  const bySig = new Map<string, { discs: Disc[]; drawn: Disc[]; rids: RegionId[] }>()
+  const forbidden = new Map<WireId, readonly Disc[]>()
+  const forbiddenDrawn = new Map<WireId, readonly Disc[]>()
+  const forbiddenRids = new Map<WireId, readonly RegionId[]>()
+  for (const [wid, w] of e.wires) {
+    const allowed = new Set<RegionId>()
+    chainInto(e.d.wires[wid]!.scope, allowed)
+    for (const bd of w.binds) chainInto(e.bodies.get(bd.body)!.region, allowed)
+    if (w.endBodyId !== null) chainInto(e.bodies.get(w.endBodyId)!.region, allowed)
+    const forb = nonSheet.filter((rid) => !allowed.has(rid))
+    const key = JSON.stringify(forb)
+    let entry = bySig.get(key)
+    if (entry === undefined) {
+      entry = {
+        rids: forb,
+        discs: forb.map((rid) => {
+          const g = e.regions.get(rid)!
+          return { c: { x: g.center.x, y: g.center.y }, r: g.radius + pad }
+        }),
+        drawn: forb.map((rid) => {
+          const g = e.regions.get(rid)!
+          return { c: { x: g.center.x, y: g.center.y }, r: g.radius }
+        }),
+      }
+      bySig.set(key, entry)
+    }
+    forbidden.set(wid, entry.discs)
+    forbiddenDrawn.set(wid, entry.drawn)
+    forbiddenRids.set(wid, entry.rids)
+  }
+  const nodes = routeObstacles(e)
+  const bounds = routeBounds(e)
+  const plain = mkFreeSpace(nodes, bounds)
+  const spaces = new Map<readonly Disc[], FreeSpace>()
+  return {
+    forbidden,
+    forbiddenDrawn,
+    forbiddenRids,
+    space(wid: WireId): FreeSpace {
+      const forb = forbidden.get(wid)
+      if (forb === undefined || forb.length === 0) return plain
+      let fs = spaces.get(forb)
+      if (fs === undefined) {
+        fs = mkFreeSpace([...nodes, ...forb], bounds)
+        spaces.set(forb, fs)
+      }
+      return fs
+    },
+  }
 }
 
 /** The fixed escape stub of a port bind: from the rim anchor outward along

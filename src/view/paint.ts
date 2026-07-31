@@ -4,7 +4,8 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, resolvedFrameSlot } from './engine'
-import { existentialStubs, legPaths } from './wires'
+import { computeLegs, existentialStubs, legPaths } from './wires'
+import type { Leg } from './engine'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -55,9 +56,10 @@ export type Shape =
   | { readonly kind: 'circle'; readonly center: Vec2; readonly r: number; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly insetColor: string | null; readonly glow: string | null }
   | { readonly kind: 'arc'; readonly center: Vec2; readonly r: number; readonly a0: number; readonly a1: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'segment'; readonly from: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  /** A traced wire stroke: the Hobby-chain samples at paint
-      resolution (plan 22 — the polyline IS the wire, not a spline fit). */
-  | { readonly kind: 'polyline'; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
+  /** A traced wire stroke: the Hobby cubic chain, with its shared samples
+      (`pts`) for energy/hit-test identity. There is deliberately NO sampled-
+      polyline stroke shape — a wire stroke that is not the painted cubics is
+      unrepresentable (the 2026-07-30 highlight-discretization defect). */
   | { readonly kind: 'bezierPath'; readonly cubics: readonly { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }[]; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
@@ -172,7 +174,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     if (w === undefined || w.binds.length !== 0) continue
     const slot = resolvedFrameSlot(e, position)
     if (slot === null) continue
-    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: STUB_DOT_R, fill: st.wire })
+    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: STUB_DOT_R, fill: wireStroke(wid) })
   }
   // Port 0 is always the single prominent reading origin whenever the sheet has
   // a boundary. All remaining ports are read clockwise from this logical port,
@@ -186,10 +188,21 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // Task 5 gallery ruling on the ∀ glyph), or a bare wire. Wire-owned Steiner branch
   // vertices are not bodies and are never dotted (USER 2026-07-07: branch points are
   // unmarked; where legs meet is downstream of the tree).
+  // The dot is a point OF the wire (the outermost quantifier point of the line
+  // of identity), so it carries the wire's colour like every stroke — a
+  // propositional ∃ dot in the base iota colour reads as the wrong sort.
+  const endWire = new Map<string, WireId>()
+  for (const [wid, w] of e.wires) {
+    if (w.endBodyId !== null) endWire.set(w.endBodyId, wid)
+  }
+  for (const [wid, w] of Object.entries(e.d.wires)) {
+    if (w.endpoints.length === 0) endWire.set(`j:${wid}`, wid) // bare ∃ — the dot IS the wire
+  }
   for (const b of e.bodies.values()) {
     if (b.kind !== 'end') continue
+    const owner = endWire.get(b.id)
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
-    shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
+    shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: owner === undefined ? st.wire : wireStroke(owner) })
   }
   return shapes
 }
@@ -263,6 +276,33 @@ export function nextTheme(t: Theme): Theme {
 }
 
 /**
+ * ONE wire's overlay stroke (hover, selection, drag feedback): the SAME Hobby
+ * cubic chain the painter draws, restroked in the interaction colour/width.
+ * Every overlay producer uses this — a wire stroke that is not the painted
+ * cubics is unrepresentable (USER 2026-07-30: the sampled-polyline overlays
+ * read as a discretization of the wire). An unfiltered overlay covers the
+ * whole wire including its ∃ stub; `legFilter` scopes it to specific legs
+ * (endpoint-level drag feedback), where the stub — not a leg — is omitted.
+ */
+export function wireOverlayShapes(
+  e: Engine, wid: WireId, stroke: string, width: number, glow: string | null = null,
+  legFilter: ((leg: Leg) => boolean) | null = null,
+): Shape[] {
+  const out: Shape[] = []
+  for (const { leg, pts, cubics } of computeLegs(e)) {
+    if (leg.wid !== wid) continue
+    if (legFilter !== null && !legFilter(leg)) continue
+    out.push({ kind: 'bezierPath', cubics, pts, stroke, width, glow })
+  }
+  if (legFilter === null) {
+    for (const s of existentialStubs(e)) {
+      if (s.wid === wid) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width, glow })
+    }
+  }
+  return out
+}
+
+/**
  * Hover-group highlight: brighten a whole relation group — the shared head wire
  * (its traced legs) and every atom bound to it — in the wire's order-ladder hue,
  * brighter and wider, glowing in Dark. The group key is the WIRE itself (heads
@@ -272,11 +312,8 @@ export function nextTheme(t: Theme): Theme {
 export function highlightGroup(e: Engine, st: Theme, wireId: WireId): Shape[] {
   const hue = relationWireHues(e.d, Math.min(st.relationHueLightness + HL_BRIGHT, 88)).get(wireId)
   if (hue === undefined) return []
-  const out: Shape[] = []
   const wireGlow = st.wireGlow ? hue : null
-  for (const { wid, pts, cubics } of legPaths(e)) {
-    if (wid === wireId) out.push({ kind: 'bezierPath', cubics, pts, stroke: hue, width: st.wireW + HL_WIDTH, glow: wireGlow })
-  }
+  const out: Shape[] = wireOverlayShapes(e, wireId, hue, st.wireW + HL_WIDTH, wireGlow)
   const w = e.d.wires[wireId]
   const atomIds = new Set(w === undefined ? [] : w.endpoints.filter((ep) => ep.port.kind === 'head').map((ep) => ep.node))
   for (const b of e.bodies.values()) {
