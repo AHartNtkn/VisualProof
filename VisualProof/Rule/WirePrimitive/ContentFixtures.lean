@@ -2,6 +2,8 @@ import VisualProof.Rule.WirePrimitive.Content
 
 namespace VisualProof
 
+#check ConcreteWirePrimitive.AppliedSite.replacement_denotation
+
 namespace WirePrimitive
 
 namespace ContentFixtures
