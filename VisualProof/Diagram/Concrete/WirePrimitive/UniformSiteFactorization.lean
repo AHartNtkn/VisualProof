@@ -7,6 +7,1120 @@ namespace WirePrimitive
 
 universe u v w
 
+/-!
+## Intrinsic simultaneous-site shapes
+
+The concrete content rules do not expose a sequence of one-site rewrites.
+Instead, their semantic ledgers compile the complete acted scope and compare
+two intrinsic shapes.  A shape retains every ordinary item and every ambient
+cut/binder, but records the uniformly rewritten cells as typed holes.
+
+Both bodies are first renamed into one common visible context.  Consequently
+ordinary items are compared by intrinsic equality and are evaluated in one
+environment; only the interpretation of the holes differs.
+-/
+
+private def Var.decEq :
+    (left right : Var context signature) → Decidable (left = right)
+  | .here, .here => isTrue rfl
+  | .here, .there _ => isFalse (fun equality => by cases equality)
+  | .there _, .here => isFalse (fun equality => by cases equality)
+  | .there left, .there right =>
+      match decEq left right with
+      | isTrue equality => isTrue (by cases equality; rfl)
+      | isFalse different => isFalse (fun equality => by
+          cases equality
+          exact different rfl)
+
+private instance : DecidableEq (Var context signature) :=
+  Var.decEq
+
+private def Vars.decEq :
+    (left right : Vars context arguments) → Decidable (left = right)
+  | .nil, .nil => isTrue rfl
+  | .cons leftHead leftTail, .cons rightHead rightTail =>
+      match Var.decEq leftHead rightHead, decEq leftTail rightTail with
+      | isTrue headEqual, isTrue tailEqual =>
+          isTrue (by cases headEqual; cases tailEqual; rfl)
+      | isFalse different, _ =>
+          isFalse (fun equality => by
+            cases equality
+            exact different rfl)
+      | _, isFalse different =>
+          isFalse (fun equality => by
+            cases equality
+            exact different rfl)
+
+private instance : DecidableEq (Vars context arguments) :=
+  Vars.decEq
+
+private def DefVar.decEq :
+    (left right : DefVar definitions arguments) → Decidable (left = right)
+  | .here, .here => isTrue rfl
+  | .here, .there _ => isFalse (fun equality => by cases equality)
+  | .there _, .here => isFalse (fun equality => by cases equality)
+  | .there left, .there right =>
+      match decEq left right with
+      | isTrue equality => isTrue (by cases equality; rfl)
+      | isFalse different => isFalse (fun equality => by
+          cases equality
+          exact different rfl)
+
+private instance : DecidableEq (DefVar definitions arguments) :=
+  DefVar.decEq
+
+deriving instance DecidableEq for Region
+deriving instance DecidableEq for Item
+deriving instance DecidableEq for ItemSeq
+
+/-- Ordered typed holes at one intrinsic context. -/
+structure UniformIntrinsicHoles
+    (arguments context : List Sig) where
+  values : List (Vars context arguments)
+  deriving DecidableEq
+
+mutual
+
+/-- One acted-scope body with its uniform cells abstracted as typed holes. -/
+inductive UniformIntrinsicRegion
+    (definitions : List (List Sig)) (arguments : List Sig) :
+    List Sig → Type
+  | mk {context : List Sig}
+      (ordinary :
+        UniformIntrinsicItemSeq definitions arguments context)
+      (holes : UniformIntrinsicHoles arguments context) :
+      UniformIntrinsicRegion definitions arguments context
+
+/-- An ordinary intrinsic item retained by a uniform-site abstraction. -/
+inductive UniformIntrinsicItem
+    (definitions : List (List Sig)) (arguments : List Sig) :
+    List Sig → Type
+  | leaf {context}
+      (item : Item definitions context) :
+      UniformIntrinsicItem definitions arguments context
+  | cut {context}
+      (body : UniformIntrinsicRegion definitions arguments context) :
+      UniformIntrinsicItem definitions arguments context
+  | bind {context}
+      (signature : Sig)
+      (body :
+        UniformIntrinsicRegion definitions arguments
+          (signature :: context)) :
+      UniformIntrinsicItem definitions arguments context
+
+/-- Ordered ordinary items retained in one intrinsic shape region. -/
+inductive UniformIntrinsicItemSeq
+    (definitions : List (List Sig)) (arguments : List Sig) :
+    List Sig → Type
+  | nil {context} :
+      UniformIntrinsicItemSeq definitions arguments context
+  | cons {context}
+      (head : UniformIntrinsicItem definitions arguments context)
+      (tail : UniformIntrinsicItemSeq definitions arguments context) :
+      UniformIntrinsicItemSeq definitions arguments context
+
+end
+
+namespace UniformIntrinsicRegion
+
+deriving instance DecidableEq for UniformIntrinsicRegion
+deriving instance DecidableEq for UniformIntrinsicItem
+deriving instance DecidableEq for UniformIntrinsicItemSeq
+
+/-- Conjunction of a proposition over every member of one list. -/
+private def all (values : List α) (holds : α → Prop) : Prop :=
+  ∀ value, value ∈ values → holds value
+
+private theorem all_congr
+    (values : List α)
+    {left right : α → Prop}
+    (pointwise : ∀ value, left value ↔ right value) :
+    all values left ↔ all values right := by
+  constructor
+  · intro holds value member
+    exact (pointwise value).mp (holds value member)
+  · intro holds value member
+    exact (pointwise value).mpr (holds value member)
+
+mutual
+
+/-- Denotation of a simultaneous-site shape under one interpretation of holes. -/
+def denote
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+  (env : Env pre context)
+  (site : PreModel.Args pre.Domain arguments → Prop) :
+    UniformIntrinsicRegion definitions arguments context → Prop
+  | .mk ordinary holes =>
+      UniformIntrinsicItemSeq.denote pre definitionEnv env site ordinary ∧
+        all holes.values (fun values => site (Vars.denote env values))
+
+/-- Denotation of one ordinary item retained in a simultaneous-site shape. -/
+def UniformIntrinsicItem.denote
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (site : PreModel.Args pre.Domain arguments → Prop) :
+    UniformIntrinsicItem definitions arguments context → Prop
+  | .leaf item =>
+      denoteItem pre definitionEnv env item
+  | .cut body =>
+      ¬ body.denote pre definitionEnv env site
+  | .bind _ body =>
+      ∃ value, body.denote pre definitionEnv (env.extend value) site
+
+/-- Denotation of the retained ordinary item sequence. -/
+def UniformIntrinsicItemSeq.denote
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+  (site : PreModel.Args pre.Domain arguments → Prop) :
+    UniformIntrinsicItemSeq definitions arguments context → Prop
+  | .nil => True
+  | .cons head tail =>
+      UniformIntrinsicItem.denote pre definitionEnv env site head ∧
+        UniformIntrinsicItemSeq.denote pre definitionEnv env site tail
+
+end
+
+mutual
+
+/-- Pointwise-equivalent hole interpretations give the same shape denotation. -/
+theorem denote_site_congr
+    (shape : UniformIntrinsicRegion definitions arguments context)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (left right : PreModel.Args pre.Domain arguments → Prop)
+    (pointwise : ∀ values, left values ↔ right values) :
+    shape.denote pre definitionEnv env left ↔
+      shape.denote pre definitionEnv env right := by
+  cases shape with
+  | mk ordinary holes =>
+      exact
+        and_congr
+          (UniformIntrinsicItemSeq.denote_site_congr ordinary pre
+            definitionEnv env left right pointwise)
+          (all_congr holes.values fun values =>
+            pointwise (Vars.denote env values))
+
+private theorem UniformIntrinsicItem.denote_site_congr
+    (item : UniformIntrinsicItem definitions arguments context)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (left right : PreModel.Args pre.Domain arguments → Prop)
+    (pointwise : ∀ values, left values ↔ right values) :
+    UniformIntrinsicItem.denote pre definitionEnv env left item ↔
+      UniformIntrinsicItem.denote pre definitionEnv env right item := by
+  cases item with
+  | leaf _ => exact Iff.rfl
+  | cut body =>
+      exact
+        not_congr
+          (denote_site_congr body pre definitionEnv env left right
+            pointwise)
+  | bind signature body =>
+      constructor
+      · rintro ⟨value, holds⟩
+        exact
+          ⟨value,
+            (denote_site_congr body pre definitionEnv (env.extend value)
+              left right pointwise).mp holds⟩
+      · rintro ⟨value, holds⟩
+        exact
+          ⟨value,
+            (denote_site_congr body pre definitionEnv (env.extend value)
+              left right pointwise).mpr holds⟩
+
+private theorem UniformIntrinsicItemSeq.denote_site_congr
+    (items : UniformIntrinsicItemSeq definitions arguments context)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (left right : PreModel.Args pre.Domain arguments → Prop)
+    (pointwise : ∀ values, left values ↔ right values) :
+    UniformIntrinsicItemSeq.denote pre definitionEnv env left items ↔
+      UniformIntrinsicItemSeq.denote pre definitionEnv env right items := by
+  cases items with
+  | nil => exact Iff.rfl
+  | cons head tail =>
+      exact
+        and_congr
+          (UniformIntrinsicItem.denote_site_congr head pre definitionEnv env
+            left right pointwise)
+          (UniformIntrinsicItemSeq.denote_site_congr tail pre definitionEnv
+            env left right pointwise)
+
+end
+
+private def matchedHeadArguments?
+    {context : List Sig}
+    {arguments atomArguments : List Sig}
+    (head : Var context (.rel arguments))
+    (atomHead : Var context (.rel atomArguments))
+    (values : Vars context atomArguments) :
+    Option (Vars context arguments) :=
+  if signatures : atomArguments = arguments then
+    if equal : signatures ▸ atomHead = head then
+      some (signatures ▸ values)
+    else
+      none
+  else
+    none
+
+private def prependOrdinary
+    (item : UniformIntrinsicItem definitions arguments context) :
+    UniformIntrinsicRegion definitions arguments context →
+      UniformIntrinsicRegion definitions arguments context
+  | .mk ordinary holes => .mk (.cons item ordinary) holes
+
+private def prependHole
+    (values : Vars context arguments) :
+    UniformIntrinsicRegion definitions arguments context →
+      UniformIntrinsicRegion definitions arguments context
+  | .mk ordinary holes => .mk ordinary ⟨values :: holes.values⟩
+
+private theorem matchedHeadArguments_denote
+    (pre : PreModel.{u})
+    (env : Env pre context)
+    (head : Var context (.rel arguments))
+    (atomHead : Var context (.rel atomArguments))
+    (values : Vars context atomArguments)
+    (matched : matchedHeadArguments? head atomHead values = some result) :
+    pre.apply (env _ atomHead) (Vars.denote env values) =
+      pre.apply (env _ head) (Vars.denote env result) := by
+  unfold matchedHeadArguments? at matched
+  split at matched
+  · rename_i signatures
+    cases signatures
+    split at matched
+    · rename_i equal
+      cases equal
+      cases Option.some.inj matched
+      rfl
+    · contradiction
+  · contradiction
+
+mutual
+
+/--
+Abstract direct atoms headed by `head`.  All other structure, including
+ordinary cuts and binders, is retained.
+-/
+def abstractApplied
+    (head : Var context (.rel arguments)) :
+    Region definitions context →
+      UniformIntrinsicRegion definitions arguments context
+  | .mk items => abstractAppliedItems head items
+
+private def abstractAppliedItems
+    (head : Var context (.rel arguments)) :
+    ItemSeq definitions context →
+      UniformIntrinsicRegion definitions arguments context
+  | .nil => .mk .nil ⟨[]⟩
+  | .cons item tail =>
+      let rest := abstractAppliedItems head tail
+      match item with
+      | .atom atomHead values =>
+          match matchedHeadArguments? head atomHead values with
+          | some arguments => prependHole arguments rest
+          | none => prependOrdinary (.leaf (.atom atomHead values)) rest
+      | .named definition values =>
+          prependOrdinary (.leaf (.named definition values)) rest
+      | .identity signature ports atLeastTwo =>
+          prependOrdinary
+            (.leaf (.identity signature ports atLeastTwo)) rest
+      | .cut body =>
+          prependOrdinary (.cut (abstractApplied head body)) rest
+      | .bind signature body =>
+          prependOrdinary
+            (.bind signature (abstractApplied (.there head) body)) rest
+
+end
+
+mutual
+
+/-- Applied-atom abstraction preserves denotation with one shared relation. -/
+theorem abstractApplied_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (head : Var context (.rel arguments))
+    (body : Region definitions context) :
+    denoteRegion pre definitionEnv env body ↔
+      (abstractApplied head body).denote pre definitionEnv env
+        (fun values => pre.apply (env _ head) values) := by
+  cases body with
+  | mk items =>
+      exact
+        abstractAppliedItems_denotes pre definitionEnv env head items
+
+private theorem abstractAppliedItems_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (head : Var context (.rel arguments))
+    (items : ItemSeq definitions context) :
+    denoteItemSeq pre definitionEnv env items ↔
+      (abstractAppliedItems head items).denote pre definitionEnv env
+        (fun values => pre.apply (env _ head) values) := by
+  cases items with
+  | nil =>
+      simp [abstractAppliedItems, UniformIntrinsicRegion.denote,
+        UniformIntrinsicItemSeq.denote, all, denoteItemSeq]
+  | cons item tail =>
+      have tailLaw :=
+        abstractAppliedItems_denotes pre definitionEnv env head tail
+      generalize restExact :
+          abstractAppliedItems head tail = rest at tailLaw ⊢
+      cases rest
+      rename_i ordinary holes
+      cases item with
+      | atom atomHead values =>
+          cases matched :
+              matchedHeadArguments? head atomHead values with
+          | none =>
+              simp [abstractAppliedItems, matched, prependOrdinary,
+                restExact,
+                UniformIntrinsicRegion.denote,
+                UniformIntrinsicItemSeq.denote,
+                UniformIntrinsicItem.denote, all, denoteItemSeq,
+                denoteItem, tailLaw, and_assoc, and_left_comm, and_comm]
+          | some result =>
+              have atomExact :=
+                matchedHeadArguments_denote pre env head atomHead values
+                  matched
+              simp [abstractAppliedItems, matched, prependHole,
+                restExact,
+                UniformIntrinsicRegion.denote,
+                UniformIntrinsicItemSeq.denote, all, denoteItemSeq,
+                denoteItem, tailLaw, atomExact, and_assoc, and_left_comm,
+                and_comm]
+      | named definition values =>
+          simp [abstractAppliedItems, prependOrdinary,
+            restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, and_assoc, and_left_comm, and_comm]
+      | identity signature ports atLeastTwo =>
+          simp [abstractAppliedItems, prependOrdinary,
+            restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, and_assoc, and_left_comm, and_comm]
+      | cut body =>
+          have bodyLaw :=
+            abstractApplied_denotes pre definitionEnv env head body
+          simp [abstractAppliedItems, prependOrdinary,
+            restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, bodyLaw, and_assoc, and_left_comm,
+            and_comm]
+      | bind signature body =>
+          have bodyLaw :
+              ∀ value : pre.Domain signature,
+                denoteRegion pre definitionEnv (env.extend value) body ↔
+                  (abstractApplied (.there head) body).denote pre
+                    definitionEnv (env.extend value)
+                    (fun values => pre.apply (env _ head) values) := by
+            intro value
+            simpa using
+              abstractApplied_denotes pre definitionEnv
+                (env.extend value) (.there head) body
+          simp [abstractAppliedItems, prependOrdinary,
+            restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, bodyLaw, and_assoc, and_left_comm,
+            and_comm]
+
+end
+
+mutual
+
+/--
+Abstract an exact cut whose body is one atom headed by `head` as one hole.
+Non-cell cuts remain in the shape and are traversed recursively.
+-/
+def abstractCutWrapped
+    (head : Var context (.rel arguments)) :
+    Region definitions context →
+      UniformIntrinsicRegion definitions arguments context
+  | .mk items => abstractCutWrappedItems head items
+
+private def abstractCutWrappedItems
+    (head : Var context (.rel arguments)) :
+    ItemSeq definitions context →
+      UniformIntrinsicRegion definitions arguments context
+  | .nil => .mk .nil ⟨[]⟩
+  | .cons item tail =>
+      let rest := abstractCutWrappedItems head tail
+      match item with
+      | .cut (.mk (.cons (.atom atomHead values) .nil)) =>
+          match matchedHeadArguments? head atomHead values with
+          | some arguments => prependHole arguments rest
+          | none =>
+              prependOrdinary
+                (.cut
+                  (abstractCutWrapped head
+                    (.mk (.cons (.atom atomHead values) .nil))))
+                rest
+      | .atom atomHead values =>
+          prependOrdinary (.leaf (.atom atomHead values)) rest
+      | .named definition values =>
+          prependOrdinary (.leaf (.named definition values)) rest
+      | .identity signature ports atLeastTwo =>
+          prependOrdinary
+            (.leaf (.identity signature ports atLeastTwo)) rest
+      | .cut body =>
+          prependOrdinary (.cut (abstractCutWrapped head body)) rest
+      | .bind signature body =>
+          prependOrdinary
+            (.bind signature (abstractCutWrapped (.there head) body)) rest
+
+end
+
+mutual
+
+/-- Exact cut-cell abstraction preserves denotation as pointwise negation. -/
+theorem abstractCutWrapped_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (head : Var context (.rel arguments))
+    (body : Region definitions context) :
+    denoteRegion pre definitionEnv env body ↔
+      (abstractCutWrapped head body).denote pre definitionEnv env
+        (fun values => ¬pre.apply (env _ head) values) := by
+  cases body with
+  | mk items =>
+      exact
+        abstractCutWrappedItems_denotes pre definitionEnv env head items
+
+private theorem abstractCutWrappedItems_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (head : Var context (.rel arguments))
+    (items : ItemSeq definitions context) :
+    denoteItemSeq pre definitionEnv env items ↔
+      (abstractCutWrappedItems head items).denote pre definitionEnv env
+        (fun values => ¬pre.apply (env _ head) values) := by
+  cases items with
+  | nil =>
+      simp [abstractCutWrappedItems, UniformIntrinsicRegion.denote,
+        UniformIntrinsicItemSeq.denote, all, denoteItemSeq]
+  | cons item tail =>
+      have tailLaw :=
+        abstractCutWrappedItems_denotes pre definitionEnv env head tail
+      generalize restExact :
+          abstractCutWrappedItems head tail = rest at tailLaw ⊢
+      cases rest
+      rename_i ordinary holes
+      cases item with
+      | atom atomHead values =>
+          simp [abstractCutWrappedItems, prependOrdinary, restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, and_assoc, and_left_comm, and_comm]
+      | named definition values =>
+          simp [abstractCutWrappedItems, prependOrdinary, restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, and_assoc, and_left_comm, and_comm]
+      | identity signature ports atLeastTwo =>
+          simp [abstractCutWrappedItems, prependOrdinary, restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, and_assoc, and_left_comm, and_comm]
+      | cut body =>
+          cases body with
+          | mk bodyItems =>
+              cases bodyItems with
+              | nil =>
+                  have bodyLaw :=
+                    abstractCutWrapped_denotes pre definitionEnv env head
+                      (.mk .nil)
+                  simp [abstractCutWrappedItems, prependOrdinary, restExact,
+                    UniformIntrinsicRegion.denote,
+                    UniformIntrinsicItemSeq.denote,
+                    UniformIntrinsicItem.denote, all, denoteItemSeq,
+                    denoteItem, tailLaw, bodyLaw, and_assoc,
+                    and_left_comm, and_comm]
+              | cons bodyHead bodyTail =>
+                  cases bodyHead with
+                  | atom atomHead values =>
+                      cases bodyTail with
+                      | nil =>
+                          cases matched :
+                              matchedHeadArguments? head atomHead values with
+                          | none =>
+                              have bodyLaw :=
+                                abstractCutWrapped_denotes pre definitionEnv
+                                  env head
+                                  (.mk
+                                    (.cons (.atom atomHead values) .nil))
+                              simp [abstractCutWrappedItems, matched,
+                                prependOrdinary, restExact,
+                                UniformIntrinsicRegion.denote,
+                                UniformIntrinsicItemSeq.denote,
+                                UniformIntrinsicItem.denote, all,
+                                denoteItemSeq, denoteItem, tailLaw, bodyLaw,
+                                and_assoc, and_left_comm, and_comm]
+                          | some result =>
+                              have atomExact :=
+                                matchedHeadArguments_denote pre env head
+                                  atomHead values matched
+                              simp [abstractCutWrappedItems, matched,
+                                prependHole, restExact,
+                                UniformIntrinsicRegion.denote,
+                                UniformIntrinsicItemSeq.denote, all,
+                                denoteRegion, denoteItemSeq, denoteItem,
+                                tailLaw, atomExact,
+                                and_assoc, and_left_comm, and_comm]
+                      | cons next rest =>
+                          have bodyLaw :=
+                            abstractCutWrapped_denotes pre definitionEnv env
+                              head
+                              (.mk
+                                (.cons (.atom atomHead values)
+                                  (.cons next rest)))
+                          simp [abstractCutWrappedItems, prependOrdinary,
+                            restExact, UniformIntrinsicRegion.denote,
+                            UniformIntrinsicItemSeq.denote,
+                            UniformIntrinsicItem.denote, all,
+                            denoteItemSeq, denoteItem, tailLaw, bodyLaw,
+                            and_assoc, and_left_comm, and_comm]
+                  | named definition values =>
+                      have bodyLaw :=
+                        abstractCutWrapped_denotes pre definitionEnv env head
+                          (.mk (.cons (.named definition values) bodyTail))
+                      simp [abstractCutWrappedItems, prependOrdinary,
+                        restExact, UniformIntrinsicRegion.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw, bodyLaw, and_assoc,
+                        and_left_comm, and_comm]
+                  | identity signature ports atLeastTwo =>
+                      have bodyLaw :=
+                        abstractCutWrapped_denotes pre definitionEnv env head
+                          (.mk
+                            (.cons
+                              (.identity signature ports atLeastTwo)
+                              bodyTail))
+                      simp [abstractCutWrappedItems, prependOrdinary,
+                        restExact, UniformIntrinsicRegion.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw, bodyLaw, and_assoc,
+                        and_left_comm, and_comm]
+                  | cut nested =>
+                      have bodyLaw :=
+                        abstractCutWrapped_denotes pre definitionEnv env head
+                          (.mk (.cons (.cut nested) bodyTail))
+                      simp [abstractCutWrappedItems, prependOrdinary,
+                        restExact, UniformIntrinsicRegion.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw, bodyLaw, and_assoc,
+                        and_left_comm, and_comm]
+                  | bind signature nested =>
+                      have bodyLaw :=
+                        abstractCutWrapped_denotes pre definitionEnv env head
+                          (.mk (.cons (.bind signature nested) bodyTail))
+                      simp [abstractCutWrappedItems, prependOrdinary,
+                        restExact, UniformIntrinsicRegion.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw, bodyLaw, and_assoc,
+                        and_left_comm, and_comm]
+      | bind signature body =>
+          have bodyLaw :
+              ∀ value : pre.Domain signature,
+                denoteRegion pre definitionEnv (env.extend value) body ↔
+                  (abstractCutWrapped (.there head) body).denote pre
+                    definitionEnv (env.extend value)
+                    (fun values => ¬pre.apply (env _ head) values) := by
+            intro value
+            simpa using
+              abstractCutWrapped_denotes pre definitionEnv
+                (env.extend value) (.there head) body
+          simp [abstractCutWrappedItems, prependOrdinary, restExact,
+            UniformIntrinsicRegion.denote,
+            UniformIntrinsicItemSeq.denote,
+            UniformIntrinsicItem.denote, all, denoteItemSeq,
+            denoteItem, tailLaw, bodyLaw, and_assoc, and_left_comm,
+            and_comm]
+
+end
+
+/-- Intermediate split abstraction before the two branches are paired. -/
+private structure ParallelRaw
+    (definitions : List (List Sig))
+    (arguments context : List Sig) where
+  ordinary : UniformIntrinsicItemSeq definitions arguments context
+  first : UniformIntrinsicHoles arguments context
+  second : UniformIntrinsicHoles arguments context
+
+private def ParallelRaw.paired?
+    (raw : ParallelRaw definitions arguments context) :
+    Option (UniformIntrinsicRegion definitions arguments context) :=
+  if paired : raw.first.values = raw.second.values then
+    some (.mk raw.ordinary raw.first)
+  else
+    none
+
+private def ParallelRaw.denote
+    (raw : ParallelRaw definitions arguments context)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (firstRelation secondRelation :
+      pre.Domain (.rel arguments)) : Prop :=
+  UniformIntrinsicItemSeq.denote pre definitionEnv env
+      (fun values =>
+        pre.apply firstRelation values ∧
+          pre.apply secondRelation values)
+      raw.ordinary ∧
+    all raw.first.values
+      (fun values =>
+        pre.apply firstRelation (Vars.denote env values)) ∧
+    all raw.second.values
+      (fun values =>
+        pre.apply secondRelation (Vars.denote env values))
+
+private theorem all_pair
+    (values : List α)
+    (left right : α → Prop) :
+    all values left ∧ all values right ↔
+      all values (fun value => left value ∧ right value) := by
+  constructor
+  · rintro ⟨leftHolds, rightHolds⟩ value member
+    exact ⟨leftHolds value member, rightHolds value member⟩
+  · intro paired
+    exact
+      ⟨fun value member => (paired value member).1,
+        fun value member => (paired value member).2⟩
+
+private theorem ParallelRaw.paired_denotes
+    (raw : ParallelRaw definitions arguments context)
+    (shape : UniformIntrinsicRegion definitions arguments context)
+    (accepted : raw.paired? = some shape)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (firstRelation secondRelation :
+      pre.Domain (.rel arguments)) :
+    raw.denote pre definitionEnv env firstRelation secondRelation ↔
+      shape.denote pre definitionEnv env
+        (fun values =>
+          pre.apply firstRelation values ∧
+            pre.apply secondRelation values) := by
+  unfold ParallelRaw.paired? at accepted
+  split at accepted
+  · rename_i paired
+    have shapeExact := Option.some.inj accepted
+    subst shape
+    unfold ParallelRaw.denote
+    rw [← paired]
+    simp [UniformIntrinsicRegion.denote, all_pair,
+      and_assoc]
+  · contradiction
+
+mutual
+
+private def abstractParallelRaw
+    (firstHead secondHead : Var context (.rel arguments)) :
+    Region definitions context → Option (ParallelRaw definitions arguments context)
+  | .mk items => abstractParallelItemsRaw firstHead secondHead items
+
+private def abstractParallelItemsRaw
+    (firstHead secondHead : Var context (.rel arguments)) :
+    ItemSeq definitions context →
+      Option (ParallelRaw definitions arguments context)
+  | .nil => some ⟨.nil, ⟨[]⟩, ⟨[]⟩⟩
+  | .cons item tail => do
+      let rest ← abstractParallelItemsRaw firstHead secondHead tail
+      match item with
+      | .atom atomHead values =>
+          match matchedHeadArguments? firstHead atomHead values with
+          | some arguments =>
+              pure
+                { rest with
+                  first := ⟨arguments :: rest.first.values⟩ }
+          | none =>
+              match matchedHeadArguments? secondHead atomHead values with
+              | some arguments =>
+                  pure
+                    { rest with
+                      second := ⟨arguments :: rest.second.values⟩ }
+              | none =>
+                  pure
+                    { rest with
+                      ordinary :=
+                        .cons (.leaf (.atom atomHead values)) rest.ordinary }
+      | .named definition values =>
+          pure
+            { rest with
+              ordinary :=
+                .cons (.leaf (.named definition values)) rest.ordinary }
+      | .identity signature ports atLeastTwo =>
+          pure
+            { rest with
+              ordinary :=
+                .cons
+                  (.leaf (.identity signature ports atLeastTwo))
+                  rest.ordinary }
+      | .cut body =>
+          let nested ← abstractParallelRaw firstHead secondHead body
+          let paired ← nested.paired?
+          pure
+            { rest with
+              ordinary := .cons (.cut paired) rest.ordinary }
+      | .bind signature body =>
+          let nested ←
+            abstractParallelRaw (.there firstHead) (.there secondHead) body
+          let paired ← nested.paired?
+          pure
+            { rest with
+              ordinary := .cons (.bind signature paired) rest.ordinary }
+
+end
+
+mutual
+
+private theorem abstractParallelRaw_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (firstHead secondHead : Var context (.rel arguments))
+    (body : Region definitions context)
+    (raw : ParallelRaw definitions arguments context)
+    (accepted :
+      abstractParallelRaw firstHead secondHead body = some raw) :
+    denoteRegion pre definitionEnv env body ↔
+      raw.denote pre definitionEnv env (env _ firstHead)
+        (env _ secondHead) := by
+  cases body with
+  | mk items =>
+      exact
+        abstractParallelItemsRaw_denotes pre definitionEnv env firstHead
+          secondHead items raw accepted
+
+private theorem abstractParallelItemsRaw_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (firstHead secondHead : Var context (.rel arguments))
+    (items : ItemSeq definitions context)
+    (raw : ParallelRaw definitions arguments context)
+    (accepted :
+      abstractParallelItemsRaw firstHead secondHead items = some raw) :
+    denoteItemSeq pre definitionEnv env items ↔
+      raw.denote pre definitionEnv env (env _ firstHead)
+        (env _ secondHead) := by
+  cases items with
+  | nil =>
+      simp [abstractParallelItemsRaw] at accepted
+      cases accepted
+      simp [ParallelRaw.denote, UniformIntrinsicItemSeq.denote, all,
+        denoteItemSeq]
+  | cons item tail =>
+      unfold abstractParallelItemsRaw at accepted
+      cases tailExact :
+          abstractParallelItemsRaw firstHead secondHead tail with
+      | none =>
+          simp [tailExact] at accepted
+      | some rest =>
+          have tailLaw :=
+            abstractParallelItemsRaw_denotes pre definitionEnv env
+              firstHead secondHead tail rest tailExact
+          simp only [tailExact, Option.bind_some] at accepted
+          cases item with
+          | atom atomHead values =>
+              cases firstMatched :
+                  matchedHeadArguments? firstHead atomHead values with
+              | some result =>
+                  simp [firstMatched] at accepted
+                  subst raw
+                  have atomExact :=
+                    matchedHeadArguments_denote pre env firstHead atomHead
+                      values firstMatched
+                  simp [ParallelRaw.denote, UniformIntrinsicItemSeq.denote,
+                    all, denoteItemSeq, denoteItem, tailLaw, atomExact,
+                    and_assoc, and_left_comm, and_comm]
+              | none =>
+                  cases secondMatched :
+                      matchedHeadArguments? secondHead atomHead values with
+                  | some result =>
+                      simp [firstMatched, secondMatched] at accepted
+                      subst raw
+                      have atomExact :=
+                        matchedHeadArguments_denote pre env secondHead
+                          atomHead values secondMatched
+                      simp [ParallelRaw.denote,
+                        UniformIntrinsicItemSeq.denote, all,
+                        denoteItemSeq, denoteItem, tailLaw, atomExact,
+                        and_assoc, and_left_comm, and_comm]
+                  | none =>
+                      simp [firstMatched, secondMatched] at accepted
+                      subst raw
+                      simp [ParallelRaw.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw, and_assoc, and_left_comm,
+                        and_comm]
+          | named definition values =>
+              simp at accepted
+              subst raw
+              simp [ParallelRaw.denote, UniformIntrinsicItemSeq.denote,
+                UniformIntrinsicItem.denote, all, denoteItemSeq, denoteItem,
+                tailLaw, and_assoc, and_left_comm, and_comm]
+          | identity signature ports atLeastTwo =>
+              simp at accepted
+              subst raw
+              simp [ParallelRaw.denote, UniformIntrinsicItemSeq.denote,
+                UniformIntrinsicItem.denote, all, denoteItemSeq, denoteItem,
+                tailLaw, and_assoc, and_left_comm, and_comm]
+          | cut body =>
+              cases nestedExact :
+                  abstractParallelRaw firstHead secondHead body with
+              | none =>
+                  simp [nestedExact] at accepted
+              | some nested =>
+                  cases pairedExact : nested.paired? with
+                  | none =>
+                      simp [nestedExact, pairedExact] at accepted
+                  | some paired =>
+                      simp [nestedExact, pairedExact] at accepted
+                      subst raw
+                      have nestedLaw :=
+                        abstractParallelRaw_denotes pre definitionEnv env
+                          firstHead secondHead body nested nestedExact
+                      have pairedLaw :=
+                        nested.paired_denotes paired pairedExact pre
+                          definitionEnv env (env _ firstHead)
+                          (env _ secondHead)
+                      simp only [denoteItemSeq, denoteItem]
+                      rw [nestedLaw, pairedLaw]
+                      simp [ParallelRaw.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw,
+                        and_assoc, and_left_comm, and_comm]
+          | bind signature body =>
+              cases nestedExact :
+                  abstractParallelRaw (.there firstHead)
+                    (.there secondHead) body with
+              | none =>
+                  simp [nestedExact] at accepted
+              | some nested =>
+                  cases pairedExact : nested.paired? with
+                  | none =>
+                      simp [nestedExact, pairedExact] at accepted
+                  | some paired =>
+                      simp [nestedExact, pairedExact] at accepted
+                      subst raw
+                      have nestedLaw :
+                          ∀ value : pre.Domain signature,
+                            denoteRegion pre definitionEnv
+                                (env.extend value) body ↔
+                              nested.denote pre definitionEnv
+                                (env.extend value) (env _ firstHead)
+                                (env _ secondHead) := by
+                        intro value
+                        simpa using
+                          abstractParallelRaw_denotes pre definitionEnv
+                            (env.extend value) (.there firstHead)
+                            (.there secondHead) body nested nestedExact
+                      have pairedLaw :
+                          ∀ value : pre.Domain signature,
+                            nested.denote pre definitionEnv
+                                (env.extend value) (env _ firstHead)
+                                (env _ secondHead) ↔
+                              paired.denote pre definitionEnv
+                                (env.extend value)
+                                (fun values =>
+                                  pre.apply (env _ firstHead) values ∧
+                                    pre.apply (env _ secondHead) values) := by
+                        intro value
+                        exact
+                          nested.paired_denotes paired pairedExact pre
+                            definitionEnv (env.extend value)
+                            (env _ firstHead) (env _ secondHead)
+                      simp only [denoteItemSeq, denoteItem]
+                      simp only [nestedLaw, pairedLaw]
+                      simp [ParallelRaw.denote,
+                        UniformIntrinsicItemSeq.denote,
+                        UniformIntrinsicItem.denote, all, denoteItemSeq,
+                        denoteItem, tailLaw,
+                        and_assoc, and_left_comm, and_comm]
+
+end
+
+/--
+Abstract co-located applications of two parallel witness wires into one hole.
+Acceptance requires the ordered argument tuples to pair exactly at every
+ambient cut/binder position, not merely globally.
+-/
+def abstractParallel
+    (firstHead secondHead : Var context (.rel arguments))
+    (body : Region definitions context) :
+    Option (UniformIntrinsicRegion definitions arguments context) := do
+  let raw ← abstractParallelRaw firstHead secondHead body
+  raw.paired?
+
+/-- Accepted parallel abstraction denotes pointwise conjunction at every hole. -/
+theorem abstractParallel_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (firstHead secondHead : Var context (.rel arguments))
+    (body : Region definitions context)
+    (shape : UniformIntrinsicRegion definitions arguments context)
+    (accepted : abstractParallel firstHead secondHead body = some shape) :
+    denoteRegion pre definitionEnv env body ↔
+      shape.denote pre definitionEnv env
+        (fun values =>
+          pre.apply (env _ firstHead) values ∧
+            pre.apply (env _ secondHead) values) := by
+  unfold abstractParallel at accepted
+  cases rawExact :
+      abstractParallelRaw firstHead secondHead body with
+  | none =>
+      simp [rawExact] at accepted
+  | some raw =>
+      simp only [rawExact, Option.bind_some] at accepted
+      exact
+        (abstractParallelRaw_denotes pre definitionEnv env firstHead
+          secondHead body raw rawExact).trans
+          (raw.paired_denotes shape accepted pre definitionEnv env
+            (env _ firstHead) (env _ secondHead))
+
+/-- Check one simultaneous cut-cell shape after both bodies share a context. -/
+def checkCutShape
+    (sourceHead targetHead : Var context (.rel arguments))
+    (sourceBody targetBody : Region definitions context) : Bool :=
+  decide
+    (abstractApplied sourceHead sourceBody =
+      abstractCutWrapped targetHead targetBody)
+
+/-- Check one simultaneous parallel-cell shape in a shared intrinsic context. -/
+def checkParallelShape
+    (sourceHead firstHead secondHead :
+      Var context (.rel arguments))
+    (sourceBody targetBody : Region definitions context) : Bool :=
+  match abstractParallel firstHead secondHead targetBody with
+  | none => false
+  | some targetShape =>
+      decide (abstractApplied sourceHead sourceBody = targetShape)
+
+/--
+A successful cut-shape check turns pointwise cell equivalence into complete
+acted-scope body equivalence, through every retained cut and binder.
+-/
+theorem checkCutShape_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (sourceHead targetHead : Var context (.rel arguments))
+    (sourceBody targetBody : Region definitions context)
+    (accepted :
+      checkCutShape sourceHead targetHead sourceBody targetBody = true)
+    (pointwise :
+      ∀ values,
+        pre.apply (env _ sourceHead) values ↔
+          ¬pre.apply (env _ targetHead) values) :
+    denoteRegion pre definitionEnv env sourceBody ↔
+      denoteRegion pre definitionEnv env targetBody := by
+  have same :
+      abstractApplied sourceHead sourceBody =
+        abstractCutWrapped targetHead targetBody := by
+    exact of_decide_eq_true (by
+      simpa [checkCutShape] using accepted)
+  let sourceShape := abstractApplied sourceHead sourceBody
+  have sourceLaw :=
+    abstractApplied_denotes pre definitionEnv env sourceHead sourceBody
+  have targetLaw :=
+    abstractCutWrapped_denotes pre definitionEnv env targetHead targetBody
+  have shapeLaw :
+      sourceShape.denote pre definitionEnv env
+          (fun values => pre.apply (env _ sourceHead) values) ↔
+        sourceShape.denote pre definitionEnv env
+          (fun values => ¬pre.apply (env _ targetHead) values) :=
+    sourceShape.denote_site_congr pre definitionEnv env _ _ pointwise
+  have targetAtSource :
+      sourceShape.denote pre definitionEnv env
+          (fun values => ¬pre.apply (env _ targetHead) values) ↔
+        denoteRegion pre definitionEnv env targetBody := by
+    simpa [sourceShape, same] using targetLaw.symm
+  exact sourceLaw.trans (shapeLaw.trans targetAtSource)
+
+/--
+A successful split-shape check turns pointwise source/pair equivalence into
+complete acted-scope body equivalence.
+-/
+theorem checkParallelShape_denotes
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre context)
+    (sourceHead firstHead secondHead :
+      Var context (.rel arguments))
+    (sourceBody targetBody : Region definitions context)
+    (accepted :
+      checkParallelShape sourceHead firstHead secondHead sourceBody
+        targetBody = true)
+    (pointwise :
+      ∀ values,
+        pre.apply (env _ sourceHead) values ↔
+          (pre.apply (env _ firstHead) values ∧
+            pre.apply (env _ secondHead) values)) :
+    denoteRegion pre definitionEnv env sourceBody ↔
+      denoteRegion pre definitionEnv env targetBody := by
+  unfold checkParallelShape at accepted
+  cases targetExact :
+      abstractParallel firstHead secondHead targetBody with
+  | none =>
+      simp [targetExact] at accepted
+  | some targetShape =>
+      have same :
+          abstractApplied sourceHead sourceBody = targetShape := by
+        exact of_decide_eq_true (by
+          simpa [targetExact] using accepted)
+      let sourceShape := abstractApplied sourceHead sourceBody
+      have sourceLaw :=
+        abstractApplied_denotes pre definitionEnv env sourceHead sourceBody
+      have targetLaw :=
+        abstractParallel_denotes pre definitionEnv env firstHead secondHead
+          targetBody targetShape targetExact
+      have shapeLaw :
+          sourceShape.denote pre definitionEnv env
+              (fun values => pre.apply (env _ sourceHead) values) ↔
+            sourceShape.denote pre definitionEnv env
+              (fun values =>
+                pre.apply (env _ firstHead) values ∧
+                  pre.apply (env _ secondHead) values) :=
+        sourceShape.denote_site_congr pre definitionEnv env _ _ pointwise
+      have targetAtSource :
+          sourceShape.denote pre definitionEnv env
+              (fun values =>
+                pre.apply (env _ firstHead) values ∧
+                  pre.apply (env _ secondHead) values) ↔
+            denoteRegion pre definitionEnv env targetBody := by
+        simpa [sourceShape, same] using targetLaw.symm
+      exact sourceLaw.trans (shapeLaw.trans targetAtSource)
+
+end UniformIntrinsicRegion
+
 namespace ConcreteFactorization
 
 open ConcreteWireQuantifier
