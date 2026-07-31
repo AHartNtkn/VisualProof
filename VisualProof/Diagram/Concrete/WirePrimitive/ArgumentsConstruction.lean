@@ -1037,7 +1037,7 @@ theorem retainedRegion_eq_noRegionRemovalEquiv
   apply Fin.ext
   rfl
 
-private theorem sourceRetainedNode_not_removed
+theorem sourceRetainedNode_not_removed
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (sites : AllAppliedSites source wire)

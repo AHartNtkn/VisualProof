@@ -357,6 +357,116 @@ theorem ArgumentResult.nodesAt_decomposition
       · exact map_map_apply _ _ _
       · exact map_map_apply _ _ _
 
+/-- The source node selected by a dense replacement-base index maps back to
+that exact retained candidate position in the checked target. -/
+theorem ArgumentResult.retainedNodeImage_sourceRetainedNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (retained : (replacementBase result.plan).NodeId) :
+    result.retainedNodeImage
+        (Internal.sourceRetainedNode source
+          (argumentSiteNodes result.sites) retained)
+        (sourceRetainedNode_not_removed result.sites retained) =
+      Internal.checkedNode result.generated
+        (Fin.castAdd result.sites.sites.length retained) := by
+  unfold ArgumentResult.retainedNodeImage
+  apply congrArg (Internal.checkedNode result.generated)
+  apply Fin.ext
+  simp only [Fin.val_castAdd]
+  exact congrArg Fin.val
+    (Internal.retainedNodeIndex_sourceRetainedNode source
+      (argumentSiteNodes result.sites) retained)
+
+/-- Exact ordered node-payload decomposition at every source region.  Retained
+payloads are renamed only by the canonical region equivalence; generated
+payloads are precisely the replacement atoms selected by the operation. -/
+theorem ArgumentResult.localNodeData_decomposition
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    (result.checked.val.nodesAt (result.regionImage region)).map
+        result.checked.val.nodes =
+      ((source.val.nodesAt region).filter
+          (fun sourceNode =>
+            decide (sourceNode ∉ argumentSiteNodes result.sites))).map
+          (fun sourceNode =>
+            (source.val.nodes sourceNode).rename result.regionEquiv) ++
+        ((Data.Finite.allFin result.sites.sites.length).filter fun site =>
+          retainedRegion source (result.sites.sites.get site).region ==
+            retainedRegion source region).map (fun site =>
+              .atom
+                (result.regionImage
+                  (result.sites.sites.get site).region)
+                result.targetArguments) := by
+  rw [result.nodesAt_decomposition, List.map_append]
+  have retainedExact :
+      (((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+            Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained))).map
+          result.checked.val.nodes =
+        ((source.val.nodesAt region).filter
+          (fun sourceNode =>
+            decide
+              (sourceNode ∉ argumentSiteNodes result.sites))).map
+          (fun sourceNode =>
+            (source.val.nodes sourceNode).rename result.regionEquiv) := by
+    calc
+      _ = ((replacementBase result.plan).nodesAt
+            (retainedRegion source region)).map (fun retained =>
+              (source.val.nodes
+                (Internal.sourceRetainedNode source
+                  (argumentSiteNodes result.sites) retained)).rename
+                    result.regionEquiv) := by
+            rw [map_map_apply]
+            apply List.map_congr_left
+            intro retained _member
+            rw [← result.retainedNodeImage_sourceRetainedNode retained]
+            exact result.retainedNodeImage_data _ _
+      _ = _ := by
+            have baseSources :=
+              batchRemovalCandidate_nodesAt_sources
+                result.plan.removal region
+            rw [← retainedRegion_eq_noRegionRemovalEquiv] at baseSources
+            change
+              ((replacementBase result.plan).nodesAt
+                  (retainedRegion source region)).map
+                    (Internal.sourceRetainedNode source
+                      (argumentSiteNodes result.sites)) =
+                (source.val.nodesAt region).filter
+                  (fun sourceNode =>
+                    decide
+                      (sourceNode ∉ argumentSiteNodes result.sites))
+              at baseSources
+            calc
+              _ = ((((replacementBase result.plan).nodesAt
+                    (retainedRegion source region)).map
+                      (Internal.sourceRetainedNode source
+                        (argumentSiteNodes result.sites))).map
+                    (fun sourceNode =>
+                      (source.val.nodes sourceNode).rename
+                        result.regionEquiv)) := by
+                  exact (map_map_apply
+                    ((replacementBase result.plan).nodesAt
+                      (retainedRegion source region))
+                    (Internal.sourceRetainedNode source
+                      (argumentSiteNodes result.sites))
+                    (fun sourceNode =>
+                      (source.val.nodes sourceNode).rename
+                        result.regionEquiv)).symm
+              _ = _ := congrArg
+                (List.map fun sourceNode =>
+                  (source.val.nodes sourceNode).rename result.regionEquiv)
+                baseSources
+  rw [retainedExact]
+  congr 1
+  rw [map_map_apply]
+  apply List.map_congr_left
+  intro site _member
+  exact result.targetNode_data site
+
 /-- Exact ordered signature decomposition at every source region.  This is
 the typed context counterpart of `wiresAt_decomposition`: retained source
 signatures keep their order, followed by the replacement head when it is
