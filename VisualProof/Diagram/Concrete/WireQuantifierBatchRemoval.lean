@@ -1826,6 +1826,37 @@ def checkedRegion
   Fin.cast
     (congrArg ConcreteDiagram.regionCount generated).symm region
 
+/-- Equality transport from a checker input to its checked region carrier,
+packaged as the canonical finite equivalence. -/
+def checkedRegionEquiv
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate) :
+    Data.Finite.FiniteEquiv candidate.RegionId checked.val.RegionId where
+  toFun := checkedRegion generated
+  invFun := Fin.cast (congrArg ConcreteDiagram.regionCount generated)
+  left_inv := by
+    intro region
+    apply Fin.ext
+    rfl
+  right_inv := by
+    intro region
+    apply Fin.ext
+    rfl
+
+/-- Checking transports each region constructor and cut parent exactly along
+the canonical carrier equivalence. -/
+theorem checkedRegion_data_equiv
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (region : candidate.RegionId) :
+    checked.val.regions (checkedRegionEquiv generated region) =
+      (candidate.regions region).rename (checkedRegionEquiv generated) := by
+  cases generated
+  cases data : checked.val.regions region <;>
+    simp [checkedRegionEquiv, checkedRegion, CRegion.rename, data]
+
 end Internal
 
 theorem checkedRegion_injective

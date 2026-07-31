@@ -2341,6 +2341,143 @@ def regionImage
     result.checked.val.RegionId :=
   Internal.checkedRegion result.generated (retainedRegion source region)
 
+/-- Argument replacement removes no region: its checked target has exactly
+the source region carrier cardinality. -/
+theorem regionCount_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    source.val.regionCount = result.checked.val.regionCount := by
+  have generated := congrArg ConcreteDiagram.regionCount result.generated
+  rw [generated]
+  change source.val.regionCount = (replacementBase result.plan).regionCount
+  unfold replacementBase Internal.batchRemovalCandidate
+  change source.val.regionCount = (Internal.retainedRegions source []).length
+  simpa [ConcreteDiagram.regionsList, Data.Finite.allFin_eq_finRange] using
+    congrArg List.length (Internal.retainedRegions_nil source)
+
+/-- Canonical source-to-target region equivalence for every checked argument
+replacement. -/
+def regionEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    Data.Finite.FiniteEquiv source.val.RegionId result.checked.val.RegionId :=
+  finEquivOfEq result.regionCount_exact
+
+/-- The construction-level `regionImage` is exactly the canonical region
+equivalence, not a second region transport. -/
+theorem regionImage_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    result.regionImage region = result.regionEquiv region := by
+  apply Fin.ext
+  unfold regionImage regionEquiv finEquivOfEq
+  unfold Internal.checkedRegion
+  change (retainedRegion source region).val = region.val
+  unfold retainedRegion Internal.retainedRegionIndex
+  have retainedExact := Internal.retainedRegions_nil source
+  let sourcePosition : Fin source.val.regionsList.length :=
+    Fin.cast (by
+      simp [ConcreteDiagram.regionsList,
+        Data.Finite.allFin_eq_finRange]) region
+  let position : Fin (Internal.retainedRegions source []).length :=
+    Fin.cast (congrArg List.length retainedExact).symm sourcePosition
+  have getExact :
+      (Internal.retainedRegions source []).get position = region := by
+    rw [get_of_list_eq retainedExact sourcePosition]
+    exact allFin_get region
+  have indexExact : retainedRegion source region = position := by
+    unfold retainedRegion Internal.retainedRegionIndex
+    rw [← getExact]
+    exact DenseList.index_get _
+      (by rw [retainedExact]; exact Data.Finite.allFin_nodup _)
+      position
+  exact congrArg Fin.val indexExact
+
+/-- The canonical region equivalence preserves and reflects the complete
+checked enclosure order. -/
+theorem regionImage_encloses
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (outer inner : source.val.RegionId) :
+    result.checked.val.Encloses
+        (result.regionImage outer) (result.regionImage inner) ↔
+      source.val.Encloses outer inner := by
+  unfold regionImage
+  rw [Internal.checkedRegion_encloses]
+  unfold replacementCandidate
+  rw [assigned_encloses]
+  exact replacementSkeleton_encloses result.plan outer inner
+
+/-- The target root is the canonical image of the source root. -/
+theorem targetRoot_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    result.checked.val.root = result.regionImage source.val.root := by
+  unfold regionImage
+  calc
+    result.checked.val.root =
+        Internal.checkedRegion result.generated
+          (replacementCandidate result.plan).root :=
+      Internal.checkedRoot_transport result.generated
+    _ = Internal.checkedRegion result.generated
+          (retainedRegion source source.val.root) := by
+      congr 1
+
+/-- Region constructors and cut parents are transported exactly by the
+canonical region equivalence. -/
+theorem regionImage_data
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.regions (result.regionEquiv region) =
+      (source.val.regions region).rename result.regionEquiv := by
+  have skeletonData :
+      (replacementSkeleton result.plan).regions
+          (retainedRegion source region) =
+        (source.val.regions region).rename
+          (Internal.noRegionRemovalEquiv source) := by
+    change
+      (replacementBase result.plan).regions
+          (retainedRegion source region) =
+        (source.val.regions region).rename
+          (Internal.noRegionRemovalEquiv source)
+    unfold replacementBase
+    rw [retainedRegion_eq_noRegionRemovalEquiv,
+      show
+        (Internal.batchRemovalCandidate result.plan.removal).regions
+            (Internal.noRegionRemovalEquiv source region) =
+          Internal.batchRegionTable result.plan.removal
+            (Internal.noRegionRemovalEquiv source region) from rfl,
+      Internal.batchRegionTable_noRegions]
+  have candidateData :
+      (replacementCandidate result.plan).regions
+          (retainedRegion source region) =
+        (source.val.regions region).rename
+          (Internal.noRegionRemovalEquiv source) := by
+    exact skeletonData
+  rw [← result.regionImage_exact]
+  unfold regionImage
+  change
+    result.checked.val.regions
+        (Internal.checkedRegionEquiv result.generated
+          (retainedRegion source region)) =
+      (source.val.regions region).rename result.regionEquiv
+  rw [Internal.checkedRegion_data_equiv, candidateData]
+  cases data : source.val.regions region with
+  | sheet => rfl
+  | cut parent =>
+      simp only [CRegion.rename]
+      congr 1
+      rw [← retainedRegion_eq_noRegionRemovalEquiv]
+      exact result.regionImage_exact parent
+
 /-- Canonical checked node generated for one ordered source application. -/
 def targetNode
     {source : CheckedDiagram definitions}
