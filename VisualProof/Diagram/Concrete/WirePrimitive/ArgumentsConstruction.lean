@@ -873,7 +873,7 @@ def replacementSkeleton
             added)
   }
 
-@[simp] private theorem replacementSkeleton_replacementNode
+@[simp] theorem replacementSkeleton_replacementNode
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {sites : AllAppliedSites source wire}
@@ -1151,7 +1151,7 @@ theorem replacementSkeleton_local_wire_scope
         retainedRegion source (spec.localScope fresh) := by
   simp [replacementSkeleton, replacementLocalWire]
 
-private theorem replacementSkeleton_retained_node_region
+theorem replacementSkeleton_retained_node_region
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {sites : AllAppliedSites source wire}

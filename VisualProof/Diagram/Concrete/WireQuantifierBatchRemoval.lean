@@ -1958,6 +1958,33 @@ theorem checkedWiresAt_transport
       apply Fin.ext
       rfl
 
+/-- Ordered local-node enumeration is preserved when a well-formed checker
+reindexes its accepted candidate. -/
+theorem checkedNodesAt_transport
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (region : candidate.RegionId) :
+    checked.val.nodesAt (checkedRegion generated region) =
+      (candidate.nodesAt region).map (checkedNode generated) := by
+  cases generated
+  unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+  have regionExact : checkedRegion rfl region = region := by
+    apply Fin.ext
+    rfl
+  rw [regionExact]
+  let nodes :=
+    (Data.Finite.allFin checked.val.nodeCount).filter fun node =>
+      (checked.val.nodes node).region == region
+  change nodes = nodes.map (checkedNode rfl)
+  calc
+    nodes = nodes.map id := (List.map_id nodes).symm
+    _ = nodes.map (checkedNode rfl) := by
+      apply List.map_congr_left
+      intro node _member
+      apply Fin.ext
+      rfl
+
 theorem checkedWire_endpoints_transport
     {checked : CheckedDiagram definitions}
     {candidate : ConcreteDiagram definitions.length}

@@ -39,6 +39,14 @@ private theorem map_get_allFin (values : List α) :
   simpa only [Function.comp_apply, List.get_eq_getElem] using
     (List.ofFn_getElem (xs := values))
 
+private theorem map_map_apply
+    (values : List α) (first : α → β) (second : β → γ) :
+    (values.map first).map second =
+      values.map (fun value => second (first value)) := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction => simp [induction]
+
 /-- Batch removal preserves the exact order of every retained local wire.
 The left side uses the dense target identifiers, while the right side is the
 source local context with precisely the removed identifiers filtered out. -/
@@ -93,6 +101,58 @@ theorem batchRemovalCandidate_wiresAt_sources
       ((source.val.wires candidate).scope == region)
       (decide (candidate ∉ removedWires)))
 
+/-- Batch removal preserves the exact order of every retained local node. -/
+theorem batchRemovalCandidate_nodesAt_sources
+    {source : CheckedDiagram definitions}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan : Internal.BatchRemovalPlan source [] removedNodes removedWires)
+    (region : source.val.RegionId) :
+    ((Internal.batchRemovalCandidate plan).nodesAt
+        (Internal.noRegionRemovalEquiv source region)).map
+          (Internal.sourceRetainedNode source removedNodes) =
+      (source.val.nodesAt region).filter
+        (fun node => decide (node ∉ removedNodes)) := by
+  unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+  have targetFilter :
+      (Data.Finite.allFin
+        (Internal.batchRemovalCandidate plan).nodeCount).filter
+          (fun node =>
+            ((Internal.batchRemovalCandidate plan).nodes node).region ==
+              Internal.noRegionRemovalEquiv source region) =
+        (Data.Finite.allFin
+          (Internal.batchRemovalCandidate plan).nodeCount).filter
+          ((fun candidate =>
+            (source.val.nodes candidate).region == region) ∘
+              Internal.sourceRetainedNode source removedNodes) := by
+    apply List.filter_congr
+    intro retained _member
+    apply decide_eq_decide.mpr
+    constructor
+    · intro same
+      apply (Internal.noRegionRemovalEquiv source).injective
+      rw [← same]
+      exact (Internal.batchRemovalCandidate_node_region_noRegions
+        plan retained).symm
+    · intro same
+      rw [Internal.batchRemovalCandidate_node_region_noRegions, same]
+  rw [targetFilter, ← List.filter_map]
+  have allSources :
+      (Data.Finite.allFin
+          (Internal.batchRemovalCandidate plan).nodeCount).map
+          (Internal.sourceRetainedNode source removedNodes) =
+        Internal.retainedNodes source removedNodes := by
+    simpa [Internal.batchRemovalCandidate] using
+      map_get_allFin (Internal.retainedNodes source removedNodes)
+  rw [allSources]
+  simp only [Internal.retainedNodes, List.filter_filter]
+  apply List.filter_congr
+  intro candidate _member
+  simpa using
+    (Bool.and_comm
+      ((source.val.nodes candidate).region == region)
+      (decide (candidate ∉ removedNodes)))
+
 /-- Argument replacement appends exactly one head and the operation-local
 wires after the retained common-core wire block. -/
 theorem replacementCandidate_wireCount
@@ -103,6 +163,73 @@ theorem replacementCandidate_wireCount
     (plan : ReplacementPlan source wire sites spec) :
     (replacementCandidate plan).wireCount =
       (replacementBase plan).wireCount + (1 + spec.localCount) := rfl
+
+/-- Argument replacement retains source nodes in dense order and appends one
+replacement node per ordered applied site. -/
+theorem replacementCandidate_nodesAt
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    {spec : ReplacementSpec source wire sites}
+    (plan : ReplacementPlan source wire sites spec)
+    (region : source.val.RegionId) :
+    (replacementCandidate plan).nodesAt (retainedRegion source region) =
+      ((replacementBase plan).nodesAt (retainedRegion source region)).map
+          (Fin.castAdd sites.sites.length) ++
+        ((Data.Finite.allFin sites.sites.length).filter fun site =>
+          retainedRegion source (sites.sites.get site).region ==
+            retainedRegion source region).map
+          (replacementNode plan) := by
+  unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+  change
+    (Data.Finite.allFin
+        ((replacementBase plan).nodeCount + sites.sites.length)).filter
+        (fun candidate =>
+          ((replacementCandidate plan).nodes candidate).region ==
+            retainedRegion source region) = _
+  rw [allFin_add]
+  refine (List.filter_append
+    ((Data.Finite.allFin (replacementBase plan).nodeCount).map
+      (Fin.castAdd sites.sites.length))
+    ((Data.Finite.allFin sites.sites.length).map
+      (Fin.natAdd (replacementBase plan).nodeCount))).trans ?_
+  rw [List.filter_map, List.filter_map]
+  congr 1
+  · apply congrArg (List.map (Fin.castAdd sites.sites.length))
+    apply List.filter_congr
+    intro retained _member
+    simp only [Function.comp_apply]
+    unfold replacementCandidate
+    rw [assigned_node]
+    have skeletonRegion :=
+      replacementSkeleton_retained_node_region
+        (sites := sites) (spec := spec) plan retained
+    have baseRegion :
+        ((replacementBase plan).nodes retained).region =
+          retainedRegion source
+            (source.val.nodes
+              (Internal.sourceRetainedNode source
+                (argumentSiteNodes sites) retained)).region := by
+      unfold replacementBase
+      rw [Internal.batchRemovalCandidate_node_region_noRegions,
+        retainedRegion_eq_noRegionRemovalEquiv]
+    exact congrArg
+      (fun candidate => candidate == retainedRegion source region)
+      (skeletonRegion.trans baseRegion.symm)
+  · apply congrArg (List.map (Fin.natAdd
+      (replacementBase plan).nodeCount))
+    apply List.filter_congr
+    intro site _member
+    simp only [Function.comp_apply]
+    unfold replacementCandidate
+    rw [assigned_node]
+    change
+      (((replacementSkeleton plan).nodes
+          (replacementNode plan site)).region ==
+        retainedRegion source region) = _
+    rw [replacementSkeleton_replacementNode
+      (sites := sites) (spec := spec) plan site]
+    rfl
 
 /-- Exact ordered local-wire decomposition of a replacement candidate.  The
 Boolean filters deliberately mirror `ConcreteDiagram.wiresAt`; later laws
@@ -194,6 +321,41 @@ theorem ArgumentResult.wiresAt_decomposition
   apply List.map_congr_left
   intro head _member
   exact result.targetWire_exact.symm
+
+/-- Checked argument results retain the candidate's exact ordered local-node
+decomposition: retained source nodes first, then one replacement per applied
+site in site order. -/
+theorem ArgumentResult.nodesAt_decomposition
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.nodesAt (result.regionImage region) =
+      ((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+            Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained)) ++
+        ((Data.Finite.allFin result.sites.sites.length).filter fun site =>
+          retainedRegion source (result.sites.sites.get site).region ==
+            retainedRegion source region).map result.targetNode := by
+  unfold ArgumentResult.regionImage
+  rw [Internal.checkedNodesAt_transport,
+    replacementCandidate_nodesAt]
+  calc
+    _ =
+        (((replacementBase result.plan).nodesAt
+            (retainedRegion source region)).map
+              (Fin.castAdd result.sites.sites.length)).map
+            (Internal.checkedNode result.generated) ++
+          (((Data.Finite.allFin result.sites.sites.length).filter fun site =>
+            retainedRegion source (result.sites.sites.get site).region ==
+              retainedRegion source region).map
+            (replacementNode result.plan)).map
+              (Internal.checkedNode result.generated) := List.map_append
+    _ = _ := by
+      congr 1
+      · exact map_map_apply _ _ _
+      · exact map_map_apply _ _ _
 
 /-- Exact ordered signature decomposition at every source region.  This is
 the typed context counterpart of `wiresAt_decomposition`: retained source
