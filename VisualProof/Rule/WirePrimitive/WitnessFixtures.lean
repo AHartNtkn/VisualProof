@@ -55,34 +55,22 @@ example :
     checkAppliedSite nullarySites (idx 0) ⟨idx 0, .arg 0⟩ = none := by
   native_decide
 
-/-! Abstract uniform rewrites used to pin the witness theorem itself. -/
+/-! Pure logical rewrites pin the one-shared-witness body theorem. -/
 
-private def abstractRewrite
+private def logicalRewrite
     {SourceWitness TargetWitness : Type}
     (siteCount : Nat)
     (siteContext : UniformSiteContext siteCount)
-    (scopeContext : UniformScopeContext)
     (sourceAt : SourceWitness → Fin siteCount → Prop)
     (targetAt : TargetWitness → Fin siteCount → Prop) :
-    UniformSiteRewrite
-      (Fin siteCount) (Fin siteCount)
-      SourceWitness TargetWitness PUnit :=
-  UniformSiteRewrite.abstractLogical
-    (.rel []) 0 siteCount
-    (List.finRange siteCount) (List.finRange siteCount)
-    id id (by simp) (by simp)
-    siteContext scopeContext sourceAt targetAt
+    LogicalUniformRewrite siteCount SourceWitness TargetWitness :=
+  LogicalUniformRewrite.ofContext siteContext sourceAt targetAt
 
 private def sameNullaryAt (value : Bool) (_ : Fin 1) : Prop :=
   value = true
 
 private def positiveNullary :=
-  abstractRewrite 1 UniformSiteContext.all UniformScopeContext.hole
-    sameNullaryAt sameNullaryAt
-
-private def negativeNullary :=
-  abstractRewrite 1 UniformSiteContext.all
-    (UniformScopeContext.cut UniformScopeContext.hole)
+  logicalRewrite 1 UniformSiteContext.all
     sameNullaryAt sameNullaryAt
 
 private def sameEliminating :
@@ -99,21 +87,14 @@ private def sameIntroducing :
     intro _ _
     exact Iff.rfl
 
-private def negativeEliminating :
-    HasEliminatingWitness negativeNullary where
-  witness := id
-  pointwise := by
-    intro _ _
-    exact Iff.rfl
-
-/-! A nullary site is sound at both positive and negative binder contexts. -/
+/-! The shared logical witness closes both body directions. -/
 example :
-    positiveNullary.sourceResult → positiveNullary.targetResult :=
-  uniform_sever_sound positiveNullary sameIntroducing (by decide)
+    positiveNullary.sourceInner → positiveNullary.targetInner :=
+  sameIntroducing.body
 
 example :
-    negativeNullary.sourceResult → negativeNullary.targetResult :=
-  uniform_join_sound negativeNullary negativeEliminating (by decide)
+    positiveNullary.targetInner → positiveNullary.sourceInner :=
+  sameEliminating.body
 
 /-!
 Site zero is positive and site one lies under a local cut.  Their shared
@@ -126,7 +107,7 @@ private def mixedSiteContext : UniformSiteContext 2 :=
     (UniformSiteContext.cut (UniformSiteContext.hole (idx 1)))
 
 private def mixedParity :=
-  abstractRewrite 2 mixedSiteContext UniformScopeContext.hole
+  logicalRewrite 2 mixedSiteContext
     (fun value _ => value = true)
     (fun value _ => value = true)
 
@@ -145,9 +126,67 @@ private def mixedIntroducing :
     exact Iff.rfl
 
 example :
-    mixedParity.sourceResult ↔ mixedParity.targetResult :=
-  uniform_equivalence_sound mixedParity
+    mixedParity.sourceInner ↔ mixedParity.targetInner :=
+  uniform_body_equivalence mixedParity
     mixedEliminating mixedIntroducing
+
+/-!
+Concrete soundness transports environment-indexed bodies. This fixture keeps
+an ambient individual binder explicit instead of collapsing its hole to one
+closed proposition.
+-/
+private def noDefinitions (pre : PreModel) : DefinitionEnv pre [] :=
+  fun definition => nomatch definition
+
+private def ambientContext : DiagramContext [] [.iota] [] :=
+  .bind .iota (.hole : DiagramContext [] [.iota] [.iota])
+
+private noncomputable def ambientZipper :
+    DiagramContext.SemanticZipper ambientContext ambientContext
+      (fun (_pre : PreModel) env => env)
+      (fun (_pre : PreModel) env => env) :=
+  (DiagramContext.ComposableSemanticZipper.identity ambientContext)
+    |>.toSemanticZipper
+
+example (pre : PreModel) :
+    denoteRegion pre (noDefinitions pre) Env.empty
+        (ambientContext.fill (blank : Region [] [.iota])) →
+      denoteRegion pre (noDefinitions pre) Env.empty
+        (ambientContext.fill (blank : Region [] [.iota])) :=
+  uniform_sever_sound ambientZipper pre (noDefinitions pre)
+    blank blank Env.empty (by
+      intro _descendant _preserves
+      exact id) (by decide)
+
+private def negativeContext : DiagramContext [] [] [] :=
+  .cut (.hole : DiagramContext [] [] [])
+
+private noncomputable def negativeZipper :
+    DiagramContext.SemanticZipper negativeContext negativeContext
+      (fun (_pre : PreModel) env => env)
+      (fun (_pre : PreModel) env => env) :=
+  (DiagramContext.ComposableSemanticZipper.identity negativeContext)
+    |>.toSemanticZipper
+
+example (pre : PreModel) :
+    denoteRegion pre (noDefinitions pre) Env.empty
+        (negativeContext.fill (blank : Region [] [])) →
+      denoteRegion pre (noDefinitions pre) Env.empty
+        (negativeContext.fill (blank : Region [] [])) :=
+  uniform_join_sound negativeZipper pre (noDefinitions pre)
+    blank blank Env.empty (by
+      intro _descendant _preserves
+      exact id) (by decide)
+
+example (pre : PreModel) :
+    denoteRegion pre (noDefinitions pre) Env.empty
+        (ambientContext.fill (blank : Region [] [.iota])) ↔
+      denoteRegion pre (noDefinitions pre) Env.empty
+        (ambientContext.fill (blank : Region [] [.iota])) :=
+  uniform_equivalence_sound ambientZipper pre (noDefinitions pre)
+    blank blank Env.empty (by
+      intro _descendant _preserves
+      exact Iff.rfl)
 
 /-! Two sites consume one shared eliminating witness. -/
 private def sharedSourceAt (value : Bool) (_ : Fin 2) : Prop :=
@@ -157,8 +196,7 @@ private def sharedTargetAt (_ : PUnit) (_ : Fin 2) : Prop :=
   True
 
 private def sharedTwoSite :=
-  abstractRewrite 2 UniformSiteContext.all
-    (UniformScopeContext.cut UniformScopeContext.hole)
+  logicalRewrite 2 UniformSiteContext.all
     sharedSourceAt sharedTargetAt
 
 private def sharedTwoSiteWitness :
@@ -169,8 +207,8 @@ private def sharedTwoSiteWitness :
     exact ⟨fun _ => trivial, fun _ => rfl⟩
 
 example :
-    sharedTwoSite.sourceResult → sharedTwoSite.targetResult :=
-  uniform_join_sound sharedTwoSite sharedTwoSiteWitness (by decide)
+    sharedTwoSite.targetInner → sharedTwoSite.sourceInner :=
+  sharedTwoSiteWitness.body
 
 /-!
 Separate choices can satisfy the two positions (`true` at zero, `false` at
@@ -184,7 +222,7 @@ private def incompatibleTargetAt (_ : PUnit) (_ : Fin 2) : Prop :=
   True
 
 private def incompatibleTwoSite :=
-  abstractRewrite 2 UniformSiteContext.all UniformScopeContext.hole
+  logicalRewrite 2 UniformSiteContext.all
     incompatibleSourceAt incompatibleTargetAt
 
 private def separateWitness (site : Fin 2) : Bool :=
@@ -203,12 +241,12 @@ theorem separate_per_site_witnesses_rejected :
   have atZero :
       uniform.witness PUnit.unit = true := by
     have h := (uniform.pointwise PUnit.unit (idx 0)).mpr trivial
-    simpa [incompatibleTwoSite, abstractRewrite, incompatibleSourceAt,
+    simpa [incompatibleTwoSite, logicalRewrite, incompatibleSourceAt,
       incompatibleTargetAt] using h
   have atOne :
       uniform.witness PUnit.unit = false := by
     have h := (uniform.pointwise PUnit.unit (idx 1)).mpr trivial
-    simpa [incompatibleTwoSite, abstractRewrite, incompatibleSourceAt,
+    simpa [incompatibleTwoSite, logicalRewrite, incompatibleSourceAt,
       incompatibleTargetAt] using h
   rw [atZero] at atOne
   contradiction

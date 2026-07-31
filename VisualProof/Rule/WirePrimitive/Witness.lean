@@ -1,10 +1,11 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.UniformSiteFactorization
+import VisualProof.Diagram.ContextZipper
 
 namespace VisualProof
 
 namespace WirePrimitive
 
-universe u v w
+universe u w
 
 /--
 One eliminating witness is shared by all target sites. A list of unrelated
@@ -12,8 +13,7 @@ per-site witnesses cannot inhabit this type.
 -/
 structure HasEliminatingWitness
     (rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result) where
+      LogicalUniformRewrite siteCount SourceWitness TargetWitness) where
   witness : TargetWitness → SourceWitness
   pointwise :
     ∀ target site,
@@ -23,8 +23,7 @@ structure HasEliminatingWitness
 /-- One introducing witness is shared by all source sites. -/
 structure HasIntroducingWitness
     (rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result) where
+      LogicalUniformRewrite siteCount SourceWitness TargetWitness) where
   witness : SourceWitness → TargetWitness
   pointwise :
     ∀ source site,
@@ -33,10 +32,10 @@ structure HasIntroducingWitness
 
 namespace HasEliminatingWitness
 
-private theorem inner
+/-- A shared eliminating witness closes the target body into the source body. -/
+theorem body
     {rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result}
+      LogicalUniformRewrite siteCount SourceWitness TargetWitness}
     (has : HasEliminatingWitness rewrite) :
     rewrite.targetInner → rewrite.sourceInner := by
   rintro ⟨target, targetHolds⟩
@@ -49,10 +48,10 @@ end HasEliminatingWitness
 
 namespace HasIntroducingWitness
 
-private theorem inner
+/-- A shared introducing witness closes the source body into the target body. -/
+theorem body
     {rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result}
+      LogicalUniformRewrite siteCount SourceWitness TargetWitness}
     (has : HasIntroducingWitness rewrite) :
     rewrite.sourceInner → rewrite.targetInner := by
   rintro ⟨source, sourceHolds⟩
@@ -63,60 +62,114 @@ private theorem inner
 
 end HasIntroducingWitness
 
-/--
-An eliminating witness is join-family sound exactly at a negative binder
-scope. Local site cut parities do not occur in this statement.
--/
-theorem uniform_join_sound
+/-- Two shared witnesses give an ungated equivalence of logical site bodies. -/
+theorem uniform_body_equivalence
     (rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result)
-    (has : HasEliminatingWitness rewrite)
-    (negative : rewrite.binderCutDepth % 2 = 1) :
-    rewrite.sourceResult → rewrite.targetResult := by
-  have scopeNegative :
-      rewrite.scopeContext.cutDepth % 2 = 1 := by
-    rw [rewrite.scope_depth]
-    exact negative
-  intro sourceHolds
-  apply rewrite.target_exact.mpr
-  apply rewrite.scopeContext.anti scopeNegative has.inner
-  exact rewrite.source_exact.mp sourceHolds
-
-/--
-An introducing witness is sever-family sound exactly at a positive binder
-scope.
--/
-theorem uniform_sever_sound
-    (rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result)
-    (has : HasIntroducingWitness rewrite)
-    (positive : rewrite.binderCutDepth % 2 = 0) :
-    rewrite.sourceResult → rewrite.targetResult := by
-  have scopePositive :
-      rewrite.scopeContext.cutDepth % 2 = 0 := by
-    rw [rewrite.scope_depth]
-    exact positive
-  intro sourceHolds
-  apply rewrite.target_exact.mpr
-  apply rewrite.scopeContext.mono scopePositive has.inner
-  exact rewrite.source_exact.mp sourceHolds
-
-/-- Two shared witnesses give an ungated equivalence at every binder depth. -/
-theorem uniform_equivalence_sound
-    (rewrite :
-      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
-        Result)
+      LogicalUniformRewrite siteCount SourceWitness TargetWitness)
     (eliminating : HasEliminatingWitness rewrite)
     (introducing : HasIntroducingWitness rewrite) :
-    rewrite.sourceResult ↔ rewrite.targetResult := by
-  have innerEquivalent :
-      rewrite.sourceInner ↔ rewrite.targetInner :=
-    ⟨introducing.inner, eliminating.inner⟩
-  exact rewrite.source_exact.trans
-    ((rewrite.scopeContext.congruent innerEquivalent).trans
-      rewrite.target_exact.symm)
+    rewrite.sourceInner ↔ rewrite.targetInner :=
+  ⟨introducing.body, eliminating.body⟩
+
+/--
+Join-family transport uses a target-to-source local law. At odd outer cut
+depth the typed semantic zipper reverses it into source-to-target soundness.
+Ambient binders remain explicit in the zipper environments.
+-/
+theorem uniform_join_sound
+    {source :
+      DiagramContext definitions sourceHole sourceOuter}
+    {target :
+      DiagramContext definitions targetHole targetOuter}
+    {outerMap : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre sourceOuter}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (zipper : DiagramContext.SemanticZipper source target outerMap holeMap)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (sourceBody : Region definitions sourceHole)
+    (targetBody : Region definitions targetHole)
+    (fixed : Env pre targetOuter)
+    (localLaw :
+      ∀ descendant : Env pre targetHole,
+        DiagramContext.PreservesOuter target fixed descendant →
+          denoteRegion pre definitionEnv descendant targetBody →
+            denoteRegion pre definitionEnv (holeMap pre descendant)
+              sourceBody)
+    (negative : source.cutDepth % 2 = 1) :
+    denoteRegion pre definitionEnv (outerMap pre fixed)
+        (source.fill sourceBody) →
+      denoteRegion pre definitionEnv fixed (target.fill targetBody) :=
+  (zipper.targetToSource pre definitionEnv sourceBody targetBody fixed
+    localLaw).2 negative
+
+/--
+Sever-family transport uses a source-to-target local law. At even outer cut
+depth the typed semantic zipper preserves that direction.
+-/
+theorem uniform_sever_sound
+    {source :
+      DiagramContext definitions sourceHole sourceOuter}
+    {target :
+      DiagramContext definitions targetHole targetOuter}
+    {outerMap : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre sourceOuter}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (zipper : DiagramContext.SemanticZipper source target outerMap holeMap)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (sourceBody : Region definitions sourceHole)
+    (targetBody : Region definitions targetHole)
+    (fixed : Env pre targetOuter)
+    (localLaw :
+      ∀ descendant : Env pre targetHole,
+        DiagramContext.PreservesOuter target fixed descendant →
+          denoteRegion pre definitionEnv (holeMap pre descendant)
+              sourceBody →
+            denoteRegion pre definitionEnv descendant targetBody)
+    (positive : source.cutDepth % 2 = 0) :
+    denoteRegion pre definitionEnv (outerMap pre fixed)
+        (source.fill sourceBody) →
+      denoteRegion pre definitionEnv fixed (target.fill targetBody) := by
+  have transported :=
+    zipper.transport .sourceToTarget pre definitionEnv sourceBody targetBody
+      fixed localLaw
+  simpa [DiagramContext.ContextDirection.through, positive,
+    DiagramContext.ContextDirection.holds] using transported
+
+/--
+Pointwise body equivalence transports through all ambient binders and cuts.
+This is the typed outer theorem used by equivalence-family primitives.
+-/
+theorem uniform_equivalence_sound
+    {source :
+      DiagramContext definitions sourceHole sourceOuter}
+    {target :
+      DiagramContext definitions targetHole targetOuter}
+    {outerMap : ∀ pre : PreModel.{u},
+      Env pre targetOuter → Env pre sourceOuter}
+    {holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole}
+    (zipper : DiagramContext.SemanticZipper source target outerMap holeMap)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (sourceBody : Region definitions sourceHole)
+    (targetBody : Region definitions targetHole)
+    (fixed : Env pre targetOuter)
+    (localLaw :
+      ∀ descendant : Env pre targetHole,
+        DiagramContext.PreservesOuter target fixed descendant →
+          (denoteRegion pre definitionEnv (holeMap pre descendant)
+              sourceBody ↔
+            denoteRegion pre definitionEnv descendant targetBody)) :
+    denoteRegion pre definitionEnv (outerMap pre fixed)
+        (source.fill sourceBody) ↔
+      denoteRegion pre definitionEnv fixed (target.fill targetBody) :=
+  (zipper.equivalence pre definitionEnv sourceBody targetBody fixed
+    (fun descendant preserves =>
+      (localLaw descendant preserves).symm)).symm
 
 end WirePrimitive
 
