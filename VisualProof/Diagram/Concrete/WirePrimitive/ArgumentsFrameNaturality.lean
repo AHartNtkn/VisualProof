@@ -1038,6 +1038,286 @@ theorem compileNodes_reindexed
   exact congrFun
     (congrFun context.wireRenaming_reindex_identity _) value
 
+private theorem ItemSeq.cast_cons_cut
+    {sourceSigs targetSigs : List Sig}
+    (same : targetSigs = sourceSigs)
+    (sourceHead : Region definitions sourceSigs)
+    (targetHead : Region definitions targetSigs)
+    (sourceTail : ItemSeq definitions sourceSigs)
+    (targetTail : ItemSeq definitions targetSigs)
+    (headExact : same ▸ targetHead = sourceHead)
+    (tailExact : same ▸ targetTail = sourceTail) :
+    same ▸ (.cons (.cut targetHead) targetTail) =
+      (.cons (.cut sourceHead) sourceTail : ItemSeq definitions sourceSigs) := by
+  cases same
+  have headExact' : targetHead = sourceHead := by simpa using headExact
+  have tailExact' : targetTail = sourceTail := by simpa using tailExact
+  subst targetHead
+  subst targetTail
+  rfl
+
+private theorem Region.cast_mk_append
+    {sourceSigs targetSigs : List Sig}
+    (same : targetSigs = sourceSigs)
+    (sourceNodes sourceChildren : ItemSeq definitions sourceSigs)
+    (targetNodes targetChildren : ItemSeq definitions targetSigs)
+    (nodesExact : same ▸ targetNodes = sourceNodes)
+    (childrenExact : same ▸ targetChildren = sourceChildren) :
+    same ▸ (.mk (targetNodes.append targetChildren)) =
+      (.mk (sourceNodes.append sourceChildren) :
+        Region definitions sourceSigs) := by
+  cases same
+  have nodesExact' : targetNodes = sourceNodes := by simpa using nodesExact
+  have childrenExact' : targetChildren = sourceChildren := by
+    simpa using childrenExact
+  subst targetNodes
+  subst targetChildren
+  rfl
+
+private theorem ItemSeq.cast_nil
+    {sourceSigs targetSigs : List Sig}
+    (same : targetSigs = sourceSigs) :
+    same ▸ (.nil : ItemSeq definitions targetSigs) =
+      (.nil : ItemSeq definitions sourceSigs) := by
+  cases same
+  rfl
+
+private theorem parent_encloses_child_local
+    (diagram : ConcreteDiagram definitionCount)
+    (child parent : diagram.RegionId)
+    (childData : diagram.regions child = .cut parent) :
+    diagram.Encloses parent child := by
+  apply (ConcreteElaboration.encloses_iff_exists diagram parent child).mpr
+  exact ⟨⟨1, by have := child.isLt; omega⟩,
+    by simp [ConcreteDiagram.climb, childData]⟩
+
+private theorem encloses_trans_local
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    {outer middle inner : diagram.RegionId}
+    (outerMiddle : diagram.Encloses outer middle)
+    (middleInner : diagram.Encloses middle inner) :
+    diagram.Encloses outer inner := by
+  obtain ⟨outerSteps, outerClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram outer middle).mp
+      outerMiddle
+  obtain ⟨innerSteps, innerClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram middle inner).mp
+      middleInner
+  have combined :
+      diagram.climb (innerSteps.val + outerSteps.val) inner = some outer := by
+    rw [ConcreteDiagram.climb_add, innerClimb]
+    exact outerClimb
+  have bounded :=
+    ConcreteElaboration.successfulClimb_le_count definitions diagram
+      wellFormed (innerSteps.val + outerSteps.val) inner outer combined
+  apply (ConcreteElaboration.encloses_iff_exists diagram outer inner).mpr
+  exact ⟨⟨innerSteps.val + outerSteps.val, by omega⟩, combined⟩
+
+private theorem encloses_child_split_local
+    (diagram : ConcreteDiagram definitionCount)
+    (ancestor child parent : diagram.RegionId)
+    (childData : diagram.regions child = .cut parent)
+    (encloses : diagram.Encloses ancestor child) :
+    ancestor = child ∨ diagram.Encloses ancestor parent := by
+  obtain ⟨steps, climbed⟩ :=
+    (ConcreteElaboration.encloses_iff_exists diagram ancestor child).mp
+      encloses
+  cases steps with
+  | mk steps bound =>
+      cases steps with
+      | zero => exact .inl (by simpa using climbed.symm)
+      | succ steps =>
+          right
+          apply (ConcreteElaboration.encloses_iff_exists
+            diagram ancestor parent).mpr
+          exact ⟨⟨steps, by omega⟩, by
+            simpa [ConcreteDiagram.climb, childData] using climbed⟩
+
+private theorem child_not_contains_acted
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {region child : source.val.RegionId}
+    (childData : source.val.regions child = .cut region)
+    (regionNotContains :
+      ¬source.val.Encloses region (source.val.wires wire).scope) :
+    ¬source.val.Encloses child (source.val.wires wire).scope := by
+  intro childContains
+  exact regionNotContains
+    (encloses_trans_local definitions source.val source.property
+      (parent_encloses_child_local source.val child region childData)
+      childContains)
+
+private theorem acted_not_encloses_child
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {region child : source.val.RegionId}
+    (childData : source.val.regions child = .cut region)
+    (actedNotRegion :
+      ¬source.val.Encloses (source.val.wires wire).scope region)
+    (childNotContains :
+      ¬source.val.Encloses child (source.val.wires wire).scope) :
+    ¬source.val.Encloses (source.val.wires wire).scope child := by
+  intro actedChild
+  rcases encloses_child_split_local source.val
+      (source.val.wires wire).scope child region childData actedChild with
+    actedIsChild | actedRegion
+  · apply childNotContains
+    rw [actedIsChild]
+    exact ConcreteDiagram.encloses_refl source.val child
+  · exact actedNotRegion actedRegion
+
+set_option maxHeartbeats 1000000 in
+/-- An ordinarily compiled subtree incomparable with the acted scope is
+reproduced exactly after retained-context reindexing. -/
+theorem compileRegion_reindexed_outside
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization) :
+    ∀ (fuel : Nat)
+      (region : source.val.RegionId)
+      (sourceContext : WireContext source.val)
+      (targetContext : WireContext result.checked.val)
+      (context : result.RetainedContext sourceContext targetContext)
+      (_targetAbove : ConcreteElaboration.ContextAbove result.checked.val
+        targetContext (result.regionImage region))
+      (_notBelow :
+        ¬source.val.Encloses (source.val.wires wire).scope region)
+      (_notContains :
+        ¬source.val.Encloses region (source.val.wires wire).scope)
+      {sourceBody : Region definitions sourceContext.sigs},
+      ConcreteElaboration.compileRegion? definitions source.val fuel region
+          sourceContext = some sourceBody →
+      ∃ targetBody : Region definitions targetContext.sigs,
+        ConcreteElaboration.compileRegion? definitions result.checked.val fuel
+            (result.regionImage region) targetContext = some targetBody ∧
+          context.sigs_exact ▸ targetBody = sourceBody := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro region sourceContext targetContext context _targetAbove _notBelow
+        _notContains sourceBody sourceCompiled
+      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+  | succ childFuel induction =>
+      intro region sourceContext targetContext context targetAbove notBelow
+        notContains sourceBody sourceCompiled
+      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
+        Option.bind_eq_some_iff.mp sourceCompiled
+      obtain ⟨sourceChildren, sourceChildrenCompiled, sourceFinished⟩ :=
+        Option.bind_eq_some_iff.mp sourceAfterNodes
+      have sourceBodyExact := Option.some.inj sourceFinished
+      subst sourceBody
+      let extended := context.extendNotBelow localized region notBelow
+      have targetExtendedNodup :
+          (targetContext.extend (result.regionImage region)).ids.Nodup :=
+        ConcreteElaboration.extend_nodup definitions result.checked.val
+          result.checked.property targetContext (result.regionImage region)
+          targetAbove
+      obtain ⟨targetNodes, targetNodesCompiled, targetNodesExact⟩ :=
+        extended.compileNodes_reindexed targetExtendedNodup
+          (nodesAt_not_below result region notBelow) sourceNodesCompiled
+      have generateChildren :
+          ∀ (children : List source.val.RegionId)
+            (sourceItems : ItemSeq definitions
+              (sourceContext.extend region).sigs),
+            (∀ child, child ∈ children →
+              child ∈ source.val.childrenOf region) →
+            ConcreteElaboration.compileChildrenWith? definitions source.val
+                (ConcreteElaboration.compileRegion? definitions source.val
+                  childFuel)
+                (sourceContext.extend region) children = some sourceItems →
+            ∃ targetItems : ItemSeq definitions
+                (targetContext.extend (result.regionImage region)).sigs,
+              ConcreteElaboration.compileChildrenWith? definitions
+                  result.checked.val
+                  (ConcreteElaboration.compileRegion? definitions
+                    result.checked.val childFuel)
+                  (targetContext.extend (result.regionImage region))
+                  (children.map result.regionImage) = some targetItems ∧
+                extended.sigs_exact ▸ targetItems = sourceItems := by
+        intro children
+        induction children with
+        | nil =>
+            intro sourceItems members compiled
+            have exactItems : sourceItems = .nil :=
+              (Option.some.inj compiled).symm
+            subst sourceItems
+            exact ⟨.nil, rfl, ItemSeq.cast_nil extended.sigs_exact⟩
+        | cons child tail tailInduction =>
+            intro sourceItems members compiled
+            obtain ⟨sourceHead, sourceTail, sourceHeadCompiled,
+                sourceTailCompiled, sourceItemsExact⟩ :=
+              InsertionCompilation.NaturalityInternal.compileChildren_cons_components
+                definitions source.val
+                (ConcreteElaboration.compileRegion? definitions source.val
+                  childFuel)
+                (sourceContext.extend region) child tail sourceItems compiled
+            subst sourceItems
+            have childMember : child ∈ source.val.childrenOf region :=
+              members child (by simp)
+            have childData := ConcreteElaboration.mem_childrenOf source.val
+              region child childMember
+            have childNotContains := child_not_contains_acted
+              (wire := wire) childData notContains
+            have childNotBelow := acted_not_encloses_child
+              (wire := wire) childData notBelow childNotContains
+            have targetChildData :
+                result.checked.val.regions (result.regionImage child) =
+                  .cut (result.regionImage region) := by
+              rw [result.regionImage_exact child,
+                result.regionImage_exact region]
+              rw [result.regionImage_data child]
+              simp [childData, CRegion.rename]
+            have targetChildAbove :=
+              ConcreteElaboration.extend_above_child definitions
+                result.checked.val result.checked.property targetContext
+                (result.regionImage region) (result.regionImage child)
+                targetAbove targetChildData
+            obtain ⟨targetHead, targetHeadCompiled, targetHeadExact⟩ :=
+              induction child (sourceContext.extend region)
+                (targetContext.extend (result.regionImage region)) extended
+                targetChildAbove childNotBelow childNotContains
+                sourceHeadCompiled
+            obtain ⟨targetTail, targetTailCompiled, targetTailExact⟩ :=
+              tailInduction sourceTail (by
+                intro candidate member
+                exact members candidate (by simp [member]))
+                sourceTailCompiled
+            refine ⟨.cons (.cut targetHead) targetTail, ?_, ?_⟩
+            · simp [ConcreteElaboration.compileChildrenWith?,
+                targetHeadCompiled, targetTailCompiled]
+            · exact ItemSeq.cast_cons_cut extended.sigs_exact sourceHead
+                targetHead sourceTail targetTail targetHeadExact targetTailExact
+      obtain ⟨targetChildren, targetChildrenCompiled,
+          targetChildrenExact⟩ :=
+        generateChildren (source.val.childrenOf region) sourceChildren
+          (fun child member => member) sourceChildrenCompiled
+      have targetCoreExact := Region.cast_mk_append extended.sigs_exact
+        sourceNodes sourceChildren targetNodes targetChildren targetNodesExact
+        targetChildrenExact
+      let targetCore : Region definitions
+          (targetContext.extend (result.regionImage region)).sigs :=
+        .mk (targetNodes.append targetChildren)
+      let targetBody := ConcreteElaboration.finishRegion result.checked.val
+        targetContext (result.regionImage region) targetCore
+      refine ⟨targetBody, ?_, ?_⟩
+      · simp only [ConcreteElaboration.compileRegion?]
+        rw [targetNodesCompiled, result.childrenOf_decomposition region]
+        have mappedChildrenExact :
+            (source.val.childrenOf region).map result.regionEquiv =
+              (source.val.childrenOf region).map result.regionImage := by
+          apply List.map_congr_left
+          intro child _member
+          exact (result.regionImage_exact child).symm
+        rw [mappedChildrenExact, targetChildrenCompiled]
+        rfl
+      · exact context.finishRegion_reindexed_not_below localized region
+          notBelow (.mk (sourceNodes.append sourceChildren)) targetCore
+          targetCoreExact
+
 end ArgumentResult.RetainedContext
 
 end ConcreteWirePrimitive
