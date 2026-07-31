@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T006
+active_task: T007
 
 tasks:
   - id: T001
@@ -339,7 +339,7 @@ tasks:
   - id: T006
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 5: prove the generic uniform-site witness theorem."
     inputs:
@@ -360,11 +360,31 @@ tasks:
     stop_if:
       - "The theorem requires caller-manufactured concrete evidence."
       - "Mixed site polarity remains an unproved assumption."
-    receipt: null
+    receipt:
+      result: done
+      harness: codex
+      commit: c2ce4bc
+      summary: "Completed the generic uniform-site logical theorem on top of exhaustive applied-head/frame receipts, then corrected its construction boundary so proof-bearing semantic factorizations are internal to primitive semantics modules and never appear in public rule inputs or applied receipts."
+      changed_files:
+        - VisualProof.lean
+        - VisualProof/Rule/WirePrimitive/Site.lean
+        - VisualProof/Rule/WirePrimitive/Witness.lean
+        - VisualProof/Rule/WirePrimitive/WitnessFixtures.lean
+        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
+      commands:
+        - cmd: lake build VisualProof.Rule.WirePrimitive.WitnessFixtures
+          status: pass
+        - cmd: lake build
+          status: pass
+        - cmd: npm run formal:size
+          status: pass
+        - cmd: "! rg -n \"UniformSiteRewrite\\.ofChecked|def ofChecked\" VisualProof/Rule/WirePrimitive/Witness.lean VisualProof/Rule/WirePrimitive/WitnessFixtures.lean"
+          status: pass
+      review: "PASS after reopening: exact acted-wire endpoint exhaustion, ordered arguments and frames, shared witnesses, mixed local parity elimination, binder-only directionality, all three public forms, negative per-site-witness fixture, proof-internal construction boundary, no public semantic premise, full build, size gate, and unrelated-file preservation verified. Initial implementation commit: 3e3595f; boundary correction: c2ce4bc."
   - id: T007
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 6: formalize content-shape primitive pairs."
     inputs:
