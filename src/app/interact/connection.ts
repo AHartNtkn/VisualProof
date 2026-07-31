@@ -1,8 +1,9 @@
 import type { Endpoint, WireId } from '../../kernel/diagram/diagram'
 import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
+import { wireOverlayShapes } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { computeLegs, existentialStubs, legPaths } from '../../view/wires'
+import { computeLegs } from '../../view/wires'
 import {
   type WireManipulationHit,
   wireManipulationHitTest,
@@ -43,43 +44,24 @@ function wireEnd(hit: WireManipulationHit): ConnectionEnd {
   }
 }
 
-function wireShapes(engine: Engine, wire: WireId, stroke: string, width: number): Shape[] {
-  const out: Shape[] = []
-  for (const path of legPaths(engine)) {
-    if (path.wid === wire) {
-      out.push({ kind: 'polyline', pts: path.pts, stroke, width, glow: null })
-    }
-  }
-  for (const stub of existentialStubs(engine)) {
-    if (stub.wid === wire) {
-      out.push({
-        kind: 'segment',
-        from: stub.from,
-        to: stub.to,
-        stroke,
-        width,
-        glow: null,
-      })
-    }
-  }
-  return out
-}
-
 function wireTargetShapes(
   engine: Engine,
   target: ConnectionEnd,
   stroke: string,
   width: number,
 ): Shape[] {
-  if (target.endpoint === null) return wireShapes(engine, target.wire, stroke, width)
+  if (target.endpoint === null) return wireOverlayShapes(engine, target.wire, stroke, width)
   const key = pkey(target.endpoint.port)
+  // endpoint-scoped feedback restrokes only the legs at that port — the same
+  // painted cubics, never a resampled polyline
   return computeLegs(engine)
     .filter(({ leg }) => leg.wid === target.wire && (
       (leg.from.body === target.endpoint!.node && leg.from.key === key)
       || (leg.to.body === target.endpoint!.node && leg.to.key === key)
     ))
-    .map(({ pts }): Shape => ({
-      kind: 'polyline',
+    .map(({ pts, cubics }): Shape => ({
+      kind: 'bezierPath',
+      cubics,
       pts,
       stroke,
       width,

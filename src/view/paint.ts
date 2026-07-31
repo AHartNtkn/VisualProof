@@ -263,6 +263,23 @@ export function nextTheme(t: Theme): Theme {
 }
 
 /**
+ * ONE wire's overlay stroke (hover, selection, drag feedback): the SAME Hobby
+ * cubic chain the painter draws, restroked in the interaction colour/width.
+ * Every overlay producer uses this — drawing the sampled `pts` as a polyline
+ * instead renders a visible discretization of the wire (USER 2026-07-30).
+ */
+export function wireOverlayShapes(e: Engine, wid: WireId, stroke: string, width: number, glow: string | null = null): Shape[] {
+  const out: Shape[] = []
+  for (const l of legPaths(e)) {
+    if (l.wid === wid) out.push({ kind: 'bezierPath', cubics: l.cubics, pts: l.pts, stroke, width, glow })
+  }
+  for (const s of existentialStubs(e)) {
+    if (s.wid === wid) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width, glow })
+  }
+  return out
+}
+
+/**
  * Hover-group highlight: brighten a whole relation group — the shared head wire
  * (its traced legs) and every atom bound to it — in the wire's order-ladder hue,
  * brighter and wider, glowing in Dark. The group key is the WIRE itself (heads
@@ -272,11 +289,8 @@ export function nextTheme(t: Theme): Theme {
 export function highlightGroup(e: Engine, st: Theme, wireId: WireId): Shape[] {
   const hue = relationWireHues(e.d, Math.min(st.relationHueLightness + HL_BRIGHT, 88)).get(wireId)
   if (hue === undefined) return []
-  const out: Shape[] = []
   const wireGlow = st.wireGlow ? hue : null
-  for (const { wid, pts, cubics } of legPaths(e)) {
-    if (wid === wireId) out.push({ kind: 'bezierPath', cubics, pts, stroke: hue, width: st.wireW + HL_WIDTH, glow: wireGlow })
-  }
+  const out: Shape[] = wireOverlayShapes(e, wireId, hue, st.wireW + HL_WIDTH, wireGlow)
   const w = e.d.wires[wireId]
   const atomIds = new Set(w === undefined ? [] : w.endpoints.filter((ep) => ep.port.kind === 'head').map((ep) => ep.node))
   for (const b of e.bodies.values()) {

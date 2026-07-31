@@ -18,7 +18,7 @@ import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, 
 import { mkWorkerSearch } from '../view/optimize-client'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
-import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
+import { paint, highlightGroup, wireOverlayShapes, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
@@ -1096,16 +1096,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const g = engine.regions.get(hit.id)
       return g === undefined ? [] : [{ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke, width: 2, insetColor: null, glow: null }]
     }
-    const out: Shape[] = []
-    // Every wire (junctions included) is its routed strokes — trace the SAME strokes
-    // paint draws, so the hover outline matches exactly.
-    for (const l of legPaths(engine)) {
-      if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
-    }
-    for (const s of existentialStubs(engine)) {
-      if (s.wid === hit.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: 3, glow: null })
-    }
-    return out
+    // Every wire (junctions included) is its routed strokes — restroke the SAME
+    // cubics paint draws (wireOverlayShapes), so the hover outline matches exactly.
+    return wireOverlayShapes(engine, hit.id, stroke, 3)
   }
 
   // Position/show the companion wrapper for the current display mode. Plain CSS
