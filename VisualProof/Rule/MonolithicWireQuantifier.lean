@@ -678,7 +678,7 @@ def applyMonolithicRelationSever
                       exact .error .inverseRelationJoinRejected
                   | .ok inverse =>
                       match inverseIsoAccepted :
-                          ConcreteWireQuantifier.RelationSeverInsertionSemantics.findConcreteIso?
+                          ConcreteIsoSearch.findConcreteIso?
                             inverse.plainFinal.val source.val with
                       | none =>
                           exact .error .inverseReconstructionRejected

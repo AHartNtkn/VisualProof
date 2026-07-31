@@ -446,8 +446,14 @@ checkers.
 
 **Files:**
 
+- Create: `VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean`
+- Create: `VisualProof/Diagram/Concrete/IsomorphismSearch.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/Content.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean`
+- Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean`
+- Modify: `VisualProof/Rule/MonolithicWireQuantifier.lean`
+- Modify: `VisualProof/Rule/WirePrimitive/Witness.lean`
+- Modify: `VisualProof/Rule/WirePrimitive/WitnessFixtures.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Content.lean`
 - Create: `VisualProof/Rule/WirePrimitive/ContentFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
@@ -486,9 +492,15 @@ checkers.
   lake build
   npm run formal:size
   git add -- VisualProof.lean \
+    VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean \
+    VisualProof/Diagram/Concrete/IsomorphismSearch.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/Content.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean \
+    VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean \
+    VisualProof/Rule/MonolithicWireQuantifier.lean \
     VisualProof/Rule/WirePrimitive.lean \
+    VisualProof/Rule/WirePrimitive/Witness.lean \
+    VisualProof/Rule/WirePrimitive/WitnessFixtures.lean \
     VisualProof/Rule/WirePrimitive/Content.lean \
     VisualProof/Rule/WirePrimitive/ContentFixtures.lean
   git commit -m "feat: prove wire content primitive soundness"

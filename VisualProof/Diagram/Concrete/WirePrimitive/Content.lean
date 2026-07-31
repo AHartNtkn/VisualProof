@@ -1,0 +1,1121 @@
+import VisualProof.Rule.WirePrimitive.Site
+import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
+import VisualProof.Diagram.Concrete.IsomorphismSearch
+
+namespace VisualProof
+
+namespace ConcreteWirePrimitive
+
+open ConcreteWireQuantifier
+open WirePrimitive
+
+/-- One checked location at which an endpoint-free relation wire is spawned. -/
+structure EndSite
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) where
+  region : source.val.RegionId
+  arguments : List source.val.WireId
+
+/-- Concrete failures shared by the six content-shape transformations. -/
+inductive ContentError
+  | expectedRelation
+  | nonAppliedEndpoint
+  | emptySites
+  | wireHasEndpoints
+  | sameWire
+  | signatureMismatch
+  | scopeMismatch
+  | nonExactCut
+  | parallelMismatch
+  | argumentArity
+  | argumentSignature (position : Nat)
+  | siteOutsideScope
+  | argumentInvisible (position : Nat)
+  | invalidRemoval
+  | malformedTarget (error : WFError)
+  | inverseDeleteRejected
+  | inverseIsomorphismRejected
+  deriving Repr, DecidableEq
+
+private def siteNodes
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : List (AppliedSite source wire)) :
+    List source.val.NodeId :=
+  sites.map AppliedSite.node
+
+private def removedSiteNodes
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire) :
+    List source.val.NodeId :=
+  siteNodes sites.sites
+
+private def sourceRegionAfterRemoval
+    {source : CheckedDiagram definitions}
+    (removed : List source.val.RegionId)
+    (region : source.val.RegionId)
+    (retained : region ∈ Internal.retainedRegions source removed) :
+    Fin (Internal.retainedRegions source removed).length :=
+  Internal.retainedRegionIndex source removed region retained
+
+private def retainedWireArgumentEndpoints
+    {source : CheckedDiagram definitions}
+    {acted : source.val.WireId}
+    (_removedRegions : List source.val.RegionId)
+    (removedNodes : List source.val.NodeId)
+    (removedWires : List source.val.WireId)
+    (sites : List (AppliedSite source acted))
+    (nodeFor : Fin sites.length → CEndpoint
+      ((Internal.retainedNodes source removedNodes).length + sites.length))
+    (candidate : Fin (Internal.retainedWires source removedWires).length) :
+    List (CEndpoint
+      ((Internal.retainedNodes source removedNodes).length + sites.length)) :=
+  let sourceWire :=
+    Internal.sourceRetainedWire source removedWires candidate
+  (Data.Finite.allFin sites.length).flatMap fun site =>
+    (List.range (sites.get site).arguments.length).filterMap fun position =>
+      match (sites.get site).arguments[position]? with
+      | some argument =>
+          if argument = sourceWire then
+            some
+              { node := (nodeFor site).node
+                port := .arg position }
+          else
+            none
+      | none => none
+
+private def retainedWireDoubleArgumentEndpoints
+    {source : CheckedDiagram definitions}
+    {acted : source.val.WireId}
+    (_removedRegions : List source.val.RegionId)
+    (removedNodes : List source.val.NodeId)
+    (removedWires : List source.val.WireId)
+    (sites : List (AppliedSite source acted))
+    (firstNode secondNode :
+      Fin sites.length →
+        Fin ((Internal.retainedNodes source removedNodes).length +
+          (sites.length + sites.length)))
+    (candidate : Fin (Internal.retainedWires source removedWires).length) :
+    List (CEndpoint
+      ((Internal.retainedNodes source removedNodes).length +
+        (sites.length + sites.length))) :=
+  let sourceWire :=
+    Internal.sourceRetainedWire source removedWires candidate
+  (Data.Finite.allFin sites.length).flatMap fun site =>
+    (List.range (sites.get site).arguments.length).flatMap fun position =>
+      match (sites.get site).arguments[position]? with
+      | some argument =>
+          if argument = sourceWire then
+            [ { node := firstNode site, port := .arg position },
+              { node := secondNode site, port := .arg position } ]
+          else
+            []
+      | none => []
+
+private structure CutWrapPlan
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire) where
+  removal :
+    Internal.BatchRemovalPlan source [] (removedSiteNodes sites) [wire]
+
+private def cutWrapBase
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : CutWrapPlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  Internal.batchRemovalCandidate plan.removal
+
+private def cutWrapRegion
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : CutWrapPlan source wire sites)
+    (site : Fin sites.sites.length) :
+    Fin ((cutWrapBase plan).regionCount + sites.sites.length) :=
+  Fin.natAdd (cutWrapBase plan).regionCount site
+
+private def cutWrapNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : CutWrapPlan source wire sites)
+    (site : Fin sites.sites.length) :
+    Fin ((cutWrapBase plan).nodeCount + sites.sites.length) :=
+  Fin.natAdd (cutWrapBase plan).nodeCount site
+
+private def cutWrapCandidate
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (signature : List Sig)
+    (plan : CutWrapPlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  let base := cutWrapBase plan
+  let count := sites.sites.length
+  {
+    regionCount := base.regionCount + count
+    nodeCount := base.nodeCount + count
+    wireCount := base.wireCount + 1
+    root := Fin.castAdd count base.root
+    regions :=
+      Fin.addCases
+        (fun region =>
+          match base.regions region with
+          | .sheet => .sheet
+          | .cut parent => .cut (Fin.castAdd count parent))
+        (fun site =>
+          .cut
+            (Fin.castAdd count
+              (sourceRegionAfterRemoval (source := source) []
+                (sites.sites.get site).region (by
+                  unfold Internal.retainedRegions
+                  apply List.mem_filter.mpr
+                  exact ⟨Data.Finite.mem_allFin _, by simp⟩))))
+    nodes :=
+      Fin.addCases
+        (fun node =>
+          match base.nodes node with
+          | .atom region args => .atom (Fin.castAdd count region) args
+          | .ref region definition args =>
+              .ref (Fin.castAdd count region) definition args
+          | .identity region sig arity =>
+              .identity (Fin.castAdd count region) sig arity)
+        (fun site => .atom (cutWrapRegion plan site) signature)
+    wires :=
+      Fin.addCases
+        (fun candidate =>
+          let data := base.wires candidate
+          { sig := data.sig
+            scope := Fin.castAdd count data.scope
+            endpoints :=
+              (data.endpoints.map fun endpoint =>
+                { node := Fin.castAdd count endpoint.node
+                  port := endpoint.port }) ++
+              retainedWireArgumentEndpoints (source := source)
+                [] (removedSiteNodes sites)
+                [wire] sites.sites
+                (fun site =>
+                  ({ node := cutWrapNode plan site, port := .head } :
+                    CEndpoint (base.nodeCount + count)))
+                candidate })
+        (fun _ =>
+          { sig := .rel signature
+            scope :=
+              Fin.castAdd count
+                (sourceRegionAfterRemoval (source := source) []
+                  (source.val.wires wire).scope (by
+                    unfold Internal.retainedRegions
+                    apply List.mem_filter.mpr
+                    exact ⟨Data.Finite.mem_allFin _, by simp⟩))
+            endpoints :=
+              (Data.Finite.allFin count).map fun site =>
+                { node := cutWrapNode plan site, port := .head } })
+  }
+
+private def cutWrapCandidateWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (signature : List Sig)
+    (plan : CutWrapPlan source wire sites) :
+    (cutWrapCandidate signature plan).WireId :=
+  ⟨(cutWrapBase plan).wireCount, by
+    simp [cutWrapCandidate]⟩
+
+/-- Checked result of wrapping every applied end in its own fresh cut. -/
+structure CutWrapResult
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) where
+  private mk ::
+  sites : AllAppliedSites source wire
+  checked : CheckedDiagram definitions
+  private signature : List Sig
+  private signature_exact : (source.val.wires wire).sig = .rel signature
+  private plan : CutWrapPlan source wire sites
+  private generated : checked.val = cutWrapCandidate signature plan
+  targetWire : checked.val.WireId
+  private targetWire_exact :
+    targetWire =
+      Internal.checkedWire generated (cutWrapCandidateWire signature plan)
+
+/-- Replace every applied end `R(x̄)` by a fresh cut containing `W(x̄)`. -/
+def cutWrap
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    Except ContentError (CutWrapResult source wire) := by
+  match signature : (source.val.wires wire).sig with
+  | .iota => exact .error .expectedRelation
+  | .rel arguments =>
+      match checkedSites : checkAllAppliedSites source wire with
+      | none => exact .error .nonAppliedEndpoint
+      | some sites =>
+          match removalAccepted :
+              Internal.checkBatchRemovalPlan? source []
+                (removedSiteNodes sites) [wire] with
+          | none => exact .error .invalidRemoval
+          | some removal =>
+              let plan : CutWrapPlan source wire sites := ⟨removal⟩
+              let candidate := cutWrapCandidate arguments plan
+              match accepted :
+                  ConcreteDiagram.checkWellFormed definitions candidate with
+              | .error error => exact .error (.malformedTarget error)
+              | .ok checked =>
+                  let generated :=
+                    ConcreteDiagram.checkWellFormed_preserves_input accepted
+                  exact .ok
+                    (CutWrapResult.mk sites checked arguments signature plan
+                      generated
+                      (Internal.checkedWire generated
+                        (cutWrapCandidateWire arguments plan)) rfl)
+
+private def absorbRegions
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire) :
+    List source.val.RegionId :=
+  sites.sites.map AppliedSite.region
+
+private def absorbParent
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire) :
+    source.val.RegionId :=
+  match source.val.regions site.region with
+  | .sheet => source.val.root
+  | .cut parent => parent
+
+private def absorbSiteExact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (site : AppliedSite source wire) : Bool :=
+  match source.val.regions site.region with
+  | .sheet => false
+  | .cut parent =>
+      decide (
+        source.val.nodesAt site.region = [site.node] ∧
+        source.val.childrenOf site.region = [] ∧
+        source.val.wiresAt site.region = [] ∧
+        parent ∉ absorbRegions sites)
+
+private structure CutAbsorbPlan
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire) where
+  removal :
+    Internal.BatchRemovalPlan source (absorbRegions sites)
+      (removedSiteNodes sites) [wire]
+  exactCuts :
+    sites.sites.all (absorbSiteExact sites) = true
+  scopeRetained :
+    (source.val.wires wire).scope ∈
+      Internal.retainedRegions source (absorbRegions sites)
+
+private theorem CutAbsorbPlan.parentRetained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : CutAbsorbPlan source wire sites)
+    (position : Fin sites.sites.length) :
+    absorbParent (sites.sites.get position) ∈
+      Internal.retainedRegions source (absorbRegions sites) := by
+  let site := sites.sites.get position
+  have accepted :=
+    (List.all_eq_true.mp plan.exactCuts) site (List.get_mem _ position)
+  unfold absorbSiteExact at accepted
+  cases regionData : source.val.regions site.region with
+  | sheet =>
+      simp [regionData] at accepted
+  | cut parent =>
+      have facts :
+          source.val.nodesAt site.region = [site.node] ∧
+          source.val.childrenOf site.region = [] ∧
+          source.val.wiresAt site.region = [] ∧
+          parent ∉ absorbRegions sites := by
+        exact of_decide_eq_true (by simpa [regionData] using accepted)
+      unfold absorbParent
+      rw [regionData]
+      unfold Internal.retainedRegions
+      apply List.mem_filter.mpr
+      exact ⟨Data.Finite.mem_allFin _, decide_eq_true facts.2.2.2⟩
+
+private def cutAbsorbBase
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : CutAbsorbPlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  Internal.batchRemovalCandidate plan.removal
+
+private def cutAbsorbNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : CutAbsorbPlan source wire sites)
+    (site : Fin sites.sites.length) :
+    Fin ((cutAbsorbBase plan).nodeCount + sites.sites.length) :=
+  Fin.natAdd (cutAbsorbBase plan).nodeCount site
+
+private def cutAbsorbCandidate
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (signature : List Sig)
+    (plan : CutAbsorbPlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  let base := cutAbsorbBase plan
+  let count := sites.sites.length
+  {
+    regionCount := base.regionCount
+    nodeCount := base.nodeCount + count
+    wireCount := base.wireCount + 1
+    root := base.root
+    regions := base.regions
+    nodes :=
+      Fin.addCases base.nodes fun site =>
+        .atom
+          (sourceRegionAfterRemoval (source := source)
+            (absorbRegions sites)
+            (absorbParent (sites.sites.get site))
+            (plan.parentRetained site))
+          signature
+    wires :=
+      Fin.addCases
+        (fun candidate =>
+          let data := base.wires candidate
+          { data with
+            endpoints :=
+              (data.endpoints.map fun endpoint =>
+                { node := Fin.castAdd count endpoint.node
+                  port := endpoint.port }) ++
+              retainedWireArgumentEndpoints (source := source)
+                (absorbRegions sites) (removedSiteNodes sites)
+                [wire] sites.sites
+                (fun site =>
+                  ({ node := cutAbsorbNode plan site, port := .head } :
+                    CEndpoint (base.nodeCount + count)))
+                candidate })
+        (fun _ =>
+          { sig := .rel signature
+            scope :=
+              sourceRegionAfterRemoval (source := source)
+                (absorbRegions sites) (source.val.wires wire).scope
+                plan.scopeRetained
+            endpoints :=
+              (Data.Finite.allFin count).map fun site =>
+                { node := cutAbsorbNode plan site, port := .head } })
+  }
+
+private def cutAbsorbCandidateWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (signature : List Sig)
+    (plan : CutAbsorbPlan source wire sites) :
+    (cutAbsorbCandidate signature plan).WireId :=
+  ⟨(cutAbsorbBase plan).wireCount, by
+    simp [cutAbsorbCandidate]⟩
+
+/-- Checked inverse of cut wrap, including exact normalized reconstruction. -/
+structure CutAbsorbResult
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) where
+  private mk ::
+  sites : AllAppliedSites source wire
+  checked : CheckedDiagram definitions
+  private signature : List Sig
+  private signature_exact : (source.val.wires wire).sig = .rel signature
+  private plan : CutAbsorbPlan source wire sites
+  private generated : checked.val = cutAbsorbCandidate signature plan
+  targetWire : checked.val.WireId
+  private targetWire_exact :
+    targetWire =
+      Internal.checkedWire generated
+        (cutAbsorbCandidateWire signature plan)
+  inverse : CutWrapResult checked targetWire
+  inverseIso : ConcreteIso inverse.checked.val source.val
+
+/-- Dissolve every exact single-atom cut occupied by the acted wire. -/
+def cutAbsorb
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    Except ContentError (CutAbsorbResult source wire) := by
+  match signature : (source.val.wires wire).sig with
+  | .iota => exact .error .expectedRelation
+  | .rel arguments =>
+      match checkAllAppliedSites source wire with
+      | none => exact .error .nonAppliedEndpoint
+      | some sites =>
+          if exactCuts :
+              sites.sites.all (absorbSiteExact sites) = true then
+            if scopeRetained :
+                (source.val.wires wire).scope ∈
+                  Internal.retainedRegions source (absorbRegions sites) then
+              match removalAccepted :
+                  Internal.checkBatchRemovalPlan? source (absorbRegions sites)
+                    (removedSiteNodes sites) [wire] with
+              | none => exact .error .invalidRemoval
+              | some removal =>
+                  let plan : CutAbsorbPlan source wire sites :=
+                    ⟨removal, exactCuts, scopeRetained⟩
+                  let candidate := cutAbsorbCandidate arguments plan
+                  match accepted :
+                      ConcreteDiagram.checkWellFormed definitions candidate with
+                  | .error error => exact .error (.malformedTarget error)
+                  | .ok checked =>
+                      let generated :=
+                        ConcreteDiagram.checkWellFormed_preserves_input accepted
+                      let targetWire :=
+                        Internal.checkedWire generated
+                          (cutAbsorbCandidateWire arguments plan)
+                      match inverseAccepted : cutWrap checked targetWire with
+                      | .error _ => exact .error .inverseDeleteRejected
+                      | .ok inverse =>
+                          match
+                            ConcreteIsoSearch.findConcreteIso?
+                                inverse.checked.val source.val with
+                          | none => exact .error .inverseIsomorphismRejected
+                          | some inverseIso =>
+                              exact .ok
+                                (CutAbsorbResult.mk sites checked arguments
+                                  signature plan generated targetWire rfl
+                                  inverse inverseIso)
+            else
+              exact .error .nonExactCut
+          else
+            exact .error .nonExactCut
+
+private structure ParallelSplitPlan
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire) where
+  removal :
+    Internal.BatchRemovalPlan source [] (removedSiteNodes sites) [wire]
+
+private def parallelSplitBase
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : ParallelSplitPlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  Internal.batchRemovalCandidate plan.removal
+
+private def parallelSplitFirstNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : ParallelSplitPlan source wire sites)
+    (site : Fin sites.sites.length) :
+    Fin ((parallelSplitBase plan).nodeCount +
+      (sites.sites.length + sites.sites.length)) :=
+  Fin.natAdd (parallelSplitBase plan).nodeCount
+    (Fin.castAdd sites.sites.length site)
+
+private def parallelSplitSecondNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : ParallelSplitPlan source wire sites)
+    (site : Fin sites.sites.length) :
+    Fin ((parallelSplitBase plan).nodeCount +
+      (sites.sites.length + sites.sites.length)) :=
+  Fin.natAdd (parallelSplitBase plan).nodeCount
+    (Fin.natAdd sites.sites.length site)
+
+private def parallelSplitCandidate
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (signature : List Sig)
+    (plan : ParallelSplitPlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  let base := parallelSplitBase plan
+  let count := sites.sites.length
+  let added := count + count
+  {
+    regionCount := base.regionCount
+    nodeCount := base.nodeCount + added
+    wireCount := base.wireCount + 2
+    root := base.root
+    regions := base.regions
+    nodes :=
+      Fin.addCases base.nodes
+        (Fin.addCases
+          (fun site =>
+            .atom
+              (sourceRegionAfterRemoval (source := source) []
+                (sites.sites.get site).region (by
+                  unfold Internal.retainedRegions
+                  apply List.mem_filter.mpr
+                  exact ⟨Data.Finite.mem_allFin _, by simp⟩))
+              signature)
+          (fun site =>
+            .atom
+              (sourceRegionAfterRemoval (source := source) []
+                (sites.sites.get site).region (by
+                  unfold Internal.retainedRegions
+                  apply List.mem_filter.mpr
+                  exact ⟨Data.Finite.mem_allFin _, by simp⟩))
+              signature))
+    wires :=
+      Fin.addCases
+        (fun candidate =>
+          let data := base.wires candidate
+          { data with
+            endpoints :=
+              (data.endpoints.map fun endpoint =>
+                { node := Fin.castAdd added endpoint.node
+                  port := endpoint.port }) ++
+              retainedWireDoubleArgumentEndpoints (source := source)
+                [] (removedSiteNodes sites) [wire] sites.sites
+                (parallelSplitFirstNode plan)
+                (parallelSplitSecondNode plan) candidate })
+        (fun branch =>
+          { sig := .rel signature
+            scope :=
+              sourceRegionAfterRemoval (source := source) []
+                (source.val.wires wire).scope (by
+                  unfold Internal.retainedRegions
+                  apply List.mem_filter.mpr
+                  exact ⟨Data.Finite.mem_allFin _, by simp⟩)
+            endpoints :=
+              (Data.Finite.allFin count).map fun site =>
+                { node :=
+                    if branch.val = 0 then
+                      parallelSplitFirstNode plan site
+                    else
+                      parallelSplitSecondNode plan site
+                  port := .head } })
+  }
+
+private def parallelSplitCandidateWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (signature : List Sig)
+    (plan : ParallelSplitPlan source wire sites)
+    (branch : Fin 2) :
+    (parallelSplitCandidate signature plan).WireId :=
+  ⟨(parallelSplitBase plan).wireCount + branch.val, by
+    have branchBound := branch.isLt
+    simp only [parallelSplitCandidate]
+    omega⟩
+
+/-- Checked simultaneous replacement of one wire by two parallel wires. -/
+structure ParallelSplitResult
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) where
+  private mk ::
+  sites : AllAppliedSites source wire
+  checked : CheckedDiagram definitions
+  private signature : List Sig
+  private signature_exact : (source.val.wires wire).sig = .rel signature
+  private plan : ParallelSplitPlan source wire sites
+  private generated : checked.val = parallelSplitCandidate signature plan
+  firstWire : checked.val.WireId
+  secondWire : checked.val.WireId
+  private firstWire_exact :
+    firstWire =
+      Internal.checkedWire generated
+        (parallelSplitCandidateWire signature plan (0 : Fin 2))
+  private secondWire_exact :
+    secondWire =
+      Internal.checkedWire generated
+        (parallelSplitCandidateWire signature plan (1 : Fin 2))
+
+/-- Replace every `R(x̄)` by co-located `W₁(x̄)` and `W₂(x̄)`. -/
+def parallelSplit
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    Except ContentError (ParallelSplitResult source wire) := by
+  match signature : (source.val.wires wire).sig with
+  | .iota => exact .error .expectedRelation
+  | .rel arguments =>
+      match checkAllAppliedSites source wire with
+      | none => exact .error .nonAppliedEndpoint
+      | some sites =>
+          match removalAccepted :
+              Internal.checkBatchRemovalPlan? source []
+                (removedSiteNodes sites) [wire] with
+          | none => exact .error .invalidRemoval
+          | some removal =>
+              let plan : ParallelSplitPlan source wire sites := ⟨removal⟩
+              let candidate := parallelSplitCandidate arguments plan
+              match accepted :
+                  ConcreteDiagram.checkWellFormed definitions candidate with
+              | .error error => exact .error (.malformedTarget error)
+              | .ok checked =>
+                  let generated :=
+                    ConcreteDiagram.checkWellFormed_preserves_input accepted
+                  exact .ok
+                    (ParallelSplitResult.mk sites checked arguments signature
+                      plan generated
+                      (Internal.checkedWire generated
+                        (parallelSplitCandidateWire arguments plan
+                          (0 : Fin 2)))
+                      (Internal.checkedWire generated
+                        (parallelSplitCandidateWire arguments plan
+                          (1 : Fin 2)))
+                      rfl rfl)
+
+private structure ParallelPair
+    (source : CheckedDiagram definitions)
+    (left right : source.val.WireId) where
+  leftSite : AppliedSite source left
+  rightSite : AppliedSite source right
+
+private def sameParallelSite
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (leftSite : AppliedSite source left)
+    (rightSite : AppliedSite source right) : Bool :=
+  leftSite.region == rightSite.region &&
+    leftSite.arguments == rightSite.arguments
+
+private def pullParallelSite?
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (target : AppliedSite source right) :
+    List (AppliedSite source left) →
+      Option
+        (AppliedSite source left × List (AppliedSite source left))
+  | [] => none
+  | candidate :: tail =>
+      if sameParallelSite candidate target then
+        some (candidate, tail)
+      else
+        match pullParallelSite? target tail with
+        | none => none
+        | some (partner, rest) => some (partner, candidate :: rest)
+
+private def pairParallelSitesAux?
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId} :
+    List (AppliedSite source left) →
+      List (AppliedSite source right) →
+        Option
+          (List (ParallelPair source left right) ×
+            List (AppliedSite source left))
+  | leftSites, [] => some ([], leftSites)
+  | leftSites, rightSite :: rightSites => do
+      let (leftSite, remaining) ← pullParallelSite? rightSite leftSites
+      let (pairs, leftover) ← pairParallelSitesAux? remaining rightSites
+      pure (⟨leftSite, rightSite⟩ :: pairs, leftover)
+
+private def pairParallelSites?
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (leftSites : List (AppliedSite source left))
+    (rightSites : List (AppliedSite source right)) :
+    Option (List (ParallelPair source left right)) := do
+  let (pairs, leftover) ← pairParallelSitesAux? leftSites rightSites
+  if leftover = [] then
+    pure pairs
+  else
+    none
+
+private def parallelPairNodes
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (pairs : List (ParallelPair source left right)) :
+    List source.val.NodeId :=
+  pairs.flatMap fun pair => [pair.leftSite.node, pair.rightSite.node]
+
+private structure ParallelFusePlan
+    (source : CheckedDiagram definitions)
+    (left right : source.val.WireId)
+    (pairs : List (ParallelPair source left right)) where
+  removal :
+    Internal.BatchRemovalPlan source []
+      (parallelPairNodes pairs) [left, right]
+
+private def parallelFuseBase
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    {pairs : List (ParallelPair source left right)}
+    (plan : ParallelFusePlan source left right pairs) :
+    ConcreteDiagram definitions.length :=
+  Internal.batchRemovalCandidate plan.removal
+
+private def parallelFuseNode
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    {pairs : List (ParallelPair source left right)}
+    (plan : ParallelFusePlan source left right pairs)
+    (pair : Fin pairs.length) :
+    Fin ((parallelFuseBase plan).nodeCount + pairs.length) :=
+  Fin.natAdd (parallelFuseBase plan).nodeCount pair
+
+private def parallelPairArgumentEndpoints
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (pairs : List (ParallelPair source left right))
+    (removedNodes : List source.val.NodeId)
+    (candidate :
+      Fin (Internal.retainedWires source [left, right]).length) :
+    List (CEndpoint
+      ((Internal.retainedNodes source removedNodes).length + pairs.length)) :=
+  let sourceWire :=
+    Internal.sourceRetainedWire source [left, right] candidate
+  (Data.Finite.allFin pairs.length).flatMap fun pair =>
+    (List.range (pairs.get pair).leftSite.arguments.length).filterMap
+      fun position =>
+        match (pairs.get pair).leftSite.arguments[position]? with
+        | some argument =>
+            if argument = sourceWire then
+              some
+                { node :=
+                    Fin.natAdd
+                      (Internal.retainedNodes source removedNodes).length pair
+                  port := .arg position }
+            else
+              none
+        | none => none
+
+private def parallelFuseCandidate
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    {pairs : List (ParallelPair source left right)}
+    (signature : List Sig)
+    (plan : ParallelFusePlan source left right pairs) :
+    ConcreteDiagram definitions.length :=
+  let base := parallelFuseBase plan
+  let count := pairs.length
+  {
+    regionCount := base.regionCount
+    nodeCount := base.nodeCount + count
+    wireCount := base.wireCount + 1
+    root := base.root
+    regions := base.regions
+    nodes :=
+      Fin.addCases base.nodes fun pair =>
+        .atom
+          (sourceRegionAfterRemoval (source := source) []
+            (pairs.get pair).leftSite.region (by
+              unfold Internal.retainedRegions
+              apply List.mem_filter.mpr
+              exact ⟨Data.Finite.mem_allFin _, by simp⟩))
+          signature
+    wires :=
+      Fin.addCases
+        (fun candidate =>
+          let data := base.wires candidate
+          { data with
+            endpoints :=
+              (data.endpoints.map fun endpoint =>
+                { node := Fin.castAdd count endpoint.node
+                  port := endpoint.port }) ++
+              parallelPairArgumentEndpoints pairs (parallelPairNodes pairs)
+                candidate })
+        (fun _ =>
+          { sig := .rel signature
+            scope :=
+              sourceRegionAfterRemoval (source := source) []
+                (source.val.wires left).scope (by
+                  unfold Internal.retainedRegions
+                  apply List.mem_filter.mpr
+                  exact ⟨Data.Finite.mem_allFin _, by simp⟩)
+            endpoints :=
+              (Data.Finite.allFin count).map fun pair =>
+                { node := parallelFuseNode plan pair, port := .head } })
+  }
+
+private def parallelFuseCandidateWire
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    {pairs : List (ParallelPair source left right)}
+    (signature : List Sig)
+    (plan : ParallelFusePlan source left right pairs) :
+    (parallelFuseCandidate signature plan).WireId :=
+  ⟨(parallelFuseBase plan).wireCount, by
+    simp [parallelFuseCandidate]⟩
+
+/-- Checked pairwise parallel fusion with exact split reconstruction. -/
+structure ParallelFuseResult
+    (source : CheckedDiagram definitions)
+    (left right : source.val.WireId) where
+  private mk ::
+  leftSites : AllAppliedSites source left
+  rightSites : AllAppliedSites source right
+  private pairs : List (ParallelPair source left right)
+  checked : CheckedDiagram definitions
+  private signature : List Sig
+  private leftSignature : (source.val.wires left).sig = .rel signature
+  private rightSignature : (source.val.wires right).sig = .rel signature
+  private plan : ParallelFusePlan source left right pairs
+  private generated : checked.val = parallelFuseCandidate signature plan
+  targetWire : checked.val.WireId
+  private targetWire_exact :
+    targetWire =
+      Internal.checkedWire generated
+        (parallelFuseCandidateWire signature plan)
+  inverse : ParallelSplitResult checked targetWire
+  inverseIso : ConcreteIso inverse.checked.val source.val
+
+/-- Fuse two co-scoped, equal-signature, pairwise co-located applied wires. -/
+def parallelFuse
+    (source : CheckedDiagram definitions)
+    (left right : source.val.WireId) :
+    Except ContentError (ParallelFuseResult source left right) := by
+  if same : left = right then
+    exact .error .sameWire
+  else
+    match leftSignature : (source.val.wires left).sig with
+    | .iota => exact .error .expectedRelation
+    | .rel arguments =>
+        match rightSignature : (source.val.wires right).sig with
+        | .iota => exact .error .signatureMismatch
+        | .rel rightArguments =>
+            if signatures : rightArguments = arguments then
+              if scopes :
+                  (source.val.wires left).scope =
+                    (source.val.wires right).scope then
+                match checkAllAppliedSites source left,
+                    checkAllAppliedSites source right with
+                | some leftSites, some rightSites =>
+                    match
+                        pairParallelSites? leftSites.sites
+                          rightSites.sites with
+                    | none => exact .error .parallelMismatch
+                    | some pairs =>
+                        match removalAccepted :
+                            Internal.checkBatchRemovalPlan? source []
+                              (parallelPairNodes pairs) [left, right] with
+                        | none => exact .error .invalidRemoval
+                        | some removal =>
+                            let plan :
+                                ParallelFusePlan source left right pairs :=
+                              ⟨removal⟩
+                            let candidate :=
+                              parallelFuseCandidate arguments plan
+                            match accepted :
+                                ConcreteDiagram.checkWellFormed definitions
+                                  candidate with
+                            | .error error =>
+                                exact .error (.malformedTarget error)
+                            | .ok checked =>
+                                let generated :=
+                                  ConcreteDiagram.checkWellFormed_preserves_input
+                                    accepted
+                                let targetWire :=
+                                  Internal.checkedWire generated
+                                    (parallelFuseCandidateWire arguments plan)
+                                match inverseAccepted :
+                                    parallelSplit checked targetWire with
+                                | .error _ =>
+                                    exact .error .inverseDeleteRejected
+                                | .ok inverse =>
+                                    match
+                                        ConcreteIsoSearch.findConcreteIso?
+                                          inverse.checked.val source.val with
+                                    | none =>
+                                        exact .error
+                                          .inverseIsomorphismRejected
+                                    | some inverseIso =>
+                                        exact .ok
+                                          (ParallelFuseResult.mk leftSites
+                                            rightSites pairs checked arguments
+                                            leftSignature
+                                            (by simpa [signatures] using
+                                              rightSignature)
+                                            plan generated targetWire rfl
+                                            inverse inverseIso)
+                | _, _ => exact .error .nonAppliedEndpoint
+              else
+                exact .error .scopeMismatch
+            else
+              exact .error .signatureMismatch
+
+private structure EndsDeletePlan
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire) where
+  removal :
+    Internal.BatchRemovalPlan source [] (removedSiteNodes sites) []
+
+private def endsDeleteCandidate
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    (plan : EndsDeletePlan source wire sites) :
+    ConcreteDiagram definitions.length :=
+  Internal.batchRemovalCandidate plan.removal
+
+/-- Checked dense removal of every applied head of one relation wire. -/
+structure EndsDeleteResult
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) where
+  private mk ::
+  sites : AllAppliedSites source wire
+  checked : CheckedDiagram definitions
+  private plan : EndsDeletePlan source wire sites
+  private generated : checked.val = endsDeleteCandidate plan
+
+/-- Delete all and only the applied-head nodes of `wire`. -/
+def deleteEnds
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    Except ContentError (EndsDeleteResult source wire) := by
+  match checkedSites : checkAllAppliedSites source wire with
+  | none => exact .error .nonAppliedEndpoint
+  | some sites =>
+      match removalAccepted :
+          Internal.checkBatchRemovalPlan? source []
+            (removedSiteNodes sites) [] with
+      | none => exact .error .invalidRemoval
+      | some removal =>
+          let plan : EndsDeletePlan source wire sites := ⟨removal⟩
+          let candidate := endsDeleteCandidate plan
+          match accepted :
+              ConcreteDiagram.checkWellFormed definitions candidate with
+          | .error error => exact .error (.malformedTarget error)
+          | .ok checked =>
+              exact .ok
+                (EndsDeleteResult.mk sites checked plan
+                  (ConcreteDiagram.checkWellFormed_preserves_input accepted))
+
+private def spawnNode
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    {wire : source.val.WireId}
+    (sites : List (EndSite source wire))
+    (site : Fin sites.length) :
+    Fin (source.val.nodeCount + sites.length) :=
+  Fin.natAdd source.val.nodeCount site
+
+private def spawnArgumentEndpoints
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    {target : source.val.WireId}
+    (sites : List (EndSite source target))
+    (candidate : source.val.WireId) :
+    List (CEndpoint (source.val.nodeCount + sites.length)) :=
+  (Data.Finite.allFin sites.length).flatMap fun site =>
+    (List.range (sites.get site).arguments.length).filterMap fun position =>
+      match (sites.get site).arguments[position]? with
+      | some argument =>
+          if argument = candidate then
+            some
+              { node := spawnNode source sites site
+                port := .arg position }
+          else
+            none
+      | none => none
+
+private def endsSpawnCandidate
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (signature : List Sig)
+    (sites : List (EndSite source wire)) :
+    ConcreteDiagram definitions.length where
+  regionCount := source.val.regionCount
+  nodeCount := source.val.nodeCount + sites.length
+  wireCount := source.val.wireCount
+  root := source.val.root
+  regions := source.val.regions
+  nodes :=
+    Fin.addCases source.val.nodes fun site =>
+      .atom (sites.get site).region signature
+  wires := fun candidate =>
+    let data := source.val.wires candidate
+    { data with
+      endpoints :=
+        (data.endpoints.map fun endpoint =>
+          ({ node := Fin.castAdd sites.length endpoint.node
+             port := endpoint.port } :
+            CEndpoint (source.val.nodeCount + sites.length)))
+        ++
+        (if candidate = wire then
+          ((Data.Finite.allFin sites.length).map fun site =>
+            ({ node := spawnNode source sites site
+               port := .head } :
+              CEndpoint (source.val.nodeCount + sites.length)))
+        else
+          [])
+        ++ spawnArgumentEndpoints source sites candidate }
+
+private def siteArgumentsValid
+    (source : CheckedDiagram definitions)
+    (signature : List Sig)
+    (arguments : List source.val.WireId) : Bool :=
+  arguments.length = signature.length &&
+    (List.zip arguments signature).all fun pair =>
+      (source.val.wires pair.1).sig == pair.2
+
+private def siteVisible
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (site : EndSite source wire) : Bool :=
+  source.val.Encloses (source.val.wires wire).scope site.region &&
+    site.arguments.all fun argument =>
+      decide
+        (source.val.Encloses
+          (source.val.wires argument).scope site.region)
+
+/-- Checked dense spawning of one applied head at every requested site. -/
+structure EndsSpawnResult
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : List (EndSite source wire)) where
+  private mk ::
+  checked : CheckedDiagram definitions
+  private signature : List Sig
+  private signature_exact :
+    (source.val.wires wire).sig = .rel signature
+  private generated :
+    checked.val =
+      endsSpawnCandidate source wire signature sites
+  inverseWire : checked.val.WireId
+  private inverseWire_exact :
+    inverseWire = Internal.checkedWire generated wire
+  inverse : EndsDeleteResult checked inverseWire
+  inverseIso : ConcreteIso inverse.checked.val source.val
+
+/-- Spawn applied heads on an endpoint-free relation wire at checked sites. -/
+def spawnEnds
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : List (EndSite source wire)) :
+    Except ContentError (EndsSpawnResult source wire sites) := by
+  match signature : (source.val.wires wire).sig with
+  | .iota => exact .error .expectedRelation
+  | .rel arguments =>
+      if occupied : (source.val.wires wire).endpoints ≠ [] then
+        exact .error .wireHasEndpoints
+      else if empty : sites = [] then
+        exact .error .emptySites
+      else if arity :
+          !(sites.all fun site =>
+            siteArgumentsValid source arguments site.arguments) then
+        exact .error .argumentArity
+      else if visible :
+          !(sites.all fun site => siteVisible source wire site) then
+        exact .error .siteOutsideScope
+      else
+        let candidate := endsSpawnCandidate source wire arguments sites
+        match accepted :
+            ConcreteDiagram.checkWellFormed definitions candidate with
+        | .error error => exact .error (.malformedTarget error)
+        | .ok checked =>
+            let generated :=
+              ConcreteDiagram.checkWellFormed_preserves_input accepted
+            let inverseWire := Internal.checkedWire generated wire
+            match inverseAccepted : deleteEnds checked inverseWire with
+            | .error _ => exact .error .inverseDeleteRejected
+            | .ok inverse =>
+                match
+                    ConcreteIsoSearch.findConcreteIso?
+                      inverse.checked.val source.val with
+                | none => exact .error .inverseIsomorphismRejected
+                | some inverseIso =>
+                    exact .ok
+                      (EndsSpawnResult.mk checked arguments signature generated
+                        inverseWire rfl inverse inverseIso)
+
+end ConcreteWirePrimitive
+
+end VisualProof
