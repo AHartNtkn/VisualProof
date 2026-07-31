@@ -3,6 +3,7 @@ import VisualProof.Rule.WirePrimitive.Content
 namespace VisualProof
 
 #check ConcreteWirePrimitive.AppliedSite.replacement_denotation
+#check WirePrimitive.AppliedSiteErasure.Result.inductionOn
 
 namespace WirePrimitive
 

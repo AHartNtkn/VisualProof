@@ -314,6 +314,44 @@ theorem Result.target_empty
     (result.target.val.wires result.targetWire).endpoints = [] :=
   result.trace.target_empty
 
+/--
+Eliminate the sealed checker trace into a proposition. Downstream semantic
+proofs receive only the exact applied site, its canonical checked erasure, and
+the induction hypothesis for the checker-produced tail; the private trace
+constructors remain unavailable.
+-/
+theorem Result.inductionOn
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : Result source wire)
+    (motive :
+      ∀ (source : CheckedDiagram definitions)
+        (_wire : source.val.WireId)
+        (target : CheckedDiagram definitions)
+        (_targetWire : target.val.WireId),
+        Prop)
+    (done :
+      ∀ (source : CheckedDiagram definitions)
+        (wire : source.val.WireId)
+        (_empty : (source.val.wires wire).endpoints = []),
+        motive source wire source wire)
+    (step :
+      ∀ {source : CheckedDiagram definitions}
+        {wire : source.val.WireId}
+        (site : AppliedSite source wire)
+        (erasure : CheckedErasure source site.node)
+        {target : CheckedDiagram definitions}
+        {targetWire : target.val.WireId},
+        motive erasure.target (erasure.wireImage wire) target targetWire →
+          motive source wire target targetWire) :
+    motive source wire result.target result.targetWire := by
+  rcases result with ⟨target, targetWire, trace⟩
+  induction trace with
+  | done source wire empty =>
+      exact done source wire empty
+  | step site erasure tail induction =>
+      exact step site erasure induction
+
 end AppliedSiteErasure
 
 end WirePrimitive
