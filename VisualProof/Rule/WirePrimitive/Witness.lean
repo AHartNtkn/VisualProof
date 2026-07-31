@@ -215,14 +215,15 @@ structure UniformSiteRewrite
   private normalized_result_exact :
     normalizeResult rawTarget = normalizedTarget
 
-namespace UniformSiteRewrite
+namespace Internal
 
 /--
-The sole construction boundary.  Production callers are primitive checkers:
-they must supply exact exhaustive position equations, binder depth, denotation
-factorizations, and normalized target equality.
+Proof-only construction boundary for primitive checker implementations.
+Public rule inputs and applied receipts never contain these semantic
+factorizations; a primitive semantics module derives them from its private
+checked structural receipt before invoking the generic witness theorem.
 -/
-def ofChecked
+def uniformSiteRewriteOfChecked
     {SourceSite : Type u}
     {TargetSite : Type v}
     {SourceWitness TargetWitness : Type w}
@@ -262,6 +263,10 @@ def ofChecked
     targetExhaustive siteContext scopeContext scopeDepthExact sourceAt
     targetAt sourceResult targetResult sourceResultExact targetResultExact
     normalizeResult rawTarget normalizedTarget normalizedResultExact
+
+end Internal
+
+namespace UniformSiteRewrite
 
 /-- The source collection covers every logical position exactly once. -/
 theorem source_positions

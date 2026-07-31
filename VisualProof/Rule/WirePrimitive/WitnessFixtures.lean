@@ -66,7 +66,7 @@ private def abstractRewrite
     UniformSiteRewrite
       (Fin siteCount) (Fin siteCount)
       SourceWitness TargetWitness PUnit :=
-  UniformSiteRewrite.ofChecked
+  Internal.uniformSiteRewriteOfChecked
     (.rel []) 0 scopeContext.cutDepth siteCount
     (List.finRange siteCount) (List.finRange siteCount)
     id id (by simp) (by simp)
