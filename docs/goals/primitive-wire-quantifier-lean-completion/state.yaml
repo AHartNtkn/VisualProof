@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T016
+active_task: T008
 
 tasks:
   - id: T001
@@ -440,7 +440,7 @@ tasks:
   - id: T008
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 7: formalize argument-plumbing equivalences."
     inputs:
@@ -468,7 +468,7 @@ tasks:
   - id: T016
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Continue plan Task 6: fold the private applied-site erasure trace, instantiate all content witnesses, and expose the six public soundness receipts."
     inputs:
@@ -485,7 +485,9 @@ tasks:
       - "VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean"
       - "VisualProof/Diagram/Concrete/IsomorphismSearch.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/Content.lean"
+      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean"
+      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean"
       - "VisualProof/Diagram/Concrete/Subgraph/FactorizationFrame.lean"
       - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean"
       - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalProvenance.lean"
@@ -513,7 +515,29 @@ tasks:
       - "A primitive would act on only some endpoints."
       - "Round-trip equality cannot be expressed by checked isomorphism and transport."
       - "The semantic induction requires a monolithic-rule premise."
-    receipt: null
+    receipt:
+      result: done
+      harness: codex
+      commit: 4f6f4bd
+      summary: "Completed plan Task 6: the checker now certifies exact paired site contexts, shared outer suffixes, and target-environment reconstruction; cut and parallel primitives instantiate complement, diagonal, and intersection witnesses over full Model; all six public receipts expose soundness; mixed-site, empty-site, refusal, polarity, and inverse-isomorphism fixtures pass."
+      changed_files:
+        - VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean
+        - VisualProof/Rule/WirePrimitive/Content.lean
+        - VisualProof/Rule/WirePrimitive/ContentFixtures.lean
+        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
+      commands:
+        - cmd: lake build VisualProof.Rule.WirePrimitive.ContentFixtures
+          status: pass
+        - cmd: lake build
+          status: pass
+        - cmd: npm run formal:size
+          status: pass
+        - cmd: git diff --check
+          status: pass
+        - cmd: "! rg -n \"\\b(sorry|admit)\\b\" VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean VisualProof/Rule/WirePrimitive/Content.lean VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
+          status: pass
+      review: "PASS: all five Task 6 plan steps, exact full-model witness ownership, complete all-head factorization, four equivalence receipts, two directed ends receipts, inverse isomorphisms, source-size limit, full build, and unrelated archive/scratchpad preservation verified."
   - id: T009
     type: worker
     assignee: Worker
