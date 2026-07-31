@@ -417,18 +417,18 @@ checkers.
   nullary site under positive and negative contexts, mixed-parity sites, and a
   two-site shared witness. Add a negative example showing that separate
   per-site witnesses do not satisfy the API.
-- [x] **Step 2: Define one site/frame authority.** An applied site records its
+- [ ] **Step 2: Define one site/frame authority.** An applied site records its
   atom-head endpoint, region, ordered arguments, and checked factorization.
   The all-sites collection proves it exhausts the acted-on wire.
-- [x] **Step 3: Prove pointwise replacement.** Show one semantic witness makes
+- [ ] **Step 3: Prove pointwise replacement.** Show one semantic witness makes
   every source/target site pair pointwise equal and that equality composes
   through all checked contexts. Mixed site polarity must disappear from the
   final obligation; only binder-scope polarity selects entailment direction.
-- [x] **Step 4: Prove the three public forms.** A supplied eliminating witness
+- [ ] **Step 4: Prove the three public forms.** A supplied eliminating witness
   gives join-family soundness, an introducing witness gives sever-family
   soundness, and both give an ungated equivalence. Keep this theorem generic
   over `PreModel`; later full-model instantiations construct the witnesses.
-- [x] **Step 5: Run GREEN and commit.**
+- [ ] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build
