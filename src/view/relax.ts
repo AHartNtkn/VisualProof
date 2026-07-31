@@ -1416,13 +1416,21 @@ function liveScoreAt(e: Engine): number {
   return score
 }
 
-/** Per-engine sticky approach decision: re-scored only when the best snapshot
-    changes (event-driven — approaching/walking frames never evaluate the full
-    energy). */
-const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; lastAdoptKey: string }>()
+/** Per-engine sticky approach decision: re-scored only at DECISION EVENTS (a
+    new best snapshot, or a mismatch REAPPEARING after the live layout had
+    matched — e.g. a walk topology change unlocked junction approach) — never
+    per frame. */
+const searchFrameState = new WeakMap<Engine, { decidedFor: LayoutBest | null; approach: boolean; rematch: boolean; lastAdoptKey: string }>()
+
+/** Same wire topology = same edge list (junction indices correspond). */
+const sameTopology = (a: WireNet, b: WireNet): boolean =>
+  a.junctions.length === b.junctions.length && JSON.stringify(a.edges) === JSON.stringify(b.edges)
 
 /** Does the live layout differ (beyond float dust) from the best snapshot on
-    any coordinate the approach may move? */
+    any coordinate the approach may move? Junctions of topology-matched wires
+    are approach coordinates like body poses: the approach must carry them all
+    the way into the searcher's basin (a gated walk cannot cross the barrier
+    the searcher's hop crossed). */
 function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): boolean {
   for (const [id, b] of e.bodies) {
     if (pinned !== null && pinned.has(id)) continue
@@ -1431,21 +1439,35 @@ function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     if (Math.abs(t.pos.x - b.pos.x) > 1e-6 || Math.abs(t.pos.y - b.pos.y) > 1e-6) return true
     if (Math.abs(Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))) > 1e-6) return true
   }
+  for (const [wid, w] of e.wires) {
+    const n = best.nets.get(wid)
+    if (n === undefined || !sameTopology(w.net, n)) continue
+    for (let j = 0; j < w.net.junctions.length; j++) {
+      const p = w.net.junctions[j]!, q = n.junctions[j]!
+      if (Math.abs(q.x - p.x) > 1e-6 || Math.abs(q.y - p.y) > 1e-6) return true
+    }
+  }
   return false
 }
 
-/** One bounded approach step toward the best snapshot: positions and angles
-    move under the travel cap; a differing wire topology is adopted whole (the
-    walk re-settles junctions afterward). */
 /** PRESENTATION pace (USER ruling 2026-07-25): the visible settling should
     read as a GENTLE approach to the minimum, not a rapid jerk — on-screen
     motion runs ~5× slower than the solver's trust region. Presentation-only:
     the worker's relaxations and the local solver path are untouched. The
     value is user-calibrated ("a slow down of maybe around five x… let's see
     if that looks good"), re-judged visually, never tuned blindly. */
-const PRESENT_SLOW = 5
+export const PRESENT_SLOW = 5
 
-function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): void {
+/** One bounded approach step toward the best snapshot. EVERY visible DOF moves
+    under the ONE presentation bound — body positions, body angles, and the
+    junctions of wires whose topology matches the best's (their indices
+    correspond, so each junction has a target). A differing topology is NEVER
+    adopted (adopting a net whole teleports junction state — the measured
+    ~10 wu snap): the presentation walk evolves those wires through its own
+    coincidence-scale contract/split events instead. Returns the set of wires
+    the approach owns this frame, so the walk leaves them alone (running both
+    on one wire is the measured approach-vs-descent tug-of-war). */
+function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): Set<WireId> {
   const bound = (WIREP.travelCap / PRESENT_SLOW) * e.scale
   for (const [id, b] of e.bodies) {
     if (pinned !== null && pinned.has(id)) continue
@@ -1461,14 +1483,22 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
     if (Math.abs(dth) > 1e-9) b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
   }
+  const owned = new Set<WireId>()
   for (const [wid, w] of e.wires) {
     const n = best.nets.get(wid)
-    if (n === undefined) continue
-    if (JSON.stringify(w.net.edges) !== JSON.stringify(n.edges)) {
-      w.net.edges = n.edges.map(([u, v]) => [u, v])
-      w.net.junctions = n.junctions.map((pt) => ({ ...pt }))
+    if (n === undefined || !sameTopology(w.net, n)) continue
+    owned.add(wid)
+    for (let j = 0; j < w.net.junctions.length; j++) {
+      const p = w.net.junctions[j]!, q = n.junctions[j]!
+      const dx = q.x - p.x, dy = q.y - p.y
+      const d = Math.hypot(dx, dy)
+      if (d > 1e-9) {
+        const st = Math.min(d, bound)
+        w.net.junctions[j] = { x: p.x + (dx / d) * st, y: p.y + (dy / d) * st }
+      }
     }
   }
+  return owned
 }
 
 /** The wire presentation walk: bounded continuation toward each wire's own routed
@@ -1484,9 +1514,14 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     let the walk trade rod down while pushing separation up without bound — a limit
     cycle that never rested. The Δsep term is charged via the spatial grid of the
     other wires' segments (they do not move while this wire walks). */
-function walkWires(e: Engine, presentation = false): boolean {
+function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | null = null): boolean {
   const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
-  const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc, bound = WIREP.travelCap * sc
+  const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc
+  // the walk moves VISIBLE junction state: presentation frames use the one
+  // presentation bound (the same per-frame pace every visible DOF gets);
+  // solver walks keep the full trust region (descent is optimization, not
+  // simulation — 2026-07-25)
+  const bound = presentation ? (WIREP.travelCap / PRESENT_SLOW) * sc : WIREP.travelCap * sc
   const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[] }[] = []
   const segsByWid = new Map<WireId, Seg2[]>()
   for (const [wid, w] of e.wires) {
@@ -1498,6 +1533,7 @@ function walkWires(e: Engine, presentation = false): boolean {
   }
   let routed = false
   for (const { wid, w, terms, bcs } of walkers) {
+    if (skip !== null && skip.has(wid)) continue
     // grid of every OTHER wire's current segments (fixed while this wire walks).
     const others: Seg2[] = []
     for (const [owid, segs] of segsByWid) if (owid !== wid) for (const s of segs) others.push(s)
@@ -1528,27 +1564,31 @@ function walkWires(e: Engine, presentation = false): boolean {
       }
       return L + sep
     }
-    // presentation frames divide the per-frame wire travel by PRESENT_SLOW
-    // (fewer substeps at the same gated bound); solver walks keep full speed
-    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? Math.max(1, Math.round(20 / PRESENT_SLOW)) : 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
+    // ONE presentation substep at the presentation bound = the per-frame wire
+    // travel equals the body travel; solver walks keep their full budget
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
     segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
   }
   return routed
 }
 
-/** The searched frame: strictly bounded per-frame work. Approach owns motion
-    when a strictly better layout is known (running approach and local descent
-    together is a measured permanent tug-of-war); otherwise the walk keeps the
-    wires settling. The full energy is evaluated only at decision events. */
+/** The searched frame: strictly bounded per-frame work. The approach owns the
+    coordinates with a known target (body poses + junctions of topology-matched
+    wires) when a strictly better layout is known; the presentation walk keeps
+    every OTHER wire settling on the SAME frame — wires never freeze while
+    bodies move (the measured lag-then-snap), and no coordinate is moved by
+    both (the measured tug-of-war). The full energy is evaluated only at
+    decision events. */
 function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: LayoutSearch): boolean {
   search.sync(e, pinned)
   const best = search.best()
-  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, lastAdoptKey: '' }
+  const st = searchFrameState.get(e) ?? { decidedFor: null, approach: false, rematch: false, lastAdoptKey: '' }
   searchFrameState.set(e, st)
-  let acted = false
+  let approached = false
+  let owned: ReadonlySet<WireId> | null = null
   if (best !== null && bestMismatch(e, best, pinned)) {
-    if (st.decidedFor !== best) {
+    if (st.decidedFor !== best || st.rematch) {
       const live = liveScoreAt(e)
       const EPS = 1e-6 * (Math.abs(live) + 1)
       if (live < best.score - EPS) {
@@ -1558,26 +1598,27 @@ function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: La
         st.approach = best.score < live - EPS
       }
       st.decidedFor = best
+      st.rematch = false
     }
     if (st.approach) {
-      approachStep(e, best, pinned)
-      acted = true
+      owned = approachStep(e, best, pinned)
+      approached = true
     }
   } else {
     st.decidedFor = best
     st.approach = false
+    st.rematch = true
   }
+  const walked = walkWires(e, true, owned)
+  const acted = approached || walked
   if (!acted) {
-    acted = walkWires(e, true)
-    if (!acted) {
-      // live rest: offer the layout to the searcher once per configuration
-      const key = liveKey(e)
-      if (key !== st.lastAdoptKey) {
-        st.lastAdoptKey = key
-        const live = liveScoreAt(e)
-        const b = search.best()
-        if (b === null || live < b.score - 1e-6 * (Math.abs(live) + 1)) search.adoptLive(e, live)
-      }
+    // live rest: offer the layout to the searcher once per configuration
+    const key = liveKey(e)
+    if (key !== st.lastAdoptKey) {
+      st.lastAdoptKey = key
+      const live = liveScoreAt(e)
+      const b = search.best()
+      if (b === null || live < b.score - 1e-6 * (Math.abs(live) + 1)) search.adoptLive(e, live)
     }
   }
   recomputeRegions(e)
