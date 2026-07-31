@@ -18,6 +18,7 @@ make the initial target RED.
 #check runPrimitiveProgram
 #check compileRelationJoin
 #check compileRelationSever
+#check initialIntrinsicResidual
 #check runPrimitiveProgram_sound
 #check compiled_join_redundant
 #check compiled_sever_redundant

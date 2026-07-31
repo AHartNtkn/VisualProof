@@ -21,6 +21,21 @@ def packedVarSignature (value : PackedVar context) : Sig := value.1
 def liftPackedVar (value : PackedVar context) : PackedVar (bound :: context) :=
   ⟨value.1, .there value.2⟩
 
+@[simp]
+theorem varsEntries_signatures
+    (values : Vars context signatures) :
+    values.entries.map packedVarSignature = signatures := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [Vars.entries, induction, packedVarSignature]
+
+@[simp]
+theorem varsEntries_length
+    (values : Vars context signatures) :
+    values.entries.length = signatures.length := by
+  rw [← List.length_map, varsEntries_signatures]
+
 /-- One content class whose current representative is an ambient host wire. -/
 structure AmbientBinding
     (source : CheckedDiagram definitions)
@@ -57,6 +72,98 @@ structure IntrinsicCompilerResidual
           binding.value = (⟨signature, value⟩ : PackedVar context)
 
 namespace AmbientBinding
+
+/-- Build the complete ordered ambient ledger from an intrinsic boundary
+suffix and its equally ordered host parameters.  Repeated intrinsic classes
+and repeated host wires remain separate entries. -/
+def ofBoundaryLists
+    {source : CheckedDiagram definitions}
+    {live : source.val.WireId} :
+    (values : List (PackedVar context)) →
+    (wires : List source.val.WireId) →
+    values.map packedVarSignature =
+      wires.map (fun wire => (source.val.wires wire).sig) →
+    live ∉ wires →
+    List (AmbientBinding source context live)
+  | [], [], _, _ => []
+  | value :: values, wire :: wires, signatures, different => by
+      have headSignature :
+          (source.val.wires wire).sig = value.1 := by
+        have heads := congrArg List.head? signatures
+        simpa [packedVarSignature] using heads.symm
+      have tailSignatures :
+          values.map packedVarSignature =
+            wires.map (fun candidate =>
+              (source.val.wires candidate).sig) := by
+        have tails := congrArg List.tail signatures
+        simpa using tails
+      have wireDifferent : wire ≠ live := by
+        intro same
+        apply different
+        simp [same]
+      have tailDifferent : live ∉ wires := by
+        intro member
+        exact different (List.mem_cons_of_mem wire member)
+      exact
+        { value := value
+          wire := wire
+          different := wireDifferent
+          signature := headSignature } ::
+        ofBoundaryLists values wires tailSignatures tailDifferent
+  | [], _ :: _, signatures, _ => by
+      simp at signatures
+  | _ :: _, [], signatures, _ => by
+      simp at signatures
+
+@[simp]
+theorem ofBoundaryLists_values
+    {source : CheckedDiagram definitions}
+    {live : source.val.WireId}
+    (values : List (PackedVar context))
+    (wires : List source.val.WireId)
+    (signatures :
+      values.map packedVarSignature =
+        wires.map (fun wire => (source.val.wires wire).sig))
+    (different : live ∉ wires) :
+    (ofBoundaryLists values wires signatures different).map
+        AmbientBinding.value = values := by
+  induction values generalizing wires with
+  | nil =>
+      cases wires with
+      | nil => rfl
+      | cons wire wires => simp at signatures
+  | cons value values induction =>
+      cases wires with
+      | nil => simp at signatures
+      | cons wire wires =>
+          simp only [ofBoundaryLists, List.map_cons]
+          congr
+          apply induction
+
+@[simp]
+theorem ofBoundaryLists_wires
+    {source : CheckedDiagram definitions}
+    {live : source.val.WireId}
+    (values : List (PackedVar context))
+    (wires : List source.val.WireId)
+    (signatures :
+      values.map packedVarSignature =
+        wires.map (fun wire => (source.val.wires wire).sig))
+    (different : live ∉ wires) :
+    (ofBoundaryLists values wires signatures different).map
+        AmbientBinding.wire = wires := by
+  induction values generalizing wires with
+  | nil =>
+      cases wires with
+      | nil => rfl
+      | cons wire wires => simp at signatures
+  | cons value values induction =>
+      cases wires with
+      | nil => simp at signatures
+      | cons wire wires =>
+          simp only [ofBoundaryLists, List.map_cons]
+          congr
+          apply induction
 
 /-- Transport one ambient class below a newly introduced formal binder. -/
 def liftThroughArityShift
@@ -100,6 +207,97 @@ def intrinsicItemSeqSize : ItemSeq definitions context → Nat
 end
 
 namespace IntrinsicCompilerResidual
+
+/--
+Construct the first total compiler obligation from the sole checked open-body
+compilation.  The ordered boundary is partitioned once: its prefix is the
+possibly-repeated formal tuple and its suffix supplies one ambient binding per
+ordered host parameter.  Boundary surjectivity proves that this partition
+covers every intrinsic class.
+-/
+def initial
+    {definitions : List (List Sig)}
+    {content : CheckedOpenDiagram definitions}
+    (compilation : OpenCompilation content)
+    {source : CheckedDiagram definitions}
+    (wire : source.val.WireId)
+    (arguments : List Sig)
+    (wireSignature : (source.val.wires wire).sig = .rel arguments)
+    (sites : AllAppliedSites source wire)
+    (parameters : List source.val.WireId)
+    (formalSignatures :
+      (checkedBoundarySigs content).take arguments.length = arguments)
+    (parameterSignatures :
+      (checkedBoundarySigs content).drop arguments.length =
+        parameters.map (fun parameter =>
+          (source.val.wires parameter).sig))
+    (liveNotParameter : wire ∉ parameters) :
+    IntrinsicCompilerResidual source
+      (ConcreteElaboration.openBoundaryClassSigs content.val) := by
+  let entries := compilation.boundary.entries
+  let formals := entries.take arguments.length
+  let ambientValues := entries.drop arguments.length
+  have ambientSignatures :
+      ambientValues.map packedVarSignature =
+        parameters.map (fun parameter =>
+          (source.val.wires parameter).sig) := by
+    calc
+      ambientValues.map packedVarSignature =
+          (entries.map packedVarSignature).drop arguments.length := by
+        simp [ambientValues, entries, List.map_drop]
+      _ = (checkedBoundarySigs content).drop arguments.length := by
+        rw [varsEntries_signatures]
+      _ = parameters.map (fun parameter =>
+          (source.val.wires parameter).sig) := parameterSignatures
+  let ambients :=
+    AmbientBinding.ofBoundaryLists ambientValues parameters
+      ambientSignatures liveNotParameter
+  exact
+    { body := compilation.body
+      wire := wire
+      arguments := arguments
+      wire_signature := wireSignature
+      sites := sites
+      formals := formals
+      formal_signatures := by
+        calc
+          formals.map packedVarSignature =
+              (entries.map packedVarSignature).take arguments.length := by
+            simp [formals, entries, List.map_take]
+          _ = (checkedBoundarySigs content).take arguments.length := by
+            rw [varsEntries_signatures]
+          _ = arguments := formalSignatures
+      ambients := ambients
+      covers := by
+        intro signature value
+        let packed : PackedVar
+            (ConcreteElaboration.openBoundaryClassSigs content.val) :=
+          ⟨signature, value⟩
+        have member : packed ∈ entries := by
+          exact compilation.openDiagram.boundary_surjective signature value
+        have partitioned :
+            packed ∈ formals ∨ packed ∈ ambientValues := by
+          have combined : entries.take arguments.length ++
+                entries.drop arguments.length = entries :=
+            List.take_append_drop arguments.length entries
+          have inCombined :
+              packed ∈ entries.take arguments.length ++
+                entries.drop arguments.length := by
+            rw [combined]
+            exact member
+          simpa [formals, ambientValues] using
+            (List.mem_append.mp inCombined)
+        cases partitioned with
+        | inl formal => exact Or.inl formal
+        | inr ambient =>
+            right
+            have mapped :
+                packed ∈ ambients.map AmbientBinding.value := by
+              rw [AmbientBinding.ofBoundaryLists_values]
+              exact ambient
+            rcases List.mem_map.mp mapped with
+              ⟨binding, bindingMember, bindingExact⟩
+            exact ⟨binding, bindingMember, bindingExact⟩ }
 
 /--
 Advance the proof-carrying obligation below one intrinsic binder after its

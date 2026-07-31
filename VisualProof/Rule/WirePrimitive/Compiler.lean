@@ -80,6 +80,25 @@ structure JoinBoundaryReceipt
         (fun wire => (input.content.val.diagram.wires wire).sig) =
       input.parameters.map (fun wire => (source.val.wires wire).sig)
 
+/--
+The proof-carrying initial obligation for every accepted strongest join.
+Unlike the executable comparison compiler below, this construction has no
+failure case: the monolithic checker already owns the exact open compilation,
+applied-site, ordered-boundary, and non-aliasing evidence.
+-/
+noncomputable def initialIntrinsicResidual
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (monolithic : AppliedMonolithicRelationJoin source input) :
+    IntrinsicCompilerResidual source
+      (ConcreteElaboration.openBoundaryClassSigs input.content.val) :=
+  IntrinsicCompilerResidual.initial monolithic.contentCompilation
+    input.wire monolithic.arguments monolithic.sourceSignature
+    monolithic.sourceSites input.parameters
+    (by simpa [checkedBoundarySigs] using monolithic.formalSignatures)
+    (by simpa [checkedBoundarySigs] using monolithic.parameterSignatures)
+    monolithic.live_not_parameter
+
 private def retainedAfterErasing
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId) :

@@ -384,6 +384,7 @@ private structure CheckedRelationJoin
     (content.val.boundary.drop arguments.length).map
         (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
       parameters.map (fun parameter => (source.val.wires parameter).sig)
+  liveNotParameter : wire ∉ parameters
   polarity :
     CheckedJoinPolarity source orientation
       (source.val.wires wire).scope
@@ -415,6 +416,7 @@ private structure RelationJoinReceipt
     (content.val.boundary.drop arguments.length).map
         (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
       parameters.map (fun parameter => (source.val.wires parameter).sig)
+  liveNotParameter : wire ∉ parameters
   polarity :
     CheckedJoinPolarity source orientation
       (source.val.wires wire).scope
@@ -652,6 +654,14 @@ theorem parameterSignatures
       input.parameters.map (fun wire => (source.val.wires wire).sig) :=
   applied.checked.parameterSignatures
 
+/-- The consumed relation head is not also an ambient parameter. -/
+theorem live_not_parameter
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    input.wire ∉ input.parameters :=
+  applied.checked.liveNotParameter
+
 /--
 The exact checked open-content compilation retained by an accepted strongest
 join.  The authoring compiler may inspect this structural receipt; primitive
@@ -828,8 +838,12 @@ private def validateRelationJoin
         pure
           { compilation := compilation
             accepted := accepted }
-  if wire ∈ parameters then
-    throw .dyingWireIsParameter
+  let liveNotParameter ←
+    if liveParameter : wire ∈ parameters then
+      (throw .dyingWireIsParameter :
+        Except MonolithicWireQuantifierError (PLift (wire ∉ parameters)))
+    else
+      pure ⟨liveParameter⟩
   let contentSigs := boundarySigs content
   let split ←
     match splitAccepted : splitAt? args.length contentSigs with
@@ -912,6 +926,7 @@ private def validateRelationJoin
             (congrArg Prod.snd splitExact).trans parameterExact.down
           simpa [contentSigs, boundarySigs, parameterSigs,
             List.map_drop] using exact
+        liveNotParameter := liveNotParameter.down
         polarity := polarity
         applications := applications.map (·.node)
         contentCompilation := contentCompilation
@@ -991,6 +1006,8 @@ def applyMonolithicRelationSever
                                     inverseChecked.formalSignatures
                                   parameterSignatures :=
                                     inverseChecked.parameterSignatures
+                                  liveNotParameter :=
+                                    inverseChecked.liveNotParameter
                                   polarity := inverseChecked.polarity
                                   contentCompilation :=
                                     inverseChecked.contentCompilation
@@ -1027,6 +1044,7 @@ def applyMonolithicRelationJoin
                 boundaryLength := validated.boundaryLength
                 formalSignatures := validated.formalSignatures
                 parameterSignatures := validated.parameterSignatures
+                liveNotParameter := validated.liveNotParameter
                 polarity := validated.polarity
                 contentCompilation := validated.contentCompilation
                 result := result
