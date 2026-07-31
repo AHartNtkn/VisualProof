@@ -518,6 +518,11 @@ checkers.
 
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean`
+- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsTupleSemantics.lean`
+- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFixedSemantics.lean`
+- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationSemantics.lean`
+- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationLocal.lean`
+- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Arguments.lean`
 - Create: `VisualProof/Rule/WirePrimitive/ArgumentsFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
@@ -532,24 +537,24 @@ checkers.
 - Corresponding `_sound` theorems and checked input/receipt types over full
   `Model`, obtained from the generic `PreModel` witness theorem.
 
-- [ ] **Step 1: Add RED plumbing fixtures.** Cover nested signatures,
+- [x] **Step 1: Add RED plumbing fixtures.** Cover nested signatures,
   per-site fresh arity-shift wires scoped at each endpoint region,
   arity-unshift exhaustion, invalid permutations, duplicate/contract
   adjacency, drop/extend positions, all-end attachment coverage, signature
   equality, and visibility.
-- [ ] **Step 2: Implement structural equivalences.** Prove arity
+- [x] **Step 2: Implement structural equivalences.** Prove arity
   shift/unshift with existential/cylindrification witnesses in the full
   relation domains; use `PreModel.inhabited` for the reverse direction's
   required choice. Prove permutation and duplicate/contract by typed tuple
   rearrangement and full-model reification of the transformed relation.
-- [ ] **Step 3: Implement merged drop/extend gates.** Detect one uniform
+- [x] **Step 3: Implement merged drop/extend gates.** Detect one uniform
   attachment wire visible at the acted wire's scope. That case is an ungated
   equivalence. Otherwise enforce join-family polarity for drop and
   sever-family polarity for extend.
-- [ ] **Step 4: Prove the gated witnesses.** Uniform attachment uses a single
+- [x] **Step 4: Prove the gated witnesses.** Uniform attachment uses a single
   scope-visible parameter in both directions. Per-site drop has only the
   eliminating witness; per-site extend has only the introducing witness.
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build

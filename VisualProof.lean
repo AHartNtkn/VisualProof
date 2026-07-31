@@ -41,5 +41,6 @@ import VisualProof.Diagram.Concrete.WirePrimitive.ContentEmptySemantics
 import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.WirePrimitive.Content
 import VisualProof.Rule.WirePrimitive.ContentFixtures
+import VisualProof.Rule.WirePrimitive.ArgumentsFixtures
 import VisualProof.Rule.MonolithicWireQuantifier
 import VisualProof.Rule.MonolithicWireQuantifierFixtures
