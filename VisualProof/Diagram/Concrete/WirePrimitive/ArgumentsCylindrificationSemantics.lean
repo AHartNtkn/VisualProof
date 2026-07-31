@@ -227,56 +227,92 @@ def count
     Nat :=
   freshCount
 
+/--
+Enumerate every typed way the larger local binder block can arise by
+inserting fresh binders of one signature into the smaller block.  Retained
+and fresh binders can have the same signature, so completeness requires both
+branches rather than a greedy first match.
+-/
+def candidates
+    (fixedSignature : Sig) :
+    (smaller larger : List Sig) →
+      List
+        (Σ freshCount,
+          BoundCylindrification fixedSignature
+            smaller larger freshCount)
+  | [], [] => [⟨0, .nil⟩]
+  | [], largerSignature :: largerRest =>
+      if same : largerSignature = fixedSignature then
+        by
+          subst largerSignature
+          exact (candidates fixedSignature [] largerRest).map fun
+            | ⟨freshCount, rest⟩ => ⟨freshCount + 1, .fresh rest⟩
+      else
+        []
+  | _ :: _, [] => []
+  | smallerSignature :: smallerRest,
+      largerSignature :: largerRest =>
+      let retained :=
+        if same : largerSignature = smallerSignature then
+          by
+            subst largerSignature
+            exact
+              (candidates fixedSignature smallerRest largerRest).map fun
+                | ⟨freshCount, rest⟩ =>
+                    ⟨freshCount, .retained smallerSignature rest⟩
+        else
+          []
+      let fresh :=
+        if same : largerSignature = fixedSignature then
+          by
+            subst largerSignature
+            exact
+              (candidates fixedSignature
+                (smallerSignature :: smallerRest) largerRest).map fun
+                | ⟨freshCount, rest⟩ =>
+                    ⟨freshCount + 1, .fresh rest⟩
+        else
+          []
+      retained ++ fresh
+termination_by smaller larger => smaller.length + larger.length
+
+theorem mem_candidates
+    (evidence :
+      BoundCylindrification fixedSignature smaller larger freshCount) :
+    ⟨freshCount, evidence⟩ ∈
+      candidates fixedSignature smaller larger :=
+  match evidence with
+  | .nil => by simp [candidates]
+  | .retained signature rest => by
+      unfold candidates
+      rw [dif_pos rfl]
+      apply List.mem_append.mpr
+      apply Or.inl
+      apply List.mem_map.mpr
+      exact ⟨⟨_, rest⟩, mem_candidates rest, rfl⟩
+  | .fresh rest => by
+      cases smaller with
+      | nil =>
+          unfold candidates
+          rw [dif_pos rfl]
+          apply List.mem_map.mpr
+          exact ⟨⟨_, rest⟩, mem_candidates rest, rfl⟩
+      | cons signature tail =>
+          unfold candidates
+          rw [dif_pos rfl]
+          apply List.mem_append.mpr
+          apply Or.inr
+          apply List.mem_map.mpr
+          exact ⟨⟨_, rest⟩, mem_candidates rest, rfl⟩
+
 def check
     (fixedSignature : Sig)
     (smaller larger : List Sig) :
     Option
       (Σ freshCount,
         BoundCylindrification fixedSignature
-          smaller larger freshCount) := by
-  match smaller, larger with
-  | [], [] =>
-      exact some ⟨0, .nil⟩
-  | [], largerSignature :: largerRest =>
-      if same : largerSignature = fixedSignature then
-        subst largerSignature
-        match check fixedSignature [] largerRest with
-        | some ⟨freshCount, rest⟩ =>
-            exact some ⟨freshCount + 1, .fresh rest⟩
-        | none => exact none
-      else
-        exact none
-  | _ :: _, [] =>
-      exact none
-  | smallerSignature :: smallerRest,
-      largerSignature :: largerRest =>
-      if retained : largerSignature = smallerSignature then
-        subst largerSignature
-        match check fixedSignature smallerRest largerRest with
-        | some ⟨freshCount, rest⟩ =>
-            exact some ⟨freshCount, .retained smallerSignature rest⟩
-        | none =>
-            if fresh : smallerSignature = fixedSignature then
-              subst smallerSignature
-              match
-                  check fixedSignature
-                    (fixedSignature :: smallerRest) largerRest with
-              | some ⟨freshCount, rest⟩ =>
-                  exact some ⟨freshCount + 1, .fresh rest⟩
-              | none => exact none
-            else
-              exact none
-      else if fresh : largerSignature = fixedSignature then
-        subst largerSignature
-        match
-            check fixedSignature
-              (smallerSignature :: smallerRest) largerRest with
-        | some ⟨freshCount, rest⟩ =>
-            exact some ⟨freshCount + 1, .fresh rest⟩
-        | none => exact none
-      else
-        exact none
-termination_by smaller.length + larger.length
+          smaller larger freshCount) :=
+  (candidates fixedSignature smaller larger).head?
 
 private def weakenOuter
     (rho : WireRenaming source target)
@@ -760,6 +796,36 @@ def checkCylindricalHoles
       false
   else
     false
+
+theorem checkCylindricalHoles_complete
+    {insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature}
+    {bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount}
+    {outer : WireRenaming smallerOuter largerOuter}
+    {smaller :
+      List
+        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+    {larger :
+      List
+        (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes : CylindricalHoles insertion bounds outer smaller larger) :
+    checkCylindricalHoles insertion bounds outer smaller larger = true := by
+  unfold checkCylindricalHoles
+  rw [dif_pos holes.smaller_length, dif_pos holes.larger_length]
+  rw [Bool.and_eq_true]
+  constructor
+  · apply decide_eq_true
+    intro index
+    simpa only [Subsingleton.elim _ holes.larger_length] using
+      holes.inserted_exact index
+  · apply decide_eq_true
+    intro index
+    simpa only [Subsingleton.elim _ holes.larger_length,
+      Subsingleton.elim _ holes.smaller_length] using
+      holes.retained_exact index
 
 theorem checkCylindricalHoles_eq_true
     {insertion :
@@ -1546,51 +1612,52 @@ def checkCylindricalShapeFuel
   | fuel + 1 => do
       let smallerPeeled := peelArgumentShape smaller
       let largerPeeled := peelArgumentShape larger
-      let ⟨freshCount, bounds⟩ ←
-        BoundCylindrification.check fixedSignature
-          smallerPeeled.bound largerPeeled.bound
-      let items ←
-        checkCylindricalShapeItemSeqFuel fuel insertion
-          (bounds.embed outer)
-          smallerPeeled.items largerPeeled.items
-      if holesAccepted :
-          checkCylindricalHoles insertion bounds outer
-              smallerPeeled.holes largerPeeled.holes =
-            true then
-        let holes :=
-          checkCylindricalHoles_eq_true holesAccepted
-        let receipt : CylindricalShape definitions insertion
-            smallerContext largerContext :=
-          .block outer bounds items.receipt holes
-        have receiptConsistent : receipt.consistent := by
-          exact
-            ⟨items.consistent,
-              fun value => by
-                exact items.embedding_exact value⟩
-        have smallerExact : receipt.smaller = smaller := by
-          change
-            wrapArgumentBinds smallerPeeled.bound
-                (.mk items.receipt.smaller
-                  ⟨smallerPeeled.holes⟩) =
-              smaller
-          rw [items.smaller_exact]
-          exact smallerPeeled.exact.symm
-        have largerExact : receipt.larger = larger := by
-          change
-            wrapArgumentBinds largerPeeled.bound
-                (.mk items.receipt.larger
-                  ⟨largerPeeled.holes⟩) =
-              larger
-          rw [items.larger_exact]
-          exact largerPeeled.exact.symm
-        some
-          { receipt := receipt
-            embedding_exact := fun _ => rfl
-            smaller_exact := smallerExact
-            larger_exact := largerExact
-            consistent := receiptConsistent }
-      else
-        none
+      (BoundCylindrification.candidates fixedSignature
+          smallerPeeled.bound largerPeeled.bound).findSome? fun candidate =>
+        let ⟨_freshCount, bounds⟩ := candidate
+        do
+          let items ←
+            checkCylindricalShapeItemSeqFuel fuel insertion
+              (bounds.embed outer)
+              smallerPeeled.items largerPeeled.items
+          if holesAccepted :
+              checkCylindricalHoles insertion bounds outer
+                  smallerPeeled.holes largerPeeled.holes =
+                true then
+            let holes :=
+              checkCylindricalHoles_eq_true holesAccepted
+            let receipt : CylindricalShape definitions insertion
+                smallerContext largerContext :=
+              .block outer bounds items.receipt holes
+            have receiptConsistent : receipt.consistent := by
+              exact
+                ⟨items.consistent,
+                  fun value => by
+                    exact items.embedding_exact value⟩
+            have smallerExact : receipt.smaller = smaller := by
+              change
+                wrapArgumentBinds smallerPeeled.bound
+                    (.mk items.receipt.smaller
+                      ⟨smallerPeeled.holes⟩) =
+                  smaller
+              rw [items.smaller_exact]
+              exact smallerPeeled.exact.symm
+            have largerExact : receipt.larger = larger := by
+              change
+                wrapArgumentBinds largerPeeled.bound
+                    (.mk items.receipt.larger
+                      ⟨largerPeeled.holes⟩) =
+                  larger
+              rw [items.larger_exact]
+              exact largerPeeled.exact.symm
+            some
+              { receipt := receipt
+                embedding_exact := fun _ => rfl
+                smaller_exact := smallerExact
+                larger_exact := largerExact
+                consistent := receiptConsistent }
+          else
+            none
 
 def checkCylindricalShapeItemFuel
     (fuel : Nat)

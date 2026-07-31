@@ -325,6 +325,24 @@ def target
     (applied : AppliedArityShift source wire newArgument) :=
   applied.result.target
 
+/-- The replacement relation wire allocated by this checked rewrite. -/
+def targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    applied.target.val.WireId :=
+  applied.result.targetWire
+
+/-- Exhaustive applied sites on the replacement relation wire. -/
+def targetSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.frame.targetSites
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -348,6 +366,22 @@ def target
     {position : Nat}
     (applied : AppliedArityUnshift source wire position) :=
   applied.result.target
+
+def targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    applied.target.val.WireId :=
+  applied.result.targetWire
+
+def targetSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.frame.targetSites
 
 def tag
     {source : CheckedDiagram definitions}
@@ -373,6 +407,22 @@ def target
     (applied : AppliedArgPermute source wire permutation) :=
   applied.result.target
 
+def targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    applied.target.val.WireId :=
+  applied.result.targetWire
+
+def targetSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.factorization.targetSites
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -397,6 +447,22 @@ def target
     (applied : AppliedArgDuplicate source wire position) :=
   applied.result.target
 
+def targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDuplicate source wire position) :
+    applied.target.val.WireId :=
+  applied.result.targetWire
+
+def targetSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDuplicate source wire position) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.factorization.targetSites
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -420,6 +486,22 @@ def target
     {position : Nat}
     (applied : AppliedArgContract source wire position) :=
   applied.result.target
+
+def targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgContract source wire position) :
+    applied.target.val.WireId :=
+  applied.result.targetWire
+
+def targetSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgContract source wire position) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.factorization.targetSites
 
 def tag
     {source : CheckedDiagram definitions}
@@ -446,6 +528,24 @@ def target
     {position : Nat}
     (applied : AppliedArgDrop source orientation wire position) :=
   applied.result.target
+
+def targetWire
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    applied.target.val.WireId :=
+  applied.result.targetWire
+
+def targetSites
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.factorization.targetSites
 
 def tag
     {source : CheckedDiagram definitions}
@@ -481,6 +581,31 @@ def target
       AppliedArgExtend source orientation wire position newArgument
         attachments) :=
   applied.result.target
+
+def targetWire
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) : applied.target.val.WireId :=
+  applied.result.targetWire
+
+def targetSites
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    AllAppliedSites applied.target applied.targetWire :=
+  applied.ledger.factorization.targetSites
 
 def tag
     {source : CheckedDiagram definitions}

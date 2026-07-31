@@ -745,6 +745,108 @@ def checkPairedContext
       | _, _ => none
 termination_by sizeOf sourceContext
 
+private theorem checkPairedTerminal_complete
+    (sourceLocal targetLocal siteOuter : List Sig) :
+    checkPairedTerminal sourceLocal targetLocal siteOuter
+        (DiagramContext.bindMany sourceLocal
+          (.hole :
+            DiagramContext definitions
+              (sourceLocal ++ siteOuter) (sourceLocal ++ siteOuter)))
+        (DiagramContext.bindMany targetLocal
+          (.hole :
+            DiagramContext definitions
+              (targetLocal ++ siteOuter) (targetLocal ++ siteOuter))) =
+      some PairedContext.terminal := by
+  simp [checkPairedTerminal]
+
+/-- Every construction-owned paired context is accepted by its executable checker. -/
+theorem checkPairedContext_complete
+    {sourceContext :
+      DiagramContext definitions (sourceLocal ++ siteOuter) outer}
+    {targetContext :
+      DiagramContext definitions (targetLocal ++ siteOuter) outer}
+    (paired :
+      PairedContext definitions sourceLocal targetLocal siteOuter
+        sourceContext targetContext) :
+    ∃ found,
+      checkPairedContext sourceLocal targetLocal siteOuter
+          sourceContext targetContext = some found := by
+  induction paired with
+  | terminal =>
+      refine ⟨PairedContext.terminal, ?_⟩
+      unfold checkPairedContext
+      rw [checkPairedTerminal_complete]
+  | surround leading suffix inner induction =>
+      cases terminalAccepted :
+          checkPairedTerminal sourceLocal targetLocal siteOuter
+            (.surround leading _ suffix) (.surround leading _ suffix) with
+      | some found =>
+          exact ⟨found, by simp [checkPairedContext, terminalAccepted]⟩
+      | none =>
+          obtain ⟨found, foundAccepted⟩ := induction
+          refine ⟨PairedContext.surround leading suffix found, ?_⟩
+          simp [checkPairedContext, terminalAccepted, foundAccepted]
+
+  | cut inner induction =>
+      cases terminalAccepted :
+          checkPairedTerminal sourceLocal targetLocal siteOuter
+            (.cut _) (.cut _) with
+      | some found =>
+          exact ⟨found, by simp [checkPairedContext, terminalAccepted]⟩
+      | none =>
+          obtain ⟨found, foundAccepted⟩ := induction
+          refine ⟨PairedContext.cut found, ?_⟩
+          simp [checkPairedContext, terminalAccepted, foundAccepted]
+  | bind signature inner induction =>
+      cases terminalAccepted :
+          checkPairedTerminal sourceLocal targetLocal siteOuter
+            (.bind signature _) (.bind signature _) with
+      | some found =>
+          exact ⟨found, by simp [checkPairedContext, terminalAccepted]⟩
+      | none =>
+          obtain ⟨found, foundAccepted⟩ := induction
+          refine ⟨PairedContext.bind signature found, ?_⟩
+          simp [checkPairedContext, terminalAccepted, foundAccepted]
+
+/-- Two binder decompositions which stop at the same complete outer spine
+induce a paired context for the primitive semantic layer. -/
+theorem PairedContext.nonempty_of_stopsAboveBindMany
+    {sourceLocal targetLocal siteOuter outer : List Sig}
+    {stopped : DiagramContext definitions siteOuter outer}
+    {sourceFull :
+      DiagramContext definitions (sourceLocal ++ siteOuter) outer}
+    {targetFull :
+      DiagramContext definitions (targetLocal ++ siteOuter) outer}
+    (sourceStops :
+      DiagramContext.StopsAboveBindMany sourceLocal stopped sourceFull)
+    (targetStops :
+      DiagramContext.StopsAboveBindMany targetLocal stopped targetFull) :
+    Nonempty
+      (PairedContext definitions sourceLocal targetLocal siteOuter sourceFull
+        targetFull) := by
+  induction sourceStops with
+  | hole sourceFull sourceExact =>
+      cases targetStops with
+      | hole targetFull targetExact =>
+          subst sourceFull
+          subst targetFull
+          exact ⟨.terminal⟩
+  | surround leading suffix sourceInner induction =>
+      cases targetStops with
+      | surround _ _ targetInner =>
+          obtain ⟨paired⟩ := induction targetInner
+          exact ⟨.surround leading suffix paired⟩
+  | cut sourceInner induction =>
+      cases targetStops with
+      | cut targetInner =>
+          obtain ⟨paired⟩ := induction targetInner
+          exact ⟨.cut paired⟩
+  | bind sourceInner induction =>
+      cases targetStops with
+      | bind targetInner =>
+          obtain ⟨paired⟩ := induction targetInner
+          exact ⟨.bind _ paired⟩
+
 /--
 The paired context checker is semantically complete: one equivalence at the
 two terminal local-binder blocks propagates through the entire retained outer
@@ -1184,6 +1286,57 @@ def checkSiteContextFactorization
   else
     exact none
 
+/-- Every construction-owned site-context factorization is rediscovered. -/
+theorem checkSiteContextFactorization_complete
+    {source : CheckedDiagram definitions}
+    {target : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {targetSite : target.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {targetScope : SiteCompilation target targetSite}
+    (context : SiteContextFactorization sourceScope targetScope) :
+    ∃ found,
+      checkSiteContextFactorization sourceScope targetScope = some found := by
+  have siteOuterExact :
+      sourceScope.frame.visible.sigs.drop
+          (localSignatures source.val sourceSite).length =
+        context.siteOuter := by
+    rw [context.sourceVisibleExact]
+    simp
+  unfold checkSiteContextFactorization
+  dsimp only
+  rw [siteOuterExact]
+  split
+  · rename_i sourceExact
+    split
+    · rename_i targetExact
+      have paired :
+          PairedContext definitions
+            (localSignatures source.val sourceSite)
+            (localSignatures target.val targetSite)
+            context.siteOuter
+            (sourceExact ▸ sourceScope.frame.context)
+            (targetExact ▸ targetScope.frame.context) := by
+        have sourceProof : sourceExact = context.source_visible_exact :=
+          Subsingleton.elim _ _
+        have targetProof : targetExact = context.target_visible_exact :=
+          Subsingleton.elim _ _
+        simpa [sourceProof, targetProof] using context.paired
+      split
+      · rename_i rejected
+        obtain ⟨found, accepted⟩ :=
+          checkPairedContext_complete paired
+        have impossible : (none : Option _) = some found :=
+          rejected.symm.trans accepted
+        contradiction
+      · rename_i found accepted
+        exact
+          ⟨⟨context.siteOuter, sourceExact, targetExact, found⟩, rfl⟩
+    · rename_i rejected
+      exact False.elim (rejected context.targetVisibleExact)
+  · rename_i rejected
+    exact False.elim (rejected context.sourceVisibleExact)
+
 /--
 One typed renaming maps every variable embedded from a common suffix to the
 corresponding variable embedded in the target context.
@@ -1234,6 +1387,44 @@ def checkSuffixAgreement
                   | there value => exact tail.agrees value⟩
       else
         exact none
+
+/-- Every extensional suffix agreement is rediscovered by the executable
+checker.  This is the proof-level bridge used by construction-owned
+factorizations: callers prove the transport law once, while the public path
+still returns the exact receipt produced by `checkSuffixAgreement`. -/
+theorem checkSuffixAgreement_complete
+    {suffix source target : List Sig}
+    {sourceEmbed : WireRenaming suffix source}
+    {targetEmbed : WireRenaming suffix target}
+    {rho : WireRenaming source target}
+    (agreement :
+      SuffixAgreement suffix source target sourceEmbed targetEmbed rho) :
+    ∃ found,
+      checkSuffixAgreement suffix sourceEmbed targetEmbed rho = some found := by
+  induction suffix with
+  | nil =>
+      exact ⟨⟨fun value => nomatch value⟩, rfl⟩
+  | cons signature rest induction =>
+      unfold checkSuffixAgreement
+      split
+      · rename_i headExact
+        let sourceTail : WireRenaming rest source :=
+          fun {_} value => sourceEmbed (.there value)
+        let targetTail : WireRenaming rest target :=
+          fun {_} value => targetEmbed (.there value)
+        let tailAgreement :
+            SuffixAgreement rest source target sourceTail targetTail rho :=
+          ⟨fun value => agreement.agrees (.there value)⟩
+        obtain ⟨tail, accepted⟩ := induction tailAgreement
+        dsimp only [sourceTail, targetTail] at accepted ⊢
+        rw [accepted]
+        exact ⟨⟨by
+          intro current value
+          cases value with
+          | here => exact headExact
+          | there value => exact tail.agrees value⟩, rfl⟩
+      · rename_i rejected
+        exact False.elim (rejected (agreement.agrees (.here)))
 
 def SiteContextFactorization.sourceOuterEmbedding
     {source : CheckedDiagram definitions}

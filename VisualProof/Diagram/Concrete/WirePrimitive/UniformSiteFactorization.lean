@@ -1163,6 +1163,40 @@ def check
         ⟨plan, checked,
           ConcreteDiagram.checkWellFormed_preserves_input accepted⟩
 
+/-- A structural plan with a well-formed canonical target cannot be refused. -/
+theorem check_complete
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {removedRegions : List source.val.RegionId}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan :
+      Internal.BatchRemovalPlan source removedRegions removedNodes
+        removedWires)
+    (wellFormed :
+      (Internal.batchRemovalCandidate plan).WellFormed definitions) :
+    ∃ erasure,
+      check source removedRegions removedNodes removedWires = some erasure := by
+  let checked : CheckedDiagram definitions :=
+    ⟨Internal.batchRemovalCandidate plan, wellFormed⟩
+  let erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires :=
+    ⟨plan, checked, rfl⟩
+  refine ⟨erasure, ?_⟩
+  simp [check, plan.checked, checked, erasure]
+  split
+  · rename_i error rejected
+    have accepted := ConcreteDiagram.checkWellFormed_complete wellFormed
+    rw [rejected] at accepted
+    contradiction
+  · rename_i checked' accepted
+    have checkedExact : checked = checked' :=
+      Except.ok.inj
+        ((ConcreteDiagram.checkWellFormed_complete wellFormed).symm.trans
+          accepted)
+    subst checked'
+    rfl
+
 /-- The checked core is the exact canonical batch-erasure candidate. -/
 theorem checked_exact
     (erasure :
@@ -1371,6 +1405,30 @@ structure CommonCoreReceipt
     ConcreteIso sourceErasure.checked.val targetErasure.checked.val
 
 namespace CommonCoreReceipt
+
+/-- Assemble a common-core receipt from two checker-owned erasures and an
+exact isomorphism between their checked outputs. -/
+def ofErasures
+    (source : CheckedDiagram definitions)
+    (target : CheckedDiagram definitions)
+    (sourceRemovedRegions : List source.val.RegionId)
+    (sourceRemovedNodes : List source.val.NodeId)
+    (sourceRemovedWires : List source.val.WireId)
+    (targetRemovedRegions : List target.val.RegionId)
+    (targetRemovedNodes : List target.val.NodeId)
+    (targetRemovedWires : List target.val.WireId)
+    (sourceErasure :
+      CheckedBatchErasure source sourceRemovedRegions sourceRemovedNodes
+        sourceRemovedWires)
+    (targetErasure :
+      CheckedBatchErasure target targetRemovedRegions targetRemovedNodes
+        targetRemovedWires)
+    (coreIso :
+      ConcreteIso sourceErasure.checked.val targetErasure.checked.val) :
+    CommonCoreReceipt source target :=
+  ⟨sourceRemovedRegions, sourceRemovedNodes, sourceRemovedWires,
+    targetRemovedRegions, targetRemovedNodes, targetRemovedWires,
+    sourceErasure, targetErasure, coreIso⟩
 
 /-- Transport one proved-retained source wire through the checked common core. -/
 def forwardRetainedWire

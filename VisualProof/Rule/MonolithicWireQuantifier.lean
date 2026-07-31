@@ -3,6 +3,7 @@ import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverInsertionSemantics
 import VisualProof.Rule.Structural
+import VisualProof.Rule.WirePrimitive.Site
 
 namespace VisualProof
 
@@ -371,6 +372,18 @@ private structure CheckedRelationJoin
     (wire : source.val.WireId)
     (content : CheckedOpenDiagram definitions)
     (parameters : List source.val.WireId) where
+  arguments : List Sig
+  sourceSignature : (source.val.wires wire).sig = .rel arguments
+  boundaryLength :
+    content.val.boundary.length = arguments.length + parameters.length
+  formalSignatures :
+    (content.val.boundary.take arguments.length).map
+        (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
+      arguments
+  parameterSignatures :
+    (content.val.boundary.drop arguments.length).map
+        (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
+      parameters.map (fun parameter => (source.val.wires parameter).sig)
   polarity :
     CheckedJoinPolarity source orientation
       (source.val.wires wire).scope
@@ -390,6 +403,18 @@ private structure RelationJoinReceipt
     (parameters : List source.val.WireId)
     (target : CheckedDiagram definitions)
     (applications : List source.val.NodeId) where
+  arguments : List Sig
+  sourceSignature : (source.val.wires wire).sig = .rel arguments
+  boundaryLength :
+    content.val.boundary.length = arguments.length + parameters.length
+  formalSignatures :
+    (content.val.boundary.take arguments.length).map
+        (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
+      arguments
+  parameterSignatures :
+    (content.val.boundary.drop arguments.length).map
+        (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
+      parameters.map (fun parameter => (source.val.wires parameter).sig)
   polarity :
     CheckedJoinPolarity source orientation
       (source.val.wires wire).scope
@@ -438,6 +463,17 @@ private structure RelationSeverConcreteReceipt
       .ok inverse
   inverseIso : ConcreteIso inverse.plainFinal.val source.val
 
+/-- Opaque accepted strongest relation-join transformation. -/
+structure AppliedMonolithicRelationJoin
+    (source : CheckedDiagram definitions)
+    (input : MonolithicRelationJoinInput source) where
+  private mk ::
+  target : CheckedDiagram definitions
+  applications : List source.val.NodeId
+  private checked :
+    RelationJoinReceipt source input.orientation input.wire input.content
+      input.parameters target applications
+
 /-- Opaque accepted strongest relation-sever transformation. -/
 structure AppliedMonolithicRelationSever
     (source : CheckedDiagram definitions)
@@ -449,17 +485,194 @@ structure AppliedMonolithicRelationSever
   private concrete :
     RelationSeverConcreteReceipt source input.orientation input.scope
       input.pattern input.occurrences target
+  private inverseInput : MonolithicRelationJoinInput target
+  private inverseApplied :
+    AppliedMonolithicRelationJoin target inverseInput
 
-/-- Opaque accepted strongest relation-join transformation. -/
-structure AppliedMonolithicRelationJoin
-    (source : CheckedDiagram definitions)
-    (input : MonolithicRelationJoinInput source) where
-  private mk ::
-  target : CheckedDiagram definitions
-  applications : List source.val.NodeId
-  private checked :
-    RelationJoinReceipt source input.orientation input.wire input.content
-      input.parameters target applications
+namespace AppliedMonolithicRelationSever
+
+/--
+The exact virtual join already checked as part of a strongest-form sever
+receipt.  This is exposed only so the authoring-layer primitive compiler can
+reverse that checked construction; the monolithic action remains absent from
+the durable proof-step language.
+-/
+def inverseJoinInput
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationSeverInput source}
+    (applied : AppliedMonolithicRelationSever source input) :
+    MonolithicRelationJoinInput applied.target :=
+  applied.inverseInput
+
+/--
+The already-accepted virtual inverse join retained by a strongest-form sever.
+The primitive compiler consumes this receipt directly, so sever compilation
+does not re-run or strengthen the monolithic acceptance boundary.
+-/
+def inverseJoinApplied
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationSeverInput source}
+    (applied : AppliedMonolithicRelationSever source input) :
+    AppliedMonolithicRelationJoin applied.target applied.inverseJoinInput :=
+  applied.inverseApplied
+
+end AppliedMonolithicRelationSever
+
+namespace AppliedMonolithicRelationJoin
+
+/-- The concrete strongest-form construction retained by the accepted receipt. -/
+def concreteResult
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    ConcreteWireQuantifier.RelationJoinResult source input.wire input.content
+      input.parameters :=
+  applied.checked.result
+
+/-- The public target is exactly the concrete strongest-form result. -/
+theorem target_eq_concreteResult
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    applied.target = applied.concreteResult.checked :=
+  applied.checked.targetExact
+
+/-- Every endpoint of the accepted source relation is an applied atom head. -/
+theorem endpoint_applied
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (member : endpoint ∈ (source.val.wires input.wire).endpoints) :
+    endpoint.port = .head ∧
+      ∃ region,
+        source.val.nodes endpoint.node =
+          .atom region applied.concreteResult.args :=
+  applied.concreteResult.endpoint_applied endpoint member
+
+private theorem sourceSites_exists
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    ∃ all,
+      WirePrimitive.checkAllAppliedSites source input.wire = some all := by
+  apply WirePrimitive.checkAllAppliedSites_complete
+  intro endpoint member
+  obtain ⟨head, region, nodeData⟩ :=
+    applied.endpoint_applied endpoint member
+  exact ⟨head, region, applied.concreteResult.args, nodeData⟩
+
+/--
+The exhaustive checker-owned source sites implied by an accepted strongest
+join.  This is derived from checked concrete incidence, not retained as a
+second authority in the monolithic receipt.
+-/
+noncomputable def sourceSites
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    WirePrimitive.AllAppliedSites source input.wire :=
+  Classical.choose applied.sourceSites_exists
+
+/-- The executable exhaustive-site checker accepts the derived source sites. -/
+theorem sourceSites_accepted
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    WirePrimitive.checkAllAppliedSites source input.wire =
+      some applied.sourceSites :=
+  Classical.choose_spec applied.sourceSites_exists
+
+/-- The checker-owned site compilation at the dying relation's scope. -/
+def sourceSite
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    SiteCompilation source (source.val.wires input.wire).scope :=
+  applied.checked.polarity.compiled
+
+/-- The source-site compiler returned the exact polarity receipt used here. -/
+theorem sourceSite_accepted
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    compileSite? source (source.val.wires input.wire).scope =
+      some applied.sourceSite :=
+  applied.checked.polarity.compiledAccepted
+
+/-- Exact enclosing-scope evidence for every ordered ambient parameter. -/
+theorem parameter_encloses
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input)
+    (position : Fin input.parameters.length) :
+    source.val.Encloses
+      (source.val.wires (input.parameters.get position)).scope
+      (source.val.wires input.wire).scope :=
+  applied.checked.parameterScopes position
+
+/-- The exact relation argument signature accepted by the monolithic checker. -/
+def arguments
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    List Sig :=
+  applied.checked.arguments
+
+theorem sourceSignature
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    (source.val.wires input.wire).sig = .rel applied.arguments :=
+  applied.checked.sourceSignature
+
+theorem boundaryLength
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    input.content.val.boundary.length =
+      applied.arguments.length + input.parameters.length :=
+  applied.checked.boundaryLength
+
+theorem formalSignatures
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    (input.content.val.boundary.take applied.arguments.length).map
+        (fun wire => (input.content.val.diagram.wires wire).sig) =
+      applied.arguments :=
+  applied.checked.formalSignatures
+
+theorem parameterSignatures
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    (input.content.val.boundary.drop applied.arguments.length).map
+        (fun wire => (input.content.val.diagram.wires wire).sig) =
+      input.parameters.map (fun wire => (source.val.wires wire).sig) :=
+  applied.checked.parameterSignatures
+
+/--
+The exact checked open-content compilation retained by an accepted strongest
+join.  The authoring compiler may inspect this structural receipt; primitive
+checkers still receive only their own local inputs.
+-/
+def contentCompilation
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    OpenCompilation input.content :=
+  applied.checked.contentCompilation.compilation
+
+/-- The executable open compiler returned that exact structural receipt. -/
+theorem contentCompilation_accepted
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    compileOpen input.content = some applied.contentCompilation :=
+  applied.checked.contentCompilation.accepted
+
+end AppliedMonolithicRelationJoin
 
 private def requireSeverPolarity
     (source : CheckedDiagram definitions)
@@ -599,10 +812,14 @@ private def validateRelationJoin
     Except MonolithicWireQuantifierError
       (CheckedRelationJoin source orientation wire content parameters) := do
   let relation := source.val.wires wire
-  let args ←
-    match relation.sig with
+  let signatureData ←
+    match sourceSignature : relation.sig with
     | .iota => throw .expectedRelation
-    | .rel args => pure args
+    | .rel args =>
+        pure
+          (⟨args, sourceSignature⟩ :
+            { arguments : List Sig // relation.sig = .rel arguments })
+  let args := signatureData.val
   let polarity ← requireJoinPolarity source orientation relation.scope
   let contentCompilation ←
     match accepted : compileOpen content with
@@ -615,16 +832,50 @@ private def validateRelationJoin
     throw .dyingWireIsParameter
   let contentSigs := boundarySigs content
   let split ←
-    match splitAt? args.length contentSigs with
+    match splitAccepted : splitAt? args.length contentSigs with
     | none => throw .boundaryTooShort
-    | some split => pure split
-  if split.1 != args then
-    throw .boundarySignatureMismatch
-  if split.2.length != parameters.length then
-    throw .parameterMismatch
-  if !(parameters.zip split.2).all
-      (fun pair => (source.val.wires pair.1).sig == pair.2) then
-    throw .parameterMismatch
+    | some split =>
+        pure
+          (⟨split, splitAccepted⟩ :
+            { split : List Sig × List Sig //
+              splitAt? args.length contentSigs = some split })
+  let formalExact ←
+    if exact : split.val.1 = args then
+      (pure ⟨exact⟩ :
+        Except MonolithicWireQuantifierError
+          (PLift (split.val.1 = args)))
+    else
+      (throw .boundarySignatureMismatch :
+        Except MonolithicWireQuantifierError
+          (PLift (split.val.1 = args)))
+  let parameterLengthExact ←
+    if exact : split.val.2.length = parameters.length then
+      (pure ⟨exact⟩ :
+        Except MonolithicWireQuantifierError
+          (PLift (split.val.2.length = parameters.length)))
+    else
+      (throw .parameterMismatch :
+        Except MonolithicWireQuantifierError
+          (PLift (split.val.2.length = parameters.length)))
+  let parameterSigs :=
+    parameters.map (fun parameter => (source.val.wires parameter).sig)
+  let parameterExact ←
+    if exact : split.val.2 = parameterSigs then
+      (pure ⟨exact⟩ :
+        Except MonolithicWireQuantifierError
+          (PLift (split.val.2 = parameterSigs)))
+    else
+      (throw .parameterMismatch :
+        Except MonolithicWireQuantifierError
+          (PLift (split.val.2 = parameterSigs)))
+  have splitExact :
+      (contentSigs.take args.length, contentSigs.drop args.length) =
+        split.val := by
+    have splitAccepted := split.property
+    unfold splitAt? at splitAccepted
+    split at splitAccepted
+    · exact Option.some.inj splitAccepted
+    · simp at splitAccepted
   if accepted :
       parametersEnclose source relation.scope parameters = true then
     let applications ←
@@ -632,7 +883,36 @@ private def validateRelationJoin
       | none => throw .nonAppliedEndpoint
       | some applications => pure applications
     pure
-      { polarity := polarity
+      { arguments := args
+        sourceSignature := signatureData.property
+        boundaryLength := by
+          have dropExact :=
+            congrArg (fun parts => parts.2.length) splitExact
+          have dropLength :
+              contentSigs.length - args.length = parameters.length := by
+            simpa [List.length_drop] using
+              dropExact.trans parameterLengthExact.down
+          have argsBound : args.length ≤ contentSigs.length := by
+            have splitAccepted := split.property
+            unfold splitAt? at splitAccepted
+            split at splitAccepted
+            · assumption
+            · simp at splitAccepted
+          have contentLength :
+              contentSigs.length =
+                args.length + parameters.length := by
+            omega
+          simpa [contentSigs, boundarySigs] using contentLength
+        formalSignatures := by
+          have exact :=
+            (congrArg Prod.fst splitExact).trans formalExact.down
+          simpa [contentSigs, boundarySigs, List.map_take] using exact
+        parameterSignatures := by
+          have exact :=
+            (congrArg Prod.snd splitExact).trans parameterExact.down
+          simpa [contentSigs, boundarySigs, parameterSigs,
+            List.map_drop] using exact
+        polarity := polarity
         applications := applications.map (·.node)
         contentCompilation := contentCompilation
         parameterScopes :=
@@ -694,7 +974,32 @@ def applyMonolithicRelationSever
                                 inverseChecked := inverseChecked
                                 inverse := inverse
                                 inverseAccepted := inverseAccepted
-                                inverseIso := inverseIso })
+                                inverseIso := inverseIso }
+                              { orientation :=
+                                  oppositeOrientation input.orientation
+                                wire := result.relationWire
+                                content := input.pattern
+                                parameters := parameters }
+                              (AppliedMonolithicRelationJoin.mk
+                                inverse.checked inverse.applications
+                                { arguments := inverseChecked.arguments
+                                  sourceSignature :=
+                                    inverseChecked.sourceSignature
+                                  boundaryLength :=
+                                    inverseChecked.boundaryLength
+                                  formalSignatures :=
+                                    inverseChecked.formalSignatures
+                                  parameterSignatures :=
+                                    inverseChecked.parameterSignatures
+                                  polarity := inverseChecked.polarity
+                                  contentCompilation :=
+                                    inverseChecked.contentCompilation
+                                  result := inverse
+                                  accepted := inverseAccepted
+                                  targetExact := rfl
+                                  applicationsExact := rfl
+                                  parameterScopes :=
+                                    inverseChecked.parameterScopes }))
 
 /--
 Validate and apply one strongest join.  Relation joining consumes every
@@ -717,7 +1022,12 @@ def applyMonolithicRelationJoin
           exact .ok
             (AppliedMonolithicRelationJoin.mk
               result.checked result.applications
-              { polarity := validated.polarity
+              { arguments := validated.arguments
+                sourceSignature := validated.sourceSignature
+                boundaryLength := validated.boundaryLength
+                formalSignatures := validated.formalSignatures
+                parameterSignatures := validated.parameterSignatures
+                polarity := validated.polarity
                 contentCompilation := validated.contentCompilation
                 result := result
                 accepted := accepted

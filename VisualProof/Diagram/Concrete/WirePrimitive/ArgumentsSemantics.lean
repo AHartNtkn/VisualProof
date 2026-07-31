@@ -19,9 +19,23 @@ private def appliedNodes
     {wire : source.val.WireId}
     (sites : AllAppliedSites source wire) :
     List source.val.NodeId :=
-  sites.sites.map AppliedSite.node
+  argumentSiteNodes sites
 
 namespace ArgumentResult
+
+/--
+The checked common-core comparison retains the exhaustive target sites that
+made the comparison possible.  Compiler invariants consume this receipt
+directly instead of rerunning target-site discovery.
+-/
+structure CommonCoreCheck
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) where
+  targetSites : AllAppliedSites result.checked result.targetWire
+  commonCore :
+    WirePrimitive.ConcreteFactorization.CommonCoreReceipt
+      source result.checked
 
 /--
 Erase the replaced applications, relation heads, and any operation-local
@@ -32,13 +46,91 @@ def checkCommonCore
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire) :
-    Option
-      (WirePrimitive.ConcreteFactorization.CommonCoreReceipt
-        source result.checked) := do
+    Option (CommonCoreCheck result) := do
   let targetSites ← checkAllAppliedSites result.checked result.targetWire
-  WirePrimitive.ConcreteFactorization.checkCommonCore source result.checked
-    [] (appliedNodes result.sites) result.sourceRemovedWires
-    [] (appliedNodes targetSites) result.targetRemovedWires
+  let sourceErasure ←
+    WirePrimitive.ConcreteFactorization.CheckedBatchErasure.check source []
+      (appliedNodes result.sites) result.sourceRemovedWires
+  let targetErasure ←
+    WirePrimitive.ConcreteFactorization.CheckedBatchErasure.check
+      result.checked [] (appliedNodes targetSites) result.targetRemovedWires
+  let canonicalIso :
+      ConcreteIso
+        (ConcreteWireQuantifier.Internal.batchRemovalCandidate
+          sourceErasure.plan)
+        (ConcreteWireQuantifier.Internal.batchRemovalCandidate
+          targetErasure.plan) := by
+    simpa [appliedNodes] using
+      result.commonCoreIso targetSites sourceErasure.plan targetErasure.plan
+  let coreIso :
+      ConcreteIso sourceErasure.checked.val targetErasure.checked.val := by
+    rw [sourceErasure.checked_exact, targetErasure.checked_exact]
+    exact canonicalIso
+  let commonCore :=
+    WirePrimitive.ConcreteFactorization.CommonCoreReceipt.ofErasures
+      source result.checked [] (appliedNodes result.sites)
+      result.sourceRemovedWires [] (appliedNodes targetSites)
+      result.targetRemovedWires sourceErasure targetErasure coreIso
+  pure ⟨targetSites, commonCore⟩
+
+private theorem sourceBatchErasure_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    ∃ erasure,
+      WirePrimitive.ConcreteFactorization.CheckedBatchErasure.check source []
+          (appliedNodes result.sites) result.sourceRemovedWires =
+        some erasure := by
+  obtain ⟨plan, _accepted⟩ :=
+    ConcreteWireQuantifier.Internal.checkBatchRemovalPlan_noRegions source
+      (appliedNodes result.sites) result.sourceRemovedWires
+  apply
+    WirePrimitive.ConcreteFactorization.CheckedBatchErasure.check_complete
+      plan
+  apply
+    ConcreteWireQuantifier.Internal.batchRemovalCandidate_wellFormed_noRegions
+      plan
+  intro removedWire removed endpoint incident
+  exact result.sourceRemovedExhausted removedWire removed endpoint incident
+
+private theorem targetBatchErasure_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire) :
+    ∃ erasure,
+      WirePrimitive.ConcreteFactorization.CheckedBatchErasure.check
+          result.checked [] (appliedNodes targetSites)
+          result.targetRemovedWires =
+        some erasure := by
+  obtain ⟨plan, _accepted⟩ :=
+    ConcreteWireQuantifier.Internal.checkBatchRemovalPlan_noRegions
+      result.checked (appliedNodes targetSites) result.targetRemovedWires
+  apply
+    WirePrimitive.ConcreteFactorization.CheckedBatchErasure.check_complete
+      plan
+  apply
+    ConcreteWireQuantifier.Internal.batchRemovalCandidate_wellFormed_noRegions
+      plan
+  intro removedWire removed endpoint incident
+  exact result.targetRemovedExhausted targetSites removedWire removed endpoint
+    incident
+
+/-- Every accepted argument primitive has a checker-produced common core; the
+factorization path cannot fail after the primitive checker has accepted. -/
+theorem checkCommonCore_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    ∃ checked, checkCommonCore result = some checked := by
+  let targetSites := result.targetSites
+  obtain ⟨sourceErasure, sourceAccepted⟩ :=
+    sourceBatchErasure_complete result
+  obtain ⟨targetErasure, targetAccepted⟩ :=
+    targetBatchErasure_complete result targetSites
+  apply Option.isSome_iff_exists.mp
+  simp [checkCommonCore, result.targetSites.checked, sourceAccepted,
+    targetAccepted, targetSites]
 
 end ArgumentResult
 
@@ -214,6 +306,69 @@ def checkRetainedHeadAlignment
             sourceVisibleProof, targetRetainedProof, targetVisibleProof⟩
     else exact none
   else exact none
+
+/-- Every extensionally established retained-head alignment is rediscovered
+by the executable finite checker. -/
+theorem checkRetainedHeadAlignment_complete
+    {source target : CheckedDiagram definitions}
+    {core :
+      WirePrimitive.ConcreteFactorization.CommonCoreReceipt source target}
+    {sourceContext : ConcreteElaboration.WireContext source.val}
+    {targetContext : ConcreteElaboration.WireContext target.val}
+    {sourceHead : source.val.WireId}
+    {targetHead : target.val.WireId}
+    (alignment :
+      RetainedHeadAlignment core sourceContext targetContext sourceHead
+        targetHead) :
+    ∃ found,
+      checkRetainedHeadAlignment core sourceContext targetContext sourceHead
+          targetHead alignment.sourceHeadRemoved alignment.targetHeadRemoved =
+        some found := by
+  unfold checkRetainedHeadAlignment
+  split
+  · rename_i sourceAccepted
+    split
+    · exact ⟨_, rfl⟩
+    · rename_i targetRejected
+      apply False.elim
+      apply targetRejected
+      unfold targetSideAligned
+      apply List.all_eq_true.mpr
+      intro candidate member
+      split
+      · rfl
+      · rename_i different
+        split
+        · rename_i retained
+          apply decide_eq_true
+          have proofExact :
+              alignment.targetRetained candidate member different = retained :=
+            Subsingleton.elim _ _
+          simpa [proofExact] using
+            alignment.targetVisible candidate member different
+        · rename_i notRetained
+          exact False.elim <|
+            notRetained (alignment.targetRetained candidate member different)
+  · rename_i sourceRejected
+    apply False.elim
+    apply sourceRejected
+    unfold sourceSideAligned
+    apply List.all_eq_true.mpr
+    intro candidate member
+    split
+    · rfl
+    · rename_i different
+      split
+      · rename_i retained
+        apply decide_eq_true
+        have proofExact :
+            alignment.sourceRetained candidate member different = retained :=
+          Subsingleton.elim _ _
+        simpa [proofExact] using
+          alignment.sourceVisible candidate member different
+      · rename_i notRetained
+        exact False.elim <|
+          notRetained (alignment.sourceRetained candidate member different)
 
 namespace RetainedHeadAlignment
 
@@ -1599,6 +1754,7 @@ structure ArgumentFrameFactorization
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
     (sourceArguments : List Sig) : Type where
+  targetSites : AllAppliedSites result.checked result.targetWire
   commonCore :
     WirePrimitive.ConcreteFactorization.CommonCoreReceipt source
       result.checked
@@ -1741,8 +1897,9 @@ def checkArgumentFrameFactorization
     (sourceSignature :
       (source.val.wires wire).sig = .rel sourceArguments) :
     Option (ArgumentFrameFactorization result sourceArguments) := do
-  let commonCore ←
+  let checkedCore ←
     ArgumentsSemantics.ArgumentResult.checkCommonCore result
+  let commonCore := checkedCore.commonCore
   if removalsExact :
       commonCore.sourceRemovedWires = result.sourceRemovedWires ∧
         commonCore.targetRemovedWires = result.targetRemovedWires then
@@ -1814,7 +1971,8 @@ def checkArgumentFrameFactorization
         (fun {_} value => .there (context.sourceOuterEmbedding value))
         (alignment.targetRenaming result.targetWire_signature)
     pure
-      ⟨commonCore, removalsExact.1, removalsExact.2, sourceScope,
+      ⟨checkedCore.targetSites, commonCore, removalsExact.1,
+        removalsExact.2, sourceScope,
         targetScope, context, alignment, sourceHead, targetHead,
         sourceHeadOrigin, targetHeadOrigin, sourceSignature, sourceOuter,
         targetOuter⟩

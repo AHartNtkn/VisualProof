@@ -87,6 +87,225 @@ private def finPermutations (n : Nat) : List (FinPermutation n) :=
     else
       none
 
+private theorem insertEverywhere_append
+    (value : α) (pre suffix : List α) :
+    pre ++ value :: suffix ∈
+      insertEverywhere value (pre ++ suffix) := by
+  induction pre with
+  | nil =>
+      cases suffix <;> simp [insertEverywhere]
+  | cons head tail induction =>
+      simp [insertEverywhere, induction]
+
+private theorem mem_rawPermutations [DecidableEq α]
+    {source target : List α}
+    (sourceNodup : source.Nodup)
+    (targetNodup : target.Nodup)
+    (same : ∀ value, value ∈ source ↔ value ∈ target) :
+    target ∈ rawPermutations source := by
+  induction source generalizing target with
+  | nil =>
+      have targetEmpty : target = [] := by
+        cases target with
+        | nil => rfl
+        | cons head tail =>
+            have : head ∈ ([] : List α) :=
+              (same head).mpr (by simp)
+            contradiction
+      subst target
+      simp [rawPermutations]
+  | cons head tail induction =>
+      have headMember : head ∈ target :=
+        (same head).mp (by simp)
+      obtain ⟨pre, suffix, targetExact⟩ :=
+        List.append_of_mem headMember
+      subst target
+      have headNotTail : head ∉ tail :=
+        (List.nodup_cons.mp sourceNodup).1
+      have targetParts := List.nodup_append.mp targetNodup
+      have headNotPre : head ∉ pre := by
+        intro member
+        exact targetParts.2.2 head member head (by simp) rfl
+      have headNotSuffix : head ∉ suffix :=
+        (List.nodup_cons.mp targetParts.2.1).1
+      have restNodup : (pre ++ suffix).Nodup := by
+        apply List.Sublist.nodup _ targetNodup
+        exact List.Sublist.append (List.Sublist.refl pre)
+          ((List.Sublist.refl suffix).cons head)
+      have restSame : ∀ value, value ∈ tail ↔
+          value ∈ pre ++ suffix := by
+        intro value
+        constructor
+        · intro member
+          have inTarget : value ∈ pre ++ head :: suffix :=
+            (same value).mp (by simp [member])
+          rw [List.mem_append] at inTarget ⊢
+          rcases inTarget with inPre | inHead
+          · exact Or.inl inPre
+          · simp only [List.mem_cons] at inHead
+            rcases inHead with exact | inSuffix
+            · subst value; contradiction
+            · exact Or.inr inSuffix
+        · intro member
+          have inTarget : value ∈ pre ++ head :: suffix := by
+            rw [List.mem_append] at member ⊢
+            rcases member with inPre | inSuffix
+            · exact Or.inl inPre
+            · exact Or.inr (by simp [inSuffix])
+          have inSource := (same value).mpr inTarget
+          simp only [List.mem_cons] at inSource
+          rcases inSource with exact | inTail
+          · subst value
+            rw [List.mem_append] at member
+            rcases member with inPre | inSuffix <;> contradiction
+          · exact inTail
+      have restMember :=
+        induction (List.nodup_cons.mp sourceNodup).2 restNodup restSame
+      simp only [rawPermutations, List.mem_flatMap]
+      exact ⟨pre ++ suffix, restMember,
+        insertEverywhere_append head pre suffix⟩
+
+private theorem move_to_front
+    (value : α) (pre suffix : List α) :
+    (value :: pre ++ suffix).Perm
+      (pre ++ value :: suffix) := by
+  induction pre with
+  | nil => simp
+  | cons head tail induction =>
+      exact
+        (List.Perm.swap value head (tail ++ suffix)).symm.trans
+          (List.Perm.cons head induction)
+
+private theorem perm_of_nodup_same_membership [DecidableEq α]
+    {left right : List α}
+    (leftNodup : left.Nodup)
+    (rightNodup : right.Nodup)
+    (same : ∀ value, value ∈ left ↔ value ∈ right) :
+    left.Perm right := by
+  induction left generalizing right with
+  | nil =>
+      cases right with
+      | nil => exact .nil
+      | cons head tail =>
+          have : head ∈ ([] : List α) :=
+            (same head).mpr (by simp)
+          contradiction
+  | cons head tail induction =>
+      have headMember : head ∈ right :=
+        (same head).mp (by simp)
+      obtain ⟨pre, suffix, rightExact⟩ :=
+        List.append_of_mem headMember
+      subst right
+      have headNotTail : head ∉ tail :=
+        (List.nodup_cons.mp leftNodup).1
+      have rightParts := List.nodup_append.mp rightNodup
+      have headNotPre : head ∉ pre := by
+        intro member
+        exact rightParts.2.2 head member head (by simp) rfl
+      have headNotSuffix : head ∉ suffix :=
+        (List.nodup_cons.mp rightParts.2.1).1
+      have tailNodup : tail.Nodup :=
+        (List.nodup_cons.mp leftNodup).2
+      have restNodup : (pre ++ suffix).Nodup := by
+        apply List.Sublist.nodup _ rightNodup
+        exact List.Sublist.append (List.Sublist.refl pre)
+          ((List.Sublist.refl suffix).cons head)
+      have restSame : ∀ value, value ∈ tail ↔
+          value ∈ pre ++ suffix := by
+        intro value
+        constructor
+        · intro member
+          have inRight : value ∈ pre ++ head :: suffix :=
+            (same value).mp (by simp [member])
+          rw [List.mem_append] at inRight ⊢
+          rcases inRight with inPre | inHead
+          · exact Or.inl inPre
+          · simp only [List.mem_cons] at inHead
+            rcases inHead with exact | inSuffix
+            · subst value; contradiction
+            · exact Or.inr inSuffix
+        · intro member
+          have inRight : value ∈ pre ++ head :: suffix := by
+            rw [List.mem_append] at member ⊢
+            rcases member with inPre | inSuffix
+            · exact Or.inl inPre
+            · exact Or.inr (by simp [inSuffix])
+          have inLeft := (same value).mpr inRight
+          simp only [List.mem_cons] at inLeft
+          rcases inLeft with exact | inTail
+          · subst value
+            rw [List.mem_append] at member
+            rcases member with inPre | inSuffix <;> contradiction
+          · exact inTail
+      have restPerm : tail.Perm (pre ++ suffix) :=
+        induction tailNodup restNodup restSame
+      exact
+        (List.Perm.cons head restPerm).trans
+          (move_to_front head pre suffix)
+
+private def equivPermutation
+    (equivalence : FiniteEquiv (Fin left) (Fin right)) :
+    FinPermutation right where
+  values := (allFin left).map equivalence
+  perm := by
+    apply perm_of_nodup_same_membership
+    · exact
+        List.Pairwise.map equivalence
+          (fun first second different same =>
+            different (equivalence.injective same))
+          (allFin_nodup left)
+    · exact allFin_nodup right
+    · intro value
+      constructor
+      · intro member
+        exact mem_allFin value
+      · intro member
+        exact List.mem_map.mpr
+          ⟨equivalence.invFun value, mem_allFin _,
+            equivalence.right_inv value⟩
+
+private theorem equivPermutation_apply
+    (equivalence : FiniteEquiv (Fin left) (Fin right))
+    (same : left = right)
+    (index : Fin left) :
+    (equivPermutation equivalence).toEquiv (Fin.cast same index) =
+      equivalence index := by
+  apply Fin.ext
+  simp [equivPermutation, FinPermutation.toEquiv, allFin_eq_finRange]
+
+private theorem equivPermutation_mem
+    (equivalence : FiniteEquiv (Fin left) (Fin right)) :
+    equivPermutation equivalence ∈ finPermutations right := by
+  unfold finPermutations
+  simp only [List.mem_filterMap]
+  refine ⟨(equivPermutation equivalence).values, ?_, ?_⟩
+  · apply mem_rawPermutations
+    · exact allFin_nodup right
+    · exact (equivPermutation equivalence).nodup
+    · intro value
+      exact (equivPermutation equivalence).perm.mem_iff.symm
+  · rw [dif_pos (equivPermutation equivalence).perm]
+
+private theorem findSome?_isSome_of_mem
+    (function : α → Option β)
+    (values : List α)
+    (value : α)
+    (member : value ∈ values)
+    (accepted : (function value).isSome = true) :
+    (values.findSome? function).isSome = true := by
+  induction values with
+  | nil => contradiction
+  | cons head tail induction =>
+      simp only [List.mem_cons] at member
+      unfold List.findSome?
+      cases headAccepted : function head with
+      | none =>
+          rcases member with exact | member
+          · subst head
+            simp [headAccepted] at accepted
+          · exact induction member
+      | some result => rfl
+
 /-- Candidate identifier transport checked before it becomes an isomorphism. -/
 private structure ConcreteIsoCandidate
     {definitions : List (List Sig)}
@@ -172,6 +391,35 @@ private theorem portCorresponds_of_true
   exact
     ⟨of_decide_eq_true sigExact, of_decide_eq_true arityExact,
       leftIndex, rightIndex, leftPort, rightPort⟩
+
+private theorem portCorresponds_true_of
+    (candidate :
+      ConcreteIsoCandidate left right regionsSame nodesSame wiresSame)
+    (endpoint : CEndpoint left.nodeCount)
+    (targetEndpoint : CEndpoint right.nodeCount)
+    (corresponds :
+      PortCorresponds left right candidate.nodeEquiv endpoint
+        targetEndpoint) :
+    portCorresponds candidate endpoint targetEndpoint = true := by
+  rcases endpoint with ⟨endpointNode, endpointPort⟩
+  rcases targetEndpoint with ⟨targetNode, targetPort⟩
+  unfold PortCorresponds at corresponds
+  rcases corresponds with ⟨nodeExact, rest⟩
+  change targetNode = candidate.nodeEquiv endpointNode at nodeExact
+  subst targetNode
+  unfold portCorresponds
+  simp only [decide_true, Bool.true_and]
+  cases leftNode : left.nodes endpointNode <;>
+    cases rightNode : right.nodes (candidate.nodeEquiv endpointNode)
+  all_goals rw [leftNode, rightNode] at rest
+  all_goals simp only at rest ⊢
+  all_goals try exact decide_eq_true rest
+  rename_i leftRegion leftSig leftArity rightRegion rightSig rightArity
+  rcases rest with
+    ⟨sigExact, arityExact, leftIndex, rightIndex, leftPort, rightPort⟩
+  subst endpointPort
+  subst targetPort
+  simp [identityPorts, sigExact, arityExact]
 
 private def rootValid
     (candidate :
@@ -329,6 +577,86 @@ private def toIso
         portCorresponds_of_true candidate endpoint targetEndpoint
           corresponds⟩
 
+private theorem equivCandidate_valid
+    (iso : ConcreteIso left right) :
+    let candidate :
+        ConcreteIsoCandidate left right iso.regionCount_eq iso.nodeCount_eq
+          iso.wireCount_eq :=
+      ⟨equivPermutation iso.regions, equivPermutation iso.nodes,
+        equivPermutation iso.wires⟩
+    candidate.valid = true := by
+  let candidate :
+      ConcreteIsoCandidate left right iso.regionCount_eq iso.nodeCount_eq
+        iso.wireCount_eq :=
+    ⟨equivPermutation iso.regions, equivPermutation iso.nodes,
+      equivPermutation iso.wires⟩
+  have regionsExact : candidate.regionEquiv = iso.regions := by
+    apply FiniteEquiv.ext
+    intro region
+    exact equivPermutation_apply iso.regions iso.regionCount_eq region
+  have nodesExact : candidate.nodeEquiv = iso.nodes := by
+    apply FiniteEquiv.ext
+    intro node
+    exact equivPermutation_apply iso.nodes iso.nodeCount_eq node
+  have wiresExact : candidate.wireEquiv = iso.wires := by
+    apply FiniteEquiv.ext
+    intro wire
+    exact equivPermutation_apply iso.wires iso.wireCount_eq wire
+  change candidate.valid = true
+  unfold valid rootValid regionsValid nodesValid signaturesValid scopesValid
+    forwardValid backwardValid
+  rw [Bool.and_eq_true_iff]
+  refine ⟨?_, ?_⟩
+  · exact decide_eq_true (by simpa [regionsExact] using iso.root)
+  rw [Bool.and_eq_true_iff]
+  refine ⟨?_, ?_⟩
+  · apply List.all_eq_true.mpr
+    intro region member
+    exact decide_eq_true (by
+      simpa [regionsExact] using iso.region_table region)
+  rw [Bool.and_eq_true_iff]
+  refine ⟨?_, ?_⟩
+  · apply List.all_eq_true.mpr
+    intro node member
+    exact decide_eq_true (by
+      simpa [regionsExact, nodesExact] using iso.node_table node)
+  rw [Bool.and_eq_true_iff]
+  refine ⟨?_, ?_⟩
+  · apply List.all_eq_true.mpr
+    intro wire member
+    exact decide_eq_true (by
+      simpa [wiresExact] using iso.wire_signature wire)
+  rw [Bool.and_eq_true_iff]
+  refine ⟨?_, ?_⟩
+  · apply List.all_eq_true.mpr
+    intro wire member
+    exact decide_eq_true (by
+      simpa [regionsExact, wiresExact] using iso.wire_scope wire)
+  rw [Bool.and_eq_true_iff]
+  refine ⟨?_, ?_⟩
+  · apply List.all_eq_true.mpr
+    intro wire wireMember
+    apply List.all_eq_true.mpr
+    intro endpoint endpointMember
+    obtain ⟨targetEndpoint, targetMember, corresponds⟩ :=
+      iso.endpoint_forward wire endpoint endpointMember
+    apply List.any_eq_true.mpr
+    refine ⟨targetEndpoint, ?_, ?_⟩
+    · simpa [wiresExact] using targetMember
+    · apply portCorresponds_true_of
+      simpa [nodesExact] using corresponds
+  · apply List.all_eq_true.mpr
+    intro wire wireMember
+    apply List.all_eq_true.mpr
+    intro targetEndpoint targetMember
+    obtain ⟨endpoint, endpointMember, corresponds⟩ :=
+      iso.endpoint_backward wire targetEndpoint (by
+        simpa [wiresExact] using targetMember)
+    apply List.any_eq_true.mpr
+    refine ⟨endpoint, endpointMember, ?_⟩
+    apply portCorresponds_true_of
+    simpa [nodesExact] using corresponds
+
 end ConcreteIsoCandidate
 
 /--
@@ -360,6 +688,58 @@ def findConcreteIso?
       exact none
   else
     exact none
+
+/-- Every existing concrete isomorphism is discoverable by the finite search. -/
+theorem findConcreteIso?_complete
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) :
+    ∃ found, findConcreteIso? left right = some found := by
+  unfold findConcreteIso?
+  rw [dif_pos iso.regionCount_eq, dif_pos iso.nodeCount_eq,
+    dif_pos iso.wireCount_eq]
+  apply Option.isSome_iff_exists.mp
+  apply findSome?_isSome_of_mem
+    (fun regions =>
+      (finPermutations right.nodeCount).findSome? fun nodes =>
+        (finPermutations right.wireCount).findSome? fun wires =>
+          let candidate :
+              ConcreteIsoCandidate left right iso.regionCount_eq
+                iso.nodeCount_eq iso.wireCount_eq :=
+            ⟨regions, nodes, wires⟩
+          if accepted : candidate.valid then
+            some (candidate.toIso accepted)
+          else none)
+    (finPermutations right.regionCount)
+    (equivPermutation iso.regions)
+    (equivPermutation_mem iso.regions)
+  apply findSome?_isSome_of_mem
+    (fun nodes =>
+      (finPermutations right.wireCount).findSome? fun wires =>
+        let candidate :
+            ConcreteIsoCandidate left right iso.regionCount_eq
+              iso.nodeCount_eq iso.wireCount_eq :=
+          ⟨equivPermutation iso.regions, nodes, wires⟩
+        if accepted : candidate.valid then
+          some (candidate.toIso accepted)
+        else none)
+    (finPermutations right.nodeCount)
+    (equivPermutation iso.nodes)
+    (equivPermutation_mem iso.nodes)
+  apply findSome?_isSome_of_mem
+    (fun wires =>
+      let candidate :
+          ConcreteIsoCandidate left right iso.regionCount_eq iso.nodeCount_eq
+            iso.wireCount_eq :=
+        ⟨equivPermutation iso.regions, equivPermutation iso.nodes, wires⟩
+      if accepted : candidate.valid then
+        some (candidate.toIso accepted)
+      else none)
+    (finPermutations right.wireCount)
+    (equivPermutation iso.wires)
+    (equivPermutation_mem iso.wires)
+  rw [dif_pos (ConcreteIsoCandidate.equivCandidate_valid iso)]
+  rfl
 
 end ConcreteIsoSearch
 

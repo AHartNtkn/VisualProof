@@ -139,6 +139,7 @@ structure LocalCylindricalFrame
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
     (sourceArguments : List Sig) where
+  targetSites : AllAppliedSites result.checked result.targetWire
   sourceScope :
     SiteCompilation source (source.val.wires wire).scope
   targetScope :
@@ -183,13 +184,14 @@ private def LocalCylindricalFrame.targetShape
   normalizedArgumentShape frame.targetRemoval localTargetHead
     (frame.context.targetBody frame.targetScope.frame.siteBody)
 
-private def checkLocalCylindricalFrame
+private def checkLocalCylindricalFrameFromSites
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
     (sourceArguments : List Sig)
     (sourceSignature :
-      (source.val.wires wire).sig = .rel sourceArguments) :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (targetSites : AllAppliedSites result.checked result.targetWire) :
     Option (LocalCylindricalFrame result sourceArguments) := do
   let sourceScope ←
     compileSite? source (source.val.wires wire).scope
@@ -234,8 +236,21 @@ private def checkLocalCylindricalFrame
   let ⟨targetReduced, targetRemoval⟩ :=
     LocalHeadRemoval.ofVar targetHead
   pure
-    ⟨sourceScope, targetScope, context, sourceReduced, targetReduced,
+    ⟨targetSites, sourceScope, targetScope, context, sourceReduced, targetReduced,
       sourceRemoval, targetRemoval⟩
+
+private def checkLocalCylindricalFrame
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments) :
+    Option (LocalCylindricalFrame result sourceArguments) := do
+  let targetSites ←
+    checkAllAppliedSites result.checked result.targetWire
+  checkLocalCylindricalFrameFromSites result sourceArguments sourceSignature
+    targetSites
 
 private def sourceCylindricalShape
     {source : CheckedDiagram definitions}
@@ -421,6 +436,36 @@ def checkScopedArityShiftLedger
       ⟨sourceArguments.length, targetExact⟩
     let frame ←
       checkLocalCylindricalFrame result sourceArguments sourceSignature
+    let accepted ←
+      checkCylindricalShape insertion
+        (fun {_} value => value)
+        frame.sourceShape frame.targetShape
+    pure ⟨insertion, frame, accepted⟩
+  else
+    none
+
+private def checkScopedArityShiftLedgerFromSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (fixedSignature : Sig)
+    (targetSites : AllAppliedSites result.checked result.targetWire) :
+    Option
+      (ScopedArityShiftLedger result sourceArguments fixedSignature) := do
+  if targetExact :
+      ConcreteWirePrimitive.insertAt sourceArguments
+          sourceArguments.length fixedSignature =
+        result.targetArguments then
+    let insertion :
+        TypedArguments.InsertionEvidence result.targetArguments
+          sourceArguments fixedSignature :=
+      ⟨sourceArguments.length, targetExact⟩
+    let frame ←
+      checkLocalCylindricalFrameFromSites result sourceArguments
+        sourceSignature targetSites
     let accepted ←
       checkCylindricalShape insertion
         (fun {_} value => value)
