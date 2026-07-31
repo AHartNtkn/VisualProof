@@ -2330,6 +2330,37 @@ def targetArguments
     List Sig :=
   result.spec.targetArguments
 
+/-- Canonical image of a source region in the checked replacement.  Argument
+replacement never deletes regions; the two explicit transports account only
+for dense construction and checked-target indexing. -/
+def regionImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.RegionId :=
+  Internal.checkedRegion result.generated (retainedRegion source region)
+
+/-- Canonical checked node generated for one ordered source application. -/
+def targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (replacementNode result.plan site)
+
+/-- Canonical checked operation-local wire at one replacement-local index. -/
+def targetLocalWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (fresh : Fin result.spec.localCount) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (replacementCandidateLocalWire result.plan fresh)
+
 /-- Source wires deleted by the simultaneous replacement, including its head. -/
 def sourceRemovedWires
     {source : CheckedDiagram definitions}
@@ -2396,6 +2427,61 @@ theorem targetWire_scope
   rw [assigned_wire_scope]
   exact congrArg (Internal.checkedRegion result.generated)
     (replacementSkeleton_head_wire_scope result.plan)
+
+@[simp]
+theorem targetWire_scope_regionImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    (result.checked.val.wires result.targetWire).scope =
+      result.regionImage (source.val.wires wire).scope :=
+  result.targetWire_scope
+
+/-- Generated replacement nodes stay at the exact images of their ordered
+source application regions. -/
+theorem targetNode_region
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    (result.checked.val.nodes (result.targetNode site)).region =
+      result.regionImage (result.sites.sites.get site).region := by
+  unfold targetNode regionImage
+  rw [Internal.checkedNode_data_transport]
+  unfold replacementCandidate
+  rw [assigned_node]
+  exact replacementSkeleton_replacementNode result.plan site ▸ rfl
+
+/-- Every operation-local argument wire has its construction-selected
+signature in the checked target. -/
+theorem targetLocalWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (fresh : Fin result.spec.localCount) :
+    (result.checked.val.wires (result.targetLocalWire fresh)).sig =
+      result.spec.localSignature fresh := by
+  unfold targetLocalWire
+  rw [Internal.checkedWire_signature_transport]
+  unfold replacementCandidate
+  rw [assigned_wire_signature]
+  exact replacementSkeleton_local_wire_signature result.plan fresh
+
+/-- Every operation-local argument wire is bound at the exact checked image
+of its construction-selected source scope. -/
+theorem targetLocalWire_scope
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (fresh : Fin result.spec.localCount) :
+    (result.checked.val.wires (result.targetLocalWire fresh)).scope =
+      result.regionImage (result.spec.localScope fresh) := by
+  unfold targetLocalWire regionImage
+  rw [Internal.checkedWire_scope_transport]
+  unfold replacementCandidate
+  rw [assigned_wire_scope]
+  exact congrArg (Internal.checkedRegion result.generated)
+    (replacementSkeleton_local_wire_scope result.plan fresh)
 
 /-- The exhaustive generated target sites retained by every accepted argument
 replacement. -/
