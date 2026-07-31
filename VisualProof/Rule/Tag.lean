@@ -17,6 +17,25 @@ inductive StepTag
   | vacuousElim
   | unfold
   | fold
+  | cutWrap
+  | cutAbsorb
+  | parallelSplit
+  | parallelFuse
+  | endsDelete
+  | endsSpawn
+  | arityShift
+  | arityUnshift
+  | argPermute
+  | argDuplicate
+  | argContract
+  | argDrop
+  | argExtend
+  | applyFormal
+  | abstractFormal
+  | identityLeaf
+  | identityAbstract
+  | refLeaf
+  | refAbstract
   deriving Repr, DecidableEq
 
 namespace StepTag
@@ -38,9 +57,28 @@ def all : List StepTag :=
   , .vacuousElim
   , .unfold
   , .fold
+  , .cutWrap
+  , .cutAbsorb
+  , .parallelSplit
+  , .parallelFuse
+  , .endsDelete
+  , .endsSpawn
+  , .arityShift
+  , .arityUnshift
+  , .argPermute
+  , .argDuplicate
+  , .argContract
+  , .argDrop
+  , .argExtend
+  , .applyFormal
+  , .abstractFormal
+  , .identityLeaf
+  , .identityAbstract
+  , .refLeaf
+  , .refAbstract
   ]
 
-theorem all_length : all.length = 15 := by
+theorem all_length : all.length = 34 := by
   decide
 
 theorem all_nodup : all.Nodup := by

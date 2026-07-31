@@ -49,6 +49,12 @@ private def negativeErasureInput :
   site := leftRegion
   target := fun _ => anchorWire
 
+private def backwardNegativeErasureInput :
+    StructuralErasureInput host oneStub where
+  orientation := .backward
+  site := leftRegion
+  target := fun _ => anchorWire
+
 /-- The public rule surface is concrete and checker-owned. -/
 example :
     (checkStructuralInsertion insertionInput).toOption.isSome = true := by
@@ -74,8 +80,13 @@ example :
   native_decide
 
 example :
+    (checkStructuralErasure backwardNegativeErasureInput).toOption.isSome =
+      true := by
+  native_decide
+
+example :
     structuralError? (checkStructuralErasure (erasureInput .backward)) =
-      some .backwardErasureForbidden := by
+      some .backwardErasureRequiresNegative := by
   native_decide
 
 example :
@@ -87,6 +98,14 @@ example :
 example (checked : StructuralInsertionReceipt insertionInput)
     (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
     Directed .forward
+      (denoteChecked pre definitionEnv checked.source)
+      (denoteChecked pre definitionEnv checked.target) :=
+  checked.sound pre definitionEnv
+
+/-- Backward erasure in a negative region has the flipped semantic direction. -/
+example (checked : StructuralErasureReceipt backwardNegativeErasureInput)
+    (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
+    Directed .backward
       (denoteChecked pre definitionEnv checked.source)
       (denoteChecked pre definitionEnv checked.target) :=
   checked.sound pre definitionEnv
@@ -129,7 +148,8 @@ private def doubled : CheckedDiagram [] :=
 private def doubleCutInput : DoubleCutInput host doubled where
   site := anchor
 
-example : (checkDoubleCut doubleCutInput).toOption.isSome = true := by
+theorem double_cut_receipt :
+    (checkDoubleCut doubleCutInput).toOption.isSome = true := by
   native_decide
 
 private def vacuousRaw : ConcreteDiagram 0 where
@@ -173,14 +193,15 @@ private def vacuousInput : VacuousInput host vacuous where
   site := anchor
   sig := .rel [.iota]
 
-example : (checkVacuous vacuousInput).toOption.isSome = true := by
+theorem vacuous_wire_receipt :
+    (checkVacuous vacuousInput).toOption.isSome = true := by
   native_decide
 
 private def descendantIteration :
     OrdinaryIterationInput oneStubOccurrence.toSelection oneStubOccurrence where
   destination := rightRegion
 
-example :
+theorem ordinary_descendant_iteration_receipt :
     (checkOrdinaryIteration descendantIteration).toOption.isSome = true := by
   native_decide
 
@@ -188,7 +209,7 @@ private def sameSiteIteration :
     OrdinaryIterationInput oneStubOccurrence.toSelection oneStubOccurrence where
   destination := anchor
 
-example :
+theorem ordinary_same_site_iteration_receipt :
     (checkOrdinaryIteration sameSiteIteration).toOption.isSome = true := by
   native_decide
 
@@ -339,7 +360,7 @@ private def nonAncestorDeiteration :
     OrdinaryDeiterationInput innerOccurrence.toSelection innerOccurrence
       siblingOccurrence.toSelection siblingOccurrence where
 
-example :
+theorem ordinary_deiteration_receipt :
     (checkOrdinaryDeiteration descendantDeiteration).toOption.isSome = true := by
   native_decide
 

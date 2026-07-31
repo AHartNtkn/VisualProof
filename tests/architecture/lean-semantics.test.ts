@@ -16,6 +16,23 @@ function leanSourcesUnder(dir: string): string[] {
 }
 
 describe('Lean semantics architecture', () => {
+  it('freezes one 34-constructor Lean proof-step inventory', () => {
+    const source = readFileSync('VisualProof/Rule/Tag.lean', 'utf8')
+    const inventory = source.match(
+      /inductive StepTag\s+([\s\S]*?)\s+deriving Repr, DecidableEq/,
+    )
+
+    expect(inventory).not.toBeNull()
+    const constructors = [
+      ...(inventory?.[1].matchAll(/^\s*\|\s+([A-Za-z][A-Za-z0-9_]*)\s*$/gm) ??
+        []),
+    ].map((match) => match[1])
+
+    expect(constructors).toHaveLength(34)
+    expect(new Set(constructors).size).toBe(34)
+    expect(source).toContain('theorem all_length : all.length = 34 := by')
+  })
+
   it('contains only the signature-indexed semantic core', () => {
     const source = leanSourcesUnder('.')
       .map((file) => readFileSync(file, 'utf8'))

@@ -22,6 +22,7 @@ import VisualProof.Rule.IdentityFixtures
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 import VisualProof.Rule.StructuralFixtures
+import VisualProof.Rule.StructuralAudit
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin

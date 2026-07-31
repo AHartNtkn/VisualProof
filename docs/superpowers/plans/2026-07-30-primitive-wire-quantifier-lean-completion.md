@@ -146,7 +146,7 @@ order, matching `src/kernel/proof/step.ts`:
   backward-negative erasure.
 - Structural insertion remains forward-negative / backward-positive.
 
-- [ ] **Step 1: Add RED inventory, Phase 3 audit, and polarity fixtures.**
+- [x] **Step 1: Add RED inventory, Phase 3 audit, and polarity fixtures.**
   Change the Lean length theorem and architecture expectation to 34. In
   `StructuralAudit.lean`, pin the completed Task 7 authority: explicit direct
   nodes plus selected subtrees, explicit anchor-scoped internal wires, one
@@ -154,21 +154,21 @@ order, matching `src/kernel/proof/step.ts`:
   content, ordinary iteration/deiteration, double-cut, and vacuous-wire
   receipts. Add a backward-negative erasure fixture and a backward-positive
   refusal fixture. Preserve the existing insertion matrix.
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
   ```bash
   lake build VisualProof.Rule.Tag VisualProof.Rule.StructuralFixtures
   npx vitest run tests/architecture/lean-semantics.test.ts
   ```
 
-- [ ] **Step 3: Replace the tag inventory.** Add the 19 merged primitive tags
+- [x] **Step 3: Replace the tag inventory.** Add the 19 merged primitive tags
   in the exact order above. Keep one `StepTag.all`; do not add a second list
   for tooling.
-- [ ] **Step 4: Replace forward-only erasure.** Remove
+- [x] **Step 4: Replace forward-only erasure.** Remove
   `backwardErasureForbidden`; check the selected site's parity against
   orientation, and prove the backward-negative case with the independently
   named negative-splice lemma required by the primitive design.
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build

@@ -44,7 +44,7 @@ inductive StructuralError
   | forwardInsertionRequiresNegative
   | backwardInsertionRequiresPositive
   | forwardErasureRequiresPositive
-  | backwardErasureForbidden
+  | backwardErasureRequiresNegative
   deriving Repr, DecidableEq
 
 /--
@@ -174,6 +174,77 @@ def target
     CheckedDiagram definitions :=
   checked.result.checked
 
+/--
+A checked splice into a negative context is sound in the insertion direction.
+This is the direct negative-splice theorem used by backward erasure; it does
+not derive that case by reversing positive erasure.
+-/
+theorem negative_splice_sound
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (forward : input.orientation = .forward)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions) :
+    denoteChecked pre definitionEnv checked.source →
+      denoteChecked pre definitionEnv checked.target := by
+  obtain ⟨compiled, _compiledAccepted, targetDenotes⟩ :=
+    denote_splice checked.fragmentCompiled checked.attachment checked.result
+      checked.resultAccepted pre definitionEnv
+  have sameSite :=
+    SiteCompilation.unique compiled.site checked.siteCompiled
+  have sameDepth :
+      compiled.site.frame.context.cutDepth =
+        checked.siteCompiled.frame.context.cutDepth :=
+    congrArg (fun site => site.frame.context.cutDepth) sameSite
+  have sourceDenotes :
+      denoteChecked pre definitionEnv base ↔
+        denoteRegion pre definitionEnv Env.empty
+          (compiled.site.frame.context.fill
+            compiled.site.frame.siteBody) := by
+    rw [elaborate_denotes_checked]
+    change
+      denoteRegion pre definitionEnv Env.empty (elaborate base) ↔
+        denoteRegion pre definitionEnv Env.empty
+          (compiled.site.frame.context.fill
+            compiled.site.frame.siteBody)
+    rw [compiled.site.frame_fills_checked]
+    rfl
+  have contraction :
+      ∀ localEnv : Env pre compiled.site.frame.visible.sigs,
+        denoteRegion pre definitionEnv localEnv
+            (Region.conjoin compiled.site.frame.siteBody
+              (intrinsicSplice checked.fragmentCompiled.openDiagram
+                compiled.intrinsicAttachment)) →
+          denoteRegion pre definitionEnv localEnv
+            compiled.site.frame.siteBody := by
+    intro localEnv inserted
+    exact
+      (Region.denote_conjoin pre definitionEnv localEnv
+        compiled.site.frame.siteBody
+        (intrinsicSplice checked.fragmentCompiled.openDiagram
+          compiled.intrinsicAttachment)).mp inserted |>.1
+  have odd :
+      compiled.site.frame.context.cutDepth % 2 = 1 := by
+    rw [sameDepth]
+    simpa [InsertionLegal, forward] using checked.legal
+  intro sourceHolds
+  apply targetDenotes.mpr
+  change
+    denoteRegion pre definitionEnv Env.empty
+      (compiled.site.frame.context.fill
+        (Region.conjoin compiled.site.frame.siteBody
+          (intrinsicSplice checked.fragmentCompiled.openDiagram
+            compiled.intrinsicAttachment)))
+  exact
+    context_anti compiled.site.frame.context pre definitionEnv
+      (Region.conjoin compiled.site.frame.siteBody
+        (intrinsicSplice checked.fragmentCompiled.openDiagram
+          compiled.intrinsicAttachment))
+      compiled.site.frame.siteBody odd contraction Env.empty
+      (sourceDenotes.mp sourceHolds)
+
 /-- Accepted concrete insertion has exactly its checked orientation. -/
 theorem sound
     {base : CheckedDiagram definitions}
@@ -223,25 +294,7 @@ theorem sound
           compiled.intrinsicAttachment)).mp inserted |>.1
   cases orientation : input.orientation with
   | forward =>
-      have odd :
-          compiled.site.frame.context.cutDepth % 2 = 1 := by
-        rw [sameDepth]
-        simpa [InsertionLegal, orientation] using checked.legal
-      intro sourceHolds
-      apply targetDenotes.mpr
-      change
-        denoteRegion pre definitionEnv Env.empty
-          (compiled.site.frame.context.fill
-            (Region.conjoin compiled.site.frame.siteBody
-              (intrinsicSplice checked.fragmentCompiled.openDiagram
-                compiled.intrinsicAttachment)))
-      exact
-        context_anti compiled.site.frame.context pre definitionEnv
-          (Region.conjoin compiled.site.frame.siteBody
-            (intrinsicSplice checked.fragmentCompiled.openDiagram
-              compiled.intrinsicAttachment))
-          compiled.site.frame.siteBody odd contraction Env.empty
-          (sourceDenotes.mp sourceHolds)
+      exact negative_splice_sound checked orientation pre definitionEnv
   | backward =>
       have even :
           compiled.site.frame.context.cutDepth % 2 = 0 := by
@@ -280,44 +333,45 @@ structure StructuralErasureInput
 
 namespace StructuralErasureInput
 
-private def asBackwardInsertion
+private def asOppositeInsertion
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
     (input : StructuralErasureInput base fragment) :
     StructuralInsertionInput base fragment where
-  orientation := .backward
+  orientation :=
+    match input.orientation with
+    | .forward => .backward
+    | .backward => .forward
   site := input.site
   target := input.target
 
 end StructuralErasureInput
 
-/-- Opaque receipt for positive forward erasure. -/
+/-- Opaque receipt for erasure at the orientation-flipped legal polarity. -/
 structure StructuralErasureReceipt
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
     (input : StructuralErasureInput base fragment) where
   private mk ::
-  private forward : input.orientation = .forward
   private inserted :
-    StructuralInsertionReceipt input.asBackwardInsertion
+    StructuralInsertionReceipt input.asOppositeInsertion
 
-/-- Backward erasure is refused before any polarity or graph work is run. -/
+/-- Check erasure by checking insertion in the opposite orientation. -/
 def checkStructuralErasure
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
     (input : StructuralErasureInput base fragment) :
     Except StructuralError (StructuralErasureReceipt input) := by
-  cases orientation : input.orientation with
-  | backward => exact .error .backwardErasureForbidden
-  | forward =>
-      match accepted :
-          checkStructuralInsertion input.asBackwardInsertion with
-      | .ok checked =>
-          exact .ok (StructuralErasureReceipt.mk orientation checked)
-      | .error .backwardInsertionRequiresPositive =>
-          exact .error .forwardErasureRequiresPositive
-      | .error error =>
-          exact .error error
+  match accepted :
+      checkStructuralInsertion input.asOppositeInsertion with
+  | .ok checked =>
+      exact .ok (StructuralErasureReceipt.mk checked)
+  | .error .backwardInsertionRequiresPositive =>
+      exact .error .forwardErasureRequiresPositive
+  | .error .forwardInsertionRequiresNegative =>
+      exact .error .backwardErasureRequiresNegative
+  | .error error =>
+      exact .error error
 
 namespace StructuralErasureReceipt
 
@@ -346,7 +400,10 @@ def target
     CheckedDiagram definitions :=
   checked.inserted.source
 
-/-- Positive forward erasure is contraction of the checked backward insertion. -/
+/--
+Erasure is the checked opposite-orientation reading of the same splice.
+Backward erasure cites `negative_splice_sound` directly.
+-/
 theorem sound
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
@@ -357,14 +414,17 @@ theorem sound
     Directed input.orientation
       (denoteChecked pre definitionEnv checked.source)
       (denoteChecked pre definitionEnv checked.target) := by
-  have insertionSound :=
-    checked.inserted.sound pre definitionEnv
   cases orientation : input.orientation with
   | forward =>
-      simpa [Directed, StructuralErasureInput.asBackwardInsertion] using
-        insertionSound
+      simpa [Directed, StructuralErasureInput.asOppositeInsertion, orientation] using
+        checked.inserted.sound pre definitionEnv
   | backward =>
-      cases checked.forward.symm.trans orientation
+      have negative :=
+        StructuralInsertionReceipt.negative_splice_sound checked.inserted
+          (by
+            simp [StructuralErasureInput.asOppositeInsertion, orientation])
+          pre definitionEnv
+      simpa [Directed] using negative
 
 end StructuralErasureReceipt
 
