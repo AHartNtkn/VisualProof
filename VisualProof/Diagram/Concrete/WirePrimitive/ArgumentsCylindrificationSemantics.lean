@@ -735,6 +735,61 @@ with exactly one acted hole.  Fresh binders are neither shared nor permitted
 to escape into nested regions.
 -/
 
+private def checkFinBijection (mapping : Fin count → Fin count) : Bool :=
+  ((Data.Finite.allFin count).all fun left =>
+    (Data.Finite.allFin count).all fun right =>
+      ! (mapping left == mapping right) || (left == right)) &&
+  ((Data.Finite.allFin count).all fun target =>
+    (Data.Finite.allFin count).any fun source =>
+      mapping source == target)
+
+private theorem checkFinBijection_eq_true
+    (mapping : Fin count → Fin count)
+    (accepted : checkFinBijection mapping = true) :
+    Function.Injective mapping ∧ Function.Surjective mapping := by
+  simp only [checkFinBijection, Bool.and_eq_true] at accepted
+  constructor
+  · intro left right same
+    have checked :=
+      (List.all_eq_true.mp
+        (List.all_eq_true.mp accepted.1 left
+          (Data.Finite.mem_allFin left)) right
+        (Data.Finite.mem_allFin right))
+    rw [Bool.or_eq_true] at checked
+    rcases checked with different | equal
+    · have equalMapping : (mapping left == mapping right) = true :=
+        beq_iff_eq.mpr same
+      rw [equalMapping] at different
+      contradiction
+    · exact beq_iff_eq.mp equal
+  · intro target
+    have checked :=
+      List.all_eq_true.mp accepted.2 target
+        (Data.Finite.mem_allFin target)
+    obtain ⟨source, _member, equal⟩ := List.any_eq_true.mp checked
+    exact ⟨source, beq_iff_eq.mp equal⟩
+
+private theorem checkFinBijection_complete
+    (mapping : Fin count → Fin count)
+    (injective : Function.Injective mapping)
+    (surjective : Function.Surjective mapping) :
+    checkFinBijection mapping = true := by
+  rw [checkFinBijection, Bool.and_eq_true]
+  constructor
+  · apply List.all_eq_true.mpr
+    intro left _
+    apply List.all_eq_true.mpr
+    intro right _
+    rw [Bool.or_eq_true]
+    by_cases same : mapping left = mapping right
+    · exact Or.inr (beq_iff_eq.mpr (injective same))
+    · exact Or.inl (by simp [same])
+  · apply List.all_eq_true.mpr
+    intro target _
+    obtain ⟨source, same⟩ := surjective target
+    apply List.any_eq_true.mpr
+    exact ⟨source, Data.Finite.mem_allFin source, beq_iff_eq.mpr same⟩
+
 structure CylindricalHoles
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -744,24 +799,106 @@ structure CylindricalHoles
         freshCount)
     (outer : WireRenaming smallerOuter largerOuter)
     (smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments))
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments))
     (larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)) : Prop where
+      List (Vars (largerBound ++ largerOuter) largerArguments)) : Type where
   smaller_length : smaller.length = freshCount
   larger_length : larger.length = freshCount
+  sourceIndex : Fin freshCount → Fin freshCount
+  sourceIndex_injective : Function.Injective sourceIndex
+  sourceIndex_surjective : Function.Surjective sourceIndex
+  freshIndex : Fin freshCount → Fin freshCount
+  freshIndex_injective : Function.Injective freshIndex
+  freshIndex_surjective : Function.Surjective freshIndex
   inserted_exact :
     ∀ index : Fin freshCount,
       (insertion.splitVars
         (larger.get (Fin.cast larger_length.symm index))).1 =
-          bounds.freshVar outer index
+          bounds.freshVar outer (freshIndex index)
   retained_exact :
     ∀ index : Fin freshCount,
       (insertion.splitVars
         (larger.get (Fin.cast larger_length.symm index))).2 =
           Vars.rename (bounds.embed outer)
-            (smaller.get (Fin.cast smaller_length.symm index))
+            (smaller.get
+              (Fin.cast smaller_length.symm (sourceIndex index)))
+
+private def checkSourceIndex
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments))
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (smallerLength : smaller.length = freshCount)
+    (largerLength : larger.length = freshCount)
+    (mapping : Fin freshCount → Fin freshCount) : Bool :=
+  checkFinBijection mapping &&
+    decide
+      (∀ index : Fin freshCount,
+        (insertion.splitVars
+          (larger.get (Fin.cast largerLength.symm index))).2 =
+            Vars.rename (bounds.embed outer)
+              (smaller.get
+                (Fin.cast smallerLength.symm (mapping index))))
+
+private def checkFreshIndex
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (largerLength : larger.length = freshCount)
+    (mapping : Fin freshCount → Fin freshCount) : Bool :=
+  checkFinBijection mapping &&
+    decide
+      (∀ index : Fin freshCount,
+        (insertion.splitVars
+          (larger.get (Fin.cast largerLength.symm index))).1 =
+            bounds.freshVar outer (mapping index))
+
+private def findSourceIndex?
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments))
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (smallerLength : smaller.length = freshCount)
+    (largerLength : larger.length = freshCount) :
+    Option (Fin freshCount → Fin freshCount) :=
+  (Data.Finite.enumerateFinFunctions freshCount freshCount).find? fun mapping =>
+    checkSourceIndex insertion bounds outer smaller larger
+      smallerLength largerLength mapping
+
+private def findFreshIndex?
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (largerLength : larger.length = freshCount) :
+    Option (Fin freshCount → Fin freshCount) :=
+  (Data.Finite.enumerateFinFunctions freshCount freshCount).find? fun mapping =>
+    checkFreshIndex insertion bounds outer larger largerLength mapping
 
 def checkCylindricalHoles
     (insertion :
@@ -772,30 +909,133 @@ def checkCylindricalHoles
         freshCount)
     (outer : WireRenaming smallerOuter largerOuter)
     (smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments))
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments))
     (larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)) :
-    Bool :=
+      List (Vars (largerBound ++ largerOuter) largerArguments)) : Bool :=
   if smallerLength : smaller.length = freshCount then
     if largerLength : larger.length = freshCount then
-      decide
-          (∀ index : Fin freshCount,
-            (insertion.splitVars
-              (larger.get (Fin.cast largerLength.symm index))).1 =
-                bounds.freshVar outer index) &&
-        decide
-          (∀ index : Fin freshCount,
-            (insertion.splitVars
-              (larger.get (Fin.cast largerLength.symm index))).2 =
-                Vars.rename (bounds.embed outer)
-                  (smaller.get
-                    (Fin.cast smallerLength.symm index)))
+      (findSourceIndex? insertion bounds outer smaller larger
+          smallerLength largerLength).isSome &&
+        (findFreshIndex? insertion bounds outer larger
+          largerLength).isSome
     else
       false
   else
     false
+
+private theorem checkSourceIndex_eq_true
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments))
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (smallerLength : smaller.length = freshCount)
+    (largerLength : larger.length = freshCount)
+    (mapping : Fin freshCount → Fin freshCount)
+    (accepted :
+      checkSourceIndex insertion bounds outer smaller larger
+        smallerLength largerLength mapping = true) :
+    Function.Injective mapping ∧ Function.Surjective mapping ∧
+      ∀ index : Fin freshCount,
+        (insertion.splitVars
+          (larger.get (Fin.cast largerLength.symm index))).2 =
+            Vars.rename (bounds.embed outer)
+              (smaller.get
+                (Fin.cast smallerLength.symm (mapping index))) := by
+  rw [checkSourceIndex, Bool.and_eq_true] at accepted
+  exact
+    ⟨(checkFinBijection_eq_true mapping accepted.1).1,
+      (checkFinBijection_eq_true mapping accepted.1).2,
+      of_decide_eq_true accepted.2⟩
+
+private theorem checkSourceIndex_complete
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments))
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (smallerLength : smaller.length = freshCount)
+    (largerLength : larger.length = freshCount)
+    (mapping : Fin freshCount → Fin freshCount)
+    (injective : Function.Injective mapping)
+    (surjective : Function.Surjective mapping)
+    (exact :
+      ∀ index : Fin freshCount,
+        (insertion.splitVars
+          (larger.get (Fin.cast largerLength.symm index))).2 =
+            Vars.rename (bounds.embed outer)
+              (smaller.get
+                (Fin.cast smallerLength.symm (mapping index)))) :
+    checkSourceIndex insertion bounds outer smaller larger
+      smallerLength largerLength mapping = true := by
+  rw [checkSourceIndex, Bool.and_eq_true]
+  exact
+    ⟨checkFinBijection_complete mapping injective surjective,
+      decide_eq_true exact⟩
+
+private theorem checkFreshIndex_eq_true
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (largerLength : larger.length = freshCount)
+    (mapping : Fin freshCount → Fin freshCount)
+    (accepted :
+      checkFreshIndex insertion bounds outer larger largerLength mapping =
+        true) :
+    Function.Injective mapping ∧ Function.Surjective mapping ∧
+      ∀ index : Fin freshCount,
+        (insertion.splitVars
+          (larger.get (Fin.cast largerLength.symm index))).1 =
+            bounds.freshVar outer (mapping index) := by
+  rw [checkFreshIndex, Bool.and_eq_true] at accepted
+  exact
+    ⟨(checkFinBijection_eq_true mapping accepted.1).1,
+      (checkFinBijection_eq_true mapping accepted.1).2,
+      of_decide_eq_true accepted.2⟩
+
+private theorem checkFreshIndex_complete
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments))
+    (largerLength : larger.length = freshCount)
+    (mapping : Fin freshCount → Fin freshCount)
+    (injective : Function.Injective mapping)
+    (surjective : Function.Surjective mapping)
+    (exact :
+      ∀ index : Fin freshCount,
+        (insertion.splitVars
+          (larger.get (Fin.cast largerLength.symm index))).1 =
+            bounds.freshVar outer (mapping index)) :
+    checkFreshIndex insertion bounds outer larger largerLength mapping =
+      true := by
+  rw [checkFreshIndex, Bool.and_eq_true]
+  exact
+    ⟨checkFinBijection_complete mapping injective surjective,
+      decide_eq_true exact⟩
 
 theorem checkCylindricalHoles_complete
     {insertion :
@@ -806,28 +1046,38 @@ theorem checkCylindricalHoles_complete
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
-    (holes : CylindricalHoles insertion bounds outer smaller larger) :
-    checkCylindricalHoles insertion bounds outer smaller larger = true := by
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes :
+      CylindricalHoles insertion bounds outer smaller larger) :
+    checkCylindricalHoles insertion bounds outer smaller larger =
+      true := by
   unfold checkCylindricalHoles
-  rw [dif_pos holes.smaller_length, dif_pos holes.larger_length]
-  rw [Bool.and_eq_true]
+  rw [dif_pos holes.smaller_length, dif_pos holes.larger_length,
+    Bool.and_eq_true]
   constructor
-  · apply decide_eq_true
+  · apply List.find?_isSome.mpr
+    refine ⟨holes.sourceIndex,
+      Data.Finite.enumerateFinFunctions_complete _ _ holes.sourceIndex, ?_⟩
+    apply checkSourceIndex_complete insertion bounds outer smaller larger
+      holes.smaller_length holes.larger_length holes.sourceIndex
+      holes.sourceIndex_injective holes.sourceIndex_surjective
+    intro index
+    simpa only [Subsingleton.elim _ holes.smaller_length,
+      Subsingleton.elim _ holes.larger_length] using
+        holes.retained_exact index
+  · apply List.find?_isSome.mpr
+    refine ⟨holes.freshIndex,
+      Data.Finite.enumerateFinFunctions_complete _ _ holes.freshIndex, ?_⟩
+    apply checkFreshIndex_complete insertion bounds outer larger
+      holes.larger_length holes.freshIndex holes.freshIndex_injective
+      holes.freshIndex_surjective
     intro index
     simpa only [Subsingleton.elim _ holes.larger_length] using
       holes.inserted_exact index
-  · apply decide_eq_true
-    intro index
-    simpa only [Subsingleton.elim _ holes.larger_length,
-      Subsingleton.elim _ holes.smaller_length] using
-      holes.retained_exact index
 
-theorem checkCylindricalHoles_eq_true
+def checkCylindricalHoles_eq_true
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
         fixedSignature}
@@ -836,30 +1086,59 @@ theorem checkCylindricalHoles_eq_true
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (accepted :
-      checkCylindricalHoles insertion bounds outer smaller larger = true) :
+      checkCylindricalHoles insertion bounds outer smaller larger =
+        true) :
     CylindricalHoles insertion bounds outer smaller larger := by
   unfold checkCylindricalHoles at accepted
   split at accepted
   next smallerLength =>
     split at accepted
     next largerLength =>
-      simp only [Bool.and_eq_true] at accepted
-      exact
-        { smaller_length := smallerLength
-          larger_length := largerLength
-          inserted_exact := of_decide_eq_true accepted.1
-          retained_exact := of_decide_eq_true accepted.2 }
-    next =>
-      contradiction
-  next =>
-    contradiction
-
+      rw [Bool.and_eq_true] at accepted
+      cases sourceFound :
+          findSourceIndex? insertion bounds outer smaller larger
+            smallerLength largerLength with
+      | none =>
+          simp [sourceFound] at accepted
+      | some sourceIndex =>
+          cases freshFound :
+              findFreshIndex? insertion bounds outer larger largerLength with
+          | none =>
+              simp [freshFound] at accepted
+          | some freshIndex =>
+              have sourceAccepted :
+                  checkSourceIndex insertion bounds outer smaller larger
+                      smallerLength largerLength sourceIndex = true := by
+                unfold findSourceIndex? at sourceFound
+                exact List.find?_some sourceFound
+              have freshAccepted :
+                  checkFreshIndex insertion bounds outer larger largerLength
+                      freshIndex = true := by
+                unfold findFreshIndex? at freshFound
+                exact List.find?_some freshFound
+              obtain ⟨sourceInjective, sourceSurjective, retainedExact⟩ :=
+                checkSourceIndex_eq_true insertion bounds outer smaller larger
+                  smallerLength largerLength sourceIndex sourceAccepted
+              obtain ⟨freshInjective, freshSurjective, insertedExact⟩ :=
+                checkFreshIndex_eq_true insertion bounds outer larger
+                  largerLength freshIndex freshAccepted
+              exact
+                { smaller_length := smallerLength
+                  larger_length := largerLength
+                  sourceIndex := sourceIndex
+                  sourceIndex_injective := sourceInjective
+                  sourceIndex_surjective := sourceSurjective
+                  freshIndex := freshIndex
+                  freshIndex_injective := freshInjective
+                  freshIndex_surjective := freshSurjective
+                  inserted_exact := insertedExact
+                  retained_exact := retainedExact }
+    next => contradiction
+  next => contradiction
 def cylindricalLift
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -881,6 +1160,76 @@ def cylindricalProject
 
 namespace CylindricalHoles
 
+noncomputable def targetForSource
+    {insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature}
+    {bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount}
+    {outer : WireRenaming smallerOuter largerOuter}
+    {smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+    {larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes :
+      CylindricalHoles insertion bounds outer smaller larger)
+    (source : Fin freshCount) : Fin freshCount :=
+  Classical.choose (holes.sourceIndex_surjective source)
+
+theorem sourceIndex_targetForSource
+    {insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature}
+    {bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount}
+    {outer : WireRenaming smallerOuter largerOuter}
+    {smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+    {larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes :
+      CylindricalHoles insertion bounds outer smaller larger)
+    (source : Fin freshCount) :
+    holes.sourceIndex (holes.targetForSource source) = source :=
+  Classical.choose_spec (holes.sourceIndex_surjective source)
+
+noncomputable def targetForFresh
+    {insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature}
+    {bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount}
+    {outer : WireRenaming smallerOuter largerOuter}
+    {smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+    {larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes :
+      CylindricalHoles insertion bounds outer smaller larger)
+    (fresh : Fin freshCount) : Fin freshCount :=
+  Classical.choose (holes.freshIndex_surjective fresh)
+
+theorem freshIndex_targetForFresh
+    {insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature}
+    {bounds :
+      BoundCylindrification fixedSignature smallerBound largerBound
+        freshCount}
+    {outer : WireRenaming smallerOuter largerOuter}
+    {smaller :
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+    {larger :
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes :
+      CylindricalHoles insertion bounds outer smaller larger)
+    (fresh : Fin freshCount) :
+    holes.freshIndex (holes.targetForFresh fresh) = fresh :=
+  Classical.choose_spec (holes.freshIndex_surjective fresh)
+
 theorem forward_pointwise
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -890,11 +1239,9 @@ theorem forward_pointwise
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -911,7 +1258,8 @@ theorem forward_pointwise
       smallerSite
         (Vars.denote smallerEnv
           (smaller.get
-            (Fin.cast holes.smaller_length.symm index))) := by
+            (Fin.cast holes.smaller_length.symm
+              (holes.sourceIndex index)))) := by
   unfold cylindricalLift
   rw [insertion.denote_split]
   rw [holes.retained_exact index]
@@ -927,11 +1275,9 @@ theorem forward
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -950,29 +1296,41 @@ theorem forward
   · intro largerHolds value member
     obtain ⟨position, valueExact⟩ := List.get_of_mem member
     subst value
-    let index : Fin freshCount :=
+    let sourceIndex : Fin freshCount :=
       Fin.cast holes.smaller_length position
+    let targetIndex := holes.targetForSource sourceIndex
     have atLarger :=
       largerHolds
-        (larger.get (Fin.cast holes.larger_length.symm index))
+        (larger.get (Fin.cast holes.larger_length.symm targetIndex))
         (List.get_mem larger _)
     have result :=
       (holes.forward_pointwise pre smallerEnv largerEnv envExact
-        smallerSite index).mp atLarger
-    simpa [index] using result
+        smallerSite targetIndex).mp atLarger
+    have mapped := holes.sourceIndex_targetForSource sourceIndex
+    have positionExact :
+        Fin.cast holes.smaller_length.symm
+            (holes.sourceIndex targetIndex) =
+          position := by
+      rw [show targetIndex = holes.targetForSource sourceIndex by rfl,
+        mapped]
+      simp [sourceIndex]
+    rw [positionExact] at result
+    exact result
   · intro smallerHolds value member
     obtain ⟨position, valueExact⟩ := List.get_of_mem member
     subst value
-    let index : Fin freshCount :=
+    let targetIndex : Fin freshCount :=
       Fin.cast holes.larger_length position
     have atSmaller :=
       smallerHolds
-        (smaller.get (Fin.cast holes.smaller_length.symm index))
+        (smaller.get
+          (Fin.cast holes.smaller_length.symm
+            (holes.sourceIndex targetIndex)))
         (List.get_mem smaller _)
     have result :=
       (holes.forward_pointwise pre smallerEnv largerEnv envExact
-        smallerSite index).mpr atSmaller
-    simpa [index] using result
+        smallerSite targetIndex).mpr atSmaller
+    simpa [targetIndex] using result
 
 theorem backward_pointwise
     {insertion :
@@ -983,11 +1341,9 @@ theorem backward_pointwise
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -1004,20 +1360,21 @@ theorem backward_pointwise
       cylindricalProject insertion largerSite
         (Vars.denote smallerEnv
           (smaller.get
-            (Fin.cast holes.smaller_length.symm index))) := by
+            (Fin.cast holes.smaller_length.symm
+              (holes.sourceIndex index)))) := by
   intro holds
   let largerVars :=
     larger.get (Fin.cast holes.larger_length.symm index)
   let smallerVars :=
-    smaller.get (Fin.cast holes.smaller_length.symm index)
+    smaller.get
+      (Fin.cast holes.smaller_length.symm (holes.sourceIndex index))
   let split := insertion.splitVars largerVars
   refine ⟨largerEnv _ split.1, ?_⟩
   have reconstructed := insertion.reconstruct largerVars
   have retained := holes.retained_exact index
   change split.2 = Vars.rename (bounds.embed outer) smallerVars at retained
   rw [retained] at reconstructed
-  have denoted :=
-    congrArg (Vars.denote largerEnv) reconstructed
+  have denoted := congrArg (Vars.denote largerEnv) reconstructed
   rw [insertion.denote_forward, Vars.denote_rename, envExact] at denoted
   change
     largerSite
@@ -1035,11 +1392,9 @@ theorem backward_from_larger
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -1058,16 +1413,26 @@ theorem backward_from_larger
   intro value member
   obtain ⟨position, valueExact⟩ := List.get_of_mem member
   subst value
-  let index : Fin freshCount :=
+  let sourceIndex : Fin freshCount :=
     Fin.cast holes.smaller_length position
+  let targetIndex := holes.targetForSource sourceIndex
   have atLarger :=
     largerHolds
-      (larger.get (Fin.cast holes.larger_length.symm index))
+      (larger.get (Fin.cast holes.larger_length.symm targetIndex))
       (List.get_mem larger _)
   have result :=
     holes.backward_pointwise pre smallerEnv largerEnv envExact
-      largerSite index atLarger
-  simpa [index] using result
+      largerSite targetIndex atLarger
+  have mapped := holes.sourceIndex_targetForSource sourceIndex
+  have positionExact :
+      Fin.cast holes.smaller_length.symm
+          (holes.sourceIndex targetIndex) =
+        position := by
+    rw [show targetIndex = holes.targetForSource sourceIndex by rfl,
+      mapped]
+    simp [sourceIndex]
+  rw [positionExact] at result
+  exact result
 
 noncomputable def backwardAssignment
     {insertion :
@@ -1078,11 +1443,9 @@ noncomputable def backwardAssignment
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -1094,11 +1457,14 @@ noncomputable def backwardAssignment
         cylindricalProject insertion largerSite
           (Vars.denote smallerEnv value)) :
     Fin freshCount → pre.Domain fixedSignature :=
-  fun index =>
+  fun fresh =>
+    let target := holes.targetForFresh fresh
     Classical.choose <| by
       have holds :=
         smallerHolds
-          (smaller.get (Fin.cast holes.smaller_length.symm index))
+          (smaller.get
+            (Fin.cast holes.smaller_length.symm
+              (holes.sourceIndex target)))
           (List.get_mem smaller _)
       exact holds
 
@@ -1111,11 +1477,9 @@ theorem backwardAssignment_spec
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -1126,18 +1490,21 @@ theorem backwardAssignment_spec
       ∀ value, value ∈ smaller →
         cylindricalProject insertion largerSite
           (Vars.denote smallerEnv value))
-    (index : Fin freshCount) :
+    (fresh : Fin freshCount) :
     largerSite
       (insertion.forwardValues
         (holes.backwardAssignment pre smallerEnv largerSite smallerHolds
-          index)
+          fresh)
         (Vars.denote smallerEnv
           (smaller.get
-            (Fin.cast holes.smaller_length.symm index)))) :=
-  Classical.choose_spec <| by
+            (Fin.cast holes.smaller_length.symm
+              (holes.sourceIndex (holes.targetForFresh fresh)))))) := by
+  exact Classical.choose_spec <| by
     have holds :=
       smallerHolds
-        (smaller.get (Fin.cast holes.smaller_length.symm index))
+        (smaller.get
+          (Fin.cast holes.smaller_length.symm
+            (holes.sourceIndex (holes.targetForFresh fresh))))
         (List.get_mem smaller _)
     exact holds
 
@@ -1150,11 +1517,9 @@ theorem backward_to_larger
         freshCount}
     {outer : WireRenaming smallerOuter largerOuter}
     {smaller :
-      List
-        (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+      List (Vars (smallerBound ++ smallerOuter) smallerArguments)}
     {larger :
-      List
-        (Vars (largerBound ++ largerOuter) largerArguments)}
+      List (Vars (largerBound ++ largerOuter) largerArguments)}
     (holes :
       CylindricalHoles insertion bounds outer smaller larger)
     (pre : PreModel.{u})
@@ -1178,30 +1543,35 @@ theorem backward_to_larger
   intro value member
   obtain ⟨position, valueExact⟩ := List.get_of_mem member
   subst value
-  let index : Fin freshCount :=
+  let targetIndex : Fin freshCount :=
     Fin.cast holes.larger_length position
+  let freshIndex := holes.freshIndex targetIndex
   let largerVars :=
-    larger.get (Fin.cast holes.larger_length.symm index)
+    larger.get (Fin.cast holes.larger_length.symm targetIndex)
   let smallerVars :=
-    smaller.get (Fin.cast holes.smaller_length.symm index)
+    smaller.get
+      (Fin.cast holes.smaller_length.symm (holes.sourceIndex targetIndex))
   let split := insertion.splitVars largerVars
   have reconstructed := insertion.reconstruct largerVars
-  have inserted := holes.inserted_exact index
-  have retained := holes.retained_exact index
-  change split.1 = bounds.freshVar outer index at inserted
+  have inserted := holes.inserted_exact targetIndex
+  have retained := holes.retained_exact targetIndex
+  change split.1 = bounds.freshVar outer freshIndex at inserted
   change split.2 = Vars.rename (bounds.embed outer) smallerVars at retained
   rw [inserted, retained] at reconstructed
-  have denoted :=
-    congrArg (Vars.denote largerEnv) reconstructed
+  have denoted := congrArg (Vars.denote largerEnv) reconstructed
   rw [insertion.denote_forward, Vars.denote_rename, envExact,
-    freshExact index] at denoted
+    freshExact freshIndex] at denoted
+  have inverseTarget : holes.targetForFresh freshIndex = targetIndex := by
+    apply holes.freshIndex_injective
+    exact holes.freshIndex_targetForFresh freshIndex
   have chosen :=
     holes.backwardAssignment_spec pre smallerEnv largerSite
-      smallerHolds index
+      smallerHolds freshIndex
+  rw [inverseTarget] at chosen
   have result : largerSite (Vars.denote largerEnv largerVars) := by
     rw [← denoted]
     exact chosen
-  simpa [largerVars, index] using result
+  simpa [largerVars, targetIndex] using result
 
 end CylindricalHoles
 

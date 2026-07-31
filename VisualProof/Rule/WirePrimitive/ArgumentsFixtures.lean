@@ -200,6 +200,44 @@ example :
       some .extendBackwardRequiresNegative := by
   native_decide
 
+/-!
+Endpoint storage order is not occurrence identity.  These two structurally
+ordered sites are deliberately stored in reverse on the acted wire and use
+distinct retained arguments.  Arity shift must pair them by typed occurrence
+content rather than equal list positions.
+-/
+private def reorderedSitesRaw : ConcreteDiagram 0 where
+  regionCount := 1
+  nodeCount := 2
+  wireCount := 3
+  root := 0
+  regions := fun _ => .sheet
+  nodes := fun _ => .atom 0 [.iota]
+  wires
+    | ⟨0, _⟩ =>
+        { sig := .rel [.iota]
+          scope := 0
+          endpoints := [⟨1, .head⟩, ⟨0, .head⟩] }
+    | ⟨1, _⟩ =>
+        { sig := .iota
+          scope := 0
+          endpoints := [⟨0, .arg 0⟩] }
+    | ⟨2, _⟩ =>
+        { sig := .iota
+          scope := 0
+          endpoints := [⟨1, .arg 0⟩] }
+
+private theorem reorderedSitesRaw_wellFormed :
+    reorderedSitesRaw.WellFormed [] := by
+  native_decide
+
+private def reorderedSites : CheckedDiagram [] :=
+  ⟨reorderedSitesRaw, reorderedSitesRaw_wellFormed⟩
+
+example :
+    (applyArityShift reorderedSites (idx 0) .iota).isOk = true := by
+  native_decide
+
 #check applyArityShift
 #check applyArityUnshift
 #check applyArgPermute
