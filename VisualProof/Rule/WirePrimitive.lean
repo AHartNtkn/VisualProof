@@ -1,4 +1,5 @@
 import VisualProof.Rule.WirePrimitive.Partition
+import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.WirePrimitive.Content
 
 /-!

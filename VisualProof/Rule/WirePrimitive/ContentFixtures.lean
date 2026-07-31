@@ -10,6 +10,8 @@ namespace VisualProof
 #check WirePrimitive.AppliedSiteErasure.Result.universal_outer_transport
 #check WirePrimitive.ends_delete_sound
 #check WirePrimitive.ends_spawn_sound
+#check WirePrimitive.ContentWitnesses.cutBodyEquivalence
+#check WirePrimitive.ContentWitnesses.parallelBodyEquivalence
 
 namespace WirePrimitive
 
