@@ -547,6 +547,42 @@ theorem arityShift_localScope_exact
           sourceSignature sites newArgument result operationAccepted).symm site)
   simpa [arityShiftSpec, sitesExact] using scopeExact
 
+/-- At every region, arity shift retains the ordered source-local signature
+block except for the acted head, then contributes the replacement head and
+one fixed-signature entry for each operation-local wire scoped there. -/
+theorem arityShift_localSignatures_shape
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    (result.checked.val.wiresAt (result.regionImage region)).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      ((source.val.wiresAt region).filter
+          (fun sourceWire => decide (sourceWire ∉ [wire]))).map
+          (fun sourceWire => (source.val.wires sourceWire).sig) ++
+        ((Data.Finite.allFin 1).filter fun _head =>
+          retainedRegion source (source.val.wires wire).scope ==
+            retainedRegion source region).map (fun _head =>
+              .rel result.targetArguments) ++
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source region).map (fun _ => newArgument) := by
+  rw [result.localSignatures_decomposition]
+  have removedExact :=
+    arityShift_sourceRemovedWires_exact source wire newArgument result accepted
+  rw [removedExact]
+  congr 1
+  apply List.map_congr_left
+  intro fresh _member
+  exact arityShift_localSignature_exact source wire sourceArguments
+    sourceSignature sites newArgument result accepted fresh
+
 /-- Every total arity-shift construction is scope-local: it removes only the
 acted head and creates each fresh argument wire at its corresponding applied
 site. -/

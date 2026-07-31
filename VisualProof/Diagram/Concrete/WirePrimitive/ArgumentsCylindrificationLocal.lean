@@ -42,6 +42,16 @@ def head :
   | .here => .here
   | .there _ rest => .there rest.head
 
+/-- Removing the binder selected by a typed variable records that exact
+variable as its distinguished head. -/
+theorem ofVar_head (selected : Var bound headSignature) :
+    (ofVar selected).2.head = selected := by
+  induction selected with
+  | here => rfl
+  | there tail induction =>
+      simp only [ofVar, head]
+      rw [induction]
+
 private def keepPrefix
     (retainedPrefix : List Sig)
     (outer : WireRenaming source target) :
@@ -68,6 +78,23 @@ def rename
         | Var.there tail => keepPrefix _ outer tail
   | .there signature rest =>
       WireRenaming.lift (rest.rename outer headSlot) signature
+
+/-- The selected local head is sent to its explicit normalized outer slot. -/
+theorem rename_head
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (outer : WireRenaming sourceOuter targetOuter)
+    (headSlot : Var targetOuter headSignature) :
+    removal.rename outer headSlot
+        (Var.appendLeft removal.head sourceOuter) =
+      Var.appendRight reduced headSlot := by
+  induction removal with
+  | here => rfl
+  | there signature rest induction =>
+      change Var.there
+          (rest.rename outer headSlot
+            (Var.appendLeft rest.head sourceOuter)) =
+        Var.there (Var.appendRight _ headSlot)
+      exact congrArg Var.there induction
 
 /-- Split the selected semantic head from the retained local values. -/
 def splitValues
