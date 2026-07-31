@@ -221,6 +221,26 @@ inductive BoundCylindrification
 
 namespace BoundCylindrification
 
+/-- A binder block consisting only of fresh variables of the fixed
+signature. -/
+def freshSuffix (fixedSignature : Sig) :
+    (count : Nat) →
+      BoundCylindrification fixedSignature []
+        (List.replicate count fixedSignature) count
+  | 0 => .nil
+  | count + 1 => .fresh (freshSuffix fixedSignature count)
+
+/-- Retain an ordered binder block and append an ordered suffix of fresh
+variables.  This is the canonical binder receipt produced by arity shift at
+each concrete region. -/
+def appendFresh (fixedSignature : Sig) :
+    (smaller : List Sig) → (count : Nat) →
+      BoundCylindrification fixedSignature smaller
+        (smaller ++ List.replicate count fixedSignature) count
+  | [], count => freshSuffix fixedSignature count
+  | signature :: rest, count =>
+      .retained signature (appendFresh fixedSignature rest count)
+
 def count
     (_ :
       BoundCylindrification fixedSignature smaller larger freshCount) :
