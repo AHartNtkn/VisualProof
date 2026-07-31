@@ -242,19 +242,6 @@ private def checkLocalCylindricalFrameFromSites
     ⟨targetSites, sourceScope, targetScope, context, sourceReduced, targetReduced,
       sourceRemoval, targetRemoval⟩
 
-private def checkLocalCylindricalFrame
-    {source : CheckedDiagram definitions}
-    {wire : source.val.WireId}
-    (result : ArgumentResult source wire)
-    (sourceArguments : List Sig)
-    (sourceSignature :
-      (source.val.wires wire).sig = .rel sourceArguments) :
-    Option (LocalCylindricalFrame result sourceArguments) := do
-  let targetSites ←
-    checkAllAppliedSites result.checked result.targetWire
-  checkLocalCylindricalFrameFromSites result sourceArguments sourceSignature
-    targetSites
-
 private theorem checkLocalCylindricalFrameFromSites_complete
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -277,24 +264,6 @@ private theorem checkLocalCylindricalFrameFromSites_complete
       sourceScope targetScope
   unfold checkLocalCylindricalFrameFromSites
   simp [sourceAccepted, targetAccepted, contextAccepted]
-
-private theorem checkLocalCylindricalFrame_complete
-    {source : CheckedDiagram definitions}
-    {wire : source.val.WireId}
-    (result : ArgumentResult source wire)
-    (localized : result.ScopeLocalization)
-    (sourceArguments : List Sig)
-    (sourceSignature :
-      (source.val.wires wire).sig = .rel sourceArguments) :
-    ∃ frame,
-      checkLocalCylindricalFrame result sourceArguments sourceSignature =
-        some frame := by
-  obtain ⟨frame, frameAccepted⟩ :=
-    checkLocalCylindricalFrameFromSites_complete result localized
-      sourceArguments sourceSignature result.targetSites
-  exact ⟨frame, by
-    simp [checkLocalCylindricalFrame, result.targetSites.checked,
-      frameAccepted]⟩
 
 private def sourceCylindricalShape
     {source : CheckedDiagram definitions}
@@ -480,7 +449,8 @@ def checkScopedArityShiftLedger
           sourceArguments fixedSignature :=
       ⟨sourceArguments.length, targetExact⟩
     let frame ←
-      checkLocalCylindricalFrame result sourceArguments sourceSignature
+      checkLocalCylindricalFrameFromSites result sourceArguments
+        sourceSignature result.targetSites
     let accepted ←
       checkCylindricalShape insertion
         (fun {_} value => value)
@@ -539,7 +509,8 @@ def checkScopedArityUnshiftLedger
           result.targetArguments fixedSignature :=
       ⟨position, sourceExact⟩
     let frame ←
-      checkLocalCylindricalFrame result sourceArguments sourceSignature
+      checkLocalCylindricalFrameFromSites result sourceArguments
+        sourceSignature result.targetSites
     let accepted ←
       checkCylindricalShape insertion
         (fun {_} value => value)
