@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
-import { DISC_R, ROUTE_CLEAR, mkEngine, escapePoint, routeObstacles, routeBounds, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
+import { DISC_R, mkEngine, escapePoint, routeObstacles, routeBounds, wireTerminalPoints, wireTerminalBCs } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { wireEnergy, settleStep, recomputeRegions, resolveOverlaps, segSeparationE } from '../../src/view/relax'
 import type { Vec2 } from '../../src/view/vec'
@@ -36,8 +36,9 @@ function drawnWireCost(e: Engine): number {
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
-      const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * e.scale)
+      const pu = pos(u), pv = pos(v)
+      const r = route(fs, pu, pv)
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
       E += rodCost(pts, space, beta)
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
@@ -137,20 +138,6 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     }
   })
 
-  it('corridor simplification: sub-clearance corner noise cannot change the curve', () => {
-    const u = { p: { x: 0, y: 0 }, n: { x: 1, y: 0 } }
-    const clean = [{ x: 3, y: 0 }, { x: 20, y: 6 }, { x: 40, y: 6 }]
-    const noisy = [{ x: 3, y: 0 }, { x: 20, y: 6 }, { x: 20.4, y: 6.2 }, { x: 40, y: 6 }]
-    // DP's contract is a deviation band, not bit-identity: the noisy corner
-    // may replace its clean neighbor WITHIN the tolerance — the two curves
-    // must stay inside the clearance band of each other
-    const a = edgeCurvePts(u, null, clean, 1.5)
-    const bb = edgeCurvePts(u, null, noisy, 1.5)
-    expect(bb.length).toBe(a.length)
-    for (let i = 0; i < a.length; i++) {
-      expect(Math.hypot(a[i]!.x - bb[i]!.x, a[i]!.y - bb[i]!.y)).toBeLessThanOrEqual(1.5)
-    }
-  })
 })
 
 describe('family conformance (coverage artifact): the drawn legs ARE Hobby cubics', () => {

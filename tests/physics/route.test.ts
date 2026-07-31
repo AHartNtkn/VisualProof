@@ -19,8 +19,15 @@ describe('free-space routing', () => {
     const r = route(fs, { x: -20, y: 0 }, { x: 20, y: 0 })
     expect(r.length).toBeGreaterThan(40) // must detour
     expect(r.length).toBeLessThan(40 + Math.PI * 5 + 1) // bounded by the half-perimeter detour
+    // `pts` is the motion-path polyline: hug chords ride the TRUE circle, so a
+    // chord sags inside by at most r·(1−cos(ARC_STEP/2)) — never deeper
+    const band = 5 * (1 - Math.cos(Math.PI / 16)) + 1e-9
+    for (const pt of r.pts) {
+      expect(Math.hypot(pt.x, pt.y), 'polyline point inside the disc').toBeGreaterThanOrEqual(5 - 1e-9)
+    }
     for (let i = 0; i + 1 < r.pts.length; i++) {
-      expect(segmentClear(r.pts[i]!, r.pts[i + 1]!, fs.discs), `segment ${i} enters the disc`).toBe(true)
+      const m = { x: (r.pts[i]!.x + r.pts[i + 1]!.x) / 2, y: (r.pts[i]!.y + r.pts[i + 1]!.y) / 2 }
+      expect(Math.hypot(m.x, m.y), `segment ${i} dips past the chord band`).toBeGreaterThanOrEqual(5 - band)
     }
   })
 
@@ -230,8 +237,10 @@ describe('bitangent routing is exact vs the polygon reference', () => {
         expect(poly, `config ${t}: polygon found no detour but tangent graph did`).not.toBeNull()
         expect(r.length, `config ${t}: tangent detour ${r.length.toFixed(4)} longer than polygon ${poly!.toFixed(4)}`)
           .toBeLessThanOrEqual(poly! + 1e-6)
-        for (let i = 0; i + 1 < r.pts.length; i++) {
-          expect(segmentClear(r.pts[i]!, r.pts[i + 1]!, discs), `config ${t}: detour segment ${i} enters a disc`).toBe(true)
+        for (const pt of r.pts) {
+          for (const D of discs) {
+            expect(Math.hypot(pt.x - D.c.x, pt.y - D.c.y), `config ${t}: polyline point inside a disc`).toBeGreaterThanOrEqual(D.r - 1e-9)
+          }
         }
       }
     }
@@ -263,9 +272,16 @@ describe('routing feasibility composes with the network', () => {
     const terms: Vec2[] = [{ x: -15, y: -8 }, { x: -15, y: 8 }, { x: 16, y: 0 }]
     const net: WireNet = { junctions: [{ x: -8, y: 0 }], edges: [[0, 3], [1, 3], [2, 3]] }
     for (let i = 0; i < 300; i++) if (!advanceNetwork(net, terms, fs, { substeps: 20, bound: 0.5 })) break
+    // routed polyline points ride the disc boundary or stay outside; chords may
+    // sag inside only within the ARC_STEP chord band
+    const band = 4 * (1 - Math.cos(Math.PI / 16)) + 1e-9
     for (const { pts } of netPaths(net, terms, fs)) {
+      for (const pt of pts) {
+        expect(Math.hypot(pt.x, pt.y), 'routed point inside the disc').toBeGreaterThanOrEqual(4 - 1e-9)
+      }
       for (let i = 0; i + 1 < pts.length; i++) {
-        expect(segmentClear(pts[i]!, pts[i + 1]!, fs.discs), 'drawn segment enters a node disc').toBe(true)
+        const m = { x: (pts[i]!.x + pts[i + 1]!.x) / 2, y: (pts[i]!.y + pts[i + 1]!.y) / 2 }
+        expect(Math.hypot(m.x, m.y), 'routed segment dips past the chord band').toBeGreaterThanOrEqual(4 - band)
       }
     }
   })

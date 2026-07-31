@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame, WireView } from './engine'
 import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
 import { mkFreeSpace, route, segSoftCost } from './route/freespace'
-import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
+import type { Disc as RouteDisc, Bounds, FreeSpace, HugArc } from './route/freespace'
 import { advanceNetwork, netEval, solveTarget, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
 import type { CurveBC } from './route/curve'
@@ -747,7 +747,7 @@ const PROBE_BAND = 4 * FD_PROBE
 
 /** A routed edge's frozen path: its interior waypoints at the captured
     optimum (endpoints re-derived live at probe time). */
-export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly interior: readonly Vec2[] }
+export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly hugs: readonly HugArc[] }
 
 /** Exact wire energy PLUS the frozen-path capture the probe evaluator needs and
     the drawn curve segments (the same ones `segSeparationE` sums over). */
@@ -764,10 +764,11 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
-      const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * e.scale)
+      const pu = pos(u), pv = pos(v)
+      const r = route(fs, pu, pv)
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
       E += rodCost(pts, fs, beta)
-      edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
+      edges.push({ wid, u, v, hugs: r.hugs })
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
   }
@@ -807,8 +808,7 @@ export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): numbe
     }
     const cc = c
     const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
-    const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
-    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, way, ROUTE_CLEAR * e.scale)
+    const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, pos(fe.u), pos(fe.v), fe.hugs, Math.sqrt(beta))
     E += rodCost(pts, cc.space, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
@@ -890,10 +890,11 @@ export function mkFrozenState(e: Engine): FrozenState {
     const edges: FrozenEdge[] = []
     let rod = 0
     for (const [u, v] of w.net.edges) {
-      const r = route(fs, pos(u), pos(v))
-      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, ROUTE_CLEAR * sc)
+      const pu = pos(u), pv = pos(v)
+      const r = route(fs, pu, pv)
+      const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
       rod += rodCost(pts, fs, beta)
-      edges.push({ wid, u, v, interior: r.pts.slice(1, -1) })
+      edges.push({ wid, u, v, hugs: r.hugs })
       for (let i = 0; i + 1 < pts.length; i++) { segs.push({ wid, a: pts[i]!, b: pts[i + 1]! }); segWire.push(wi) }
     }
     wires.push({ wid, edges, segStart: start, segEnd: segs.length, rod })
@@ -1036,8 +1037,7 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
       const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
       let newRod = 0
       for (const fe of cap.edges) {
-        const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
-        const pts = edgeCurvePts(fe.u < bcs.length ? bcs[fe.u]! : null, fe.v < bcs.length ? bcs[fe.v]! : null, way, ROUTE_CLEAR * fst.sc)
+        const pts = edgeCurvePts(fe.u < bcs.length ? bcs[fe.u]! : null, fe.v < bcs.length ? bcs[fe.v]! : null, pos(fe.u), pos(fe.v), fe.hugs, Math.sqrt(fst.beta))
         newRod += rodCost(pts, space, fst.beta)
         for (let i = 0; i + 1 < pts.length; i++) newSegs.push({ wid: cap.wid, a: pts[i]!, b: pts[i + 1]! })
       }
@@ -1813,7 +1813,7 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     other wires' segments (they do not move while this wire walks). */
 function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | null = null): boolean {
   const spaces = wireRouteSpaces(e)
-  const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc
+  const beta = rodBeta(e), sc = e.scale, R = WIREP.sepR * sc
   // the walk moves VISIBLE junction state: presentation frames use the one
   // presentation bound (the same per-frame pace every visible DOF gets);
   // solver walks keep the full trust region (descent is optimization, not
@@ -1827,7 +1827,7 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     const fsW = spaces.space(wid)
     const bcs = wireTerminalBCs(e, w)
     walkers.push({ wid, w, terms, bcs, fs: fsW })
-    segsByWid.set(wid, netEval(w.net, terms, fsW, bcs, beta, tol).segs)
+    segsByWid.set(wid, netEval(w.net, terms, fsW, bcs, beta).segs)
   }
   let routed = false
   for (const { wid, w, terms, bcs, fs } of walkers) {
@@ -1840,7 +1840,7 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     let stamp = 0
     const inv = 1 / R
     const gate = (n: WireNet): number => {
-      const { L, segs } = netEval(n, terms, fs, bcs, beta, tol)
+      const { L, segs } = netEval(n, terms, fs, bcs, beta)
       let sep = 0
       for (const s of segs) {
         stamp++
@@ -1864,9 +1864,9 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     }
     // ONE presentation substep at the presentation bound = the per-frame wire
     // travel equals the body travel; solver walks keep their full budget
-    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, bcs, beta, simplifyTol: tol, gate }) || routed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, bcs, beta, gate }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
-    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
+    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta).segs)
   }
   return routed
 }

@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { ROUTE_CLEAR, wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
+import { DISC_R, wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { route, type FreeSpace } from './route/freespace'
 import { edgeCurveCubics, sampleCubics } from './route/curve'
 import type { Cubic } from './route/curve'
@@ -68,8 +68,9 @@ function computeLegsUncached(e: Engine): LegGeom[] {
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
-      const rt = route(fs, pos(u), pos(v))
-      const cubics = edgeCurveCubics(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, rt.pts, ROUTE_CLEAR * e.scale)
+      const pu = pos(u), pv = pos(v)
+      const rt = route(fs, pu, pv)
+      const cubics = edgeCurveCubics(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, rt.hugs, DISC_R * e.scale)
       out.push({ leg: { wid, from: endId(wid, w, u), to: endId(wid, w, v) }, pts: sampleCubics(cubics), cubics })
     }
   }

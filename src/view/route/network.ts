@@ -52,12 +52,13 @@ const posOf = (net: WireNet, terms: readonly Vec2[], v: number): Vec2 =>
 /** Route + build the drawn curve of every edge, handing each edge's samples to
     `cb` (shared by netLength and netEval). */
 function forEachEdgeCurve(
-  net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[], simplifyTol: number,
+  net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[], beta: number,
   cb: (pts: readonly Vec2[]) => void,
 ): void {
   for (const [u, v] of net.edges) {
-    const r = route(fs, posOf(net, terms, u), posOf(net, terms, v))
-    cb(edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, simplifyTol))
+    const pu = posOf(net, terms, u), pv = posOf(net, terms, v)
+    const r = route(fs, pu, pv)
+    cb(edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta)))
   }
 }
 
@@ -67,10 +68,9 @@ export function netLength(
   fs: FreeSpace,
   bcs: readonly CurveBC[] = [],
   beta = 0,
-  simplifyTol = 0,
 ): number {
   let L = 0
-  forEachEdgeCurve(net, terms, fs, bcs, simplifyTol, (pts) => { L += rodCost(pts, fs, beta) })
+  forEachEdgeCurve(net, terms, fs, bcs, beta, (pts) => { L += rodCost(pts, fs, beta) })
   return L
 }
 
@@ -78,11 +78,11 @@ export function netLength(
     needs both (the rod length of the wire and its segments, to charge separation
     against the OTHER wires). */
 export function netEval(
-  net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, simplifyTol = 0,
+  net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0,
 ): { L: number; segs: { a: Vec2; b: Vec2 }[] } {
   let L = 0
   const segs: { a: Vec2; b: Vec2 }[] = []
-  forEachEdgeCurve(net, terms, fs, bcs, simplifyTol, (pts) => {
+  forEachEdgeCurve(net, terms, fs, bcs, beta, (pts) => {
     L += rodCost(pts, fs, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ a: pts[i]!, b: pts[i + 1]! })
   })
@@ -205,11 +205,11 @@ export function contract(net: WireNet, terms: readonly Vec2[], _fs: FreeSpace): 
  * ≥ 3), take the largest positive first-order gain, open by SPLIT_EPS, and
  * keep it only if the ACTUAL routed length decreased (strict gate).
  */
-export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, simplifyTol = 0, gate?: (net: WireNet) => number): boolean {
+export function trySplit(net: WireNet, terms: readonly Vec2[], fs: FreeSpace, bcs: readonly CurveBC[] = [], beta = 0, gate?: (net: WireNet) => number): boolean {
   const nT = terms.length
   // the acceptance gate: the caller may supply the TRUE energy restricted to this
   // wire (rod + separation vs the other wires); default is rod length alone.
-  const evalE = gate ?? ((n: WireNet): number => netLength(n, terms, fs, bcs, beta, simplifyTol))
+  const evalE = gate ?? ((n: WireNet): number => netLength(n, terms, fs, bcs, beta))
   for (let j = 0; j < net.junctions.length; j++) {
     const inc = junctionTangents(net, terms, fs, j)
     const k = inc.length
@@ -298,17 +298,16 @@ export function advanceNetwork(
   net: WireNet,
   terms: readonly Vec2[],
   fs: FreeSpace,
-  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number; simplifyTol?: number; gate?: (net: WireNet) => number },
+  opts: { substeps: number; bound: number; bcs?: readonly CurveBC[]; beta?: number; gate?: (net: WireNet) => number },
 ): boolean {
   const bcs = opts.bcs ?? []
   const beta = opts.beta ?? 0
-  const simplifyTol = opts.simplifyTol ?? 0
   // The acceptance gate: the TRUE energy restricted to this wire's junction
   // coordinates. The default is the wire's rod length; the walk supplies rod +
   // separation-vs-other-wires, which — because the other wires are fixed while
   // this wire walks — equals ΔE_total exactly, so the strict gate makes the walk a
   // strict descent of the whole objective (no rod-vs-separation limit cycle).
-  const evalE = opts.gate ?? ((n: WireNet): number => netLength(n, terms, fs, bcs, beta, simplifyTol))
+  const evalE = opts.gate ?? ((n: WireNet): number => netLength(n, terms, fs, bcs, beta))
   let changed = false
   // the off-screen fixed-topology TARGET is solved ONCE per advance (and again
   // only after a topology change) — the substeps walk toward it under the
@@ -330,26 +329,31 @@ export function advanceNetwork(
     if (net.junctions.length > 0) {
       resolveTargetIfNeeded()
       const tgt = target!
-      const proposal = net.junctions.map((p, j) => {
+      // Each junction's bounded step toward its target is gated INDIVIDUALLY
+      // (deterministic index order): the target is a routed-LENGTH proxy
+      // (Weiszfeld), the gate is the true drawn energy, and a junction already
+      // resting at the energy minimum can sit a hair off its proxy target — a
+      // JOINT proposal then charges that junction's uphill proxy step against
+      // every other junction's real descent and wedges the whole walk
+      // (measured: +1.20 from a resting junction vetoing −0.39 from a
+      // displaced one). The gate stays the true energy restricted to the one
+      // moved coordinate, so acceptance is exact per step.
+      for (let j = 0; j < net.junctions.length; j++) {
+        const p = net.junctions[j]!
         const t = tgt.junctions[j]!
         const dx = t.x - p.x, dy = t.y - p.y
         const d = Math.hypot(dx, dy)
-        if (d < 1e-12) return p
+        if (d < 1e-12) continue
         const step = Math.min(d, opts.bound)
-        return { x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }
-      })
-      const anyProposed = proposal.some((p, j) => p.x !== net.junctions[j]!.x || p.y !== net.junctions[j]!.y)
-      if (anyProposed) {
         if (curL === null) curL = evalE(net)
-        const before = net.junctions
-        net.junctions = proposal
+        net.junctions[j] = { x: p.x + (dx / d) * step, y: p.y + (dy / d) * step }
         const L1 = evalE(net)
         if (L1 < curL - 1e-12) {
           curL = L1
           stepMoved = true
           changed = true
         } else {
-          net.junctions = before
+          net.junctions[j] = p
         }
       }
     }
@@ -358,6 +362,6 @@ export function advanceNetwork(
   // one routed split check per advance, only when something changed (splits
   // are rare; when one fires the next advance's walk grows it under the gates;
   // at rest nothing scans — the state is already a gated fixed point)
-  if (changed) trySplit(net, terms, fs, bcs, beta, simplifyTol, opts.gate)
+  if (changed) trySplit(net, terms, fs, bcs, beta, opts.gate)
   return changed
 }

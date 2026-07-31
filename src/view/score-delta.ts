@@ -95,7 +95,7 @@ function currentRegionDiscs(e: Engine): Map<RegionId, Disc> {
 /** Evaluate one wire against ITS routing space: routed rod energy, drawn curve
     segments, and per-edge reach data. The exact per-wire slice of
     `wireEnergyCapture` (relax.ts) — the same route → curve → rodCost pipeline. */
-function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta: number, clear: number): WireCache {
+function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta: number): WireCache {
   const terms = wireTerminalPoints(e, w)
   if (terms.length < 2) return { E: 0, segs: [], edges: [], frozen: [] }
   const fs = spaces.space(wid)
@@ -108,10 +108,10 @@ function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta:
   for (const [u, v] of w.net.edges) {
     const pu = pos(u), pv = pos(v)
     const r = route(fs, pu, pv)
-    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, r.pts, clear)
+    const pts = edgeCurvePts(u < bcs.length ? bcs[u]! : null, v < bcs.length ? bcs[v]! : null, pu, pv, r.hugs, Math.sqrt(beta))
     E += rodCost(pts, fs, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ a: pts[i]!, b: pts[i + 1]! })
-    frozen.push({ wid, u, v, interior: r.pts.slice(1, -1) })
+    frozen.push({ wid, u, v, hugs: r.hugs })
     let L = r.cost
     for (const q of pts) { const fq = f2(pu, q, pv); if (fq > L) L = fq }
     edges.push({ pu, pv, L })
@@ -124,13 +124,12 @@ function evalWire(e: Engine, wid: WireId, w: WireView, spaces: WireSpaces, beta:
 export function mkScoreState(e: Engine): ScoreState {
   const spaces = wireRouteSpaces(e)
   const beta = rodBeta(e)
-  const clear = ROUTE_CLEAR * e.scale
   const wires = new Map<WireId, WireCache>()
   const order: WireId[] = []
   const frozen: FrozenEdge[] = []
   let wireETotal = 0
   for (const [wid, w] of e.wires) {
-    const c = evalWire(e, wid, w, spaces, beta, clear)
+    const c = evalWire(e, wid, w, spaces, beta)
     wires.set(wid, c)
     order.push(wid)
     wireETotal += c.E
@@ -240,13 +239,12 @@ export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>,
   // obstacles (visibility is lazy — it only builds if an affected route is
   // actually blocked, and only the affected routes query it).
   const beta = rodBeta(e)
-  const clear = ROUTE_CLEAR * sc
   const newWire = new Map<WireId, WireCache>()
   let dWireE = 0
   if (affected.size > 0) {
     const spaces = wireRouteSpaces(e)
     for (const wid of affected) {
-      const c = evalWire(e, wid, e.wires.get(wid)!, spaces, beta, clear)
+      const c = evalWire(e, wid, e.wires.get(wid)!, spaces, beta)
       newWire.set(wid, c)
       dWireE += c.E - st.wires.get(wid)!.E
     }

@@ -1,5 +1,5 @@
 import type { Vec2 } from '../vec'
-import type { Bounds, Disc } from './freespace'
+import type { Bounds, Disc, HugArc } from './freespace'
 import { segSoftCost } from './freespace'
 
 /**
@@ -96,55 +96,63 @@ export function sampleCubics(cubics: readonly Cubic[]): Vec2[] {
   return out
 }
 
-/** Iterative Douglas–Peucker polyline simplification (deterministic,
-    stack-based). Keeps endpoints; drops interior points within `tol` of the
-    simplified chords. */
-export function simplifyPolyline(pts: readonly Vec2[], tol: number): Vec2[] {
-  if (pts.length <= 2 || tol <= 0) return pts.map((p) => ({ ...p }))
-  const keep = new Array<boolean>(pts.length).fill(false)
-  keep[0] = keep[pts.length - 1] = true
-  const stack: [number, number][] = [[0, pts.length - 1]]
-  while (stack.length > 0) {
-    const [a, b] = stack.pop()!
-    if (b - a < 2) continue
-    const ax = pts[a]!.x, ay = pts[a]!.y
-    const dx = pts[b]!.x - ax, dy = pts[b]!.y - ay
-    const dd = Math.hypot(dx, dy)
-    let worst = -1, wd = tol
-    for (let k = a + 1; k < b; k++) {
-      const d = dd < 1e-12
-        ? Math.hypot(pts[k]!.x - ax, pts[k]!.y - ay)
-        : Math.abs((pts[k]!.x - ax) * dy - (pts[k]!.y - ay) * dx) / dd
-      if (d > wd) { wd = d; worst = k }
-    }
-    if (worst >= 0) {
-      keep[worst] = true
-      stack.push([a, worst], [worst, b])
-    }
-  }
-  return pts.filter((_, i) => keep[i]).map((p) => ({ ...p }))
+/** Max hug angle one Hobby piece may span. The interior anchors exist ONLY to
+    keep the drawn curve on the route's side of the hugged disc — never to
+    trace the arc — and one tangent-clamped piece cannot reach the disc's far
+    side while its subtended angle is under π; π/2 takes that bound with a 2×
+    margin. At π/2 a cubic with tangential ends deviates from the circular arc
+    by ~3·10⁻⁴·r (the classical quarter-circle cubic bound), so every span
+    choice in [π/3, π] draws visually identical curves — a derived bound, not
+    a tuning knob (executable: the span-insensitivity test). */
+const HUG_SPAN = Math.PI / 2
+
+/** The anchors of one hugging arc: its ENTRY and EXIT tangency points plus
+    interior points on a fixed HUG_SPAN angular grid from the entry, each
+    carrying the circle's EXACT tangent direction there (in the direction of
+    travel). Anchoring the tangency points pins the curve at contact (the
+    free entry/exit blends happen OUTSIDE the hug, so they cannot sag into the
+    disc), and the grid rule makes the construction CONTINUOUS in the sweep: a
+    new grid anchor appears precisely when the sweep crosses a grid multiple —
+    i.e. exactly AT the exit anchor, already on the curve — and then separates
+    smoothly. Equal-fraction placement would instead relocate every anchor
+    whenever the count steps (a visible pop). */
+function hugAnchors(h: HugArc): { p: Vec2; t: number }[] {
+  const dir = h.sweep >= 0 ? 1 : -1
+  const at = (a: number): { p: Vec2; t: number } => ({
+    p: { x: h.c.x + h.r * Math.cos(a), y: h.c.y + h.r * Math.sin(a) },
+    t: a + (Math.PI / 2) * dir,
+  })
+  const out: { p: Vec2; t: number }[] = [at(h.from)]
+  const n = Math.floor(Math.abs(h.sweep) / HUG_SPAN + 1e-9)
+  for (let k = 1; k <= n; k++) out.push(at(h.from + dir * HUG_SPAN * k))
+  out.push(at(h.from + h.sweep))
+  return out
 }
 
 /**
- * The drawn curve of one edge: the Hobby cubic chain through the routed
- * corridor. The corridor is Douglas–Peucker-simplified at `simplifyTol` =
- * the routing CLEARANCE (ROUTE_CLEAR·scale): the corridor is only defined up
- * to the band it was inflated by, so simplification within that band loses
- * nothing the router promised — and the family gets the SPARSE anchors it
- * was characterized on (the lab's legs were rim + a few control points,
- * never polygon-corner interpolation). Clamped ends (port rim → outward normal, frame slot →
- * inward normal) fix the end tangents; interior anchors take Catmull-Rom
- * forward directions; natural ends (junctions, dots) take the chord.
- * Deterministic, closed form, stateless; the same samples are rendered and
- * charged.
+ * The drawn curve of one edge: the Hobby cubic chain anchored on the route's
+ * CONTACT STRUCTURE (spec 2026-07-31). Anchors are the two terminals plus the
+ * hug anchors of each contact arc; straight runs contribute nothing. A spline
+ * through the route's sampled polyline reproduces the router's tangent-line-
+ * plus-circular-arc geodesic — the rejected drafting look — so the samples
+ * never reach the drawing. Clamped ends (port rim → outward normal, frame
+ * slot → inward normal) fix the end tangents and REPLACE the route's
+ * endpoints (the escape point is the anchor displaced along the clamp normal
+ * — the same boundary datum — so keeping both would interpolate one datum
+ * twice); every interior anchor carries its exact geometric tangent, so no
+ * tangent is ever estimated from neighboring points; natural ends (junctions,
+ * dots) take the chord toward the adjacent anchor. Deterministic, closed
+ * form, stateless; the same samples are rendered and charged.
  */
 export function edgeCurvePts(
   u: CurveBC,
   v: CurveBC,
-  routePts: readonly Vec2[],
-  simplifyTol = 0,
+  start: Vec2,
+  end: Vec2,
+  hugs: readonly HugArc[],
+  clampLayer = 0,
 ): Vec2[] {
-  return sampleCubics(edgeCurveCubics(u, v, routePts, simplifyTol))
+  return sampleCubics(edgeCurveCubics(u, v, start, end, hugs, clampLayer))
 }
 
 /** The edge's Hobby cubic chain itself — the renderer draws THESE as true
@@ -153,41 +161,46 @@ export function edgeCurvePts(
 export function edgeCurveCubics(
   u: CurveBC,
   v: CurveBC,
-  routePts: readonly Vec2[],
-  simplifyTol = 0,
+  start: Vec2,
+  end: Vec2,
+  hugs: readonly HugArc[],
+  clampLayer = 0,
 ): Cubic[] {
-  // A clamped end REPLACES the corridor's escape endpoint with its anchor:
-  // the escape point is the anchor displaced along the clamp normal — the
-  // same boundary datum the clamped tangent already encodes — so keeping
-  // both would interpolate one datum twice (the measured kink vertex).
-  const core = simplifyPolyline(routePts, simplifyTol)
-  const inner = core.slice(u !== null ? 1 : 0, v !== null ? core.length - 1 : core.length)
-  const pts: Vec2[] = [
-    ...(u !== null ? [{ ...u.p }] : []),
-    ...inner,
-    ...(v !== null ? [{ ...v.p }] : []),
-  ]
-  // dedupe
-  const Q: Vec2[] = []
-  for (const p of pts) {
-    const last = Q[Q.length - 1]
-    if (last !== undefined && Math.hypot(p.x - last.x, p.y - last.y) < 1e-9) continue
-    Q.push(p)
+  const a0: Vec2 = u !== null ? { ...u.p } : { ...start }
+  const a1: Vec2 = v !== null ? { ...v.p } : { ...end }
+  // Interior anchors, dropping any that coincide with a terminal anchor (a
+  // grazing contact at an endpoint — the terminal's clamp wins), and any
+  // within `clampLayer` (= r*, the rod bend radius — USER rod ruling
+  // 2026-07-24) of a CLAMPED terminal: a rod cannot conform to contact detail
+  // inside its own bend scale, and a wire leaving a port immediately hugs its
+  // own node's inflated disc, putting a tangency anchor with a perpendicular
+  // tangent right next to the clamp — one boundary datum interpolated twice
+  // (measured: a 0.54-radius curl at the port of a forced U-turn).
+  const inLayer = (bc: CurveBC, p: Vec2): boolean =>
+    bc !== null && Math.hypot(p.x - bc.p.x, p.y - bc.p.y) < clampLayer
+  const interior = hugs.flatMap(hugAnchors).filter(
+    (a) =>
+      Math.hypot(a.p.x - a0.x, a.p.y - a0.y) >= 1e-9 &&
+      Math.hypot(a.p.x - a1.x, a.p.y - a1.y) >= 1e-9 &&
+      !inLayer(u, a.p) && !inLayer(v, a.p),
+  )
+  const Q: { p: Vec2; t: number | null }[] = [{ p: a0, t: null }]
+  for (const a of interior) {
+    const last = Q[Q.length - 1]!
+    if (Math.hypot(a.p.x - last.p.x, a.p.y - last.p.y) < 1e-9) continue
+    Q.push({ p: a.p, t: a.t })
   }
+  if (Math.hypot(a1.x - Q[Q.length - 1]!.p.x, a1.y - Q[Q.length - 1]!.p.y) >= 1e-9) Q.push({ p: a1, t: null })
   if (Q.length < 2) return []
   const m = Q.length - 1
-  const catmull = (i: number): number => {
-    const a = Q[Math.max(0, i - 1)]!, b = Q[Math.min(m, i + 1)]!
-    return Math.atan2(b.y - a.y, b.x - a.x)
-  }
-  const fwd: number[] = Q.map((_, i) => catmull(i))
-  const uAng = u !== null ? Math.atan2(u.n.y, u.n.x) : fwd[0]!
-  const vAng = v !== null ? Math.atan2(v.n.y, v.n.x) : fwd[m]! + Math.PI
+  const chord = (i: number, j: number): number => Math.atan2(Q[j]!.p.y - Q[i]!.p.y, Q[j]!.p.x - Q[i]!.p.x)
+  const uAng = u !== null ? Math.atan2(u.n.y, u.n.x) : chord(0, 1)
+  const vAng = v !== null ? Math.atan2(v.n.y, v.n.x) : chord(m - 1, m) + Math.PI
   const cubics: Cubic[] = []
   for (let i = 0; i + 1 < Q.length; i++) {
-    const ta = i === 0 ? uAng : fwd[i]!
-    const tb = i + 1 === m ? vAng : fwd[i + 1]! + Math.PI
-    cubics.push(hobbySeg(Q[i]!, ta, Q[i + 1]!, tb))
+    const ta = i === 0 ? uAng : Q[i]!.t!
+    const tb = i + 1 === m ? vAng : Q[i + 1]!.t! + Math.PI
+    cubics.push(hobbySeg(Q[i]!.p, ta, Q[i + 1]!.p, tb))
   }
   return cubics
 }
