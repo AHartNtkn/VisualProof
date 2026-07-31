@@ -22,6 +22,60 @@ private def appliedRegions
     List source.val.RegionId :=
   sites.sites.map AppliedSite.region
 
+/-- The common-core isomorphism identifies two retained source regions. -/
+private def regionsCorrespond
+    {source target : CheckedDiagram definitions}
+    (core : CommonCoreReceipt source target)
+    (sourceRegion : source.val.RegionId)
+    (targetRegion : target.val.RegionId) : Bool :=
+  match core.sourceErasure.regionImage? sourceRegion,
+      core.targetErasure.regionImage? targetRegion with
+  | some sourceImage, some targetImage =>
+      decide (core.coreIso.regions sourceImage = targetImage)
+  | _, _ => false
+
+/-- The common-core isomorphism identifies two retained source wires. -/
+private def wiresCorrespond
+    {source target : CheckedDiagram definitions}
+    (core : CommonCoreReceipt source target)
+    (sourceWire : source.val.WireId)
+    (targetWire : target.val.WireId) : Bool :=
+  match core.sourceErasure.wireImage? sourceWire,
+      core.targetErasure.wireImage? targetWire with
+  | some sourceImage, some targetImage =>
+      decide (core.coreIso.wires sourceImage = targetImage)
+  | _, _ => false
+
+/-- Ordered argument tuples cross the exact common-core wire transport. -/
+private def argumentsCorrespond
+    {source target : CheckedDiagram definitions}
+    (core : CommonCoreReceipt source target)
+    (sourceArguments : List source.val.WireId)
+    (targetArguments : List target.val.WireId) : Bool :=
+  sourceArguments.length == targetArguments.length &&
+    (List.zip sourceArguments targetArguments).all fun pair =>
+      wiresCorrespond core pair.1 pair.2
+
+/-- A generated wrap site contributes its cut's retained parent to the core. -/
+private def cutParent?
+    {target : CheckedDiagram definitions}
+    {wire : target.val.WireId}
+    (site : AppliedSite target wire) :
+    Option target.val.RegionId :=
+  match target.val.regions site.region with
+  | .sheet => none
+  | .cut parent => some parent
+
+/-- Every free region and ordered argument wire of one site survives erasure. -/
+private def sourceBoundaryRetained
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (core : CommonCoreReceipt source target)
+    (site : AppliedSite source wire) : Bool :=
+  (core.sourceErasure.regionImage? site.region).isSome &&
+    site.arguments.all fun argument =>
+      (core.sourceErasure.wireImage? argument).isSome
+
 namespace CutWrapResult
 
 /--
@@ -40,6 +94,73 @@ def checkCommonCore
     [] (appliedNodes result.sites) [wire]
     (appliedRegions targetSites) (appliedNodes targetSites)
     [result.targetWire]
+
+/--
+Exact positional ledger for cut wrapping. Besides equal cardinality, every
+source site is paired with a generated target cut whose retained parent and
+ordered argument tuple cross the checked common-core isomorphism.
+-/
+def SitesCorrespond
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (core : CommonCoreReceipt source result.checked) : Prop :=
+  result.sites.sites.length = targetSites.sites.length ∧
+    (List.zip result.sites.sites targetSites.sites).all (fun pair =>
+      match cutParent? pair.2 with
+      | none => false
+      | some targetParent =>
+          regionsCorrespond core pair.1.region targetParent &&
+            argumentsCorrespond core pair.1.arguments pair.2.arguments) =
+      true
+
+/-- Sealed checker-owned wrap-site correspondence and exact common core. -/
+structure SiteLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire) where
+  private mk ::
+  targetSites : AllAppliedSites result.checked result.targetWire
+  commonCore : CommonCoreReceipt source result.checked
+  private sites_correspond :
+    SitesCorrespond result targetSites commonCore
+
+/-- Check the complete positional wrap ledger; no caller supplies a pairing. -/
+def checkSiteLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire) :
+    Option (SiteLedger result) := do
+  let targetSites ←
+    checkAllAppliedSites result.checked result.targetWire
+  let commonCore ← result.checkCommonCore
+  if exact :
+      result.sites.sites.length = targetSites.sites.length ∧
+        (List.zip result.sites.sites targetSites.sites).all (fun pair =>
+          match cutParent? pair.2 with
+          | none => false
+          | some targetParent =>
+              regionsCorrespond commonCore pair.1.region targetParent &&
+                argumentsCorrespond commonCore pair.1.arguments
+                  pair.2.arguments) =
+        true then
+    pure ⟨targetSites, commonCore, exact⟩
+  else
+    none
+
+namespace SiteLedger
+
+/-- The retained wrap ledger covers the source and target sites positionally. -/
+theorem correspondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : CutWrapResult source wire}
+    (ledger : SiteLedger result) :
+    SitesCorrespond result ledger.targetSites ledger.commonCore :=
+  ledger.sites_correspond
+
+end SiteLedger
 
 end CutWrapResult
 
@@ -63,6 +184,81 @@ def checkCommonCore
     [] (appliedNodes firstSites ++ appliedNodes secondSites)
     [result.firstWire, result.secondWire]
 
+/--
+Exact positional ledger for parallel splitting. Each source site is paired
+with one site on each generated wire at the same transported region and with
+the same transported ordered argument tuple.
+-/
+def SitesCorrespond
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire)
+    (firstSites : AllAppliedSites result.checked result.firstWire)
+    (secondSites : AllAppliedSites result.checked result.secondWire)
+    (core : CommonCoreReceipt source result.checked) : Prop :=
+  result.sites.sites.length = firstSites.sites.length ∧
+    result.sites.sites.length = secondSites.sites.length ∧
+    (List.zip result.sites.sites
+      (List.zip firstSites.sites secondSites.sites)).all (fun pair =>
+        regionsCorrespond core pair.1.region pair.2.1.region &&
+          regionsCorrespond core pair.1.region pair.2.2.region &&
+          argumentsCorrespond core pair.1.arguments pair.2.1.arguments &&
+          argumentsCorrespond core pair.1.arguments pair.2.2.arguments) =
+      true
+
+/-- Sealed checker-owned split-site correspondence and exact common core. -/
+structure SiteLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire) where
+  private mk ::
+  firstSites : AllAppliedSites result.checked result.firstWire
+  secondSites : AllAppliedSites result.checked result.secondWire
+  commonCore : CommonCoreReceipt source result.checked
+  private sites_correspond :
+    SitesCorrespond result firstSites secondSites commonCore
+
+/-- Check the complete positional split ledger; no caller supplies a pairing. -/
+def checkSiteLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire) :
+    Option (SiteLedger result) := do
+  let firstSites ←
+    checkAllAppliedSites result.checked result.firstWire
+  let secondSites ←
+    checkAllAppliedSites result.checked result.secondWire
+  let commonCore ← result.checkCommonCore
+  if exact :
+      result.sites.sites.length = firstSites.sites.length ∧
+        result.sites.sites.length = secondSites.sites.length ∧
+        (List.zip result.sites.sites
+          (List.zip firstSites.sites secondSites.sites)).all (fun pair =>
+            regionsCorrespond commonCore pair.1.region pair.2.1.region &&
+              regionsCorrespond commonCore pair.1.region pair.2.2.region &&
+              argumentsCorrespond commonCore pair.1.arguments
+                pair.2.1.arguments &&
+              argumentsCorrespond commonCore pair.1.arguments
+                pair.2.2.arguments) =
+          true then
+    pure ⟨firstSites, secondSites, commonCore, exact⟩
+  else
+    none
+
+namespace SiteLedger
+
+/-- The retained split ledger covers all three site collections positionally. -/
+theorem correspondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    SitesCorrespond result ledger.firstSites ledger.secondSites
+      ledger.commonCore :=
+  ledger.sites_correspond
+
+end SiteLedger
+
 end ParallelSplitResult
 
 namespace EndsDeleteResult
@@ -79,6 +275,49 @@ def checkCommonCore
   ConcreteFactorization.checkCommonCore source result.checked
     [] (appliedNodes result.sites) []
     [] [] []
+
+/-- Every deleted source cell retains its free region and ordered arguments. -/
+def SitesRetained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire)
+    (core : CommonCoreReceipt source result.checked) : Prop :=
+  result.sites.sites.all (sourceBoundaryRetained core) = true
+
+/-- Sealed checker-owned deletion-site boundary and exact common core. -/
+structure SiteLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) where
+  private mk ::
+  commonCore : CommonCoreReceipt source result.checked
+  private sites_retained : SitesRetained result commonCore
+
+/-- Check every deleted site's retained free boundary. -/
+def checkSiteLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    Option (SiteLedger result) := do
+  let commonCore ← result.checkCommonCore
+  if exact :
+      result.sites.sites.all (sourceBoundaryRetained commonCore) = true then
+    pure ⟨commonCore, exact⟩
+  else
+    none
+
+namespace SiteLedger
+
+/-- Every recorded deletion site has a complete retained free boundary. -/
+theorem retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : EndsDeleteResult source wire}
+    (ledger : SiteLedger result) :
+    SitesRetained result ledger.commonCore :=
+  ledger.sites_retained
+
+end SiteLedger
 
 end EndsDeleteResult
 

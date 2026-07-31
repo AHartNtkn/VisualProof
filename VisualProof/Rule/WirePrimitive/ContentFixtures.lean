@@ -78,6 +78,10 @@ example :
     spawned.inverse.checkCommonCore.isSome = true := by
   native_decide
 
+example :
+    spawned.inverse.checkSiteLedger.isSome = true := by
+  native_decide
+
 /-! Cut wrapping and exact absorption act on both mixed-parity sites. -/
 private def wrapped :
     CutWrapResult spawned.checked spawned.inverseWire :=
@@ -103,6 +107,10 @@ example :
 
 example :
     wrapped.checkCommonCore.isSome = true := by
+  native_decide
+
+example :
+    wrapped.checkSiteLedger.isSome = true := by
   native_decide
 
 example :
@@ -138,6 +146,10 @@ example :
   native_decide
 
 example :
+    split.checkSiteLedger.isSome = true := by
+  native_decide
+
+example :
     (ConcreteIsoSearch.findConcreteIso?
       fused.checked.val spawned.checked.val).isSome = true := by
   native_decide
@@ -170,6 +182,14 @@ example :
 
 example :
     emptySplit.checkCommonCore.isSome = true := by
+  native_decide
+
+example :
+    emptyWrapped.checkSiteLedger.isSome = true := by
+  native_decide
+
+example :
+    emptySplit.checkSiteLedger.isSome = true := by
   native_decide
 
 /-! Empty site lists and non-head endpoints are refused. -/

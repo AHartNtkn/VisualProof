@@ -57,6 +57,34 @@ theorem checked_exact
       Internal.batchRemovalCandidate erasure.plan :=
   erasure.generated
 
+/-- Image of one retained source region in the exact checked erasure. -/
+def regionImage?
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (region : source.val.RegionId) :
+    Option erasure.checked.val.RegionId :=
+  if retained :
+      region ∈ Internal.retainedRegions source removedRegions then
+    some
+      (Internal.checkedRegion erasure.checked_exact
+        (Internal.retainedRegionIndex source removedRegions region retained))
+  else
+    none
+
+/-- Image of one retained source wire in the exact checked erasure. -/
+def wireImage?
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : source.val.WireId) :
+    Option erasure.checked.val.WireId :=
+  if retained :
+      wire ∈ Internal.retainedWires source removedWires then
+    some
+      (Internal.checkedWire erasure.checked_exact
+        (Internal.retainedWireIndex source removedWires wire retained))
+  else
+    none
+
 end CheckedBatchErasure
 
 /--
