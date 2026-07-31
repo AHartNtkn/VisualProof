@@ -340,7 +340,8 @@ private theorem all_targetWires
       ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire,
       ConcreteDiagram.wiresList]
 
-private theorem target_wiresAt
+/-- Singleton node erasure preserves the ordered local wires of every region. -/
+theorem target_wiresAt
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
@@ -365,6 +366,29 @@ private theorem target_wiresAt
     (fun data => data.scope == region)
     (congrArg source.val.wires
       (wiresList_get_targetWire source removed wire))
+
+/--
+Singleton node erasure preserves the ordered signature block bound at every
+region.
+-/
+theorem target_localSigs
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (region : source.val.RegionId) :
+    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source removed).wiresAt
+        (targetRegion source removed region)).map
+          (fun wire =>
+            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              source removed).wires wire).sig) =
+      (source.val.wiresAt region).map
+        (fun wire => (source.val.wires wire).sig) := by
+  rw [target_wiresAt, List.map_map]
+  apply List.map_congr_left
+  intro wire _member
+  exact
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+      source removed wire
 
 /-- The dense target index of one retained source node. -/
 def targetNode

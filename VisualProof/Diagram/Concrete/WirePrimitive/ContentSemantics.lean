@@ -178,6 +178,118 @@ theorem compose
 
 end UniversalScopeTransport
 
+/--
+Constructor-preserving transport strictly above the acted binder scope.
+Unlike `UniversalScopeTransport`, this carries no local content law; it is the
+structural trace authority that composes until the endpoint-free binder is
+deleted.
+-/
+structure UniversalOuterTransport
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (target : CheckedDiagram definitions)
+    (targetWire : target.val.WireId) : Type (u + 1) where
+  sourceScope :
+    SiteCompilation source (source.val.wires wire).scope
+  targetSite : target.val.RegionId
+  targetSite_eq :
+    targetSite = (target.val.wires targetWire).scope
+  targetScope :
+    SiteCompilation target targetSite
+  sourceCanonical :
+    SiteCompilation.AboveScopeDecomposition sourceScope
+  targetCanonical :
+    SiteCompilation.AboveScopeDecomposition targetScope
+  outerProjection :
+    WireRenaming sourceCanonical.siteOuter.sigs
+      targetCanonical.siteOuter.sigs
+  composable :
+    DiagramContext.ComposableSemanticZipper
+      sourceCanonical.above targetCanonical.above
+      (fun (_pre : PreModel.{u}) env => env)
+      (fun (_pre : PreModel.{u}) env =>
+        Env.comp env outerProjection)
+
+namespace UniversalOuterTransport
+
+/-- Identity structural transport at one checked acted scope. -/
+noncomputable def identity
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    UniversalOuterTransport.{u} source wire source wire := by
+  let scope : SiteCompilation source (source.val.wires wire).scope :=
+    Classical.choice (by
+      obtain ⟨scope, _compiled⟩ :=
+        compileSite_complete source (source.val.wires wire).scope
+      exact ⟨scope⟩)
+  let canonical :
+      SiteCompilation.AboveScopeDecomposition scope :=
+    Classical.choice scope.aboveScopeDecomposition
+  exact
+    {
+      sourceScope := scope
+      targetSite := (source.val.wires wire).scope
+      targetSite_eq := rfl
+      targetScope := scope
+      sourceCanonical := canonical
+      targetCanonical := canonical
+      outerProjection := fun {_} value => value
+      composable :=
+        DiagramContext.ComposableSemanticZipper.identity canonical.above
+    }
+
+/-- Structural transports compose through proof-independent site compilation. -/
+noncomputable def compose
+    {source middle target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {middleWire : middle.val.WireId}
+    {targetWire : target.val.WireId}
+    (first :
+      UniversalOuterTransport.{u} source wire middle middleWire)
+    (second :
+      UniversalOuterTransport.{u} middle middleWire target targetWire) :
+    UniversalOuterTransport.{u} source wire target targetWire := by
+  cases first with
+  | mk sourceScope middleSite middleSiteEq middleScope sourceCanonical
+      middleCanonical firstProjection firstComposable =>
+      cases middleSiteEq
+      cases second with
+      | mk secondMiddleScope targetSite targetSiteEq targetScope
+          secondMiddleCanonical targetCanonical secondProjection
+          secondComposable =>
+          have sameScope :
+              middleScope = secondMiddleScope :=
+            SiteCompilation.unique middleScope secondMiddleScope
+          cases sameScope
+          let aligned :=
+            middleCanonical.alignment secondMiddleCanonical
+          cases middleCanonical with
+          | mk middleOuter middleAbove middleVisible middleDecomposition =>
+              cases secondMiddleCanonical with
+              | mk secondOuter secondAbove secondVisible
+                  secondDecomposition =>
+                    cases aligned with
+                    | mk outerExact aboveExact =>
+                        cases outerExact
+                        cases aboveExact
+                        exact
+                          {
+                            sourceScope := sourceScope
+                            targetSite := targetSite
+                            targetSite_eq := targetSiteEq
+                            targetScope := targetScope
+                            sourceCanonical := sourceCanonical
+                            targetCanonical := targetCanonical
+                            outerProjection :=
+                              fun {_} value =>
+                                secondProjection (firstProjection value)
+                            composable :=
+                              DiagramContext.ComposableSemanticZipper.compose
+                                firstComposable secondComposable
+                          }
+
+end UniversalOuterTransport
+
 private def appliedNodes
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -1010,6 +1122,20 @@ private theorem cast_transport
   cases eq_of_heq wireSame
   exact transport
 
+private noncomputable def cast_outer_transport
+    {source left right : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {leftWire : left.val.WireId}
+    {rightWire : right.val.WireId}
+    (same : left = right)
+    (wireSame : HEq leftWire rightWire)
+    (transport :
+      UniversalOuterTransport.{u} source wire left leftWire) :
+    UniversalOuterTransport.{u} source wire right rightWire := by
+  cases same
+  cases eq_of_heq wireSame
+  exact transport
+
 private theorem normalize_erasure
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -1612,6 +1738,176 @@ private theorem canonical_scope_transport
         (sourceDenotationExact.symm ▸ sourceHolds)
   exact targetTransport.trans (normalizedFilled.trans sourceTransport.symm)
 
+/--
+One canonical singleton erasure carries the constructor-preserving prefix
+strictly above the acted binder scope.
+-/
+private theorem canonical_outer_transport_nonempty
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node) :
+    let target : CheckedDiagram definitions :=
+      ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source site.node,
+        erasure.candidate_wellFormed⟩
+    Nonempty
+      (UniversalOuterTransport.{u} source wire target
+        (targetWire source site.node wire)) := by
+  let target : CheckedDiagram definitions :=
+    ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source site.node,
+      erasure.candidate_wellFormed⟩
+  have scopeSite :
+      source.val.Encloses (source.val.wires wire).scope
+        (source.val.nodes site.node).region := by
+    have scopeProof :=
+      ConcreteElaboration.Internal.endpoint_scope definitions source.val
+        source.property site.endpoint wire site.endpoint_owner
+    simpa [AppliedSite.endpoint] using scopeProof
+  let empty := ConcreteElaboration.WireContext.empty source.val
+  have rootAbove :
+      ConcreteElaboration.ContextAbove source.val empty source.val.root := by
+    exact
+      ⟨by simp [empty, ConcreteElaboration.WireContext.empty],
+        by simp [empty, ConcreteElaboration.WireContext.empty]⟩
+  have rootPaired :
+      PairedGeneratedFrame source site.node site.region source.val.root
+        (source.val.regionCount + 1) empty site.frame.frame := by
+    simpa [site.node_data] using
+      pairedGeneratedFrame source site.node erasure site.region source.val.root
+        (source.val.regionCount + 1) empty site.frame.frame rootAbove
+        site.frame.frame_generated
+  rcases rootPaired with
+    ⟨_rootTargetFrame, _rootPairedAbove, _rootSourceGenerated,
+      rootProvenance⟩
+  have rootProvenanceAtNode :
+      ErasureFrameProvenance source site.node
+        (source.val.nodes site.node).region
+        (source.val.regionCount + 1) empty source.val.root
+        site.frame.frame _rootTargetFrame := by
+    simpa [site.node_data] using rootProvenance
+  have rootScope :
+      source.val.Encloses source.val.root
+        (source.val.wires wire).scope :=
+    of_decide_eq_true
+      ((List.all_eq_true.mp source.property.all_regions_reach_root)
+        (source.val.wires wire).scope
+        (Data.Finite.mem_allFin (source.val.wires wire).scope))
+  obtain ⟨receipt, sourceGenerated, targetGenerated⟩ :=
+    rootProvenanceAtNode.aboveScope erasure.candidate_wellFormed
+      (source.val.wires wire).scope rootScope scopeSite
+  let sourceScope :
+      SiteCompilation source (source.val.wires wire).scope :=
+    SiteCompilation.ofFrame receipt.sourceStopped (by
+      simpa [empty, ConcreteElaboration.WireContext.empty] using
+        sourceGenerated)
+  change
+    Nonempty
+      (UniversalOuterTransport source wire target
+        (targetWire source site.node wire))
+  have targetWireScope :
+      (target.val.wires (targetWire source site.node wire)).scope =
+        targetRegion source site.node (source.val.wires wire).scope := by
+    simpa [target] using targetWire_scope source site.node wire
+  let targetScope :
+      SiteCompilation target
+        (targetRegion source site.node (source.val.wires wire).scope) :=
+    SiteCompilation.ofFrame receipt.targetStopped (by
+      simpa [target, empty, ConcreteElaboration.WireContext.empty,
+        targetRegion_eq] using targetGenerated)
+  let sourceCanonical :
+      SiteCompilation.AboveScopeDecomposition sourceScope :=
+    {
+      siteOuter := receipt.sourceSiteOuter
+      above := receipt.sourceAbove
+      visibleExact := receipt.sourceStoppedVisible
+      contextDecomposition := receipt.sourceDecomposition
+    }
+  let targetCanonical :
+      SiteCompilation.AboveScopeDecomposition targetScope :=
+    {
+      siteOuter := targetContext source site.node receipt.sourceSiteOuter
+      above := receipt.targetAbove
+      visibleExact := receipt.targetStoppedVisible
+      contextDecomposition := receipt.targetDecomposition
+    }
+  let outerProjection :
+      WireRenaming sourceCanonical.siteOuter.sigs
+        targetCanonical.siteOuter.sigs :=
+    contextRenaming source site.node receipt.sourceSiteOuter
+  exact
+    ⟨{
+      sourceScope := sourceScope
+      targetSite :=
+        targetRegion source site.node (source.val.wires wire).scope
+      targetSite_eq := targetWireScope.symm
+      targetScope := targetScope
+      sourceCanonical := sourceCanonical
+      targetCanonical := targetCanonical
+      outerProjection := outerProjection
+      composable := by
+        have outerMapEquality :
+            (fun (pre : PreModel.{u}) (env : Env pre []) =>
+              Env.comp env
+                (contextRenaming source site.node
+                  (ConcreteElaboration.WireContext.empty source.val))) =
+            (fun (pre : PreModel.{u}) (env : Env pre []) => env) := by
+          funext pre env sig value
+          nomatch value
+        rw [← outerMapEquality]
+        simpa [sourceCanonical, targetCanonical, outerProjection, empty,
+          ConcreteElaboration.WireContext.empty] using receipt.composable
+    }⟩
+
+private noncomputable def canonical_outer_transport
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node) :
+    let target : CheckedDiagram definitions :=
+      ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source site.node,
+        erasure.candidate_wellFormed⟩
+    UniversalOuterTransport.{u} source wire target
+      (targetWire source site.node wire) :=
+  Classical.choice (canonical_outer_transport_nonempty site erasure)
+
+private noncomputable def normalize_outer_erasure
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node)
+    (canonicalTransport :
+      let canonical : CheckedDiagram definitions :=
+        ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source site.node,
+          erasure.candidate_wellFormed⟩
+      UniversalOuterTransport.{u} source wire canonical
+        (targetWire source site.node wire)) :
+    UniversalOuterTransport.{u} source wire erasure.target
+      (erasure.wireImage wire) := by
+  let canonical : CheckedDiagram definitions :=
+    ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source site.node,
+      erasure.candidate_wellFormed⟩
+  have targetExact : canonical = erasure.target := by
+    apply Subtype.ext
+    exact erasure.generated.symm
+  change
+    UniversalOuterTransport.{u} source wire canonical
+      (targetWire source site.node wire) at canonicalTransport
+  refine
+    cast_outer_transport
+      (leftWire := targetWire source site.node wire)
+      (rightWire := erasure.wireImage wire)
+      targetExact ?_ canonicalTransport
+  · have counts :
+        canonical.val.wireCount = erasure.target.val.wireCount :=
+      congrArg ConcreteDiagram.wireCount
+        (congrArg Subtype.val targetExact)
+    exact fin_heq_of_val_eq counts _ _ rfl
+
 /-- Public one-step transport normalized to the exact checked erasure target. -/
 theorem universal_scope_transport
     {source : CheckedDiagram definitions}
@@ -1622,6 +1918,17 @@ theorem universal_scope_transport
       (erasure.wireImage wire) :=
   normalize_erasure site erasure
     (canonical_scope_transport site erasure)
+
+/-- Public one-step constructor-preserving transport above the acted scope. -/
+noncomputable def universal_outer_transport
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node) :
+    UniversalOuterTransport.{u} source wire erasure.target
+      (erasure.wireImage wire) :=
+  normalize_outer_erasure site erasure
+    (canonical_outer_transport site erasure)
 
 end AppliedSite
 
@@ -1651,6 +1958,37 @@ theorem universal_scope_transport
         (ConcreteWirePrimitive.AppliedSite.universal_scope_transport
           site erasure)
         tail)
+
+/--
+The sealed all-applied-site trace composes the constructor-preserving prefix
+strictly above the acted binder scope.
+-/
+private theorem universal_outer_transport_nonempty
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : AppliedSiteErasure.Result source wire) :
+    Nonempty
+      (UniversalOuterTransport.{u} source wire result.target
+        result.targetWire) :=
+  result.inductionOn
+    (fun source wire target targetWire =>
+      Nonempty
+        (UniversalOuterTransport.{u} source wire target targetWire))
+    (fun source wire _empty =>
+      ⟨UniversalOuterTransport.identity source wire⟩)
+    (fun {source} {wire} site erasure {target} {targetWire} tail =>
+      ⟨UniversalOuterTransport.compose
+          (ConcreteWirePrimitive.AppliedSite.universal_outer_transport
+            site erasure)
+          (Classical.choice tail)⟩)
+
+noncomputable def universal_outer_transport
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : AppliedSiteErasure.Result source wire) :
+    UniversalOuterTransport.{u} source wire result.target
+      result.targetWire :=
+  Classical.choice (universal_outer_transport_nonempty result)
 
 end WirePrimitive.AppliedSiteErasure.Result
 

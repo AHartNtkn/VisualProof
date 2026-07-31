@@ -4,8 +4,10 @@ namespace VisualProof
 
 #check ConcreteWirePrimitive.AppliedSite.replacement_denotation
 #check ConcreteWirePrimitive.AppliedSite.universal_scope_transport
+#check ConcreteWirePrimitive.AppliedSite.universal_outer_transport
 #check WirePrimitive.AppliedSiteErasure.Result.inductionOn
 #check WirePrimitive.AppliedSiteErasure.Result.universal_scope_transport
+#check WirePrimitive.AppliedSiteErasure.Result.universal_outer_transport
 
 namespace WirePrimitive
 

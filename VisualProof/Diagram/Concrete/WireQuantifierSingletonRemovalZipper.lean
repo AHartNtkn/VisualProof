@@ -92,12 +92,34 @@ structure ErasureAboveScopeReceipt
         (ConcreteElaboration.finishRegion (Target source removed)
           (targetContext source removed sourceSiteOuter)
           (targetRegion source removed scope) targetBody)
-  zipper :
-    DiagramContext.SemanticZipper.{u} sourceAbove targetAbove
+  composable :
+    DiagramContext.ComposableSemanticZipper.{u} sourceAbove targetAbove
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env (contextRenaming source removed sourceOuter))
       (fun (_pre : PreModel.{u}) env =>
         Env.comp env (contextRenaming source removed sourceSiteOuter))
+
+/-- The semantic view of the constructor-preserving above-scope derivation. -/
+def ErasureAboveScopeReceipt.zipper
+    {source : CheckedDiagram definitions}
+    {removed : source.val.NodeId}
+    {scope : source.val.RegionId}
+    {sourceOuter : ConcreteElaboration.WireContext source.val}
+    {sourceFrame : RegionFrame definitions source.val sourceOuter}
+    {targetFrame :
+      RegionFrame definitions (Target source removed)
+        (targetContext source removed sourceOuter)}
+    (receipt :
+      ErasureAboveScopeReceipt.{u} source removed scope sourceOuter
+        sourceFrame targetFrame) :
+    DiagramContext.SemanticZipper.{u} receipt.sourceAbove
+      receipt.targetAbove
+      (fun (_pre : PreModel.{u}) env =>
+        Env.comp env (contextRenaming source removed sourceOuter))
+      (fun (_pre : PreModel.{u}) env =>
+        Env.comp env
+          (contextRenaming source removed receipt.sourceSiteOuter)) :=
+  receipt.composable.toSemanticZipper
 
 /--
 Stop an erasure provenance fold before the current region's binder block.
@@ -166,7 +188,7 @@ theorem ErasureFrameProvenance.stopAboveCurrent
           targetStoppedBody := rfl
           sourceFill := ?_
           targetFill := ?_
-          zipper := ?_
+          composable := ?_
         }, ?_, ?_⟩
       · change
           (bindContextFor source.val sourceOuter.ids
@@ -186,7 +208,7 @@ theorem ErasureFrameProvenance.stopAboveCurrent
         rw [bindContextFor_fill, finishBodyFor_eq_finishRegion]
         rfl
       · simpa using
-          (DiagramContext.SemanticZipper.hole
+          (DiagramContext.ComposableSemanticZipper.hole
             (definitions := definitions)
             (fun (pre : PreModel.{u}) env =>
               Env.comp env
@@ -241,7 +263,7 @@ theorem ErasureFrameProvenance.stopAboveCurrent
           targetStoppedBody := rfl
           sourceFill := ?_
           targetFill := ?_
-          zipper := ?_
+          composable := ?_
         }, ?_, ?_⟩
       · change
           (bindContextFor source.val sourceOuter.ids
@@ -264,7 +286,7 @@ theorem ErasureFrameProvenance.stopAboveCurrent
         rw [bindContextFor_fill, finishBodyFor_eq_finishRegion]
         rfl
       · simpa using
-          (DiagramContext.SemanticZipper.hole
+          (DiagramContext.ComposableSemanticZipper.hole
             (definitions := definitions)
             (fun (pre : PreModel.{u}) env =>
               Env.comp env
@@ -448,6 +470,296 @@ theorem erasureBindContextZipper
         apply directedMiddle
         rw [environments] at sourceCore
         exact sourceCore
+
+private def erasureTransportRenaming
+    {source source' target target' : List Sig}
+    (sourceExact : source = source')
+    (targetExact : target = target')
+    (rho : WireRenaming source' target') :
+    WireRenaming source target :=
+  fun {_} value => targetExact.symm ▸ rho (sourceExact ▸ value)
+
+private theorem erasureTransportRenaming_reindexed_identity
+    {source source' target target' : List Sig}
+    (sourceExact : source = source')
+    (targetExact : target = target')
+    (rawTargetToSource : target' = source')
+    (targetToSource : target = source)
+    (rho : WireRenaming source' target')
+    (rawIdentity :
+      (fun {sig} (value : Var source' sig) =>
+        rawTargetToSource ▸ rho value) =
+        (fun {_} (value : Var source' _) => value)) :
+    (fun {sig} (value : Var source sig) =>
+      targetToSource ▸
+        erasureTransportRenaming sourceExact targetExact rho value) =
+      (fun {_} (value : Var source _) => value) := by
+  cases sourceExact
+  cases targetExact
+  have proofExact : targetToSource = rawTargetToSource :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  exact rawIdentity
+
+private theorem castTargetRenaming_reindexed_identity
+    {source targetRaw target : List Sig}
+    (targetExact : targetRaw = target)
+    (rawTargetToSource : targetRaw = source)
+    (targetToSource : target = source)
+    (rho : WireRenaming source targetRaw)
+    (rawIdentity :
+      (fun {sig} (value : Var source sig) =>
+        rawTargetToSource ▸ rho value) =
+        (fun {_} (value : Var source _) => value)) :
+    (fun {sig} (value : Var source sig) =>
+      targetToSource ▸ (targetExact ▸ rho) value) =
+      (fun {_} (value : Var source _) => value) := by
+  cases targetExact
+  have proofExact : targetToSource = rawTargetToSource :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  exact rawIdentity
+
+private theorem envComp_erasureTransportRenaming
+    {source source' target target' : List Sig}
+    (sourceExact : source' = source)
+    (targetExact : target' = target)
+    (rho : WireRenaming source' target') :
+    (fun (pre : PreModel.{u}) (env : Env pre target) =>
+      sourceExact ▸ Env.comp (targetExact.symm ▸ env) rho) =
+      (fun (pre : PreModel.{u}) (env : Env pre target) =>
+        Env.comp env
+          (erasureTransportRenaming sourceExact.symm targetExact.symm
+            rho)) := by
+  cases sourceExact
+  cases targetExact
+  rfl
+
+private theorem erasureCast_trans
+    {α : Sort v} {motive : α → Sort w}
+    {left middle right : α}
+    (leftMiddle : left = middle)
+    (middleRight : middle = right)
+    (value : motive left) :
+    middleRight ▸ (leftMiddle ▸ value) =
+      (leftMiddle.trans middleRight) ▸ value := by
+  cases leftMiddle
+  cases middleRight
+  rfl
+
+private theorem erasureBindMany_reindexBound
+    {leftBound rightBound outer hole : List Sig}
+    (same : leftBound = rightBound)
+    (inner :
+      DiagramContext definitions hole (leftBound ++ outer)) :
+    DiagramContext.bindMany leftBound inner =
+      DiagramContext.bindMany rightBound
+        ((congrArg (fun bound => bound ++ outer) same) ▸ inner) := by
+  cases same
+  rfl
+
+/--
+Retain one complete compiler binder block around a constructor-preserving
+singleton-node erasure derivation.
+-/
+noncomputable def erasureBindContextComposable
+    {source : CheckedDiagram definitions}
+    (removed : source.val.NodeId)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceInner :
+      DiagramContext definitions sourceHole
+        (sourceOuter.extend region).sigs)
+    (targetInner :
+      DiagramContext definitions targetHole
+        ((targetContext source removed sourceOuter).extend
+          (targetRegion source removed region)).sigs)
+    (holeMap : ∀ pre : PreModel.{u},
+      Env pre targetHole → Env pre sourceHole)
+    (inner :
+      DiagramContext.ComposableSemanticZipper sourceInner targetInner
+        (fun _pre env =>
+          Env.comp env
+            (extendedContextRenaming source removed sourceOuter region))
+        holeMap) :
+    DiagramContext.ComposableSemanticZipper
+      (bindContextFor source.val sourceOuter.ids
+        (source.val.wiresAt region) sourceInner)
+      (bindContextFor (Target source removed)
+        (targetContext source removed sourceOuter).ids
+        ((Target source removed).wiresAt
+          (targetRegion source removed region))
+        targetInner)
+      (fun _pre env =>
+        Env.comp env (contextRenaming source removed sourceOuter))
+      holeMap := by
+  let bound :=
+    (source.val.wiresAt region).map
+      (fun wire => (source.val.wires wire).sig)
+  let outerRenaming :=
+    (contextRenaming source removed sourceOuter :
+      WireRenaming sourceOuter.sigs
+        (targetContext source removed sourceOuter).sigs)
+  let fullRenaming :=
+    (extendedContextRenaming source removed sourceOuter region :
+      WireRenaming (sourceOuter.extend region).sigs
+        ((targetContext source removed sourceOuter).extend
+          (targetRegion source removed region)).sigs)
+  let sourceExact :
+      (sourceOuter.extend region).sigs =
+        bound ++ sourceOuter.sigs :=
+    @List.map_append _ _
+      (fun wire => (source.val.wires wire).sig)
+      (source.val.wiresAt region) sourceOuter.ids
+  let targetExact :
+      ((targetContext source removed sourceOuter).extend
+          (targetRegion source removed region)).sigs =
+        bound ++ (targetContext source removed sourceOuter).sigs :=
+    (@List.map_append _ _
+      (fun wire => ((Target source removed).wires wire).sig)
+      ((Target source removed).wiresAt
+        (targetRegion source removed region))
+      (targetContext source removed sourceOuter).ids).trans
+      (congrArg
+        (fun localSigs =>
+          localSigs ++ (targetContext source removed sourceOuter).sigs)
+        (target_localSigs source removed region))
+  let canonicalFullRenaming :
+      WireRenaming (bound ++ sourceOuter.sigs)
+        (bound ++ (targetContext source removed sourceOuter).sigs) :=
+    erasureTransportRenaming sourceExact.symm targetExact.symm fullRenaming
+  let outerTargetToSource :=
+    targetContext_sigs source removed sourceOuter
+  let fullTargetToSource :
+      ((targetContext source removed sourceOuter).extend
+          (targetRegion source removed region)).sigs =
+        (sourceOuter.extend region).sigs :=
+    (congrArg ConcreteElaboration.WireContext.sigs
+      (targetContext_extend source removed sourceOuter region).symm).trans
+      (targetContext_sigs source removed (sourceOuter.extend region))
+  let canonicalTargetToSource :
+      bound ++ (targetContext source removed sourceOuter).sigs =
+        bound ++ sourceOuter.sigs :=
+    congrArg (List.append bound) outerTargetToSource
+  have rawFullIdentity :
+      (fun {sig} (value : Var (sourceOuter.extend region).sigs sig) =>
+        fullTargetToSource ▸ fullRenaming value) =
+      (fun {_} (value : Var (sourceOuter.extend region).sigs _) => value) := by
+    apply castTargetRenaming_reindexed_identity
+      (congrArg ConcreteElaboration.WireContext.sigs
+        (targetContext_extend source removed sourceOuter region))
+      (targetContext_sigs source removed (sourceOuter.extend region))
+      fullTargetToSource
+      (contextRenaming source removed (sourceOuter.extend region))
+    exact
+      contextRenaming_reindex_identity source removed
+        (sourceOuter.extend region)
+  have outerIdentity :
+      (fun {sig} (value : Var sourceOuter.sigs sig) =>
+        outerTargetToSource ▸ outerRenaming value) =
+      (fun {_} (value : Var sourceOuter.sigs _) => value) := by
+    simpa only [outerTargetToSource, outerRenaming] using
+      (contextRenaming_reindex_identity source removed sourceOuter)
+  have canonicalFullIdentity :
+      (fun {sig} (value : Var (bound ++ sourceOuter.sigs) sig) =>
+        canonicalTargetToSource ▸ canonicalFullRenaming value) =
+      (fun {_}
+        (value : Var (bound ++ sourceOuter.sigs) _) => value) :=
+    erasureTransportRenaming_reindexed_identity sourceExact.symm
+      targetExact.symm fullTargetToSource canonicalTargetToSource
+      fullRenaming rawFullIdentity
+  have canonicalFullExact :
+      (canonicalFullRenaming :
+        WireRenaming (bound ++ sourceOuter.sigs)
+          (bound ++ (targetContext source removed sourceOuter).sigs)) =
+      (DiagramContext.ComposableSemanticZipper.liftMany
+          bound outerRenaming :
+        WireRenaming (bound ++ sourceOuter.sigs)
+          (bound ++
+            (targetContext source removed sourceOuter).sigs)) := by
+    simpa only using
+      (DiagramContext.ComposableSemanticZipper.eq_liftMany_of_reindexed_identity
+          bound outerTargetToSource
+          outerRenaming canonicalFullRenaming outerIdentity
+          canonicalFullIdentity)
+  have canonicalInnerRaw :=
+    (inner.rebaseSourceOuter sourceExact).rebaseTargetOuter targetExact
+  have canonicalInner :
+      DiagramContext.ComposableSemanticZipper
+        (sourceExact ▸ sourceInner) (targetExact ▸ targetInner)
+        (fun (pre : PreModel.{u}) env =>
+          Env.comp env canonicalFullRenaming)
+        holeMap := by
+    rw [← envComp_erasureTransportRenaming sourceExact targetExact
+      fullRenaming]
+    exact canonicalInnerRaw
+  have liftedInner :
+      DiagramContext.ComposableSemanticZipper
+        (sourceExact ▸ sourceInner) (targetExact ▸ targetInner)
+        (fun (pre : PreModel.{u}) env =>
+          Env.comp env
+            (DiagramContext.ComposableSemanticZipper.liftMany
+              bound outerRenaming))
+        holeMap := by
+    rw [← canonicalFullExact]
+    exact canonicalInner
+  have boundComposable :=
+    DiagramContext.ComposableSemanticZipper.bindMany
+      bound outerRenaming liftedInner
+  have sourceAncestorExact :
+      bindContextFor source.val sourceOuter.ids
+          (source.val.wiresAt region) sourceInner =
+        DiagramContext.bindMany bound (sourceExact ▸ sourceInner) := by
+    rw [bindContextFor_eq_bindMany]
+    unfold bound
+    have proofExact :
+        (@List.map_append _ _
+            (fun wire => (source.val.wires wire).sig)
+            (source.val.wiresAt region) sourceOuter.ids) =
+          sourceExact :=
+      Subsingleton.elim _ _
+    rw [proofExact]
+    rfl
+  have targetAncestorExact :
+      bindContextFor (Target source removed)
+          (targetContext source removed sourceOuter).ids
+          ((Target source removed).wiresAt
+            (targetRegion source removed region)) targetInner =
+        DiagramContext.bindMany bound (targetExact ▸ targetInner) := by
+    rw [bindContextFor_eq_bindMany]
+    rw [erasureBindMany_reindexBound
+      (target_localSigs source removed region)]
+    apply congrArg (DiagramContext.bindMany bound)
+    unfold bound
+    let mapAppend :=
+      @List.map_append _ _
+        (fun wire => ((Target source removed).wires wire).sig)
+        ((Target source removed).wiresAt
+          (targetRegion source removed region))
+        (targetContext source removed sourceOuter).ids
+    let localExact :
+        (((Target source removed).wiresAt
+          (targetRegion source removed region)).map
+            (fun wire => ((Target source removed).wires wire).sig)) ++
+              (targetContext source removed sourceOuter).sigs =
+          (source.val.wiresAt region).map
+              (fun wire => (source.val.wires wire).sig) ++
+                (targetContext source removed sourceOuter).sigs :=
+      congrArg
+        (fun localSigs =>
+          localSigs ++ (targetContext source removed sourceOuter).sigs)
+        (target_localSigs source removed region)
+    calc
+      _ = (mapAppend.trans localExact) ▸ targetInner := by
+        exact erasureCast_trans mapAppend localExact targetInner
+      _ = targetExact ▸ targetInner := by
+        have proofExact : mapAppend.trans localExact = targetExact :=
+          Subsingleton.elim _ _
+        rw [proofExact]
+        rfl
+    all_goals rfl
+  rw [sourceAncestorExact, targetAncestorExact]
+  simpa only [outerRenaming] using boundComposable
 
 private theorem ErasureSiblingProvenance.zipper
     {source : CheckedDiagram definitions}
@@ -773,9 +1085,10 @@ private theorem ErasureSiblingProvenance.aboveScope
           targetStoppedBody := nestedReceipt.targetStoppedBody
           sourceFill := ?_
           targetFill := ?_
-          zipper :=
-            DiagramContext.SemanticZipper.surround
-              (DiagramContext.SemanticZipper.cut nestedReceipt.zipper)
+          composable :=
+            DiagramContext.ComposableSemanticZipper.surround
+              (DiagramContext.ComposableSemanticZipper.cut
+                nestedReceipt.composable)
               sourceLeading sourceSuffix targetLeading targetSuffix
               leadingLaw suffixLaw
         }, ?_, ?_⟩
@@ -1022,8 +1335,8 @@ theorem ErasureFrameProvenance.aboveScope
         let rebasedTarget :=
           erasureRebaseRegionFrame contextExact targetAround
         have rebasedZipperRaw :=
-          aroundReceipt.zipper.rebaseTargetOuter
-            outerSigsExact aroundReceipt.targetAbove
+          aroundReceipt.composable.rebaseTargetOuter
+            outerSigsExact
         have outerMapEquality :
             (fun (pre : PreModel.{u})
               (env :
@@ -1048,7 +1361,7 @@ theorem ErasureFrameProvenance.aboveScope
               (contextRenaming source removed
                 (sourceOuter.extend region)))
         have rebasedZipper :
-            DiagramContext.SemanticZipper
+            DiagramContext.ComposableSemanticZipper
               aroundReceipt.sourceAbove
               (outerSigsExact ▸ aroundReceipt.targetAbove)
               (fun (pre : PreModel.{u}) env =>
@@ -1097,7 +1410,8 @@ theorem ErasureFrameProvenance.aboveScope
                   (targetRegion source removed region))
                 targetStoppedInner.context }
         have ancestorZipper :
-            DiagramContext.SemanticZipper sourceAncestor targetAncestor
+            DiagramContext.ComposableSemanticZipper sourceAncestor
+              targetAncestor
               (fun (pre : PreModel.{u}) env =>
                 Env.comp env
                   (contextRenaming source removed sourceOuter))
@@ -1105,8 +1419,7 @@ theorem ErasureFrameProvenance.aboveScope
                 Env.comp env
                   (contextRenaming source removed
                     aroundReceipt.sourceSiteOuter)) := by
-          apply erasureBindContextZipper removed sourceOuter region
-            sourceExtendedNodup
+          apply erasureBindContextComposable removed sourceOuter region
           exact rebasedZipper
         refine
           ⟨{
@@ -1169,7 +1482,7 @@ theorem ErasureFrameProvenance.aboveScope
             targetStoppedBody := aroundReceipt.targetStoppedBody
             sourceFill := ?_
             targetFill := ?_
-            zipper := ancestorZipper
+            composable := ancestorZipper
           }, ?_, ?_⟩
         · change
             (bindContextFor source.val sourceOuter.ids
