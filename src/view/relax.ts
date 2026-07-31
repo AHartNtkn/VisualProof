@@ -1294,29 +1294,43 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     r = reg.parent
   }
   const owned = b.kind === 'end'
+  const wall = b.kind !== 'end' ? e.frame : null
+  const saved = b.pos
+  const dirty = new Set<RegionId>([b.region])
   let x = p.x, y = p.y
-  for (const [rid, g] of e.regions) {
-    if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
-    const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
-    const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
-    if (d >= need) continue
-    const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
-    x = g.center.x + ux * need; y = g.center.y + uy * need
-  }
-  // the fixed frame is a hard wall (plan 24): a drag meets the edge and stops —
-  // the node never crosses out and the frame never grows to chase the cursor
-  const c0 = clampToFrame(e, b, { x, y })
-  x = c0.x; y = c0.y
-  // CUT hard wall (USER 2026-07-06): the border contains the CUTS too, not just the
-  // discs. The dragged body is PINNED (the settle gate cannot relax it), so if its
-  // own cut's circle would exit the border, pull the body in until every ancestor
-  // region circle fits — the cut stops at the wall, so the dragged node stops with
-  // it. Iterated because moving the body in shrinks/shifts the derived circle.
-  const f = e.frame
-  if (f !== null && b.kind !== 'end') {
-    const saved = b.pos
-    const dirty = new Set<RegionId>([b.region])
-    for (let it = 0; it < 8; it++) {
+  let pull = true
+  let lastOver = Infinity
+  let prePull = { x, y }
+  // The three hard walls — foreign region circles, the fixed frame (plan 24),
+  // and the CUT wall (USER 2026-07-06: the border contains the cuts too, so the
+  // dragged body is pulled in until every ancestor circle fits) — are projected
+  // ALTERNATELY to a joint fixed point. One sequential pass is wrong: the
+  // cut-wall pull can drive the body straight through a foreign circle it was
+  // pushed out of moments before (measured 4.75 wu deep), which both violates
+  // hard semantic containment and freezes the drag frontier. Alternation makes
+  // the pull and the push compose into a slide around the foreign clearance.
+  // All bounds here are SEMANTIC (disc against drawn circle), not aesthetic:
+  // a gap-inclusive push moves bodies that rest legally inside their gap, and
+  // that sideways "healing" both surprises the cursor and reads as a worsening
+  // to the frontier's strict no-deepening gate. Gap restoration is the live
+  // settle's job. Terminates when a full round moves the point less than the
+  // cut-wall tolerance (0.05 wu); measured on the wall-pull-through-circle
+  // fixture the joint residual hits zero in 9–12 rounds, so the cap of 16 is
+  // that plus margin — any residual past it is caught by the drag frontier's
+  // relative gate rather than accepted.
+  for (let it = 0; it < 16; it++) {
+    const px = x, py = y
+    for (const [rid, g] of e.regions) {
+      if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+      const need = owned ? g.radius : b.discR * e.scale + g.radius
+      const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
+      if (d >= need) continue
+      const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
+      x = g.center.x + ux * need; y = g.center.y + uy * need
+    }
+    const c0 = clampToFrame(e, b, { x, y })
+    x = c0.x; y = c0.y
+    if (wall !== null && pull) {
       b.pos = { x, y }
       recomputeRegions(e, dirty)
       let rt = 0, lf = 0, bt = 0, tp = 0
@@ -1324,16 +1338,51 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
         if (e.d.regions[rid]!.kind === 'sheet') continue
         const g = e.regions.get(rid)
         if (g === undefined) continue
-        rt = Math.max(rt, g.center.x + g.radius - (f.center.x + f.half))
-        lf = Math.max(lf, (f.center.x - f.half) - (g.center.x - g.radius))
-        bt = Math.max(bt, g.center.y + g.radius - (f.center.y + f.half))
-        tp = Math.max(tp, (f.center.y - f.half) - (g.center.y - g.radius))
+        rt = Math.max(rt, g.center.x + g.radius - (wall.center.x + wall.half))
+        lf = Math.max(lf, (wall.center.x - wall.half) - (g.center.x - g.radius))
+        bt = Math.max(bt, g.center.y + g.radius - (wall.center.y + wall.half))
+        tp = Math.max(tp, (wall.center.y - wall.half) - (g.center.y - g.radius))
       }
-      const dx = rt > lf ? -rt : lf, dy = bt > tp ? -bt : tp
-      if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) break
-      const c = clampToFrame(e, b, { x: x + dx, y: y + dy })
-      x = c.x; y = c.y
+      // A pull is only valid while it WORKS: an ancestor circle can spill
+      // because of content that is not this body at all (its edge supported by
+      // a sibling subtree), and pulling then just marches the body across the
+      // scene by the spill amount every round without moving the circle
+      // (measured: a 0.73 wu residual spill dragged the body 11 wu off the
+      // cursor). If a round fails to reduce the worst overshoot, undo that
+      // round's pull and stop pulling — the residual is not this drag's to fix
+      // and the frontier's relative gate tolerates it at its baseline.
+      const over = Math.max(rt, lf, bt, tp, 0)
+      if (over >= lastOver - 0.01) {
+        x = prePull.x; y = prePull.y
+        pull = false
+      } else {
+        lastOver = over
+        prePull = { x, y }
+        const dx = rt > lf ? -rt : lf, dy = bt > tp ? -bt : tp
+        const c = clampToFrame(e, b, { x: x + dx, y: y + dy })
+        x = c.x; y = c.y
+        // If the pull landed inside a foreign circle, slide ALONG that circle
+        // to the pulled axis line (the joint projection for the pair) instead
+        // of leaving the radial push to fight the pull — plain alternation
+        // drifts tangentially by a sliver per round and never resolves a
+        // head-on pull (measured 3.7 wu penetration left after 16 rounds).
+        for (const [rid, g] of e.regions) {
+          if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+          const need = owned ? g.radius : b.discR * e.scale + g.radius
+          if (Math.hypot(x - g.center.x, y - g.center.y) >= need) continue
+          if (dx !== 0 && Math.abs(x - g.center.x) < need) {
+            const h = Math.sqrt(need * need - (x - g.center.x) * (x - g.center.x))
+            y = g.center.y + (y >= g.center.y ? h : -h)
+          } else if (dy !== 0 && Math.abs(y - g.center.y) < need) {
+            const h = Math.sqrt(need * need - (y - g.center.y) * (y - g.center.y))
+            x = g.center.x + (x >= g.center.x ? h : -h)
+          }
+        }
+      }
     }
+    if (Math.hypot(x - px, y - py) < 0.05) break
+  }
+  if (wall !== null) {
     b.pos = saved
     recomputeRegions(e, dirty)
   }
@@ -1644,13 +1693,21 @@ function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
   return false
 }
 
-/** One bounded step from a body toward `target` along the shortest path that
-    respects semantic containment: the body's non-ancestor region circles are
-    routing obstacles (inflated exactly as `clampDragToFeasible` requires,
-    shrunk by a hair so a body resting ON the clamp boundary routes from a
-    feasible point), and the step walks the routed polyline for `st`. With no
-    blocking circle this is the straight step at the same cost. */
-function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Vec2 {
+/** The shortest path from a body's position to `target` that respects
+    semantic containment, as a polyline: the body's non-ancestor region circles
+    are routing obstacles inflated to the aesthetic clearance (sibGap included,
+    shrunk by a hair so a body resting ON that boundary routes from a feasible
+    point) — the path PREFERS keeping the gap where room exists, while the drag
+    clamp and the frontier gate enforce only the tighter semantic bound. The
+    frame participates as the route's bounds (steep soft cost outside), so the
+    path picks a side with a real corridor instead of wedging into the pocket
+    between a circle and the wall; the wall itself stays hard via the drag
+    clamp. With no blocking circle this is the straight segment at the same
+    cost. Both the presentation approach and the drag frontier move bodies
+    ALONG this path — the straight chord to a target on the far side of a cut
+    passes through the cut, so any straight-line interpolation either violates
+    containment or wedges radially against it. */
+export function containedPath(e: Engine, b: Body, target: Vec2): readonly Vec2[] {
   const ancestors = new Set<RegionId>()
   for (let r = b.region; ;) {
     ancestors.add(r)
@@ -1665,11 +1722,12 @@ function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Ve
     const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
     discs.push({ c: g.center, r: need - 1e-3 })
   }
-  // the frame participates as the route's bounds (steep soft cost outside),
-  // so the step picks a side with a real corridor instead of wedging into the
-  // pocket between a circle and the wall; the wall itself stays hard via the
-  // drag clamp
-  const pts = route(mkFreeSpace(discs, routeBounds(e)), b.pos, target).pts
+  return route(mkFreeSpace(discs, routeBounds(e)), b.pos, target).pts
+}
+
+/** One bounded step from a body toward `target` along `containedPath`. */
+function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Vec2 {
+  const pts = containedPath(e, b, target)
   let remaining = st
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1]!, q = pts[i]!
