@@ -163,7 +163,7 @@ structure LocalCylindricalFrame
         (result.checked.val.wires result.targetWire).scope)
       targetReduced
 
-private def LocalCylindricalFrame.sourceShape
+def LocalCylindricalFrame.sourceShape
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {result : ArgumentResult source wire}
@@ -175,7 +175,7 @@ private def LocalCylindricalFrame.sourceShape
   normalizedArgumentShape frame.sourceRemoval localSourceHead
     (frame.context.sourceBody frame.sourceScope.frame.siteBody)
 
-private def LocalCylindricalFrame.targetShape
+def LocalCylindricalFrame.targetShape
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {result : ArgumentResult source wire}
@@ -187,7 +187,7 @@ private def LocalCylindricalFrame.targetShape
   normalizedArgumentShape frame.targetRemoval localTargetHead
     (frame.context.targetBody frame.targetScope.frame.siteBody)
 
-private def checkLocalCylindricalFrameFromSites
+def checkLocalCylindricalFrameFromSites
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
@@ -242,7 +242,7 @@ private def checkLocalCylindricalFrameFromSites
     ⟨targetSites, sourceScope, targetScope, context, sourceReduced, targetReduced,
       sourceRemoval, targetRemoval⟩
 
-private theorem checkLocalCylindricalFrameFromSites_complete
+theorem checkLocalCylindricalFrameFromSites_complete
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)

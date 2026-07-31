@@ -2896,6 +2896,34 @@ theorem replaceAppliedEnds_targetArguments_exact
         subst result
         rfl
 
+/-- A successful replacement retains the exact exhaustive source-site
+receipt supplied to the construction. -/
+theorem replaceAppliedEnds_sites_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result) :
+    result.sites = sites := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
+
 def checkedArgumentSites
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId) :

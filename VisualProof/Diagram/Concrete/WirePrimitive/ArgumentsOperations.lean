@@ -8,6 +8,100 @@ namespace ConcreteWirePrimitive
 open ConcreteWireQuantifier
 open WirePrimitive
 
+/-- A successful replacement retains the exact number of operation-local
+wires requested by its construction specification. -/
+theorem replaceAppliedEnds_localCount_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result) :
+    result.spec.localCount = spec.localCount := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
+
+/-- A successful replacement retains the operation-local signature function
+requested by its construction specification. -/
+theorem replaceAppliedEnds_localSignature_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result)
+    (fresh : Fin result.spec.localCount) :
+    result.spec.localSignature fresh =
+      spec.localSignature
+        (Fin.cast
+          (replaceAppliedEnds_localCount_exact source wire sites spec
+            sourceRemovedExhausted result accepted) fresh) := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
+
+/-- A successful replacement retains the operation-local scope function
+requested by its construction specification. -/
+theorem replaceAppliedEnds_localScope_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result)
+    (fresh : Fin result.spec.localCount) :
+    result.spec.localScope fresh =
+      spec.localScope
+        (Fin.cast
+          (replaceAppliedEnds_localCount_exact source wire sites spec
+            sourceRemovedExhausted result accepted) fresh) := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
+
 /-- A successful replacement retains its caller-proved scope-locality facts;
 the checked construction cannot substitute a different removal or local-wire
 specification. -/
@@ -360,6 +454,98 @@ theorem arityShift_targetArguments_exact
       (arityShiftSpec source wire relationArguments sites newArgument)
       _ result accepted
   simpa [arityShiftSpec] using exact
+
+/-- Arity shift allocates exactly one operation-local argument wire for every
+exhaustively checked source occurrence. -/
+theorem arityShift_localCount_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (relationArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel relationArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    result.spec.localCount = result.sites.sites.length := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  have sitesExact := replaceAppliedEnds_sites_exact source wire sites
+    (arityShiftSpec source wire relationArguments sites newArgument) _
+    result accepted
+  calc
+    result.spec.localCount =
+        (arityShiftSpec source wire relationArguments sites newArgument).localCount :=
+      replaceAppliedEnds_localCount_exact source wire sites
+        (arityShiftSpec source wire relationArguments sites newArgument) _
+        result accepted
+    _ = sites.sites.length := rfl
+    _ = result.sites.sites.length := by rw [sitesExact]
+
+/-- Every operation-local wire created by arity shift carries the inserted
+signature. -/
+theorem arityShift_localSignature_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (relationArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel relationArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (fresh : Fin result.spec.localCount) :
+    result.spec.localSignature fresh = newArgument := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  simpa [arityShiftSpec] using
+    replaceAppliedEnds_localSignature_exact source wire sites
+      (arityShiftSpec source wire relationArguments sites newArgument) _
+      result accepted fresh
+
+/-- The operation-local wire indexed by a source occurrence is scoped at
+that occurrence's exact region. -/
+theorem arityShift_localScope_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (relationArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel relationArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length) :
+    result.spec.localScope
+        (Fin.cast
+          (arityShift_localCount_exact source wire relationArguments
+            sourceSignature sites newArgument result accepted).symm site) =
+      (result.sites.sites.get site).region := by
+  have operationAccepted := accepted
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  have sitesExact := replaceAppliedEnds_sites_exact source wire sites
+    (arityShiftSpec source wire relationArguments sites newArgument) _
+    result accepted
+  have scopeExact := replaceAppliedEnds_localScope_exact source wire sites
+    (arityShiftSpec source wire relationArguments sites newArgument) _
+    result accepted
+      (Fin.cast
+        (arityShift_localCount_exact source wire relationArguments
+          sourceSignature sites newArgument result operationAccepted).symm site)
+  simpa [arityShiftSpec, sitesExact] using scopeExact
 
 /-- Every total arity-shift construction is scope-local: it removes only the
 acted head and creates each fresh argument wire at its corresponding applied
