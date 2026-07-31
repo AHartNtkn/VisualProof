@@ -57,8 +57,9 @@ describe('wire overlays are the painted cubics, never a polyline', () => {
     const { e, term, rel } = scene()
     for (const wid of [term, rel]) {
       const shapes = wireOverlayShapes(e, wid, '#f00', 3)
+      // a resampled-polyline stroke is UNREPRESENTABLE (the Shape union has no
+      // such variant), so only the positive law needs asserting
       const strokes = shapes.filter((s) => s.kind === 'bezierPath')
-      expect(shapes.some((s) => s.kind === 'polyline'), `${wid}: overlay contains a resampled polyline`).toBe(false)
       expect(strokes.length, `${wid}: overlay restrokes every painted leg`).toBe(paintedCubics(e, wid).length)
       expect(strokes.map((s) => (s.kind === 'bezierPath' ? s.cubics : null)), `${wid}: overlay cubics ARE the painted cubics`)
         .toEqual(paintedCubics(e, wid))
@@ -91,7 +92,6 @@ describe('wire overlays are the painted cubics, never a polyline', () => {
 
     const overlay = drag.overlay()
     expect(overlay.length, 'sanity: the drag renders a target overlay').toBeGreaterThan(1)
-    expect(overlay.some((s) => s.kind === 'polyline'), 'drag overlay contains a resampled polyline').toBe(false)
     const strokes = overlay.filter((s) => s.kind === 'bezierPath')
     expect(strokes.map((s) => (s.kind === 'bezierPath' ? s.cubics : null)), 'drag target overlay cubics ARE the painted cubics')
       .toEqual(paintedCubics(e, term))

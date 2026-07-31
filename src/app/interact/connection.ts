@@ -3,7 +3,6 @@ import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import { wireOverlayShapes } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { computeLegs } from '../../view/wires'
 import {
   type WireManipulationHit,
   wireManipulationHitTest,
@@ -51,22 +50,11 @@ function wireTargetShapes(
   width: number,
 ): Shape[] {
   if (target.endpoint === null) return wireOverlayShapes(engine, target.wire, stroke, width)
+  // endpoint-scoped feedback restrokes only the legs at that port
   const key = pkey(target.endpoint.port)
-  // endpoint-scoped feedback restrokes only the legs at that port — the same
-  // painted cubics, never a resampled polyline
-  return computeLegs(engine)
-    .filter(({ leg }) => leg.wid === target.wire && (
-      (leg.from.body === target.endpoint!.node && leg.from.key === key)
-      || (leg.to.body === target.endpoint!.node && leg.to.key === key)
-    ))
-    .map(({ pts, cubics }): Shape => ({
-      kind: 'bezierPath',
-      cubics,
-      pts,
-      stroke,
-      width,
-      glow: null,
-    }))
+  return wireOverlayShapes(engine, target.wire, stroke, width, null, (leg) =>
+    (leg.from.body === target.endpoint!.node && leg.from.key === key)
+    || (leg.to.body === target.endpoint!.node && leg.to.key === key))
 }
 
 /** The wire-to-wire connection drag, shared by construction and proving. */

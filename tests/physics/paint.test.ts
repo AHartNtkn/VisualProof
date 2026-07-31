@@ -116,7 +116,7 @@ describe('boundary honesty: boundary wires connect inside the frame and internal
     })
     // NOTHING is drawn outside the frame: every painted point stays within the box
     for (const s of paint(e, LIGHT)) {
-      const pts = s.kind === 'polyline' || s.kind === 'bezierPath' ? s.pts : s.kind === 'stub' ? [s.from, s.to] : []
+      const pts = s.kind === 'bezierPath' ? s.pts : s.kind === 'stub' ? [s.from, s.to] : []
       for (const pt of pts) {
         expect(pt.x, 'no painted wire point past the frame').toBeGreaterThanOrEqual(fb.minX - 1)
         expect(pt.x).toBeLessThanOrEqual(fb.maxX + 1)

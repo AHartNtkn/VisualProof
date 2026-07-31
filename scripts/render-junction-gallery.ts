@@ -39,7 +39,6 @@ function shapeToSvg(s: Shape): string {
     }
     case 'arc': return poly(arcPts(s.center.x, s.center.y, s.r, s.a0, s.a1), s.stroke, s.width)
     case 'segment': return poly([s.from, s.to], s.stroke, s.width)
-    case 'polyline': return poly(s.pts, s.stroke, s.width)
     case 'bezierPath': {
       if (s.cubics.length === 0) return ''
       const d = [`M ${f(s.cubics[0]!.a.x)} ${f(s.cubics[0]!.a.y)}`,

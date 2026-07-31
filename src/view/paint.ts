@@ -4,7 +4,8 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, resolvedFrameSlot } from './engine'
-import { existentialStubs, legPaths } from './wires'
+import { computeLegs, existentialStubs, legPaths } from './wires'
+import type { Leg } from './engine'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -55,9 +56,10 @@ export type Shape =
   | { readonly kind: 'circle'; readonly center: Vec2; readonly r: number; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly insetColor: string | null; readonly glow: string | null }
   | { readonly kind: 'arc'; readonly center: Vec2; readonly r: number; readonly a0: number; readonly a1: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'segment'; readonly from: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  /** A traced wire stroke: the Hobby-chain samples at paint
-      resolution (plan 22 — the polyline IS the wire, not a spline fit). */
-  | { readonly kind: 'polyline'; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
+  /** A traced wire stroke: the Hobby cubic chain, with its shared samples
+      (`pts`) for energy/hit-test identity. There is deliberately NO sampled-
+      polyline stroke shape — a wire stroke that is not the painted cubics is
+      unrepresentable (the 2026-07-30 highlight-discretization defect). */
   | { readonly kind: 'bezierPath'; readonly cubics: readonly { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }[]; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
@@ -265,16 +267,26 @@ export function nextTheme(t: Theme): Theme {
 /**
  * ONE wire's overlay stroke (hover, selection, drag feedback): the SAME Hobby
  * cubic chain the painter draws, restroked in the interaction colour/width.
- * Every overlay producer uses this — drawing the sampled `pts` as a polyline
- * instead renders a visible discretization of the wire (USER 2026-07-30).
+ * Every overlay producer uses this — a wire stroke that is not the painted
+ * cubics is unrepresentable (USER 2026-07-30: the sampled-polyline overlays
+ * read as a discretization of the wire). An unfiltered overlay covers the
+ * whole wire including its ∃ stub; `legFilter` scopes it to specific legs
+ * (endpoint-level drag feedback), where the stub — not a leg — is omitted.
  */
-export function wireOverlayShapes(e: Engine, wid: WireId, stroke: string, width: number, glow: string | null = null): Shape[] {
+export function wireOverlayShapes(
+  e: Engine, wid: WireId, stroke: string, width: number, glow: string | null = null,
+  legFilter: ((leg: Leg) => boolean) | null = null,
+): Shape[] {
   const out: Shape[] = []
-  for (const l of legPaths(e)) {
-    if (l.wid === wid) out.push({ kind: 'bezierPath', cubics: l.cubics, pts: l.pts, stroke, width, glow })
+  for (const { leg, pts, cubics } of computeLegs(e)) {
+    if (leg.wid !== wid) continue
+    if (legFilter !== null && !legFilter(leg)) continue
+    out.push({ kind: 'bezierPath', cubics, pts, stroke, width, glow })
   }
-  for (const s of existentialStubs(e)) {
-    if (s.wid === wid) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width, glow })
+  if (legFilter === null) {
+    for (const s of existentialStubs(e)) {
+      if (s.wid === wid) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width, glow })
+    }
   }
   return out
 }
