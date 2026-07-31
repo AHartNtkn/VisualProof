@@ -651,6 +651,7 @@ tasks:
       - "VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsConstruction.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsConstructionNaturality.lean"
+      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFrameNaturality.lean"
       - "VisualProof/Diagram/Concrete/ElaborationTransport.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCommonCore.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsOperations.lean"
