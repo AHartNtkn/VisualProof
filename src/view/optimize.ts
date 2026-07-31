@@ -404,6 +404,13 @@ export class LayoutOptimizer {
         monotone path); publishes only its certified rest;
       - 'chain': the unified Metropolis chain, one move per unit. */
   #phase: 'descend' | 'polish' | 'chain' = 'descend'
+  /** Greedy-descent range factor (the descend phase's own D; the chain's #D
+      is calibrated separately after certification). */
+  #descentD = 1
+  /** The scene's largest displacement unit (bodies, regions, wires, drawn
+      rotation) — when D times this is at the sensing floor, every proposal is
+      floor-scale and a zero-accept sweep means no sensed descent remains. */
+  #descentMaxUnit = 0
   /** The persistent exact-delta evaluator over the scratch (rebuilt whenever a
       solver phase or restart moves the scratch outside the chain's commits). */
   #st: ScoreState | null = null
@@ -518,26 +525,55 @@ export class LayoutOptimizer {
   #enterDescent(): void {
     this.#phase = 'descend'
     this.#st = null
+    this.#descentD = 1
+    this.#descentMaxUnit = 0
     this.#warmupMags = []
     this.#movesThisEpoch = 0
     this.#epochAccepts = 0
   }
 
-  /** One PUBLISH quantum of the streamed seed/incumbent polish: plain settle
-      steps, each quantum published. Every published state is on the scene's
-      own monotone downhill path — never a random perturbation. The rest this
-      reaches is CERTIFIED (settleStep's final sweep proves no
-      single-coordinate improvement remains) and seeds the chain. */
+  /** One PUBLISH quantum of the streamed seed/incumbent descent: a GREEDY
+      (accept-only-downhill) sweep of the chain — one expected visit per DOF,
+      delta-priced — published at the quantum boundary, so the app watches the
+      seed untangle through strictly-improving states from the first slices.
+      The range factor shrinks by the same acceptance-rate rule the chain
+      uses; when a whole sweep at floor-scale amplitudes accepts nothing, no
+      sensed descent remains and the deterministic solver takes over ONCE (the
+      silent polish: it finishes any residue the move set cannot express and
+      its final sweep is the rest certificate). This replaces running the
+      full deterministic solver per quantum, whose per-step cost on dense
+      scenes (exhaustive coordinate trials) consumed entire search budgets
+      before the chain ever started (measured 2026-07-31). */
   #descentQuantum(): boolean {
-    const scratch = this.#scratch!, pinned = this.#pinned
-    let atRest = false
-    for (let s = 0; s < RELAX_PUBLISH_STEPS; s++) {
-      if (!settleStep(scratch, pinned)) { atRest = true; break }
+    const scratch = this.#scratch!, pinned = this.#pinned, rng = this.#rng
+    if (this.#st === null) {
+      recomputeRegions(scratch)
+      this.#st = mkScoreState(scratch)
+      let u = 0
+      for (const b of scratch.bodies.values()) u = Math.max(u, (b.discR + 2) * scratch.scale, Math.PI * b.discR * scratch.scale)
+      for (const [, g] of scratch.regions) u = Math.max(u, g.radius)
+      for (const [, w] of scratch.wires) if (w.net.junctions.length > 0) u = Math.max(u, wireBoundRadius(scratch, w))
+      this.#descentMaxUnit = u
     }
-    recomputeRegions(scratch)
-    const score = layoutScore(scratch)
-    const improved = this.#publishIfBetter(score)
-    if (atRest) this.#enterChain()
+    const st = this.#st
+    const kinds = MOVE_REGISTRY.filter((m) => m.applicable(scratch, pinned))
+    if (kinds.length === 0) { this.#phase = 'polish'; return false }
+    const n = Math.max(1, this.#dofCount())
+    let accepts = 0
+    for (let k = 0; k < n; k++) {
+      const kind = kinds[Math.floor(rng() * kinds.length)]!
+      const p = kind.propose(scratch, pinned, rng, this.#descentD)
+      if (p === null) continue
+      recomputeRegions(scratch)
+      const mr = applyMove(scratch, st, p.moved, p.wids ?? null)
+      // material improvement only (the solver gates' own epsilon): float-dust
+      // accepts at floor amplitudes would keep the descent phase alive forever
+      if (mr.dE < -eps(st.total)) { mr.commit(); accepts++ } else { p.undo(); mr.abort() }
+    }
+    const improved = this.#publishIfBetter(st.total)
+    const R = accepts / n
+    this.#descentD = Math.min(1, this.#descentD * (1 - 0.44 + R))
+    if (accepts === 0 && this.#descentD * this.#descentMaxUnit <= FD_PROBE) this.#phase = 'polish'
     return improved
   }
 
@@ -644,7 +680,7 @@ export class LayoutOptimizer {
       const R = this.#epochAccepts / this.#movesThisEpoch
       // the RANGE LIMITER: Dlimit_new = Dlimit_old · (1 − 0.44 + R_accept),
       // clamped — VPR's published rule and target
-      this.#D = Math.min(1, Math.max(1e-3, this.#D * (1 - 0.44 + R)))
+      this.#D = Math.min(1, this.#D * (1 - 0.44 + R))
       this.#T *= COOL
       if (this.#T < this.#T0 * REHEAT_FLOOR || this.#epochAccepts === 0) this.#reheat()
       this.#movesThisEpoch = 0

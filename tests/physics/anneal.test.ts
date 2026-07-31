@@ -216,7 +216,8 @@ describe('the seed relaxation streams incrementally (plan Task 6 Phase 0)', () =
       .toBeLessThan(1e-6 * (rawScore + 1))
 
     const seq: number[] = []
-    for (let k = 0; k < 8; k++) { opt.tick(null, 0); seq.push(opt.best()!.score) }
+    // units are greedy DOF-sweeps now (ms-scale), not 50-settle-step quanta
+    for (let k = 0; k < 120; k++) { opt.tick(null, 0); seq.push(opt.best()!.score) }
     // every published state is on the scene's own downhill path — never higher
     for (let i = 1; i < seq.length; i++) {
       expect(seq[i]!, 'the published best never increases (no absurd states)').toBeLessThanOrEqual(seq[i - 1]! + 1e-9)
