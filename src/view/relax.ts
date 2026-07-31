@@ -2,7 +2,7 @@ import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame, WireView } from './engine'
 import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
-import { route, segSoftCost } from './route/freespace'
+import { mkFreeSpace, route, segSoftCost } from './route/freespace'
 import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
 import { advanceNetwork, netEval, solveTarget, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
@@ -1487,6 +1487,45 @@ function bestMismatch(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
   return false
 }
 
+/** One bounded step from a body toward `target` along the shortest path that
+    respects semantic containment: the body's non-ancestor region circles are
+    routing obstacles (inflated exactly as `clampDragToFeasible` requires,
+    shrunk by a hair so a body resting ON the clamp boundary routes from a
+    feasible point), and the step walks the routed polyline for `st`. With no
+    blocking circle this is the straight step at the same cost. */
+function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Vec2 {
+  const ancestors = new Set<RegionId>()
+  for (let r = b.region; ;) {
+    ancestors.add(r)
+    const reg = e.d.regions[r]!
+    if (reg.kind === 'sheet') break
+    r = reg.parent
+  }
+  const owned = b.kind === 'end'
+  const discs: RouteDisc[] = []
+  for (const [rid, g] of e.regions) {
+    if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+    const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
+    discs.push({ c: g.center, r: need - 1e-3 })
+  }
+  // the frame participates as the route's bounds (steep soft cost outside),
+  // so the step picks a side with a real corridor instead of wedging into the
+  // pocket between a circle and the wall; the wall itself stays hard via the
+  // drag clamp
+  const pts = route(mkFreeSpace(discs, routeBounds(e)), b.pos, target).pts
+  let remaining = st
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!, q = pts[i]!
+    const seg = Math.hypot(q.x - a.x, q.y - a.y)
+    if (seg >= remaining) {
+      const f = seg < 1e-12 ? 0 : remaining / seg
+      return { x: a.x + (q.x - a.x) * f, y: a.y + (q.y - a.y) * f }
+    }
+    remaining -= seg
+  }
+  return { x: target.x, y: target.y }
+}
+
 /** PRESENTATION pace (USER ruling 2026-07-25): the visible settling should
     read as a GENTLE approach to the minimum, not a rapid jerk — on-screen
     motion runs ~5× slower than the solver's trust region. Presentation-only:
@@ -1510,11 +1549,17 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     if (pinned !== null && pinned.has(id)) continue
     const t = best.poses.get(id)
     if (t === undefined) continue
-    const dx = t.pos.x - b.pos.x, dy = t.pos.y - b.pos.y
-    const d = Math.hypot(dx, dy)
+    const d = Math.hypot(t.pos.x - b.pos.x, t.pos.y - b.pos.y)
     if (d > 1e-9) {
-      const st = Math.min(d, bound)
-      b.pos = { x: b.pos.x + (dx / d) * st, y: b.pos.y + (dy / d) * st }
+      // HARD SEMANTIC CONTAINMENT (USER LAW, restated 2026-07-30 for the
+      // approach): a node never enters a cut it is not part of, not even
+      // transiently. A straight step clamped by the drag projection STALLS
+      // when the target lies radially behind a circle (no tangential
+      // component), so the step instead follows the shortest FEASIBLE path:
+      // the same deterministic route() the wires use, over the body's
+      // semantic obstacle circles. The drag clamp remains the hard backstop
+      // (frame wall, derived-circle fit).
+      b.pos = clampDragToFeasible(e, b, stepAroundForeignCuts(e, b, t.pos, Math.min(d, bound)))
     }
     const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
     const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
