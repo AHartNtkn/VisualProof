@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationLocal
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsConstructionNaturality
 
 namespace VisualProof
 

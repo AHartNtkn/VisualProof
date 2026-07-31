@@ -1931,6 +1931,33 @@ theorem checkedWire_scope_transport
   subst candidate
   rfl
 
+/-- Ordered local-wire enumeration is preserved when a well-formed checker
+reindexes its accepted candidate. -/
+theorem checkedWiresAt_transport
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (region : candidate.RegionId) :
+    checked.val.wiresAt (checkedRegion generated region) =
+      (candidate.wiresAt region).map (checkedWire generated) := by
+  cases generated
+  unfold ConcreteDiagram.wiresAt ConcreteDiagram.wiresList
+  have regionExact : checkedRegion rfl region = region := by
+    apply Fin.ext
+    rfl
+  rw [regionExact]
+  let wires :=
+    (Data.Finite.allFin checked.val.wireCount).filter fun wire =>
+      (checked.val.wires wire).scope == region
+  change wires = wires.map (checkedWire rfl)
+  calc
+    wires = wires.map id := (List.map_id wires).symm
+    _ = wires.map (checkedWire rfl) := by
+      apply List.map_congr_left
+      intro wire _member
+      apply Fin.ext
+      rfl
+
 theorem checkedWire_endpoints_transport
     {checked : CheckedDiagram definitions}
     {candidate : ConcreteDiagram definitions.length}

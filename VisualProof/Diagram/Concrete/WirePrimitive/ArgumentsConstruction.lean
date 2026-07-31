@@ -498,7 +498,7 @@ theorem assigned_wire_signature
     ((assignEndpoints diagram owner).wires wire).sig =
       (diagram.wires wire).sig := rfl
 
-private theorem assigned_wire_scope
+theorem assigned_wire_scope
     (diagram : ConcreteDiagram definitionCount)
     (owner : CEndpoint diagram.nodeCount → diagram.WireId)
     (wire : diagram.WireId) :
@@ -1128,7 +1128,7 @@ private theorem replacementSkeleton_local_wire_signature
       (replacementLocalWire plan fresh)).sig = spec.localSignature fresh := by
   simp [replacementSkeleton, replacementLocalWire]
 
-private theorem replacementSkeleton_head_wire_scope
+theorem replacementSkeleton_head_wire_scope
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {sites : AllAppliedSites source wire}
@@ -1139,7 +1139,7 @@ private theorem replacementSkeleton_head_wire_scope
         retainedRegion source (source.val.wires wire).scope := by
   simp [replacementSkeleton, replacementHeadWire]
 
-private theorem replacementSkeleton_local_wire_scope
+theorem replacementSkeleton_local_wire_scope
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     {sites : AllAppliedSites source wire}
