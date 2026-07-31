@@ -1029,7 +1029,7 @@ structure ReplacementValid
       ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
         endpoint.node ∈ siteNodes sites
 
-private theorem retainedRegion_eq_noRegionRemovalEquiv
+theorem retainedRegion_eq_noRegionRemovalEquiv
     (source : CheckedDiagram definitions)
     (region : source.val.RegionId) :
     retainedRegion source region =

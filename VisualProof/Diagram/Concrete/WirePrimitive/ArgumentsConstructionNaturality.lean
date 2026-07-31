@@ -195,5 +195,92 @@ theorem ArgumentResult.wiresAt_decomposition
   intro head _member
   exact result.targetWire_exact.symm
 
+/-- Exact ordered signature decomposition at every source region.  This is
+the typed context counterpart of `wiresAt_decomposition`: retained source
+signatures keep their order, followed by the replacement head when it is
+local to the region, followed by operation-local signatures. -/
+theorem ArgumentResult.localSignatures_decomposition
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    (result.checked.val.wiresAt (result.regionImage region)).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      ((source.val.wiresAt region).filter
+          (fun sourceWire =>
+            decide (sourceWire ∉ result.sourceRemovedWires))).map
+          (fun sourceWire => (source.val.wires sourceWire).sig) ++
+        ((Data.Finite.allFin 1).filter fun _head =>
+          retainedRegion source (source.val.wires wire).scope ==
+            retainedRegion source region).map (fun _head =>
+              .rel result.targetArguments) ++
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source region).map result.spec.localSignature := by
+  rw [result.wiresAt_decomposition]
+  simp only [List.map_append, List.map_map]
+  have retainedExact :
+      ((replacementBase result.plan).wiresAt
+          (retainedRegion source region)).map
+          ((fun targetWire =>
+              (result.checked.val.wires targetWire).sig) ∘
+            fun retained =>
+              Internal.checkedWire result.generated
+                (Fin.castAdd (1 + result.spec.localCount) retained)) =
+        ((source.val.wiresAt region).filter
+          (fun sourceWire =>
+            decide (sourceWire ∉ result.sourceRemovedWires))).map
+          (fun sourceWire => (source.val.wires sourceWire).sig) := by
+    calc
+      _ = ((replacementBase result.plan).wiresAt
+            (retainedRegion source region)).map
+            (fun retained =>
+              (source.val.wires
+                (Internal.sourceRetainedWire source
+                  result.sourceRemovedWires retained)).sig) := by
+            apply List.map_congr_left
+            intro retained _member
+            simp only [Function.comp_apply]
+            rw [Internal.checkedWire_signature_transport]
+            unfold replacementCandidate
+            rw [assigned_wire_signature,
+              replacementSkeleton_retained_wire_signature]
+            rfl
+      _ = ((((replacementBase result.plan).wiresAt
+              (retainedRegion source region)).map
+                (Internal.sourceRetainedWire source
+                  result.sourceRemovedWires)).map
+              (fun sourceWire =>
+                (source.val.wires sourceWire).sig)) := by
+            rw [List.map_map]
+            apply List.map_congr_left
+            intro retained _member
+            rfl
+      _ = _ := by
+            have baseSources :=
+              batchRemovalCandidate_wiresAt_sources
+                result.plan.removal region
+            rw [← retainedRegion_eq_noRegionRemovalEquiv] at baseSources
+            change
+              ((replacementBase result.plan).wiresAt
+                  (retainedRegion source region)).map
+                    (Internal.sourceRetainedWire source
+                      result.sourceRemovedWires) =
+                (source.val.wiresAt region).filter
+                  (fun sourceWire =>
+                    decide (sourceWire ∉ result.sourceRemovedWires))
+              at baseSources
+            rw [baseSources]
+  rw [retainedExact]
+  congr 1
+  · congr 1
+    apply List.map_congr_left
+    intro head _member
+    simp only [Function.comp_apply]
+    exact result.targetWire_signature
+  · apply List.map_congr_left
+    intro fresh _member
+    exact result.targetLocalWire_signature fresh
+
 end ConcreteWirePrimitive
 end VisualProof
