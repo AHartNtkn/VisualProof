@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T002
+active_task: T003
 
 tasks:
   - id: T001
@@ -110,7 +110,7 @@ tasks:
   - id: T002
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 1: correct the Phase 3 structural baseline and freeze the exact 34 tags."
     inputs:
@@ -137,11 +137,31 @@ tasks:
       - "A semantic decision conflicts with the governing specs."
       - "Implementation requires files outside allowed_files."
       - "Verification fails twice for an unexplained cause."
-    receipt: null
+    receipt:
+      result: done
+      harness: codex
+      commit: "091cc84"
+      summary: "Froze the exact 34-tag Lean inventory, replaced forward-only erasure with flipped-polarity receipts, added the direct negative-splice theorem, and pinned the completed structural audit."
+      changed_files:
+        - "VisualProof.lean"
+        - "VisualProof/Rule/Tag.lean"
+        - "VisualProof/Rule/Structural.lean"
+        - "VisualProof/Rule/StructuralFixtures.lean"
+        - "VisualProof/Rule/StructuralAudit.lean"
+        - "tests/architecture/lean-semantics.test.ts"
+        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+      commands:
+        - cmd: "lake build"
+          status: pass
+        - cmd: "npm run formal:size"
+          status: pass
+        - cmd: "npx vitest run tests/architecture/lean-semantics.test.ts"
+          status: pass
+      review: "PASS: allowed-file scope, 34-tag order and uniqueness, both erasure polarities, independent negative-splice use, audit coverage, and unrelated-file preservation verified."
   - id: T003
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 2: complete and isolate the monolithic specification rule."
     inputs:
