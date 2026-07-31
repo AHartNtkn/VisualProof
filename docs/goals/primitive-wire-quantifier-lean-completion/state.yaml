@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T008
+active_task: T009
 
 tasks:
   - id: T001
@@ -440,7 +440,7 @@ tasks:
   - id: T008
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 7: formalize argument-plumbing equivalences."
     inputs:
@@ -469,7 +469,36 @@ tasks:
     stop_if:
       - "The TypeScript uniform-visible gate cannot be matched."
       - "A full-model dependency is hidden behind PreModel."
-    receipt: null
+    receipt:
+      result: done
+      harness: codex
+      commit: f8fa460
+      summary: "Completed plan Task 7: all seven argument-plumbing primitives have checked concrete receipts and full-model soundness; arity shift/unshift normalize complete scope-local binder blocks so endpoint-local fresh wires work both at the acted scope and in nested regions; tuple permutation/duplication/contraction, merged uniform drop/extend equivalence, and per-site polarity gates are executable and proved."
+      changed_files:
+        - VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsTupleSemantics.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFixedSemantics.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationSemantics.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationLocal.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean
+        - VisualProof/Rule/WirePrimitive.lean
+        - VisualProof/Rule/WirePrimitive/Arguments.lean
+        - VisualProof/Rule/WirePrimitive/ArgumentsFixtures.lean
+        - VisualProof.lean
+        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
+      commands:
+        - cmd: lake build VisualProof.Rule.WirePrimitive.ArgumentsFixtures
+          status: pass
+        - cmd: lake build
+          status: pass
+        - cmd: npm run formal:size
+          status: pass
+        - cmd: git diff --check
+          status: pass
+        - cmd: "! rg -n \"\\b(sorry|admit|axiom)\\b\" VisualProof/Diagram/Concrete/WirePrimitive/Arguments*.lean VisualProof/Rule/WirePrimitive/Arguments*.lean"
+          status: pass
+      review: "PASS: all five Task 7 steps, full-model reification boundaries, all-end action, mixed acted-scope/nested fresh-wire regression, inverse unshift exhaustion, exact merged uniform/per-site gates, source-size limit, full build, and unrelated archive/scratchpad preservation verified."
   - id: T016
     type: worker
     assignee: Worker
@@ -546,7 +575,7 @@ tasks:
   - id: T009
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 8: formalize formal, identity, and folded-reference leaves."
     inputs:
