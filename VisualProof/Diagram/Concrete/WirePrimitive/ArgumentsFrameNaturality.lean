@@ -433,6 +433,85 @@ inductive RetainedNodeList
       RetainedNodeList result (sourceNode :: sourceTail)
         (result.retainedNodeImage sourceNode retained :: targetTail)
 
+/-- Dense replacement-base node order induces the canonical ordered
+retained-node correspondence. -/
+noncomputable def RetainedNodeList.ofDense
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (dense : List (replacementBase result.plan).NodeId) :
+    RetainedNodeList result
+      (dense.map (Internal.sourceRetainedNode source
+        (argumentSiteNodes result.sites)))
+      (dense.map (fun retained =>
+        Internal.checkedNode result.generated
+          (Fin.castAdd result.sites.sites.length retained))) := by
+  induction dense with
+  | nil => exact .nil
+  | cons retained tail induction =>
+      simpa [result.retainedNodeImage_sourceRetainedNode retained] using
+        RetainedNodeList.cons
+          (Internal.sourceRetainedNode source
+            (argumentSiteNodes result.sites) retained)
+          (sourceRetainedNode_not_removed result.sites retained)
+          induction
+
+/-- At a strict ancestor of the acted scope, ordered local node identifiers
+are exactly the retained source nodes and their canonical checked images. -/
+noncomputable def nodesAt_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    RetainedNodeList result (source.val.nodesAt outer)
+      (result.checked.val.nodesAt (result.regionImage outer)) := by
+  let dense := (replacementBase result.plan).nodesAt
+    (retainedRegion source outer)
+  have correspondence := RetainedNodeList.ofDense result dense
+  have sourceExact :
+      dense.map (Internal.sourceRetainedNode source
+        (argumentSiteNodes result.sites)) = source.val.nodesAt outer := by
+    have baseSources := batchRemovalCandidate_nodesAt_sources
+      result.plan.removal outer
+    rw [← retainedRegion_eq_noRegionRemovalEquiv] at baseSources
+    change dense.map (Internal.sourceRetainedNode source
+      (argumentSiteNodes result.sites)) =
+        (source.val.nodesAt outer).filter
+          (fun node => decide
+            (node ∉ argumentSiteNodes result.sites)) at baseSources
+    rw [baseSources]
+    apply List.filter_eq_self.mpr
+    intro node member
+    exact decide_eq_true
+      (result.nodeAt_strictlyAbove_not_siteNode outer outerEncloses
+        strict node member)
+  have generatedEmpty :
+      (Data.Finite.allFin result.sites.sites.length).filter
+          (fun site =>
+            retainedRegion source (result.sites.sites.get site).region ==
+              retainedRegion source outer) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro site _member accepted
+    have same := eq_of_beq accepted
+    apply result.siteRegion_ne_strictlyAbove outer outerEncloses strict site
+    apply (Internal.noRegionRemovalEquiv source).injective
+    rw [← retainedRegion_eq_noRegionRemovalEquiv,
+      ← retainedRegion_eq_noRegionRemovalEquiv]
+    exact same
+  have targetExact :
+      result.checked.val.nodesAt (result.regionImage outer) =
+        dense.map (fun retained =>
+          Internal.checkedNode result.generated
+            (Fin.castAdd result.sites.sites.length retained)) := by
+    rw [result.nodesAt_decomposition outer, generatedEmpty]
+    simp [dense]
+  rw [sourceExact] at correspondence
+  rw [targetExact]
+  exact correspondence
+
 /-- Ordered retained node sequences compile by pointwise renaming. -/
 theorem compileNodes_natural
     {source : CheckedDiagram definitions}
