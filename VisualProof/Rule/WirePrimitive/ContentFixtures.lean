@@ -14,6 +14,7 @@ namespace VisualProof
 #check WirePrimitive.ContentWitnesses.parallelBodyEquivalence
 #check ConcreteWirePrimitive.endpointFreeDeletion_denotes
 #check ConcreteWirePrimitive.CutWrapResult.SiteLedger.empty_denotes
+#check ConcreteWirePrimitive.ParallelSplitResult.SiteLedger.empty_denotes
 
 namespace WirePrimitive
 
@@ -240,6 +241,22 @@ example :
 private def emptySplit :
     ParallelSplitResult spawnSource (idx 0) :=
   (parallelSplit spawnSource (idx 0)).toOption.get (by native_decide)
+
+private def emptySplitLedger :=
+  emptySplit.checkSiteLedger.get (by native_decide)
+
+example :
+    ConcreteIso
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        spawnSource (idx 0))
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        (ConcreteWireQuantifier.ExhaustedWireRemovalSemantics.deletedCheckedDiagram
+          emptySplit.checked emptySplit.firstWire
+          (emptySplitLedger.emptyCore rfl).firstWellFormed)
+        (ConcreteWireQuantifier.ExhaustedWireRemovalSemantics.targetWire
+          emptySplit.checked emptySplit.firstWire emptySplit.secondWire
+          (emptySplitLedger.emptyCore rfl).different)) :=
+  (emptySplitLedger.emptyCore rfl).deletionIso
 
 example :
     ((emptyWrapped.checked.val.wires emptyWrapped.targetWire).endpoints,

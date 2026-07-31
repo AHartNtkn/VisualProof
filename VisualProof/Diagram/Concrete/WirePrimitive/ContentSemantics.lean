@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.Content
+import VisualProof.Diagram.Concrete.WirePrimitive.ContentEmptyCore
 import VisualProof.Diagram.Concrete.WirePrimitive.UniformSiteFactorization
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemovalFinal
@@ -568,25 +569,6 @@ def SitesCorrespond
             argumentsCorrespond core pair.1.arguments pair.2.arguments) =
       true
 
-/-- Checker-owned common landing for an endpoint-free cut wrap. -/
-structure EmptyCore
-    {source : CheckedDiagram definitions}
-    {wire : source.val.WireId}
-    (result : CutWrapResult source wire) where
-  private mk ::
-  sourceWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-      source wire).WellFormed definitions
-  targetWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-      result.checked result.targetWire).WellFormed definitions
-  deletionIso :
-    ConcreteIso
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-        source wire)
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-        result.checked result.targetWire)
-
 /-- Sealed checker-owned wrap-site correspondence and exact common core. -/
 structure SiteLedger
     {source : CheckedDiagram definitions}
@@ -625,28 +607,7 @@ def checkSiteLedger
   let targetScope ←
     compileSite? result.checked
       (result.checked.val.wires result.targetWire).scope
-  let emptyCore ←
-    if empty : result.sites.sites = [] then do
-      if sourceWellFormed :
-          (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-            source wire).WellFormed definitions then
-        if targetWellFormed :
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-              result.checked result.targetWire).WellFormed definitions then
-          let deletionIso ←
-            ConcreteIsoSearch.findConcreteIso?
-              (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-                source wire)
-              (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
-                result.checked result.targetWire)
-          pure (fun _ =>
-            EmptyCore.mk sourceWellFormed targetWellFormed deletionIso)
-        else
-          none
-      else
-        none
-    else
-      pure (fun exact => (empty exact).elim)
+  let emptyCore ← result.checkOptionalEmptyCore
   if exact :
       result.sites.sites.length = targetSites.sites.length ∧
         (List.zip result.sites.sites targetSites.sites).all (fun pair =>
@@ -788,6 +749,8 @@ structure SiteLedger
   private second_cut_depth_exact :
     sourceScope.frame.context.cutDepth =
       secondScope.frame.context.cutDepth
+  private empty_core :
+    result.sites.sites = [] → EmptyCore result
 
 /-- Check the complete positional split ledger; no caller supplies a pairing. -/
 def checkSiteLedger
@@ -808,6 +771,7 @@ def checkSiteLedger
   let secondScope ←
     compileSite? result.checked
       (result.checked.val.wires result.secondWire).scope
+  let emptyCore ← result.checkOptionalEmptyCore
   if exact :
       result.sites.sites.length = firstSites.sites.length ∧
         result.sites.sites.length = secondSites.sites.length ∧
@@ -832,7 +796,7 @@ def checkSiteLedger
       pure
         ⟨firstSites, secondSites, commonCore, sourceScope, firstScope,
           secondScope, exact, scopeExact.1, scopeExact.2.1,
-          scopeExact.2.2.1, scopeExact.2.2.2⟩
+          scopeExact.2.2.1, scopeExact.2.2.2, emptyCore⟩
     else
       none
   else
@@ -889,6 +853,16 @@ theorem secondCutDepth
     ledger.sourceScope.frame.context.cutDepth =
       ledger.secondScope.frame.context.cutDepth :=
   ledger.second_cut_depth_exact
+
+/-- Empty exhaustive splits carry one independently checked deletion core. -/
+def emptyCore
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result)
+    (empty : result.sites.sites = []) :
+    EmptyCore result :=
+  ledger.empty_core empty
 
 end SiteLedger
 

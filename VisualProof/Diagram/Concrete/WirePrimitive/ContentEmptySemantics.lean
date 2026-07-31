@@ -55,4 +55,74 @@ theorem empty_denotes
 
 end ConcreteWirePrimitive.CutWrapResult.SiteLedger
 
+namespace ConcreteWirePrimitive.ParallelSplitResult.SiteLedger
+
+open ConcreteWireQuantifier.ExhaustedWireRemovalSemantics
+
+/--
+An endpoint-free parallel split is equivalence of one unused relation binder
+with two unused binders. The target's dense two-wire deletion order and final
+landing are checker-owned.
+-/
+theorem empty_denotes
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : ParallelSplitResult.SiteLedger result)
+    (empty : result.sites.sites = [])
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions) :
+    denoteChecked pre definitionEnv source ↔
+      denoteChecked pre definitionEnv result.checked := by
+  let core := ledger.emptyCore empty
+  have sourceEmpty :
+      (source.val.wires wire).endpoints = [] := by
+    rw [← result.sites.exhaustive, empty]
+    rfl
+  have firstSitesEmpty : ledger.firstSites.sites = [] := by
+    apply List.eq_nil_of_length_eq_zero
+    have lengths := (ledger.correspondence).1
+    simpa [empty] using lengths.symm
+  have secondSitesEmpty : ledger.secondSites.sites = [] := by
+    apply List.eq_nil_of_length_eq_zero
+    have lengths := (ledger.correspondence).2.1
+    simpa [empty] using lengths.symm
+  have firstEmpty :
+      (result.checked.val.wires result.firstWire).endpoints = [] := by
+    rw [← ledger.firstSites.exhaustive, firstSitesEmpty]
+    rfl
+  have secondEmpty :
+      (result.checked.val.wires result.secondWire).endpoints = [] := by
+    rw [← ledger.secondSites.exhaustive, secondSitesEmpty]
+    rfl
+  let firstDeleted :=
+    deletedCheckedDiagram result.checked result.firstWire
+      core.firstWellFormed
+  let secondWire :=
+    targetWire result.checked result.firstWire result.secondWire
+      core.different
+  have sourceDeletion :=
+    endpointFreeDeletion_denotes source wire sourceEmpty
+      core.sourceWellFormed pre definitionEnv
+  have firstDeletion :=
+    endpointFreeDeletion_denotes result.checked result.firstWire firstEmpty
+      core.firstWellFormed pre definitionEnv
+  have secondDeletion :=
+    endpointFreeDeletion_denotes firstDeleted secondWire core.secondEmpty
+      core.secondWellFormed pre definitionEnv
+  have landing :=
+    iso_denotation
+      (left :=
+        deletedCheckedDiagram source wire core.sourceWellFormed)
+      (right :=
+        deletedCheckedDiagram firstDeleted secondWire
+          core.secondWellFormed)
+      core.deletionIso pre definitionEnv
+  exact
+    sourceDeletion.symm.trans
+      (landing.trans (secondDeletion.trans firstDeletion))
+
+end ConcreteWirePrimitive.ParallelSplitResult.SiteLedger
+
 end VisualProof
