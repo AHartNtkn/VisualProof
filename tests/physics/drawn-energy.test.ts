@@ -248,7 +248,7 @@ describe('envelope probe evaluator (frozen corridors)', () => {
       recomputeRegions(e)
       resolveOverlaps(e)
       const cap = wireEnergyCapture(e)
-      const frozen = frozenWireEnergy(e, cap.edges, cap.forbidden)
+      const frozen = frozenWireEnergy(e, cap.edges)
       expect(Math.abs(frozen - cap.E), `${name}: frozen != exact at base`)
         .toBeLessThan(1e-9 * (Math.abs(cap.E) + 1))
     }

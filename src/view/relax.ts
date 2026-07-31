@@ -737,15 +737,21 @@ export function wireEnergy(e: Engine): number {
   return wireEnergyCapture(e).E
 }
 
+/** Region-circle patch band (drawn units): a probe displaces one coordinate by
+    FD_PROBE, and a minimal enclosing circle's centre and radius are each
+    1-Lipschitz in a support disc's position, so the circle boundary moves at
+    most 2·FD_PROBE; segs farther than that from the capture boundary keep
+    their inside/outside status on BOTH sides and contribute exactly zero to
+    the surcharge delta. 2× safety margin. */
+const PROBE_BAND = 4 * FD_PROBE
+
 /** A routed edge's frozen path: its interior waypoints at the captured
     optimum (endpoints re-derived live at probe time). */
 export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly interior: readonly Vec2[] }
 
-/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs,
-    the drawn curve segments (the same ones `segSeparationE` sums over), and
-    each wire's forbidden-region discs (the frozen model freezes them along
-    with the corridors). */
-export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[]; forbidden: ReadonlyMap<WireId, readonly RouteDisc[]> } {
+/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs and
+    the drawn curve segments (the same ones `segSeparationE` sums over). */
+export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[] } {
   const spaces = wireRouteSpaces(e)
   const beta = rodBeta(e)
   let E = 0
@@ -765,7 +771,7 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
   }
-  return { E: E + segSeparationE(segs, e.scale), edges, segs, forbidden: spaces.forbidden }
+  return { E: E + segSeparationE(segs, e.scale), edges, segs }
 }
 
 /**
@@ -780,7 +786,8 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
  * strict descent is exact; only probe DIRECTIONS use the equal-derivative
  * majorizer.
  */
-export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[], forbidden: ReadonlyMap<WireId, readonly RouteDisc[]>): number {
+export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): number {
+  const spaces = wireRouteSpaces(e)
   const nodes = routeObstacles(e)
   const bounds = routeBounds(e)
   const beta = rodBeta(e)
@@ -791,7 +798,7 @@ export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[], forbid
     let c = perWire.get(fe.wid)
     if (c === undefined) {
       const w = e.wires.get(fe.wid)!
-      const forb = forbidden.get(fe.wid)
+      const forb = spaces.forbidden.get(fe.wid)
       c = {
         terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions,
         space: { discs: forb !== undefined && forb.length > 0 ? [...nodes, ...forb] : nodes, bounds },
@@ -828,11 +835,23 @@ export type FrozenState = {
   readonly wires: FrozenWireCap[]
   readonly termWires: Map<string, number[]>
   readonly obstacle: Map<string, RouteDisc>
-  /** Each wire's forbidden-region discs at capture. The frozen model freezes
-      them with the corridors: probe rebuilds charge against these, so probe
-      deltas stay exact within the model even when a displaced body would move
-      a region circle (gates re-evaluate the true energy regardless). */
-  readonly forbidden: ReadonlyMap<WireId, readonly RouteDisc[]>
+  /** Per-wire forbidden region ids (shared arrays from wireRouteSpaces). The
+      frozen model freezes CORRIDORS only; discs — node AND region — are LIVE,
+      so probe directions see the cut-obstacle coupling a body move creates by
+      dragging its ancestor circles (without this the probes reported downhill
+      where the true energy rose on every cut-heavy trial — measured 100% of
+      1360 fallback trials uphill, 2026-07-31). */
+  readonly forbiddenRids: ReadonlyMap<WireId, readonly RegionId[]>
+  /** Inflated forbidden circles at capture (r = drawn + ROUTE_CLEAR·scale). */
+  readonly regionDiscs: Map<RegionId, RouteDisc>
+  /** Wire indices whose forbidden set contains each region (patch fan-out). */
+  readonly ridWires: Map<RegionId, number[]>
+  /** Per region, the cached seg indices within PROBE_BAND of the capture
+      circle's boundary — the only segs whose surcharge a probe-scale circle
+      change can touch (Lipschitz: |Δcentre|+|Δradius| ≤ 2·FD_PROBE per moved
+      support disc, band = 4·FD_PROBE with a 2× margin). Larger displacements
+      fall back to the wire's full seg range. */
+  readonly ridBandSegs: Map<RegionId, number[]>
   readonly grid: SepGrid
   readonly R: number
   readonly beta: number
@@ -891,6 +910,37 @@ export function mkFrozenState(e: Engine): FrozenState {
       })
     }
   }
+  const regionDiscs = new Map<RegionId, RouteDisc>()
+  for (const [rid, g] of e.regions) {
+    if (e.d.regions[rid]!.kind === 'sheet') continue
+    regionDiscs.set(rid, { c: { x: g.center.x, y: g.center.y }, r: g.radius + ROUTE_CLEAR * sc })
+  }
+  const ridWires = new Map<RegionId, number[]>()
+  for (let wi = 0; wi < wires.length; wi++) {
+    for (const rid of spaces.forbiddenRids.get(wires[wi]!.wid) ?? []) {
+      const l = ridWires.get(rid)
+      if (l !== undefined) l.push(wi)
+      else ridWires.set(rid, [wi])
+    }
+  }
+  const ridBandSegs = new Map<RegionId, number[]>()
+  for (const [rid, D] of regionDiscs) {
+    const wl = ridWires.get(rid)
+    if (wl === undefined) continue
+    const band: number[] = []
+    for (const wi of wl) {
+      const cap = wires[wi]!
+      for (let si = cap.segStart; si < cap.segEnd; si++) {
+        const seg = segs[si]!
+        const d0 = Math.hypot(seg.a.x - D.c.x, seg.a.y - D.c.y)
+        const d1 = Math.hypot(seg.b.x - D.c.x, seg.b.y - D.c.y)
+        const lo = Math.min(d0, d1) - Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y)
+        const hi = Math.max(d0, d1)
+        if (lo <= D.r + PROBE_BAND && hi >= D.r - PROBE_BAND) band.push(si)
+      }
+    }
+    ridBandSegs.set(rid, band)
+  }
   const grid = buildSepGrid(segs, R)
   // one near-pair pass yields both the total and each wire's contribution.
   const wireSep = new Float64Array(wires.length)
@@ -902,7 +952,9 @@ export function mkFrozenState(e: Engine): FrozenState {
     wireSep[segWire[j]!]! += ePair
   })
   return {
-    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle, forbidden: spaces.forbidden, grid, R, beta, sc, bounds,
+    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle,
+    forbiddenRids: spaces.forbiddenRids, regionDiscs, ridWires, ridBandSegs,
+    grid, R, beta, sc, bounds,
     frozenTotal: rodTotal + sepTotal, wireSep, seen: new Int32Array(segs.length), stamp: 0,
   }
 }
@@ -967,6 +1019,11 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
   const newSegs: WireSeg[] = []
 
   // (1) rebuild the curves of wires terminating on bodyId; full rodCost delta.
+  // current inflated forbidden circles (regions were recomputed by the caller)
+  const curRegionDisc = (rid: RegionId): RouteDisc => {
+    const g = e.regions.get(rid)!
+    return { c: g.center, r: g.radius + ROUTE_CLEAR * fst.sc }
+  }
   if (affSet !== null) {
     const nodes = routeObstacles(e)
     for (const wi of affSet) {
@@ -974,8 +1031,8 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
       const w = e.wires.get(cap.wid)!
       const terms = wireTerminalPoints(e, w)
       const bcs = wireTerminalBCs(e, w)
-      const forb = fst.forbidden.get(cap.wid)
-      const space = { discs: forb !== undefined && forb.length > 0 ? [...nodes, ...forb] : nodes, bounds: fst.bounds }
+      const rids = fst.forbiddenRids.get(cap.wid) ?? []
+      const space = { discs: rids.length > 0 ? [...nodes, ...rids.map(curRegionDisc)] : nodes, bounds: fst.bounds }
       const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
       let newRod = 0
       for (const fe of cap.edges) {
@@ -1014,6 +1071,36 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
         const seg = fst.segs[s]!
         if (farFrom(seg, o) && farFrom(seg, p)) continue
         dRod += segSoftCost(seg.a, seg.b, newSpace) - segSoftCost(seg.a, seg.b, oldSpace)
+      }
+    }
+  }
+
+  // (2b) region-circle surcharge patch: the displaced body drags its ancestor
+  // circles, and every NON-affected wire whose forbidden set contains a changed
+  // circle keeps its frozen curve while that curve's obstacle surcharge
+  // changes. Single-disc segSoftCost differences (the |seg| term cancels), over
+  // the precomputed boundary-band segs for probe-scale changes, or the wires'
+  // full seg ranges for larger ones — exact either way (out-of-band segs keep
+  // their inside/outside status by the Lipschitz bound).
+  for (const [rid, oldD] of fst.regionDiscs) {
+    const wl = fst.ridWires.get(rid)
+    if (wl === undefined) continue
+    const newD = curRegionDisc(rid)
+    const w = Math.hypot(newD.c.x - oldD.c.x, newD.c.y - oldD.c.y) + Math.abs(newD.r - oldD.r)
+    if (w === 0) continue
+    const oldSpace = { discs: [oldD], bounds: null }
+    const newSpace = { discs: [newD], bounds: null }
+    const patchSeg = (si: number): void => {
+      if (affSet !== null && affSet.has(fst.segWire[si]!)) return
+      const seg = fst.segs[si]!
+      dRod += segSoftCost(seg.a, seg.b, newSpace) - segSoftCost(seg.a, seg.b, oldSpace)
+    }
+    if (w <= PROBE_BAND) {
+      for (const si of fst.ridBandSegs.get(rid) ?? []) patchSeg(si)
+    } else {
+      for (const wi of wl) {
+        const cap = fst.wires[wi]!
+        for (let si = cap.segStart; si < cap.segEnd; si++) patchSeg(si)
       }
     }
   }
@@ -1263,7 +1350,7 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
  * bounded trial per Δ halving with legality projection and a strict gate,
  * then single-coordinate fallback. Memoryless and deterministic.
  */
-function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
+function operatorStep(e: Engine, pinned: ReadonlySet<string> | null, frozen: ReadonlySet<string> | null = null): boolean {
   const sc = e.scale
   recomputeRegions(e)
   const wiredBodies = new Set<string>()
@@ -1278,21 +1365,60 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   // frozenWireEnergy rebuild — no routing solves, and no whole-scene re-eval.
   const fst = mkFrozenState(e)
 
-  type Coord = { get(): number; set(v: number): void; readonly m: number; readonly rot: boolean; localE(): number }
+  type Coord = {
+    get(): number
+    set(v: number): void
+    /** Probe application: set + the SAME legality projection the trial gates
+        apply (propose -> project -> evaluate). Probes that skip the projection
+        measure a map the gates never test: on a packed seed every
+        single-coordinate move violates a sibling gap, the projection cancels
+        it, and the un-projected probes kept promising descent — the fallback
+        then exhaustively disproved them at full-eval cost, ~336 trials/step,
+        100% rejected (measured 2026-07-31). Rotation needs no projection. */
+    probe(v: number): void
+    probeRestore(): void
+    readonly m: number
+    readonly rot: boolean
+    localE(): number
+  }
   const coords: Coord[] = []
   const movedBodies: Body[] = []
   for (const b of e.bodies.values()) {
+    // the searcher's block freeze is TOTAL (position AND rotation): a frozen
+    // body contributes no coordinates at all, so the block relaxation's cost
+    // and effect are confined to the block (annealing redesign D2). Distinct
+    // from `pinned`, which is the user drag's POSITION pin (rotation free —
+    // USER 2026-07-07).
+    if (frozen !== null && frozen.has(b.id)) continue
     const dirty = new Set<RegionId>([b.region])
     const localE = (): number => { recomputeRegions(e, dirty); return fst.frozenTotal + frozenProbe(fst, e, b.id) + contentEnergy(e) }
     if (pinned === null || !pinned.has(b.id)) {
       movedBodies.push(b)
-      coords.push({ get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } }, m: 1, rot: false, localE })
-      coords.push({ get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } }, m: 1, rot: false, localE })
+      let saved: Vec2 | null = null
+      const probeAt = (p: Vec2): void => {
+        if (saved === null) saved = b.pos
+        b.pos = projectBodyPos(e, b, p)
+      }
+      const probeRestore = (): void => { if (saved !== null) { b.pos = saved; saved = null } }
+      coords.push({
+        get: () => b.pos.x, set: (v) => { b.pos = { x: v, y: b.pos.y } },
+        probe: (v) => probeAt({ x: v, y: b.pos.y }), probeRestore,
+        m: 1, rot: false, localE,
+      })
+      coords.push({
+        get: () => b.pos.y, set: (v) => { b.pos = { x: b.pos.x, y: v } },
+        probe: (v) => probeAt({ x: b.pos.x, y: v }), probeRestore,
+        m: 1, rot: false, localE,
+      })
     }
     // rotation: an ordinary coordinate under the same budget (2026-07-24 law);
     // only port-bearing wired bodies feel it (content is rotation-invariant)
     if (wiredBodies.has(b.id) && b.localAnchor.size > 0) {
-      coords.push({ get: () => b.theta, set: (v) => { b.theta = v }, m: Math.max(b.discR * sc, 1e-6), rot: true, localE })
+      coords.push({
+        get: () => b.theta, set: (v) => { b.theta = v },
+        probe: (v) => { b.theta = v }, probeRestore: () => {},
+        m: Math.max(b.discR * sc, 1e-6), rot: true, localE,
+      })
     }
   }
 
@@ -1310,8 +1436,10 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
     const v0 = c.get()
     const h = FD_PROBE / c.m
     const e0 = baseOf(c)
-    c.set(v0 + h); const ep = c.localE()
-    c.set(v0 - h); const em = c.localE()
+    c.probe(v0 + h); const ep = c.localE()
+    c.probeRestore()
+    c.probe(v0 - h); const em = c.localE()
+    c.probeRestore()
     c.set(v0)
     const slopeP = (ep - e0) / h
     const slopeM = (e0 - em) / h
@@ -1744,18 +1872,32 @@ function searchedFrame(e: Engine, pinned: ReadonlySet<string> | null, search: La
   return acted || search.searching
 }
 
-export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): boolean {
+export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null, frozen: ReadonlySet<string> | null = null): boolean {
   recomputeRegions(e)
   if (e.frame === null) establishFrame(e)
 
   const search = LAYOUT_SEARCH.get(e)
   if (search !== undefined) return searchedFrame(e, pinned, search)
 
-  let moved = operatorStep(e, pinned)
-  moved = walkWires(e) || moved
+  let moved = operatorStep(e, pinned, frozen)
+  moved = walkWires(e, false, frozen === null ? null : frozenWires(e, frozen)) || moved
   recomputeRegions(e)
   e.tick++
   return moved
+}
+
+/** Wires whose EVERY terminal body is frozen: outside the relax block, so the
+    walk leaves their junctions untouched (a wire with any terminal in the
+    block adapts along with it). */
+function frozenWires(e: Engine, frozen: ReadonlySet<string>): Set<WireId> {
+  const out = new Set<WireId>()
+  for (const [wid, w] of e.wires) {
+    let all = true
+    for (const bd of w.binds) { if (!frozen.has(bd.body)) { all = false; break } }
+    if (all && w.endBodyId !== null && !frozen.has(w.endBodyId)) all = false
+    if (all) out.add(wid)
+  }
+  return out
 }
 
 /** Run a tick budget of strict descent, bracketed by the DISCRETE construction-

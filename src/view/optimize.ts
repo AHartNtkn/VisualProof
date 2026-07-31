@@ -114,7 +114,15 @@ export function movableUnits(e: Engine): MovableUnit[] {
     hopping restores a rejected hop from the whole-basin snapshot (relaxation
     moves more than the move did), so it does not use `undo`; the field is the
     move library's own contract, unchanged from the annealer. */
-type Proposal = { readonly moved: Set<string>; undo(): void }
+type Proposal = {
+  readonly moved: Set<string>
+  /** The RELAX BLOCK for this move (annealing redesign D2): the bodies allowed
+      to settle after the perturbation; everything else is frozen. Defaults to
+      `moved`. A junction hop names its wire's terminal bodies (the junction is
+      not a body, but its wire must walk and its neighborhood may adapt). */
+  readonly block?: ReadonlySet<string>
+  undo(): void
+}
 
 export type MoveKind = {
   readonly name: string
@@ -294,7 +302,9 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
       const r = octaveBase(rng) * wireBoundRadius(e, w)
       const a = rng() * 2 * Math.PI
       w.net.junctions[j] = { x: saved.x + Math.cos(a) * r, y: saved.y + Math.sin(a) * r }
-      return { moved: new Set<string>(), undo }
+      const block = new Set<string>(w.binds.map((bd) => bd.body))
+      if (w.endBodyId !== null) block.add(w.endBodyId)
+      return { moved: new Set<string>(), block, undo }
     },
   },
   {
@@ -556,6 +566,23 @@ export class LayoutOptimizer {
     recomputeRegions(scratch)
   }
 
+  /** BLOCK-LOCAL relaxation (annealing redesign D2): settle ONLY the block the
+      hop perturbed, with every other body totally frozen. The measured defect
+      this kills: a hop's GLOBAL relaxation moved bodies the move never touched
+      as far as the ones it did (median 5.81 vs 5.53 wu, 2026-07-28), so
+      accepting a hop scrambled organized regions it never addressed — and the
+      relaxation cost scaled with the scene instead of the block. Wales–Doye's
+      original freezing idiom, on the existing pinned plumbing. */
+  #relaxBlock(block: ReadonlySet<string>): void {
+    const scratch = this.#scratch!, pinned = this.#pinned
+    const frozen = new Set<string>()
+    for (const id of scratch.bodies.keys()) if (!block.has(id)) frozen.add(id)
+    for (let s = 0; s < RELAX_REST_CAP; s++) {
+      if (!settleStep(scratch, pinned, frozen)) break
+    }
+    recomputeRegions(scratch)
+  }
+
   /** The DOF count driving the epoch length and reheat cadence. */
   #dofCount(): number {
     return nonPinnedIds(this.#scratch!, this.#pinned).length + this.#scratch!.childrenOf.size
@@ -591,8 +618,10 @@ export class LayoutOptimizer {
     const p = kind.propose(scratch, pinned, rng)
     if (p === null) return { accepted: false, improved: false }
     recomputeRegions(scratch)
-    this.#relaxToRest()
-    const newE = layoutScore(scratch)
+    const block = p.block ?? p.moved
+    if (block.size > 0 && block.size < scratch.bodies.size) this.#relaxBlock(block)
+    else this.#relaxToRest()
+    let newE = layoutScore(scratch)
     const dE = newE - this.#basinE
     // warmup: the first PROBE_BATCH hops accept unconditionally (T = ∞ start)
     // and their |ΔE| magnitudes fix T0 = median — no dedicated probe phase
@@ -608,6 +637,15 @@ export class LayoutOptimizer {
     const T = this.#T
     const accept = warming || dE < 0 || (T > 0 && rng() < Math.exp(-dE / T))
     if (accept) {
+      // an accepted block-hop's state is a BLOCK rest. Published bests must be
+      // GLOBAL rests (USER law: every published best is a sensible layout), so
+      // a candidate improvement is POLISHED — fully relaxed — before the
+      // publish gate; the chain adopts the polished floor either way (a free
+      // strict improvement, and accommodation the block freeze deferred).
+      if (this.#best !== null && newE < this.#best.score - eps(this.#best.score)) {
+        this.#relaxToRest()
+        newE = layoutScore(scratch)
+      }
       this.#basinE = newE
       const improved = this.#publishIfBetter(newE)
       if (improved) { this.#reheatsSinceImprove = 0; this.#lowDuty = false }

@@ -191,11 +191,21 @@ describe('the seed relaxation streams incrementally (plan Task 6 Phase 0)', () =
     // energy. In app mode the frame runs no node descent, so without Phase 0 this
     // sits raw-kinked until the first published best.
     const b = new DiagramBuilder()
-    const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
-    for (let i = 0; i < 4; i++) {
-      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
+    const r = [0, 1, 2, 3, 4, 5].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
+    for (let i = 0; i < 6; i++) {
+      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 6]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
+    // a WIDE hard seed (ports facing wrong ways across long spans): the
+    // faster D1 solver rested the old 4-ref spiral seed inside two publish
+    // quanta, which says nothing about streaming — the fixture must genuinely
+    // need several quanta for the ≥3-distinct-publishes assertion to measure
+    // incrementality rather than scene difficulty.
+    r.forEach((id, i) => {
+      const body = e.bodies.get(id)!
+      body.pos = { x: Math.cos((i / 6) * 2 * Math.PI) * 70, y: Math.sin((i / 6) * 2 * Math.PI) * 70 }
+      body.theta = i * 2.4
+    })
     recomputeRegions(e); resolveOverlaps(e); establishFrame(e); recomputeRegions(e)
     const rawScore = layoutScore(e)
 
