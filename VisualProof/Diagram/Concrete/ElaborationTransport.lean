@@ -372,7 +372,10 @@ private theorem resolveIdentityPorts?_map
                 simpa using targetHead
               simp [resolveIdentityPorts?, targetHead', targetTail]
 
-private theorem compileNode?_map
+/-- Compile one copied node under a context-local wire action.  No global
+wire-signature map is required: only variables visible in the supplied
+contexts and incidences of the copied node participate in elaboration. -/
+theorem compileNode?_natural
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
     (rightWellFormed : right.WellFormed definitions)
@@ -584,7 +587,7 @@ theorem compileNodes?_singleton_natural
             sourceCompiled)
       subst sourceItems
       have targetNodeEquation :=
-        compileNode?_map rightWellFormed rightContextNodup
+        compileNode?_natural rightWellFormed rightContextNodup
           rho wireMap contextAction regionMap nodeShape
           forwardIncident sourceNodeEquation
       refine
