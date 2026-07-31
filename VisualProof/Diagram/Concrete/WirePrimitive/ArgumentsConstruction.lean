@@ -2380,6 +2380,23 @@ theorem targetWire_signature
   simp only [Fin.addCases_right]
   rfl
 
+/-- The fresh replacement head remains scoped at the exact image of the
+source head's scope.  Argument replacement removes no regions, so this is the
+construction-owned region transport used by semantic factorization. -/
+theorem targetWire_scope
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) :
+    (result.checked.val.wires result.targetWire).scope =
+      Internal.checkedRegion result.generated
+        (retainedRegion source (source.val.wires wire).scope) := by
+  rw [result.targetWire_exact,
+    Internal.checkedWire_scope_transport]
+  unfold replacementCandidateWire replacementCandidate
+  rw [assigned_wire_scope]
+  exact congrArg (Internal.checkedRegion result.generated)
+    (replacementSkeleton_head_wire_scope result.plan)
+
 /-- The exhaustive generated target sites retained by every accepted argument
 replacement. -/
 def targetSites
@@ -2487,6 +2504,35 @@ theorem replaceAppliedEnds_sourceRemovedWires_exact
       replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
         .ok result) :
     result.sourceRemovedWires = wire :: spec.removedWires := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
+
+/-- A successful replacement retains the caller's exact target argument
+vector.  Later semantic receipts may use this construction-owned equation
+without reopening the opaque result or rediscovering the replacement spec. -/
+theorem replaceAppliedEnds_targetArguments_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result) :
+    result.targetArguments = spec.targetArguments := by
   unfold replaceAppliedEnds at accepted
   split at accepted <;> try contradiction
   next removal _ =>

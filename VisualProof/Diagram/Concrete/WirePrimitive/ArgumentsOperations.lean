@@ -295,6 +295,31 @@ theorem arityShift_sourceRemovedWires_exact
               _ result accepted
           simpa [arityShiftSpec] using exact
 
+/-- The total arity-shift construction appends exactly the requested
+signature to the source relation's ordered argument vector. -/
+theorem arityShift_targetArguments_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (relationArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel relationArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    result.targetArguments = relationArguments ++ [newArgument] := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  have exact :=
+    replaceAppliedEnds_targetArguments_exact source wire sites
+      (arityShiftSpec source wire relationArguments sites newArgument)
+      _ result accepted
+  simpa [arityShiftSpec] using exact
+
 private structure LocalUnshiftWiresReceipt
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
