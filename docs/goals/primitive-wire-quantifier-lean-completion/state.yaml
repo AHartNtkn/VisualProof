@@ -227,6 +227,7 @@ tasks:
       - "VisualProof.lean"
       - "VisualProof/Diagram/Concrete/WirePartition.lean"
       - "VisualProof/Diagram/Concrete/WirePartitionSemantics.lean"
+      - "VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean"
       - "VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean"
       - "VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean"
       - "VisualProof/Diagram/Concrete/WireQuantifierIota.lean"

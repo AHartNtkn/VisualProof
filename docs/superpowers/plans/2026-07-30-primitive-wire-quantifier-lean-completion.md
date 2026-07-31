@@ -248,6 +248,7 @@ order, matching `src/kernel/proof/step.ts`:
 
 - Create: `VisualProof/Diagram/Concrete/WirePartition.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePartitionSemantics.lean`
+- Modify: `VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean`
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean`
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Partition.lean`
