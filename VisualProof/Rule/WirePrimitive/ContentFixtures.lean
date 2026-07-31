@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.ContentSemantics
+import VisualProof.Rule.WirePrimitive.Content
 
 namespace VisualProof
 
@@ -14,6 +14,11 @@ private def idx {bound : Nat}
 
 private def contentError? {α : Type} :
     Except ContentError α → Option ContentError
+  | .error error => some error
+  | .ok _ => none
+
+private def ruleError? {α : Type} :
+    Except WireContentError α → Option WireContentError
   | .error error => some error
   | .ok _ => none
 
@@ -254,6 +259,90 @@ private def nonHead : CheckedDiagram [] :=
 example :
     contentError? (deleteEnds nonHead (idx 0)) =
       some .nonAppliedEndpoint := by
+  native_decide
+
+/-! Public receipts retain exact tags, targets, and checked polarity gates. -/
+
+example (applied : AppliedCutWrap source wire) :
+    applied.tag = .cutWrap := rfl
+
+example (applied : AppliedCutAbsorb source wire) :
+    applied.tag = .cutAbsorb := rfl
+
+example (applied : AppliedParallelSplit source wire) :
+    applied.tag = .parallelSplit := rfl
+
+example (applied : AppliedParallelFuse source left right) :
+    applied.tag = .parallelFuse := rfl
+
+private def negativeRaw : ConcreteDiagram 0 where
+  regionCount := 2
+  nodeCount := 0
+  wireCount := 1
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 0
+  nodes := nofun
+  wires := fun _ =>
+    { sig := .rel []
+      scope := 1
+      endpoints := [] }
+
+private theorem negativeRaw_wellFormed :
+    negativeRaw.WellFormed [] := by
+  native_decide
+
+private def negativeSource : CheckedDiagram [] :=
+  ⟨negativeRaw, negativeRaw_wellFormed⟩
+
+private def negativeSites :
+    List (EndSite negativeSource (idx 0)) :=
+  [⟨idx 1, []⟩]
+
+example :
+    ruleError?
+      (applyEndsSpawn negativeSource (idx 0) negativeSites .forward) =
+        some .endsSpawnRequiresPositive := by
+  native_decide
+
+example (applied : AppliedEndsSpawn source orientation wire sites) :
+    applied.tag = .endsSpawn := rfl
+
+private def negativeConcreteSpawn :=
+  (spawnEnds negativeSource (idx 0) negativeSites)
+    |>.toOption.get (by native_decide)
+
+example :
+    ruleError?
+      (applyEndsDelete negativeConcreteSpawn.checked
+        negativeConcreteSpawn.inverseWire .backward) =
+        some .endsDeleteBackwardRequiresPositive := by
+  native_decide
+
+example (applied : AppliedEndsDelete source orientation wire) :
+    applied.tag = .endsDelete := rfl
+
+example :
+    (applyEndsSpawn negativeSource (idx 0) negativeSites .backward).isOk =
+      true := by
+  native_decide
+
+example :
+    (applyEndsDelete negativeConcreteSpawn.checked
+      negativeConcreteSpawn.inverseWire .forward).isOk = true := by
+  native_decide
+
+example :
+    ruleError?
+      (applyEndsDelete spawned.checked spawned.inverseWire .forward) =
+        some .endsDeleteRequiresNegative := by
+  native_decide
+
+example :
+    ruleError?
+      (applyEndsSpawn spawnSource (idx 0) spawnSites .backward) =
+        some .endsSpawnBackwardRequiresNegative := by
   native_decide
 
 end ContentFixtures
