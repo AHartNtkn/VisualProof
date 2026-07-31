@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCommonCore
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsConstructionNaturality
 
 namespace VisualProof
 
@@ -6,6 +7,46 @@ namespace ConcreteWirePrimitive
 
 open ConcreteWireQuantifier
 open WirePrimitive
+
+/-- A successful replacement retains its caller-proved scope-locality facts;
+the checked construction cannot substitute a different removal or local-wire
+specification. -/
+theorem replaceAppliedEnds_scopeLocalization
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (removedEnclosed :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        source.val.Encloses (source.val.wires wire).scope
+          (source.val.wires sourceWire).scope)
+    (localEnclosed :
+      ∀ fresh : Fin spec.localCount,
+        source.val.Encloses (source.val.wires wire).scope
+          (spec.localScope fresh))
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result) :
+    result.ScopeLocalization := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted
+  · contradiction
+  · simp only at accepted
+    split at accepted
+    · contradiction
+    · split at accepted
+      · contradiction
+      · cases accepted
+        exact
+          { removed_enclosed := by
+              intro sourceWire removed
+              exact removedEnclosed sourceWire removed
+            local_enclosed := localEnclosed }
 
 private theorem arityShiftSpec_argument_existing
     (source : CheckedDiagram definitions)
@@ -319,6 +360,43 @@ theorem arityShift_targetArguments_exact
       (arityShiftSpec source wire relationArguments sites newArgument)
       _ result accepted
   simpa [arityShiftSpec] using exact
+
+/-- Every total arity-shift construction is scope-local: it removes only the
+acted head and creates each fresh argument wire at its corresponding applied
+site. -/
+theorem arityShift_scopeLocalization
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (relationArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel relationArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    result.ScopeLocalization := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  let spec :=
+    arityShiftSpec source wire relationArguments sites newArgument
+  have valid : ReplacementValid spec :=
+    arityShiftSpec_valid source wire relationArguments sourceSignature sites
+      newArgument
+  apply replaceAppliedEnds_scopeLocalization sites spec
+    valid.removedExhausted
+  · intro sourceWire removed
+    have same : sourceWire = wire := by
+      simpa [spec, arityShiftSpec] using removed
+    subst sourceWire
+    exact ConcreteDiagram.encloses_refl source.val _
+  · intro fresh
+    simpa [spec, arityShiftSpec] using
+      (sites.sites.get fresh).head_visible
+  · simpa [spec] using accepted
 
 private structure LocalUnshiftWiresReceipt
     {source : CheckedDiagram definitions}

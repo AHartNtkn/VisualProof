@@ -507,6 +507,117 @@ theorem ArgumentResult.childrenOf_decomposition
       simp only [CRegion.rename]
       exact decide_eq_decide.mpr result.regionEquiv.injective.eq_iff
 
+/-- An applied site cannot itself lie at a region strictly above the acted
+head's scope. -/
+theorem ArgumentResult.siteRegion_ne_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope)
+    (site : Fin result.sites.sites.length) :
+    (result.sites.sites.get site).region ≠ outer := by
+  intro same
+  have scopeEnclosesOuter :
+      source.val.Encloses (source.val.wires wire).scope outer := by
+    rw [← same]
+    exact (result.sites.sites.get site).head_visible
+  have equal :=
+    factor_encloses_antisymm definitions source.val source.property
+      outerEncloses scopeEnclosesOuter
+  exact strict equal
+
+/-- No rewritten application node is local to a region strictly above the
+acted head's scope. -/
+theorem ArgumentResult.nodeAt_strictlyAbove_not_siteNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt outer) :
+    node ∉ argumentSiteNodes result.sites := by
+  intro removed
+  obtain ⟨site, _siteMember, siteExact⟩ := List.mem_map.mp removed
+  have regionExact : site.region = outer := by
+    rw [ConcreteDiagram.nodesAt, List.mem_filter] at nodeAt
+    have localExact := eq_of_beq nodeAt.2
+    rw [← siteExact, site.node_data] at localExact
+    exact localExact
+  have scopeEnclosesOuter :
+      source.val.Encloses (source.val.wires wire).scope outer := by
+    rw [← regionExact]
+    exact site.head_visible
+  have equal :=
+    factor_encloses_antisymm definitions source.val source.property
+      outerEncloses scopeEnclosesOuter
+  exact strict equal
+
+/-- Above the acted scope, node compilation sees exactly the retained source
+payloads in source order; the replacement contributes no local node. -/
+theorem ArgumentResult.localNodeData_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    (result.checked.val.nodesAt (result.regionImage outer)).map
+        result.checked.val.nodes =
+      (source.val.nodesAt outer).map (fun sourceNode =>
+        (source.val.nodes sourceNode).rename result.regionEquiv) := by
+  rw [result.localNodeData_decomposition outer]
+  have retainedExact :
+      (source.val.nodesAt outer).filter
+          (fun sourceNode =>
+            decide
+              (sourceNode ∉ argumentSiteNodes result.sites)) =
+        source.val.nodesAt outer := by
+    apply List.filter_eq_self.mpr
+    intro node member
+    exact decide_eq_true
+      (result.nodeAt_strictlyAbove_not_siteNode outer outerEncloses
+        strict node member)
+  rw [retainedExact]
+  have generatedEmpty :
+      (Data.Finite.allFin result.sites.sites.length).filter
+          (fun site =>
+            retainedRegion source (result.sites.sites.get site).region ==
+              retainedRegion source outer) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro site _member
+    intro accepted
+    have same := eq_of_beq accepted
+    apply result.siteRegion_ne_strictlyAbove outer outerEncloses strict site
+    apply (Internal.noRegionRemovalEquiv source).injective
+    rw [← retainedRegion_eq_noRegionRemovalEquiv,
+      ← retainedRegion_eq_noRegionRemovalEquiv]
+    exact same
+  rw [generatedEmpty]
+  simp
+
+/-- Construction-owned scope locality needed by frame naturality.  Removed
+and freshly generated local wires may live at the acted scope or below it,
+never above it. -/
+structure ArgumentResult.ScopeLocalization
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire) : Prop where
+  removed_enclosed :
+    ∀ sourceWire, sourceWire ∈ result.sourceRemovedWires →
+      source.val.Encloses (source.val.wires wire).scope
+        (source.val.wires sourceWire).scope
+  local_enclosed :
+    ∀ fresh : Fin result.spec.localCount,
+      source.val.Encloses (source.val.wires wire).scope
+        (result.spec.localScope fresh)
+
 /-- Exact ordered signature decomposition at every source region.  This is
 the typed context counterpart of `wiresAt_decomposition`: retained source
 signatures keep their order, followed by the replacement head when it is
@@ -593,6 +704,76 @@ theorem ArgumentResult.localSignatures_decomposition
   · apply List.map_congr_left
     intro fresh _member
     exact result.targetLocalWire_signature fresh
+
+/-- Strictly above a scope-local argument replacement, the exact ordered
+local signature context is unchanged. -/
+theorem ArgumentResult.localSignatures_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    (result.checked.val.wiresAt (result.regionImage outer)).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      (source.val.wiresAt outer).map
+        (fun sourceWire => (source.val.wires sourceWire).sig) := by
+  rw [result.localSignatures_decomposition outer]
+  have retainedExact :
+      (source.val.wiresAt outer).filter
+          (fun sourceWire =>
+            decide (sourceWire ∉ result.sourceRemovedWires)) =
+        source.val.wiresAt outer := by
+    apply List.filter_eq_self.mpr
+    intro sourceWire member
+    apply decide_eq_true
+    intro removed
+    rw [ConcreteDiagram.wiresAt, List.mem_filter] at member
+    have scopeExact := eq_of_beq member.2
+    have scopeEnclosesOuter :
+        source.val.Encloses (source.val.wires wire).scope outer := by
+      rw [← scopeExact]
+      exact localized.removed_enclosed sourceWire removed
+    have equal := factor_encloses_antisymm definitions source.val
+      source.property outerEncloses scopeEnclosesOuter
+    exact strict equal
+  rw [retainedExact]
+  have headEmpty :
+      (Data.Finite.allFin 1).filter (fun _head =>
+          retainedRegion source (source.val.wires wire).scope ==
+            retainedRegion source outer) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro _head _member accepted
+    have same := eq_of_beq accepted
+    apply strict
+    apply (Internal.noRegionRemovalEquiv source).injective
+    rw [← retainedRegion_eq_noRegionRemovalEquiv,
+      ← retainedRegion_eq_noRegionRemovalEquiv]
+    exact same.symm
+  rw [headEmpty]
+  have localEmpty :
+      (Data.Finite.allFin result.spec.localCount).filter (fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source outer) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro fresh _member accepted
+    have same := eq_of_beq accepted
+    have localExact : result.spec.localScope fresh = outer := by
+      apply (Internal.noRegionRemovalEquiv source).injective
+      rw [← retainedRegion_eq_noRegionRemovalEquiv,
+        ← retainedRegion_eq_noRegionRemovalEquiv]
+      exact same
+    have scopeEnclosesOuter :
+        source.val.Encloses (source.val.wires wire).scope outer := by
+      rw [← localExact]
+      exact localized.local_enclosed fresh
+    have equal := factor_encloses_antisymm definitions source.val
+      source.property outerEncloses scopeEnclosesOuter
+    exact strict equal
+  rw [localEmpty]
+  simp
 
 end ConcreteWirePrimitive
 end VisualProof
