@@ -219,6 +219,18 @@ def targetWire
   ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
     source removed wire
 
+/-- Image of one source wire in the checked singleton-erasure target. -/
+def CheckedErasure.wireImage
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {removed : source.val.NodeId}
+    (erasure : CheckedErasure source removed)
+    (wire : source.val.WireId) :
+    erasure.target.val.WireId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.wireCount erasure.generated).symm
+    (targetWire source removed wire)
+
 @[simp] private theorem wiresList_get_targetWire
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)

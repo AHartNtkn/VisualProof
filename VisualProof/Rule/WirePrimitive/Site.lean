@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrame
+import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemoval
 
 namespace VisualProof
 
@@ -74,6 +75,57 @@ theorem node_data
     source.val.nodes site.node =
       .atom site.region site.argumentSignatures :=
   site.node_exact
+
+/--
+The checked site frame projects to the exact compiled atom singleton, and
+the atom head resolves to the acted wire. This is the semantic entry point
+for checker-owned singleton-erasure folds.
+-/
+theorem compiled_atom
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire) :
+    ∃ (outer : ConcreteElaboration.WireContext source.val)
+      (_visibleExact :
+        site.frame.frame.visible = outer.extend site.region)
+      (head :
+        Var (outer.extend site.region).sigs
+          (.rel site.argumentSignatures))
+      (arguments :
+        Vars (outer.extend site.region).sigs
+          site.argumentSignatures),
+      ConcreteElaboration.compileNodes? definitions source.val
+          (outer.extend site.region) [site.node] =
+        some (.cons (.atom head arguments) .nil) ∧
+      ConcreteElaboration.WireContext.origin source.val
+          (outer.extend site.region).ids head =
+        wire := by
+  obtain ⟨outer, _fuel, nodes, _children, visibleExact,
+      nodesCompiled, _childrenCompiled, _bodyExact⟩ :=
+    site.frame.site_origin
+  have member : site.node ∈ source.val.nodesAt site.region := by
+    unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+    apply List.mem_filter.mpr
+    exact
+      ⟨Data.Finite.mem_allFin site.node,
+        by rw [site.node_data]; exact beq_iff_eq.mpr rfl⟩
+  obtain ⟨item, singletonCompiled⟩ :=
+    ConcreteWireQuantifier.SingletonRemovalSemantics.compileNodes_singleton_of_member
+      definitions source.val (outer.extend site.region)
+      (source.val.nodesAt site.region) nodes nodesCompiled site.node member
+  obtain ⟨head, arguments, itemExact, headOrigin, _argumentOrigins⟩ :=
+    ConcreteElaboration.compileNodes?_atom_shape source.val
+      (outer.extend site.region) site.node site.node_data singletonCompiled
+  have itemSame : item = .atom head arguments :=
+    ItemSeq.cons.inj itemExact |>.1
+  subst item
+  have exactHead :
+      ConcreteElaboration.WireContext.origin source.val
+          (outer.extend site.region).ids head =
+        wire :=
+    Option.some.inj (headOrigin.symm.trans site.endpoint_owner)
+  exact
+    ⟨outer, visibleExact, head, arguments, singletonCompiled, exactHead⟩
 
 end AppliedSite
 
@@ -162,6 +214,107 @@ theorem length
   rw [← all.exhaustive, List.length_map]
 
 end AllAppliedSites
+
+namespace AppliedSiteErasure
+
+open ConcreteWireQuantifier.SingletonRemovalSemantics
+
+/--
+Checker-owned recursive removal of applied heads. Each step is the canonical
+checked singleton erasure, and the acted wire is transported into the next
+checked state.
+-/
+private inductive Trace :
+    (source : CheckedDiagram definitions) →
+    (wire : source.val.WireId) →
+    (target : CheckedDiagram definitions) →
+    (targetWire : target.val.WireId) →
+    Type
+  | done
+      (source : CheckedDiagram definitions)
+      (wire : source.val.WireId)
+      (empty : (source.val.wires wire).endpoints = []) :
+      Trace source wire source wire
+  | step
+      {source : CheckedDiagram definitions}
+      {wire : source.val.WireId}
+      (site : AppliedSite source wire)
+      (erasure : CheckedErasure source site.node)
+      {target : CheckedDiagram definitions}
+      {targetWire : target.val.WireId}
+      (tail :
+        Trace erasure.target (erasure.wireImage wire) target targetWire) :
+      Trace source wire target targetWire
+
+/-- Opaque complete singleton-erasure trace for every applied head. -/
+structure Result
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) where
+  private mk ::
+  target : CheckedDiagram definitions
+  targetWire : target.val.WireId
+  private trace : Trace source wire target targetWire
+
+private def checkWithFuel :
+    (fuel : Nat) →
+    (source : CheckedDiagram definitions) →
+    (wire : source.val.WireId) →
+    Option (Result source wire)
+  | 0, source, wire =>
+      if empty : (source.val.wires wire).endpoints = [] then
+        some ⟨source, wire, .done source wire empty⟩
+      else
+        none
+  | fuel + 1, source, wire =>
+      match endpoints : (source.val.wires wire).endpoints with
+      | [] =>
+          some ⟨source, wire, .done source wire endpoints⟩
+      | endpoint :: _ =>
+          match checkAppliedSite source wire endpoint with
+          | none => none
+          | some site =>
+              match (CheckedErasure.check source site.node).toOption with
+              | none => none
+              | some erasure =>
+                  match
+                      checkWithFuel fuel erasure.target
+                        (erasure.wireImage wire) with
+                  | none => none
+                  | some tail =>
+                      some
+                        ⟨tail.target, tail.targetWire,
+                          .step site erasure tail.trace⟩
+
+/--
+Remove every applied head by canonical checked singleton erasures. The fuel
+bound is structural: each accepted step removes exactly one source node.
+-/
+def check
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    Option (Result source wire) :=
+  checkWithFuel (source.val.nodeCount + 1) source wire
+
+private theorem Trace.target_empty
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {target : CheckedDiagram definitions}
+    {targetWire : target.val.WireId}
+    (trace : Trace source wire target targetWire) :
+    (target.val.wires targetWire).endpoints = [] := by
+  induction trace with
+  | done _ _ empty => exact empty
+  | step _ _ _ induction => exact induction
+
+/-- The final transported wire has no endpoints. -/
+theorem Result.target_empty
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : Result source wire) :
+    (result.target.val.wires result.targetWire).endpoints = [] :=
+  result.trace.target_empty
+
+end AppliedSiteErasure
 
 end WirePrimitive
 

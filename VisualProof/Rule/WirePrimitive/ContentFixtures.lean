@@ -95,6 +95,20 @@ example :
       deleteLedger.targetScope.frame.context.cutDepth :=
   deleteLedger.cutDepth
 
+private def deletionTrace :=
+  AppliedSiteErasure.check spawned.checked spawned.inverseWire
+    |>.get (by native_decide)
+
+example :
+    (deletionTrace.target.val.wires
+      deletionTrace.targetWire).endpoints = [] :=
+  deletionTrace.target_empty
+
+example :
+    (ConcreteIsoSearch.findConcreteIso? deletionTrace.target.val
+      spawned.inverse.checked.val).isSome = true := by
+  native_decide
+
 /-! Cut wrapping and exact absorption act on both mixed-parity sites. -/
 private def wrapped :
     CutWrapResult spawned.checked spawned.inverseWire :=

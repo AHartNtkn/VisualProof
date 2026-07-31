@@ -418,6 +418,9 @@ structure SiteLedger
     (result : EndsDeleteResult source wire) where
   private mk ::
   commonCore : CommonCoreReceipt source result.checked
+  erasureTrace : AppliedSiteErasure.Result source wire
+  erasureIso :
+    ConcreteIso erasureTrace.target.val result.checked.val
   sourceScope :
     SiteCompilation source (source.val.wires wire).scope
   targetScope :
@@ -438,6 +441,10 @@ def checkSiteLedger
     (result : EndsDeleteResult source wire) :
     Option (SiteLedger result) := do
   let commonCore ← result.checkCommonCore
+  let erasureTrace ← AppliedSiteErasure.check source wire
+  let erasureIso ←
+    ConcreteIsoSearch.findConcreteIso? erasureTrace.target.val
+      result.checked.val
   let sourceScope ←
     compileSite? source (source.val.wires wire).scope
   let targetScope ←
@@ -451,8 +458,8 @@ def checkSiteLedger
           sourceScope.frame.context.cutDepth =
             targetScope.frame.context.cutDepth then
       pure
-        ⟨commonCore, sourceScope, targetScope, exact, scopeExact.1,
-          scopeExact.2⟩
+        ⟨commonCore, erasureTrace, erasureIso, sourceScope, targetScope,
+          exact, scopeExact.1, scopeExact.2⟩
     else
       none
   else
@@ -468,6 +475,18 @@ theorem retained
     (ledger : SiteLedger result) :
     SitesRetained result ledger.commonCore :=
   ledger.sites_retained
+
+/--
+The checker-owned singleton fold removes every acted endpoint and lands on
+the executable batch deletion target up to checked concrete isomorphism.
+-/
+def erasureLanding
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : EndsDeleteResult source wire}
+    (ledger : SiteLedger result) :
+    ConcreteIso ledger.erasureTrace.target.val result.checked.val :=
+  ledger.erasureIso
 
 /-- The retained acted binder occupies the transported source scope. -/
 theorem scopeCorrespondence
