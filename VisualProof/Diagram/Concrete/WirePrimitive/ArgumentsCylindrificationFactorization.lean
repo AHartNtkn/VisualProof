@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationLocal
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationCompleteness
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsConstructionNaturality
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsSiteFactorization
 

@@ -1593,6 +1593,70 @@ def argumentShapeItemSeqDepth :
 
 end
 
+def checkCylindricalShapeFromPeeled
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (outer : WireRenaming smallerContext largerContext)
+    (smaller :
+      UniformIntrinsicRegion definitions smallerArguments smallerContext)
+    (larger :
+      UniformIntrinsicRegion definitions largerArguments largerContext)
+    (smallerPeeled : PeeledArgumentShape smaller)
+    (largerPeeled : PeeledArgumentShape larger)
+    (checkItems :
+      ∀ {smallerBound largerBound : List Sig},
+        (inner : WireRenaming smallerBound largerBound) →
+        (smallerItems :
+          UniformIntrinsicItemSeq definitions smallerArguments smallerBound) →
+        (largerItems :
+          UniformIntrinsicItemSeq definitions largerArguments largerBound) →
+        Option
+          (CheckedCylindricalShapeItemSeq insertion inner
+            smallerItems largerItems)) :
+    Option (CheckedCylindricalShape insertion outer smaller larger) :=
+  (BoundCylindrification.candidates fixedSignature
+      smallerPeeled.bound largerPeeled.bound).findSome? fun candidate =>
+    let ⟨_freshCount, bounds⟩ := candidate
+    do
+      let items ←
+        checkItems (bounds.embed outer)
+          smallerPeeled.items largerPeeled.items
+      if holesAccepted :
+          checkCylindricalHoles insertion bounds outer
+              smallerPeeled.holes largerPeeled.holes = true then
+        let holes := checkCylindricalHoles_eq_true holesAccepted
+        let receipt : CylindricalShape definitions insertion
+            smallerContext largerContext :=
+          .block outer bounds items.receipt holes
+        have receiptConsistent : receipt.consistent := by
+          exact
+            ⟨items.consistent,
+              fun value => by
+                exact items.embedding_exact value⟩
+        have smallerExact : receipt.smaller = smaller := by
+          change
+            wrapArgumentBinds smallerPeeled.bound
+                (.mk items.receipt.smaller ⟨smallerPeeled.holes⟩) =
+              smaller
+          rw [items.smaller_exact]
+          exact smallerPeeled.exact.symm
+        have largerExact : receipt.larger = larger := by
+          change
+            wrapArgumentBinds largerPeeled.bound
+                (.mk items.receipt.larger ⟨largerPeeled.holes⟩) =
+              larger
+          rw [items.larger_exact]
+          exact largerPeeled.exact.symm
+        some
+          { receipt := receipt
+            embedding_exact := fun _ => rfl
+            smaller_exact := smallerExact
+            larger_exact := largerExact
+            consistent := receiptConsistent }
+      else
+        none
+
 mutual
 
 def checkCylindricalShapeFuel
@@ -1609,55 +1673,12 @@ def checkCylindricalShapeFuel
       (CheckedCylindricalShape insertion outer smaller larger) :=
   match fuel with
   | 0 => none
-  | fuel + 1 => do
+  | fuel + 1 =>
       let smallerPeeled := peelArgumentShape smaller
       let largerPeeled := peelArgumentShape larger
-      (BoundCylindrification.candidates fixedSignature
-          smallerPeeled.bound largerPeeled.bound).findSome? fun candidate =>
-        let ⟨_freshCount, bounds⟩ := candidate
-        do
-          let items ←
-            checkCylindricalShapeItemSeqFuel fuel insertion
-              (bounds.embed outer)
-              smallerPeeled.items largerPeeled.items
-          if holesAccepted :
-              checkCylindricalHoles insertion bounds outer
-                  smallerPeeled.holes largerPeeled.holes =
-                true then
-            let holes :=
-              checkCylindricalHoles_eq_true holesAccepted
-            let receipt : CylindricalShape definitions insertion
-                smallerContext largerContext :=
-              .block outer bounds items.receipt holes
-            have receiptConsistent : receipt.consistent := by
-              exact
-                ⟨items.consistent,
-                  fun value => by
-                    exact items.embedding_exact value⟩
-            have smallerExact : receipt.smaller = smaller := by
-              change
-                wrapArgumentBinds smallerPeeled.bound
-                    (.mk items.receipt.smaller
-                      ⟨smallerPeeled.holes⟩) =
-                  smaller
-              rw [items.smaller_exact]
-              exact smallerPeeled.exact.symm
-            have largerExact : receipt.larger = larger := by
-              change
-                wrapArgumentBinds largerPeeled.bound
-                    (.mk items.receipt.larger
-                      ⟨largerPeeled.holes⟩) =
-                  larger
-              rw [items.larger_exact]
-              exact largerPeeled.exact.symm
-            some
-              { receipt := receipt
-                embedding_exact := fun _ => rfl
-                smaller_exact := smallerExact
-                larger_exact := largerExact
-                consistent := receiptConsistent }
-          else
-            none
+      checkCylindricalShapeFromPeeled insertion outer smaller larger
+        smallerPeeled largerPeeled fun inner =>
+          checkCylindricalShapeItemSeqFuel fuel insertion inner
 
 def checkCylindricalShapeItemFuel
     (fuel : Nat)
