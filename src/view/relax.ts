@@ -1903,7 +1903,7 @@ function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | 
     }
     // ONE presentation substep at the presentation bound = the per-frame wire
     // travel equals the body travel; solver walks keep their full budget
-    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, ns, bcs, beta, gate, probeStalls: !presentation }) || routed
+    routed = advanceNetwork(w.net, terms, fs, { substeps: presentation ? 1 : 20, bound, ns, bcs, beta, gate }) || routed
     // this wire moved → refresh its segments so later wires see the new positions.
     segsByWid.set(wid, netEval(w.net, terms, fs, ns, bcs, beta).segs)
   }

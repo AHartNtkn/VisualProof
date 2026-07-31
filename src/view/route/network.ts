@@ -310,13 +310,6 @@ export function advanceNetwork(
   opts: {
     substeps: number; bound: number; ns: NearSpace; bcs?: readonly CurveBC[]; beta?: number
     gate?: (net: WireNet) => number
-    /** Probe the axes when the Weiszfeld target step stalls (rest polish —
-        see below). The SOLVER walk sets this; presentation frames skip it:
-        their job is bounded motion toward targets at frame rate, and rest
-        quality is asserted on the certified rest the solver walk produces.
-        Skipping is not an approximation of the frame's contract — a stalled
-        target step already returns "nothing moved" either way. */
-    probeStalls?: boolean
   },
 ): boolean {
   const bcs = opts.bcs ?? []
@@ -378,12 +371,16 @@ export function advanceNetwork(
           }
         }
         // The Weiszfeld target is a routed-LENGTH proxy; the energy also
-        // charges bending and nearness, so a junction can rest at the proxy
-        // target while a bounded step still descends the TRUE energy. When
-        // the target step stalls, probe the axes under the same bound and the
-        // same strict gate — the walk is then a true coordinate descent of
-        // the one energy, with the proxy step as its accelerator.
-        if (!took && opts.probeStalls === true) {
+        // charges bending and nearness, so a junction can stall against a
+        // ridge the straight-to-target step cannot descend (measured: a
+        // displaced junction froze one step in) or rest at the proxy target
+        // short of the true minimum. Whenever the target step stalls, probe
+        // the axes under the same bound and the same strict gate — the walk
+        // is then a true coordinate descent of the one energy with the proxy
+        // step as its accelerator. Probes run ONLY on stall frames, and the
+        // solve memo makes repeated probes of a stable stall nearly free, so
+        // accepting-target frames (the active-motion hot path) never pay.
+        if (!took) {
           const h = opts.bound
           if (curL === null) curL = evalE(net)
           let bestL: number = curL
@@ -406,9 +403,14 @@ export function advanceNetwork(
     }
     if (!stepMoved) break
   }
-  // one routed split check per advance, only when something changed (splits
-  // are rare; when one fires the next advance's walk grows it under the gates;
-  // at rest nothing scans — the state is already a gated fixed point)
-  if (changed) trySplit(net, terms, fs, opts.ns, bcs, beta, opts.gate)
+  // one split check per advance, UNCONDITIONALLY. Junctions spawn at their
+  // solved optimum, so a fat junction's first advance moves nothing — a split
+  // check gated on motion is unreachable from birth and the degree-6 star
+  // rests forever until a user wiggles a terminal (the reported defect).
+  // Splitting is part of REACHING rest: a state is only a fixed point when no
+  // partition descends. At a true rest the scan is cheap (the first-order
+  // tangent test fails and no gate evaluates), and the caller's rest
+  // certificate then skips the whole walk on the unchanged state.
+  if (trySplit(net, terms, fs, opts.ns, bcs, beta, opts.gate)) changed = true
   return changed
 }

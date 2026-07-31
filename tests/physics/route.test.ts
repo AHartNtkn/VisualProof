@@ -119,6 +119,22 @@ describe('presentation continuation', () => {
     expect(JSON.stringify(net), 'no-op is EXACT').toBe(rest)
   })
 
+  it('an optimally-seeded fat junction still splits at rest — no external wiggle required', () => {
+    // Junctions SPAWN at their solved optimum (b7a6dac), so the walk's first
+    // advance moves nothing — and a split check that only runs after motion is
+    // unreachable from birth: the degree-6 star sits at rest forever until a
+    // user wiggles a terminal (the reported defect). Splitting is part of
+    // REACHING rest, not a side effect of motion.
+    const terms: Vec2[] = Array.from({ length: 6 }, (_, k) => {
+      const a = (k / 6) * 2 * Math.PI
+      return { x: 30 * Math.cos(a), y: 30 * Math.sin(a) }
+    })
+    const net: WireNet = { junctions: [{ x: 0, y: 0 }], edges: terms.map((_, k) => [k, 6] as const) }
+    solveTarget(net, terms, empty) // the seed rule: spawn at the solved optimum
+    for (let i = 0; i < 200; i++) if (!advanceNetwork(net, terms, empty, { substeps: 20, bound: 0.5, ns: emptyNs, beta: 30.25 })) break
+    expect(net.junctions.length, 'the 6-way star must separate into branches on its own').toBeGreaterThanOrEqual(2)
+  })
+
   it('pinch → contraction → re-split: the full transition through a real degree-4 intermediate', () => {
     // wide rectangle, correct columns pairing
     let terms: Vec2[] = [{ x: -20, y: -6 }, { x: -20, y: 6 }, { x: 20, y: -6 }, { x: 20, y: 6 }]
