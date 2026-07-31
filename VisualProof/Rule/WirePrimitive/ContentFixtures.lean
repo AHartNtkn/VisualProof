@@ -12,6 +12,7 @@ namespace VisualProof
 #check WirePrimitive.ends_spawn_sound
 #check WirePrimitive.ContentWitnesses.cutBodyEquivalence
 #check WirePrimitive.ContentWitnesses.parallelBodyEquivalence
+#check ConcreteWirePrimitive.endpointFreeDeletion_denotes
 
 namespace WirePrimitive
 

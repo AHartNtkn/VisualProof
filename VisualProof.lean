@@ -36,6 +36,7 @@ import VisualProof.Rule.WirePrimitive.PartitionFixtures
 import VisualProof.Rule.WirePrimitive.Site
 import VisualProof.Rule.WirePrimitive.Witness
 import VisualProof.Rule.WirePrimitive.WitnessFixtures
+import VisualProof.Diagram.Concrete.WirePrimitive.ExhaustedWireEquivalence
 import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.WirePrimitive.Content
 import VisualProof.Rule.WirePrimitive.ContentFixtures

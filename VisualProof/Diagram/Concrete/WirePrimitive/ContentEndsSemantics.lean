@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ContentSemantics
+import VisualProof.Diagram.Concrete.WirePrimitive.ExhaustedWireEquivalence
 
 namespace VisualProof
 
