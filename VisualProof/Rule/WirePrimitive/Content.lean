@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ContentEndsSemantics
+import VisualProof.Diagram.Concrete.WirePrimitive.ContentEmptySemantics
 import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural

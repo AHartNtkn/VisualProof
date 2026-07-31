@@ -568,6 +568,25 @@ def SitesCorrespond
             argumentsCorrespond core pair.1.arguments pair.2.arguments) =
       true
 
+/-- Checker-owned common landing for an endpoint-free cut wrap. -/
+structure EmptyCore
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire) where
+  private mk ::
+  sourceWellFormed :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      source wire).WellFormed definitions
+  targetWellFormed :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      result.checked result.targetWire).WellFormed definitions
+  deletionIso :
+    ConcreteIso
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        source wire)
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        result.checked result.targetWire)
+
 /-- Sealed checker-owned wrap-site correspondence and exact common core. -/
 structure SiteLedger
     {source : CheckedDiagram definitions}
@@ -589,6 +608,8 @@ structure SiteLedger
   private cut_depth_exact :
     sourceScope.frame.context.cutDepth =
       targetScope.frame.context.cutDepth
+  private empty_core :
+    result.sites.sites = [] → EmptyCore result
 
 /-- Check the complete positional wrap ledger; no caller supplies a pairing. -/
 def checkSiteLedger
@@ -604,6 +625,28 @@ def checkSiteLedger
   let targetScope ←
     compileSite? result.checked
       (result.checked.val.wires result.targetWire).scope
+  let emptyCore ←
+    if empty : result.sites.sites = [] then do
+      if sourceWellFormed :
+          (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            source wire).WellFormed definitions then
+        if targetWellFormed :
+            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+              result.checked result.targetWire).WellFormed definitions then
+          let deletionIso ←
+            ConcreteIsoSearch.findConcreteIso?
+              (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                source wire)
+              (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                result.checked result.targetWire)
+          pure (fun _ =>
+            EmptyCore.mk sourceWellFormed targetWellFormed deletionIso)
+        else
+          none
+      else
+        none
+    else
+      pure (fun exact => (empty exact).elim)
   if exact :
       result.sites.sites.length = targetSites.sites.length ∧
         (List.zip result.sites.sites targetSites.sites).all (fun pair =>
@@ -621,7 +664,7 @@ def checkSiteLedger
             targetScope.frame.context.cutDepth then
       pure
         ⟨targetSites, commonCore, sourceScope, targetScope, exact,
-          scopeExact.1, scopeExact.2⟩
+          scopeExact.1, scopeExact.2, emptyCore⟩
     else
       none
   else
@@ -657,6 +700,16 @@ theorem cutDepth
     ledger.sourceScope.frame.context.cutDepth =
       ledger.targetScope.frame.context.cutDepth :=
   ledger.cut_depth_exact
+
+/-- Empty exhaustive wraps carry one independently checked deletion core. -/
+def emptyCore
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : CutWrapResult source wire}
+    (ledger : SiteLedger result)
+    (empty : result.sites.sites = []) :
+    EmptyCore result :=
+  ledger.empty_core empty
 
 end SiteLedger
 

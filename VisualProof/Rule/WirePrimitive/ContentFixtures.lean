@@ -13,6 +13,7 @@ namespace VisualProof
 #check WirePrimitive.ContentWitnesses.cutBodyEquivalence
 #check WirePrimitive.ContentWitnesses.parallelBodyEquivalence
 #check ConcreteWirePrimitive.endpointFreeDeletion_denotes
+#check ConcreteWirePrimitive.CutWrapResult.SiteLedger.empty_denotes
 
 namespace WirePrimitive
 
@@ -224,6 +225,17 @@ example :
 private def emptyWrapped :
     CutWrapResult spawnSource (idx 0) :=
   (cutWrap spawnSource (idx 0)).toOption.get (by native_decide)
+
+private def emptyWrappedLedger :=
+  emptyWrapped.checkSiteLedger.get (by native_decide)
+
+example :
+    ConcreteIso
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        spawnSource (idx 0))
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        emptyWrapped.checked emptyWrapped.targetWire) :=
+  (emptyWrappedLedger.emptyCore rfl).deletionIso
 
 private def emptySplit :
     ParallelSplitResult spawnSource (idx 0) :=
