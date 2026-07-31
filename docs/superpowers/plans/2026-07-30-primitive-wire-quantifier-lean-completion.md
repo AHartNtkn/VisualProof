@@ -274,7 +274,7 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 
 - `applyWireSever`, `applyWireJoin`.
 - `wire_sever_sound`, `wire_join_sound` over `PreModel`.
-- `identity_substitution_derived_sound` completed from Task 2.
+- `identity_substitution_derived_sound` completed in Task 4.
 
 - [ ] **Step 1: Add RED generic fixtures.** Cover `.iota`, `rel []`, nested
   relation signatures, moved-endpoint scope enclosure, chosen sever scope
