@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ContentEndsSemantics
 import VisualProof.Diagram.Concrete.WirePrimitive.ContentEmptySemantics
+import VisualProof.Diagram.Concrete.WirePrimitive.ContentShapeSemantics
 import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
@@ -387,6 +388,62 @@ def applyEndsSpawn
   else
     throw .semanticLedgerRejected
 
+/-- Cut wrapping is a checked whole-diagram equivalence. -/
+theorem cut_wrap_sound
+    {source : CheckedDiagram definitions}
+    (wire : source.val.WireId)
+    (applied : AppliedCutWrap source wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  applied.ledger.denotes model definitionEnv
+
+/-- Exact cut absorption is the checked inverse of cut wrapping. -/
+theorem cut_absorb_sound
+    {source : CheckedDiagram definitions}
+    (wire : source.val.WireId)
+    (applied : AppliedCutAbsorb source wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target := by
+  have inverseSound :=
+    applied.inverseLedger.denotes model definitionEnv
+  have inverseLanding :=
+    iso_denotation applied.checked.inverseIso model.toPreModel definitionEnv
+  exact inverseLanding.symm.trans inverseSound.symm
+
+/-- Parallel splitting is a checked whole-diagram equivalence. -/
+theorem parallel_split_sound
+    {source : CheckedDiagram definitions}
+    (wire : source.val.WireId)
+    (applied : AppliedParallelSplit source wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  applied.ledger.denotes model definitionEnv
+
+/-- Exact parallel fusion is the checked inverse of parallel splitting. -/
+theorem parallel_fuse_sound
+    {source : CheckedDiagram definitions}
+    (left right : source.val.WireId)
+    (applied : AppliedParallelFuse source left right)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target := by
+  have inverseSound :=
+    applied.inverseLedger.denotes model definitionEnv
+  have inverseLanding :=
+    iso_denotation applied.checked.inverseIso model.toPreModel definitionEnv
+  exact inverseLanding.symm.trans inverseSound.symm
+
 /-- All-end deletion is sound in the checker-selected orientation. -/
 theorem ends_delete_sound
     {source : CheckedDiagram definitions}
@@ -455,6 +512,70 @@ theorem ends_spawn_sound
       intro targetHolds
       exact inverseLanding.mp (sound.2 odd targetHolds)
 
+namespace AppliedCutWrap
+
+/-- Method-form soundness carried by an accepted cut-wrap receipt. -/
+theorem sound
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutWrap source wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  cut_wrap_sound wire applied model definitionEnv
+
+end AppliedCutWrap
+
+namespace AppliedCutAbsorb
+
+/-- Method-form soundness carried by an accepted cut-absorb receipt. -/
+theorem sound
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutAbsorb source wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  cut_absorb_sound wire applied model definitionEnv
+
+end AppliedCutAbsorb
+
+namespace AppliedParallelSplit
+
+/-- Method-form soundness carried by an accepted parallel-split receipt. -/
+theorem sound
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedParallelSplit source wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  parallel_split_sound wire applied model definitionEnv
+
+end AppliedParallelSplit
+
+namespace AppliedParallelFuse
+
+/-- Method-form soundness carried by an accepted parallel-fuse receipt. -/
+theorem sound
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (applied : AppliedParallelFuse source left right)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  parallel_fuse_sound left right applied model definitionEnv
+
+end AppliedParallelFuse
+
 namespace AppliedEndsDelete
 
 /-- Method-form soundness carried by an accepted all-end deletion receipt. -/
@@ -498,7 +619,8 @@ export Content
   (WireContentError AppliedCutWrap AppliedCutAbsorb AppliedParallelSplit
     AppliedParallelFuse AppliedEndsDelete AppliedEndsSpawn applyCutWrap
     applyCutAbsorb applyParallelSplit applyParallelFuse applyEndsDelete
-    applyEndsSpawn ends_delete_sound ends_spawn_sound)
+    applyEndsSpawn cut_wrap_sound cut_absorb_sound parallel_split_sound
+    parallel_fuse_sound ends_delete_sound ends_spawn_sound)
 
 end WirePrimitive
 
@@ -506,6 +628,7 @@ export WirePrimitive
   (WireContentError AppliedCutWrap AppliedCutAbsorb AppliedParallelSplit
     AppliedParallelFuse AppliedEndsDelete AppliedEndsSpawn applyCutWrap
     applyCutAbsorb applyParallelSplit applyParallelFuse applyEndsDelete
-    applyEndsSpawn ends_delete_sound ends_spawn_sound)
+    applyEndsSpawn cut_wrap_sound cut_absorb_sound parallel_split_sound
+    parallel_fuse_sound ends_delete_sound ends_spawn_sound)
 
 end VisualProof

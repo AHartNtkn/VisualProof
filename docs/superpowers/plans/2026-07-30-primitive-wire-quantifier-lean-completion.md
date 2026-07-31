@@ -474,23 +474,23 @@ checkers.
   `parallel_split_sound`, `parallel_fuse_sound`,
   `ends_delete_sound`, and `ends_spawn_sound`.
 
-- [ ] **Step 1: Add RED checker fixtures.** Cover all-end transformation,
+- [x] **Step 1: Add RED checker fixtures.** Cover all-end transformation,
   empty endpoint sets, mixed site regions, exact single-atom cut absorption,
   pairwise co-located parallel matching, endpoint-free spawn, ordered
   argument signatures, site visibility, polarity matrix, and non-head
   refusal.
-- [ ] **Step 2: Implement concrete receipts.** Mirror the merged
+- [x] **Step 2: Implement concrete receipts.** Mirror the merged
   `src/kernel/rules/wire-content.ts` result shape and freshness discipline.
   Every checker proves it selected all applied heads and no others.
-- [ ] **Step 3: Instantiate the witness theorem.** Use:
+- [x] **Step 3: Instantiate the witness theorem.** Use:
   `W := True` for ends deletion; negation for cut wrap/absorb; conjunction
   and diagonal copying for parallel split/fuse. Construct relation-valued
   witnesses in full `Model`; reuse `PreModel.inhabited` only where choosing
   an unused value is sufficient.
-- [ ] **Step 4: Prove exact inverse fixtures.** Wrap/absorb and split/fuse
+- [x] **Step 4: Prove exact inverse fixtures.** Wrap/absorb and split/fuse
   round trips must produce checked isomorphic normalized diagrams with
   transported ordered boundaries.
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build

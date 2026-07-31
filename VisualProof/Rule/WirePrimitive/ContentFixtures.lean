@@ -10,6 +10,10 @@ namespace VisualProof
 #check WirePrimitive.AppliedSiteErasure.Result.universal_outer_transport
 #check WirePrimitive.ends_delete_sound
 #check WirePrimitive.ends_spawn_sound
+#check WirePrimitive.cut_wrap_sound
+#check WirePrimitive.cut_absorb_sound
+#check WirePrimitive.parallel_split_sound
+#check WirePrimitive.parallel_fuse_sound
 #check WirePrimitive.ContentWitnesses.cutBodyEquivalence
 #check WirePrimitive.ContentWitnesses.parallelBodyEquivalence
 #check ConcreteWirePrimitive.endpointFreeDeletion_denotes
@@ -321,14 +325,54 @@ example :
 example (applied : AppliedCutWrap source wire) :
     applied.tag = .cutWrap := rfl
 
+example
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutWrap source wire)
+    (model : Model)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  applied.sound model definitionEnv
+
 example (applied : AppliedCutAbsorb source wire) :
     applied.tag = .cutAbsorb := rfl
+
+example
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutAbsorb source wire)
+    (model : Model)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  applied.sound model definitionEnv
 
 example (applied : AppliedParallelSplit source wire) :
     applied.tag = .parallelSplit := rfl
 
+example
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedParallelSplit source wire)
+    (model : Model)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  applied.sound model definitionEnv
+
 example (applied : AppliedParallelFuse source left right) :
     applied.tag = .parallelFuse := rfl
+
+example
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (applied : AppliedParallelFuse source left right)
+    (model : Model)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    denoteChecked model.toPreModel definitionEnv applied.source ↔
+      denoteChecked model.toPreModel definitionEnv applied.target :=
+  applied.sound model definitionEnv
 
 private def negativeRaw : ConcreteDiagram 0 where
   regionCount := 2
