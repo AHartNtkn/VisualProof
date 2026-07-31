@@ -934,6 +934,31 @@ structure SiteContextFactorization
       (source_visible_exact ▸ sourceScope.frame.context)
       (target_visible_exact ▸ targetScope.frame.context)
 
+/-- Package a construction-owned exact shared outer spine for two compiled
+sites. The executable checker remains the authority that rediscovers it. -/
+def SiteContextFactorization.ofPaired
+    {source : CheckedDiagram definitions}
+    {target : CheckedDiagram definitions}
+    {sourceSite : source.val.RegionId}
+    {targetSite : target.val.RegionId}
+    {sourceScope : SiteCompilation source sourceSite}
+    {targetScope : SiteCompilation target targetSite}
+    (siteOuter : List Sig)
+    (sourceVisibleExact :
+      sourceScope.frame.visible.sigs =
+        localSignatures source.val sourceSite ++ siteOuter)
+    (targetVisibleExact :
+      targetScope.frame.visible.sigs =
+        localSignatures target.val targetSite ++ siteOuter)
+    (paired : PairedContext definitions
+      (localSignatures source.val sourceSite)
+      (localSignatures target.val targetSite)
+      siteOuter
+      (sourceVisibleExact ▸ sourceScope.frame.context)
+      (targetVisibleExact ▸ targetScope.frame.context)) :
+    SiteContextFactorization sourceScope targetScope :=
+  ⟨siteOuter, sourceVisibleExact, targetVisibleExact, paired⟩
+
 theorem SiteContextFactorization.sourceVisibleExact
     {source : CheckedDiagram definitions}
     {target : CheckedDiagram definitions}

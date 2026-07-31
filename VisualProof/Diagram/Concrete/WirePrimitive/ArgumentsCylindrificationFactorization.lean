@@ -1,6 +1,6 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationLocal
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsConstructionNaturality
-import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsFrameNaturality
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsSiteFactorization
 
 namespace VisualProof
 
@@ -253,6 +253,47 @@ private def checkLocalCylindricalFrame
     checkAllAppliedSites result.checked result.targetWire
   checkLocalCylindricalFrameFromSites result sourceArguments sourceSignature
     targetSites
+
+private theorem checkLocalCylindricalFrameFromSites_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (targetSites : AllAppliedSites result.checked result.targetWire) :
+    ∃ frame,
+      checkLocalCylindricalFrameFromSites result sourceArguments
+          sourceSignature targetSites = some frame := by
+  obtain ⟨sourceScope, sourceAccepted⟩ :=
+    compileSite_complete source (source.val.wires wire).scope
+  obtain ⟨targetScope, targetAccepted⟩ :=
+    compileSite_complete result.checked
+      (result.checked.val.wires result.targetWire).scope
+  obtain ⟨context, contextAccepted⟩ :=
+    checkSiteContextFactorization_argument_complete result localized
+      sourceScope targetScope
+  unfold checkLocalCylindricalFrameFromSites
+  simp [sourceAccepted, targetAccepted, contextAccepted]
+
+private theorem checkLocalCylindricalFrame_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments) :
+    ∃ frame,
+      checkLocalCylindricalFrame result sourceArguments sourceSignature =
+        some frame := by
+  obtain ⟨frame, frameAccepted⟩ :=
+    checkLocalCylindricalFrameFromSites_complete result localized
+      sourceArguments sourceSignature result.targetSites
+  exact ⟨frame, by
+    simp [checkLocalCylindricalFrame, result.targetSites.checked,
+      frameAccepted]⟩
 
 private def sourceCylindricalShape
     {source : CheckedDiagram definitions}
