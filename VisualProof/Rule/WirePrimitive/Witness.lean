@@ -40,9 +40,10 @@ private theorem inner
     (has : HasEliminatingWitness rewrite) :
     rewrite.targetInner → rewrite.sourceInner := by
   rintro ⟨target, targetHolds⟩
-  exact ⟨has.witness target,
-    (rewrite.siteContext.fill_congr
-      (has.pointwise target)).mpr targetHolds⟩
+  exact
+    ⟨has.witness target,
+      (rewrite.body_congruent (has.witness target) target
+        (has.pointwise target)).mpr targetHolds⟩
 
 end HasEliminatingWitness
 
@@ -55,9 +56,10 @@ private theorem inner
     (has : HasIntroducingWitness rewrite) :
     rewrite.sourceInner → rewrite.targetInner := by
   rintro ⟨source, sourceHolds⟩
-  exact ⟨has.witness source,
-    (rewrite.siteContext.fill_congr
-      (has.pointwise source)).mp sourceHolds⟩
+  exact
+    ⟨has.witness source,
+      (rewrite.body_congruent source (has.witness source)
+        (has.pointwise source)).mp sourceHolds⟩
 
 end HasIntroducingWitness
 

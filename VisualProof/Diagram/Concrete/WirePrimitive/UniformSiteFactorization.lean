@@ -14,9 +14,11 @@ The semantic layer separates two checked contexts:
 * `UniformScopeContext` surrounds the acted wire's binder scope. Its cut
   depth is the sole directional polarity authority.
 
-This module owns the private uniform-rewrite constructor. Concrete
-factorization checkers live beside it so no rule-facing module can manufacture
-whole-diagram semantic equations.
+`UniformSiteBodyFactorization` is the concrete proof boundary between them.
+It retains only the checker-derived fact needed by the witness theorem:
+pointwise cell equivalence implies equivalence of the complete bodies inside
+the acted binder scope. This module owns both private constructors, so no
+rule-facing module can manufacture whole-diagram semantic equations.
 -/
 
 /-- A checked propositional context with one hole per logical wire site. -/
@@ -80,6 +82,60 @@ theorem fill_congr
   context.congruent left right pointwise
 
 end UniformSiteContext
+
+/--
+The complete checked body inside one acted binder scope.
+
+Concrete all-site zipper construction proves `pointwise_exact`; consumers
+cannot replace it with caller-supplied whole-diagram equations. The abstract
+fixture constructor below is the only non-concrete inhabitant and derives this
+field from an explicit `UniformSiteContext`.
+-/
+structure UniformSiteBodyFactorization
+    (siteCount : Nat)
+    (SourceWitness TargetWitness : Type w) where
+  private mk ::
+  sourceAt : SourceWitness → Fin siteCount → Prop
+  targetAt : TargetWitness → Fin siteCount → Prop
+  sourceBody : SourceWitness → Prop
+  targetBody : TargetWitness → Prop
+  private pointwise_exact :
+    ∀ source target,
+      (∀ site, sourceAt source site ↔ targetAt target site) →
+        (sourceBody source ↔ targetBody target)
+
+namespace UniformSiteBodyFactorization
+
+/-- Pointwise cell equivalence fills the complete checked scope body. -/
+theorem congruent
+    (factorization :
+      UniformSiteBodyFactorization siteCount SourceWitness TargetWitness)
+    (source : SourceWitness)
+    (target : TargetWitness)
+    (pointwise :
+      ∀ site,
+        factorization.sourceAt source site ↔
+          factorization.targetAt target site) :
+    factorization.sourceBody source ↔
+      factorization.targetBody target :=
+  factorization.pointwise_exact source target pointwise
+
+/--
+Definitionally exact logical factorization for witness-theorem fixtures.
+Concrete rule receipts never call this constructor.
+-/
+private def ofLogicalContext
+    (context : UniformSiteContext siteCount)
+    (sourceAt : SourceWitness → Fin siteCount → Prop)
+    (targetAt : TargetWitness → Fin siteCount → Prop) :
+    UniformSiteBodyFactorization siteCount SourceWitness TargetWitness :=
+  UniformSiteBodyFactorization.mk sourceAt targetAt
+    (fun witness => context.fill (sourceAt witness))
+    (fun witness => context.fill (targetAt witness)) (by
+      intro source target pointwise
+      exact context.fill_congr pointwise)
+
+end UniformSiteBodyFactorization
 
 /--
 One semantic context surrounding the acted wire's binder scope. The retained
@@ -192,22 +248,19 @@ structure UniformSiteRewrite
     sourceSites.map sourcePosition = List.finRange siteCount
   private target_exhaustive :
     targetSites.map targetPosition = List.finRange siteCount
-  siteContext : UniformSiteContext siteCount
+  siteFactorization :
+    UniformSiteBodyFactorization siteCount SourceWitness TargetWitness
   scopeContext : UniformScopeContext
   private scope_depth_exact :
     scopeContext.cutDepth = binderCutDepth
-  sourceAt : SourceWitness → Fin siteCount → Prop
-  targetAt : TargetWitness → Fin siteCount → Prop
   sourceResult : Prop
   targetResult : Prop
   private source_result_exact :
     sourceResult ↔
-      scopeContext.fill
-        (∃ witness, siteContext.fill (sourceAt witness))
+      scopeContext.fill (∃ witness, siteFactorization.sourceBody witness)
   private target_result_exact :
     targetResult ↔
-      scopeContext.fill
-        (∃ witness, siteContext.fill (targetAt witness))
+      scopeContext.fill (∃ witness, siteFactorization.targetBody witness)
   normalizeResult : Result → Result
   rawTarget : Result
   normalizedTarget : Result
@@ -241,14 +294,46 @@ def abstractLogical
     (targetAt : TargetWitness → Fin siteCount → Prop) :
     UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
       PUnit :=
+  let factorization :=
+    UniformSiteBodyFactorization.ofLogicalContext
+      siteContext sourceAt targetAt
   UniformSiteRewrite.mk signature binderScope scopeContext.cutDepth siteCount
     sourceSites targetSites sourcePosition targetPosition sourceExhaustive
-    targetExhaustive siteContext scopeContext rfl sourceAt targetAt
+    targetExhaustive factorization scopeContext rfl
     (scopeContext.fill
-      (∃ witness, siteContext.fill (sourceAt witness)))
+      (∃ witness, factorization.sourceBody witness))
     (scopeContext.fill
-      (∃ witness, siteContext.fill (targetAt witness)))
+      (∃ witness, factorization.targetBody witness))
     Iff.rfl Iff.rfl id PUnit.unit PUnit.unit rfl
+
+/-- Source proposition at one exact logical site. -/
+def sourceAt
+    (rewrite :
+      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
+        Result) :
+    SourceWitness → Fin rewrite.siteCount → Prop :=
+  rewrite.siteFactorization.sourceAt
+
+/-- Target proposition at the corresponding exact logical site. -/
+def targetAt
+    (rewrite :
+      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
+        Result) :
+    TargetWitness → Fin rewrite.siteCount → Prop :=
+  rewrite.siteFactorization.targetAt
+
+/-- Pointwise site equivalence fills the complete checked binder body. -/
+theorem body_congruent
+    (rewrite :
+      UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
+        Result)
+    (source : SourceWitness)
+    (target : TargetWitness)
+    (pointwise :
+      ∀ site, rewrite.sourceAt source site ↔ rewrite.targetAt target site) :
+    rewrite.siteFactorization.sourceBody source ↔
+      rewrite.siteFactorization.targetBody target :=
+  rewrite.siteFactorization.congruent source target pointwise
 
 /-- The source collection covers every logical position exactly once. -/
 theorem source_positions
@@ -289,14 +374,14 @@ def sourceInner
     (rewrite :
       UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
         Result) : Prop :=
-  ∃ witness, rewrite.siteContext.fill (rewrite.sourceAt witness)
+  ∃ witness, rewrite.siteFactorization.sourceBody witness
 
 /-- Logical body of the checked target factorization. -/
 def targetInner
     (rewrite :
       UniformSiteRewrite SourceSite TargetSite SourceWitness TargetWitness
         Result) : Prop :=
-  ∃ witness, rewrite.siteContext.fill (rewrite.targetAt witness)
+  ∃ witness, rewrite.siteFactorization.targetBody witness
 
 /-- Checked source denotation equals the factored source proposition. -/
 theorem source_exact
