@@ -1,9 +1,9 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame, WireView } from './engine'
-import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, frameSlots, FRAME_MARGIN } from './engine'
-import { mkFreeSpace, route, segSoftCost } from './route/freespace'
-import type { Disc as RouteDisc, Bounds } from './route/freespace'
+import { DISC_R, ROUTE_CLEAR, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, routeObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
+import { route, segSoftCost } from './route/freespace'
+import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
 import { advanceNetwork, netEval, FD_PROBE } from './route/network'
 import type { WireNet } from './route/network'
 import type { CurveBC } from './route/curve'
@@ -706,10 +706,12 @@ export function wireEnergy(e: Engine): number {
     optimum (endpoints re-derived live at probe time). */
 export type FrozenEdge = { readonly wid: string; readonly u: number; readonly v: number; readonly interior: readonly Vec2[] }
 
-/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs and
-    the drawn curve segments (the same ones `segSeparationE` sums over). */
-export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[] } {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+/** Exact wire energy PLUS the frozen-path capture the probe evaluator needs,
+    the drawn curve segments (the same ones `segSeparationE` sums over), and
+    each wire's forbidden-region discs (the frozen model freezes them along
+    with the corridors). */
+export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; segs: WireSeg[]; forbidden: ReadonlyMap<WireId, readonly RouteDisc[]> } {
+  const spaces = wireRouteSpaces(e)
   const beta = rodBeta(e)
   let E = 0
   const edges: FrozenEdge[] = []
@@ -717,6 +719,7 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fs = spaces.space(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     for (const [u, v] of w.net.edges) {
@@ -727,7 +730,7 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
       for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid, a: pts[i]!, b: pts[i + 1]! })
     }
   }
-  return { E: E + segSeparationE(segs, e.scale), edges, segs }
+  return { E: E + segSeparationE(segs, e.scale), edges, segs, forbidden: spaces.forbidden }
 }
 
 /**
@@ -742,24 +745,29 @@ export function wireEnergyCapture(e: Engine): { E: number; edges: FrozenEdge[]; 
  * strict descent is exact; only probe DIRECTIONS use the equal-derivative
  * majorizer.
  */
-export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[]): number {
-  const space = { discs: routeObstacles(e), bounds: routeBounds(e) }
+export function frozenWireEnergy(e: Engine, edges: readonly FrozenEdge[], forbidden: ReadonlyMap<WireId, readonly RouteDisc[]>): number {
+  const nodes = routeObstacles(e)
+  const bounds = routeBounds(e)
   const beta = rodBeta(e)
   let E = 0
   const segs: { wid: string; a: Vec2; b: Vec2 }[] = []
-  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[] }>()
+  const perWire = new Map<string, { terms: Vec2[]; bcs: CurveBC[]; junctions: Vec2[]; space: { discs: readonly RouteDisc[]; bounds: Bounds | null } }>()
   for (const fe of edges) {
     let c = perWire.get(fe.wid)
     if (c === undefined) {
       const w = e.wires.get(fe.wid)!
-      c = { terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions }
+      const forb = forbidden.get(fe.wid)
+      c = {
+        terms: wireTerminalPoints(e, w), bcs: wireTerminalBCs(e, w), junctions: w.net.junctions,
+        space: { discs: forb !== undefined && forb.length > 0 ? [...nodes, ...forb] : nodes, bounds },
+      }
       perWire.set(fe.wid, c)
     }
     const cc = c
     const pos = (v: number): Vec2 => (v < cc.terms.length ? cc.terms[v]! : cc.junctions[v - cc.terms.length]!)
     const way: Vec2[] = [pos(fe.u), ...fe.interior, pos(fe.v)]
     const pts = edgeCurvePts(fe.u < cc.bcs.length ? cc.bcs[fe.u]! : null, fe.v < cc.bcs.length ? cc.bcs[fe.v]! : null, way, ROUTE_CLEAR * e.scale)
-    E += rodCost(pts, space, beta)
+    E += rodCost(pts, cc.space, beta)
     for (let i = 0; i + 1 < pts.length; i++) segs.push({ wid: fe.wid, a: pts[i]!, b: pts[i + 1]! })
   }
   return E + segSeparationE(segs, e.scale)
@@ -785,6 +793,11 @@ export type FrozenState = {
   readonly wires: FrozenWireCap[]
   readonly termWires: Map<string, number[]>
   readonly obstacle: Map<string, RouteDisc>
+  /** Each wire's forbidden-region discs at capture. The frozen model freezes
+      them with the corridors: probe rebuilds charge against these, so probe
+      deltas stay exact within the model even when a displaced body would move
+      a region circle (gates re-evaluate the true energy regardless). */
+  readonly forbidden: ReadonlyMap<WireId, readonly RouteDisc[]>
   readonly grid: SepGrid
   readonly R: number
   readonly beta: number
@@ -801,7 +814,7 @@ export type FrozenState = {
 /** Build the frozen state ONCE per operatorStep from a base capture. It IS a full
     exact eval (the routing solve), so it replaces the step's wireEnergyCapture. */
 export function mkFrozenState(e: Engine): FrozenState {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const spaces = wireRouteSpaces(e)
   const bounds = routeBounds(e)
   const beta = rodBeta(e)
   const sc = e.scale
@@ -815,6 +828,7 @@ export function mkFrozenState(e: Engine): FrozenState {
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fs = spaces.space(wid)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
     const wi = wires.length
@@ -853,7 +867,7 @@ export function mkFrozenState(e: Engine): FrozenState {
     wireSep[segWire[j]!]! += ePair
   })
   return {
-    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle, grid, R, beta, sc, bounds,
+    segs, segWire: Int32Array.from(segWire), wires, termWires, obstacle, forbidden: spaces.forbidden, grid, R, beta, sc, bounds,
     frozenTotal: rodTotal + sepTotal, wireSep, seen: new Int32Array(segs.length), stamp: 0,
   }
 }
@@ -919,12 +933,14 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
 
   // (1) rebuild the curves of wires terminating on bodyId; full rodCost delta.
   if (affSet !== null) {
-    const space = { discs: routeObstacles(e), bounds: fst.bounds }
+    const nodes = routeObstacles(e)
     for (const wi of affSet) {
       const cap = fst.wires[wi]!
       const w = e.wires.get(cap.wid)!
       const terms = wireTerminalPoints(e, w)
       const bcs = wireTerminalBCs(e, w)
+      const forb = fst.forbidden.get(cap.wid)
+      const space = { discs: forb !== undefined && forb.length > 0 ? [...nodes, ...forb] : nodes, bounds: fst.bounds }
       const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
       let newRod = 0
       for (const fe of cap.edges) {
@@ -1515,24 +1531,25 @@ function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> |
     cycle that never rested. The Δsep term is charged via the spatial grid of the
     other wires' segments (they do not move while this wire walks). */
 function walkWires(e: Engine, presentation = false, skip: ReadonlySet<WireId> | null = null): boolean {
-  const fs = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const spaces = wireRouteSpaces(e)
   const beta = rodBeta(e), sc = e.scale, tol = ROUTE_CLEAR * sc, R = WIREP.sepR * sc
   // the walk moves VISIBLE junction state: presentation frames use the one
   // presentation bound (the same per-frame pace every visible DOF gets);
   // solver walks keep the full trust region (descent is optimization, not
   // simulation — 2026-07-25)
   const bound = presentation ? (WIREP.travelCap / PRESENT_SLOW) * sc : WIREP.travelCap * sc
-  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[] }[] = []
+  const walkers: { wid: WireId; w: WireView; terms: Vec2[]; bcs: CurveBC[]; fs: FreeSpace }[] = []
   const segsByWid = new Map<WireId, Seg2[]>()
   for (const [wid, w] of e.wires) {
     const terms = wireTerminalPoints(e, w)
     if (terms.length < 2) continue
+    const fsW = spaces.space(wid)
     const bcs = wireTerminalBCs(e, w)
-    walkers.push({ wid, w, terms, bcs })
-    segsByWid.set(wid, netEval(w.net, terms, fs, bcs, beta, tol).segs)
+    walkers.push({ wid, w, terms, bcs, fs: fsW })
+    segsByWid.set(wid, netEval(w.net, terms, fsW, bcs, beta, tol).segs)
   }
   let routed = false
-  for (const { wid, w, terms, bcs } of walkers) {
+  for (const { wid, w, terms, bcs, fs } of walkers) {
     if (skip !== null && skip.has(wid)) continue
     // grid of every OTHER wire's current segments (fixed while this wire walks).
     const others: Seg2[] = []

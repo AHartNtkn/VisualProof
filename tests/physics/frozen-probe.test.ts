@@ -49,7 +49,7 @@ describe('frozen-probe delta equals a fresh frozen eval (plan Task 8b)', () => {
         }
         const capBase = wireEnergyCapture(e)
         const fst = mkFrozenState(e)
-        const frozenBase = frozenWireEnergy(e, capBase.edges)
+        const frozenBase = frozenWireEnergy(e, capBase.edges, capBase.forbidden)
         // the frozen state's cached total must equal a fresh frozen eval at base
         expect(close(fst.frozenTotal, frozenBase), `${name} v${variant}: fst.frozenTotal ${fst.frozenTotal} vs fresh ${frozenBase}`).toBe(true)
 
@@ -63,7 +63,7 @@ describe('frozen-probe delta equals a fresh frozen eval (plan Task 8b)', () => {
             const savedPos = { ...b.pos }, savedTheta = b.theta
             mutate()
             recomputeRegions(e)
-            const refDelta = frozenWireEnergy(e, capBase.edges) - frozenBase
+            const refDelta = frozenWireEnergy(e, capBase.edges, capBase.forbidden) - frozenBase
             const probeDelta = frozenProbe(fst, e, b.id)
             expect(close(probeDelta, refDelta),
               `${name} v${variant} body ${b.id} d${coord}: probe ${probeDelta} vs fresh ${refDelta} (Δ ${Math.abs(probeDelta - refDelta).toExponential(2)})`).toBe(true)

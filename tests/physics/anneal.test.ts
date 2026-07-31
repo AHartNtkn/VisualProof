@@ -5,7 +5,7 @@ import type { Diagram } from '../../src/kernel/diagram/diagram'
 import type { Engine } from '../../src/view/engine'
 import { mkEngine } from '../../src/view/engine'
 import { settle, recomputeRegions, resolveOverlaps, establishFrame } from '../../src/view/relax'
-import { layoutScore, LayoutOptimizer, applyLayoutSnapshot, MOVE_REGISTRY, movableUnits } from '../../src/view/optimize'
+import { layoutScore, LayoutOptimizer, MOVE_REGISTRY, movableUnits } from '../../src/view/optimize'
 import type { LayoutBest } from '../../src/view/optimize'
 
 /**
@@ -33,38 +33,46 @@ import type { LayoutBest } from '../../src/view/optimize'
  */
 
 /** Cut holding K star-wired refs (a heavy cohesive obstacle subtree — no
-    wandering end dots), wedged between two wired root refs. */
-function buildTrap(k: number): { d: Diagram; cut: string; n0: string; n1: string } {
+    wandering end dots), wedged between `pairs` left–right wired ref pairs.
+    Under the cut-obstacle metric (2026-07-30) a SINGLE crossing wire just
+    detours around the wedge at modest cost — the wedge is not a trap — so the
+    fixture crosses it with two wires: each pays its detour plus separation
+    against the other's, and moving the cut aside wins decisively (measured
+    trapped 1589.6 vs aside 377.3). */
+function buildTrap(k: number, pairs: number): { d: Diagram; cut: string; left: string[]; right: string[] } {
   const b = new DiagramBuilder()
   const cut = b.cut(b.root)
   const inner: string[] = []
   for (let i = 0; i < k; i++) inner.push(b.ref(cut, `C${i}`, relSig([IOTA])))
   if (k >= 2) b.wire(cut, inner.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })), IOTA)
-  const n0 = b.ref(b.root, 'R', relSig([IOTA]))
-  const n1 = b.ref(b.root, 'S', relSig([IOTA]))
-  b.wire(b.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
-  return { d: b.build(), cut, n0, n1 }
+  const left: string[] = [], right: string[] = []
+  for (let p = 0; p < pairs; p++) {
+    const n0 = b.ref(b.root, `L${p}`, relSig([IOTA]))
+    const n1 = b.ref(b.root, `R${p}`, relSig([IOTA]))
+    b.wire(b.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
+    left.push(n0); right.push(n1)
+  }
+  return { d: b.build(), cut, left, right }
 }
 
-/** The wedged local minimum: refs pushed apart on the x-axis, the cut blob
-    clustered at the origin between them, then settled to rest. */
-function trappedEngine(d: Diagram, cut: string, n0: string, n1: string): Engine {
-  const e = mkEngine(d, [])
-  const cutBodies = [...e.bodies.values()].filter((b) => b.region === cut)
-  e.bodies.get(n0)!.pos = { x: -34, y: 0 }
-  e.bodies.get(n1)!.pos = { x: 34, y: 0 }
-  cutBodies.forEach((b, i) => { b.pos = { x: Math.cos(i * 2.4) * 5, y: Math.sin(i * 2.4) * 5 } })
+/** A settled rest from an explicit seed: ref pairs spread on the x-axis, the
+    cut blob either wedged at the origin between them or displaced aside. The
+    aside rest is the acceptance REFERENCE floor — measured in-test, so the
+    contract self-calibrates to the current energy instead of pinning a stale
+    ratio. */
+function settledSeed(t: { d: Diagram; cut: string; left: string[]; right: string[] }, aside: boolean): Engine {
+  const e = mkEngine(t.d, [])
+  const n = t.left.length
+  t.left.forEach((id, p) => { e.bodies.get(id)!.pos = { x: -34, y: (p - (n - 1) / 2) * 16 } })
+  t.right.forEach((id, p) => { e.bodies.get(id)!.pos = { x: 34, y: (p - (n - 1) / 2) * 16 } })
+  ;[...e.bodies.values()].filter((b) => b.region === t.cut).forEach((b, i) => {
+    b.pos = aside
+      ? { x: Math.cos(i * 2.4) * 5, y: 45 + Math.sin(i * 2.4) * 5 }
+      : { x: Math.cos(i * 2.4) * 5, y: Math.sin(i * 2.4) * 5 }
+  })
   settle(e, 8000)
   recomputeRegions(e)
   return e
-}
-
-/** The cut circle diameter when `best` is laid out on a fresh engine. */
-function cutDiameterOf(best: LayoutBest, d: Diagram, cut: string): number {
-  const g = mkEngine(d, [])
-  applyLayoutSnapshot(g, best)
-  recomputeRegions(g)
-  return 2 * g.regions.get(cut)!.radius
 }
 
 /** Drive the search one atomic unit per tick until the best reaches `target` or
@@ -91,28 +99,26 @@ function bestSequence(e: Engine, seed: number, units: number): number[] {
 }
 
 describe('basin hopping escapes the wedged-cut trap (plan Task 6 acceptance)', () => {
-  it('a cut subtree wedged between two wired refs is moved aside; best <= 0.6x trapped', () => {
-    const { d, cut, n0, n1 } = buildTrap(3)
-    const e = trappedEngine(d, cut, n0, n1)
+  it('a cut subtree wedged between two crossing wires is moved aside, reaching the measured aside floor', () => {
+    const trap = buildTrap(3, 2)
+    const e = settledSeed(trap, false)
     const trapped = layoutScore(e)
+    const asideFloor = layoutScore(settledSeed(trap, true))
 
-    // Basin hopping escapes this wedged 3-ref cut a few hops after the sliced
-    // 16-probe calibration (measured ~19 units, ~10 s). Each unit is one atomic
-    // relaxation; the loop stops at the first escape (safety cap 40 units). K=3
-    // is the largest wedged cut that fits the 30 s suite cap — each hop is a full
-    // relaxation (~1.5 s here vs ~2.9 s on the ratified K=4 cut, whose calibration
-    // alone would exceed 30 s; the brief's 60 s budget is impossible under the
-    // cap) — see task6-report.md.
-    const best = anneal(e, 0xace4, 0.6 * trapped, 40)
+    // fixture sanity: the wedge IS a trap under the current energy — the aside
+    // basin is far lower, and only a coordinated subtree displacement relocates
+    // the multi-body cut (measured 2026-07-30: trapped 1589.6, aside 377.3).
+    expect(asideFloor, `aside ${asideFloor.toFixed(1)} must undercut trapped ${trapped.toFixed(1)} decisively`)
+      .toBeLessThan(0.5 * trapped)
 
-    const b0 = best.poses.get(n0)!.pos, b1 = best.poses.get(n1)!.pos
-    const refDist = Math.hypot(b0.x - b1.x, b0.y - b1.y)
-    const cutDiam = cutDiameterOf(best, d, cut)
+    // Basin hopping escapes a few hops after the sliced 16-probe calibration
+    // (measured 17 units, ~8 s; safety cap 40). The target is the measured
+    // aside floor itself (+2% relaxation slack): the search must actually find
+    // the basin the reference seed settles into, not merely improve.
+    const best = anneal(e, 0xace4, asideFloor * 1.02, 40)
 
-    expect(best.score, `best ${best.score.toFixed(1)} vs 0.6·trapped ${(0.6 * trapped).toFixed(1)}`)
-      .toBeLessThanOrEqual(0.6 * trapped)
-    expect(refDist, `two wired refs ${refDist.toFixed(1)} vs cut diameter ${cutDiam.toFixed(1)}`)
-      .toBeLessThan(cutDiam)
+    expect(best.score, `best ${best.score.toFixed(1)} vs aside floor ${asideFloor.toFixed(1)} (trapped ${trapped.toFixed(1)})`)
+      .toBeLessThanOrEqual(asideFloor * 1.02)
   })
 })
 

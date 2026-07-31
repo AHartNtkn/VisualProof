@@ -155,28 +155,6 @@ export function insideAnyDisc(p: Vec2, discs: readonly Disc[]): number {
   return -1
 }
 
-/** Push a point out of every disc interior (feasibility projection for
-    junction coordinates). Deterministic; at most one pass per disc in index
-    order, repeated until clear (bounded by disc count). */
-export function projectFeasible(p: Vec2, discs: readonly Disc[], bounds: Bounds | null = null): Vec2 {
-  let x = p.x, y = p.y
-  if (bounds !== null) {
-    x = Math.max(bounds.minX, Math.min(bounds.maxX, x))
-    y = Math.max(bounds.minY, Math.min(bounds.maxY, y))
-  }
-  for (let pass = 0; pass < discs.length + 1; pass++) {
-    const i = insideAnyDisc({ x, y }, discs)
-    if (i < 0) break
-    const D = discs[i]!
-    const dx = x - D.c.x, dy = y - D.c.y
-    const d = Math.hypot(dx, dy)
-    const ux = d < 1e-12 ? 1 : dx / d, uy = d < 1e-12 ? 0 : dy / d
-    x = D.c.x + ux * (D.r + 1e-6)
-    y = D.c.y + uy * (D.r + 1e-6)
-  }
-  return { x, y }
-}
-
 export function mkFreeSpace(discs: readonly Disc[], bounds: Bounds | null = null): FreeSpace {
   return { discs, bounds, tg: null, memo: new Map() }
 }

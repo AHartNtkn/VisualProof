@@ -1,8 +1,8 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireView } from './engine'
-import { ROUTE_CLEAR, routeObstacles, routeBounds, wireTerminalBCs, wireTerminalPoints } from './engine'
-import { mkFreeSpace, route, type FreeSpace } from './route/freespace'
+import { ROUTE_CLEAR, wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
+import { route, type FreeSpace } from './route/freespace'
 import { edgeCurveCubics, sampleCubics } from './route/curve'
 import type { Cubic } from './route/curve'
 
@@ -60,9 +60,10 @@ export function computeLegs(e: Engine): LegGeom[] {
 }
 
 function computeLegsUncached(e: Engine): LegGeom[] {
-  const fs: FreeSpace = mkFreeSpace(routeObstacles(e), routeBounds(e))
+  const spaces = wireRouteSpaces(e)
   const out: LegGeom[] = []
   for (const [wid, w] of e.wires) {
+    const fs: FreeSpace = spaces.space(wid)
     const terms = wireTerminalPoints(e, w)
     const bcs = wireTerminalBCs(e, w)
     const pos = (v: number): Vec2 => (v < terms.length ? terms[v]! : w.net.junctions[v - terms.length]!)
