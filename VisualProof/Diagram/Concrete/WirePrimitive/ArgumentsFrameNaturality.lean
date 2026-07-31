@@ -43,6 +43,26 @@ theorem ArgumentResult.contextWireMap_signature
   rw [result.contextWireMap_retained sourceWire retained]
   exact result.retainedWireImage_signature sourceWire retained
 
+/-- A wire local to a region not enclosed by the acted scope cannot be among
+the localized replacement's removed wires. -/
+theorem ArgumentResult.wireAt_not_below_not_removed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (region : source.val.RegionId)
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope region)
+    (sourceWire : source.val.WireId)
+    (member : sourceWire ∈ source.val.wiresAt region) :
+    sourceWire ∉ result.sourceRemovedWires := by
+  intro removed
+  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member
+  have localScope := eq_of_beq member.2
+  apply notBelow
+  rw [← localScope]
+  exact localized.removed_enclosed sourceWire removed
+
 /-- A wire local to a strict ancestor of a localized replacement cannot be
 among the replacement's removed wires. -/
 theorem ArgumentResult.wireAt_strictlyAbove_not_removed
@@ -57,16 +77,12 @@ theorem ArgumentResult.wireAt_strictlyAbove_not_removed
     (sourceWire : source.val.WireId)
     (member : sourceWire ∈ source.val.wiresAt outer) :
     sourceWire ∉ result.sourceRemovedWires := by
-  intro removed
-  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member
-  have localScope := eq_of_beq member.2
-  have actedEnclosesOuter :
-      source.val.Encloses (source.val.wires wire).scope outer := by
-    rw [← localScope]
-    exact localized.removed_enclosed sourceWire removed
+  apply result.wireAt_not_below_not_removed localized outer
+  intro actedEnclosesOuter
   have same := factor_encloses_antisymm definitions source.val
     source.property outerEncloses actedEnclosesOuter
   exact strict same
+  exact member
 
 /-- Every incidence of a retained source node is reproduced on the
 canonical target node and wire images. -/
@@ -99,17 +115,16 @@ theorem ArgumentResult.retainedNode_forwardIncident
     ⟨result.retainedNodeImage node nodeRetained, port⟩
     (result.retainedWireImage sourceWire sourceWireRetained) targetOwner
 
-/-- At a strict ancestor of the acted scope, ordered local wire identifiers
-are exactly the canonical images of the source identifiers. -/
-theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
+/-- At any region not enclosed by the acted scope, ordered local wire
+identifiers are exactly the canonical images of the source identifiers. -/
+theorem ArgumentResult.wiresAt_contextWireMap_not_below
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
     (localized : result.ScopeLocalization)
     (outer : source.val.RegionId)
-    (outerEncloses :
-      source.val.Encloses outer (source.val.wires wire).scope)
-    (strict : outer ≠ (source.val.wires wire).scope) :
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope outer) :
     result.checked.val.wiresAt (result.regionImage outer) =
       (source.val.wiresAt outer).map result.contextWireMap := by
   rw [result.wiresAt_decomposition outer]
@@ -121,19 +136,21 @@ theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
     apply List.filter_eq_self.mpr
     intro sourceWire member
     exact decide_eq_true
-      (result.wireAt_strictlyAbove_not_removed localized outer
-        outerEncloses strict sourceWire member)
+      (result.wireAt_not_below_not_removed localized outer notBelow
+        sourceWire member)
   have headEmpty :
       (Data.Finite.allFin 1).filter (fun _head =>
           retainedRegion source (source.val.wires wire).scope ==
             retainedRegion source outer) = [] := by
     apply List.filter_eq_nil_iff.mpr
     intro _head _member accepted
-    apply strict
-    apply (Internal.noRegionRemovalEquiv source).injective
-    rw [← retainedRegion_eq_noRegionRemovalEquiv,
-      ← retainedRegion_eq_noRegionRemovalEquiv]
-    exact (eq_of_beq accepted).symm
+    apply notBelow
+    have same : (source.val.wires wire).scope = outer := by
+      apply (Internal.noRegionRemovalEquiv source).injective
+      rw [← retainedRegion_eq_noRegionRemovalEquiv,
+        ← retainedRegion_eq_noRegionRemovalEquiv]
+      exact eq_of_beq accepted
+    exact same ▸ ConcreteDiagram.encloses_refl source.val _
   have localEmpty :
       (Data.Finite.allFin result.spec.localCount).filter (fun fresh =>
           retainedRegion source (result.spec.localScope fresh) ==
@@ -149,9 +166,7 @@ theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
         source.val.Encloses (source.val.wires wire).scope outer := by
       rw [← localExact]
       exact localized.local_enclosed fresh
-    have same := factor_encloses_antisymm definitions source.val
-      source.property outerEncloses actedEnclosesOuter
-    exact strict same
+    exact notBelow actedEnclosesOuter
   rw [headEmpty, localEmpty]
   simp only [List.map_nil, List.append_nil]
   have baseSources := batchRemovalCandidate_wiresAt_sources
@@ -194,6 +209,25 @@ theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
         intro retained _member
         rfl
     _ = _ := by rw [baseSources]
+
+/-- At a strict ancestor of the acted scope, ordered local wire identifiers
+are exactly the canonical images of the source identifiers. -/
+theorem ArgumentResult.wiresAt_contextWireMap_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    result.checked.val.wiresAt (result.regionImage outer) =
+      (source.val.wiresAt outer).map result.contextWireMap := by
+  apply result.wiresAt_contextWireMap_not_below localized outer
+  intro actedEnclosesOuter
+  have same := factor_encloses_antisymm definitions source.val
+    source.property outerEncloses actedEnclosesOuter
+  exact strict same
 
 private def contextEmbeddingMapped
     (source : ConcreteDiagram sourceCount)
@@ -481,6 +515,33 @@ theorem signature_exact
   result.contextWireMap_signature sourceWire
     (context.source_retained sourceWire member)
 
+/-- Descending through any region not enclosed by the acted scope extends
+both compiler contexts by corresponding ordered local-wire blocks. -/
+def extendNotBelow
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (localized : result.ScopeLocalization)
+    (outer : source.val.RegionId)
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope outer) :
+    result.RetainedContext (sourceContext.extend outer)
+      (targetContext.extend (result.regionImage outer)) :=
+  { source_retained := by
+      intro sourceWire member
+      simp only [WireContext.extend, List.mem_append] at member
+      rcases member with localMember | previous
+      · exact result.wireAt_not_below_not_removed localized outer
+          notBelow sourceWire localMember
+      · exact context.source_retained sourceWire previous
+    ids_exact := by
+      unfold WireContext.extend
+      rw [result.wiresAt_contextWireMap_not_below localized outer
+        notBelow, context.ids_exact, List.map_append] }
+
 /-- Descending through a strict ancestor extends both compiler contexts by
 the corresponding ordered local-wire blocks. -/
 def extendStrictlyAbove
@@ -496,18 +557,12 @@ def extendStrictlyAbove
       source.val.Encloses outer (source.val.wires wire).scope)
     (strict : outer ≠ (source.val.wires wire).scope) :
     result.RetainedContext (sourceContext.extend outer)
-      (targetContext.extend (result.regionImage outer)) :=
-  { source_retained := by
-      intro sourceWire member
-      simp only [WireContext.extend, List.mem_append] at member
-      rcases member with localMember | previous
-      · exact result.wireAt_strictlyAbove_not_removed localized outer
-          outerEncloses strict sourceWire localMember
-      · exact context.source_retained sourceWire previous
-    ids_exact := by
-      unfold WireContext.extend
-      rw [result.wiresAt_contextWireMap_strictlyAbove localized outer
-        outerEncloses strict, context.ids_exact, List.map_append] }
+      (targetContext.extend (result.regionImage outer)) := by
+  apply context.extendNotBelow localized outer
+  intro actedEnclosesOuter
+  have same := factor_encloses_antisymm definitions source.val
+    source.property outerEncloses actedEnclosesOuter
+  exact strict same
 
 /-- Corresponding visible contexts have definitionally ordered equal
 signature lists, even though their concrete wire identifiers differ. -/
@@ -654,6 +709,45 @@ theorem compileNode_natural
         sourceWire incident)
     sourceCompiled
 
+/-- No rewritten application node is local to a region not enclosed by the
+acted scope. -/
+theorem nodeAt_not_below_not_siteNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId)
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope region)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt region) :
+    node ∉ argumentSiteNodes result.sites := by
+  intro removed
+  obtain ⟨site, _siteMember, siteExact⟩ := List.mem_map.mp removed
+  have regionExact : site.region = region := by
+    rw [ConcreteDiagram.nodesAt, List.mem_filter] at nodeAt
+    have localExact := eq_of_beq nodeAt.2
+    rw [← siteExact, site.node_data] at localExact
+    exact localExact
+  apply notBelow
+  rw [← regionExact]
+  exact site.head_visible
+
+/-- No replacement site is local to a region not enclosed by the acted
+scope. -/
+theorem siteRegion_ne_not_below
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId)
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope region)
+    (site : Fin result.sites.sites.length) :
+    (result.sites.sites.get site).region ≠ region := by
+  intro same
+  apply notBelow
+  rw [← same]
+  exact (result.sites.sites.get site).head_visible
+
 /-- Pointwise ordered correspondence between retained source nodes and their
 canonical checked images. -/
 inductive RetainedNodeList
@@ -692,16 +786,16 @@ noncomputable def RetainedNodeList.ofDense
           (sourceRetainedNode_not_removed result.sites retained)
           induction
 
-/-- At a strict ancestor of the acted scope, ordered local node identifiers
-are exactly the retained source nodes and their canonical checked images. -/
-noncomputable def nodesAt_strictlyAbove
+/-- At any region not enclosed by the acted scope, ordered local node
+identifiers are exactly the retained source nodes and their canonical checked
+images. -/
+noncomputable def nodesAt_not_below
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
     (outer : source.val.RegionId)
-    (outerEncloses :
-      source.val.Encloses outer (source.val.wires wire).scope)
-    (strict : outer ≠ (source.val.wires wire).scope) :
+    (notBelow :
+      ¬source.val.Encloses (source.val.wires wire).scope outer) :
     RetainedNodeList result (source.val.nodesAt outer)
       (result.checked.val.nodesAt (result.regionImage outer)) := by
   let dense := (replacementBase result.plan).nodesAt
@@ -722,8 +816,7 @@ noncomputable def nodesAt_strictlyAbove
     apply List.filter_eq_self.mpr
     intro node member
     exact decide_eq_true
-      (result.nodeAt_strictlyAbove_not_siteNode outer outerEncloses
-        strict node member)
+      (nodeAt_not_below_not_siteNode result outer notBelow node member)
   have generatedEmpty :
       (Data.Finite.allFin result.sites.sites.length).filter
           (fun site =>
@@ -732,7 +825,7 @@ noncomputable def nodesAt_strictlyAbove
     apply List.filter_eq_nil_iff.mpr
     intro site _member accepted
     have same := eq_of_beq accepted
-    apply result.siteRegion_ne_strictlyAbove outer outerEncloses strict site
+    apply siteRegion_ne_not_below result outer notBelow site
     apply (Internal.noRegionRemovalEquiv source).injective
     rw [← retainedRegion_eq_noRegionRemovalEquiv,
       ← retainedRegion_eq_noRegionRemovalEquiv]
@@ -747,6 +840,24 @@ noncomputable def nodesAt_strictlyAbove
   rw [sourceExact] at correspondence
   rw [targetExact]
   exact correspondence
+
+/-- At a strict ancestor of the acted scope, ordered local node identifiers
+are exactly the retained source nodes and their canonical checked images. -/
+noncomputable def nodesAt_strictlyAbove
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (outer : source.val.RegionId)
+    (outerEncloses :
+      source.val.Encloses outer (source.val.wires wire).scope)
+    (strict : outer ≠ (source.val.wires wire).scope) :
+    RetainedNodeList result (source.val.nodesAt outer)
+      (result.checked.val.nodesAt (result.regionImage outer)) := by
+  apply nodesAt_not_below result outer
+  intro actedEnclosesOuter
+  have same := factor_encloses_antisymm definitions source.val
+    source.property outerEncloses actedEnclosesOuter
+  exact strict same
 
 /-- Ordered retained node sequences compile by pointwise renaming. -/
 theorem compileNodes_natural
