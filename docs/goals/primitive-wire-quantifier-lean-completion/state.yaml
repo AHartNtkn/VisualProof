@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T009
+active_task: T010
 
 tasks:
   - id: T001
@@ -575,7 +575,7 @@ tasks:
   - id: T009
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 8: formalize formal, identity, and folded-reference leaves."
     inputs:
@@ -598,11 +598,35 @@ tasks:
     stop_if:
       - "Ref semantics require implicit macro expansion."
       - "Selected nodes do not exhaust the checked abstracted sites."
-    receipt: null
+    receipt:
+      result: done
+      harness: codex
+      commit: 51b6964
+      summary: "Completed plan Task 8: checked formal, identity, and folded-reference join/sever leaves consume every applied endpoint or the exact selected node set; their independent semantic factorization proves full-Model soundness, typed chronological definition lookup without macro expansion, inverse checked isomorphism, both orientations, refusal behavior, and the truthful PreModel/Model boundary."
+      changed_files:
+        - VisualProof.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean
+        - VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean
+        - VisualProof/Rule/WirePrimitive.lean
+        - VisualProof/Rule/WirePrimitive/Leaves.lean
+        - VisualProof/Rule/WirePrimitive/LeavesFixtures.lean
+        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
+      commands:
+        - cmd: lake build VisualProof.Rule.WirePrimitive.LeavesFixtures
+          status: pass
+        - cmd: lake build
+          status: pass
+        - cmd: npm run formal:size
+          status: pass
+        - cmd: git diff --check
+          status: pass
+        - cmd: "! rg -n \"\\b(sorry|admit|axiom)\\b\" VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean VisualProof/Rule/WirePrimitive/Leaves.lean VisualProof/Rule/WirePrimitive/LeavesFixtures.lean"
+          status: pass
+      review: "PASS: all five Task 8 steps, all-head join behavior, exact selected-node abstraction, formal-position and equal-signature identity witnesses, folded typed ref lookup, inverse checked isomorphism, both polarity/orientation paths, refusal fixtures, full-model boundary, source-size limit, full build, and unrelated archive/scratchpad preservation verified."
   - id: T010
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 9: formalize the content compiler and monolithic redundancy."
     inputs:
