@@ -1,5 +1,4 @@
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemoval
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrameSupport
 
 namespace VisualProof
@@ -920,32 +919,6 @@ theorem pairedGeneratedFrame
       erasure.candidate_wellFormed fuel sourceOuter region site sourceAbove
       sourceGenerated
   exact .intro targetFrame sourceAbove sourceGenerated provenance
-
-/-- Project a relation-join receipt into the canonical paired frame receipt. -/
-theorem RelationJoinStep.pairedGeneratedFrame
-    {source : CheckedDiagram definitions}
-    {dying : source.val.WireId}
-    {content : CheckedOpenDiagram definitions}
-    (step : RelationJoinStep source dying content)
-    (site region : step.prior.val.RegionId)
-    (fuel : Nat)
-    (sourceOuter :
-      ConcreteElaboration.WireContext step.prior.val)
-    (sourceFrame :
-      RegionFrame definitions step.prior.val sourceOuter)
-    (sourceAbove :
-      ConcreteElaboration.ContextAbove step.prior.val sourceOuter region)
-    (sourceGenerated :
-      compileRegionFrame? definitions step.prior.val site fuel region
-          sourceOuter =
-        some sourceFrame) :
-    PairedGeneratedFrame step.prior step.priorApplication site region fuel
-      sourceOuter sourceFrame :=
-  SingletonRemovalSemantics.pairedGeneratedFrame
-    step.prior step.priorApplication
-    (SingletonRemovalSemantics.RelationJoinStep.checkedErasure step)
-      site region fuel sourceOuter sourceFrame
-    sourceAbove sourceGenerated
 
 end SingletonRemovalSemantics
 

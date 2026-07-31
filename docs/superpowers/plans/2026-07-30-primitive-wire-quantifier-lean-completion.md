@@ -450,6 +450,10 @@ checkers.
 - Create: `VisualProof/Diagram/Concrete/IsomorphismSearch.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/Content.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean`
+- Modify: `VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean`
+- Modify: `VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalProvenance.lean`
+- Create: `VisualProof/Diagram/Concrete/WireQuantifierRelationJoinSingletonRemoval.lean`
+- Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationJoinAlignment.lean`
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean`
 - Modify: `VisualProof/Rule/MonolithicWireQuantifier.lean`
 - Modify: `VisualProof/Rule/WirePrimitive/Witness.lean`
