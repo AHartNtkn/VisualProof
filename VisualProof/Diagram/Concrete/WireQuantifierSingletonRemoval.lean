@@ -29,6 +29,28 @@ structure CheckedErasure
 
 namespace CheckedErasure
 
+/--
+Run the canonical dense singleton erasure and retain the exact checked target.
+Failure is reported directly by concrete well-formedness; no repair or
+fallback target is constructed.
+-/
+def check
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId) :
+    Except WFError (CheckedErasure source removed) := by
+  let candidate :=
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      source removed
+  match accepted :
+      ConcreteDiagram.checkWellFormed definitions candidate with
+  | .error error =>
+      exact .error error
+  | .ok target =>
+      exact .ok
+        { target := target
+          generated :=
+            ConcreteDiagram.checkWellFormed_preserves_input accepted }
+
 theorem candidate_wellFormed
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
