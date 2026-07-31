@@ -1,6 +1,7 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.Content
 import VisualProof.Diagram.Concrete.WirePrimitive.UniformSiteFactorization
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityZipper
 
 namespace VisualProof
 
@@ -11,6 +12,171 @@ open WirePrimitive.ConcreteFactorization
 open ConcreteWireQuantifier.SingletonRemovalSemantics
 
 universe u
+
+/-- Canonical first occurrence of one checked visible wire. -/
+private def visibleVariable
+    (diagram : ConcreteDiagram definitionCount)
+    (wire : diagram.WireId) :
+    (ids : List diagram.WireId) →
+      wire ∈ ids →
+        Var (ids.map fun id => (diagram.wires id).sig)
+          (diagram.wires wire).sig
+  | [], member => by simp at member
+  | head :: tail, member =>
+      if same : wire = head then
+        same ▸ .here
+      else
+        .there
+          (visibleVariable diagram wire tail (by
+            simpa [same] using member))
+
+@[simp] private theorem visibleVariable_origin
+    (diagram : ConcreteDiagram definitionCount)
+    (wire : diagram.WireId)
+    (ids : List diagram.WireId)
+    (member : wire ∈ ids) :
+    ConcreteElaboration.WireContext.origin diagram ids
+        (visibleVariable diagram wire ids member) =
+      wire := by
+  induction ids with
+  | nil => simp at member
+  | cons head tail induction =>
+      unfold visibleVariable
+      split
+      · rename_i same
+        subst head
+        rfl
+      · simp only [ConcreteElaboration.WireContext.origin]
+        exact induction _
+
+/-- Every canonical checked site context has distinct visible wire ids. -/
+private theorem site_visible_nodup
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site) :
+    compiled.frame.visible.ids.Nodup := by
+  obtain ⟨scopeCompiled, outer, _fuel, _relative, _relativeVisible,
+      _inner, scopeVisible, _rootInner, above, _generated, _relativeBody,
+      _relativeContext, _scopeBody, _rootBody, _replacementBody,
+      _cutDepth⟩ :=
+    compiled.factorAt_relative_origin site
+      (ConcreteDiagram.encloses_refl base.val site)
+  have same : scopeCompiled = compiled :=
+    SiteCompilation.unique scopeCompiled compiled
+  subst scopeCompiled
+  rw [scopeVisible]
+  exact
+    ConcreteElaboration.extend_nodup definitions base.val base.property
+      outer site above
+
+/--
+An environment assigns the acted relation wire the universal relation whenever
+that wire is visible in the supplied checked context.
+-/
+def AssignsUniversal
+    {source : CheckedDiagram definitions}
+    (wire : source.val.WireId)
+    (context : ConcreteElaboration.WireContext source.val)
+    (pre : PreModel.{u})
+    (env : Env pre context.sigs) : Prop :=
+  ∀ (arguments : List Sig)
+    (head : Var context.sigs (.rel arguments)),
+    ConcreteElaboration.WireContext.origin source.val context.ids head =
+        wire →
+      ∀ values : PreModel.Args pre.Domain arguments,
+        pre.apply (env _ head) values
+
+/--
+Sealed semantic transport between the unbound bodies at one acted wire scope.
+The compiler-selected scopes and typed renaming remain existential proof data,
+so the proposition composes across a trace without becoming a second
+construction API.
+-/
+def UniversalScopeTransport
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (target : CheckedDiagram definitions)
+    (targetWire : target.val.WireId) : Prop :=
+  ∃ (sourceScope :
+      SiteCompilation source (source.val.wires wire).scope)
+    (targetScope :
+      SiteCompilation target (target.val.wires targetWire).scope)
+    (map :
+      WireRenaming sourceScope.frame.visible.sigs
+        targetScope.frame.visible.sigs),
+    (∀ {signature : Sig}
+      (value : Var sourceScope.frame.visible.sigs signature),
+      ConcreteElaboration.WireContext.origin source.val
+          sourceScope.frame.visible.ids value =
+          wire →
+        ConcreteElaboration.WireContext.origin target.val
+            targetScope.frame.visible.ids (map value) =
+          targetWire) ∧
+    ∀ (pre : PreModel.{u})
+      (definitionEnv : DefinitionEnv pre definitions)
+      (targetEnv : Env pre targetScope.frame.visible.sigs),
+      AssignsUniversal targetWire targetScope.frame.visible pre targetEnv →
+        (denoteRegion pre definitionEnv targetEnv
+              targetScope.frame.siteBody ↔
+          denoteRegion pre definitionEnv
+            (Env.comp targetEnv map) sourceScope.frame.siteBody)
+
+namespace UniversalScopeTransport
+
+/-- Identity transport at one checked acted scope. -/
+theorem identity
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    UniversalScopeTransport.{u} source wire source wire := by
+  obtain ⟨scope, _compiled⟩ :=
+    compileSite_complete source (source.val.wires wire).scope
+  refine ⟨scope, scope, fun {_} value => value, ?_, ?_⟩
+  · intro _ value origin
+    exact origin
+  · intro _pre _definitionEnv _targetEnv _assigned
+    exact Iff.rfl
+
+/-- Scope transports compose without introducing a second context authority. -/
+theorem compose
+    {source middle target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {middleWire : middle.val.WireId}
+    {targetWire : target.val.WireId}
+    (first :
+      UniversalScopeTransport.{u} source wire middle middleWire)
+    (second :
+      UniversalScopeTransport.{u} middle middleWire target targetWire) :
+    UniversalScopeTransport.{u} source wire target targetWire := by
+  obtain
+    ⟨sourceScope, middleScope, firstMap, firstWireMap, firstBody⟩
+      := first
+  obtain
+    ⟨middleScope', targetScope, secondMap, secondWireMap, secondBody⟩
+      := second
+  have same :
+      middleScope = middleScope' :=
+    SiteCompilation.unique middleScope middleScope'
+  subst middleScope'
+  refine
+    ⟨sourceScope, targetScope,
+      fun {_} value => secondMap (firstMap value), ?_, ?_⟩
+  · intro _ value origin
+    exact
+      secondWireMap (firstMap value)
+        (firstWireMap value origin)
+  · intro pre definitionEnv targetEnv assigned
+    have middleAssigned :
+        AssignsUniversal middleWire middleScope.frame.visible pre
+          (Env.comp targetEnv secondMap) := by
+      intro arguments head origin values
+      exact assigned arguments (secondMap head)
+        (secondWireMap head origin) values
+    exact
+      (secondBody pre definitionEnv targetEnv assigned).trans
+        (firstBody pre definitionEnv
+          (Env.comp targetEnv secondMap) middleAssigned)
+
+end UniversalScopeTransport
 
 private def appliedNodes
     {source : CheckedDiagram definitions}
@@ -547,6 +713,149 @@ private theorem origin_transport
   cases same
   rfl
 
+private theorem origin_transport_forward
+    {diagram : ConcreteDiagram definitionCount}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (value : Var left.sigs sig) :
+    ConcreteElaboration.WireContext.origin diagram right.ids
+        (congrArg ConcreteElaboration.WireContext.sigs same ▸ value) =
+      ConcreteElaboration.WireContext.origin diagram left.ids value := by
+  cases same
+  rfl
+
+private theorem origin_transport_renaming
+    {diagram : ConcreteDiagram definitionCount}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    {sourceSignatures : List Sig}
+    (map : WireRenaming sourceSignatures right.sigs)
+    (value : Var sourceSignatures sig) :
+    ConcreteElaboration.WireContext.origin diagram left.ids
+        ((congrArg ConcreteElaboration.WireContext.sigs same.symm ▸
+          map) value) =
+      ConcreteElaboration.WireContext.origin diagram right.ids
+        (map value) := by
+  cases same
+  rfl
+
+private theorem scope_environment_coherence
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (outer : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (sourceScope :
+      ConcreteElaboration.WireContext source.val)
+    (targetScope :
+      ConcreteElaboration.WireContext
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source removed))
+    (sourceExact : sourceScope = outer.extend region)
+    (targetExact :
+      targetScope =
+        (targetContext source removed outer).extend
+          (targetRegion source removed region))
+    (scopeTargetExact :
+      targetScope = targetContext source removed sourceScope)
+    (pre : PreModel)
+    (targetEnv : Env pre targetScope.sigs) :
+    Env.comp
+        (congrArg ConcreteElaboration.WireContext.sigs targetExact ▸
+          targetEnv)
+        (extendedContextRenaming source removed outer region) =
+      congrArg ConcreteElaboration.WireContext.sigs sourceExact ▸
+        Env.comp targetEnv
+          (congrArg ConcreteElaboration.WireContext.sigs
+              scopeTargetExact.symm ▸
+            contextRenaming source removed sourceScope) := by
+  subst sourceScope
+  subst targetScope
+  have exactProof :
+      scopeTargetExact =
+        (targetContext_extend source removed outer region).symm :=
+    Subsingleton.elim _ _
+  rw [exactProof]
+  rfl
+
+private theorem transported_environment_apply
+    {diagram : ConcreteDiagram definitionCount}
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    (pre : PreModel)
+    (env : Env pre left.sigs)
+    {sig : Sig}
+    (value : Var left.sigs sig) :
+    (congrArg ConcreteElaboration.WireContext.sigs same ▸ env) sig
+        (congrArg ConcreteElaboration.WireContext.sigs same ▸ value) =
+      env sig value := by
+  cases same
+  rfl
+
+private theorem denoteRegion_transport
+    {left right : List Sig}
+    (same : left = right)
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre definitions)
+    (env : Env pre left)
+    (body : Region definitions left) :
+    denoteRegion pre definitionEnv env body ↔
+      denoteRegion pre definitionEnv
+        (same ▸ env) (same ▸ body) := by
+  cases same
+  rfl
+
+private theorem compileRegionFrame_site_inner_liftOuter_origin
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (site : diagram.RegionId)
+    (fuel : Nat)
+    (outer : ConcreteElaboration.WireContext diagram)
+    (frame : RegionFrame definitions diagram outer)
+    (inner :
+      DiagramContext definitions frame.visible.sigs
+        (outer.extend site).sigs)
+    (compiled :
+      compileRegionFrame? definitions diagram site fuel site outer =
+        some frame)
+    (decomposition :
+      frame.context =
+        bindContextFor diagram outer.ids (diagram.wiresAt site) inner) :
+    ∀ {sig : Sig} (value : Var (outer.extend site).sigs sig),
+      ConcreteElaboration.WireContext.origin diagram frame.visible.ids
+          (DiagramContext.liftOuter inner value) =
+        ConcreteElaboration.WireContext.origin diagram
+          (outer.extend site).ids value := by
+  cases fuel with
+  | zero =>
+      simp [compileRegionFrame?] at compiled
+  | succ childFuel =>
+      unfold compileRegionFrame? at compiled
+      simp only [↓reduceDIte] at compiled
+      obtain ⟨body, _bodyCompiled, frameEquation⟩ :=
+        Option.bind_eq_some_iff.mp compiled
+      have frameExact :
+          ({ visible := outer.extend site
+             siteBody := body
+             context :=
+               bindContextFor diagram outer.ids
+                 (diagram.wiresAt site) .hole } :
+            RegionFrame definitions diagram outer) =
+            frame :=
+        Option.some.inj frameEquation
+      subst frame
+      have innerExact :
+          (.hole :
+            DiagramContext definitions (outer.extend site).sigs
+              (outer.extend site).sigs) =
+            inner := by
+        apply
+          bindContextFor_injective diagram outer.ids
+            (diagram.wiresAt site)
+        exact decomposition
+      subst inner
+      intro sig value
+      rfl
+
 namespace AppliedSite
 
 /--
@@ -677,8 +986,672 @@ theorem replacement_denotation
   rw [emptyEnv] at result
   exact result
 
+private theorem fin_heq_of_val_eq
+    {leftBound rightBound : Nat}
+    (bounds : leftBound = rightBound)
+    (left : Fin leftBound)
+    (right : Fin rightBound)
+    (values : left.val = right.val) :
+    HEq left right := by
+  subst rightBound
+  exact heq_of_eq (Fin.ext values)
+
+private theorem cast_transport
+    {source left right : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {leftWire : left.val.WireId}
+    {rightWire : right.val.WireId}
+    (same : left = right)
+    (wireSame : HEq leftWire rightWire)
+    (transport :
+      UniversalScopeTransport.{u} source wire left leftWire) :
+    UniversalScopeTransport.{u} source wire right rightWire := by
+  cases same
+  cases eq_of_heq wireSame
+  exact transport
+
+private theorem normalize_erasure
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node)
+    (canonicalTransport :
+      let canonical : CheckedDiagram definitions :=
+        ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            source site.node,
+          erasure.candidate_wellFormed⟩
+      UniversalScopeTransport.{u} source wire canonical
+        (targetWire source site.node wire)) :
+    UniversalScopeTransport.{u} source wire erasure.target
+      (erasure.wireImage wire) := by
+  let canonical : CheckedDiagram definitions :=
+    ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source site.node,
+      erasure.candidate_wellFormed⟩
+  have targetExact : canonical = erasure.target := by
+    apply Subtype.ext
+    exact erasure.generated.symm
+  change
+    UniversalScopeTransport.{u} source wire canonical
+      (targetWire source site.node wire) at canonicalTransport
+  refine
+    cast_transport
+      (leftWire := targetWire source site.node wire)
+      (rightWire := erasure.wireImage wire)
+      targetExact ?_ canonicalTransport
+  · have counts :
+        canonical.val.wireCount = erasure.target.val.wireCount :=
+      congrArg ConcreteDiagram.wireCount
+        (congrArg Subtype.val targetExact)
+    exact fin_heq_of_val_eq counts _ _ rfl
+
+/--
+Erasing one checker-selected applied head preserves the acted binder body
+when that binder is assigned the universal relation. Both the co-scoped and
+strict-enclosure compiler cases discharge through the same replacement
+zipper; no caller supplies a semantic premise.
+-/
+private theorem canonical_scope_transport
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node) :
+    let target : CheckedDiagram definitions :=
+      ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          source site.node,
+        erasure.candidate_wellFormed⟩
+    UniversalScopeTransport.{u} source wire target
+      (targetWire source site.node wire) := by
+  let target : CheckedDiagram definitions :=
+    ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        source site.node,
+      erasure.candidate_wellFormed⟩
+  have encloses :
+      source.val.Encloses (source.val.wires wire).scope site.region := by
+    have scopeProof :=
+      ConcreteElaboration.Internal.endpoint_scope definitions source.val
+        source.property site.endpoint wire site.endpoint_owner
+    simpa [AppliedSite.endpoint, site.node_data] using scopeProof
+  obtain ⟨sourceScope, sourceOuter, fuel, sourceRelative,
+      sourceRelativeVisible, sourceInner, sourceScopeVisible,
+      _sourceRootInner, sourceAbove, sourceRelativeGenerated,
+      _sourceRelativeBody, sourceRelativeDecomposition, sourceScopeBody,
+      _sourceRootBody, _sourceReplacementBody, _sourceCutDepth⟩ :=
+    site.frame.factorAt_relative_origin
+      (source.val.wires wire).scope encloses
+  have paired :
+      PairedGeneratedFrame source site.node site.region
+        (source.val.wires wire).scope fuel sourceOuter sourceRelative := by
+    simpa [site.node_data] using
+      pairedGeneratedFrame source site.node erasure site.region
+        (source.val.wires wire).scope fuel sourceOuter sourceRelative
+        sourceAbove sourceRelativeGenerated
+  rcases paired with
+    ⟨targetRelative, _pairedAbove, _pairedSourceGenerated, provenance⟩
+  have provenanceAtNode :
+      ErasureFrameProvenance source site.node
+        (source.val.nodes site.node).region fuel sourceOuter
+        (source.val.wires wire).scope sourceRelative targetRelative := by
+    simpa [site.node_data] using provenance
+  have zippers :
+      ErasureFrameZippers source site.node (PUnit : Type u)
+        (source.val.wires wire).scope sourceOuter sourceRelative
+        targetRelative :=
+    provenanceAtNode.zippers erasure.candidate_wellFormed
+  rcases zippers with
+    ⟨pairedInner, targetRelativeVisible, bodyLaw, innerZipper,
+      _fullZipper⟩
+  have sourceInnerExact : pairedInner.sourceInner = sourceInner := by
+    apply
+      bindContextFor_injective source.val sourceOuter.ids
+        (source.val.wiresAt (source.val.wires wire).scope)
+    exact
+      pairedInner.sourceDecomposition.symm.trans
+        sourceRelativeDecomposition
+  let empty := ConcreteElaboration.WireContext.empty source.val
+  have rootAbove :
+      ConcreteElaboration.ContextAbove source.val empty source.val.root := by
+    exact
+      ⟨by simp [empty, ConcreteElaboration.WireContext.empty],
+        by simp [empty, ConcreteElaboration.WireContext.empty]⟩
+  have rootPaired :
+      PairedGeneratedFrame source site.node site.region source.val.root
+        (source.val.regionCount + 1) empty site.frame.frame := by
+    simpa [site.node_data] using
+      pairedGeneratedFrame source site.node erasure site.region source.val.root
+        (source.val.regionCount + 1) empty site.frame.frame rootAbove
+        site.frame.frame_generated
+  rcases rootPaired with
+    ⟨rootTargetFrame, _rootPairedAbove, _rootSourceGenerated,
+      rootProvenance⟩
+  obtain ⟨targetSite, _targetSiteCompiled⟩ :=
+    compileSite_complete target (targetRegion source site.node site.region)
+  have targetSiteFrameExact : targetSite.frame = rootTargetFrame := by
+    apply Option.some.inj
+    exact targetSite.frame_generated.symm.trans (by
+      simpa [target, ConcreteElaboration.WireContext.empty,
+        targetRegion_eq] using rootProvenance.targetGenerated)
+  have targetSiteVisible :
+      targetSite.frame.visible =
+        targetContext source site.node site.frame.frame.visible := by
+    rw [targetSiteFrameExact]
+    exact rootProvenance.targetVisible
+  have targetEncloses :
+      target.val.Encloses
+        (targetRegion source site.node (source.val.wires wire).scope)
+        (targetRegion source site.node site.region) := by
+    exact
+      (target_encloses source site.node
+        (source.val.wires wire).scope site.region).mpr encloses
+  obtain ⟨targetScope, targetOuter, targetFuel, targetRelative',
+      targetRelativeVisible', targetFactorInner, targetScopeVisible,
+      _targetRootInner, _targetAbove, targetRelativeGenerated,
+      _targetRelativeBody, targetRelativeDecomposition, targetScopeBody,
+      _targetRootBody, _targetReplacementBody, _targetCutDepth⟩ :=
+    targetSite.factorAt_relative_origin
+      (targetRegion source site.node (source.val.wires wire).scope)
+      targetEncloses
+  have targetRelativeVisibleExact :
+      targetRelative'.visible = targetRelative.visible := by
+    exact
+      targetRelativeVisible'.trans
+        (targetSiteVisible.trans
+          ((congrArg (targetContext source site.node)
+              sourceRelativeVisible.symm).trans
+            provenance.targetVisible.symm))
+  have targetOuterExact :
+      targetOuter = targetContext source site.node sourceOuter := by
+    apply
+      InsertionCompilation.compileRegionFrame?_outer_of_visible
+        definitions target.val
+        (targetRegion source site.node site.region)
+        targetFuel fuel
+        (targetRegion source site.node (source.val.wires wire).scope)
+        targetOuter (targetContext source site.node sourceOuter)
+        targetRelative' targetRelative
+        targetRelativeGenerated
+    · simpa [target] using provenance.targetGenerated
+    · exact targetRelativeVisibleExact
+  subst targetOuter
+  let commonFuel := targetFuel + fuel
+  have targetRelativeAtCommon :
+      compileRegionFrame? definitions target.val
+          (targetRegion source site.node site.region) commonFuel
+          (targetRegion source site.node (source.val.wires wire).scope)
+          (targetContext source site.node sourceOuter) =
+        some targetRelative' :=
+    InsertionCompilation.NaturalityInternal.compileRegionFrame_fuel_mono
+      definitions target.val
+        (targetRegion source site.node site.region)
+        targetFuel commonFuel (by
+          unfold commonFuel
+          omega)
+        (targetRegion source site.node (source.val.wires wire).scope)
+        (targetContext source site.node sourceOuter)
+        targetRelativeGenerated
+  have targetRelativeAtCommon' :
+      compileRegionFrame? definitions target.val
+          (targetRegion source site.node site.region) commonFuel
+          (targetRegion source site.node (source.val.wires wire).scope)
+          (targetContext source site.node sourceOuter) =
+        some targetRelative :=
+    InsertionCompilation.NaturalityInternal.compileRegionFrame_fuel_mono
+      definitions target.val
+        (targetRegion source site.node site.region)
+        fuel commonFuel (by
+          unfold commonFuel
+          omega)
+        (targetRegion source site.node (source.val.wires wire).scope)
+        (targetContext source site.node sourceOuter)
+        (by simpa [target] using provenance.targetGenerated)
+  have targetRelativeExact : targetRelative' = targetRelative :=
+    Option.some.inj
+      (targetRelativeAtCommon.symm.trans targetRelativeAtCommon')
+  subst targetRelative'
+  have targetInnerExact :
+      targetFactorInner = pairedInner.targetInner := by
+    apply
+      bindContextFor_injective target.val
+        (targetContext source site.node sourceOuter).ids
+        (target.val.wiresAt
+          (targetRegion source site.node (source.val.wires wire).scope))
+    exact
+      targetRelativeDecomposition.symm.trans
+        pairedInner.targetDecomposition
+  subst targetFactorInner
+  have scopeTargetVisible :
+      targetScope.frame.visible =
+        targetContext source site.node sourceScope.frame.visible :=
+    targetScopeVisible.trans
+      ((targetContext_extend source site.node sourceOuter
+        (source.val.wires wire).scope).symm.trans
+        (congrArg (targetContext source site.node)
+          sourceScopeVisible).symm)
+  let scopeMap :
+      WireRenaming sourceScope.frame.visible.sigs
+        targetScope.frame.visible.sigs :=
+    congrArg ConcreteElaboration.WireContext.sigs
+        scopeTargetVisible.symm ▸
+      contextRenaming source site.node sourceScope.frame.visible
+  have scopeMapWire :
+      ∀ {signature : Sig}
+        (value : Var sourceScope.frame.visible.sigs signature),
+        ConcreteElaboration.WireContext.origin source.val
+            sourceScope.frame.visible.ids value =
+            wire →
+          ConcreteElaboration.WireContext.origin target.val
+              targetScope.frame.visible.ids (scopeMap value) =
+            targetWire source site.node wire := by
+    intro signature value origin
+    unfold scopeMap
+    rw [origin_transport_renaming scopeTargetVisible
+      (contextRenaming source site.node sourceScope.frame.visible) value]
+    exact (contextRenaming_action source site.node
+      sourceScope.frame.visible value).trans (congrArg _ origin)
+  obtain ⟨siteOuter, siteVisible, siteHead, siteArguments,
+      siteCompiled, siteHeadOrigin⟩ := site.compiled_atom
+  let relativeSiteVisible :
+      sourceRelative.visible = siteOuter.extend site.region :=
+    sourceRelativeVisible.trans siteVisible
+  let removedHead :
+      Var sourceRelative.visible.sigs (.rel site.argumentSignatures) :=
+    congrArg ConcreteElaboration.WireContext.sigs
+        relativeSiteVisible.symm ▸
+      siteHead
+  let removedArguments :
+      Vars sourceRelative.visible.sigs site.argumentSignatures :=
+    congrArg ConcreteElaboration.WireContext.sigs
+        relativeSiteVisible.symm ▸
+      siteArguments
+  have removedCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          sourceRelative.visible [site.node] =
+        some (.cons (.atom removedHead removedArguments) .nil) := by
+    exact
+      compileNodes_atom_transport relativeSiteVisible site.node
+        siteHead siteArguments siteCompiled
+  have removedHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val
+          sourceRelative.visible.ids removedHead =
+        wire := by
+    unfold removedHead
+    exact
+      (origin_transport relativeSiteVisible siteHead).trans
+        siteHeadOrigin
+  have sourceScopeHeadMember :
+      wire ∈ sourceScope.frame.visible.ids :=
+    sourceScope.visible_of_encloses wire
+      (ConcreteDiagram.encloses_refl source.val
+        (source.val.wires wire).scope)
+  have relationSignature :
+      (source.val.wires wire).sig =
+        .rel site.argumentSignatures := by
+    exact
+      (congrArg (fun candidate => (source.val.wires candidate).sig)
+        removedHeadOrigin.symm).trans
+        (ConcreteElaboration.WireContext.origin_signature source.val
+          sourceRelative.visible.ids removedHead)
+  let sourceScopeHead :
+      Var sourceScope.frame.visible.sigs
+        (.rel site.argumentSignatures) :=
+    InsertionCompilation.NaturalityInternal.castVar relationSignature
+      (visibleVariable source.val wire
+        sourceScope.frame.visible.ids sourceScopeHeadMember)
+  have sourceScopeHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val
+          sourceScope.frame.visible.ids sourceScopeHead =
+        wire := by
+    unfold sourceScopeHead
+    exact
+      (InsertionCompilation.NaturalityInternal.origin_castVar
+        source.val sourceScope.frame.visible.ids relationSignature
+        (visibleVariable source.val wire
+          sourceScope.frame.visible.ids sourceScopeHeadMember)).trans
+        (visibleVariable_origin source.val wire
+          sourceScope.frame.visible.ids sourceScopeHeadMember)
+  let sourceOuterHead :
+      Var
+        (sourceOuter.extend (source.val.wires wire).scope).sigs
+        (.rel site.argumentSignatures) :=
+    congrArg ConcreteElaboration.WireContext.sigs sourceScopeVisible ▸
+      sourceScopeHead
+  have sourceOuterHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val
+          (sourceOuter.extend (source.val.wires wire).scope).ids
+          sourceOuterHead =
+        wire := by
+    unfold sourceOuterHead
+    exact
+      (origin_transport_forward sourceScopeVisible
+        sourceScopeHead).trans sourceScopeHeadOrigin
+  have sourceRelativeNodup : sourceRelative.visible.ids.Nodup := by
+    rw [sourceRelativeVisible]
+    exact site_visible_nodup site.frame
+  have targetRelativeNodup : targetRelative.visible.ids.Nodup := by
+    rw [targetRelativeVisible']
+    exact site_visible_nodup targetSite
+  change
+    UniversalScopeTransport source wire target
+      (targetWire source site.node wire)
+  unfold UniversalScopeTransport
+  rw [show
+    (target.val.wires (targetWire source site.node wire)).scope =
+      targetRegion source site.node (source.val.wires wire).scope by
+        simpa [target] using targetWire_scope source site.node wire]
+  refine ⟨sourceScope, targetScope, scopeMap, scopeMapWire, ?_⟩
+  intro pre definitionEnv targetEnv universal
+  have sourceLiftHeadExact :
+      DiagramContext.liftOuter pairedInner.sourceInner sourceOuterHead =
+        removedHead := by
+    by_cases coScoped :
+        (source.val.wires wire).scope = site.region
+    · have sourceGeneratedAtScope :
+          compileRegionFrame? definitions source.val
+              (source.val.wires wire).scope fuel
+              (source.val.wires wire).scope sourceOuter =
+            some sourceRelative := by
+        simpa only [coScoped] using sourceRelativeGenerated
+      rw [sourceInnerExact]
+      apply
+        InsertionCompilation.NaturalityInternal.origin_injective
+          source.val sourceRelative.visible.ids sourceRelativeNodup
+      rw [
+        compileRegionFrame_site_inner_liftOuter_origin definitions
+          source.val (source.val.wires wire).scope fuel sourceOuter
+          sourceRelative sourceInner sourceGeneratedAtScope
+          sourceRelativeDecomposition sourceOuterHead,
+        sourceOuterHeadOrigin, removedHeadOrigin]
+    · rw [sourceInnerExact]
+      apply
+        InsertionCompilation.NaturalityInternal.origin_injective
+          source.val sourceRelative.visible.ids sourceRelativeNodup
+      rw [
+        compileRegionFrame?_strict_inner_liftOuter_origin definitions
+          source.val site.region fuel (source.val.wires wire).scope
+          sourceOuter sourceRelative sourceInner coScoped
+          sourceRelativeGenerated sourceRelativeDecomposition,
+        sourceOuterHeadOrigin, removedHeadOrigin]
+  have targetLiftHeadExact :
+      DiagramContext.liftOuter pairedInner.targetInner
+          (extendedContextRenaming source site.node sourceOuter
+            (source.val.wires wire).scope sourceOuterHead) =
+        erasureVisibleRenaming site.node sourceRelative
+          targetRelativeVisible removedHead := by
+    by_cases coScoped :
+        (source.val.wires wire).scope = site.region
+    · have targetCoScoped :
+          targetRegion source site.node (source.val.wires wire).scope =
+            targetRegion source site.node site.region :=
+        congrArg (targetRegion source site.node) coScoped
+      have targetGeneratedAtScope :
+          compileRegionFrame? definitions target.val
+              (targetRegion source site.node
+                (source.val.wires wire).scope)
+              fuel
+              (targetRegion source site.node
+                (source.val.wires wire).scope)
+              (targetContext source site.node sourceOuter) =
+            some targetRelative := by
+        simpa only [targetCoScoped] using provenance.targetGenerated
+      apply
+        InsertionCompilation.NaturalityInternal.origin_injective
+          target.val targetRelative.visible.ids targetRelativeNodup
+      calc
+        _ =
+            ConcreteElaboration.WireContext.origin target.val
+              ((targetContext source site.node sourceOuter).extend
+                (targetRegion source site.node
+                  (source.val.wires wire).scope)).ids
+              (extendedContextRenaming source site.node sourceOuter
+                (source.val.wires wire).scope sourceOuterHead) := by
+              simpa [target] using
+                compileRegionFrame_site_inner_liftOuter_origin
+                  definitions target.val
+                  (targetRegion source site.node
+                    (source.val.wires wire).scope)
+                  fuel (targetContext source site.node sourceOuter)
+                  targetRelative pairedInner.targetInner
+                  targetGeneratedAtScope targetRelativeDecomposition
+                  (extendedContextRenaming source site.node sourceOuter
+                    (source.val.wires wire).scope sourceOuterHead)
+        _ = targetWire source site.node wire := by
+              simpa [target] using
+                (extendedContextRenaming_origin source site.node sourceOuter
+                  (source.val.wires wire).scope sourceOuterHead).trans
+                  (congrArg (targetWire source site.node)
+                    sourceOuterHeadOrigin)
+        _ =
+            ConcreteElaboration.WireContext.origin target.val
+              targetRelative.visible.ids
+              (erasureVisibleRenaming site.node sourceRelative
+                targetRelativeVisible removedHead) := by
+              symm
+              simpa [target] using
+                (erasureVisibleRenaming_origin site.node sourceRelative
+                  targetRelativeVisible removedHead).trans
+                  (congrArg (targetWire source site.node)
+                    removedHeadOrigin)
+    · rw [← sourceLiftHeadExact]
+      exact
+        pairedInner.liftOuter_erasureVisibleRenaming site.node site.region
+          (source.val.wires wire).scope fuel sourceOuter sourceRelative
+          targetRelative coScoped sourceRelativeGenerated
+          (by simpa [target] using provenance.targetGenerated)
+          targetRelativeVisible targetRelativeNodup sourceOuterHead
+
+  let fixedTargetEnv :
+      Env pre
+        ((targetContext source site.node sourceOuter).extend
+          (targetRegion source site.node
+            (source.val.wires wire).scope)).sigs :=
+    congrArg ConcreteElaboration.WireContext.sigs
+        targetScopeVisible ▸
+      targetEnv
+  have sourceEnvironmentExact :
+      Env.comp fixedTargetEnv
+          (extendedContextRenaming source site.node sourceOuter
+            (source.val.wires wire).scope) =
+        congrArg ConcreteElaboration.WireContext.sigs
+            sourceScopeVisible ▸
+          Env.comp targetEnv scopeMap := by
+    exact
+      scope_environment_coherence source site.node sourceOuter
+        (source.val.wires wire).scope sourceScope.frame.visible
+        targetScope.frame.visible sourceScopeVisible targetScopeVisible
+        scopeTargetVisible pre targetEnv
+  have localLaw :
+      ∀ descendant : Env pre targetRelative.visible.sigs,
+        DiagramContext.PreservesOuter pairedInner.targetInner
+            fixedTargetEnv descendant →
+          (denoteRegion pre definitionEnv descendant
+              targetRelative.siteBody ↔
+            denoteRegion pre definitionEnv
+              (Env.comp descendant
+                (erasureVisibleRenaming site.node sourceRelative
+                  targetRelativeVisible))
+              sourceRelative.siteBody) := by
+    intro descendant preserves
+    have targetHeadValue :
+        descendant (.rel site.argumentSignatures)
+            (erasureVisibleRenaming site.node sourceRelative
+              targetRelativeVisible removedHead) =
+          targetEnv (.rel site.argumentSignatures)
+            (scopeMap sourceScopeHead) := by
+      calc
+        _ =
+            descendant (.rel site.argumentSignatures)
+              (DiagramContext.liftOuter pairedInner.targetInner
+                (extendedContextRenaming source site.node sourceOuter
+                  (source.val.wires wire).scope sourceOuterHead)) := by
+              rw [targetLiftHeadExact]
+        _ =
+            fixedTargetEnv (.rel site.argumentSignatures)
+              (extendedContextRenaming source site.node sourceOuter
+                (source.val.wires wire).scope sourceOuterHead) := by
+              exact
+                congrFun
+                  (congrFun preserves
+                    (.rel site.argumentSignatures))
+                  (extendedContextRenaming source site.node sourceOuter
+                    (source.val.wires wire).scope sourceOuterHead)
+        _ =
+            (congrArg ConcreteElaboration.WireContext.sigs
+                  sourceScopeVisible ▸
+              Env.comp targetEnv scopeMap)
+                (.rel site.argumentSignatures) sourceOuterHead := by
+              exact
+                congrFun
+                  (congrFun sourceEnvironmentExact
+                    (.rel site.argumentSignatures))
+                  sourceOuterHead
+        _ =
+            targetEnv (.rel site.argumentSignatures)
+              (scopeMap sourceScopeHead) := by
+              unfold sourceOuterHead
+              exact
+                transported_environment_apply sourceScopeVisible
+                  pre (Env.comp targetEnv scopeMap) sourceScopeHead
+    have targetScopeHeadOrigin :
+        ConcreteElaboration.WireContext.origin target.val
+            targetScope.frame.visible.ids (scopeMap sourceScopeHead) =
+          targetWire source site.node wire :=
+      scopeMapWire sourceScopeHead sourceScopeHeadOrigin
+    have atomHolds :
+        denoteItem pre definitionEnv
+          (Env.comp descendant
+            (erasureVisibleRenaming site.node sourceRelative
+              targetRelativeVisible))
+          (.atom removedHead removedArguments) := by
+      change
+        pre.apply
+          (descendant (.rel site.argumentSignatures)
+            (erasureVisibleRenaming site.node sourceRelative
+              targetRelativeVisible removedHead))
+          (Vars.denote
+            (Env.comp descendant
+              (erasureVisibleRenaming site.node sourceRelative
+                targetRelativeVisible))
+            removedArguments)
+      rw [targetHeadValue]
+      exact
+        universal site.argumentSignatures (scopeMap sourceScopeHead)
+          targetScopeHeadOrigin
+          (Vars.denote
+            (Env.comp descendant
+              (erasureVisibleRenaming site.node sourceRelative
+                targetRelativeVisible))
+            removedArguments)
+    have localAt :
+        LocalReplacementAt source site.node sourceRelative.visible
+          targetRelative.visible targetRelativeVisible
+          (blank : Region definitions targetRelative.visible.sigs)
+          (.atom removedHead removedArguments) pre definitionEnv
+          descendant := by
+      unfold LocalReplacementAt
+      have environments :=
+        env_comp_cast_renaming
+          (congrArg ConcreteElaboration.WireContext.sigs
+            targetRelativeVisible.symm)
+          (contextRenaming source site.node sourceRelative.visible)
+          pre descendant
+      constructor
+      · intro _blankHolds
+        exact environments ▸ atomHolds
+      · intro _atomHolds
+        exact denoteRegion_blank pre definitionEnv descendant
+    have bodyEquivalence :=
+      bodyLaw (.atom removedHead removedArguments) removedCompiled pre
+        definitionEnv
+        (blank : Region definitions targetRelative.visible.sigs)
+        descendant localAt
+    simpa using bodyEquivalence
+  have filledEquivalence :=
+    innerZipper.equivalence pre definitionEnv sourceRelative.siteBody
+      targetRelative.siteBody fixedTargetEnv localLaw
+  have targetTransport :=
+    denoteRegion_transport
+      (congrArg ConcreteElaboration.WireContext.sigs targetScopeVisible)
+      pre definitionEnv targetEnv targetScope.frame.siteBody
+  have sourceTransport :=
+    denoteRegion_transport
+      (congrArg ConcreteElaboration.WireContext.sigs sourceScopeVisible)
+      pre definitionEnv (Env.comp targetEnv scopeMap)
+      sourceScope.frame.siteBody
+  rw [targetScopeBody] at targetTransport
+  rw [sourceScopeBody] at sourceTransport
+  rw [sourceInnerExact] at filledEquivalence
+  have sourceDenotationExact :
+      denoteRegion pre definitionEnv
+          (Env.comp fixedTargetEnv
+            (extendedContextRenaming source site.node sourceOuter
+              (source.val.wires wire).scope))
+          (sourceInner.fill sourceRelative.siteBody) =
+        denoteRegion pre definitionEnv
+          (congrArg ConcreteElaboration.WireContext.sigs
+              sourceScopeVisible ▸
+            Env.comp targetEnv scopeMap)
+          (sourceInner.fill sourceRelative.siteBody) :=
+    congrArg
+      (fun env =>
+        denoteRegion pre definitionEnv env
+          (sourceInner.fill sourceRelative.siteBody))
+      sourceEnvironmentExact
+  have normalizedFilled :
+      denoteRegion pre definitionEnv fixedTargetEnv
+          (pairedInner.targetInner.fill targetRelative.siteBody) ↔
+        denoteRegion pre definitionEnv
+          (congrArg ConcreteElaboration.WireContext.sigs
+              sourceScopeVisible ▸
+            Env.comp targetEnv scopeMap)
+          (sourceInner.fill sourceRelative.siteBody) := by
+    constructor
+    · intro targetHolds
+      exact sourceDenotationExact ▸ filledEquivalence.mp targetHolds
+    · intro sourceHolds
+      exact filledEquivalence.mpr
+        (sourceDenotationExact.symm ▸ sourceHolds)
+  exact targetTransport.trans (normalizedFilled.trans sourceTransport.symm)
+
+/-- Public one-step transport normalized to the exact checked erasure target. -/
+theorem universal_scope_transport
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire)
+    (erasure : CheckedErasure source site.node) :
+    UniversalScopeTransport.{u} source wire erasure.target
+      (erasure.wireImage wire) :=
+  normalize_erasure site erasure
+    (canonical_scope_transport site erasure)
+
 end AppliedSite
 
 end ConcreteWirePrimitive
+
+namespace WirePrimitive.AppliedSiteErasure.Result
+
+open ConcreteWirePrimitive
+
+/--
+The sealed all-applied-site trace composes one universal-scope transport per
+checked singleton erasure.
+-/
+theorem universal_scope_transport
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : AppliedSiteErasure.Result source wire) :
+    UniversalScopeTransport.{u} source wire result.target
+      result.targetWire :=
+  result.inductionOn
+    (fun source wire target targetWire =>
+      UniversalScopeTransport.{u} source wire target targetWire)
+    (fun source wire _empty =>
+      UniversalScopeTransport.identity source wire)
+    (fun {source} {wire} site erasure {target} {targetWire} tail =>
+      UniversalScopeTransport.compose
+        (ConcreteWirePrimitive.AppliedSite.universal_scope_transport
+          site erasure)
+        tail)
+
+end WirePrimitive.AppliedSiteErasure.Result
 
 end VisualProof

@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalitySupport
+import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 
 namespace VisualProof
 
@@ -256,6 +257,17 @@ def targetRegion
       source removed).RegionId :=
   ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
     source removed region
+
+/-- Image of one source region in the checked singleton-erasure target. -/
+def CheckedErasure.regionImage
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {removed : source.val.NodeId}
+    (erasure : CheckedErasure source removed)
+    (region : source.val.RegionId) :
+    erasure.target.val.RegionId :=
+  ConcreteWireQuantifier.Internal.checkedRegion erasure.generated
+    (targetRegion source removed region)
 
 @[simp] private theorem targetRegion_val
     (source : CheckedDiagram definitions)
@@ -935,7 +947,7 @@ private theorem targetContext_nodup
     intro left right different equality
     exact different ((targetWire_injective source removed) equality))
 
-@[simp] private theorem targetWire_scope
+@[simp] theorem targetWire_scope
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (wire : source.val.WireId) :
@@ -947,6 +959,39 @@ private theorem targetContext_nodup
       (source.val.wiresList.get (targetWire source removed wire))).scope =
       targetRegion source removed (source.val.wires wire).scope
   rw [wiresList_get_targetWire, targetRegion_eq]
+
+/-- Canonical singleton erasure preserves every transported wire signature. -/
+@[simp] theorem CheckedErasure.wireImage_signature
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {removed : source.val.NodeId}
+    (erasure : CheckedErasure source removed)
+    (wire : source.val.WireId) :
+    (erasure.target.val.wires (erasure.wireImage wire)).sig =
+      (source.val.wires wire).sig := by
+  exact
+    (ConcreteWireQuantifier.Internal.checkedWire_signature_transport
+      erasure.generated
+      (targetWire source removed wire)).trans
+      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+        source removed wire)
+
+/-- Canonical singleton erasure transports a wire to its transported scope. -/
+@[simp] theorem CheckedErasure.wireImage_scope
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {removed : source.val.NodeId}
+    (erasure : CheckedErasure source removed)
+    (wire : source.val.WireId) :
+    (erasure.target.val.wires (erasure.wireImage wire)).scope =
+      erasure.regionImage (source.val.wires wire).scope := by
+  exact
+    (ConcreteWireQuantifier.Internal.checkedWire_scope_transport
+      erasure.generated
+      (targetWire source removed wire)).trans
+      (congrArg
+        (ConcreteWireQuantifier.Internal.checkedRegion erasure.generated)
+        (targetWire_scope source removed wire))
 
 private theorem target_climb
     (source : CheckedDiagram definitions)
@@ -972,7 +1017,7 @@ private theorem target_climb
             ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
             dataEquation, targetRegion_eq] using induction parent
 
-private theorem target_encloses
+theorem target_encloses
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (outer inner : source.val.RegionId) :
@@ -1001,6 +1046,22 @@ private theorem target_encloses
     refine ⟨steps, ?_⟩
     rw [target_climb, climbed]
     rfl
+
+/-- Singleton erasure preserves and reflects enclosure of transported regions. -/
+theorem CheckedErasure.encloses_iff
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {removed : source.val.NodeId}
+    (erasure : CheckedErasure source removed)
+    (outer inner : source.val.RegionId) :
+    erasure.target.val.Encloses
+        (erasure.regionImage outer) (erasure.regionImage inner) ↔
+      source.val.Encloses outer inner := by
+  exact
+    (ConcreteWireQuantifier.Internal.checkedRegion_encloses
+      erasure.generated (targetRegion source removed outer)
+      (targetRegion source removed inner)).trans
+      (target_encloses source removed outer inner)
 
 theorem target_find_enclosing
     (source : CheckedDiagram definitions)
