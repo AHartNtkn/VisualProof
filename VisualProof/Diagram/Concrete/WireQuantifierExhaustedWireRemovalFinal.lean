@@ -213,6 +213,67 @@ theorem scopeParity
         receipt.reflected.localBodyLaw pre definitionEnv chosen targetEnv)
       targetFinished
 
+/--
+Lift the dying-scope equivalence through the retained outer constructor tree.
+The caller supplies only the inhabitant needed when starting from the plain
+diagram; the reverse direction recovers the bound witness.
+-/
+theorem scopeEquivalence
+    {source : CheckedDiagram definitions}
+    {removed : source.val.WireId}
+    {targetWellFormed : (Target source removed).WellFormed definitions}
+    {bound :
+      SiteCompilation source (source.val.wires removed).scope}
+    (receipt :
+      FinalDeletionOuterReceipt.{u} source removed targetWellFormed bound)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (fixed : Env pre [])
+    (specified :
+      ∀ (targetOuterEnv :
+          Env pre receipt.reflected.targetSiteOuter.sigs)
+        (targetValues :
+          ConcreteElaboration.WireValues pre
+            (((Target source removed).wiresAt
+              (targetRegion source removed
+                (source.val.wires removed).scope)).map
+              fun wire => ((Target source removed).wires wire).sig)),
+        pre.Domain (source.val.wires removed).sig) :
+    denoteRegion pre definitionEnv fixed
+        (receipt.reflected.targetAbove.fill
+          (ConcreteElaboration.finishRegion (Target source removed)
+            receipt.reflected.targetSiteOuter
+            (targetRegion source removed
+              (source.val.wires removed).scope)
+            receipt.reflected.targetBody)) ↔
+      denoteRegion pre definitionEnv
+        (Env.comp fixed
+          (contextProjection source removed
+            (ConcreteElaboration.WireContext.empty
+              (Target source removed))
+            (ConcreteElaboration.WireContext.empty source.val)
+            receipt.reflected.outerCorrespond
+            receipt.reflected.outerRemovedAbsent))
+        (receipt.reflected.sourceAbove.fill
+          (ConcreteElaboration.finishRegion source.val
+            receipt.reflected.sourceSiteOuter
+            (source.val.wires removed).scope
+            receipt.reflected.sourceBody)) := by
+  apply receipt.reflected.composable.toSemanticZipper.equivalence
+  intro descendant _preserves
+  exact
+    finishDyingRegion_equivalence source removed
+      receipt.reflected.targetSiteOuter
+      receipt.reflected.sourceSiteOuter
+      receipt.reflected.siteCorrespond
+      receipt.reflected.siteRemovedAbsent
+      receipt.reflected.sourceVisibleNodup pre definitionEnv descendant
+      (specified descendant) receipt.reflected.targetBody
+      receipt.reflected.sourceBody
+      (fun chosen targetEnv =>
+        receipt.reflected.localBodyEquivalence pre definitionEnv chosen
+          targetEnv)
+
 /-- Specialize `scopeParity` to the exact bound and plain checked roots. -/
 theorem rootParity
     {source : CheckedDiagram definitions}
@@ -280,6 +341,44 @@ theorem rootParity
     have targetDenotes := parity.2 odd sourceDenotes
     rw [receipt.plainRootFill]
     exact targetDenotes
+
+/-- The exact plain and bound checked roots have equivalent denotation. -/
+theorem rootEquivalence
+    {source : CheckedDiagram definitions}
+    {removed : source.val.WireId}
+    {targetWellFormed : (Target source removed).WellFormed definitions}
+    {bound :
+      SiteCompilation source (source.val.wires removed).scope}
+    (receipt :
+      FinalDeletionOuterReceipt.{u} source removed targetWellFormed bound)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (specified :
+      ∀ (targetOuterEnv :
+          Env pre receipt.reflected.targetSiteOuter.sigs)
+        (targetValues :
+          ConcreteElaboration.WireValues pre
+            (((Target source removed).wiresAt
+              (targetRegion source removed
+                (source.val.wires removed).scope)).map
+              fun wire => ((Target source removed).wires wire).sig)),
+        pre.Domain (source.val.wires removed).sig) :
+    denoteRegion pre definitionEnv Env.empty receipt.plain.checked ↔
+      denoteRegion pre definitionEnv Env.empty bound.checked := by
+  have equivalence :=
+    receipt.scopeEquivalence pre definitionEnv Env.empty specified
+  have emptySource :
+      Env.comp (Env.empty : Env pre [])
+          (contextProjection source removed
+            (ConcreteElaboration.WireContext.empty (Target source removed))
+            (ConcreteElaboration.WireContext.empty source.val)
+            receipt.reflected.outerCorrespond
+            receipt.reflected.outerRemovedAbsent) =
+        Env.empty := by
+    funext sig value
+    nomatch value
+  rw [receipt.plainRootFill, receipt.boundRootFill]
+  simpa only [emptySource] using equivalence
 
 end FinalDeletionOuterReceipt
 

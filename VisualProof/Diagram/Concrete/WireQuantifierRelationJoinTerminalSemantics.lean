@@ -456,8 +456,8 @@ private noncomputable def relationJoin_composeDeletion
                   siteCorrespond siteRemovedAbsent sourceAbove targetAbove
                   sourceBody targetBody sourceVisible targetVisible
                   sourceNodup sourceBodyExact targetBodyExact
-                  localBodyLaw sourceCutDepth sourceFill targetFill
-                  sourceDecomposition composable =>
+                  localBodyLaw localBodyEquivalence sourceCutDepth sourceFill
+                  targetFill sourceDecomposition composable =>
                     cases aligned with
                     | mk outerExact aboveExact =>
                         cases outerExact

@@ -2016,6 +2016,103 @@ theorem finishDyingRegion_implication
   rw [reconstructed]
   exact localBodyLaw chosen targetExtended targetCore
 
+/--
+Close the unequal dying-scope binder blocks in both directions. The
+plain-to-bound direction uses the caller's inhabitant; the bound-to-plain
+direction recovers the removed value from the source binder witness.
+-/
+theorem finishDyingRegion_equivalence
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (targetContext :
+      ConcreteElaboration.WireContext (Target source removed))
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (correspond :
+      ContextsCorrespond source removed targetContext sourceContext)
+    (removedAbsent : removed ∉ sourceContext.ids)
+    (sourceExtendedNodup :
+      (sourceContext.extend (source.val.wires removed).scope).ids.Nodup)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (targetOuterEnv : Env pre targetContext.sigs)
+    (specified :
+      ∀ retainedLocal :
+          ConcreteElaboration.WireValues pre
+            (((Target source removed).wiresAt
+              (targetRegion source removed
+                (source.val.wires removed).scope)).map
+              fun wire => ((Target source removed).wires wire).sig),
+        pre.Domain (source.val.wires removed).sig)
+    (targetBody :
+      Region definitions
+        (targetContext.extend
+          (targetRegion source removed
+            (source.val.wires removed).scope)).sigs)
+    (sourceBody :
+      Region definitions
+        (sourceContext.extend
+          (source.val.wires removed).scope).sigs)
+    (localBodyEquivalence :
+      ∀ (chosen : pre.Domain (source.val.wires removed).sig)
+        (targetEnv :
+          Env pre
+            (targetContext.extend
+              (targetRegion source removed
+                (source.val.wires removed).scope)).sigs),
+        denoteRegion pre definitionEnv targetEnv targetBody ↔
+          denoteRegion pre definitionEnv
+            (sourceEnvironmentFromTarget source removed
+              (targetContext.extend
+                (targetRegion source removed
+                  (source.val.wires removed).scope))
+              (sourceContext.extend
+                (source.val.wires removed).scope)
+              (extend_contexts_correspond source removed correspond
+                (source.val.wires removed).scope)
+              pre chosen targetEnv)
+            sourceBody) :
+    denoteRegion pre definitionEnv targetOuterEnv
+        (ConcreteElaboration.finishRegion
+          (Target source removed) targetContext
+          (targetRegion source removed
+            (source.val.wires removed).scope)
+          targetBody) ↔
+      denoteRegion pre definitionEnv
+        (Env.comp targetOuterEnv
+          (contextProjection source removed targetContext sourceContext
+            correspond removedAbsent))
+        (ConcreteElaboration.finishRegion source.val sourceContext
+          (source.val.wires removed).scope sourceBody) := by
+  constructor
+  · exact
+      finishDyingRegion_implication source removed targetContext
+        sourceContext correspond removedAbsent sourceExtendedNodup pre
+        definitionEnv targetOuterEnv specified targetBody sourceBody
+        (fun chosen targetEnv =>
+          (localBodyEquivalence chosen targetEnv).mp)
+  · intro sourceFinished
+    obtain ⟨sourceValues, sourceCore⟩ :=
+      (ConcreteElaboration.denote_finishRegion definitions source.val
+        sourceContext (source.val.wires removed).scope pre definitionEnv
+        (Env.comp targetOuterEnv
+          (contextProjection source removed targetContext sourceContext
+            correspond removedAbsent))
+        sourceBody).mp sourceFinished
+    obtain ⟨chosen, targetValues, environments⟩ :=
+      dyingScopeEnvironmentsCorrespond_source source removed targetContext
+        sourceContext correspond removedAbsent sourceExtendedNodup pre
+        targetOuterEnv sourceValues
+    apply
+      (ConcreteElaboration.denote_finishRegion definitions
+        (Target source removed) targetContext
+        (targetRegion source removed
+          (source.val.wires removed).scope)
+        pre definitionEnv targetOuterEnv targetBody).mpr
+    refine ⟨targetValues, ?_⟩
+    apply (localBodyEquivalence chosen _).mpr
+    rw [← environments.source_eq sourceExtendedNodup]
+    exact sourceCore
+
 end ExhaustedWireRemovalSemantics
 
 end ConcreteWireQuantifier

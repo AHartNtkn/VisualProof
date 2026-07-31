@@ -100,6 +100,27 @@ structure AboveScopeReflection
               (source.val.wires removed).scope)
             pre specified targetEnv)
           sourceBody
+  localBodyEquivalence :
+    ∀ (pre : PreModel.{u})
+      (definitionEnv : DefinitionEnv pre definitions)
+      (specified : pre.Domain (source.val.wires removed).sig)
+      (targetEnv :
+        Env pre
+          (targetSiteOuter.extend
+            (targetRegion source removed
+              (source.val.wires removed).scope)).sigs),
+      denoteRegion pre definitionEnv targetEnv targetBody ↔
+        denoteRegion pre definitionEnv
+          (sourceEnvironmentFromTarget source removed
+            (targetSiteOuter.extend
+              (targetRegion source removed
+                (source.val.wires removed).scope))
+            (sourceSiteOuter.extend
+              (source.val.wires removed).scope)
+            (extend_contexts_correspond source removed siteCorrespond
+              (source.val.wires removed).scope)
+            pre specified targetEnv)
+          sourceBody
   sourceCutDepthExact :
     sourceFrame.context.cutDepth = sourceAbove.cutDepth
   sourceFill :
@@ -322,6 +343,7 @@ private theorem compileSiblingFrame_reflect_outer
                   sourceBodyExact := nested.sourceBodyExact
                   targetBodyExact := nested.targetBodyExact
                   localBodyLaw := nested.localBodyLaw
+                  localBodyEquivalence := nested.localBodyEquivalence
                   sourceCutDepthExact := by
                     simpa [sourceGenerated, DiagramContext.cutDepth] using
                       congrArg Nat.succ nested.sourceCutDepthExact
@@ -565,6 +587,37 @@ theorem Internal.compileRegionFrame_reflect_outer
                             (source.val.wires removed).scope above)
                           pre specified targetEnv)).mp
                     exact targetDenotes
+                  localBodyEquivalence := by
+                    intro pre definitionEnv specified targetEnv
+                    exact
+                      compileRegionBody_corresponding_denotation
+                        source removed targetWellFormed removedEndpoints fuel
+                        targetOuter sourceOuter correspond
+                        (source.val.wires removed).scope rfl above sourceBody
+                        targetBody sourceBodyEquation targetBodyCompiled pre
+                        definitionEnv specified targetEnv
+                        (sourceEnvironmentFromTarget source removed
+                          (targetOuter.extend
+                            (targetRegion source removed
+                              (source.val.wires removed).scope))
+                          (sourceOuter.extend
+                            (source.val.wires removed).scope)
+                          (extend_contexts_correspond source removed
+                            correspond (source.val.wires removed).scope)
+                          pre specified targetEnv)
+                        (sourceEnvironmentFromTarget_corresponds source
+                          removed
+                          (targetOuter.extend
+                            (targetRegion source removed
+                              (source.val.wires removed).scope))
+                          (sourceOuter.extend
+                            (source.val.wires removed).scope)
+                          (extend_contexts_correspond source removed
+                            correspond (source.val.wires removed).scope)
+                          (ConcreteElaboration.extend_nodup definitions
+                            source.val source.property sourceOuter
+                            (source.val.wires removed).scope above)
+                          pre specified targetEnv)
                   sourceCutDepthExact := by
                     exact
                       bindContextFor_cutDepth_eq source.val sourceOuter.ids
@@ -951,6 +1004,8 @@ theorem Internal.compileRegionFrame_reflect_outer
                                 aroundReflection.targetBodyExact
                               localBodyLaw :=
                                 aroundReflection.localBodyLaw
+                              localBodyEquivalence :=
+                                aroundReflection.localBodyEquivalence
                               sourceCutDepthExact := by
                                 change
                                   (bindContextFor source.val
