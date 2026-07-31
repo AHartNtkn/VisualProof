@@ -8,6 +8,8 @@ namespace VisualProof
 #check WirePrimitive.AppliedSiteErasure.Result.inductionOn
 #check WirePrimitive.AppliedSiteErasure.Result.universal_scope_transport
 #check WirePrimitive.AppliedSiteErasure.Result.universal_outer_transport
+#check WirePrimitive.ends_delete_sound
+#check WirePrimitive.ends_spawn_sound
 
 namespace WirePrimitive
 
@@ -330,6 +332,19 @@ example :
 example (applied : AppliedEndsSpawn source orientation wire sites) :
     applied.tag = .endsSpawn := rfl
 
+example
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {sites : List (EndSite source wire)}
+    (applied : AppliedEndsSpawn source orientation wire sites)
+    (model : Model)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv applied.source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) :=
+  applied.sound model definitionEnv
+
 private def negativeConcreteSpawn :=
   (spawnEnds negativeSource (idx 0) negativeSites)
     |>.toOption.get (by native_decide)
@@ -343,6 +358,18 @@ example :
 
 example (applied : AppliedEndsDelete source orientation wire) :
     applied.tag = .endsDelete := rfl
+
+example
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedEndsDelete source orientation wire)
+    (model : Model)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv applied.source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) :=
+  applied.sound model definitionEnv
 
 example :
     (applyEndsSpawn negativeSource (idx 0) negativeSites .backward).isOk =

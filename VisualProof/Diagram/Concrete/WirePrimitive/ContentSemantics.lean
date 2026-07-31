@@ -1,6 +1,8 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.Content
 import VisualProof.Diagram.Concrete.WirePrimitive.UniformSiteFactorization
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper
+import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemovalFinal
+import VisualProof.Diagram.Concrete.ElaborationInvariance
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityZipper
 
 namespace VisualProof
@@ -10,6 +12,7 @@ namespace ConcreteWirePrimitive
 open WirePrimitive
 open WirePrimitive.ConcreteFactorization
 open ConcreteWireQuantifier.SingletonRemovalSemantics
+open ConcreteWireQuantifier.ExhaustedWireRemovalSemantics
 
 universe u
 
@@ -85,6 +88,13 @@ def AssignsUniversal
         wire →
       ∀ values : PreModel.Args pre.Domain arguments,
         pre.apply (env _ head) values
+
+/-- Canonical universal value at relations, with an arbitrary individual. -/
+noncomputable def universalValue
+    (model : Model.{u}) :
+    (signature : Sig) → Sig.denote model.Carrier signature
+  | .iota => Classical.choice model.inhabited
+  | .rel _ => fun _ => True
 
 /--
 Sealed semantic transport between the unbound bodies at one acted wire scope.
@@ -862,6 +872,9 @@ structure SiteLedger
   private mk ::
   commonCore : CommonCoreReceipt source result.checked
   erasureTrace : AppliedSiteErasure.Result source wire
+  private target_deletion_wellFormed :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      erasureTrace.target erasureTrace.targetWire).WellFormed definitions
   erasureIso :
     ConcreteIso erasureTrace.target.val result.checked.val
   sourceScope :
@@ -893,16 +906,22 @@ def checkSiteLedger
   let targetScope ←
     compileSite? result.checked
       (result.checked.val.wires result.targetWire).scope
-  if exact :
-      result.sites.sites.all (sourceBoundaryRetained commonCore) = true then
-    if scopeExact :
-        regionsCorrespond commonCore (source.val.wires wire).scope
-              (result.checked.val.wires result.targetWire).scope = true ∧
-          sourceScope.frame.context.cutDepth =
-            targetScope.frame.context.cutDepth then
-      pure
-        ⟨commonCore, erasureTrace, erasureIso, sourceScope, targetScope,
-          exact, scopeExact.1, scopeExact.2⟩
+  if targetDeletion :
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        erasureTrace.target erasureTrace.targetWire).WellFormed
+          definitions then
+    if exact :
+        result.sites.sites.all (sourceBoundaryRetained commonCore) = true then
+      if scopeExact :
+          regionsCorrespond commonCore (source.val.wires wire).scope
+                (result.checked.val.wires result.targetWire).scope = true ∧
+            sourceScope.frame.context.cutDepth =
+              targetScope.frame.context.cutDepth then
+        pure
+          ⟨commonCore, erasureTrace, targetDeletion, erasureIso, sourceScope,
+            targetScope, exact, scopeExact.1, scopeExact.2⟩
+      else
+        none
     else
       none
   else
@@ -930,6 +949,21 @@ def erasureLanding
     (ledger : SiteLedger result) :
     ConcreteIso ledger.erasureTrace.target.val result.checked.val :=
   ledger.erasureIso
+
+/--
+The checker also verifies that the trace's endpoint-free acted wire can be
+deleted canonically. This receipt is used only to justify reassignment of the
+otherwise-unused binder.
+-/
+theorem targetDeletionWellFormed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : EndsDeleteResult source wire}
+    (ledger : SiteLedger result) :
+    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      ledger.erasureTrace.target
+      ledger.erasureTrace.targetWire).WellFormed definitions :=
+  ledger.target_deletion_wellFormed
 
 /-- The retained acted binder occupies the transported source scope. -/
 theorem scopeCorrespondence
@@ -1064,7 +1098,7 @@ private theorem transported_environment_apply
   cases same
   rfl
 
-private theorem denoteRegion_transport
+theorem denoteRegion_transport
     {left right : List Sig}
     (same : left = right)
     (pre : PreModel)
@@ -1076,6 +1110,762 @@ private theorem denoteRegion_transport
         (same ▸ env) (same ▸ body) := by
   cases same
   rfl
+
+private def finishMany
+    (bound : List Sig) :
+    Region definitions (bound ++ outer) → Region definitions outer :=
+  match bound with
+  | [] => fun body => body
+  | sig :: rest => fun body =>
+      finishMany rest (.mk (.cons (.bind sig body) .nil))
+
+private theorem bindMany_fill
+    (bound : List Sig)
+    (inner :
+      DiagramContext definitions hole (bound ++ outer))
+    (body : Region definitions hole) :
+    (DiagramContext.bindMany bound inner).fill body =
+      finishMany bound (inner.fill body) := by
+  induction bound generalizing outer with
+  | nil => rfl
+  | cons sig rest induction =>
+      simpa [DiagramContext.bindMany, DiagramContext.fill, finishMany] using
+        induction (.bind sig inner)
+
+private theorem bindMany_cutDepth
+    (bound : List Sig)
+    (inner :
+      DiagramContext definitions hole (bound ++ outer)) :
+    (DiagramContext.bindMany bound inner).cutDepth = inner.cutDepth := by
+  induction bound generalizing outer with
+  | nil => rfl
+  | cons sig rest induction =>
+      simpa [DiagramContext.bindMany, DiagramContext.cutDepth] using
+        induction (.bind sig inner)
+
+private theorem stopsAboveBindMany_cutDepth
+    {stopped :
+      DiagramContext definitions stoppedHole outer}
+    {full :
+      DiagramContext definitions (bound ++ stoppedHole) outer}
+    (decomposition : DiagramContext.StopsAboveBindMany bound stopped full) :
+    full.cutDepth = stopped.cutDepth := by
+  induction decomposition with
+  | hole full exact =>
+      subst full
+      exact bindMany_cutDepth bound _
+  | surround leading suffix inner induction =>
+      simpa [DiagramContext.cutDepth] using induction
+  | cut inner induction =>
+      simpa [DiagramContext.cutDepth] using congrArg Nat.succ induction
+  | bind inner induction =>
+      simpa [DiagramContext.cutDepth] using induction
+
+private theorem stopsAboveBindMany_fill
+    {stopped :
+      DiagramContext definitions stoppedHole outer}
+    {full :
+      DiagramContext definitions (bound ++ stoppedHole) outer}
+    (decomposition : DiagramContext.StopsAboveBindMany bound stopped full)
+    (body : Region definitions (bound ++ stoppedHole)) :
+    full.fill body =
+      stopped.fill (finishMany bound body) := by
+  induction decomposition with
+  | hole full exact =>
+      subst full
+      exact bindMany_fill bound .hole body
+  | surround leading suffix inner induction =>
+      simpa [DiagramContext.fill] using
+        congrArg (fun region => Region.surround leading region suffix)
+          (induction body)
+  | cut inner induction =>
+      simpa [DiagramContext.fill] using
+        congrArg (fun region => Region.mk (.cons (.cut region) .nil))
+          (induction body)
+  | bind inner induction =>
+      simpa [DiagramContext.fill] using
+        congrArg (fun region => Region.mk (.cons (.bind _ region) .nil))
+          (induction body)
+
+private theorem castContext_fill
+    {leftHole rightHole outer : List Sig}
+    (same : leftHole = rightHole)
+    (context : DiagramContext definitions leftHole outer)
+    (body : Region definitions leftHole) :
+    (same ▸ context).fill (same ▸ body) = context.fill body := by
+  cases same
+  rfl
+
+private theorem castContext_cutDepth
+    {leftHole rightHole outer : List Sig}
+    (same : leftHole = rightHole)
+    (context : DiagramContext definitions leftHole outer) :
+    (same ▸ context).cutDepth = context.cutDepth := by
+  cases same
+  rfl
+
+private def castContextOuter
+    (same : left = right)
+    (context : DiagramContext definitions hole left) :
+    DiagramContext definitions hole right :=
+  same ▸ context
+
+private theorem castHoleOuter_heq
+    (same : left = right) :
+    HEq
+      (.hole : DiagramContext definitions right right)
+      (castContextOuter same
+        (.hole : DiagramContext definitions left left)) := by
+  cases same
+  rfl
+
+private theorem castRegion_heq
+    {left right : List Sig}
+    (same : left = right)
+    (body : Region definitions left) :
+    HEq (same ▸ body) body := by
+  cases same
+  rfl
+
+theorem aboveScope_fill_finishRegion
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled) :
+    compiled.frame.context.fill compiled.frame.siteBody =
+      canonical.above.fill
+        (ConcreteElaboration.finishRegion base.val canonical.siteOuter site
+          (congrArg ConcreteElaboration.WireContext.sigs
+            canonical.visibleExact ▸ compiled.frame.siteBody)) := by
+  let visibleSigs :=
+    congrArg ConcreteElaboration.WireContext.sigs canonical.visibleExact
+  let extendSigs :=
+    ConcreteElaboration.WireContext.sigs_extend canonical.siteOuter site
+  let holeExact := visibleSigs.trans extendSigs
+  let castBody : Region definitions
+      (((base.val.wiresAt site).map
+          (fun wire => (base.val.wires wire).sig)) ++
+        canonical.siteOuter.sigs) :=
+    holeExact ▸ compiled.frame.siteBody
+  have decomposed :=
+    stopsAboveBindMany_fill canonical.contextDecomposition castBody
+  have proofExact :
+      ((congrArg ConcreteElaboration.WireContext.sigs
+          canonical.visibleExact).trans
+        (ConcreteElaboration.WireContext.sigs_extend
+          canonical.siteOuter site)) =
+        holeExact :=
+    Subsingleton.elim _ _
+  rw [proofExact] at decomposed
+  change
+    (holeExact ▸ compiled.frame.context).fill
+        (holeExact ▸ compiled.frame.siteBody) =
+      _ at decomposed
+  rw [castContext_fill] at decomposed
+  rw [decomposed]
+  congr 1
+  change
+    finishMany
+        ((base.val.wiresAt site).map
+          (fun wire => (base.val.wires wire).sig))
+        castBody =
+      ConcreteElaboration.finishRegion base.val canonical.siteOuter site
+        (visibleSigs ▸ compiled.frame.siteBody)
+  calc
+    finishMany
+        ((base.val.wiresAt site).map
+          (fun wire => (base.val.wires wire).sig))
+        castBody =
+      (DiagramContext.bindMany
+        ((base.val.wiresAt site).map
+          (fun wire => (base.val.wires wire).sig))
+        (.hole : DiagramContext definitions
+          (((base.val.wiresAt site).map
+              (fun wire => (base.val.wires wire).sig)) ++
+            canonical.siteOuter.sigs)
+          (((base.val.wiresAt site).map
+              (fun wire => (base.val.wires wire).sig)) ++
+            canonical.siteOuter.sigs))).fill castBody :=
+      (bindMany_fill _ .hole castBody).symm
+    _ =
+      (bindContextFor base.val canonical.siteOuter.ids
+        (base.val.wiresAt site)
+        (.hole :
+          DiagramContext definitions
+            (canonical.siteOuter.extend site).sigs
+            (canonical.siteOuter.extend site).sigs)).fill
+          (visibleSigs ▸ compiled.frame.siteBody) := by
+      rw [bindContextFor_eq_bindMany]
+      rw [bindMany_fill, bindMany_fill]
+      congr
+      · exact extendSigs.symm
+      · exact castHoleOuter_heq extendSigs
+      · exact
+          (castRegion_heq holeExact compiled.frame.siteBody).trans
+            (castRegion_heq visibleSigs compiled.frame.siteBody).symm
+    _ = _ := by
+      rw [bindContextFor_fill, finishBodyFor_eq_finishRegion]
+      rfl
+
+theorem aboveScope_cutDepth_eq
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled) :
+    compiled.frame.context.cutDepth = canonical.above.cutDepth := by
+  let visibleSigs :=
+    congrArg ConcreteElaboration.WireContext.sigs canonical.visibleExact
+  let extendSigs :=
+    ConcreteElaboration.WireContext.sigs_extend canonical.siteOuter site
+  let holeExact := visibleSigs.trans extendSigs
+  have decomposed :=
+    stopsAboveBindMany_cutDepth canonical.contextDecomposition
+  have proofExact :
+      ((congrArg ConcreteElaboration.WireContext.sigs
+          canonical.visibleExact).trans
+        (ConcreteElaboration.WireContext.sigs_extend
+          canonical.siteOuter site)) =
+        holeExact :=
+    Subsingleton.elim _ _
+  rw [proofExact] at decomposed
+  change
+    (holeExact ▸ compiled.frame.context).cutDepth =
+      canonical.above.cutDepth at decomposed
+  exact
+    (castContext_cutDepth holeExact
+      compiled.frame.context).symm.trans decomposed
+
+/--
+An endpoint-free bound wire can be reassigned the canonical universal value
+without changing its compiled body or any strictly outer variable.
+-/
+private theorem endpointFree_reassign_universal
+    {bound : CheckedDiagram definitions}
+    {removed : bound.val.WireId}
+    {targetWellFormed :
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        bound removed).WellFormed definitions}
+    {compiled :
+      SiteCompilation bound (bound.val.wires removed).scope}
+    (receipt :
+      FinalDeletionOuterReceipt.{u} bound removed targetWellFormed compiled)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions)
+    (sourceEnv :
+      Env model.toPreModel
+        (receipt.reflected.sourceSiteOuter.extend
+          (bound.val.wires removed).scope).sigs)
+    (sourceHolds :
+      denoteRegion model.toPreModel definitionEnv sourceEnv
+        receipt.reflected.sourceBody) :
+    ∃ reassigned :
+        Env model.toPreModel
+          (receipt.reflected.sourceSiteOuter.extend
+            (bound.val.wires removed).scope).sigs,
+      (∀ (value :
+          Var
+            (receipt.reflected.sourceSiteOuter.extend
+              (bound.val.wires removed).scope).sigs
+            (bound.val.wires removed).sig),
+        ConcreteElaboration.WireContext.origin bound.val
+            (receipt.reflected.sourceSiteOuter.extend
+              (bound.val.wires removed).scope).ids value =
+          removed →
+        reassigned _ value =
+          universalValue model (bound.val.wires removed).sig) ∧
+      (∀ {signature : Sig}
+        (value :
+          Var receipt.reflected.sourceSiteOuter.sigs signature),
+        reassigned _
+            (ConcreteElaboration.appendRightVar bound.val
+              (bound.val.wiresAt (bound.val.wires removed).scope)
+              value) =
+          sourceEnv _ (ConcreteElaboration.appendRightVar bound.val
+            (bound.val.wiresAt (bound.val.wires removed).scope) value)) ∧
+      denoteRegion model.toPreModel definitionEnv reassigned
+        receipt.reflected.sourceBody := by
+  let sourceOuter :
+      Env model.toPreModel receipt.reflected.sourceSiteOuter.sigs :=
+    fun signature value =>
+      sourceEnv signature
+        (ConcreteElaboration.appendRightVar bound.val
+          (bound.val.wiresAt (bound.val.wires removed).scope) value)
+  let targetOuter :
+      Env model.toPreModel receipt.reflected.targetSiteOuter.sigs :=
+    Env.comp sourceOuter
+      (contextEmbedding bound removed receipt.reflected.targetSiteOuter
+        receipt.reflected.sourceSiteOuter
+        receipt.reflected.siteCorrespond)
+  have sourceOuterNodup :
+      receipt.reflected.sourceSiteOuter.ids.Nodup := by
+    have parts := receipt.reflected.sourceVisibleNodup
+    rw [ConcreteElaboration.WireContext.extend,
+      List.nodup_append] at parts
+    exact parts.2.1
+  have sourceOuterProjection :
+      Env.comp targetOuter
+          (contextProjection bound removed
+            receipt.reflected.targetSiteOuter
+            receipt.reflected.sourceSiteOuter
+            receipt.reflected.siteCorrespond
+            receipt.reflected.siteRemovedAbsent) =
+        sourceOuter := by
+    exact
+      contextEmbedding_projection_environment bound removed
+        receipt.reflected.targetSiteOuter
+        receipt.reflected.sourceSiteOuter
+        receipt.reflected.siteCorrespond sourceOuterNodup
+        receipt.reflected.siteRemovedAbsent model.toPreModel sourceOuter
+  let sourceValues :=
+    ConcreteElaboration.valuesFromEnvironmentFor bound.val
+      receipt.reflected.sourceSiteOuter.ids
+      (bound.val.wiresAt (bound.val.wires removed).scope) sourceEnv
+  have sourceReconstructed :
+      ConcreteElaboration.extendEnvironment bound.val
+          receipt.reflected.sourceSiteOuter
+          (bound.val.wires removed).scope sourceValues sourceOuter =
+        sourceEnv := by
+    apply
+      ConcreteElaboration.extendEnvironmentFor_from bound.val
+        receipt.reflected.sourceSiteOuter.ids
+        (bound.val.wiresAt (bound.val.wires removed).scope)
+    intro signature value
+    rfl
+  obtain ⟨oldValue, targetValues, oldCorrespond⟩ :=
+    ConcreteWireQuantifier.ExhaustedWireRemovalSemantics.Internal.dyingScopeEnvironmentsCorrespond_source
+        bound removed receipt.reflected.targetSiteOuter
+        receipt.reflected.sourceSiteOuter
+        receipt.reflected.siteCorrespond
+        receipt.reflected.siteRemovedAbsent
+        receipt.reflected.sourceVisibleNodup model.toPreModel
+        targetOuter sourceValues
+  let targetExtended :=
+    ConcreteElaboration.extendEnvironment
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        bound removed)
+      receipt.reflected.targetSiteOuter
+      (targetRegion bound removed (bound.val.wires removed).scope)
+      targetValues targetOuter
+  have oldSourceExact :
+      sourceEnv =
+        sourceEnvironmentFromTarget bound removed
+          (receipt.reflected.targetSiteOuter.extend
+            (targetRegion bound removed
+              (bound.val.wires removed).scope))
+          (receipt.reflected.sourceSiteOuter.extend
+            (bound.val.wires removed).scope)
+          (extend_contexts_correspond bound removed
+            receipt.reflected.siteCorrespond
+            (bound.val.wires removed).scope)
+          model.toPreModel oldValue targetExtended := by
+    calc
+      sourceEnv =
+          ConcreteElaboration.extendEnvironment bound.val
+            receipt.reflected.sourceSiteOuter
+            (bound.val.wires removed).scope sourceValues sourceOuter :=
+        sourceReconstructed.symm
+      _ = ConcreteElaboration.extendEnvironment bound.val
+            receipt.reflected.sourceSiteOuter
+            (bound.val.wires removed).scope sourceValues
+            (Env.comp targetOuter
+              (contextProjection bound removed
+                receipt.reflected.targetSiteOuter
+                receipt.reflected.sourceSiteOuter
+                receipt.reflected.siteCorrespond
+                receipt.reflected.siteRemovedAbsent)) := by
+        rw [sourceOuterProjection]
+      _ = sourceEnvironmentFromTarget bound removed
+            (receipt.reflected.targetSiteOuter.extend
+              (targetRegion bound removed
+                (bound.val.wires removed).scope))
+            (receipt.reflected.sourceSiteOuter.extend
+              (bound.val.wires removed).scope)
+            (extend_contexts_correspond bound removed
+              receipt.reflected.siteCorrespond
+              (bound.val.wires removed).scope)
+            model.toPreModel oldValue targetExtended :=
+        oldCorrespond.source_eq receipt.reflected.sourceVisibleNodup
+  have targetHolds :
+      denoteRegion model.toPreModel definitionEnv targetExtended
+        receipt.reflected.targetBody :=
+    (receipt.reflected.localBodyEquivalence model.toPreModel definitionEnv
+      oldValue targetExtended).mpr (oldSourceExact ▸ sourceHolds)
+  let selected := universalValue model (bound.val.wires removed).sig
+  let reassigned :=
+    sourceEnvironmentFromTarget bound removed
+      (receipt.reflected.targetSiteOuter.extend
+        (targetRegion bound removed (bound.val.wires removed).scope))
+      (receipt.reflected.sourceSiteOuter.extend
+        (bound.val.wires removed).scope)
+      (extend_contexts_correspond bound removed
+        receipt.reflected.siteCorrespond
+        (bound.val.wires removed).scope)
+      model.toPreModel selected targetExtended
+  have reassignedHolds :
+      denoteRegion model.toPreModel definitionEnv reassigned
+        receipt.reflected.sourceBody :=
+    (receipt.reflected.localBodyEquivalence model.toPreModel definitionEnv
+      selected targetExtended).mp targetHolds
+  have reassignedCorrespond :=
+    sourceEnvironmentFromTarget_corresponds bound removed
+      (receipt.reflected.targetSiteOuter.extend
+        (targetRegion bound removed (bound.val.wires removed).scope))
+      (receipt.reflected.sourceSiteOuter.extend
+        (bound.val.wires removed).scope)
+      (extend_contexts_correspond bound removed
+        receipt.reflected.siteCorrespond
+        (bound.val.wires removed).scope)
+      receipt.reflected.sourceVisibleNodup model.toPreModel selected
+      targetExtended
+  refine ⟨reassigned, reassignedCorrespond.removedValue, ?_, reassignedHolds⟩
+  intro signature value
+  let reassignedValues :=
+    ConcreteElaboration.valuesFromEnvironmentFor bound.val
+      receipt.reflected.sourceSiteOuter.ids
+      (bound.val.wiresAt (bound.val.wires removed).scope) reassigned
+  have outerExact :
+      sourceEnvironmentFromTarget bound removed
+          receipt.reflected.targetSiteOuter
+          receipt.reflected.sourceSiteOuter
+          receipt.reflected.siteCorrespond model.toPreModel selected
+          targetOuter =
+        sourceOuter := by
+    rw [sourceEnvironmentFromTarget_eq_projection bound removed
+      receipt.reflected.targetSiteOuter
+      receipt.reflected.sourceSiteOuter
+      receipt.reflected.siteCorrespond sourceOuterNodup
+      receipt.reflected.siteRemovedAbsent]
+    exact sourceOuterProjection
+  have reconstructed :=
+    sourceEnvironmentFromTarget_extend_reconstruct bound removed
+      receipt.reflected.targetSiteOuter
+      receipt.reflected.sourceSiteOuter
+      receipt.reflected.siteCorrespond
+      (bound.val.wires removed).scope
+      receipt.reflected.sourceVisibleNodup
+      receipt.reflected.siteRemovedAbsent model.toPreModel selected
+      targetValues targetOuter
+  change
+    ConcreteElaboration.extendEnvironment bound.val
+        receipt.reflected.sourceSiteOuter
+        (bound.val.wires removed).scope reassignedValues
+        (sourceEnvironmentFromTarget bound removed
+          receipt.reflected.targetSiteOuter
+          receipt.reflected.sourceSiteOuter
+          receipt.reflected.siteCorrespond model.toPreModel selected
+          targetOuter) =
+      reassigned at reconstructed
+  rw [outerExact] at reconstructed
+  rw [← reconstructed]
+  exact
+    ConcreteElaboration.extendEnvironment_appendRightVar bound.val
+      receipt.reflected.sourceSiteOuter
+      (bound.val.wires removed).scope reassignedValues sourceOuter value
+
+private theorem castEnvBack_apply
+    {left right : List Sig}
+    (same : left = right)
+    (env : Env pre right)
+    {signature : Sig}
+    (value : Var left signature) :
+    (same.symm ▸ env) signature value =
+      env signature (same ▸ value) := by
+  cases same
+  rfl
+
+theorem castEnv_roundtrip
+    {left right : List Sig}
+    (same : left = right)
+    (env : Env pre right) :
+    same ▸ (same.symm ▸ env) = env := by
+  cases same
+  rfl
+
+private theorem castVar_roundtrip
+    {left right : List Sig}
+    (same : left = right)
+    {signature : Sig}
+    (value : Var right signature) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+private theorem castSignatureVar_roundtrip
+    {context : List Sig}
+    {left right : Sig}
+    (same : left = right)
+    (value : Var context right) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+private theorem origin_cast_signature
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    {left right : Sig}
+    (same : left = right)
+    (value : Var context.sigs left) :
+    ConcreteElaboration.WireContext.origin diagram context.ids
+        (same ▸ value) =
+      ConcreteElaboration.WireContext.origin diagram context.ids value := by
+  cases same
+  rfl
+
+private theorem env_cast_signature_apply
+    {context : List Sig}
+    {left right : Sig}
+    (same : left = right)
+    (env : Env pre context)
+    (value : Var context left) :
+    env right (same ▸ value) =
+      (congrArg pre.Domain same ▸ env left value) := by
+  cases same
+  rfl
+
+private theorem universalValue_relation
+    (model : Model.{u})
+    {signature : Sig}
+    (same : signature = .rel arguments) :
+    congrArg model.toPreModel.Domain same ▸
+        (show model.toPreModel.Domain signature from
+          universalValue model signature) =
+      (fun _ => True) := by
+  cases same
+  rfl
+
+private theorem castVisibleEnv_appendRightRaw
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (visible outer : ConcreteElaboration.WireContext base.val)
+    (same : visible = outer.extend site)
+    (env : Env pre visible.sigs)
+    {signature : Sig}
+    (value : Var outer.sigs signature) :
+    (congrArg ConcreteElaboration.WireContext.sigs same ▸ env)
+        signature
+        (ConcreteElaboration.appendRightVar base.val
+          (base.val.wiresAt site) value) =
+      env signature (embedOuterThroughScope visible outer same value) := by
+  cases same
+  rfl
+
+theorem castVisibleEnv_appendRight
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled)
+    (env : Env pre compiled.frame.visible.sigs)
+    {signature : Sig}
+    (value : Var canonical.siteOuter.sigs signature) :
+    (congrArg ConcreteElaboration.WireContext.sigs
+          canonical.visibleExact ▸ env)
+        signature
+        (ConcreteElaboration.appendRightVar base.val
+          (base.val.wiresAt site) value) =
+      env signature (scopeEmbedOuter canonical value) := by
+  exact
+    castVisibleEnv_appendRightRaw compiled.frame.visible
+      canonical.siteOuter canonical.visibleExact env value
+
+private theorem aligned_scopeEmbedOuter
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {compiled : SiteCompilation base site}
+    (left right : SiteCompilation.AboveScopeDecomposition compiled)
+    (aligned :
+      SiteCompilation.AboveScopeDecomposition.Alignment left right)
+    {signature : Sig}
+    (value : Var left.siteOuter.sigs signature) :
+    scopeEmbedOuter left value =
+      scopeEmbedOuter right
+        (congrArg ConcreteElaboration.WireContext.sigs
+          aligned.siteOuterExact ▸ value) := by
+  cases left with
+  | mk leftOuter leftAbove leftVisible leftDecomposition =>
+      cases right with
+      | mk rightOuter rightAbove rightVisible rightDecomposition =>
+          cases aligned with
+          | mk outerExact aboveExact =>
+              cases outerExact
+              have proofExact : leftVisible = rightVisible :=
+                Subsingleton.elim _ _
+              cases proofExact
+              rfl
+
+/--
+Frame-level endpoint-free reassignment. It hides the deletion reflection's
+canonical decomposition and returns the result in any caller-selected
+decomposition of the same compiled acted scope.
+-/
+theorem endpointFree_reassign_frame
+    {bound : CheckedDiagram definitions}
+    {removed : bound.val.WireId}
+    {targetWellFormed :
+      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        bound removed).WellFormed definitions}
+    {compiled :
+      SiteCompilation bound (bound.val.wires removed).scope}
+    (receipt :
+      FinalDeletionOuterReceipt.{u} bound removed targetWellFormed compiled)
+    (canonical : SiteCompilation.AboveScopeDecomposition compiled)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions)
+    (sourceEnv :
+      Env model.toPreModel compiled.frame.visible.sigs)
+    (sourceHolds :
+      denoteRegion model.toPreModel definitionEnv sourceEnv
+        compiled.frame.siteBody) :
+    ∃ reassigned :
+        Env model.toPreModel compiled.frame.visible.sigs,
+      AssignsUniversal removed compiled.frame.visible model.toPreModel
+          reassigned ∧
+      (∀ {signature : Sig}
+        (value : Var canonical.siteOuter.sigs signature),
+        reassigned _ (scopeEmbedOuter canonical value) =
+          sourceEnv _ (scopeEmbedOuter canonical value)) ∧
+      denoteRegion model.toPreModel definitionEnv reassigned
+        compiled.frame.siteBody := by
+  let receiptCanonical := receipt.boundCanonical
+  let visibleSigs :=
+    congrArg ConcreteElaboration.WireContext.sigs
+      receipt.reflected.sourceVisibleExact
+  let receiptEnv :
+      Env model.toPreModel
+        (receipt.reflected.sourceSiteOuter.extend
+          (bound.val.wires removed).scope).sigs :=
+    visibleSigs ▸ sourceEnv
+  have receiptHolds :
+      denoteRegion model.toPreModel definitionEnv receiptEnv
+        receipt.reflected.sourceBody := by
+    have casted :=
+      (denoteRegion_transport visibleSigs model.toPreModel definitionEnv
+        sourceEnv compiled.frame.siteBody).mp sourceHolds
+    rw [receipt.reflected.sourceBodyExact] at casted
+    exact casted
+  obtain ⟨receiptReassigned, removedValue, outerAgreement,
+      reassignedHolds⟩ :=
+    endpointFree_reassign_universal receipt model definitionEnv receiptEnv
+      receiptHolds
+  let reassigned :
+      Env model.toPreModel compiled.frame.visible.sigs :=
+    visibleSigs.symm ▸ receiptReassigned
+  have universal :
+      AssignsUniversal removed compiled.frame.visible model.toPreModel
+        reassigned := by
+    intro arguments head headOrigin values
+    have removedSignature :
+        (bound.val.wires removed).sig = .rel arguments := by
+      rw [← headOrigin]
+      exact
+        ConcreteElaboration.WireContext.origin_signature bound.val
+          compiled.frame.visible.ids head
+    let removedHead :
+        Var compiled.frame.visible.sigs
+          (bound.val.wires removed).sig :=
+      removedSignature.symm ▸ head
+    have removedHeadOrigin :
+        ConcreteElaboration.WireContext.origin bound.val
+            compiled.frame.visible.ids removedHead =
+          removed := by
+      calc
+        _ =
+            ConcreteElaboration.WireContext.origin bound.val
+              compiled.frame.visible.ids head := by
+          exact
+            origin_cast_signature bound.val compiled.frame.visible
+              removedSignature.symm head
+        _ = removed := headOrigin
+    have extendedOrigin :
+        ConcreteElaboration.WireContext.origin bound.val
+            (receipt.reflected.sourceSiteOuter.extend
+              (bound.val.wires removed).scope).ids
+            (visibleSigs ▸ removedHead) =
+          removed :=
+      (origin_transport_forward receipt.reflected.sourceVisibleExact
+        removedHead).trans removedHeadOrigin
+    have selected :=
+      removedValue (visibleSigs ▸ removedHead) extendedOrigin
+    have selectedAtRemoved :
+        reassigned _ removedHead =
+          universalValue model (bound.val.wires removed).sig := by
+      change
+        (visibleSigs.symm ▸ receiptReassigned) _ removedHead =
+          universalValue model (bound.val.wires removed).sig
+      rw [castEnvBack_apply visibleSigs receiptReassigned removedHead]
+      exact selected
+    have selectedAtHead :
+        reassigned _ head =
+          (congrArg model.toPreModel.Domain removedSignature ▸
+            universalValue model (bound.val.wires removed).sig) := by
+      calc
+        reassigned _ head =
+            reassigned _
+              (removedSignature ▸ removedHead) := by
+          rw [castSignatureVar_roundtrip removedSignature head]
+        _ =
+            (congrArg model.toPreModel.Domain removedSignature ▸
+              reassigned _ removedHead) :=
+          env_cast_signature_apply removedSignature reassigned removedHead
+        _ =
+            (congrArg model.toPreModel.Domain removedSignature ▸
+              universalValue model (bound.val.wires removed).sig) := by
+          rw [selectedAtRemoved]
+    rw [universalValue_relation model removedSignature] at selectedAtHead
+    change
+      reassigned (.rel arguments) head
+        (PreModel.Args.toFull values)
+    simpa using
+      congrFun selectedAtHead (PreModel.Args.toFull values)
+  have outer :
+      ∀ {signature : Sig}
+        (value : Var canonical.siteOuter.sigs signature),
+        reassigned _ (scopeEmbedOuter canonical value) =
+          sourceEnv _ (scopeEmbedOuter canonical value) := by
+    intro signature value
+    let aligned := canonical.alignment receiptCanonical
+    let receiptValue :
+        Var receiptCanonical.siteOuter.sigs signature :=
+      congrArg ConcreteElaboration.WireContext.sigs
+        aligned.siteOuterExact ▸ value
+    have embedExact :
+        scopeEmbedOuter canonical value =
+          scopeEmbedOuter receiptCanonical receiptValue :=
+      aligned_scopeEmbedOuter canonical receiptCanonical aligned value
+    rw [embedExact]
+    calc
+      reassigned _ (scopeEmbedOuter receiptCanonical receiptValue) =
+          receiptReassigned _
+            (ConcreteElaboration.appendRightVar bound.val
+              (bound.val.wiresAt (bound.val.wires removed).scope)
+              receiptValue) := by
+        rw [← castVisibleEnv_appendRight receiptCanonical reassigned
+          receiptValue]
+        exact congrFun
+          (congrFun (castEnv_roundtrip visibleSigs receiptReassigned)
+            signature)
+          (ConcreteElaboration.appendRightVar bound.val
+            (bound.val.wiresAt (bound.val.wires removed).scope)
+            receiptValue)
+      _ = receiptEnv _
+            (ConcreteElaboration.appendRightVar bound.val
+              (bound.val.wiresAt (bound.val.wires removed).scope)
+              receiptValue) :=
+        outerAgreement receiptValue
+      _ = sourceEnv _ (scopeEmbedOuter receiptCanonical receiptValue) := by
+        exact castVisibleEnv_appendRight receiptCanonical sourceEnv
+          receiptValue
+  have frameHolds :
+      denoteRegion model.toPreModel definitionEnv reassigned
+        compiled.frame.siteBody := by
+    apply
+      (denoteRegion_transport visibleSigs model.toPreModel definitionEnv
+        reassigned compiled.frame.siteBody).mpr
+    rw [castEnv_roundtrip visibleSigs receiptReassigned,
+      receipt.reflected.sourceBodyExact]
+    exact reassignedHolds
+  exact ⟨reassigned, universal, outer, frameHolds⟩
 
 private theorem compileRegionFrame_site_inner_liftOuter_origin
     (definitions : List (List Sig))

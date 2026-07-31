@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.ContentSemantics
+import VisualProof.Diagram.Concrete.WirePrimitive.ContentEndsSemantics
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 
@@ -270,6 +270,9 @@ structure AppliedEndsSpawn
   private checked : EndsSpawnResult source wire sites
   private inverseLedger :
     EndsDeleteResult.SiteLedger checked.inverse
+  private cut_depth_exact :
+    polarity.compiled.frame.context.cutDepth =
+      inverseLedger.sourceScope.frame.context.cutDepth
 
 namespace AppliedEndsSpawn
 
@@ -375,7 +378,117 @@ def applyEndsSpawn
       .concreteRejected
   let inverseLedger ←
     optionToExcept .semanticLedgerRejected checked.inverse.checkSiteLedger
-  pure ⟨polarity, checked, inverseLedger⟩
+  if exact :
+      polarity.compiled.frame.context.cutDepth =
+        inverseLedger.sourceScope.frame.context.cutDepth then
+    pure ⟨polarity, checked, inverseLedger, exact⟩
+  else
+    throw .semanticLedgerRejected
+
+/-- All-end deletion is sound in the checker-selected orientation. -/
+theorem ends_delete_sound
+    {source : CheckedDiagram definitions}
+    (orientation : Orientation)
+    (wire : source.val.WireId)
+    (applied : AppliedEndsDelete source orientation wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv applied.source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) := by
+  have sound :=
+    applied.ledger.denotes model definitionEnv
+  have scopes :
+      applied.polarity.compiled = applied.ledger.sourceScope :=
+    SiteCompilation.unique _ _
+  cases orientation with
+  | forward =>
+      have odd :
+          applied.ledger.sourceScope.frame.context.cutDepth % 2 = 1 := by
+        rw [← scopes]
+        exact of_decide_eq_true (by
+          simpa [deletePolarityLegal] using applied.polarity.legal)
+      exact sound.2 odd
+  | backward =>
+      have even :
+          applied.ledger.sourceScope.frame.context.cutDepth % 2 = 0 := by
+        rw [← scopes]
+        exact of_decide_eq_true (by
+          simpa [deletePolarityLegal] using applied.polarity.legal)
+      exact sound.1 even
+
+/-- Endpoint spawning is the checked inverse of all-end deletion. -/
+theorem ends_spawn_sound
+    {source : CheckedDiagram definitions}
+    (orientation : Orientation)
+    (wire : source.val.WireId)
+    (sites : List (EndSite source wire))
+    (applied : AppliedEndsSpawn source orientation wire sites)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv applied.source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) := by
+  have sound :=
+    applied.inverseLedger.denotes model definitionEnv
+  have inverseLanding :=
+    iso_denotation applied.checked.inverseIso model.toPreModel definitionEnv
+  cases orientation with
+  | forward =>
+      have even :
+          applied.inverseLedger.sourceScope.frame.context.cutDepth % 2 = 0 := by
+        rw [← applied.cut_depth_exact]
+        exact of_decide_eq_true (by
+          simpa [spawnPolarityLegal] using applied.polarity.legal)
+      intro sourceHolds
+      exact sound.1 even (inverseLanding.mpr sourceHolds)
+  | backward =>
+      have odd :
+          applied.inverseLedger.sourceScope.frame.context.cutDepth % 2 = 1 := by
+        rw [← applied.cut_depth_exact]
+        exact of_decide_eq_true (by
+          simpa [spawnPolarityLegal] using applied.polarity.legal)
+      intro targetHolds
+      exact inverseLanding.mp (sound.2 odd targetHolds)
+
+namespace AppliedEndsDelete
+
+/-- Method-form soundness carried by an accepted all-end deletion receipt. -/
+theorem sound
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedEndsDelete source orientation wire)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv applied.source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) :=
+  ends_delete_sound orientation wire applied model definitionEnv
+
+end AppliedEndsDelete
+
+namespace AppliedEndsSpawn
+
+/-- Method-form soundness carried by an accepted endpoint-spawn receipt. -/
+theorem sound
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {sites : List (EndSite source wire)}
+    (applied : AppliedEndsSpawn source orientation wire sites)
+    (model : Model.{u})
+    (definitionEnv :
+      DefinitionEnv model.toPreModel definitions) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv applied.source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) :=
+  ends_spawn_sound orientation wire sites applied model definitionEnv
+
+end AppliedEndsSpawn
 
 end Content
 
@@ -383,7 +496,7 @@ export Content
   (WireContentError AppliedCutWrap AppliedCutAbsorb AppliedParallelSplit
     AppliedParallelFuse AppliedEndsDelete AppliedEndsSpawn applyCutWrap
     applyCutAbsorb applyParallelSplit applyParallelFuse applyEndsDelete
-    applyEndsSpawn)
+    applyEndsSpawn ends_delete_sound ends_spawn_sound)
 
 end WirePrimitive
 
@@ -391,6 +504,6 @@ export WirePrimitive
   (WireContentError AppliedCutWrap AppliedCutAbsorb AppliedParallelSplit
     AppliedParallelFuse AppliedEndsDelete AppliedEndsSpawn applyCutWrap
     applyCutAbsorb applyParallelSplit applyParallelFuse applyEndsDelete
-    applyEndsSpawn)
+    applyEndsSpawn ends_delete_sound ends_spawn_sound)
 
 end VisualProof
