@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.IdentityNormalizationCore
+import VisualProof.Diagram.Concrete.ElaborationDenotation
 
 namespace VisualProof
 
@@ -48,7 +49,8 @@ private theorem survivor_not_absorbed
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node) :
     eligible.survivor ∉ eligible.second :: eligible.rest := by
-  have nodup := source.val.identityIncidentWires_nodup node
+  have nodup :=
+    collapseIncidentWires_nodup source node eligible.identity.region
   rw [eligible.incident_eq] at nodup
   exact (List.nodup_cons.mp nodup).1
 
@@ -57,6 +59,8 @@ private theorem survivor_incident
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node) :
     eligible.survivor ∈ source.val.identityIncidentWires node := by
+  rw [← mem_collapseIncidentWires source node
+    eligible.identity.region]
   rw [eligible.incident_eq]
   simp
 
@@ -67,6 +71,8 @@ private theorem absorbed_incident
     (wire : source.val.WireId)
     (member : wire ∈ eligible.second :: eligible.rest) :
     wire ∈ source.val.identityIncidentWires node := by
+  rw [← mem_collapseIncidentWires source node
+    eligible.identity.region]
   rw [eligible.incident_eq]
   exact List.mem_cons_of_mem eligible.survivor member
 
@@ -78,6 +84,8 @@ private theorem incident_eq_survivor_or_absorbed
     wire ∈ source.val.identityIncidentWires node ↔
       wire = eligible.survivor ∨
         wire ∈ eligible.second :: eligible.rest := by
+  rw [← mem_collapseIncidentWires source node
+    eligible.identity.region]
   rw [eligible.incident_eq]
   simp
 
@@ -928,7 +936,56 @@ private theorem representative_signature_eq_original
   · subst original
     rfl
 
-private theorem representative_scope_eq_original
+private theorem checked_encloses_trans
+    (source : CheckedDiagram definitions)
+    {outer middle inner : source.val.RegionId}
+    (outerMiddle : source.val.Encloses outer middle)
+    (middleInner : source.val.Encloses middle inner) :
+    source.val.Encloses outer inner := by
+  obtain ⟨outerSteps, outerClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists
+      source.val outer middle).mp outerMiddle
+  obtain ⟨innerSteps, innerClimb⟩ :=
+    (ConcreteElaboration.encloses_iff_exists
+      source.val middle inner).mp middleInner
+  have combined :
+      source.val.climb (innerSteps.val + outerSteps.val) inner =
+        some outer := by
+    rw [ConcreteDiagram.climb_add, innerClimb]
+    exact outerClimb
+  have bounded :=
+    ConcreteElaboration.successfulClimb_le_count definitions source.val
+      source.property (innerSteps.val + outerSteps.val) inner outer combined
+  exact
+    (ConcreteElaboration.encloses_iff_exists source.val outer inner).mpr
+      ⟨⟨innerSteps.val + outerSteps.val, by omega⟩, combined⟩
+
+private theorem survivor_scope_encloses_identity_region
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node) :
+    source.val.Encloses
+      (source.val.wires eligible.survivor).scope
+      eligible.identity.region := by
+  obtain ⟨endpoint, endpointMember, endpointNode⟩ :=
+    (mem_identityIncidentWires source.val node eligible.survivor).mp
+      (survivor_incident source node eligible)
+  have checked :=
+    (List.all_eq_true.mp source.property.wire_scopes_enclose)
+      (eligible.survivor, endpoint) (by
+        simp only [ConcreteDiagram.endpointOccurrences, List.mem_flatMap]
+        exact
+          ⟨eligible.survivor, Data.Finite.mem_allFin _,
+            List.mem_map.mpr ⟨endpoint, endpointMember, rfl⟩⟩)
+  have encloses :
+      source.val.Encloses
+        (source.val.wires eligible.survivor).scope
+        (source.val.nodes endpoint.node).region :=
+    of_decide_eq_true checked
+  rw [endpointNode, eligible.identity.node_eq] at encloses
+  exact encloses
+
+private theorem representative_scope_encloses_original
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -938,18 +995,22 @@ private theorem representative_scope_eq_original
           original ∈ source.val.identityIncidentWires node ∨
         representative ≠ eligible.survivor ∧
           original = representative) :
-    (source.val.wires representative).scope =
+    source.val.Encloses
+      (source.val.wires representative).scope
       (source.val.wires original).scope := by
   rcases ownership with
     ⟨representativeSurvivor, originalIncident⟩ |
     ⟨representativeNotSurvivor, originalRepresentative⟩
   · subst representative
-    exact
-      (eligible.coScoped eligible.survivor
-        (survivor_incident source node eligible)).trans
-        (eligible.coScoped original originalIncident).symm
+    rcases
+        (incident_eq_survivor_or_absorbed source node eligible original).mp
+          originalIncident with originalSurvivor | originalAbsorbed
+    · subst original
+      exact source.val.encloses_refl _
+    · rw [eligible.absorbedCoScoped original originalAbsorbed]
+      exact survivor_scope_encloses_identity_region source node eligible
   · subst original
-    rfl
+    exact source.val.encloses_refl _
 
 private theorem collapseWire_signature_eq_original
     (source : CheckedDiagram definitions)
@@ -980,7 +1041,7 @@ private theorem collapseWire_signature_eq_original
     representative_signature_eq_original source node eligible _ _
       ownership
 
-private theorem collapseWire_scope_eq_original
+private theorem collapseWire_scope_encloses_original
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -998,15 +1059,16 @@ private theorem collapseWire_scope_eq_original
           original =
             (retainedWires source.val
               (eligible.second :: eligible.rest)).get targetWire) :
-    ((collapseCandidate source node eligible).wires targetWire).scope =
+    source.val.Encloses
+      ((collapseCandidate source node eligible).wires targetWire).scope
       (source.val.wires original).scope := by
-  change
+  change source.val.Encloses
     (source.val.wires
       ((retainedWires source.val
-        (eligible.second :: eligible.rest)).get targetWire)).scope =
-      (source.val.wires original).scope
+        (eligible.second :: eligible.rest)).get targetWire)).scope
+    (source.val.wires original).scope
   exact
-    representative_scope_eq_original source node eligible _ _
+    representative_scope_encloses_original source node eligible _ _
       ownership
 
 private theorem collapse_exact_endpoint_exists
@@ -1566,8 +1628,8 @@ private theorem collapse_wire_scopes_enclose
         (source.val.nodes originalEndpoint.node).region :=
     of_decide_eq_true sourceChecked
   apply decide_eq_true
-  have scopeEquality :=
-    collapseWire_scope_eq_original source node eligible targetWire
+  have scopeEncloses :=
+    collapseWire_scope_encloses_original source node eligible targetWire
       originalWire ownership
   have targetNodeData :
       (collapseCandidate source node eligible).nodes
@@ -1575,9 +1637,11 @@ private theorem collapse_wire_scopes_enclose
         source.val.nodes
           ((retainedNodes source.val [node]).get
             targetEndpoint.node) := rfl
-  rw [scopeEquality, targetNodeData, nodeEquation]
-  unfold ConcreteDiagram.Encloses at sourceEncloses ⊢
-  simpa using sourceEncloses
+  rw [targetNodeData, nodeEquation]
+  have sourceResult :=
+    checked_encloses_trans source scopeEncloses sourceEncloses
+  unfold ConcreteDiagram.Encloses at sourceResult ⊢
+  simpa only [collapseCandidate_climb] using sourceResult
 
 private theorem collapse_all_regions_reach_root
     (source : CheckedDiagram definitions)

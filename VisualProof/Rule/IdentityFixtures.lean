@@ -1,41 +1,119 @@
-import VisualProof.Diagram.Concrete.Examples
-import VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
-import VisualProof.Rule.IdentityRetargetSemantics
+import VisualProof.Rule.Identity
 
 namespace VisualProof
 namespace IdentityFixtures
 
-open ConcreteExamples
 open ConcreteDiagram
+open StructuralCore
+open WirePrimitive.Partition
 
-/-! Orderless identity incidence is exercised at arity three and above. -/
+private def idx {bound : Nat}
+    (value : Nat) (valid : value < bound := by native_decide) : Fin bound :=
+  ⟨value, valid⟩
 
-example :
-    (normalizeIdentities threePortIdentity_checked).target.val.wireCount = 1 := by
-  native_decide
-
-example :
-    (fuseSameRegion identityOrderOriginal_checked
-      ⟨0, by decide⟩ ⟨1, by decide⟩).isSome = true := by
-  native_decide
-
-example :
-    (fuseSameRegion identityOrderPermuted_checked
-      ⟨0, by decide⟩ ⟨1, by decide⟩).isSome = true := by
-  native_decide
-
-example (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
-    denoteChecked pre definitionEnv identityOrderOriginal_checked =
-      denoteChecked pre definitionEnv identityOrderPermuted_checked :=
-  identityIncidencePermutation_denotation pre definitionEnv
+private def nestedSig : Sig := .rel [.rel [], .iota]
 
 /-!
-The retarget host has one three-port same-signature identity. Its region
-strictly dominates the nested insertion site but not the sibling site.
+The zero-outer case lives at even cut depth.  Three distinct local wires make
+the collapse rule, rather than degenerate deletion, authoritative.
 -/
+private def allCoScopedRaw : ConcreteDiagram 0 where
+  regionCount := 1
+  nodeCount := 1
+  wireCount := 3
+  root := 0
+  regions := fun _ => .sheet
+  nodes := fun _ => .identity 0 nestedSig 3
+  wires
+    | ⟨0, _⟩ =>
+        { sig := nestedSig
+          scope := 0
+          endpoints := [⟨0, .identity 0⟩] }
+    | ⟨1, _⟩ =>
+        { sig := nestedSig
+          scope := 0
+          endpoints := [⟨0, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := nestedSig
+          scope := 0
+          endpoints := [⟨0, .identity 2⟩] }
 
-def retargetHostRaw : ConcreteDiagram 0 where
-  regionCount := 4
+private theorem allCoScopedRaw_wellFormed :
+    allCoScopedRaw.WellFormed [] := by
+  native_decide
+
+private def allCoScoped : CheckedDiagram [] :=
+  ⟨allCoScopedRaw, allCoScopedRaw_wellFormed⟩
+
+example :
+    (collapseOnePoint allCoScoped (idx 0)).map
+        (fun rewrite =>
+          (rewrite.target.val.nodeCount,
+            rewrite.target.val.wiresList.map fun wire =>
+              ((rewrite.target.val.wires wire).sig,
+                (rewrite.target.val.wires wire).scope.val))) =
+      some (0, [(nestedSig, 0)]) := by
+  native_decide
+
+/-!
+The one-outer case lives at odd cut depth.  The outer wire is deliberately
+second in concrete order: eligibility must select it as the representative,
+then preserve its signature and root scope.
+-/
+private def oneOuterRaw : ConcreteDiagram 0 where
+  regionCount := 2
+  nodeCount := 1
+  wireCount := 3
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 0
+  nodes := fun _ => .identity 1 nestedSig 3
+  wires
+    | ⟨0, _⟩ =>
+        { sig := nestedSig
+          scope := 1
+          endpoints := [⟨0, .identity 0⟩] }
+    | ⟨1, _⟩ =>
+        { sig := nestedSig
+          scope := 0
+          endpoints := [⟨0, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := nestedSig
+          scope := 1
+          endpoints := [⟨0, .identity 2⟩] }
+
+private theorem oneOuterRaw_wellFormed :
+    oneOuterRaw.WellFormed [] := by
+  native_decide
+
+private def oneOuter : CheckedDiagram [] :=
+  ⟨oneOuterRaw, oneOuterRaw_wellFormed⟩
+
+private def oneOuterRewrite : IdentityRewrite oneOuter :=
+  (collapseOnePoint oneOuter (idx 0)).get (by native_decide)
+
+example :
+    (oneOuterRewrite.target.val.nodeCount,
+      oneOuterRewrite.target.val.wireCount,
+      (oneOuterRewrite.target.val.wires (idx 0)).sig,
+      (oneOuterRewrite.target.val.wires (idx 0)).scope.val,
+      (oneOuterRewrite.wireImage (idx 0)).val,
+      (oneOuterRewrite.wireImage (idx 1)).val,
+      (oneOuterRewrite.wireImage (idx 2)).val) =
+      (0, 1, nestedSig, 0, 0, 0, 0) := by
+  native_decide
+
+example :
+    (normalizeOneIdentity oneOuter).isSome = true := by
+  native_decide
+
+/-!
+Two outer wires are the exact refusal boundary.  The local third wire ensures
+the source is nondegenerate while the two outer scopes remain comparable.
+-/
+private def twoOuterRaw : ConcreteDiagram 0 where
+  regionCount := 3
   nodeCount := 1
   wireCount := 3
   root := 0
@@ -43,186 +121,236 @@ def retargetHostRaw : ConcreteDiagram 0 where
     | ⟨0, _⟩ => .sheet
     | ⟨1, _⟩ => .cut 0
     | ⟨2, _⟩ => .cut 1
-    | ⟨3, _⟩ => .cut 0
-  nodes := fun _ => .identity 1 .iota 3
+  nodes := fun _ => .identity 2 nestedSig 3
+  wires
+    | ⟨0, _⟩ =>
+        { sig := nestedSig
+          scope := 0
+          endpoints := [⟨0, .identity 0⟩] }
+    | ⟨1, _⟩ =>
+        { sig := nestedSig
+          scope := 1
+          endpoints := [⟨0, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := nestedSig
+          scope := 2
+          endpoints := [⟨0, .identity 2⟩] }
+
+private theorem twoOuterRaw_wellFormed :
+    twoOuterRaw.WellFormed [] := by
+  native_decide
+
+private def twoOuter : CheckedDiagram [] :=
+  ⟨twoOuterRaw, twoOuterRaw_wellFormed⟩
+
+example :
+    (collapseOnePoint twoOuter (idx 0)).isNone = true := by
+  native_decide
+
+example :
+    (normalizeOneIdentity twoOuter).isNone = true := by
+  native_decide
+
+/-! Soundness is pinned at both even and odd cut parity. -/
+example (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
+    denoteChecked pre definitionEnv allCoScoped ↔
+      denoteChecked pre definitionEnv
+        (normalizeIdentities allCoScoped).target :=
+  normalizeIdentities_sound allCoScoped pre definitionEnv
+    |>.symm
+
+example (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
+    denoteChecked pre definitionEnv oneOuter ↔
+      denoteChecked pre definitionEnv
+        (normalizeIdentities oneOuter).target :=
+  normalizeIdentities_sound oneOuter pre definitionEnv
+    |>.symm
+
+/-!
+Derived substitution uses only the ordinary copy receipt, scoped sever, and
+eager normalization.  The source identity lives in region 1 with both `a`
+and `b` root-scoped, so neither it nor its copied instance can normalize
+before severing.  The two atom sites pin forward severing at even depth and
+backward severing at odd depth on the same checked host.
+-/
+private def substitutionPatternRaw : OpenConcreteDiagram 0 where
+  diagram :=
+    { regionCount := 1
+      nodeCount := 1
+      wireCount := 2
+      root := 0
+      regions := fun _ => .sheet
+      nodes := fun _ => .identity 0 .iota 2
+      wires
+        | ⟨0, _⟩ =>
+            { sig := .iota
+              scope := 0
+              endpoints := [⟨0, .identity 0⟩] }
+        | ⟨1, _⟩ =>
+            { sig := .iota
+              scope := 0
+              endpoints := [⟨0, .identity 1⟩] } }
+  boundary := [0, 1]
+
+private theorem substitutionPatternRaw_wellFormed :
+    substitutionPatternRaw.WellFormed [] := by
+  constructor <;> native_decide
+
+private def substitutionPattern : CheckedOpenDiagram [] :=
+  ⟨substitutionPatternRaw, substitutionPatternRaw_wellFormed⟩
+
+private def substitutionHostRaw : ConcreteDiagram 0 where
+  regionCount := 4
+  nodeCount := 3
+  wireCount := 4
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 0
+    | ⟨2, _⟩ => .cut 1
+    | ⟨3, _⟩ => .cut 2
+  nodes
+    | ⟨0, _⟩ => .identity 1 .iota 2
+    | ⟨1, _⟩ => .atom 2 [.iota]
+    | ⟨2, _⟩ => .atom 3 [.iota]
   wires
     | ⟨0, _⟩ =>
         { sig := .iota
           scope := 0
-          endpoints := [⟨0, .identity 2⟩] }
+          endpoints :=
+            [⟨0, .identity 0⟩, ⟨1, .arg 0⟩, ⟨2, .arg 0⟩] }
     | ⟨1, _⟩ =>
         { sig := .iota
           scope := 0
-          endpoints := [⟨0, .identity 0⟩] }
-    | ⟨2, _⟩ =>
-        { sig := .iota
-          scope := 0
           endpoints := [⟨0, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := .rel [.iota]
+          scope := 2
+          endpoints := [⟨1, .head⟩] }
+    | ⟨3, _⟩ =>
+        { sig := .rel [.iota]
+          scope := 3
+          endpoints := [⟨2, .head⟩] }
 
-theorem retargetHostRaw_wellFormed : retargetHostRaw.WellFormed [] := by
+private theorem substitutionHostRaw_wellFormed :
+    substitutionHostRaw.WellFormed [] := by
   native_decide
 
-def retargetHost : CheckedDiagram [] :=
-  ⟨retargetHostRaw, retargetHostRaw_wellFormed⟩
+private def substitutionHost : CheckedDiagram [] :=
+  ⟨substitutionHostRaw, substitutionHostRaw_wellFormed⟩
 
-def nestedSite : retargetHost.val.RegionId := ⟨2, by decide⟩
-def siblingSite : retargetHost.val.RegionId := ⟨3, by decide⟩
-def identityNode : retargetHost.val.NodeId := ⟨0, by decide⟩
-def sourceWire : retargetHost.val.WireId := ⟨0, by decide⟩
-def targetWire : retargetHost.val.WireId := ⟨1, by decide⟩
-def thirdWire : retargetHost.val.WireId := ⟨2, by decide⟩
+private def substitutionOccurrenceInput :
+    OccurrenceInput substitutionPattern substitutionHost where
+  region := idx 1
+  regionMap := fun _ => idx 1
+  nodeMap := fun _ => idx 0
+  wireMap
+    | ⟨0, _⟩ => idx 0
+    | ⟨1, _⟩ => idx 1
 
-def sourceTarget :
-    Fin repeatedBoundaryAlias_checked.val.boundary.length →
-      retargetHost.val.WireId :=
-  fun _ => sourceWire
+private def substitutionOccurrence :
+    Occurrence substitutionPattern substitutionHost :=
+  (checkOccurrence substitutionOccurrenceInput).toOption.get
+    (by native_decide)
 
-def sourceAttachment? :
-    Option
-      (ConcreteSpliceAttachment retargetHost nestedSite
-        repeatedBoundaryAlias_checked) :=
-  checkConcreteSpliceAttachment retargetHost nestedSite
-    repeatedBoundaryAlias_checked sourceTarget
+private def evenIterationInput :
+    OrdinaryIterationInput substitutionOccurrence.toSelection
+      substitutionOccurrence where
+  destination := idx 2
 
-example : sourceAttachment?.isSome = true := by
-  native_decide
+private def oddIterationInput :
+    OrdinaryIterationInput substitutionOccurrence.toSelection
+      substitutionOccurrence where
+  destination := idx 3
 
-def sourceAttachment :
-    ConcreteSpliceAttachment retargetHost nestedSite
-      repeatedBoundaryAlias_checked :=
-  sourceAttachment?.get (by native_decide)
+private def evenIteration :
+    CheckedOrdinaryIteration evenIterationInput :=
+  (checkOrdinaryIteration evenIterationInput).toOption.get
+    (by native_decide)
 
-def retargetInput (boundary : Nat) : IdentityRetargetInput retargetHost where
-  boundary := boundary
-  identity := identityNode
-  sourceWire := sourceWire
-  targetWire := targetWire
+private def oddIteration :
+    CheckedOrdinaryIteration oddIterationInput :=
+  (checkOrdinaryIteration oddIterationInput).toOption.get
+    (by native_decide)
 
 example :
-    (checkIdentityRetarget retargetHost nestedSite .iteration
-      (orderedAttachmentTuple sourceAttachment)
-      (retargetInput 0)).isSome = true := by
+    (evenIteration.target.val.nodeCount,
+      oddIteration.target.val.nodeCount) = (4, 4) := by
+  native_decide
+
+/-! Plain iteration preserves the copied identity's exact `a,b` attachments. -/
+example :
+    (evenIteration.target.val.endpointOwner?
+        ⟨idx 3, .identity 0⟩,
+      evenIteration.target.val.endpointOwner?
+        ⟨idx 3, .identity 1⟩,
+      oddIteration.target.val.endpointOwner?
+        ⟨idx 3, .identity 0⟩,
+      oddIteration.target.val.endpointOwner?
+        ⟨idx 3, .identity 1⟩) =
+      (some (idx 0), some (idx 1), some (idx 0), some (idx 1)) := by
+  native_decide
+
+private def evenSeverInput : WireSeverInput evenIteration.target where
+  orientation := .forward
+  wire := idx 0
+  keep := [⟨idx 0, .identity 0⟩, ⟨idx 2, .arg 0⟩]
+  scope := idx 2
+
+private def oddSeverInput : WireSeverInput oddIteration.target where
+  orientation := .backward
+  wire := idx 0
+  keep := [⟨idx 0, .identity 0⟩, ⟨idx 1, .arg 0⟩]
+  scope := idx 3
+
+private def evenSever : AppliedWireSever evenIteration.target evenSeverInput :=
+  (applyWireSever evenIteration.target evenSeverInput).toOption.get
+    (by native_decide)
+
+private def oddSever : AppliedWireSever oddIteration.target oddSeverInput :=
+  (applyWireSever oddIteration.target oddSeverInput).toOption.get
+    (by native_decide)
+
+private def evenNormalized := normalizeIdentities evenSever.target
+private def oddNormalized := normalizeIdentities oddSever.target
+
+/-!
+The selected atom argument lands on `b`; the other atom remains attached to
+`a`.  The copied identity and the fresh sever wire are both absent afterward.
+-/
+example :
+    (evenNormalized.target.val.nodeCount,
+      evenNormalized.target.val.wireCount,
+      evenNormalized.target.val.endpointOwner?
+        ⟨idx 1, .arg 0⟩,
+      evenNormalized.target.val.endpointOwner?
+        ⟨idx 2, .arg 0⟩) =
+      (3, 4, some (idx 1), some (idx 0)) := by
   native_decide
 
 example :
-    (checkIdentityRetarget retargetHost siblingSite .iteration
-      [sourceWire] (retargetInput 0)).isSome = false := by
+    (oddNormalized.target.val.nodeCount,
+      oddNormalized.target.val.wireCount,
+      oddNormalized.target.val.endpointOwner?
+        ⟨idx 1, .arg 0⟩,
+      oddNormalized.target.val.endpointOwner?
+        ⟨idx 2, .arg 0⟩) =
+      (3, 4, some (idx 0), some (idx 1)) := by
   native_decide
-
-def forwardBatch :
-    CheckedIdentityRetargets retargetHost nestedSite .iteration
-      (orderedAttachmentTuple sourceAttachment) :=
-  (checkIdentityRetargets retargetHost nestedSite .iteration
-    (orderedAttachmentTuple sourceAttachment)
-    [retargetInput 0, retargetInput 1]).get (by native_decide)
-
-def reverseBatch :
-    CheckedIdentityRetargets retargetHost nestedSite .iteration
-      (orderedAttachmentTuple sourceAttachment) :=
-  (checkIdentityRetargets retargetHost nestedSite .iteration
-    (orderedAttachmentTuple sourceAttachment)
-    [retargetInput 1, retargetInput 0]).get (by native_decide)
-
-/-- Batch input order cannot alter the ordered attachment result. -/
-example :
-    forwardBatch.retargetAttachments =
-      reverseBatch.retargetAttachments := by
-  native_decide
-
-example :
-    forwardBatch.retargetAttachments = [targetWire, targetWire] := by
-  native_decide
-
-def checkedRetarget? :
-    Option
-      (CheckedIdentityRetargetedSplice retargetHost nestedSite
-        repeatedBoundaryAlias_checked .iteration) :=
-  checkIdentityRetargetedSplice retargetHost nestedSite
-    repeatedBoundaryAlias_checked .iteration sourceAttachment
-    [retargetInput 1, retargetInput 0]
-
-example : checkedRetarget?.isSome = true := by
-  native_decide
-
-def checkedRetarget :
-    CheckedIdentityRetargetedSplice retargetHost nestedSite
-      repeatedBoundaryAlias_checked .iteration :=
-  checkedRetarget?.get (by native_decide)
-
-/-- Repeated ordered aliases are retargeted positionally and remain aliases. -/
-example :
-    checkedRetarget.target.target ⟨0, by decide⟩ =
-        checkedRetarget.target.target ⟨1, by decide⟩ ∧
-      checkedRetarget.target.target ⟨0, by decide⟩ = targetWire := by
-  native_decide
-
-def siblingSourceTarget :
-    Fin repeatedBoundaryAlias_checked.val.boundary.length →
-      retargetHost.val.WireId :=
-  fun _ => sourceWire
-
-def siblingSourceAttachment :
-    ConcreteSpliceAttachment retargetHost siblingSite
-      repeatedBoundaryAlias_checked :=
-  (checkConcreteSpliceAttachment retargetHost siblingSite
-    repeatedBoundaryAlias_checked siblingSourceTarget).get
-      (by native_decide)
-
-/-- The full checker refuses the same identity at the sibling site. -/
-example :
-    (checkIdentityRetargetedSplice retargetHost siblingSite
-      repeatedBoundaryAlias_checked .iteration siblingSourceAttachment
-      [retargetInput 0]).isSome = false := by
-  native_decide
-
-def fragmentCompiled : OpenCompilation repeatedBoundaryAlias_checked :=
-  (compileOpen repeatedBoundaryAlias_checked).get (by native_decide)
-
-theorem sourceSucceeds :
-    ∃ result, splice checkedRetarget.source = .ok result := by
-  cases accepted : splice checkedRetarget.source with
-  | error error =>
-      have possible :
-          (match splice checkedRetarget.source with
-            | .ok _ => true
-            | .error _ => false) = true := by
-        native_decide
-      simp [accepted] at possible
-  | ok result => exact ⟨result, rfl⟩
-
-noncomputable def sourceResult :
-    ConcreteSpliceResult checkedRetarget.source :=
-  Classical.choose sourceSucceeds
-
-theorem sourceAccepted :
-    splice checkedRetarget.source = .ok sourceResult := by
-  exact Classical.choose_spec sourceSucceeds
-
-theorem targetSucceeds :
-    ∃ result, splice checkedRetarget.target = .ok result := by
-  cases accepted : splice checkedRetarget.target with
-  | error error =>
-      have possible :
-          (match splice checkedRetarget.target with
-            | .ok _ => true
-            | .error _ => false) = true := by
-        native_decide
-      simp [accepted] at possible
-  | ok result => exact ⟨result, rfl⟩
-
-noncomputable def targetResult :
-    ConcreteSpliceResult checkedRetarget.target :=
-  Classical.choose targetSucceeds
-
-theorem targetAccepted :
-    splice checkedRetarget.target = .ok targetResult := by
-  exact Classical.choose_spec targetSucceeds
 
 example (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
-    denoteChecked pre definitionEnv targetResult.checked ↔
-      denoteChecked pre definitionEnv sourceResult.checked :=
-  identity_retarget_sound fragmentCompiled checkedRetarget
-    sourceResult sourceAccepted targetResult targetAccepted pre definitionEnv
+    Directed .forward
+      (denoteChecked pre definitionEnv evenIteration.source)
+      (denoteChecked pre definitionEnv evenNormalized.target) :=
+  identity_substitution_derived_sound
+    evenIteration evenSeverInput evenSever pre definitionEnv
+
+example (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :
+    Directed .backward
+      (denoteChecked pre definitionEnv oddIteration.source)
+      (denoteChecked pre definitionEnv oddNormalized.target) :=
+  identity_substitution_derived_sound
+    oddIteration oddSeverInput oddSever pre definitionEnv
 
 end IdentityFixtures
 end VisualProof

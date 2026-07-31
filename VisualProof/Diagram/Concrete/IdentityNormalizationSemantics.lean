@@ -11,7 +11,7 @@ namespace ConcreteDiagram
 private theorem normalizeOne_sound
     (source : CheckedDiagram definitions)
     (result : IdentityRewrite source)
-    (found : normalizeOne source = some result)
+    (found : normalizeOneIdentity source = some result)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions) :
     denoteChecked pre definitionEnv result.target ↔
@@ -21,7 +21,7 @@ private theorem normalizeOne_sound
       ⟨node, _, ruleFound⟩ |
       ⟨left, _, right, _, ruleFound⟩
   · exact dropDegenerate_sound source node pre definitionEnv result ruleFound
-  · exact collapseCoScoped_sound source node result ruleFound pre definitionEnv
+  · exact collapseOnePoint_sound source node result ruleFound pre definitionEnv
   · exact fuseSameRegion_sound source left right result ruleFound pre
       definitionEnv
 
@@ -33,7 +33,7 @@ theorem normalizeIdentities_sound
     denoteChecked pre definitionEnv (normalizeIdentities source).target ↔
       denoteChecked pre definitionEnv source := by
   rw [normalizeIdentities]
-  cases stepEquation : normalizeOne source with
+  cases stepEquation : normalizeOneIdentity source with
   | none =>
       rfl
   | some first =>

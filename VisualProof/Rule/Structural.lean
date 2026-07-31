@@ -1,5 +1,5 @@
 import VisualProof.Rule.Tag
-import VisualProof.Rule.IdentityRetargetSemantics
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
 
 namespace VisualProof
@@ -27,7 +27,6 @@ inductive StructuralError
   | siteCompilationFailed
   | attachmentRejected
   | spliceRejected (error : WFError)
-  | identityRetargetRejected
   | extractionRejected (error : ExtractionError)
   | illegalCopyDestination
   | relativeFrameCompilationFailed
@@ -427,124 +426,6 @@ theorem sound
       simpa [Directed] using negative
 
 end StructuralErasureReceipt
-
-/--
-Raw concrete input for the identity-retargeted attachment subcase of copy.
-Every retarget names an exact boundary position, identity, and ordered
-source/target wire pair.
--/
-structure IdentityRetargetedCopyInput
-    (base : CheckedDiagram definitions)
-    (fragment : CheckedOpenDiagram definitions) where
-  direction : IdentityRetargetDirection
-  site : base.val.RegionId
-  sourceTarget :
-    Fin fragment.val.boundary.length → base.val.WireId
-  retargets : List (IdentityRetargetInput base)
-
-/-- Opaque receipt for two independently checked retarget-related splices. -/
-structure CheckedIdentityRetargetedCopy
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    (input : IdentityRetargetedCopyInput base fragment) where
-  private mk ::
-  private fragmentCompiled : OpenCompilation fragment
-  private checked :
-    CheckedIdentityRetargetedSplice base input.site fragment input.direction
-  private sourceResult : ConcreteSpliceResult checked.source
-  private sourceAccepted : splice checked.source = .ok sourceResult
-  private targetResult : ConcreteSpliceResult checked.target
-  private targetAccepted : splice checked.target = .ok targetResult
-
-/--
-Validate the ordered source attachment, the explicit identity evidence batch,
-the retargeted attachment, and both concrete splices.
--/
-def checkIdentityRetargetedCopy
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    (input : IdentityRetargetedCopyInput base fragment) :
-    Except StructuralError (CheckedIdentityRetargetedCopy input) := by
-  match compiledAccepted : compileOpen fragment with
-  | none => exact .error .fragmentCompilationFailed
-  | some fragmentCompiled =>
-      match sourceAccepted :
-          checkConcreteSpliceAttachment base input.site fragment
-            input.sourceTarget with
-      | none => exact .error .attachmentRejected
-      | some source =>
-          match retargetAccepted :
-              checkIdentityRetargetedSplice base input.site fragment
-                input.direction source input.retargets with
-          | none => exact .error .identityRetargetRejected
-          | some checked =>
-              match sourceResultAccepted : splice checked.source with
-              | .error error => exact .error (.spliceRejected error)
-              | .ok sourceResult =>
-                  match targetResultAccepted : splice checked.target with
-                  | .error error => exact .error (.spliceRejected error)
-                  | .ok targetResult =>
-                      exact .ok
-                        (CheckedIdentityRetargetedCopy.mk fragmentCompiled
-                          checked sourceResult sourceResultAccepted
-                          targetResult targetResultAccepted)
-
-namespace CheckedIdentityRetargetedCopy
-
-def tag
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    {input : IdentityRetargetedCopyInput base fragment}
-    (_checked : CheckedIdentityRetargetedCopy input) : StepTag :=
-  match input.direction with
-  | .iteration => .iteration
-  | .deiteration => .deiteration
-
-def source
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    {input : IdentityRetargetedCopyInput base fragment}
-    (checked : CheckedIdentityRetargetedCopy input) :
-    CheckedDiagram definitions :=
-  match input.direction with
-  | .iteration => checked.sourceResult.checked
-  | .deiteration => checked.targetResult.checked
-
-def target
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    {input : IdentityRetargetedCopyInput base fragment}
-    (checked : CheckedIdentityRetargetedCopy input) :
-    CheckedDiagram definitions :=
-  match input.direction with
-  | .iteration => checked.targetResult.checked
-  | .deiteration => checked.sourceResult.checked
-
-/--
-The only semantic step for retargeted attachments is the generic Task 6
-theorem; no local identity premise or certificate is accepted.
--/
-theorem sound
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    {input : IdentityRetargetedCopyInput base fragment}
-    (checked : CheckedIdentityRetargetedCopy input)
-    (pre : PreModel.{u})
-    (definitionEnv : DefinitionEnv pre definitions) :
-    Directed .forward
-      (denoteChecked pre definitionEnv checked.source)
-      (denoteChecked pre definitionEnv checked.target) := by
-  have equivalent :=
-    identity_retarget_sound checked.fragmentCompiled checked.checked
-      checked.sourceResult checked.sourceAccepted checked.targetResult
-      checked.targetAccepted pre definitionEnv
-  cases directionEq : input.direction with
-  | iteration =>
-      simpa [Directed, source, target, directionEq] using equivalent.mpr
-  | deiteration =>
-      simpa [Directed, source, target, directionEq] using equivalent.mp
-
-end CheckedIdentityRetargetedCopy
 
 /-!
 The following equality instances are executable validation machinery for
@@ -1293,7 +1174,7 @@ def target
     CheckedDiagram definitions :=
   checked.result.checked
 
-private theorem equivalence
+theorem equivalence
     {definitions : List (List Sig)}
     {host : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}

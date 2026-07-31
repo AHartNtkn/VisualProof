@@ -344,26 +344,26 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 - `identity_substitution_derived_sound` composes iteration, generic scoped
   sever, and normalization in both orientations.
 
-- [ ] **Step 1: Add RED one-point fixtures.** Cover all-co-scoped collapse,
+- [x] **Step 1: Add RED one-point fixtures.** Cover all-co-scoped collapse,
   exactly-one-outer collapse with the outer wire as survivor, two-outer
   refusal, arbitrary signature, and both cut parities.
-- [ ] **Step 2: Add RED derived-substitution fixtures.** Starting from
+- [x] **Step 2: Add RED derived-substitution fixtures.** Starting from
   `id(a,b)` dominating `P(a)`, check plain iteration into the inner region,
   sever the copied identity port and `P` endpoint onto a fresh wire scoped at
   that region, and require eager normalization to land on `P(b)`. Cover
   forward and backward orientations.
-- [ ] **Step 3: Extend normalization.** Generalize the collapse proof from
+- [x] **Step 3: Extend normalization.** Generalize the collapse proof from
   all-co-scoped to all-but-at-most-one-co-scoped and prove the one-point
   equivalence without changing degeneracy drop or same-region fusion.
-- [ ] **Step 4: Delete retarget authority.** Remove every
+- [x] **Step 4: Delete retarget authority.** Remove every
   `IdentityRetarget*` structure, checker, semantic theorem, structural copy
   payload, fixture, export, and import. Plain copy rules preserve attachment
   identities exactly.
-- [ ] **Step 5: Prove the derived theorem.** Compose the public ordinary
+- [x] **Step 5: Prove the derived theorem.** Compose the public ordinary
   iteration receipt, Task 3's generic scoped sever receipt, and
   `normalizeIdentities_sound`; prove exact normalized landing and ordered
   transport in both orientations.
-- [ ] **Step 6: Prove the displaced model is absent.**
+- [x] **Step 6: Prove the displaced model is absent.**
 
   ```bash
   test ! -e VisualProof/Rule/IdentityRetargetSemantics.lean
@@ -371,7 +371,7 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
     VisualProof VisualProof.lean
   ```
 
-- [ ] **Step 7: Run GREEN and commit.**
+- [x] **Step 7: Run GREEN and commit.**
 
   ```bash
   lake build

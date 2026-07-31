@@ -17,6 +17,47 @@ structure IdentityNodeInfo
   node_eq :
     source.val.nodes node = .identity region signature arity
 
+/--
+Stable one-point-collapse order: wires scoped outside the identity region come
+first, followed by the co-scoped wires, with concrete order preserved inside
+each class.  Eligibility therefore chooses the unique outer wire as survivor
+when one exists, without making physical identity-port order authoritative.
+-/
+def collapseIncidentWires
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region : source.val.RegionId) :
+    List source.val.WireId :=
+  let incident := source.val.identityIncidentWires node
+  let outer : source.val.WireId → Bool :=
+    fun wire => decide ((source.val.wires wire).scope ≠ region)
+  incident.filter outer ++ incident.filter (fun wire => !outer wire)
+
+theorem collapseIncidentWires_perm
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (collapseIncidentWires source node region).Perm
+      (source.val.identityIncidentWires node) := by
+  exact List.filter_append_perm _ _
+
+@[simp] theorem mem_collapseIncidentWires
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region : source.val.RegionId)
+    (wire : source.val.WireId) :
+    wire ∈ collapseIncidentWires source node region ↔
+      wire ∈ source.val.identityIncidentWires node :=
+  (collapseIncidentWires_perm source node region).mem_iff
+
+theorem collapseIncidentWires_nodup
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region : source.val.RegionId) :
+    (collapseIncidentWires source node region).Nodup :=
+  (collapseIncidentWires_perm source node region).nodup_iff.mpr
+    (source.val.identityIncidentWires_nodup node)
+
 /-- The complete eligibility receipt for Rule 1. -/
 structure DropEligibility
     {definitions : List (List Sig)}
@@ -36,10 +77,10 @@ structure CollapseEligibility
   second : source.val.WireId
   rest : List source.val.WireId
   incident_eq :
-    source.val.identityIncidentWires node =
+    collapseIncidentWires source node identity.region =
       survivor :: second :: rest
-  coScoped :
-    ∀ wire, wire ∈ source.val.identityIncidentWires node →
+  absorbedCoScoped :
+    ∀ wire, wire ∈ second :: rest →
       (source.val.wires wire).scope = identity.region
 
 /-- The complete eligibility receipt for Rule 3. -/
@@ -89,11 +130,10 @@ def collapseEligibility?
   match nodeData : source.val.nodes node with
   | .identity region sig arity =>
       match incidentEq :
-          source.val.identityIncidentWires node with
+          collapseIncidentWires source node region with
       | survivor :: second :: rest =>
-          if coScoped :
-              ∀ wire,
-                wire ∈ source.val.identityIncidentWires node →
+          if absorbedCoScoped :
+              ∀ wire, wire ∈ second :: rest →
                 (source.val.wires wire).scope = region then
             exact some
               { identity :=
@@ -105,7 +145,7 @@ def collapseEligibility?
                 second := second
                 rest := rest
                 incident_eq := incidentEq
-                coScoped := coScoped }
+                absorbedCoScoped := absorbedCoScoped }
           else
             exact none
       | _ => exact none

@@ -38,7 +38,7 @@ private theorem representative_mem_retained
     representative source node eligible wire ∈
       retainedWires source.val (eligible.second :: eligible.rest) := by
   have incidentNodup :=
-    source.val.identityIncidentWires_nodup node
+    collapseIncidentWires_nodup source node eligible.identity.region
   rw [eligible.incident_eq] at incidentNodup
   have survivorNotAbsorbed :
       eligible.survivor ∉ eligible.second :: eligible.rest := by
@@ -48,6 +48,8 @@ private theorem representative_mem_retained
         candidate ∈ eligible.second :: eligible.rest →
         candidate ∈ source.val.identityIncidentWires node := by
     intro candidate member
+    rw [← mem_collapseIncidentWires source node
+      eligible.identity.region]
     rw [eligible.incident_eq]
     exact List.mem_cons_of_mem eligible.survivor member
   unfold representative retainedWires
@@ -117,6 +119,8 @@ private def sourceWire
     · rename_i incident
       have survivorIncident :
           eligible.survivor ∈ source.val.identityIncidentWires node := by
+        rw [← mem_collapseIncidentWires source node
+          eligible.identity.region]
         rw [eligible.incident_eq]
         simp
       exact
@@ -153,6 +157,8 @@ private theorem targetWire_sourceWire
     unfold representative
     split
     · rename_i incident
+      rw [← mem_collapseIncidentWires source node
+        eligible.identity.region] at incident
       rw [eligible.incident_eq] at incident
       rcases List.mem_cons.mp incident with survivor | absorbed
       · exact survivor.symm
@@ -195,28 +201,58 @@ private theorem targetWire_sourceWire
   unfold sourceWire
   exact retained_get_targetWire source node eligible wire
 
-private theorem targetWire_scope
+private theorem survivor_incident
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node) :
+    eligible.survivor ∈ source.val.identityIncidentWires node := by
+  rw [← mem_collapseIncidentWires source node
+    eligible.identity.region]
+  rw [eligible.incident_eq]
+  simp
+
+private theorem incident_eq_survivor_or_absorbed
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node)
+    (wire : source.val.WireId) :
+    wire ∈ source.val.identityIncidentWires node ↔
+      wire = eligible.survivor ∨
+        wire ∈ eligible.second :: eligible.rest := by
+  rw [← mem_collapseIncidentWires source node
+    eligible.identity.region]
+  rw [eligible.incident_eq]
+  simp
+
+private theorem targetWire_scope_representative
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
     (wire : source.val.WireId) :
     ((Target source node eligible).wires
       (targetWire source node eligible wire)).scope =
-        (source.val.wires wire).scope := by
+        (source.val.wires
+          (representative source node eligible wire)).scope := by
   change
     (source.val.wires
       ((retainedWires source.val
         (eligible.second :: eligible.rest)).get
           (targetWire source node eligible wire))).scope =
-      (source.val.wires wire).scope
+      (source.val.wires
+        (representative source node eligible wire)).scope
   rw [retained_get_targetWire]
-  unfold representative
-  split
-  · rename_i incident
-    exact (eligible.coScoped eligible.survivor (by
-      rw [eligible.incident_eq]
-      simp)).trans (eligible.coScoped wire incident).symm
-  · rfl
+
+private theorem targetWire_eq_survivor_of_incident
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node)
+    (wire : source.val.WireId)
+    (incident : wire ∈ source.val.identityIncidentWires node) :
+    targetWire source node eligible wire =
+      targetWire source node eligible eligible.survivor := by
+  apply Fin.ext
+  unfold targetWire representative
+  simp only [if_pos incident, if_pos (survivor_incident source node eligible)]
 
 private def targetNode
     (source : CheckedDiagram definitions)
@@ -381,24 +417,27 @@ private theorem targetEndpoint_incident
     · intro survivor
       subst wire
       apply wireNotIncident
+      rw [← mem_collapseIncidentWires source node
+        eligible.identity.region]
       rw [eligible.incident_eq]
       simp
 
-private theorem targetWire_mem_wiresAt
+private theorem targetWire_mem_wiresAt_of_representative_scope
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
     (region : source.val.RegionId)
     (wire : source.val.WireId)
-    (member : wire ∈ source.val.wiresAt region) :
+    (scope :
+      (source.val.wires
+        (representative source node eligible wire)).scope = region) :
     targetWire source node eligible wire ∈
       (Target source node eligible).wiresAt region := by
-  unfold ConcreteDiagram.wiresAt at member ⊢
+  unfold ConcreteDiagram.wiresAt
   apply List.mem_filter.mpr
   constructor
   · exact Data.Finite.mem_allFin _
-  · have scope := eq_of_beq (List.mem_filter.mp member).2
-    rw [targetWire_scope, scope]
+  · rw [targetWire_scope_representative, scope]
     simp
 
 private theorem sourceWire_mem_wiresAt
@@ -415,11 +454,16 @@ private theorem sourceWire_mem_wiresAt
   constructor
   · exact Data.Finite.mem_allFin _
   · have targetScope := eq_of_beq (List.mem_filter.mp member).2
-    have sourceScope :=
-      targetWire_scope source node eligible
-        (sourceWire source node eligible wire)
-    rw [targetWire_sourceWire] at sourceScope
-    rw [← sourceScope, targetScope]
+    change
+      (source.val.wires
+        ((retainedWires source.val
+          (eligible.second :: eligible.rest)).get wire)).scope =
+        region at targetScope
+    change
+      ((source.val.wires
+        (sourceWire source node eligible wire)).scope == region) = true
+    unfold sourceWire
+    rw [targetScope]
     simp
 
 private structure ContextsRelated
@@ -460,7 +504,11 @@ private theorem extend_contexts_related
       ConcreteElaboration.WireContext (Target source node eligible)}
     (related :
       ContextsRelated source node eligible sourceContext targetContext)
-    (region : source.val.RegionId) :
+    (region : source.val.RegionId)
+    (survivorVisible :
+      region = eligible.identity.region →
+      (source.val.wires eligible.survivor).scope ≠ region →
+        eligible.survivor ∈ sourceContext.ids) :
     ContextsRelated source node eligible
       (sourceContext.extend region) (targetContext.extend region) := by
   constructor
@@ -468,8 +516,39 @@ private theorem extend_contexts_related
     simp only [ConcreteElaboration.WireContext.extend,
       List.mem_append] at member ⊢
     rcases member with localMember | outer
-    · exact Or.inl
-        (targetWire_mem_wiresAt source node eligible region wire localMember)
+    · have localScope :
+          (source.val.wires wire).scope = region := by
+        unfold ConcreteDiagram.wiresAt at localMember
+        exact eq_of_beq (List.mem_filter.mp localMember).2
+      by_cases incident : wire ∈ source.val.identityIncidentWires node
+      · rcases
+          (incident_eq_survivor_or_absorbed source node eligible wire).mp
+            incident with wireSurvivor | absorbed
+        · subst wire
+          exact Or.inl
+            (targetWire_mem_wiresAt_of_representative_scope source node
+              eligible region eligible.survivor (by
+                simp [representative,
+                  survivor_incident source node eligible, localScope]))
+        · have absorbedScope :=
+            eligible.absorbedCoScoped wire absorbed
+          have regionIdentity : region = eligible.identity.region :=
+            localScope.symm.trans absorbedScope
+          by_cases survivorLocal :
+              (source.val.wires eligible.survivor).scope = region
+          · exact Or.inl
+              (targetWire_mem_wiresAt_of_representative_scope source node
+                eligible region wire (by
+                  simp [representative, incident, survivorLocal]))
+          · exact Or.inr (by
+              rw [targetWire_eq_survivor_of_incident source node eligible
+                wire incident]
+              exact related.forward eligible.survivor
+                (survivorVisible regionIdentity survivorLocal))
+      · exact Or.inl
+          (targetWire_mem_wiresAt_of_representative_scope source node
+            eligible region wire (by
+              simp [representative, incident, localScope]))
     · exact Or.inr (related.forward wire outer)
   · intro wire member
     simp only [ConcreteElaboration.WireContext.extend,
@@ -813,6 +892,60 @@ private theorem compileNodes_singleton_of_member
         exact ⟨headItem, headCompiled⟩
       · exact induction restItems restCompiled tailMember
 
+private theorem identity_mem_nodesAt
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node) :
+    node ∈ source.val.nodesAt eligible.identity.region := by
+  unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+  apply List.mem_filter.mpr
+  refine ⟨Data.Finite.mem_allFin _, ?_⟩
+  rw [eligible.identity.node_eq]
+  simp [CNode.region]
+
+private theorem survivor_mem_outer_context
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (regionIdentity : region = eligible.identity.region)
+    (survivorNotLocal :
+      (source.val.wires eligible.survivor).scope ≠ region)
+    (sourceNodes : ItemSeq definitions (sourceContext.extend region).sigs)
+    (sourceNodesEquation :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceContext.extend region) (source.val.nodesAt region) =
+        some sourceNodes) :
+    eligible.survivor ∈ sourceContext.ids := by
+  have nodeMember : node ∈ source.val.nodesAt region := by
+    rw [regionIdentity]
+    exact identity_mem_nodesAt source node eligible
+  obtain ⟨item, singletonCompiled⟩ :=
+    compileNodes_singleton_of_member definitions source.val
+      (sourceContext.extend region) (source.val.nodesAt region)
+      sourceNodes sourceNodesEquation node nodeMember
+  obtain ⟨ports, _two, _itemsEquation, origins⟩ :=
+    ConcreteElaboration.compileNodes?_identity_origins source.val
+      source.property (sourceContext.extend region) node
+      eligible.identity.node_eq singletonCompiled
+  obtain ⟨survivorVar, _survivorMember, survivorOrigin⟩ :=
+    (origins eligible.survivor).mp
+      (survivor_incident source node eligible)
+  have extendedMember :
+      eligible.survivor ∈ (sourceContext.extend region).ids := by
+    rw [← survivorOrigin]
+    exact origin_mem source.val (sourceContext.extend region).ids survivorVar
+  simp only [ConcreteElaboration.WireContext.extend,
+    List.mem_append] at extendedMember
+  rcases extendedMember with localMember | outerMember
+  · have localScope :
+        (source.val.wires eligible.survivor).scope = region := by
+      unfold ConcreteDiagram.wiresAt at localMember
+      exact eq_of_beq (List.mem_filter.mp localMember).2
+    exact False.elim (survivorNotLocal localScope)
+  · exact outerMember
+
 private theorem origin_injective
     (diagram : ConcreteDiagram definitionCount)
     (ids : List diagram.WireId)
@@ -858,23 +991,6 @@ private theorem origin_injective
                 (induction (List.nodup_cons.mp nodup).2
                   (by simpa [ConcreteElaboration.WireContext.origin]
                     using same))
-
-private theorem targetWire_eq_survivor_of_incident
-    (source : CheckedDiagram definitions)
-    (node : source.val.NodeId)
-    (eligible : CollapseEligibility source node)
-    (wire : source.val.WireId)
-    (incident : wire ∈ source.val.identityIncidentWires node) :
-    targetWire source node eligible wire =
-      targetWire source node eligible eligible.survivor := by
-  apply Fin.ext
-  unfold targetWire representative
-  simp only [if_pos incident]
-  have survivorIncident :
-      eligible.survivor ∈ source.val.identityIncidentWires node := by
-    rw [eligible.incident_eq]
-    simp
-  simp [survivorIncident]
 
 private theorem contextRenaming_eq_of_incident
     (source : CheckedDiagram definitions)
@@ -1001,9 +1117,8 @@ private theorem source_environment_one_point
     obtain ⟨wireVar, wireVarMember, wireVarOrigin⟩ :=
       (origins wire).mp incident
     have survivorIncident :
-        eligible.survivor ∈ source.val.identityIncidentWires node := by
-      rw [eligible.incident_eq]
-      simp
+        eligible.survivor ∈ source.val.identityIncidentWires node :=
+      survivor_incident source node eligible
     obtain ⟨survivorVar, survivorVarMember, survivorVarOrigin⟩ :=
       (origins eligible.survivor).mp survivorIncident
     have valueEqWireVar : value = wireVar :=
@@ -1101,10 +1216,13 @@ private theorem contextRenaming_appendRight
     (related :
       ContextsRelated source node eligible sourceContext targetContext)
     (region : source.val.RegionId)
+    (extendedRelated :
+      ContextsRelated source node eligible
+        (sourceContext.extend region) (targetContext.extend region))
     (targetExtendedNodup : (targetContext.extend region).ids.Nodup)
     {sig : Sig} (value : Var sourceContext.sigs sig) :
     contextRenaming source node eligible
-        (extend_contexts_related source node eligible related region)
+        extendedRelated
         (ConcreteElaboration.appendRightVar source.val
           (source.val.wiresAt region) value) =
       ConcreteElaboration.appendRightVar
@@ -1139,10 +1257,13 @@ private theorem contextSection_appendRight
     (related :
       ContextsRelated source node eligible sourceContext targetContext)
     (region : source.val.RegionId)
+    (extendedRelated :
+      ContextsRelated source node eligible
+        (sourceContext.extend region) (targetContext.extend region))
     (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
     {sig : Sig} (value : Var targetContext.sigs sig) :
     contextSection source node eligible
-        (extend_contexts_related source node eligible related region)
+        extendedRelated
         (ConcreteElaboration.appendRightVar
           (Target source node eligible)
           ((Target source node eligible).wiresAt region) value) =
@@ -1193,6 +1314,9 @@ private theorem target_extended_realizes_source
     (related :
       ContextsRelated source node eligible sourceContext targetContext)
     (region : source.val.RegionId)
+    (extendedRelated :
+      ContextsRelated source node eligible
+        (sourceContext.extend region) (targetContext.extend region))
     (targetExtendedNodup : (targetContext.extend region).ids.Nodup)
     (pre : PreModel)
     (sourceEnv : Env pre sourceContext.sigs)
@@ -1211,7 +1335,7 @@ private theorem target_extended_realizes_source
     let sourceExtended :=
       Env.comp targetExtended
         (contextRenaming source node eligible
-          (extend_contexts_related source node eligible related region))
+          extendedRelated)
     ConcreteElaboration.extendEnvironment source.val sourceContext region
         (ConcreteElaboration.valuesFromEnvironmentFor source.val
           sourceContext.ids (source.val.wiresAt region) sourceExtended)
@@ -1222,13 +1346,14 @@ private theorem target_extended_realizes_source
   intro sig value
   have sameVar :=
     contextRenaming_appendRight source node eligible related region
+      extendedRelated
       targetExtendedNodup value
   change
     ConcreteElaboration.extendEnvironment
         (Target source node eligible) targetContext region
         targetValues targetEnv sig
         (contextRenaming source node eligible
-          (extend_contexts_related source node eligible related region)
+          extendedRelated
           (ConcreteElaboration.appendRightVar source.val
             (source.val.wiresAt region) value)) =
       sourceEnv sig value
@@ -1247,6 +1372,9 @@ private theorem source_extended_realizes_target
     (related :
       ContextsRelated source node eligible sourceContext targetContext)
     (region : source.val.RegionId)
+    (extendedRelated :
+      ContextsRelated source node eligible
+        (sourceContext.extend region) (targetContext.extend region))
     (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
     (targetNodup : targetContext.ids.Nodup)
     (pre : PreModel)
@@ -1265,7 +1393,7 @@ private theorem source_extended_realizes_target
     let targetExtended :=
       Env.comp sourceExtended
         (contextSection source node eligible
-          (extend_contexts_related source node eligible related region))
+          extendedRelated)
     ConcreteElaboration.extendEnvironment
         (Target source node eligible) targetContext region
         (ConcreteElaboration.valuesFromEnvironmentFor
@@ -1278,12 +1406,13 @@ private theorem source_extended_realizes_target
   intro sig value
   have sameVar :=
     contextSection_appendRight source node eligible related region
+      extendedRelated
       sourceExtendedNodup value
   change
     ConcreteElaboration.extendEnvironment source.val sourceContext region
         sourceValues sourceEnv sig
         (contextSection source node eligible
-          (extend_contexts_related source node eligible related region)
+          extendedRelated
           (ConcreteElaboration.appendRightVar
             (Target source node eligible)
             ((Target source node eligible).wiresAt region) value)) =
@@ -1653,11 +1782,14 @@ private theorem extended_one_point_without_local_incident
     (related :
       ContextsRelated source node eligible sourceContext targetContext)
     (region : source.val.RegionId)
+    (extendedRelated :
+      ContextsRelated source node eligible
+        (sourceContext.extend region) (targetContext.extend region))
     (sourceExtendedNodup : (sourceContext.extend region).ids.Nodup)
     (targetExtendedNodup : (targetContext.extend region).ids.Nodup)
-    (noLocalIncident :
+    (localRepresentative :
       ∀ wire, wire ∈ source.val.wiresAt region →
-        wire ∉ source.val.identityIncidentWires node)
+        representative source node eligible wire = wire)
     (pre : PreModel)
     (sourceEnv : Env pre sourceContext.sigs)
     (sourceOnePoint :
@@ -1669,8 +1801,6 @@ private theorem extended_one_point_without_local_incident
     (sourceValues : ConcreteElaboration.WireValues pre
       ((source.val.wiresAt region).map fun wire =>
         (source.val.wires wire).sig)) :
-    let extendedRelated :=
-      extend_contexts_related source node eligible related region
     let sourceExtended :=
       ConcreteElaboration.extendEnvironment source.val sourceContext region
         sourceValues sourceEnv
@@ -1689,24 +1819,24 @@ private theorem extended_one_point_without_local_incident
     have := origin_mem source.val (sourceContext.extend region).ids value
     simpa [ConcreteElaboration.WireContext.extend] using this
   rcases wireMember with localMember | outerMember
-  · have notIncident := noLocalIncident wire localMember
+  · have representativeSelf := localRepresentative wire localMember
     have sectionOrigin :
         ConcreteElaboration.WireContext.origin source.val
             (sourceContext.extend region).ids
             (contextSection source node eligible
-              (extend_contexts_related source node eligible related region)
+              extendedRelated
               (contextRenaming source node eligible
-                (extend_contexts_related source node eligible related region)
+                extendedRelated
                 value)) =
           wire := by
       rw [contextSection_origin, contextRenaming_origin,
         sourceWire_targetWire]
-      simp [representative, notIncident, wire]
+      simpa [wire] using representativeSelf
     have sameVariable :
         contextSection source node eligible
-            (extend_contexts_related source node eligible related region)
+            extendedRelated
             (contextRenaming source node eligible
-              (extend_contexts_related source node eligible related region)
+              extendedRelated
               value) =
           value :=
       origin_injective source.val (sourceContext.extend region).ids
@@ -1715,9 +1845,9 @@ private theorem extended_one_point_without_local_incident
       ConcreteElaboration.extendEnvironment source.val sourceContext region
           sourceValues sourceEnv sig
           (contextSection source node eligible
-            (extend_contexts_related source node eligible related region)
+            extendedRelated
             (contextRenaming source node eligible
-              (extend_contexts_related source node eligible related region)
+              extendedRelated
               value)) =
         ConcreteElaboration.extendEnvironment source.val sourceContext region
           sourceValues sourceEnv sig value
@@ -1754,9 +1884,9 @@ private theorem extended_one_point_without_local_incident
       ConcreteElaboration.extendEnvironment source.val sourceContext region
           sourceValues sourceEnv sig
           (contextSection source node eligible
-            (extend_contexts_related source node eligible related region)
+            extendedRelated
             (contextRenaming source node eligible
-              (extend_contexts_related source node eligible related region)
+              extendedRelated
               (ConcreteElaboration.appendRightVar source.val
                 (source.val.wiresAt region) outerVar'))) =
         ConcreteElaboration.extendEnvironment source.val sourceContext region
@@ -1764,14 +1894,14 @@ private theorem extended_one_point_without_local_incident
           (ConcreteElaboration.appendRightVar source.val
             (source.val.wiresAt region) outerVar')
     rw [contextRenaming_appendRight source node eligible related region
-        targetExtendedNodup,
+        extendedRelated targetExtendedNodup,
       contextSection_appendRight source node eligible related region
-        sourceExtendedNodup,
+        extendedRelated sourceExtendedNodup,
       ConcreteElaboration.extendEnvironment_appendRightVar,
       ConcreteElaboration.extendEnvironment_appendRightVar]
     exact congrFun (congrFun sourceOnePoint sig) outerVar'
 
-private theorem no_local_incident_of_region_ne
+private theorem representative_local_of_region_ne
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -1779,24 +1909,22 @@ private theorem no_local_incident_of_region_ne
     (different : region ≠ eligible.identity.region)
     (wire : source.val.WireId)
     (localMember : wire ∈ source.val.wiresAt region) :
-    wire ∉ source.val.identityIncidentWires node := by
-  intro incident
+    representative source node eligible wire = wire := by
   have localScope :
       (source.val.wires wire).scope = region := by
     unfold ConcreteDiagram.wiresAt at localMember
     exact eq_of_beq (List.mem_filter.mp localMember).2
-  exact different (localScope.symm.trans (eligible.coScoped wire incident))
-
-private theorem identity_mem_nodesAt
-    (source : CheckedDiagram definitions)
-    (node : source.val.NodeId)
-    (eligible : CollapseEligibility source node) :
-    node ∈ source.val.nodesAt eligible.identity.region := by
-  unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
-  apply List.mem_filter.mpr
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  rw [eligible.identity.node_eq]
-  simp [CNode.region]
+  unfold representative
+  split
+  · rename_i incident
+    rcases
+        (incident_eq_survivor_or_absorbed source node eligible wire).mp
+          incident with wireSurvivor | absorbed
+    · exact wireSurvivor.symm
+    · have absorbedScope :=
+        eligible.absorbedCoScoped wire absorbed
+      exact False.elim (different (localScope.symm.trans absorbedScope))
+  · rfl
 
 @[simp] private theorem target_childrenOf
     (source : CheckedDiagram definitions)
@@ -1932,7 +2060,11 @@ private theorem compileRegion_equiv
                         ConcreteElaboration.denote_finishRegion]
                       let extendedRelated :=
                         extend_contexts_related source node eligible related
-                          region
+                          region (fun regionIdentity survivorNotLocal =>
+                            survivor_mem_outer_context source node eligible
+                              sourceContext region regionIdentity
+                              survivorNotLocal sourceNodes
+                              sourceNodesEquation)
                       have sourceExtendedNodup :=
                         ConcreteElaboration.extend_nodup definitions source.val
                           source.property sourceContext region _sourceAbove
@@ -1961,7 +2093,8 @@ private theorem compileRegion_equiv
                                 region targetValues targetEnv =
                               targetExtended :=
                           source_extended_realizes_target source node eligible
-                            related region sourceExtendedNodup
+                            related region extendedRelated
+                            sourceExtendedNodup
                             _targetAbove.1 pre sourceEnv targetEnv _outerRelated
                             sourceValues
                         refine ⟨targetValues, ?_⟩
@@ -2002,10 +2135,10 @@ private theorem compileRegion_equiv
                               identityCompiled (by simpa using identityDenotes)
                           · exact
                               extended_one_point_without_local_incident source
-                                node eligible related region
+                                node eligible related region extendedRelated
                                 sourceExtendedNodup
                                 targetExtendedNodup
-                                (no_local_incident_of_region_ne source node
+                                (representative_local_of_region_ne source node
                                   eligible region same)
                                 pre sourceEnv _sourceOnePoint sourceValues
                         have extendedEnvRelated :
@@ -2082,7 +2215,8 @@ private theorem compileRegion_equiv
                                 sourceContext region sourceValues sourceEnv =
                               sourceExtended :=
                           target_extended_realizes_source source node eligible
-                            related region targetExtendedNodup pre sourceEnv
+                            related region extendedRelated
+                            targetExtendedNodup pre sourceEnv
                             targetEnv _outerRelated targetValues
                         refine ⟨sourceValues, ?_⟩
                         rw [sourceRealizes]
@@ -2218,16 +2352,16 @@ end IdentityNormalizationCollapseSemantics
 Rule 2 preserves denotation in every premodel.  Its only premise is the
 successful checked structural rewrite; no semantic certificate is required.
 -/
-theorem collapseCoScoped_sound
+theorem collapseOnePoint_sound
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (target : IdentityRewrite source)
-    (result : collapseCoScoped source node = some target)
+    (result : collapseOnePoint source node = some target)
     (pre : PreModel)
     (definitionEnv : DefinitionEnv pre definitions) :
     denoteChecked pre definitionEnv target.target ↔
       denoteChecked pre definitionEnv source := by
-  unfold collapseCoScoped at result
+  unfold collapseOnePoint at result
   cases eligibleEquation :
       IdentityNormalizationCore.collapseEligibility? source node with
   | none =>

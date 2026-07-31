@@ -17,7 +17,6 @@ import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityFixtures
 import VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
 import VisualProof.Rule.Identity
-import VisualProof.Rule.IdentityRetargetSemantics
 import VisualProof.Rule.IdentityFixtures
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural

@@ -67,8 +67,11 @@ private def collapseRewrite
     wire_signature := transport.wire_signature
     nodeCount_lt := collapseCandidate_nodeCount_lt source node eligible }
 
-/-- Rule 2: collapse one co-scoped identity onto its first incident wire. -/
-def collapseCoScoped
+/--
+Rule 2: collapse one identity whose incident wires have at most one outer
+scope.  The unique outer wire survives when present.
+-/
+def collapseOnePoint
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId) :
     Option (IdentityRewrite source) :=
@@ -108,7 +111,7 @@ private def firstCollapse?
     (source : CheckedDiagram definitions) :
     Option (IdentityRewrite source) :=
   (identityNodeIds source.val).findSome? fun node =>
-    collapseCoScoped source node
+    collapseOnePoint source node
 
 private def fusionSearch?
     (source : CheckedDiagram definitions) :
@@ -126,7 +129,7 @@ private def firstFusion?
   fusionSearch? source (identityNodeIds source.val)
 
 /-- Apply exactly the first eligible rewrite in Rule 1→2→3 priority. -/
-def normalizeOne
+def normalizeOneIdentity
     (source : CheckedDiagram definitions) :
     Option (IdentityRewrite source) :=
   match firstDrop? source with
@@ -181,20 +184,20 @@ private theorem fusionSearch?_provenance
 
 /--
 Every successful eager step is exactly one public primitive rule result.
-Private search order remains owned by `normalizeOne`.
+Private search order remains owned by `normalizeOneIdentity`.
 -/
 theorem normalizeOne_provenance
     (source : CheckedDiagram definitions)
     (result : IdentityRewrite source)
-    (found : normalizeOne source = some result) :
+    (found : normalizeOneIdentity source = some result) :
     (∃ node, node ∈ identityNodeIds source.val ∧
       dropDegenerate source node = some result) ∨
     (∃ node, node ∈ identityNodeIds source.val ∧
-      collapseCoScoped source node = some result) ∨
+      collapseOnePoint source node = some result) ∨
     (∃ left, left ∈ identityNodeIds source.val ∧
       ∃ right, right ∈ identityNodeIds source.val ∧
         fuseSameRegion source left right = some result) := by
-  unfold normalizeOne at found
+  unfold normalizeOneIdentity at found
   cases dropEquation : firstDrop? source with
   | some dropResult =>
       rw [dropEquation] at found
@@ -248,7 +251,7 @@ the node removed by each checked rewrite; there is no fuel fallback.
 def normalizeIdentities
     (source : CheckedDiagram definitions) :
     IdentityNormalization source :=
-  match normalizeOne source with
+  match normalizeOneIdentity source with
   | none => identityNormalizationRefl source
   | some first =>
       composeNormalization first (normalizeIdentities first.target)

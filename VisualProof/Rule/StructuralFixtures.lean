@@ -1,6 +1,5 @@
 import VisualProof.Rule.Structural
 import VisualProof.Diagram.Concrete.Subgraph.SpliceExamples
-import VisualProof.Rule.IdentityFixtures
 
 namespace VisualProof
 namespace StructuralFixtures
@@ -398,20 +397,6 @@ example :
 example :
     structuralError? (checkOrdinaryDeiteration nonAncestorDeiteration) =
       some .illegalDeiterationJustifier := by
-  native_decide
-
-private def retargetedIteration :
-    IdentityRetargetedCopyInput IdentityFixtures.retargetHost
-      ConcreteExamples.repeatedBoundaryAlias_checked where
-  direction := .iteration
-  site := IdentityFixtures.nestedSite
-  sourceTarget := IdentityFixtures.sourceTarget
-  retargets :=
-    [IdentityFixtures.retargetInput 1, IdentityFixtures.retargetInput 0]
-
-example :
-    (checkIdentityRetargetedCopy retargetedIteration).toOption.isSome =
-      true := by
   native_decide
 
 end StructuralFixtures

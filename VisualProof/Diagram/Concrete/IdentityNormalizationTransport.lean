@@ -76,7 +76,7 @@ theorem collapseRepresentative_mem_retained
     collapseRepresentative source node eligible wire ∈
       retainedWires source.val (eligible.second :: eligible.rest) := by
   have incidentNodup :=
-    source.val.identityIncidentWires_nodup node
+    collapseIncidentWires_nodup source node eligible.identity.region
   rw [eligible.incident_eq] at incidentNodup
   have survivorNotAbsorbed :
       eligible.survivor ∉ eligible.second :: eligible.rest := by
@@ -86,9 +86,10 @@ theorem collapseRepresentative_mem_retained
         candidate ∈ eligible.second :: eligible.rest →
         candidate ∈ source.val.identityIncidentWires node := by
     intro candidate member
+    rw [← mem_collapseIncidentWires source node
+      eligible.identity.region]
     rw [eligible.incident_eq]
-    simp only [List.mem_cons] at member ⊢
-    exact Or.inr member
+    exact List.mem_cons_of_mem eligible.survivor member
   unfold collapseRepresentative retainedWires
   rw [List.mem_filter]
   constructor
@@ -142,6 +143,8 @@ private theorem collapseRepresentative_signature
   · rename_i incident
     have survivorIncident :
         eligible.survivor ∈ source.val.identityIncidentWires node := by
+      rw [← mem_collapseIncidentWires source node
+        eligible.identity.region]
       rw [eligible.incident_eq]
       simp
     exact
