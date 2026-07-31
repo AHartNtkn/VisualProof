@@ -286,6 +286,8 @@ tasks:
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/Diagram/Concrete/IdentityNormalizationCore.lean"
+      - "VisualProof/Diagram/Concrete/IdentityNormalization.lean"
+      - "VisualProof/Diagram/Concrete/IdentityNormalizationTransport.lean"
       - "VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean"
       - "VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean"
       - "VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean"

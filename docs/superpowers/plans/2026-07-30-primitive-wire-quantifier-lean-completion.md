@@ -324,6 +324,8 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 **Files:**
 
 - Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCore.lean`
+- Modify: `VisualProof/Diagram/Concrete/IdentityNormalization.lean`
+- Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationTransport.lean`
 - Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean`
 - Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean`
 - Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean`
