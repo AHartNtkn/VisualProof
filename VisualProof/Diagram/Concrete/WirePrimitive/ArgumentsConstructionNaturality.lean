@@ -47,6 +47,18 @@ private theorem map_map_apply
   | nil => rfl
   | cons head tail induction => simp [induction]
 
+private theorem map_allFin_finEquivOfEq
+    {left right : Nat}
+    (exact : left = right) :
+    (Data.Finite.allFin left).map (finEquivOfEq exact) =
+      Data.Finite.allFin right := by
+  subst right
+  apply List.ext_get
+  · simp
+  · intro position leftBound rightBound
+    apply Fin.ext
+    simp [Data.Finite.allFin_eq_finRange, finEquivOfEq]
+
 /-- Batch removal preserves the exact order of every retained local wire.
 The left side uses the dense target identifiers, while the right side is the
 source local context with precisely the removed identifiers filtered out. -/
@@ -466,6 +478,34 @@ theorem ArgumentResult.localNodeData_decomposition
   apply List.map_congr_left
   intro site _member
   exact result.targetNode_data site
+
+/-- Argument replacement preserves the exact ordered region tree.  Every
+target child is the canonical image of the corresponding source child, with
+no reordering or additional region. -/
+theorem ArgumentResult.childrenOf_decomposition
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.childrenOf (result.regionImage region) =
+      (source.val.childrenOf region).map result.regionEquiv := by
+  unfold ConcreteDiagram.childrenOf ConcreteDiagram.regionsList
+  rw [result.regionImage_exact]
+  rw [← map_allFin_finEquivOfEq result.regionCount_exact]
+  have equivalenceExact :
+      finEquivOfEq result.regionCount_exact = result.regionEquiv := rfl
+  rw [equivalenceExact]
+  rw [List.filter_map]
+  apply congrArg (List.map result.regionEquiv)
+  apply List.filter_congr
+  intro child _member
+  simp only [Function.comp_apply]
+  rw [result.regionImage_data child]
+  cases source.val.regions child with
+  | sheet => rfl
+  | cut parent =>
+      simp only [CRegion.rename]
+      exact decide_eq_decide.mpr result.regionEquiv.injective.eq_iff
 
 /-- Exact ordered signature decomposition at every source region.  This is
 the typed context counterpart of `wiresAt_decomposition`: retained source
