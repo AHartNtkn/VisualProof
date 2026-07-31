@@ -588,23 +588,23 @@ checkers.
 - `applyRefLeaf`, `applyRefAbstract`.
 - Corresponding `_sound` theorems over full `Model`.
 
-- [ ] **Step 1: Add RED leaf fixtures.** Cover formal-position signature
+- [x] **Step 1: Add RED leaf fixtures.** Cover formal-position signature
   equality, distinct per-site formal heads, identity equal signature/arity,
   one shared definition for ref abstraction, definition signature lookup,
   chosen scope enclosure, all endpoints, both orientations, and all refusal
   cases in the merged TypeScript checkers.
-- [ ] **Step 2: Implement checked concrete leaves.** Match
+- [x] **Step 2: Implement checked concrete leaves.** Match
   `src/kernel/rules/wire-args.ts`: join-family leaf rules consume every
   applied end; sever-family abstract rules consume the exact selected
   node set and create one fresh uniformly applied wire.
-- [ ] **Step 3: Prove semantic witnesses.** Use full relation domains for
+- [x] **Step 3: Prove semantic witnesses.** Use full relation domains for
   application, equality at arbitrary `Sig`, and the predicate denoted by a
   stored definition. Ref proofs must call typed definition lookup and show
   equivalence to unfold/compile/fold without actually expanding the macro.
-- [ ] **Step 4: Audit fullness.** Add theorem signatures/`#check` fixtures
+- [x] **Step 4: Audit fullness.** Add theorem signatures/`#check` fixtures
   demonstrating that generic partition/merge remains `PreModel`-parametric
   while relation-synthesizing primitive instances quantify over `Model`.
-- [ ] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Run GREEN and commit.**
 
   ```bash
   lake build
