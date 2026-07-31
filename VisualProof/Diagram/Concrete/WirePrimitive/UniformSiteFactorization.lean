@@ -1,10 +1,111 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.Content
+import VisualProof.Diagram.Concrete.IsomorphismSearch
+import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 
 namespace VisualProof
 
 namespace WirePrimitive
 
 universe u v w
+
+namespace ConcreteFactorization
+
+open ConcreteWireQuantifier
+
+/--
+One checker-owned dense batch erasure. The retained target is exactly the
+canonical `batchRemovalCandidate`; no caller can substitute another core.
+-/
+structure CheckedBatchErasure
+    (source : CheckedDiagram definitions)
+    (removedRegions : List source.val.RegionId)
+    (removedNodes : List source.val.NodeId)
+    (removedWires : List source.val.WireId) where
+  private mk ::
+  plan :
+    Internal.BatchRemovalPlan source removedRegions removedNodes removedWires
+  checked : CheckedDiagram definitions
+  private generated :
+    checked.val = Internal.batchRemovalCandidate plan
+
+namespace CheckedBatchErasure
+
+/-- Execute and check one exact canonical batch erasure. -/
+def check
+    (source : CheckedDiagram definitions)
+    (removedRegions : List source.val.RegionId)
+    (removedNodes : List source.val.NodeId)
+    (removedWires : List source.val.WireId) :
+    Option
+      (CheckedBatchErasure source removedRegions removedNodes removedWires) := do
+  let plan ←
+    Internal.checkBatchRemovalPlan? source removedRegions removedNodes
+      removedWires
+  match accepted :
+      ConcreteDiagram.checkWellFormed definitions
+        (Internal.batchRemovalCandidate plan) with
+  | .error _ => none
+  | .ok checked =>
+      some
+        ⟨plan, checked,
+          ConcreteDiagram.checkWellFormed_preserves_input accepted⟩
+
+/-- The checked core is the exact canonical batch-erasure candidate. -/
+theorem checked_exact
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires) :
+    erasure.checked.val =
+      Internal.batchRemovalCandidate erasure.plan :=
+  erasure.generated
+
+end CheckedBatchErasure
+
+/--
+Independent source and target erasures meet at one checked concrete core,
+modulo the repository's canonical concrete isomorphism.
+-/
+structure CommonCoreReceipt
+    (source target : CheckedDiagram definitions) where
+  private mk ::
+  sourceRemovedRegions : List source.val.RegionId
+  sourceRemovedNodes : List source.val.NodeId
+  sourceRemovedWires : List source.val.WireId
+  targetRemovedRegions : List target.val.RegionId
+  targetRemovedNodes : List target.val.NodeId
+  targetRemovedWires : List target.val.WireId
+  sourceErasure :
+    CheckedBatchErasure source sourceRemovedRegions sourceRemovedNodes
+      sourceRemovedWires
+  targetErasure :
+    CheckedBatchErasure target targetRemovedRegions targetRemovedNodes
+      targetRemovedWires
+  coreIso :
+    ConcreteIso sourceErasure.checked.val targetErasure.checked.val
+
+/-- Check both canonical erasures and their exact common-core isomorphism. -/
+def checkCommonCore
+    (source target : CheckedDiagram definitions)
+    (sourceRemovedRegions : List source.val.RegionId)
+    (sourceRemovedNodes : List source.val.NodeId)
+    (sourceRemovedWires : List source.val.WireId)
+    (targetRemovedRegions : List target.val.RegionId)
+    (targetRemovedNodes : List target.val.NodeId)
+    (targetRemovedWires : List target.val.WireId) :
+    Option (CommonCoreReceipt source target) := do
+  let sourceErasure ←
+    CheckedBatchErasure.check source sourceRemovedRegions sourceRemovedNodes
+      sourceRemovedWires
+  let targetErasure ←
+    CheckedBatchErasure.check target targetRemovedRegions targetRemovedNodes
+      targetRemovedWires
+  let coreIso ←
+    ConcreteIsoSearch.findConcreteIso? sourceErasure.checked.val
+      targetErasure.checked.val
+  pure
+    ⟨sourceRemovedRegions, sourceRemovedNodes, sourceRemovedWires,
+      targetRemovedRegions, targetRemovedNodes, targetRemovedWires,
+      sourceErasure, targetErasure, coreIso⟩
+
+end ConcreteFactorization
 
 /-!
 The semantic layer separates two checked contexts:

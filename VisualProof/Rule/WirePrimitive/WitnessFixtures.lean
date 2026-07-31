@@ -1,4 +1,5 @@
 import VisualProof.Rule.WirePrimitive.Witness
+import VisualProof.Rule.WirePrimitive.Site
 
 namespace VisualProof
 

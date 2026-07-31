@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.Content
+import VisualProof.Diagram.Concrete.WirePrimitive.ContentSemantics
 
 namespace VisualProof
 
@@ -74,6 +74,10 @@ example :
     ConcreteIso spawned.inverse.checked.val spawnSource.val :=
   spawned.inverseIso
 
+example :
+    spawned.inverse.checkCommonCore.isSome = true := by
+  native_decide
+
 /-! Cut wrapping and exact absorption act on both mixed-parity sites. -/
 private def wrapped :
     CutWrapResult spawned.checked spawned.inverseWire :=
@@ -96,6 +100,10 @@ private def absorbed :
 example :
     ConcreteIso absorbed.inverse.checked.val wrapped.checked.val :=
   absorbed.inverseIso
+
+example :
+    wrapped.checkCommonCore.isSome = true := by
+  native_decide
 
 example :
     (ConcreteIsoSearch.findConcreteIso?
@@ -126,6 +134,10 @@ example :
   fused.inverseIso
 
 example :
+    split.checkCommonCore.isSome = true := by
+  native_decide
+
+example :
     (ConcreteIsoSearch.findConcreteIso?
       fused.checked.val spawned.checked.val).isSome = true := by
   native_decide
@@ -150,6 +162,14 @@ example :
       (emptySplit.checked.val.wires emptySplit.firstWire).endpoints,
       (emptySplit.checked.val.wires emptySplit.secondWire).endpoints) =
       ([], [], []) := by
+  native_decide
+
+example :
+    emptyWrapped.checkCommonCore.isSome = true := by
+  native_decide
+
+example :
+    emptySplit.checkCommonCore.isSome = true := by
   native_decide
 
 /-! Empty site lists and non-head endpoints are refused. -/
