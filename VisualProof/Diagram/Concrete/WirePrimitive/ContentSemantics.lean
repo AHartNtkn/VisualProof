@@ -1,6 +1,5 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.Content
+import VisualProof.Diagram.Concrete.WirePrimitive.ContentAlignment
 import VisualProof.Diagram.Concrete.WirePrimitive.ContentEmptyCore
-import VisualProof.Diagram.Concrete.WirePrimitive.UniformSiteFactorization
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalZipper
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemovalFinal
 import VisualProof.Diagram.Concrete.ElaborationInvariance
@@ -73,10 +72,7 @@ private theorem site_visible_nodup
     ConcreteElaboration.extend_nodup definitions base.val base.property
       outer site above
 
-/--
-An environment assigns the acted relation wire the universal relation whenever
-that wire is visible in the supplied checked context.
--/
+/-- The acted visible relation is universal in this environment. -/
 def AssignsUniversal
     {source : CheckedDiagram definitions}
     (wire : source.val.WireId)
@@ -97,12 +93,7 @@ noncomputable def universalValue
   | .iota => Classical.choice model.inhabited
   | .rel _ => fun _ => True
 
-/--
-Sealed semantic transport between the unbound bodies at one acted wire scope.
-The compiler-selected scopes and typed renaming remain existential proof data,
-so the proposition composes across a trace without becoming a second
-construction API.
--/
+/-- Sealed semantic transport between two acted-wire scope bodies. -/
 def UniversalScopeTransport
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
@@ -144,10 +135,7 @@ private def embedOuterThroughScope
         ConcreteElaboration.appendRightVar base.val
           (base.val.wiresAt site) value
 
-/--
-Embed the variables strictly outside a compiled scope through that scope's
-local wire block into the full visible context.
--/
+/-- Embed variables outside a scope through its local wire block. -/
 def scopeEmbedOuter
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}
@@ -261,12 +249,7 @@ private noncomputable def reindexComposableSemanticZipperHoles
   cases targetContextExact
   exact zipper
 
-/--
-Coherent universal transport at the acted binder scope and strictly above it.
-The full-visible projection extends the site-outer projection, so the local
-body equivalence and constructor-preserving outer trace close through one
-authoritative binder environment.
--/
+/-- Coherent acted-scope and constructor-preserving outer transport. -/
 structure UniversalOuterTransport
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
@@ -532,11 +515,7 @@ private def sourceBoundaryRetained
 
 namespace CutWrapResult
 
-/--
-Erase every source atom and the old witness wire; independently erase every
-generated single-atom cut and the new witness wire. The remaining checked
-diagrams must be concretely isomorphic.
--/
+/-- Check the wrap source and target against one exact common core. -/
 def checkCommonCore
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -549,11 +528,7 @@ def checkCommonCore
     (appliedRegions targetSites) (appliedNodes targetSites)
     [result.targetWire]
 
-/--
-Exact positional ledger for cut wrapping. Besides equal cardinality, every
-source site is paired with a generated target cut whose retained parent and
-ordered argument tuple cross the checked common-core isomorphism.
--/
+/-- Exact positional correspondence for every generated wrap site. -/
 def SitesCorrespond
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -582,6 +557,12 @@ structure SiteLedger
   targetScope :
     SiteCompilation result.checked
       (result.checked.val.wires result.targetWire).scope
+  factorization :
+    ContentAlignment.CutFactorization result sourceScope targetScope
+  private source_removed_wires :
+    commonCore.sourceRemovedWires = [wire]
+  private target_removed_wires :
+    commonCore.targetRemovedWires = [result.targetWire]
   private sites_correspond :
     SitesCorrespond result targetSites commonCore
   private scope_corresponds :
@@ -608,24 +589,42 @@ def checkSiteLedger
     compileSite? result.checked
       (result.checked.val.wires result.targetWire).scope
   let emptyCore ← result.checkOptionalEmptyCore
-  if exact :
-      result.sites.sites.length = targetSites.sites.length ∧
-        (List.zip result.sites.sites targetSites.sites).all (fun pair =>
-          match cutParent? pair.2 with
-          | none => false
-          | some targetParent =>
-              regionsCorrespond commonCore pair.1.region targetParent &&
-                argumentsCorrespond commonCore pair.1.arguments
-                  pair.2.arguments) =
-        true then
-    if scopeExact :
-        regionsCorrespond commonCore (source.val.wires wire).scope
-              (result.checked.val.wires result.targetWire).scope = true ∧
-          sourceScope.frame.context.cutDepth =
-            targetScope.frame.context.cutDepth then
-      pure
-        ⟨targetSites, commonCore, sourceScope, targetScope, exact,
-          scopeExact.1, scopeExact.2, emptyCore⟩
+  if removalsExact :
+      commonCore.sourceRemovedWires = [wire] ∧
+        commonCore.targetRemovedWires = [result.targetWire] then
+    let alignment ←
+      ContentAlignment.checkVisibleWireAlignment source result.checked
+        sourceScope.frame.visible targetScope.frame.visible
+        (ContentAlignment.cutForwardWire result commonCore removalsExact.1)
+        (ContentAlignment.cutBackwardWire result commonCore removalsExact.2)
+        (ContentAlignment.cutForwardWire_signature result commonCore
+          removalsExact.1)
+        (ContentAlignment.cutBackwardWire_signature result commonCore
+          removalsExact.2)
+    let factorization ←
+      ContentAlignment.checkCutFactorization result sourceScope targetScope
+        alignment
+    if exact :
+        result.sites.sites.length = targetSites.sites.length ∧
+          (List.zip result.sites.sites targetSites.sites).all (fun pair =>
+            match cutParent? pair.2 with
+            | none => false
+            | some targetParent =>
+                regionsCorrespond commonCore pair.1.region targetParent &&
+                  argumentsCorrespond commonCore pair.1.arguments
+                    pair.2.arguments) =
+          true then
+      if scopeExact :
+          regionsCorrespond commonCore (source.val.wires wire).scope
+                (result.checked.val.wires result.targetWire).scope = true ∧
+            sourceScope.frame.context.cutDepth =
+              targetScope.frame.context.cutDepth then
+        pure
+          ⟨targetSites, commonCore, sourceScope, targetScope, factorization,
+            removalsExact.1, removalsExact.2, exact, scopeExact.1,
+            scopeExact.2, emptyCore⟩
+      else
+        none
     else
       none
   else
@@ -662,6 +661,24 @@ theorem cutDepth
       ledger.targetScope.frame.context.cutDepth :=
   ledger.cut_depth_exact
 
+/-- The wrap common core removes exactly the one acted source wire. -/
+theorem sourceRemovedWires
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : CutWrapResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.commonCore.sourceRemovedWires = [wire] :=
+  ledger.source_removed_wires
+
+/-- The wrap common core removes exactly the generated target witness. -/
+theorem targetRemovedWires
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : CutWrapResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.commonCore.targetRemovedWires = [result.targetWire] :=
+  ledger.target_removed_wires
+
 /-- Empty exhaustive wraps carry one independently checked deletion core. -/
 def emptyCore
     {source : CheckedDiagram definitions}
@@ -678,10 +695,7 @@ end CutWrapResult
 
 namespace ParallelSplitResult
 
-/--
-Erase every source atom and old witness wire; independently erase the two
-ordered target atoms per logical position and both generated witness wires.
--/
+/-- Check the split source and target against one exact common core. -/
 def checkCommonCore
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -696,11 +710,7 @@ def checkCommonCore
     [] (appliedNodes firstSites ++ appliedNodes secondSites)
     [result.firstWire, result.secondWire]
 
-/--
-Exact positional ledger for parallel splitting. Each source site is paired
-with one site on each generated wire at the same transported region and with
-the same transported ordered argument tuple.
--/
+/-- Exact positional correspondence for every generated parallel pair. -/
 def SitesCorrespond
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -735,6 +745,13 @@ structure SiteLedger
   secondScope :
     SiteCompilation result.checked
       (result.checked.val.wires result.secondWire).scope
+  factorization :
+    ContentAlignment.ParallelFactorization result sourceScope firstScope
+  private source_removed_wires :
+    commonCore.sourceRemovedWires = [wire]
+  private target_removed_wires :
+    commonCore.targetRemovedWires =
+      [result.firstWire, result.secondWire]
   private sites_correspond :
     SitesCorrespond result firstSites secondSites commonCore
   private first_scope_corresponds :
@@ -772,31 +789,50 @@ def checkSiteLedger
     compileSite? result.checked
       (result.checked.val.wires result.secondWire).scope
   let emptyCore ← result.checkOptionalEmptyCore
-  if exact :
-      result.sites.sites.length = firstSites.sites.length ∧
-        result.sites.sites.length = secondSites.sites.length ∧
-        (List.zip result.sites.sites
-          (List.zip firstSites.sites secondSites.sites)).all (fun pair =>
-            regionsCorrespond commonCore pair.1.region pair.2.1.region &&
-              regionsCorrespond commonCore pair.1.region pair.2.2.region &&
-              argumentsCorrespond commonCore pair.1.arguments
-                pair.2.1.arguments &&
-              argumentsCorrespond commonCore pair.1.arguments
-                pair.2.2.arguments) =
-          true then
-    if scopeExact :
-        regionsCorrespond commonCore (source.val.wires wire).scope
-              (result.checked.val.wires result.firstWire).scope = true ∧
+  if removalsExact :
+      commonCore.sourceRemovedWires = [wire] ∧
+        commonCore.targetRemovedWires =
+          [result.firstWire, result.secondWire] then
+    let alignment ←
+      ContentAlignment.checkVisibleWireAlignment source result.checked
+        sourceScope.frame.visible firstScope.frame.visible
+        (ContentAlignment.splitForwardWire result commonCore removalsExact.1)
+        (ContentAlignment.splitBackwardWire result commonCore removalsExact.2)
+        (ContentAlignment.splitForwardWire_signature result commonCore
+          removalsExact.1)
+        (ContentAlignment.splitBackwardWire_signature result commonCore
+          removalsExact.2)
+    let factorization ←
+      ContentAlignment.checkParallelFactorization result sourceScope
+        firstScope alignment
+    if exact :
+        result.sites.sites.length = firstSites.sites.length ∧
+          result.sites.sites.length = secondSites.sites.length ∧
+          (List.zip result.sites.sites
+            (List.zip firstSites.sites secondSites.sites)).all (fun pair =>
+              regionsCorrespond commonCore pair.1.region pair.2.1.region &&
+                regionsCorrespond commonCore pair.1.region pair.2.2.region &&
+                argumentsCorrespond commonCore pair.1.arguments
+                  pair.2.1.arguments &&
+                argumentsCorrespond commonCore pair.1.arguments
+                  pair.2.2.arguments) =
+            true then
+      if scopeExact :
           regionsCorrespond commonCore (source.val.wires wire).scope
-              (result.checked.val.wires result.secondWire).scope = true ∧
-          sourceScope.frame.context.cutDepth =
-              firstScope.frame.context.cutDepth ∧
-          sourceScope.frame.context.cutDepth =
-              secondScope.frame.context.cutDepth then
-      pure
-        ⟨firstSites, secondSites, commonCore, sourceScope, firstScope,
-          secondScope, exact, scopeExact.1, scopeExact.2.1,
-          scopeExact.2.2.1, scopeExact.2.2.2, emptyCore⟩
+                (result.checked.val.wires result.firstWire).scope = true ∧
+            regionsCorrespond commonCore (source.val.wires wire).scope
+                (result.checked.val.wires result.secondWire).scope = true ∧
+            sourceScope.frame.context.cutDepth =
+                firstScope.frame.context.cutDepth ∧
+            sourceScope.frame.context.cutDepth =
+                secondScope.frame.context.cutDepth then
+        pure
+          ⟨firstSites, secondSites, commonCore, sourceScope, firstScope,
+            secondScope, factorization, removalsExact.1, removalsExact.2, exact,
+            scopeExact.1, scopeExact.2.1, scopeExact.2.2.1,
+            scopeExact.2.2.2, emptyCore⟩
+      else
+        none
     else
       none
   else
@@ -854,6 +890,25 @@ theorem secondCutDepth
       ledger.secondScope.frame.context.cutDepth :=
   ledger.second_cut_depth_exact
 
+/-- The split common core removes exactly the one acted source wire. -/
+theorem sourceRemovedWires
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.commonCore.sourceRemovedWires = [wire] :=
+  ledger.source_removed_wires
+
+/-- The split common core removes exactly the two generated target wires. -/
+theorem targetRemovedWires
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ParallelSplitResult source wire}
+    (ledger : SiteLedger result) :
+    ledger.commonCore.targetRemovedWires =
+      [result.firstWire, result.secondWire] :=
+  ledger.target_removed_wires
+
 /-- Empty exhaustive splits carry one independently checked deletion core. -/
 def emptyCore
     {source : CheckedDiagram definitions}
@@ -870,10 +925,7 @@ end ParallelSplitResult
 
 namespace EndsDeleteResult
 
-/--
-Erase every source application while retaining its now endpoint-free witness
-wire. The executable deletion target itself is the independently checked core.
--/
+/-- Check all-end erasure against its independently checked target. -/
 def checkCommonCore
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -965,10 +1017,7 @@ theorem retained
     SitesRetained result ledger.commonCore :=
   ledger.sites_retained
 
-/--
-The checker-owned singleton fold removes every acted endpoint and lands on
-the executable batch deletion target up to checked concrete isomorphism.
--/
+/-- The singleton fold lands on the batch target up to checked isomorphism. -/
 def erasureLanding
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -977,11 +1026,7 @@ def erasureLanding
     ConcreteIso ledger.erasureTrace.target.val result.checked.val :=
   ledger.erasureIso
 
-/--
-The checker also verifies that the trace's endpoint-free acted wire can be
-deleted canonically. This receipt is used only to justify reassignment of the
-otherwise-unused binder.
--/
+/-- The trace's endpoint-free acted wire is canonically deletable. -/
 theorem targetDeletionWellFormed
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}

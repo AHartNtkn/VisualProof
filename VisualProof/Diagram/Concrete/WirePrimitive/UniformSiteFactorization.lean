@@ -1199,6 +1199,153 @@ def wireImage?
   else
     none
 
+/-- Dense checked-erasure image of one proved-retained source wire. -/
+def retainedWire
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : source.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires source removedWires) :
+    erasure.checked.val.WireId :=
+  Internal.checkedWire erasure.checked_exact
+    (Internal.retainedWireIndex source removedWires wire retained)
+
+/-- A retained wire's dense image preserves its signature exactly. -/
+theorem retainedWire_signature
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : source.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires source removedWires) :
+    (erasure.checked.val.wires
+        (erasure.retainedWire wire retained)).sig =
+      (source.val.wires wire).sig := by
+  calc
+    (erasure.checked.val.wires
+        (erasure.retainedWire wire retained)).sig =
+        ((Internal.batchRemovalCandidate erasure.plan).wires
+          (Internal.retainedWireIndex source removedWires wire
+            retained)).sig :=
+      Internal.checkedWire_signature_transport erasure.checked_exact _
+    _ = (source.val.wires wire).sig := by
+      unfold Internal.batchRemovalCandidate Internal.batchWireTable
+        Internal.sourceRetainedWire Internal.retainedWireIndex
+      change
+        (source.val.wires
+          ((Internal.retainedWires source removedWires).get
+            (DenseList.index
+              (Internal.retainedWires source removedWires) wire
+              retained))).sig =
+          (source.val.wires wire).sig
+      rw [DenseList.get_index]
+
+/--
+Recover the unique original wire represented by one dense checked-erasure
+wire. This is the inverse direction needed to align independently erased
+source and target contexts through a common core.
+-/
+def originalWire
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : erasure.checked.val.WireId) :
+    source.val.WireId :=
+  Internal.sourceRetainedWire source removedWires
+    (Fin.cast
+      (congrArg ConcreteDiagram.wireCount erasure.checked_exact) wire)
+
+/-- Recovering an erasure wire preserves its signature exactly. -/
+theorem originalWire_signature
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : erasure.checked.val.WireId) :
+    (source.val.wires (erasure.originalWire wire)).sig =
+      (erasure.checked.val.wires wire).sig := by
+  let candidateWire :
+      (Internal.batchRemovalCandidate erasure.plan).WireId :=
+    Fin.cast
+      (congrArg ConcreteDiagram.wireCount erasure.checked_exact) wire
+  have checkedWireExact :
+      Internal.checkedWire erasure.checked_exact candidateWire = wire := by
+    apply Fin.ext
+    rfl
+  calc
+    (source.val.wires (erasure.originalWire wire)).sig =
+        ((Internal.batchRemovalCandidate erasure.plan).wires
+          candidateWire).sig := by
+      rfl
+    _ =
+        (erasure.checked.val.wires
+          (Internal.checkedWire erasure.checked_exact candidateWire)).sig :=
+      (Internal.checkedWire_signature_transport
+        erasure.checked_exact candidateWire).symm
+    _ = (erasure.checked.val.wires wire).sig := by
+      rw [checkedWireExact]
+
+/-- Every recovered original wire belongs to the retained dense table. -/
+theorem originalWire_mem_retained
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : erasure.checked.val.WireId) :
+    erasure.originalWire wire ∈
+      Internal.retainedWires source removedWires := by
+  unfold originalWire Internal.sourceRetainedWire
+  exact List.get_mem _ _
+
+/-- Recovering a proved retained wire returns that exact source wire. -/
+@[simp] theorem originalWire_retainedWire
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : source.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires source removedWires) :
+    erasure.originalWire (erasure.retainedWire wire retained) = wire := by
+  let recovered :
+      Fin (Internal.retainedWires source removedWires).length :=
+    Fin.cast
+      (congrArg ConcreteDiagram.wireCount erasure.checked_exact)
+      (erasure.retainedWire wire retained)
+  have recoveredExact :
+      recovered =
+        Internal.retainedWireIndex source removedWires wire retained := by
+    apply Fin.ext
+    rfl
+  unfold originalWire
+  change Internal.sourceRetainedWire source removedWires recovered = wire
+  rw [recoveredExact]
+  unfold Internal.sourceRetainedWire Internal.retainedWireIndex
+  rw [DenseList.get_index]
+
+/-- Re-embedding a recovered wire returns the exact dense checked wire. -/
+@[simp] theorem retainedWire_originalWire
+    (erasure :
+      CheckedBatchErasure source removedRegions removedNodes removedWires)
+    (wire : erasure.checked.val.WireId) :
+    erasure.retainedWire (erasure.originalWire wire)
+        (erasure.originalWire_mem_retained wire) =
+      wire := by
+  let position :
+      Fin (Internal.retainedWires source removedWires).length :=
+    Fin.cast
+      (congrArg ConcreteDiagram.wireCount erasure.checked_exact) wire
+  have retainedNodup :
+      (Internal.retainedWires source removedWires).Nodup := by
+    exact
+      (Data.Finite.allFin_nodup source.val.wireCount).filter _
+  have indexExact :
+      Internal.retainedWireIndex source removedWires
+          (erasure.originalWire wire)
+          (erasure.originalWire_mem_retained wire) =
+        position := by
+    unfold Internal.retainedWireIndex originalWire
+      Internal.sourceRetainedWire
+    exact
+      DenseList.index_get
+        (Internal.retainedWires source removedWires) retainedNodup position
+  unfold retainedWire
+  rw [indexExact]
+  apply Fin.ext
+  rfl
+
 end CheckedBatchErasure
 
 /--
@@ -1222,6 +1369,118 @@ structure CommonCoreReceipt
       targetRemovedWires
   coreIso :
     ConcreteIso sourceErasure.checked.val targetErasure.checked.val
+
+namespace CommonCoreReceipt
+
+/-- Transport one proved-retained source wire through the checked common core. -/
+def forwardRetainedWire
+    (core : CommonCoreReceipt source target)
+    (wire : source.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires source core.sourceRemovedWires) :
+    target.val.WireId :=
+  core.targetErasure.originalWire
+    (core.coreIso.wires
+      (core.sourceErasure.retainedWire wire retained))
+
+/-- Common-core forward transport preserves the wire signature. -/
+theorem forwardRetainedWire_signature
+    (core : CommonCoreReceipt source target)
+    (wire : source.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires source core.sourceRemovedWires) :
+    (target.val.wires (core.forwardRetainedWire wire retained)).sig =
+      (source.val.wires wire).sig := by
+  calc
+    (target.val.wires (core.forwardRetainedWire wire retained)).sig =
+        (core.targetErasure.checked.val.wires
+          (core.coreIso.wires
+            (core.sourceErasure.retainedWire wire retained))).sig :=
+      core.targetErasure.originalWire_signature _
+    _ =
+        (core.sourceErasure.checked.val.wires
+          (core.sourceErasure.retainedWire wire retained)).sig :=
+      core.coreIso.wire_signature _
+    _ = (source.val.wires wire).sig :=
+      core.sourceErasure.retainedWire_signature wire retained
+
+/-- Transport one proved-retained target wire backward through the common core. -/
+def backwardRetainedWire
+    (core : CommonCoreReceipt source target)
+    (wire : target.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires target core.targetRemovedWires) :
+    source.val.WireId :=
+  core.sourceErasure.originalWire
+    (core.coreIso.wires.symm
+      (core.targetErasure.retainedWire wire retained))
+
+/-- Common-core backward transport preserves the wire signature. -/
+theorem backwardRetainedWire_signature
+    (core : CommonCoreReceipt source target)
+    (wire : target.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires target core.targetRemovedWires) :
+    (source.val.wires (core.backwardRetainedWire wire retained)).sig =
+      (target.val.wires wire).sig := by
+  calc
+    (source.val.wires (core.backwardRetainedWire wire retained)).sig =
+        (core.sourceErasure.checked.val.wires
+          (core.coreIso.wires.symm
+            (core.targetErasure.retainedWire wire retained))).sig :=
+      core.sourceErasure.originalWire_signature _
+    _ =
+        (core.targetErasure.checked.val.wires
+          (core.targetErasure.retainedWire wire retained)).sig :=
+      core.coreIso.symm.wire_signature _
+    _ = (target.val.wires wire).sig :=
+      core.targetErasure.retainedWire_signature wire retained
+
+/-- Forward then backward common-core transport returns the retained source. -/
+@[simp] theorem backward_forwardRetainedWire
+    (core : CommonCoreReceipt source target)
+    (wire : source.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires source core.sourceRemovedWires) :
+    core.backwardRetainedWire
+        (core.forwardRetainedWire wire retained)
+        (core.targetErasure.originalWire_mem_retained
+          (core.coreIso.wires
+            (core.sourceErasure.retainedWire wire retained))) =
+      wire := by
+  unfold backwardRetainedWire forwardRetainedWire
+  rw [CheckedBatchErasure.retainedWire_originalWire]
+  have isoExact :
+      core.coreIso.wires.symm
+          (core.coreIso.wires
+            (core.sourceErasure.retainedWire wire retained)) =
+        core.sourceErasure.retainedWire wire retained :=
+    core.coreIso.wires.left_inv _
+  rw [isoExact, CheckedBatchErasure.originalWire_retainedWire]
+
+/-- Backward then forward common-core transport returns the retained target. -/
+@[simp] theorem forward_backwardRetainedWire
+    (core : CommonCoreReceipt source target)
+    (wire : target.val.WireId)
+    (retained :
+      wire ∈ Internal.retainedWires target core.targetRemovedWires) :
+    core.forwardRetainedWire
+        (core.backwardRetainedWire wire retained)
+        (core.sourceErasure.originalWire_mem_retained
+          (core.coreIso.wires.symm
+            (core.targetErasure.retainedWire wire retained))) =
+      wire := by
+  unfold forwardRetainedWire backwardRetainedWire
+  rw [CheckedBatchErasure.retainedWire_originalWire]
+  have isoExact :
+      core.coreIso.wires
+          (core.coreIso.wires.symm
+            (core.targetErasure.retainedWire wire retained)) =
+        core.targetErasure.retainedWire wire retained :=
+    core.coreIso.wires.right_inv _
+  rw [isoExact, CheckedBatchErasure.originalWire_retainedWire]
+
+end CommonCoreReceipt
 
 /-- Check both canonical erasures and their exact common-core isomorphism. -/
 def checkCommonCore

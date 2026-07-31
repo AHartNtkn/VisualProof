@@ -241,6 +241,22 @@ structure CutWrapResult
     targetWire =
       Internal.checkedWire generated (cutWrapCandidateWire signature plan)
 
+/-- The generated cut witness retains the acted relation signature. -/
+theorem CutWrapResult.targetWire_signature
+    (result : CutWrapResult source wire) :
+    (result.checked.val.wires result.targetWire).sig =
+      (source.val.wires wire).sig := by
+  rw [result.targetWire_exact,
+    Internal.checkedWire_signature_transport result.generated]
+  have targetExact :
+      cutWrapCandidateWire result.signature result.plan =
+        Fin.natAdd (cutWrapBase result.plan).wireCount (0 : Fin 1) := by
+    apply Fin.ext
+    rfl
+  rw [targetExact]
+  simpa only [cutWrapCandidate, Fin.addCases_right] using
+    result.signature_exact.symm
+
 /-- Replace every applied end `R(x̄)` by a fresh cut containing `W(x̄)`. -/
 def cutWrap
     (source : CheckedDiagram definitions)
@@ -625,6 +641,63 @@ structure ParallelSplitResult
     secondWire =
       Internal.checkedWire generated
         (parallelSplitCandidateWire signature plan (1 : Fin 2))
+
+/-- The first generated parallel witness retains the acted signature. -/
+theorem ParallelSplitResult.firstWire_signature
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.firstWire).sig =
+      (source.val.wires wire).sig := by
+  rw [result.firstWire_exact,
+    Internal.checkedWire_signature_transport result.generated]
+  have firstExact :
+      parallelSplitCandidateWire result.signature result.plan (0 : Fin 2) =
+        Fin.natAdd (parallelSplitBase result.plan).wireCount
+          (0 : Fin 2) := by
+    apply Fin.ext
+    rfl
+  rw [firstExact]
+  simpa only [parallelSplitCandidate, Fin.addCases_right] using
+    result.signature_exact.symm
+
+/-- The second generated parallel witness retains the acted signature. -/
+theorem ParallelSplitResult.secondWire_signature
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.secondWire).sig =
+      (source.val.wires wire).sig := by
+  rw [result.secondWire_exact,
+    Internal.checkedWire_signature_transport result.generated]
+  have secondExact :
+      parallelSplitCandidateWire result.signature result.plan (1 : Fin 2) =
+        Fin.natAdd (parallelSplitBase result.plan).wireCount
+          (1 : Fin 2) := by
+    apply Fin.ext
+    rfl
+  rw [secondExact]
+  simpa only [parallelSplitCandidate, Fin.addCases_right] using
+    result.signature_exact.symm
+
+/-- Both generated parallel witnesses occupy the same acted scope. -/
+theorem ParallelSplitResult.wireScopes_eq
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.firstWire).scope =
+      (result.checked.val.wires result.secondWire).scope := by
+  rw [result.firstWire_exact, result.secondWire_exact,
+    Internal.checkedWire_scope_transport,
+    Internal.checkedWire_scope_transport]
+  have firstExact :
+      parallelSplitCandidateWire result.signature result.plan (0 : Fin 2) =
+        Fin.natAdd (parallelSplitBase result.plan).wireCount
+          (0 : Fin 2) := by
+    apply Fin.ext
+    rfl
+  have secondExact :
+      parallelSplitCandidateWire result.signature result.plan (1 : Fin 2) =
+        Fin.natAdd (parallelSplitBase result.plan).wireCount
+          (1 : Fin 2) := by
+    apply Fin.ext
+    rfl
+  rw [firstExact, secondExact]
+  simp only [parallelSplitCandidate, Fin.addCases_right]
 
 /-- Replace every `R(x̄)` by co-located `W₁(x̄)` and `W₂(x̄)`. -/
 def parallelSplit
