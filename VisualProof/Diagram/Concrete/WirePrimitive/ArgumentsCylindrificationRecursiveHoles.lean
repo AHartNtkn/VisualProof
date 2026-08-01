@@ -418,7 +418,7 @@ theorem recursiveRegionClassifier_isSome
     (sourceArguments : List Sig)
     (sourceSignature :
       (source.val.wires wire).sig = .rel sourceArguments)
-    (result : ArgumentResult source wire)
+    (sites : AllAppliedSites source wire)
     (context : ConcreteElaboration.WireContext source.val)
     (region : source.val.RegionId)
     (items : ItemSeq definitions (context.extend region).sigs)
@@ -433,7 +433,7 @@ theorem recursiveRegionClassifier_isSome
     (node : source.val.NodeId)
     (nodeAt : node ∈ source.val.nodesAt region) :
     (recursiveRegionClassifier source context region outerHead node).isSome =
-      decide (node ∈ argumentSiteNodes result.sites) := by
+      decide (node ∈ argumentSiteNodes sites) := by
   cases classified :
       recursiveRegionClassifier source context region outerHead node with
   | none =>
@@ -442,21 +442,21 @@ theorem recursiveRegionClassifier_isSome
       apply decide_eq_false_iff_not.mpr
       intro member
       have sourceNodeMember :
-          node ∈ sourceSiteNodesAt result.sites region := by
+          node ∈ sourceSiteNodesAt sites region := by
         apply List.mem_filter.mpr
         exact ⟨nodeAt, decide_eq_true member⟩
       have orderedMember :=
-        (aritySiteNodesAt_mem_iff result.sites region node).mpr
+        (aritySiteNodesAt_mem_iff sites region node).mpr
           sourceNodeMember
       obtain ⟨siteIndex, siteIndexMember, nodeExact⟩ :=
         List.mem_map.mp orderedMember
       have siteRegion :
-          (result.sites.sites.get siteIndex).region = region := by
+          (sites.sites.get siteIndex).region = region := by
         exact eq_of_beq (List.mem_filter.mp siteIndexMember).2
       obtain ⟨arguments, selected, _origins⟩ :=
         recursiveRegionClassifier_complete sourceArguments sourceSignature
           context region items compiled contextNodup outerHead outerHeadOrigin
-          (result.sites.sites.get siteIndex) siteRegion
+          (sites.sites.get siteIndex) siteRegion
       rw [nodeExact, classified] at selected
       contradiction
   | some values =>
@@ -464,7 +464,7 @@ theorem recursiveRegionClassifier_isSome
       symm
       apply decide_eq_true
       obtain ⟨site, siteMember, nodeExact⟩ :=
-        recursiveRegionClassifier_site result.sites context region outerHead
+        recursiveRegionClassifier_site sites context region outerHead
           outerHeadOrigin node values classified
       unfold argumentSiteNodes
       apply List.mem_map.mpr
@@ -479,7 +479,7 @@ theorem recursiveRegionHoleValues_alignment
     (sourceArguments : List Sig)
     (sourceSignature :
       (source.val.wires wire).sig = .rel sourceArguments)
-    (result : ArgumentResult source wire)
+    (sites : AllAppliedSites source wire)
     (context : ConcreteElaboration.WireContext source.val)
     (region : source.val.RegionId)
     (items : ItemSeq definitions (context.extend region).sigs)
@@ -493,7 +493,7 @@ theorem recursiveRegionHoleValues_alignment
         wire) :
     (recursiveNormalizedNodeShape context region outerHead items).holeValues.map
         some =
-      (sourceSiteNodesAt result.sites region).map
+      (sourceSiteNodesAt sites region).map
         (recursiveRegionClassifier source context region outerHead) := by
   unfold recursiveNormalizedNodeShape
   rw [UniformIntrinsicRegion.abstractAppliedItems_holeValues]
@@ -507,9 +507,42 @@ theorem recursiveRegionHoleValues_alignment
   unfold sourceSiteNodesAt
   apply UniformIntrinsicRegion.map_some_filterMap_eq_map_filter
   intro node nodeAt
-  exact recursiveRegionClassifier_isSome sourceArguments sourceSignature result
+  exact recursiveRegionClassifier_isSome sourceArguments sourceSignature sites
     context region items compiled contextNodup outerHead outerHeadOrigin node
     nodeAt
+
+/-- Target holes at an image region are aligned with the generated target
+applications in the source endpoint/site order. -/
+theorem recursiveTargetRegionHoleValues_alignment
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (region : source.val.RegionId)
+    (targetItems : ItemSeq definitions
+      (targetOuter.extend (result.regionImage region)).sigs)
+    (targetCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (targetOuter.extend (result.regionImage region))
+          (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (targetHead : Var targetOuter.sigs (.rel result.targetArguments))
+    (targetHeadOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val targetOuter.ids
+          targetHead = result.targetWire) :
+    (recursiveNormalizedNodeShape targetOuter (result.regionImage region)
+        targetHead targetItems).holeValues.map some =
+      (aritySitesAt result.sites region).map fun site =>
+        recursiveRegionClassifier result.checked targetOuter
+          (result.regionImage region) targetHead (result.targetNode site) := by
+  have aligned := recursiveRegionHoleValues_alignment
+    result.targetArguments result.targetWire_signature result.targetSites
+    targetOuter (result.regionImage region) targetItems targetCompiled
+    targetNodup targetHead targetHeadOrigin
+  rw [ArgumentResult.targetSiteNodesAt_exact result region] at aligned
+  simpa [List.map_map, Function.comp_def] using aligned
 
 /-- Assemble a cylindrical-hole receipt from exact ordered lengths, the two
 finite order equivalences, and one pointwise split equation.  Root and
