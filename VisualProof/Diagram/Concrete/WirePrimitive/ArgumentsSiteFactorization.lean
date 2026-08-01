@@ -670,7 +670,8 @@ private noncomputable def ArgumentResult.FrameContextPair.bindRegion
           extended.sigs_exact sourceExtendExact targetNested.context)
   exact sourceContextExact.symm ▸ targetContextExact.symm ▸ boundPair
 
-private theorem ArgumentResult.regionImage_injective
+/-- The construction-owned checked region image is injective. -/
+theorem ArgumentResult.regionImage_injective
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire) :
