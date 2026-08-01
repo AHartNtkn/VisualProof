@@ -3198,6 +3198,90 @@ def wireEquiv
   simp
   rfl
 
+theorem nodeEquiv_generated
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.nodeEquiv (applied.result.sites.sites.get site).node =
+      applied.result.targetNode site := by
+  have generated : (applied.result.sites.sites.get site).node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨applied.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  unfold nodeEquiv ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+  change applied.result.nodeImage
+      (applied.result.sites.sites.get site).node = _
+  rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_pos generated]
+  rw [ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_get
+    applied.result.sites site generated]
+
+theorem nodeEquiv_retained
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (node : source.val.NodeId)
+    (retained : node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites) :
+    applied.nodeEquiv node =
+      applied.result.retainedNodeImage node retained := by
+  unfold nodeEquiv ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+  change applied.result.nodeImage node = _
+  rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_neg retained]
+
+theorem wireEquiv_retained
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    applied.wireEquiv sourceWire =
+      applied.result.retainedWireImage sourceWire (by
+        rw [applied.source_removed_exact]
+        simpa [different]) := by
+  unfold wireEquiv ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly
+  change (if same : sourceWire = wire then applied.result.targetWire
+    else applied.result.retainedWireImage sourceWire _) = _
+  rw [dif_neg different]
+
+theorem wireEquiv_retained_signature
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    (applied.target.val.wires (applied.wireEquiv sourceWire)).sig =
+      (source.val.wires sourceWire).sig := by
+  rw [applied.wireEquiv_retained sourceWire different]
+  exact applied.result.retainedWireImage_signature sourceWire _
+
+theorem wireEquiv_retained_scope
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    (applied.target.val.wires (applied.wireEquiv sourceWire)).scope =
+      applied.result.regionEquiv (source.val.wires sourceWire).scope := by
+  rw [applied.wireEquiv_retained sourceWire different,
+    show
+      (applied.target.val.wires
+          (applied.result.retainedWireImage sourceWire _)).scope =
+        applied.result.regionImage (source.val.wires sourceWire).scope by
+      exact applied.result.retainedWireImage_scope sourceWire _]
+  exact applied.result.regionImage_exact _
+
 theorem targetArguments_exact
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3364,6 +3448,105 @@ def wireEquiv
     ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly
   simp
   rfl
+
+theorem nodeEquiv_generated
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.nodeEquiv (applied.result.sites.sites.get site).node =
+      applied.result.targetNode site := by
+  have generated : (applied.result.sites.sites.get site).node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨applied.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  unfold nodeEquiv ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+  change applied.result.nodeImage
+      (applied.result.sites.sites.get site).node = _
+  rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_pos generated]
+  rw [ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_get
+    applied.result.sites site generated]
+
+theorem nodeEquiv_retained
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (node : source.val.NodeId)
+    (retained : node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites) :
+    applied.nodeEquiv node =
+      applied.result.retainedNodeImage node retained := by
+  unfold nodeEquiv ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+  change applied.result.nodeImage node = _
+  rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_neg retained]
+
+theorem wireEquiv_retained
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    applied.wireEquiv sourceWire =
+      applied.result.retainedWireImage sourceWire (by
+        rw [applied.source_removed_exact]
+        simpa [different]) := by
+  unfold wireEquiv ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly
+  change (if same : sourceWire = wire then applied.result.targetWire
+    else applied.result.retainedWireImage sourceWire _) = _
+  rw [dif_neg different]
+
+theorem wireEquiv_retained_signature
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    (applied.target.val.wires (applied.wireEquiv sourceWire)).sig =
+      (source.val.wires sourceWire).sig := by
+  rw [applied.wireEquiv_retained sourceWire different]
+  exact applied.result.retainedWireImage_signature sourceWire _
+
+theorem wireEquiv_retained_scope
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (sourceWire : source.val.WireId)
+    (different : sourceWire ≠ wire) :
+    (applied.target.val.wires (applied.wireEquiv sourceWire)).scope =
+      applied.result.regionEquiv (source.val.wires sourceWire).scope := by
+  rw [applied.wireEquiv_retained sourceWire different,
+    show
+      (applied.target.val.wires
+          (applied.result.retainedWireImage sourceWire _)).scope =
+        applied.result.regionImage (source.val.wires sourceWire).scope by
+      exact applied.result.retainedWireImage_scope sourceWire _]
+  exact applied.result.regionImage_exact _
 
 theorem targetArguments_exact
     {source : CheckedDiagram definitions}
@@ -3541,6 +3724,346 @@ back to the original planned head. -/
     _ = forwardWire := by
       rw [← forward.wireEquiv_head]
       exact forward.wireEquiv.left_inv forwardWire
+
+/-- The transported inverse region carrier sends the rebuilt root exactly
+back to the planned root. -/
+theorem inverseTransport_root
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    forward.inverseTransportRegionEquiv backward targetIso
+        backward.target.val.root = planned.val.root := by
+  unfold inverseTransportRegionEquiv
+  change forward.result.regionEquiv.symm
+    (targetIso.regions
+      (backward.result.regionEquiv.symm backward.target.val.root)) = _
+  have backwardRoot : backward.target.val.root =
+      backward.result.regionEquiv real.val.root := by
+    exact backward.result.targetRoot_exact.trans
+      (backward.result.regionImage_exact real.val.root)
+  rw [backwardRoot]
+  have backwardCancel :=
+    backward.result.regionEquiv.left_inv real.val.root
+  change backward.result.regionEquiv.invFun
+      (backward.result.regionEquiv real.val.root) = real.val.root
+    at backwardCancel
+  calc
+    forward.result.regionEquiv.symm
+        (targetIso.regions
+          (backward.result.regionEquiv.symm
+            (backward.result.regionEquiv real.val.root))) =
+        forward.result.regionEquiv.symm
+          (targetIso.regions real.val.root) :=
+      congrArg (fun value => forward.result.regionEquiv.symm
+        (targetIso.regions value)) backwardCancel
+    _ = forward.result.regionEquiv.symm forward.target.val.root := by
+      rw [targetIso.root]
+    _ = forward.result.regionEquiv.symm
+        (forward.result.regionEquiv planned.val.root) := by
+      congr 1
+      exact forward.result.targetRoot_exact.trans
+        (forward.result.regionImage_exact planned.val.root)
+    _ = planned.val.root := forward.result.regionEquiv.left_inv _
+
+/-- Region tables commute with the transported inverse carrier. -/
+theorem inverseTransport_region_table
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (region : backward.target.val.RegionId) :
+    planned.val.regions
+        (forward.inverseTransportRegionEquiv backward targetIso region) =
+      (backward.target.val.regions region).rename
+        (forward.inverseTransportRegionEquiv backward targetIso) := by
+  let realRegion := backward.result.regionEquiv.symm region
+  have backwardData := backward.result.regionImage_data realRegion
+  have backwardRegionExact : backward.result.regionEquiv realRegion = region :=
+    backward.result.regionEquiv.right_inv region
+  rw [backwardRegionExact] at backwardData
+  have backwardDataPublic : backward.target.val.regions region =
+      (real.val.regions realRegion).rename backward.result.regionEquiv :=
+    backwardData
+  have middleData := targetIso.region_table realRegion
+  have plannedData := forward.result.regionImage_data
+    (forward.result.regionEquiv.symm (targetIso.regions realRegion))
+  have plannedRegionExact :
+      forward.result.regionEquiv
+          (forward.result.regionEquiv.symm (targetIso.regions realRegion)) =
+        targetIso.regions realRegion :=
+    forward.result.regionEquiv.right_inv _
+  rw [plannedRegionExact] at plannedData
+  unfold inverseTransportRegionEquiv
+  change planned.val.regions
+      (forward.result.regionEquiv.symm (targetIso.regions realRegion)) = _
+  rw [backwardDataPublic]
+  have middleRelation :
+      (real.val.regions realRegion).rename targetIso.regions =
+        (planned.val.regions
+          (forward.result.regionEquiv.symm
+            (targetIso.regions realRegion))).rename
+          forward.result.regionEquiv :=
+    middleData.symm.trans plannedData
+  cases realData : real.val.regions realRegion with
+  | sheet =>
+      cases plannedDataExact : planned.val.regions
+          (forward.result.regionEquiv.symm
+            (targetIso.regions realRegion)) with
+      | sheet => rfl
+      | cut parent =>
+          rw [realData, plannedDataExact] at middleRelation
+          contradiction
+  | cut realParent =>
+      cases plannedDataExact : planned.val.regions
+          (forward.result.regionEquiv.symm
+            (targetIso.regions realRegion)) with
+      | sheet =>
+          rw [realData, plannedDataExact] at middleRelation
+          contradiction
+      | cut plannedParent =>
+          rw [realData, plannedDataExact] at middleRelation
+          simp only [CRegion.rename] at middleRelation
+          have parentRelation : targetIso.regions realParent =
+              forward.result.regionEquiv plannedParent :=
+            CRegion.cut.inj middleRelation
+          congr 1
+          unfold ConcreteWirePrimitive.ArgumentResult.inverseTransportRegionEquiv
+          change plannedParent = forward.result.regionEquiv.symm
+            (targetIso.regions
+              (backward.result.regionEquiv.symm
+                (backward.result.regionEquiv realParent)))
+          have backwardParentCancel :=
+            backward.result.regionEquiv.left_inv realParent
+          change backward.result.regionEquiv.invFun
+              (backward.result.regionEquiv realParent) = realParent
+            at backwardParentCancel
+          calc
+            plannedParent = forward.result.regionEquiv.symm
+                (targetIso.regions realParent) :=
+              (forward.result.regionEquiv.left_inv plannedParent).symm.trans
+                (congrArg forward.result.regionEquiv.symm
+                  parentRelation).symm
+            _ = forward.result.regionEquiv.symm
+                (targetIso.regions
+                  (backward.result.regionEquiv.symm
+                    (backward.result.regionEquiv realParent))) :=
+              congrArg (fun value => forward.result.regionEquiv.symm
+                (targetIso.regions value)) backwardParentCancel.symm
+
+/-- The transported inverse wire carrier acts on every inverse-construction
+image by composing the three construction-owned wire equivalences. -/
+theorem inverseTransport_wireEquiv_image
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (realWire : real.val.WireId) :
+    forward.inverseTransportWireEquiv backward targetIso
+        (backward.wireEquiv realWire) =
+      forward.wireEquiv.symm (targetIso.wires realWire) := by
+  unfold inverseTransportWireEquiv
+  change forward.wireEquiv.symm
+    (targetIso.wires
+      (backward.wireEquiv.symm (backward.wireEquiv realWire))) = _
+  have backwardCancel := backward.wireEquiv.left_inv realWire
+  change backward.wireEquiv.invFun (backward.wireEquiv realWire) =
+    realWire at backwardCancel
+  exact congrArg (fun value => forward.wireEquiv.symm
+    (targetIso.wires value)) backwardCancel
+
+/-- Complete wire-signature law for the transported inverse carrier. -/
+theorem inverseTransport_wire_signature
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (argumentExact :
+      forward.sourceArgumentList[position]? = some newArgument)
+    (targetWire : backward.target.val.WireId) :
+    (planned.val.wires
+      (forward.inverseTransportWireEquiv backward targetIso targetWire)).sig =
+      (backward.target.val.wires targetWire).sig := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have targetExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  rw [← targetExact, forward.inverseTransport_wireEquiv_image]
+  by_cases head : realWire = backwardWire
+  · rw [head]
+    have forwardInverseHead : forward.wireEquiv.symm forward.targetWire =
+        forwardWire := by
+      rw [← forward.wireEquiv_head]
+      exact forward.wireEquiv.left_inv forwardWire
+    have backwardTargetSignature :
+        (backward.target.val.wires backward.targetWire).sig =
+          .rel backward.result.targetArguments := by
+      exact backward.result.targetWire_signature
+    rw [wireExact, forwardInverseHead, backward.wireEquiv_head,
+      forward.sourceWire_signature, backwardTargetSignature]
+    have restored := forward.inverseTargetArguments_exact backward
+      targetIso wireExact argumentExact
+    exact congrArg Sig.rel restored.symm
+  · let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+    have plannedImage : forward.wireEquiv plannedWire =
+        targetIso.wires realWire :=
+      forward.wireEquiv.right_inv (targetIso.wires realWire)
+    have plannedDifferent : plannedWire ≠ forwardWire := by
+      intro same
+      have mapped := congrArg forward.wireEquiv same
+      rw [plannedImage, forward.wireEquiv_head] at mapped
+      have realExact := targetIso.wires.injective
+        (mapped.trans wireExact.symm)
+      exact head realExact
+    calc
+      (planned.val.wires plannedWire).sig =
+          (forward.target.val.wires (targetIso.wires realWire)).sig := by
+        rw [← plannedImage]
+        exact (forward.wireEquiv_retained_signature plannedWire
+          plannedDifferent).symm
+      _ = (real.val.wires realWire).sig :=
+        targetIso.wire_signature realWire
+      _ = (backward.target.val.wires
+          (backward.wireEquiv realWire)).sig :=
+        (backward.wireEquiv_retained_signature realWire head).symm
+
+/-- Complete wire-scope law for the transported inverse carrier. -/
+theorem inverseTransport_wire_scope
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (targetWire : backward.target.val.WireId) :
+    (planned.val.wires
+      (forward.inverseTransportWireEquiv backward targetIso targetWire)).scope =
+      forward.inverseTransportRegionEquiv backward targetIso
+        (backward.target.val.wires targetWire).scope := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have targetExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  rw [← targetExact, forward.inverseTransport_wireEquiv_image]
+  by_cases head : realWire = backwardWire
+  · rw [head]
+    have forwardInverseHead : forward.wireEquiv.symm forward.targetWire =
+        forwardWire := by
+      rw [← forward.wireEquiv_head]
+      exact forward.wireEquiv.left_inv forwardWire
+    rw [wireExact, forwardInverseHead, backward.wireEquiv_head]
+    have backwardScope := backward.result.targetWire_scope_regionImage
+    change (backward.target.val.wires backward.targetWire).scope =
+        backward.result.regionImage
+          (real.val.wires backwardWire).scope at backwardScope
+    have forwardScope := forward.result.targetWire_scope_regionImage
+    change (forward.target.val.wires forward.targetWire).scope =
+        forward.result.regionImage
+          (planned.val.wires forwardWire).scope at forwardScope
+    have middleScope := targetIso.wire_scope backwardWire
+    rw [wireExact] at middleScope
+    unfold inverseTransportRegionEquiv
+    rw [backwardScope, backward.result.regionImage_exact]
+    have backwardCancel := backward.result.regionEquiv.left_inv
+      (real.val.wires backwardWire).scope
+    change backward.result.regionEquiv.invFun
+        (backward.result.regionEquiv
+          (real.val.wires backwardWire).scope) =
+      (real.val.wires backwardWire).scope at backwardCancel
+    calc
+      (planned.val.wires forwardWire).scope =
+          forward.result.regionEquiv.symm
+            (forward.result.regionEquiv
+              (planned.val.wires forwardWire).scope) :=
+        (forward.result.regionEquiv.left_inv _).symm
+      _ = forward.result.regionEquiv.symm
+          (forward.target.val.wires forward.targetWire).scope := by
+        rw [forwardScope, forward.result.regionImage_exact]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions (real.val.wires backwardWire).scope) := by
+        rw [middleScope]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions
+            (backward.result.regionEquiv.symm
+              (backward.result.regionEquiv
+                (real.val.wires backwardWire).scope))) :=
+        congrArg (fun value => forward.result.regionEquiv.symm
+          (targetIso.regions value)) backwardCancel.symm
+  · let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+    have plannedImage : forward.wireEquiv plannedWire =
+        targetIso.wires realWire :=
+      forward.wireEquiv.right_inv (targetIso.wires realWire)
+    have plannedDifferent : plannedWire ≠ forwardWire := by
+      intro same
+      have mapped := congrArg forward.wireEquiv same
+      rw [plannedImage, forward.wireEquiv_head] at mapped
+      have realExact := targetIso.wires.injective
+        (mapped.trans wireExact.symm)
+      exact head realExact
+    have forwardScope := forward.wireEquiv_retained_scope plannedWire
+      plannedDifferent
+    rw [plannedImage] at forwardScope
+    have backwardScope := backward.wireEquiv_retained_scope realWire head
+    have middleScope := targetIso.wire_scope realWire
+    unfold inverseTransportRegionEquiv
+    rw [backwardScope]
+    have backwardCancel := backward.result.regionEquiv.left_inv
+      (real.val.wires realWire).scope
+    change backward.result.regionEquiv.invFun
+        (backward.result.regionEquiv (real.val.wires realWire).scope) =
+      (real.val.wires realWire).scope at backwardCancel
+    calc
+      (planned.val.wires plannedWire).scope =
+          forward.result.regionEquiv.symm
+            (forward.result.regionEquiv
+              (planned.val.wires plannedWire).scope) :=
+        (forward.result.regionEquiv.left_inv _).symm
+      _ = forward.result.regionEquiv.symm
+          (forward.target.val.wires (targetIso.wires realWire)).scope := by
+        rw [forwardScope]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions (real.val.wires realWire).scope) := by
+        rw [middleScope]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions
+            (backward.result.regionEquiv.symm
+              (backward.result.regionEquiv
+                (real.val.wires realWire).scope))) :=
+        congrArg (fun value => forward.result.regionEquiv.symm
+          (targetIso.regions value)) backwardCancel.symm
 
 end AppliedArgDrop
 
