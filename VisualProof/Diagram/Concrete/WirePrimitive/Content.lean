@@ -1053,6 +1053,34 @@ def deleteEnds
 
 namespace EndsDeleteResult
 
+/-- Image of any retained source region in the exact dense deletion target. -/
+def targetRegion
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.RegionId :=
+  have retained : region ∈ Internal.retainedRegions source [] := by
+    unfold Internal.retainedRegions
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin _, by simp⟩
+  Internal.checkedRegion result.generated
+    (Internal.retainedRegionIndex source [] region retained)
+
+/-- Image of any retained source wire in the exact dense deletion target. -/
+def targetWireImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire)
+    (sourceWire : source.val.WireId) :
+    result.checked.val.WireId :=
+  have retained : sourceWire ∈ Internal.retainedWires source [] := by
+    unfold Internal.retainedWires
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin _, by simp⟩
+  Internal.checkedWire result.generated
+    (Internal.retainedWireIndex source [] sourceWire retained)
+
 /-- Image of the retained acted wire in the exact dense deletion target. -/
 def targetWire
     {source : CheckedDiagram definitions}
@@ -1065,6 +1093,17 @@ def targetWire
     exact ⟨Data.Finite.mem_allFin _, by simp⟩
   Internal.checkedWire result.generated
     (Internal.retainedWireIndex source [] wire retained)
+
+/-- Exact ordered spawn sites inverse to this all-ends deletion.  Region and
+argument-wire aliases are transported by the deletion construction itself. -/
+def targetSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    List (EndSite result.checked result.targetWire) :=
+  result.sites.sites.map fun site =>
+    { region := result.targetRegion site.region
+      arguments := site.arguments.map result.targetWireImage }
 
 end EndsDeleteResult
 

@@ -274,6 +274,24 @@ def target
     CheckedDiagram definitions :=
   applied.checked.checked
 
+/-- Exact endpoint-free acted wire retained by all-ends deletion. -/
+def inverseWire
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedEndsDelete source orientation wire) :
+    applied.target.val.WireId :=
+  applied.checked.targetWire
+
+/-- Exact ordered sites deleted by the step, transported into its target. -/
+def inverseSites
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedEndsDelete source orientation wire) :
+    List (EndSite applied.target applied.inverseWire) :=
+  applied.checked.targetSites
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
