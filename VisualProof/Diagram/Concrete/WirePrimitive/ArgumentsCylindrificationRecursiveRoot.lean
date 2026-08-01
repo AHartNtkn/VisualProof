@@ -164,6 +164,30 @@ theorem recursiveExtendedNormalization_outer
   rw [recursiveRoot_cast_cancel]
   exact recursivePrefixRenaming_appendRight _ _ _
 
+/-- The inherited acted head remains the selected normalized outer head after
+descending through one concrete region extension. -/
+theorem recursiveExtendedNormalization_head_of_origin
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (outer : WireRenaming context.sigs normalizedOuter)
+    (contextNodup : (context.extend region).ids.Nodup)
+    (head : Var (context.extend region).sigs (.rel arguments))
+    (outerHead : Var context.sigs (.rel arguments))
+    (headOrigin :
+      ConcreteElaboration.WireContext.origin diagram
+          (context.extend region).ids head = wire)
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin diagram context.ids outerHead =
+        wire) :
+    recursiveExtendedNormalization context region outer head =
+      Var.appendRight
+        ((diagram.wiresAt region).map fun localWire =>
+          (diagram.wires localWire).sig) (outer outerHead) := by
+  unfold recursiveExtendedNormalization
+  rw [recursiveRegionNormalization_head_of_origin context region contextNodup
+    head outerHead headOrigin outerHeadOrigin]
+  exact recursivePrefixRenaming_appendRight _ _ _
+
 /-- A head-excluding correspondence between independently normalized concrete
 contexts.  It records exactly the relation needed by retained leaves, hole
 tuples, and recursive children; the changed relation head is intentionally
@@ -189,6 +213,53 @@ structure RecursiveNormalizationCorrespondence
         (ConcreteElaboration.WireContext.origin source.val sourceContext.ids
           sourceValue) →
     embedding (sourceMap sourceValue) = targetMap targetValue
+
+theorem RecursiveNormalizationCorrespondence.renameVars_commutes
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : ConcreteElaboration.WireContext source.val}
+    {targetContext : ConcreteElaboration.WireContext result.checked.val}
+    {normalizedSource normalizedTarget : List Sig}
+    (correspondence : RecursiveNormalizationCorrespondence result
+      sourceContext targetContext normalizedSource normalizedTarget) :
+    ∀ {arguments : List Sig}
+      (sourceValues : Vars sourceContext.sigs arguments)
+      (targetValues : Vars targetContext.sigs arguments),
+      ConcreteElaboration.variableOrigins result.checked.val targetContext
+          targetValues =
+        (ConcreteElaboration.variableOrigins source.val sourceContext
+          sourceValues).map result.contextWireMap →
+      (∀ sourceWire,
+        sourceWire ∈ ConcreteElaboration.variableOrigins source.val
+          sourceContext sourceValues → sourceWire ≠ wire) →
+      Vars.rename correspondence.embedding
+          (Vars.rename correspondence.sourceMap sourceValues) =
+        Vars.rename correspondence.targetMap targetValues
+  | [], .nil, .nil, _, _ => rfl
+  | _ :: _, .cons sourceHead sourceTail, .cons targetHead targetTail,
+      originsExact, sourceNotHead => by
+      simp only [ConcreteElaboration.variableOrigins, List.map_cons,
+        List.cons.injEq] at originsExact
+      have headNotHead :
+          ConcreteElaboration.WireContext.origin source.val
+              sourceContext.ids sourceHead ≠ wire := by
+        apply sourceNotHead
+        change _ ∈ _ :: ConcreteElaboration.variableOrigins source.val
+          sourceContext sourceTail
+        exact List.mem_cons_self
+      simp only [Vars.rename]
+      rw [correspondence.commutes sourceHead targetHead
+        headNotHead originsExact.1]
+      exact congrArg (Vars.cons (correspondence.targetMap targetHead))
+        (correspondence.renameVars_commutes sourceTail targetTail
+          originsExact.2 (by
+            intro sourceWire member
+            apply sourceNotHead sourceWire
+            change sourceWire ∈ _ ::
+              ConcreteElaboration.variableOrigins source.val sourceContext
+                sourceTail
+            exact List.mem_cons_of_mem _ member))
 
 /-- The checked root frame supplies the initial head-excluding context
 correspondence used by every proper descendant. -/
