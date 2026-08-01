@@ -1136,6 +1136,46 @@ theorem LocalCylindricalFrame.sourceFrameNormalization_of_head_origin
   rw [canonicalExact]
   exact frame.sourceFrameNormalization_head
 
+/-- Every local source application is recognized as a hole after frame
+normalization, and the hole stores precisely the compiled ordered argument
+tuple.  This is the pointwise source half of the cylindrical-hole receipt. -/
+theorem LocalCylindricalFrame.compileSourceAppliedSiteHole?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (site : AppliedSite source wire)
+    (siteRegion : site.region = (source.val.wires wire).scope) :
+    ∃ (head : Var frame.sourceScope.frame.visible.sigs
+          (.rel sourceArguments))
+      (arguments : Vars frame.sourceScope.frame.visible.sigs
+          sourceArguments),
+      ConcreteElaboration.Internal.compileNode? definitions source.val
+          frame.sourceScope.frame.visible site.node =
+        some (.atom head arguments) ∧
+      UniformIntrinsicRegion.matchedHeadArguments?
+          (Var.appendRight frame.sourceReduced localSourceHead)
+          (frame.sourceFrameNormalization head)
+          (Vars.rename frame.sourceFrameNormalization arguments) =
+        some (Vars.rename frame.sourceFrameNormalization arguments) ∧
+      ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible arguments = site.arguments := by
+  have argumentSignatures :=
+    appliedSite_arguments_eq_relationArguments sourceArguments
+      sourceSignature site
+  cases argumentSignatures
+  obtain ⟨head, arguments, compiled, headOrigin, argumentOrigins⟩ :=
+    frame.compileSourceAppliedSite?_complete site siteRegion
+  have normalizedHead :=
+    frame.sourceFrameNormalization_of_head_origin pair head headOrigin
+  refine ⟨head, arguments, compiled, ?_, argumentOrigins⟩
+  simp [UniformIntrinsicRegion.matchedHeadArguments?, normalizedHead]
+
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
 exhaustiveness, while true outer owners remain in the paired outer spine. -/
