@@ -99,6 +99,64 @@ theorem recursiveExtendedNormalization_outer
   rw [recursiveRoot_cast_cancel]
   exact recursivePrefixRenaming_appendRight _ _ _
 
+/-- A head-excluding correspondence between independently normalized concrete
+contexts.  It records exactly the relation needed by retained leaves, hole
+tuples, and recursive children; the changed relation head is intentionally
+outside its domain law. -/
+structure RecursiveNormalizationCorrespondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (normalizedSource normalizedTarget : List Sig) where
+  sourceMap : WireRenaming sourceContext.sigs normalizedSource
+  targetMap : WireRenaming targetContext.sigs normalizedTarget
+  embedding : WireRenaming normalizedSource normalizedTarget
+  commutes : ∀ {signature : Sig}
+      (sourceValue : Var sourceContext.sigs signature)
+      (targetValue : Var targetContext.sigs signature),
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+        sourceValue ≠ wire →
+    ConcreteElaboration.WireContext.origin result.checked.val
+        targetContext.ids targetValue =
+      result.contextWireMap
+        (ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+          sourceValue) →
+    embedding (sourceMap sourceValue) = targetMap targetValue
+
+/-- The checked root frame supplies the initial head-excluding context
+correspondence used by every proper descendant. -/
+def LocalCylindricalFrame.rootNormalizationCorrespondence
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    RecursiveNormalizationCorrespondence result
+      frame.sourceScope.frame.visible frame.targetScope.frame.visible
+      (frame.sourceReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter))
+      (frame.targetReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+  { sourceMap := frame.sourceFrameNormalization
+    targetMap := frame.targetFrameNormalization
+    embedding :=
+      (frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted).embed (fun {_} value => value)
+    commutes := fun sourceValue targetValue sourceNotHead mappedOrigin =>
+      frame.frameNormalization_commutes_of_mapped_origin sourceArguments
+        sourceSignature newArgument result accepted pair sourceValue
+        targetValue sourceNotHead mappedOrigin }
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
