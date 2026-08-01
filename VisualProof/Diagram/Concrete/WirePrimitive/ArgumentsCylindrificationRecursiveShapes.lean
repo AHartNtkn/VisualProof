@@ -1012,6 +1012,244 @@ noncomputable def recursiveReindexHoles
           (fun {_} value => bounds.embed newOuter (sourceMap value))
           (fun _ => rfl) selected).symm
 
+mutual
+
+/-- Reindex a consistent cylindrical shape along commuting source and target
+context maps. -/
+noncomputable def recursiveReindexShape
+    (sourceRenaming : WireRenaming smallerOuter normalizedSmallerOuter)
+    (targetRenaming : WireRenaming largerOuter normalizedLargerOuter)
+    (newOuter : WireRenaming normalizedSmallerOuter normalizedLargerOuter)
+    (shape : CylindricalShape definitions insertion smallerOuter largerOuter)
+    (consistent : shape.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerOuter signature),
+      newOuter (sourceRenaming value) =
+        targetRenaming (shape.embedding value)) :
+    CylindricalShape definitions insertion normalizedSmallerOuter
+      normalizedLargerOuter :=
+  match shape with
+  | .block (smallerBound := smallerBound) (largerBound := largerBound)
+      oldOuter bounds items holes =>
+      let sourceMap : WireRenaming (smallerBound ++ smallerOuter)
+          (smallerBound ++ normalizedSmallerOuter) :=
+        recursiveLiftOuterRenaming smallerBound sourceRenaming
+      let targetMap : WireRenaming (largerBound ++ largerOuter)
+          (largerBound ++ normalizedLargerOuter) :=
+        recursiveLiftOuterRenaming largerBound targetRenaming
+      let newEmbedding : WireRenaming
+          (smallerBound ++ normalizedSmallerOuter)
+          (largerBound ++ normalizedLargerOuter) := bounds.embed newOuter
+      let innerCommutes : ∀ {signature : Sig}
+          (value : Var (smallerBound ++ smallerOuter) signature),
+          newEmbedding (sourceMap value) =
+            targetMap (items.embedding value) := by
+        intro signature value
+        calc
+          newEmbedding (sourceMap value) =
+              targetMap (bounds.embed oldOuter value) :=
+            (recursiveBoundEmbed_natural bounds oldOuter sourceRenaming
+              targetRenaming newOuter (by
+                intro valueSignature outerValue
+                exact commutes outerValue) value).symm
+          _ = targetMap (items.embedding value) :=
+            congrArg targetMap (consistent.2 value).symm
+      .block newOuter bounds
+        (recursiveReindexItemSeq sourceMap targetMap newEmbedding items
+          consistent.1 innerCommutes)
+        (recursiveReindexHoles insertion bounds oldOuter sourceRenaming
+          targetRenaming newOuter (by
+            intro valueSignature value
+            exact commutes value) holes)
+
+/-- Reindex one consistent cylindrical item. -/
+noncomputable def recursiveReindexItem
+    (sourceRenaming : WireRenaming smallerContext normalizedSmallerContext)
+    (targetRenaming : WireRenaming largerContext normalizedLargerContext)
+    (newEmbedding : WireRenaming normalizedSmallerContext
+      normalizedLargerContext)
+    (item : CylindricalShapeItem definitions insertion smallerContext
+      largerContext)
+    (consistent : item.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      newEmbedding (sourceRenaming value) =
+        targetRenaming (item.embedding value)) :
+    CylindricalShapeItem definitions insertion normalizedSmallerContext
+      normalizedLargerContext :=
+  match item with
+  | .leaf oldEmbedding smaller larger exact =>
+      .leaf newEmbedding (smaller.renameWires sourceRenaming)
+        (larger.renameWires targetRenaming) (by
+          let combined : WireRenaming smallerContext
+              normalizedLargerContext :=
+            fun {_} value => newEmbedding (sourceRenaming value)
+          calc
+            (smaller.renameWires sourceRenaming).renameWires newEmbedding =
+                smaller.renameWires combined :=
+              recursiveItemRename_comp sourceRenaming newEmbedding combined
+                (fun _ => rfl) smaller
+            _ = smaller.renameWires
+                (fun {_} value => targetRenaming (oldEmbedding value)) :=
+              recursiveItemRename_eq _ _ (by
+                intro signature value
+                exact commutes value) smaller
+            _ = (smaller.renameWires oldEmbedding).renameWires
+                targetRenaming :=
+              (recursiveItemRename_comp oldEmbedding targetRenaming
+                (fun {_} value => targetRenaming (oldEmbedding value))
+                (fun _ => rfl) smaller).symm
+            _ = larger.renameWires targetRenaming :=
+              congrArg (Item.renameWires targetRenaming) exact)
+  | .cut body =>
+      .cut (recursiveReindexShape sourceRenaming targetRenaming newEmbedding
+        body consistent (by
+          intro signature value
+          exact commutes value))
+
+/-- Reindex one consistent ordered cylindrical item sequence. -/
+noncomputable def recursiveReindexItemSeq
+    (sourceRenaming : WireRenaming smallerContext normalizedSmallerContext)
+    (targetRenaming : WireRenaming largerContext normalizedLargerContext)
+    (newEmbedding : WireRenaming normalizedSmallerContext
+      normalizedLargerContext)
+    (items : CylindricalShapeItemSeq definitions insertion smallerContext
+      largerContext)
+    (consistent : items.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      newEmbedding (sourceRenaming value) =
+        targetRenaming (items.embedding value)) :
+    CylindricalShapeItemSeq definitions insertion normalizedSmallerContext
+      normalizedLargerContext :=
+  match items with
+  | .nil oldEmbedding => .nil newEmbedding
+  | .cons head tail =>
+      .cons
+        (recursiveReindexItem sourceRenaming targetRenaming newEmbedding head
+          consistent.1 (by
+            intro signature value
+            exact commutes value))
+        (recursiveReindexItemSeq sourceRenaming targetRenaming newEmbedding
+          tail consistent.2.1 (by
+            intro signature value
+            calc
+              newEmbedding (sourceRenaming value) =
+                  targetRenaming (head.embedding value) := commutes value
+              _ = targetRenaming (tail.embedding value) :=
+                congrArg targetRenaming (consistent.2.2 value).symm))
+
+end
+
+mutual
+
+/-- Reindexing preserves shape consistency and installs exactly the requested
+outer embedding. -/
+theorem recursiveReindexShape_valid
+    (sourceRenaming : WireRenaming smallerOuter normalizedSmallerOuter)
+    (targetRenaming : WireRenaming largerOuter normalizedLargerOuter)
+    (newOuter : WireRenaming normalizedSmallerOuter normalizedLargerOuter)
+    (shape : CylindricalShape definitions insertion smallerOuter largerOuter)
+    (consistent : shape.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerOuter signature),
+      newOuter (sourceRenaming value) =
+        targetRenaming (shape.embedding value)) :
+    let reindexed := recursiveReindexShape sourceRenaming targetRenaming
+      newOuter shape consistent commutes
+    reindexed.consistent ∧
+      ∀ {signature : Sig}
+        (value : Var normalizedSmallerOuter signature),
+        reindexed.embedding value = newOuter value := by
+  cases shape with
+  | block oldOuter bounds items holes =>
+      simp only [recursiveReindexShape, CylindricalShape.consistent,
+        CylindricalShape.embedding]
+      constructor
+      · constructor
+        · exact (recursiveReindexItemSeq_valid _ _ _ items consistent.1 _).1
+        · intro signature value
+          exact (recursiveReindexItemSeq_valid _ _ _ items consistent.1 _).2
+            value
+      · intro signature value
+        exact True.intro
+
+/-- Reindexing preserves item consistency and installs exactly the requested
+item embedding. -/
+theorem recursiveReindexItem_valid
+    (sourceRenaming : WireRenaming smallerContext normalizedSmallerContext)
+    (targetRenaming : WireRenaming largerContext normalizedLargerContext)
+    (newEmbedding : WireRenaming normalizedSmallerContext
+      normalizedLargerContext)
+    (item : CylindricalShapeItem definitions insertion smallerContext
+      largerContext)
+    (consistent : item.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      newEmbedding (sourceRenaming value) =
+        targetRenaming (item.embedding value)) :
+    let reindexed := recursiveReindexItem sourceRenaming targetRenaming
+      newEmbedding item consistent commutes
+    reindexed.consistent ∧
+      ∀ {signature : Sig}
+        (value : Var normalizedSmallerContext signature),
+        reindexed.embedding value = newEmbedding value := by
+  cases item with
+  | leaf oldEmbedding smaller larger exact =>
+      exact ⟨True.intro, fun _ => rfl⟩
+  | cut body =>
+      simpa only [recursiveReindexItem, CylindricalShapeItem.consistent,
+        CylindricalShapeItem.embedding] using
+        recursiveReindexShape_valid sourceRenaming targetRenaming newEmbedding
+          body consistent commutes
+
+/-- Reindexing preserves sequence consistency and installs exactly the
+requested sequence embedding. -/
+theorem recursiveReindexItemSeq_valid
+    (sourceRenaming : WireRenaming smallerContext normalizedSmallerContext)
+    (targetRenaming : WireRenaming largerContext normalizedLargerContext)
+    (newEmbedding : WireRenaming normalizedSmallerContext
+      normalizedLargerContext)
+    (items : CylindricalShapeItemSeq definitions insertion smallerContext
+      largerContext)
+    (consistent : items.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      newEmbedding (sourceRenaming value) =
+        targetRenaming (items.embedding value)) :
+    let reindexed := recursiveReindexItemSeq sourceRenaming targetRenaming
+      newEmbedding items consistent commutes
+    reindexed.consistent ∧
+      ∀ {signature : Sig}
+        (value : Var normalizedSmallerContext signature),
+        reindexed.embedding value = newEmbedding value := by
+  cases items with
+  | nil oldEmbedding =>
+      exact ⟨True.intro, fun _ => rfl⟩
+  | cons head tail =>
+      simp only [recursiveReindexItemSeq,
+        CylindricalShapeItemSeq.consistent,
+        CylindricalShapeItemSeq.embedding]
+      have headValid := recursiveReindexItem_valid sourceRenaming
+        targetRenaming newEmbedding head consistent.1 commutes
+      have tailCommutes : ∀ {signature : Sig}
+          (value : Var smallerContext signature),
+          newEmbedding (sourceRenaming value) =
+            targetRenaming (tail.embedding value) := by
+        intro signature value
+        calc
+          newEmbedding (sourceRenaming value) =
+              targetRenaming (head.embedding value) := commutes value
+          _ = targetRenaming (tail.embedding value) :=
+            congrArg targetRenaming (consistent.2.2 value).symm
+      have tailValid := recursiveReindexItemSeq_valid sourceRenaming
+        targetRenaming newEmbedding tail consistent.2.1 tailCommutes
+      refine ⟨⟨headValid.1, tailValid.1, ?_⟩, headValid.2⟩
+      intro signature value
+      exact (tailValid.2 value).trans (headValid.2 value).symm
+
+end
+
 /-- Transport a cylindrical shape across exact source and target context
 equalities. -/
 def recursiveShapeTransport
