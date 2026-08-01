@@ -50,6 +50,30 @@ theorem recursiveVar_append_cases
               congrArg Var.there localExact⟩
           · exact Or.inr ⟨outerValue, congrArg Var.there outerExact⟩
 
+private theorem recursiveAppendLeft_ne_appendRight
+    (localValue : Var localPrefix signature)
+    (outerValue : Var outer signature) :
+    Var.appendLeft localValue outer ≠
+      Var.appendRight localPrefix outerValue := by
+  induction localPrefix with
+  | nil => nomatch localValue
+  | cons head tail induction =>
+      cases localValue with
+      | here => intro impossible; cases impossible
+      | there localValue =>
+          intro impossible
+          exact induction localValue (Var.there.inj impossible)
+
+private theorem recursiveAppendRight_injective
+    (localPrefix : List Sig) {left right : Var outer signature}
+    (same : Var.appendRight localPrefix left =
+      Var.appendRight localPrefix right) :
+    left = right := by
+  induction localPrefix with
+  | nil => exact same
+  | cons head tail induction =>
+      exact induction (Var.there.inj same)
+
 private theorem recursiveRelationSignature_not_mem
     (arguments : List Sig) : Sig.rel arguments ∉ arguments := by
   intro member
@@ -296,6 +320,47 @@ structure RecursiveNormalizationCorrespondence
           sourceValue) →
     embedding (sourceMap sourceValue) = targetMap targetValue
 
+/-- Exact normalization and reflection of the two differently typed acted
+heads.  This is separate from retained-context correspondence because no
+typed source-to-target action exists on the changed head itself. -/
+structure RecursiveHeadNormalization
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceArguments : List Sig)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceMap : WireRenaming sourceContext.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel sourceArguments))
+    (targetHead : Var normalizedTarget (.rel result.targetArguments)) where
+  sourceWitness : Var sourceContext.sigs (.rel sourceArguments)
+  sourceWitness_origin :
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+      sourceWitness = wire
+  targetWitness : Var targetContext.sigs (.rel result.targetArguments)
+  targetWitness_origin :
+    ConcreteElaboration.WireContext.origin result.checked.val targetContext.ids
+      targetWitness = result.targetWire
+  source_forward : ∀
+      (value : Var sourceContext.sigs (.rel sourceArguments)),
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+        value = wire → sourceMap value = sourceHead
+  source_reflect : ∀
+      (value : Var sourceContext.sigs (.rel sourceArguments)),
+    sourceMap value = sourceHead →
+      ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+        value = wire
+  target_forward : ∀
+      (value : Var targetContext.sigs (.rel result.targetArguments)),
+    ConcreteElaboration.WireContext.origin result.checked.val targetContext.ids
+        value = result.targetWire → targetMap value = targetHead
+  target_reflect : ∀
+      (value : Var targetContext.sigs (.rel result.targetArguments)),
+    targetMap value = targetHead →
+      ConcreteElaboration.WireContext.origin result.checked.val targetContext.ids
+        value = result.targetWire
+
 theorem RecursiveNormalizationCorrespondence.renameVars_commutes
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -485,6 +550,38 @@ def LocalCylindricalFrame.rootNormalizationCorrespondence
         sourceSignature newArgument result accepted pair sourceValue
         targetValue sourceNotHead mappedOrigin }
 
+def LocalCylindricalFrame.rootHeadNormalization
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    RecursiveHeadNormalization result sourceArguments
+      frame.sourceScope.frame.visible frame.targetScope.frame.visible
+      frame.sourceFrameNormalization frame.targetFrameNormalization
+      (Var.appendRight frame.sourceReduced localSourceHead)
+      (Var.appendRight frame.targetReduced localTargetHead) :=
+  { sourceWitness := frame.context.sourceVisibleExact.symm ▸
+      Var.appendLeft frame.sourceHead frame.context.siteOuter
+    sourceWitness_origin := by
+      rw [frame.sourceFrameVisible_origin_local pair]
+      exact frame.sourceHead_origin
+    targetWitness := frame.context.targetVisibleExact.symm ▸
+      Var.appendLeft frame.targetHead frame.context.siteOuter
+    targetWitness_origin := by
+      rw [frame.targetFrameVisible_origin_local pair]
+      exact frame.targetHead_origin
+    source_forward := fun value origin =>
+      frame.sourceFrameNormalization_of_head_origin pair value origin
+    source_reflect := fun value normalized =>
+      frame.sourceHead_origin_of_normalized pair value normalized
+    target_forward := fun value origin =>
+      frame.targetFrameNormalization_of_head_origin pair value origin
+    target_reflect := fun value normalized =>
+      frame.targetHead_origin_of_normalized pair value normalized }
+
 /-- Descending through one proper region preserves the head-excluding
 correspondence.  Local wires use the construction's bound embedding; inherited
 outer wires use the parent correspondence. -/
@@ -612,6 +709,104 @@ noncomputable def RecursiveNormalizationCorrespondence.extend
         (mappedOrigin.trans expectedOrigin.symm)
     subst targetValue
     exact exact
+
+def RecursiveHeadNormalization.extend
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceMap : WireRenaming sourceContext.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel sourceArguments))
+    (targetHead : Var normalizedTarget (.rel result.targetArguments))
+    (normalization : RecursiveHeadNormalization result sourceArguments
+      sourceContext targetContext sourceMap targetMap sourceHead targetHead)
+    (sourceNodup : (sourceContext.extend region).ids.Nodup)
+    (targetNodup :
+      (targetContext.extend (result.regionImage region)).ids.Nodup) :
+    RecursiveHeadNormalization result sourceArguments
+      (sourceContext.extend region)
+      (targetContext.extend (result.regionImage region))
+      (recursiveExtendedNormalization sourceContext region sourceMap)
+      (recursiveExtendedNormalization targetContext
+        (result.regionImage region) targetMap)
+      (Var.appendRight
+        ((source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig) sourceHead)
+      (Var.appendRight
+        ((result.checked.val.wiresAt (result.regionImage region)).map
+          fun targetWire => (result.checked.val.wires targetWire).sig)
+        targetHead) :=
+  { sourceWitness :=
+      (ConcreteElaboration.WireContext.sigs_extend sourceContext region).symm ▸
+        Var.appendRight
+          ((source.val.wiresAt region).map fun sourceWire =>
+            (source.val.wires sourceWire).sig) normalization.sourceWitness
+    sourceWitness_origin := by
+      rw [recursive_origin_extend_outer]
+      exact normalization.sourceWitness_origin
+    targetWitness :=
+      (ConcreteElaboration.WireContext.sigs_extend targetContext
+        (result.regionImage region)).symm ▸
+        Var.appendRight
+          ((result.checked.val.wiresAt (result.regionImage region)).map
+            fun targetWire => (result.checked.val.wires targetWire).sig)
+          normalization.targetWitness
+    targetWitness_origin := by
+      rw [recursive_origin_extend_outer]
+      exact normalization.targetWitness_origin
+    source_forward := fun value origin => by
+      have exact := recursiveExtendedNormalization_head_of_origin
+        sourceContext region sourceMap sourceNodup value
+        normalization.sourceWitness origin normalization.sourceWitness_origin
+      change recursiveExtendedNormalization sourceContext region sourceMap
+          value =
+        Var.appendRight
+          ((source.val.wiresAt region).map fun sourceWire =>
+            (source.val.wires sourceWire).sig)
+          (sourceMap normalization.sourceWitness) at exact
+      rw [normalization.source_forward normalization.sourceWitness
+        normalization.sourceWitness_origin] at exact
+      exact exact
+    source_reflect := fun value normalized => by
+      rcases recursiveExtendedNormalization_cases source.val sourceContext
+          region value with
+        ⟨localValue, rfl⟩ | ⟨outerValue, rfl⟩
+      · rw [recursiveExtendedNormalization_local] at normalized
+        exact False.elim
+          (recursiveAppendLeft_ne_appendRight localValue sourceHead normalized)
+      · rw [recursiveExtendedNormalization_outer] at normalized
+        have outerExact := recursiveAppendRight_injective _ normalized
+        rw [recursive_origin_extend_outer]
+        exact normalization.source_reflect outerValue outerExact
+    target_forward := fun value origin => by
+      have exact := recursiveExtendedNormalization_head_of_origin targetContext
+        (result.regionImage region) targetMap targetNodup value
+        normalization.targetWitness origin
+        normalization.targetWitness_origin
+      change recursiveExtendedNormalization targetContext
+          (result.regionImage region) targetMap value =
+        Var.appendRight
+          ((result.checked.val.wiresAt (result.regionImage region)).map
+            fun targetWire => (result.checked.val.wires targetWire).sig)
+          (targetMap normalization.targetWitness) at exact
+      rw [normalization.target_forward normalization.targetWitness
+        normalization.targetWitness_origin] at exact
+      exact exact
+    target_reflect := fun value normalized => by
+      rcases recursiveExtendedNormalization_cases result.checked.val
+          targetContext (result.regionImage region) value with
+        ⟨localValue, rfl⟩ | ⟨outerValue, rfl⟩
+      · rw [recursiveExtendedNormalization_local] at normalized
+        exact False.elim
+          (recursiveAppendLeft_ne_appendRight localValue targetHead normalized)
+      · rw [recursiveExtendedNormalization_outer] at normalized
+        have outerExact := recursiveAppendRight_injective _ normalized
+        rw [recursive_origin_extend_outer]
+        exact normalization.target_reflect outerValue outerExact }
 
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
