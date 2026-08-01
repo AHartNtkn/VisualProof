@@ -429,6 +429,33 @@ theorem checked_generated
   simpa [relationSeverCandidate] using
     congrArg ConcreteDiagram.wireCount result.generated
 
+/-- Public characterization of the batch-retained source regions. -/
+theorem retainedRegion_iff
+    (result : RelationSeverResult source scope sites)
+    (region : source.val.RegionId) :
+    region ∈ Internal.retainedRegions source (relationRemovedRegions sites) ↔
+      region ∉ sites.flatMap RelationSeverSite.removedRegions := by
+  simp [Internal.retainedRegions, relationRemovedRegions,
+    ConcreteDiagram.regionsList, Data.Finite.mem_allFin]
+
+/-- Public characterization of the batch-retained source nodes. -/
+theorem retainedNode_iff
+    (result : RelationSeverResult source scope sites)
+    (node : source.val.NodeId) :
+    node ∈ Internal.retainedNodes source (relationRemovedNodes sites) ↔
+      node ∉ sites.flatMap RelationSeverSite.removedNodes := by
+  simp [Internal.retainedNodes, relationRemovedNodes,
+    ConcreteDiagram.nodesList, Data.Finite.mem_allFin]
+
+/-- Public characterization of the batch-retained source wires. -/
+theorem retainedWire_iff
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId) :
+    wire ∈ Internal.retainedWires source (relationRemovedWires sites) ↔
+      wire ∉ sites.flatMap RelationSeverSite.removedWires := by
+  simp [Internal.retainedWires, relationRemovedWires,
+    ConcreteDiagram.wiresList, Data.Finite.mem_allFin]
+
 theorem site_formal_signatures
     (result : RelationSeverResult source scope sites)
     (site : Fin sites.length) :

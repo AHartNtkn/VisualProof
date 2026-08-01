@@ -262,6 +262,104 @@ private def CheckedOccurrences.semanticEvidence
       (WireQuantifierSemantics.RelationSeverOccurrence source pattern) :=
   checked.entries.semanticEvidence
 
+/-!
+## Batch reconstruction carrier partition
+
+The inverse join restores a severed family in site order.  During that fold,
+only the batch-retained carriers and the carriers belonging to the already
+restored occurrence prefix have a representative in the current diagram.
+These predicates make that partial domain explicit; the completed fold proves
+that the domain is all of the original source.
+-/
+
+private def retainedBySitesRegion
+    {source : CheckedDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (region : source.val.RegionId) : Prop :=
+  region ∉ sites.flatMap ConcreteWireQuantifier.RelationSeverSite.removedRegions
+
+private def retainedBySitesNode
+    {source : CheckedDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (node : source.val.NodeId) : Prop :=
+  node ∉ sites.flatMap ConcreteWireQuantifier.RelationSeverSite.removedNodes
+
+private def retainedBySitesWire
+    {source : CheckedDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (wire : source.val.WireId) : Prop :=
+  wire ∉ sites.flatMap ConcreteWireQuantifier.RelationSeverSite.removedWires
+
+private def restoredRegion
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern))
+    (region : source.val.RegionId) : Prop :=
+  ∃ content ∈ restored, ∃ patternRegion,
+    patternRegion ≠ pattern.val.diagram.root ∧
+      content.occurrence.regionMap patternRegion = region
+
+private def restoredNode
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern))
+    (node : source.val.NodeId) : Prop :=
+  ∃ content ∈ restored, ∃ patternNode,
+    content.occurrence.nodeMap patternNode = node
+
+private def restoredWire
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern))
+    (wire : source.val.WireId) : Prop :=
+  ∃ content ∈ restored, ∃ patternWire,
+    patternWire ∉ pattern.val.boundary ∧
+      content.occurrence.wireMap patternWire = wire
+
+private def BatchCoveredRegion
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (region : source.val.RegionId) : Prop :=
+  retainedBySitesRegion sites region ∨ restoredRegion restored region
+
+private def BatchCoveredNode
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (node : source.val.NodeId) : Prop :=
+  retainedBySitesNode sites node ∨ restoredNode restored node
+
+private def BatchCoveredWire
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (wire : source.val.WireId) : Prop :=
+  retainedBySitesWire sites wire ∨ restoredWire restored wire
+
+/-- Construction state for the snoc induction restoring a severed family. -/
+private structure BatchReconstructionState
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (current : CheckedDiagram definitions) where
+  regionImage :
+    { region : source.val.RegionId //
+        BatchCoveredRegion sites restored region } →
+      current.val.RegionId
+  nodeImage :
+    { node : source.val.NodeId //
+        BatchCoveredNode sites restored node } →
+      current.val.NodeId
+  wireImage :
+    { wire : source.val.WireId //
+        BatchCoveredWire sites restored wire } →
+      current.val.WireId
+
 private def formalBoundaryValid
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -467,6 +565,43 @@ private structure RelationSeverConcreteReceipt
     inverse.steps.map ConcreteWireQuantifier.RelationJoinStep.application =
       result.atoms
   inverseIso : ConcreteIso inverse.plainFinal.val source.val
+
+/-- Nil case of the batch reconstruction fold: only sever-retained carriers
+have representatives before the first occurrence is restored. -/
+private def batchReconstructionNil
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites) :
+    BatchReconstructionState (pattern := pattern) sites [] result.checked where
+  regionImage := fun region =>
+    result.regionImage region.1 (by
+      have retained :
+          region.1 ∉
+            sites.flatMap
+              ConcreteWireQuantifier.RelationSeverSite.removedRegions := by
+        simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
+          using region.2
+      exact (result.retainedRegion_iff region.1).mpr retained)
+  nodeImage := fun node =>
+    result.nodeImage node.1 (by
+      have retained :
+          node.1 ∉
+            sites.flatMap
+              ConcreteWireQuantifier.RelationSeverSite.removedNodes := by
+        simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+          using node.2
+      exact (result.retainedNode_iff node.1).mpr retained)
+  wireImage := fun wire =>
+    result.wireImage wire.1 (by
+      have retained :
+          wire.1 ∉
+            sites.flatMap
+              ConcreteWireQuantifier.RelationSeverSite.removedWires := by
+        simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+          using wire.2
+      exact (result.retainedWire_iff wire.1).mpr retained)
 
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin
