@@ -334,6 +334,7 @@ structure TransportedWireSeverInverse
     (targetIso : ConcreteIso real.val sever.target.val)
     (orientation : Orientation) where
   input : WireJoinInput real
+  orientationExact : input.orientation = orientation
   applied : AppliedWireJoin real input
   targetIso : ConcreteIso applied.target.val source.val
 
@@ -461,6 +462,7 @@ def invertWireSeverTransported
               | some sourceIso =>
                   exact .ok
                     { input := inverseInput
+                      orientationExact := rfl
                       applied := inverseApplied
                       targetIso := sourceIso }
 

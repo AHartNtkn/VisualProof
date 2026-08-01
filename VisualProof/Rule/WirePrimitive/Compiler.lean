@@ -1301,20 +1301,6 @@ private def wireSeverCandidates
         | .error _ => none
         | .ok applied => some (.wireSever input rfl applied)
 
-private def wireJoinCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun left =>
-    real.val.wiresList.filterMap fun right =>
-      let input : WireJoinInput real :=
-        { orientation := orientation
-          left := left
-          right := right }
-      match applyWireJoin real input with
-      | .error _ => none
-      | .ok applied => some (.wireJoin input rfl applied)
-
 private def cutAbsorbCandidates
     (real : CheckedDiagram definitions)
     (orientation : Orientation) :
@@ -1442,7 +1428,7 @@ private def inverseCandidates
   match step with
   | .identityInsert .. => throw .malformedResidual
   | .identityErase .. => throw .malformedResidual
-  | .wireSever .. => pure (wireJoinCandidates real orientation)
+  | .wireSever .. => throw .malformedResidual
   | .wireJoin .. => pure (wireSeverCandidates real orientation)
   | .cutWrap .. => pure (cutAbsorbCandidates real orientation)
   | .cutAbsorb .. => pure (cutWrapCandidates real orientation)
@@ -1491,11 +1477,22 @@ private def invertStep
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
     (real : CheckedDiagram definitions)
+    (targetIso : ConcreteIso real.val step.target.val)
     (orientation : Orientation) :
-    Except CompilerError (InverseStepRun orientation real planned) := do
-  let candidates ← inverseCandidates step real orientation
-  requireOption .redundancyMismatch <|
-    selectInverse? planned candidates
+    Except CompilerError (InverseStepRun orientation real planned) :=
+  match step with
+  | .wireSever input _ applied => do
+      let inverse ←
+        (Partition.invertWireSeverTransported applied real targetIso
+          orientation).mapError .partitionRejected
+      pure
+        { step := .wireJoin inverse.input inverse.orientationExact
+            inverse.applied
+          normalizedIso := inverse.targetIso }
+  | _ => do
+      let candidates ← inverseCandidates step real orientation
+      requireOption .redundancyMismatch <|
+        selectInverse? planned candidates
 
 private structure ReversedProgram
     (orientation : Orientation)
@@ -1518,7 +1515,8 @@ private def reversePrimitiveProgram :
       let reversedTail ←
         reversePrimitiveProgram tail real finalIso orientation
       let inverse ←
-        invertStep head reversedTail.program.target orientation
+        invertStep head reversedTail.program.target
+          reversedTail.normalizedIso orientation
       pure
         { program :=
             reversedTail.program.append
