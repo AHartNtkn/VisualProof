@@ -508,6 +508,24 @@ def source
     {permutation : List Nat}
     (_ : AppliedArgPermute source wire permutation) := source
 
+/-- The exact source relation argument vector selected by the permutation
+checker. -/
+def sourceArgumentList
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) : List Sig :=
+  applied.sourceArguments
+
+/-- Exact relation signature of the live permutation source wire. -/
+theorem sourceWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    (source.val.wires wire).sig = .rel applied.sourceArgumentList :=
+  applied.sourceSignature
+
 def target
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -580,6 +598,220 @@ theorem targetArguments_exact
     applied.result.targetArguments =
       permute applied.sourceArguments permutation :=
   applied.target_arguments_exact
+
+/-- Exact signature of the checked permutation target wire. -/
+theorem targetWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    (applied.target.val.wires applied.targetWire).sig =
+      .rel (permute applied.sourceArgumentList permutation) := by
+  change (applied.result.checked.val.wires applied.result.targetWire).sig = _
+  rw [applied.result.targetWire_signature,
+    applied.targetArguments_exact]
+  rfl
+
+/-- A transported application of the receipt-owned inverse restores the
+original relation argument vector exactly. -/
+theorem inverseTargetArguments_exact
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire) :
+    backward.result.targetArguments = forward.sourceArgumentList := by
+  have signatureExact := targetIso.wire_signature backwardWire
+  rw [wireExact, forward.targetWire_signature,
+    backward.sourceWire_signature] at signatureExact
+  have argumentsExact : backward.sourceArgumentList =
+      permute forward.sourceArgumentList permutation := by
+    exact Sig.rel.inj signatureExact.symm
+  unfold sourceArgumentList at argumentsExact ⊢
+  rw [backward.targetArguments_exact, argumentsExact]
+  exact forward.permutation_receipt.permute_inverse
+    forward.sourceArgumentList rfl
+
+/-- Region carrier of the transported inverse permutation run. -/
+def inverseTransportRegionEquiv
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    Data.Finite.FiniteEquiv backward.target.val.RegionId
+      planned.val.RegionId :=
+  forward.result.inverseTransportRegionEquiv backward.result targetIso
+
+/-- Node carrier of the transported inverse permutation run. -/
+def inverseTransportNodeEquiv
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    Data.Finite.FiniteEquiv backward.target.val.NodeId planned.val.NodeId :=
+  forward.result.inverseTransportNodeEquiv backward.result
+    forward.targetSites backward.targetSites targetIso
+
+/-- Wire carrier of the transported inverse permutation run. -/
+def inverseTransportWireEquiv
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    Data.Finite.FiniteEquiv backward.target.val.WireId planned.val.WireId :=
+  forward.result.inverseTransportWireEquivHeadOnly backward.result
+    forward.source_removed_exact forward.local_count_exact
+    backward.source_removed_exact backward.local_count_exact targetIso
+
+/-- The transported inverse region carrier sends the rebuilt root exactly
+back to the planned root. -/
+theorem inverseTransport_root
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    forward.inverseTransportRegionEquiv backward targetIso
+        backward.target.val.root = planned.val.root := by
+  unfold inverseTransportRegionEquiv
+  change forward.result.regionEquiv.symm
+    (targetIso.regions
+      (backward.result.regionEquiv.symm backward.target.val.root)) = _
+  have backwardRoot : backward.target.val.root =
+      backward.result.regionEquiv real.val.root := by
+    exact backward.result.targetRoot_exact.trans
+      (backward.result.regionImage_exact real.val.root)
+  rw [backwardRoot]
+  have backwardCancel :=
+    backward.result.regionEquiv.left_inv real.val.root
+  change backward.result.regionEquiv.invFun
+      (backward.result.regionEquiv real.val.root) = real.val.root
+    at backwardCancel
+  calc
+    forward.result.regionEquiv.symm
+        (targetIso.regions
+          (backward.result.regionEquiv.symm
+            (backward.result.regionEquiv real.val.root))) =
+        forward.result.regionEquiv.symm
+          (targetIso.regions real.val.root) :=
+      congrArg (fun value => forward.result.regionEquiv.symm
+        (targetIso.regions value)) backwardCancel
+    _ = forward.result.regionEquiv.symm forward.target.val.root := by
+      rw [targetIso.root]
+    _ = forward.result.regionEquiv.symm
+        (forward.result.regionEquiv planned.val.root) := by
+      congr 1
+      exact forward.result.targetRoot_exact.trans
+        (forward.result.regionImage_exact planned.val.root)
+    _ = planned.val.root := forward.result.regionEquiv.left_inv _
+
+/-- Region tables commute with the transported inverse carrier. -/
+theorem inverseTransport_region_table
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (region : backward.target.val.RegionId) :
+    planned.val.regions
+        (forward.inverseTransportRegionEquiv backward targetIso region) =
+      (backward.target.val.regions region).rename
+        (forward.inverseTransportRegionEquiv backward targetIso) := by
+  let realRegion := backward.result.regionEquiv.symm region
+  have backwardData := backward.result.regionImage_data realRegion
+  have backwardRegionExact : backward.result.regionEquiv realRegion = region :=
+    backward.result.regionEquiv.right_inv region
+  rw [backwardRegionExact] at backwardData
+  have backwardDataPublic : backward.target.val.regions region =
+      (real.val.regions realRegion).rename backward.result.regionEquiv := by
+    exact backwardData
+  have middleData := targetIso.region_table realRegion
+  have plannedData := forward.result.regionImage_data
+    (forward.result.regionEquiv.symm (targetIso.regions realRegion))
+  have plannedRegionExact :
+      forward.result.regionEquiv
+          (forward.result.regionEquiv.symm (targetIso.regions realRegion)) =
+        targetIso.regions realRegion :=
+    forward.result.regionEquiv.right_inv _
+  rw [plannedRegionExact] at plannedData
+  unfold inverseTransportRegionEquiv
+  change planned.val.regions
+      (forward.result.regionEquiv.symm (targetIso.regions realRegion)) = _
+  rw [backwardDataPublic]
+  have middleRelation :
+      (real.val.regions realRegion).rename targetIso.regions =
+        (planned.val.regions
+          (forward.result.regionEquiv.symm
+            (targetIso.regions realRegion))).rename
+          forward.result.regionEquiv :=
+    middleData.symm.trans plannedData
+  cases realData : real.val.regions realRegion with
+  | sheet =>
+      cases plannedDataExact : planned.val.regions
+          (forward.result.regionEquiv.symm
+            (targetIso.regions realRegion)) with
+      | sheet => rfl
+      | cut parent =>
+          rw [realData, plannedDataExact] at middleRelation
+          contradiction
+  | cut realParent =>
+      cases plannedDataExact : planned.val.regions
+          (forward.result.regionEquiv.symm
+            (targetIso.regions realRegion)) with
+      | sheet =>
+          rw [realData, plannedDataExact] at middleRelation
+          contradiction
+      | cut plannedParent =>
+          rw [realData, plannedDataExact] at middleRelation
+          simp only [CRegion.rename] at middleRelation
+          have parentRelation : targetIso.regions realParent =
+              forward.result.regionEquiv plannedParent :=
+            CRegion.cut.inj middleRelation
+          congr 1
+          unfold ConcreteWirePrimitive.ArgumentResult.inverseTransportRegionEquiv
+          change plannedParent = forward.result.regionEquiv.symm
+            (targetIso.regions
+              (backward.result.regionEquiv.symm
+                (backward.result.regionEquiv realParent)))
+          have backwardParentCancel :=
+            backward.result.regionEquiv.left_inv realParent
+          change backward.result.regionEquiv.invFun
+              (backward.result.regionEquiv realParent) = realParent
+            at backwardParentCancel
+          calc
+            plannedParent = forward.result.regionEquiv.symm
+                (targetIso.regions realParent) :=
+              (forward.result.regionEquiv.left_inv plannedParent).symm.trans
+                (congrArg forward.result.regionEquiv.symm
+                  parentRelation).symm
+            _ = forward.result.regionEquiv.symm
+                (targetIso.regions
+                  (backward.result.regionEquiv.symm
+                    (backward.result.regionEquiv realParent))) :=
+              congrArg (fun value => forward.result.regionEquiv.symm
+                (targetIso.regions value)) backwardParentCancel.symm
 
 /-- Every generated application uses the receipt-owned permuted attachment
 tuple at its exact source-site position. -/

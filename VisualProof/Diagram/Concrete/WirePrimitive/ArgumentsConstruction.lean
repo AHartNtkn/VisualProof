@@ -967,6 +967,43 @@ theorem ValidPermutationReceipt.permute_get
   simpa [ValidPermutationReceipt.forwardPosition, List.get_eq_getElem]
     using selected
 
+/-- The forward position of the receipt-owned inverse is the original
+receipt's constructive inverse position. -/
+@[simp] theorem ValidPermutationReceipt.inverseReceipt_forwardPosition
+    (valid : ValidPermutationReceipt length permutation)
+    (position : Fin length) :
+    valid.inverseReceipt.forwardPosition position =
+      valid.inversePosition position := by
+  apply Fin.ext
+  unfold ValidPermutationReceipt.forwardPosition
+  simpa using valid.inverse_get position
+
+/-- Applying the receipt-owned inverse permutation cancels the accepted
+forward permutation on every tuple of the proved length. -/
+theorem ValidPermutationReceipt.permute_inverse
+    (valid : ValidPermutationReceipt length permutation)
+    (values : List α)
+    (valuesLength : values.length = length) :
+    permute (permute values permutation) valid.inverse = values := by
+  apply List.ext_get
+  · rw [valid.inverseReceipt.permute_length
+      (permute values permutation)
+      (valid.permute_length values valuesLength)]
+    exact valuesLength.symm
+  · intro position leftBound rightBound
+    let finitePosition : Fin length := ⟨position, by
+      rw [← valuesLength]
+      exact rightBound⟩
+    have outer := valid.inverseReceipt.permute_get
+      (permute values permutation)
+      (valid.permute_length values valuesLength) finitePosition
+    have inner := valid.permute_get values valuesLength
+      (valid.inversePosition finitePosition)
+    rw [valid.inverseReceipt_forwardPosition] at outer
+    have restored := valid.forward_inversePosition finitePosition
+    simpa [finitePosition, List.get_eq_getElem, restored] using
+      outer.trans inner
+
 /-- One argument in a rebuilt applied end. -/
 inductive ArgumentReference
     (source : CheckedDiagram definitions) (localCount : Nat)
