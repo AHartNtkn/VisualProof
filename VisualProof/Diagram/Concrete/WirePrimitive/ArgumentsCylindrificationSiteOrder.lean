@@ -62,6 +62,151 @@ theorem targetAppliedSite_region
   rw [targetAppliedSite_node, result.targetNode_data] at exact
   simpa using exact.symm
 
+/-- The generated target site's checked atom arity is the construction's
+exact target relation arity. -/
+theorem targetAppliedSite_argumentSignatures
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    (targetAppliedSite result site).argumentSignatures =
+      result.targetArguments := by
+  have exact := (targetAppliedSite result site).node_data.symm.trans
+    (by simpa [targetAppliedSite_node] using result.targetNode_data site)
+  exact CNode.atom.inj exact |>.2
+
+/-- An accepted arity shift allocates one replacement reference beyond the
+complete ordered source argument tuple at every generated site. -/
+theorem arityShift_spec_arguments_length
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length) :
+    (result.spec.arguments site).length =
+      (result.sites.sites.get site).arguments.length + 1 := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  change replaceAppliedEnds source wire sites
+    (arityShiftSpec source wire sourceArguments sites newArgument) _ =
+      .ok result at accepted
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        cases accepted
+        simp [arityShiftSpec, existingReferences]
+
+/-- The target site's concrete argument attachments are precisely the
+retained source attachments followed by this site's canonical fresh local
+wire. -/
+theorem targetAppliedSite_arguments
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length) :
+    (targetAppliedSite result site).arguments =
+      (result.sites.sites.get site).arguments.map result.contextWireMap ++
+        [result.targetLocalWire
+          (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+            sourceSignature result.sites newArgument result accepted).symm
+            site)] := by
+  let sourceSite := result.sites.sites.get site
+  let targetSite := targetAppliedSite result site
+  have sourceArgumentSignatures :
+      sourceSite.argumentSignatures = sourceArguments :=
+    appliedSite_arguments_eq_relationArguments sourceArguments
+      sourceSignature sourceSite
+  have targetArgumentSignatures :
+      targetSite.argumentSignatures = result.targetArguments :=
+    targetAppliedSite_argumentSignatures result site
+  have targetArgumentsExact :=
+    arityShift_targetArguments_exact source wire sourceArguments
+      sourceSignature sites newArgument result accepted
+  have targetLength :
+      targetSite.arguments.length = sourceSite.arguments.length + 1 := by
+    rw [targetSite.arguments_length, targetArgumentSignatures,
+      targetArgumentsExact, List.length_append, List.length_singleton,
+      sourceSite.arguments_length, sourceArgumentSignatures]
+  have expectedLength :
+      ((result.sites.sites.get site).arguments.map result.contextWireMap ++
+        [result.targetLocalWire
+          (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+            sourceSignature result.sites newArgument result accepted).symm
+            site)]).length = sourceSite.arguments.length + 1 := by
+    simp [sourceSite]
+  apply List.ext_get
+  · rw [targetLength, List.length_append, List.length_map,
+      List.length_singleton]
+  · intro index targetBound expectedBound
+    by_cases existing : index < sourceSite.arguments.length
+    · have existingRaw :
+          index < (result.sites.sites.get site).arguments.length := by
+        simpa [sourceSite] using existing
+      have referenceBound : index < (result.spec.arguments site).length := by
+        rw [arityShift_spec_arguments_length source wire
+          sourceArguments sourceSignature sites newArgument result accepted]
+        omega
+      have targetArgumentBound : index < result.targetArguments.length := by
+        rw [← targetArgumentSignatures,
+          ← targetSite.arguments_length]
+        exact targetBound
+      have targetOwner := targetSite.argument_owner index targetBound
+      rw [targetAppliedSite_node] at targetOwner
+      have constructionOwner :=
+        arityShift_targetNode_existing_owner source wire sourceArguments
+          sourceSignature sites newArgument result accepted site index
+          existingRaw referenceBound targetArgumentBound
+      have wireExact := Option.some.inj
+        (targetOwner.symm.trans constructionOwner)
+      simp only [List.get_eq_getElem]
+      rw [List.getElem_append_left (by simpa using existing)]
+      simpa [sourceSite, targetSite] using wireExact
+    · have last : index = sourceSite.arguments.length := by
+        rw [expectedLength] at expectedBound
+        omega
+      subst index
+      have referenceBound :
+          (result.sites.sites.get site).arguments.length <
+            (result.spec.arguments site).length := by
+        rw [arityShift_spec_arguments_length source wire
+          sourceArguments sourceSignature sites newArgument result accepted]
+        omega
+      have targetArgumentBound : sourceSite.arguments.length <
+          result.targetArguments.length := by
+        rw [← targetArgumentSignatures,
+          ← targetSite.arguments_length]
+        exact targetBound
+      have targetOwner := targetSite.argument_owner _ targetBound
+      rw [targetAppliedSite_node] at targetOwner
+      have constructionOwner :=
+        arityShift_targetNode_local_owner source wire sourceArguments
+          sourceSignature sites newArgument result accepted site
+          referenceBound targetArgumentBound
+      have wireExact := Option.some.inj
+        (targetOwner.symm.trans constructionOwner)
+      simp only [List.get_eq_getElem]
+      simpa [sourceSite, targetSite] using wireExact
+
 private theorem eraseDups_length_le
     [BEq α] [LawfulBEq α] (values : List α) :
     values.eraseDups.length ≤ values.length := by
