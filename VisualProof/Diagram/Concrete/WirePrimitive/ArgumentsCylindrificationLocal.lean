@@ -147,6 +147,33 @@ def retain
       | .here => .here
       | .there tail => .there (rest.retain tail)
 
+/-- Intrinsically typed classification of every local variable as either the
+selected head or one exact retained position. -/
+inductive VariableClass
+    (removal : LocalHeadRemoval headSignature bound reduced) :
+    {signature : Sig} → Var bound signature → Type
+  | head : VariableClass removal removal.head
+  | retained (value : Var reduced signature) :
+      VariableClass removal (removal.retain value)
+
+/-- The head/retained classification is exhaustive without comparing
+signatures or untyped de Bruijn indices. -/
+def classify
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (value : Var bound signature) : VariableClass removal value := by
+  induction removal with
+  | @here rest =>
+      cases value with
+      | here => exact .head
+      | there tail => exact .retained tail
+  | @there localSignature tailBound tailReduced rest induction =>
+      cases value with
+      | here => exact .retained .here
+      | there tail =>
+          cases induction tail with
+          | head => exact .head
+          | retained retained => exact .retained (.there retained)
+
 /--
 Rename a complete local-plus-outer context after moving the selected head to
 an explicit slot in the new outer context.
