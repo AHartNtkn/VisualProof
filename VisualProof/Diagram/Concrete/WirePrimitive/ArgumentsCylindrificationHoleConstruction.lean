@@ -33,6 +33,18 @@ private theorem origin_cast_context
   cases same
   rfl
 
+private theorem variableOrigins_length_local
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    {signatures : List Sig}
+    (values : Vars context.sigs signatures) :
+    (ConcreteElaboration.variableOrigins diagram context values).length =
+      signatures.length := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [ConcreteElaboration.variableOrigins, induction]
+
 private theorem canonical_appendRight_eq
     {sourceContextSigs sourceReduced mappedSigs actualFresh
       targetContextSigs targetReduced fresh : List Sig}
@@ -707,6 +719,73 @@ theorem LocalCylindricalFrame.normalizedHole_split_exact
     exact (frame.frameNormalizations_commute_of_mapped_origins
       sourceArguments sourceSignature newArgument result accepted pair
         sourceValues _ sourceNotHead mappedOrigins).symm
+
+/-- The construction-owned append layout of one target application is enough
+to discharge both concrete-origin premises of `normalizedHole_split_exact`.
+This is the pointwise bridge used by the ordered root-hole receipt. -/
+theorem LocalCylindricalFrame.normalizedHole_split_exact_of_origins
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair
+      (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (freshIndex :
+      Fin (arityFreshAt result (source.val.wires wire).scope).length)
+    (sourceValues :
+      Vars frame.sourceScope.frame.visible.sigs sourceArguments)
+    (targetValues :
+      Vars frame.targetScope.frame.visible.sigs result.targetArguments)
+    (sourceNotHead : ∀ sourceWire,
+      sourceWire ∈ ConcreteElaboration.variableOrigins source.val
+        frame.sourceScope.frame.visible sourceValues → sourceWire ≠ wire)
+    (originsExact :
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible targetValues =
+        (ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible sourceValues).map
+            result.contextWireMap ++
+          [result.targetLocalWire
+            ((arityFreshAt result (source.val.wires wire).scope).get
+              freshIndex)]) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        (Vars.rename frame.targetFrameNormalization targetValues) =
+      ⟨(frame.rootBounds sourceArguments sourceSignature newArgument result
+          accepted).freshVar (fun {_} value => value) freshIndex,
+        Vars.rename
+          ((frame.rootBounds sourceArguments sourceSignature newArgument result
+            accepted).embed (fun {_} value => value))
+          (Vars.rename frame.sourceFrameNormalization sourceValues)⟩ := by
+  let insertion := arityShiftInsertion source wire sourceArguments
+    sourceSignature newArgument result accepted
+  have prefixLength :
+      ((ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible sourceValues).map
+            result.contextWireMap).length = sourceArguments.length := by
+    simpa using variableOrigins_length_local source.val
+      frame.sourceScope.frame.visible sourceValues
+  obtain ⟨mappedOrigins, insertedOrigin⟩ :=
+    insertion.splitVars_origins_of_append
+      (arityShiftInsertion_position source wire sourceArguments
+        sourceSignature newArgument result accepted)
+      result.checked.val frame.targetScope.frame.visible targetValues
+      ((ConcreteElaboration.variableOrigins source.val
+        frame.sourceScope.frame.visible sourceValues).map
+          result.contextWireMap)
+      prefixLength
+      (result.targetLocalWire
+        ((arityFreshAt result (source.val.wires wire).scope).get freshIndex))
+      originsExact
+  exact frame.normalizedHole_split_exact sourceArguments sourceSignature
+    newArgument result accepted pair freshIndex sourceValues targetValues
+    sourceNotHead mappedOrigins insertedOrigin
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive

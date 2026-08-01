@@ -234,6 +234,88 @@ theorem InsertionEvidence.variableOrigins_splitVars
     _ = _ := evidence.variableOrigins_forwardVars diagram context split.1
       split.2
 
+/-- Concrete origin extraction preserves the signature-indexed tuple length. -/
+theorem variableOrigins_length
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    {signatures : List Sig}
+    (values : Vars context.sigs signatures) :
+    (ConcreteElaboration.variableOrigins diagram context values).length =
+      signatures.length := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [ConcreteElaboration.variableOrigins, induction]
+
+private theorem insertAt_end
+    (values : List α)
+    (value : α) :
+    ConcreteWirePrimitive.insertAt values values.length value =
+      values ++ [value] := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [ConcreteWirePrimitive.insertAt, induction]
+
+private theorem append_singleton_eq_append_singleton
+    {left right : List α}
+    {leftLast rightLast : α}
+    (lengthExact : left.length = right.length)
+    (exact : left ++ [leftLast] = right ++ [rightLast]) :
+    left = right ∧ leftLast = rightLast := by
+  induction left generalizing right with
+  | nil =>
+      cases right with
+      | nil => simpa using exact
+      | cons head tail => simp at lengthExact
+  | cons head tail induction =>
+      cases right with
+      | nil => simp at lengthExact
+      | cons rightHead rightTail =>
+          simp only [List.cons_append, List.cons.injEq] at exact
+          have tailLength : tail.length = rightTail.length := by
+            simpa using lengthExact
+          obtain ⟨tailExact, lastExact⟩ :=
+            induction tailLength exact.2
+          exact ⟨by rw [exact.1, tailExact], lastExact⟩
+
+/-- For an append-position insertion, an exact concrete-origin suffix
+decomposes the checked split into its retained prefix and inserted owner. -/
+theorem InsertionEvidence.splitVars_origins_of_append
+    (evidence :
+      InsertionEvidence larger smaller fixedSignature)
+    (positionExact : evidence.position = smaller.length)
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (values : Vars context.sigs larger)
+    (retainedPrefix : List diagram.WireId)
+    (prefixLength : retainedPrefix.length = smaller.length)
+    (fresh : diagram.WireId)
+    (originsExact :
+      ConcreteElaboration.variableOrigins diagram context values =
+        retainedPrefix ++ [fresh]) :
+    ConcreteElaboration.variableOrigins diagram context
+        (evidence.splitVars values).2 = retainedPrefix ∧
+      ConcreteElaboration.WireContext.origin diagram context.ids
+        (evidence.splitVars values).1 = fresh := by
+  let retainedOrigins := ConcreteElaboration.variableOrigins diagram context
+    (evidence.splitVars values).2
+  let insertedOrigin := ConcreteElaboration.WireContext.origin diagram
+    context.ids (evidence.splitVars values).1
+  have retainedLength : retainedOrigins.length = smaller.length :=
+    variableOrigins_length diagram context (evidence.splitVars values).2
+  have splitLayout := evidence.variableOrigins_splitVars diagram context values
+  rw [positionExact] at splitLayout
+  have insertedAtEnd :
+      ConcreteWirePrimitive.insertAt retainedOrigins smaller.length
+          insertedOrigin = retainedOrigins ++ [insertedOrigin] := by
+    rw [← retainedLength]
+    exact insertAt_end retainedOrigins insertedOrigin
+  rw [insertedAtEnd] at splitLayout
+  exact append_singleton_eq_append_singleton
+    (retainedLength.trans prefixLength.symm)
+    (splitLayout.symm.trans originsExact)
+
 private theorem splitInsertedValuesCore_reconstruct
     (smaller : List Sig)
     (position : Nat)
