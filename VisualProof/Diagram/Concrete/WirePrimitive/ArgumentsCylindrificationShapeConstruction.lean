@@ -196,6 +196,47 @@ private def castVarsArguments
     (values : Vars context left) : Vars context right :=
   same ▸ values
 
+private theorem insertAt_length
+    (values : List α)
+    (value : α) :
+    ConcreteWirePrimitive.insertAt values values.length value =
+      values ++ [value] := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [ConcreteWirePrimitive.insertAt, induction]
+
+/-- Canonical typed insertion owned by every accepted arity shift. -/
+def arityShiftInsertion
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    TypedArguments.InsertionEvidence result.targetArguments
+      sourceArguments newArgument :=
+  { position := sourceArguments.length
+    largerExact :=
+      (insertAt_length sourceArguments newArgument).trans
+        (arityShift_targetArguments_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted).symm }
+
+@[simp]
+theorem arityShiftInsertion_position
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+      newArgument result accepted).position = sourceArguments.length := rfl
+
 /-- Rename a source compiled-frame variable into the source-normalized
 arity-shape context, including the explicit source/target head slots. -/
 def LocalCylindricalFrame.sourceFrameNormalization
