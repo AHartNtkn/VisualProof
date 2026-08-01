@@ -121,6 +121,12 @@ inductive UniformIntrinsicItemSeq
 
 end
 
+/-- Ordered hole tuples exposed by a uniform intrinsic region. -/
+def UniformIntrinsicRegion.holeValues :
+    UniformIntrinsicRegion definitions arguments context →
+      List (Vars context arguments)
+  | .mk _ holes => holes.values
+
 namespace UniformIntrinsicRegion
 
 deriving instance DecidableEq for UniformIntrinsicRegion
@@ -180,6 +186,7 @@ def UniformIntrinsicItemSeq.denote
   | .cons head tail =>
       UniformIntrinsicItem.denote pre definitionEnv env site head ∧
         UniformIntrinsicItemSeq.denote pre definitionEnv env site tail
+
 
 end
 
@@ -282,6 +289,20 @@ private def prependHole
       UniformIntrinsicRegion definitions arguments context
   | .mk ordinary holes => .mk ordinary ⟨values :: holes.values⟩
 
+@[simp] private theorem holeValues_prependOrdinary
+    (item : UniformIntrinsicItem definitions arguments context)
+    (shape : UniformIntrinsicRegion definitions arguments context) :
+    (prependOrdinary item shape).holeValues = shape.holeValues := by
+  cases shape
+  rfl
+
+@[simp] private theorem holeValues_prependHole
+    (values : Vars context arguments)
+    (shape : UniformIntrinsicRegion definitions arguments context) :
+    (prependHole values shape).holeValues = values :: shape.holeValues := by
+  cases shape
+  rfl
+
 /-- Concatenate the retained ordinary portions of two uniform shapes. -/
 def UniformIntrinsicItemSeq.append :
     UniformIntrinsicItemSeq definitions arguments context →
@@ -378,6 +399,65 @@ def abstractAppliedItems
             (.bind signature (abstractApplied (.there head) body)) rest
 
 end
+
+/-- Direct application tuples selected from one item sequence, in source
+item order. Nested cuts and binders own their own local hole lists. -/
+def directAppliedArguments
+    (head : Var context (.rel arguments)) :
+    ItemSeq definitions context → List (Vars context arguments)
+  | .nil => []
+  | .cons item tail =>
+      let rest := directAppliedArguments head tail
+      match item with
+      | .atom atomHead values =>
+          match matchedHeadArguments? head atomHead values with
+          | some applied => applied :: rest
+          | none => rest
+      | .named .. => rest
+      | .identity .. => rest
+      | .cut .. => rest
+      | .bind .. => rest
+
+/-- `abstractAppliedItems` exposes exactly the direct matching applications
+and preserves their item-sequence order. -/
+theorem abstractAppliedItems_holeValues
+    (head : Var context (.rel arguments)) :
+    ∀ items : ItemSeq definitions context,
+    (abstractAppliedItems head items).holeValues =
+      directAppliedArguments head items
+  | .nil => rfl
+  | .cons item tail => by
+      have tailExact := abstractAppliedItems_holeValues head tail
+      cases item with
+      | atom atomHead values =>
+          simp only [abstractAppliedItems, directAppliedArguments]
+          split
+          · exact (holeValues_prependHole _ _).trans
+              (congrArg (List.cons _) tailExact)
+          · exact (holeValues_prependOrdinary _ _).trans tailExact
+      | named definition values =>
+          simp only [abstractAppliedItems, directAppliedArguments]
+          exact (holeValues_prependOrdinary _ _).trans tailExact
+      | identity signature ports atLeastTwo =>
+          simp only [abstractAppliedItems, directAppliedArguments]
+          exact (holeValues_prependOrdinary _ _).trans tailExact
+      | cut body =>
+          simp only [abstractAppliedItems, directAppliedArguments]
+          exact (holeValues_prependOrdinary _ _).trans tailExact
+      | bind signature body =>
+          simp only [abstractAppliedItems, directAppliedArguments]
+          exact (holeValues_prependOrdinary _ _).trans tailExact
+
+/-- `abstractApplied` has the same direct ordered hole characterization at
+the region boundary. -/
+theorem abstractApplied_holeValues
+    (head : Var context (.rel arguments))
+    (body : Region definitions context) :
+    (abstractApplied head body).holeValues =
+      match body with
+      | .mk items => directAppliedArguments head items := by
+  cases body with
+  | mk items => exact abstractAppliedItems_holeValues head items
 
 /-- Applied abstraction preserves item-sequence concatenation exactly. -/
 theorem abstractAppliedItems_append
