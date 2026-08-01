@@ -922,6 +922,96 @@ theorem recursiveBoundFresh_natural
       | zero => rfl
       | succ tail => exact congrArg Var.there (induction tail)
 
+/-- Reindex a complete cylindrical hole receipt while keeping its bound
+coordinates fixed and changing only the true outer contexts. -/
+noncomputable def recursiveReindexHoles
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (oldOuter : WireRenaming smallerOuter largerOuter)
+    (sourceRenaming : WireRenaming smallerOuter normalizedSmallerOuter)
+    (targetRenaming : WireRenaming largerOuter normalizedLargerOuter)
+    (newOuter : WireRenaming normalizedSmallerOuter normalizedLargerOuter)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerOuter signature),
+      newOuter (sourceRenaming value) = targetRenaming (oldOuter value))
+    {smaller : List
+      (Vars (smallerBound ++ smallerOuter) smallerArguments)}
+    {larger : List
+      (Vars (largerBound ++ largerOuter) largerArguments)}
+    (holes : CylindricalHoles insertion bounds oldOuter smaller larger) :
+    CylindricalHoles insertion bounds newOuter
+      (smaller.map fun values => Vars.rename
+        (recursiveLiftOuterRenaming smallerBound sourceRenaming) values)
+      (larger.map fun values => Vars.rename
+        (recursiveLiftOuterRenaming largerBound targetRenaming) values) := by
+  let sourceMap : WireRenaming (smallerBound ++ smallerOuter)
+      (smallerBound ++ normalizedSmallerOuter) :=
+    recursiveLiftOuterRenaming smallerBound sourceRenaming
+  let targetMap : WireRenaming (largerBound ++ largerOuter)
+      (largerBound ++ normalizedLargerOuter) :=
+    recursiveLiftOuterRenaming largerBound targetRenaming
+  have smallerLength :
+      (smaller.map fun values => Vars.rename sourceMap values).length =
+        freshCount := by simpa [sourceMap] using holes.smaller_length
+  have largerLength :
+      (larger.map fun values => Vars.rename targetMap values).length =
+        freshCount := by simpa [targetMap] using holes.larger_length
+  refine
+    { smaller_length := smallerLength
+      larger_length := largerLength
+      sourceIndex := holes.sourceIndex
+      sourceIndex_injective := holes.sourceIndex_injective
+      sourceIndex_surjective := holes.sourceIndex_surjective
+      freshIndex := holes.freshIndex
+      freshIndex_injective := holes.freshIndex_injective
+      freshIndex_surjective := holes.freshIndex_surjective
+      inserted_exact := ?_
+      retained_exact := ?_ }
+  · intro index
+    simp only [List.get_eq_getElem, List.getElem_map,
+      TypedArguments.InsertionEvidence.splitVars_rename]
+    change targetMap
+        (insertion.splitVars
+          (larger.get (Fin.cast holes.larger_length.symm index))).1 = _
+    rw [holes.inserted_exact]
+    exact recursiveBoundFresh_natural bounds oldOuter targetRenaming newOuter
+      (holes.freshIndex index)
+  · intro index
+    simp only [List.get_eq_getElem, List.getElem_map,
+      TypedArguments.InsertionEvidence.splitVars_rename]
+    change Vars.rename targetMap
+        (insertion.splitVars
+          (larger.get (Fin.cast holes.larger_length.symm index))).2 =
+      Vars.rename (bounds.embed newOuter)
+        (Vars.rename sourceMap
+          (smaller.get (Fin.cast holes.smaller_length.symm
+            (holes.sourceIndex index))))
+    rw [holes.retained_exact]
+    let selected := smaller.get (Fin.cast holes.smaller_length.symm
+      (holes.sourceIndex index))
+    let combined : WireRenaming (smallerBound ++ smallerOuter)
+        (largerBound ++ normalizedLargerOuter) :=
+      fun {_} value => targetMap (bounds.embed oldOuter value)
+    calc
+      Vars.rename targetMap
+          (Vars.rename (bounds.embed oldOuter) selected) =
+        Vars.rename combined selected :=
+          recursiveVarsRename_comp (bounds.embed oldOuter) targetMap combined
+            (fun _ => rfl) selected
+      _ = Vars.rename
+          (fun {_} value => bounds.embed newOuter (sourceMap value))
+          selected := recursiveVarsRename_eq _ _ (by
+            intro signature value
+            exact recursiveBoundEmbed_natural bounds oldOuter sourceRenaming
+              targetRenaming newOuter commutes value) selected
+      _ = Vars.rename (bounds.embed newOuter)
+          (Vars.rename sourceMap selected) :=
+        (recursiveVarsRename_comp sourceMap (bounds.embed newOuter)
+          (fun {_} value => bounds.embed newOuter (sourceMap value))
+          (fun _ => rfl) selected).symm
+
 /-- Transport a cylindrical shape across exact source and target context
 equalities. -/
 def recursiveShapeTransport
