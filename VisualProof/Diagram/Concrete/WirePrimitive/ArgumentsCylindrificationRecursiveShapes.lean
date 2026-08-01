@@ -166,6 +166,46 @@ def recursiveLeafReceipt
   | .nil, _, _ => rfl
   | .cons head tail, _, _ => rfl
 
+/-- Concatenate two cylindrical item-sequence receipts without changing their
+shared context action. -/
+def recursiveReceiptAppend
+    (left right : CylindricalShapeItemSeq definitions insertion
+      smallerContext largerContext) :
+    CylindricalShapeItemSeq definitions insertion smallerContext largerContext :=
+  match left with
+  | .nil _ => right
+  | .cons head tail => .cons head (recursiveReceiptAppend tail right)
+
+@[simp] theorem recursiveReceiptAppend_smaller
+    (right : CylindricalShapeItemSeq definitions insertion
+      smallerContext largerContext) :
+    ∀ left : CylindricalShapeItemSeq definitions insertion
+      smallerContext largerContext,
+    (recursiveReceiptAppend left right).smaller =
+      UniformIntrinsicRegion.UniformIntrinsicItemSeq.append
+        left.smaller right.smaller
+  | .nil _ => rfl
+  | .cons head tail => by
+      simp only [recursiveReceiptAppend, CylindricalShapeItemSeq.smaller,
+        UniformIntrinsicRegion.UniformIntrinsicItemSeq.append]
+      exact congrArg (UniformIntrinsicItemSeq.cons head.smaller)
+        (recursiveReceiptAppend_smaller right tail)
+
+@[simp] theorem recursiveReceiptAppend_larger
+    (right : CylindricalShapeItemSeq definitions insertion
+      smallerContext largerContext) :
+    ∀ left : CylindricalShapeItemSeq definitions insertion
+      smallerContext largerContext,
+    (recursiveReceiptAppend left right).larger =
+      UniformIntrinsicRegion.UniformIntrinsicItemSeq.append
+        left.larger right.larger
+  | .nil _ => rfl
+  | .cons head tail => by
+      simp only [recursiveReceiptAppend, CylindricalShapeItemSeq.larger,
+        UniformIntrinsicRegion.UniformIntrinsicItemSeq.append]
+      exact congrArg (UniformIntrinsicItemSeq.cons head.larger)
+        (recursiveReceiptAppend_larger right tail)
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
