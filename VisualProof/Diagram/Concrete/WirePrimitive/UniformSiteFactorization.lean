@@ -477,6 +477,78 @@ theorem directAppliedArguments_compileChildrenWith_eq_nil
               subst items
               simpa [directAppliedArguments] using induction rest tailCompiled
 
+/-- Compile and classify one concrete node as a direct application of the
+selected intrinsic head. -/
+def compiledAppliedArguments?
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (head : Var context.sigs (.rel arguments))
+    (node : diagram.NodeId) : Option (Vars context.sigs arguments) := do
+  let item ← ConcreteElaboration.Internal.compileNode? definitions diagram
+    context node
+  match item with
+  | .atom atomHead values => matchedHeadArguments? head atomHead values
+  | .named .. => none
+  | .identity .. => none
+  | .cut .. => none
+  | .bind .. => none
+
+/-- The direct holes extracted from a compiled concrete node list are exactly
+the ordered successful results of its per-node application classifier. -/
+theorem directAppliedArguments_compileNodes
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (head : Var context.sigs (.rel arguments)) :
+    ∀ (nodes : List diagram.NodeId)
+      (items : ItemSeq definitions context.sigs),
+      ConcreteElaboration.compileNodes? definitions diagram context nodes =
+          some items →
+        directAppliedArguments head items =
+          nodes.filterMap
+            (compiledAppliedArguments? definitions diagram context head)
+  | [], items, compiled => by
+      simp [ConcreteElaboration.compileNodes?] at compiled
+      subst items
+      rfl
+  | node :: tail, items, compiled => by
+      simp only [ConcreteElaboration.compileNodes?] at compiled
+      cases headCompiled :
+          ConcreteElaboration.Internal.compileNode? definitions diagram
+            context node with
+      | none => simp [headCompiled] at compiled
+      | some compiledHead =>
+          cases tailCompiled :
+              ConcreteElaboration.compileNodes? definitions diagram context
+                tail with
+          | none => simp [headCompiled, tailCompiled] at compiled
+          | some compiledTail =>
+              have itemsExact :
+                  items = .cons compiledHead compiledTail := by
+                exact (Option.some.inj (by
+                  simpa [headCompiled, tailCompiled] using compiled)).symm
+              subst items
+              have tailExact := directAppliedArguments_compileNodes
+                definitions diagram context head tail compiledTail tailCompiled
+              cases compiledHead with
+              | atom atomHead values =>
+                  simp only [directAppliedArguments, List.filterMap_cons,
+                    compiledAppliedArguments?, headCompiled]
+                  split <;> simp [tailExact, *]
+              | named definition values =>
+                  simp [directAppliedArguments, compiledAppliedArguments?,
+                    headCompiled, tailExact]
+              | identity signature ports atLeastTwo =>
+                  simp [directAppliedArguments, compiledAppliedArguments?,
+                    headCompiled, tailExact]
+              | cut body =>
+                  simp [directAppliedArguments, compiledAppliedArguments?,
+                    headCompiled, tailExact]
+              | bind signature body =>
+                  simp [directAppliedArguments, compiledAppliedArguments?,
+                    headCompiled, tailExact]
+
 /-- `abstractAppliedItems` exposes exactly the direct matching applications
 and preserves their item-sequence order. -/
 theorem abstractAppliedItems_holeValues
