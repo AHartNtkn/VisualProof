@@ -764,6 +764,7 @@ theorem argPermute_sourceRemovedWires_exact
       contradiction
   | ok relationArguments =>
       rw [relationAccepted] at accepted
+      dsimp [bind, pure, Except.instMonad, Except.bind, Except.pure] at accepted
       change
         (if !validPermutation relationArguments.length permutation then
             .error .invalidPermutation
@@ -968,6 +969,7 @@ theorem argPermute_localCount_exact
       contradiction
   | ok relationArguments =>
       rw [relationAccepted] at accepted
+      dsimp [bind, pure, Except.instMonad, Except.bind, Except.pure] at accepted
       change
         (if !validPermutation relationArguments.length permutation then
             .error .invalidPermutation
@@ -1104,7 +1106,7 @@ theorem argDrop_sourceRemovedWires_exact
       rw [relationAccepted] at accepted
       change
         (if !validPosition relationArguments position then
-            .error .invalidPosition
+            Except.error ArgumentError.invalidPosition
           else do
             let sites ← checkedArgumentSites source wire
             let spec : ReplacementSpec source wire sites :=
@@ -1141,6 +1143,58 @@ theorem argDrop_sourceRemovedWires_exact
                 _ result accepted
             simpa using exact
 
+/-- Argument drop allocates no operation-local wire. -/
+theorem argDrop_localCount_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argDrop source wire position = .ok result) :
+    result.spec.localCount = 0 := by
+  unfold argDrop at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validPosition relationArguments position then
+            .error .invalidPosition
+          else do
+            let sites ← checkedArgumentSites source wire
+            let spec : ReplacementSpec source wire sites :=
+              { targetArguments := eraseAt relationArguments position
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    eraseAt (sites.sites.get site).arguments position }
+            replaceAppliedEnds source wire sites spec _) =
+          .ok result at accepted
+      cases valid : validPosition relationArguments position with
+      | false => simp [valid] at accepted
+      | true =>
+        simp [valid] at accepted
+        cases sitesAccepted : checkedArgumentSites source wire with
+        | error error =>
+            rw [sitesAccepted] at accepted
+            contradiction
+        | ok sites =>
+            rw [sitesAccepted] at accepted
+            exact replaceAppliedEnds_localCount_exact source wire sites
+              { targetArguments := eraseAt relationArguments position
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    eraseAt (sites.sites.get site).arguments position }
+              _ result accepted
+
 /-- Insert one caller-selected visible attachment at every applied end. -/
 def argExtend
     (source : CheckedDiagram definitions)
@@ -1148,35 +1202,204 @@ def argExtend
     (position : Nat)
     (newArgument : Sig)
     (attachments : List source.val.WireId) :
-    Except ArgumentError (ArgumentResult source wire) := do
-  let relationArguments ← checkedRelationArguments source wire
-  if !validInsertionPosition relationArguments position then
-    throw .invalidPosition
-  let sites ← checkedArgumentSites source wire
-  if attachments.length != sites.sites.length then
-    throw .attachmentCoverage
-  if !(attachments.all fun attachment =>
-      (source.val.wires attachment).sig == newArgument) then
-    throw .attachmentSignature
-  if !((sites.sites.zip attachments).all fun pair =>
-      source.val.Encloses
-        (source.val.wires pair.2).scope pair.1.region) then
-    throw .attachmentInvisible
-  let spec : ReplacementSpec source wire sites :=
-    { targetArguments :=
-        insertAt relationArguments position newArgument
-      removedWires := []
-      localCount := 0
-      localSignature := Fin.elim0
-      localScope := Fin.elim0
-      arguments := fun site =>
-        existingReferences <|
-          insertAt (sites.sites.get site).arguments position
-            ((attachments[site.val]?).getD wire) }
-  replaceAppliedEnds source wire sites spec (by
-    intro sourceWire removed endpoint incident
-    exact head_only_removed_exhausted sites sourceWire
-      (by simpa [spec] using removed) endpoint incident)
+    Except ArgumentError (ArgumentResult source wire) :=
+  match checkedRelationArguments source wire with
+  | .error error => .error error
+  | .ok relationArguments =>
+      if !validInsertionPosition relationArguments position then
+        .error .invalidPosition
+      else
+        match checkedArgumentSites source wire with
+        | .error error => .error error
+        | .ok sites =>
+            if attachments.length != sites.sites.length then
+              .error .attachmentCoverage
+            else if !(attachments.all fun attachment =>
+                (source.val.wires attachment).sig == newArgument) then
+              .error .attachmentSignature
+            else if !((sites.sites.zip attachments).all fun pair =>
+                source.val.Encloses
+                  (source.val.wires pair.2).scope pair.1.region) then
+              .error .attachmentInvisible
+            else
+              let spec : ReplacementSpec source wire sites :=
+                { targetArguments :=
+                    insertAt relationArguments position newArgument
+                  removedWires := []
+                  localCount := 0
+                  localSignature := Fin.elim0
+                  localScope := Fin.elim0
+                  arguments := fun site =>
+                    existingReferences <|
+                      insertAt (sites.sites.get site).arguments position
+                        ((attachments[site.val]?).getD wire) }
+              replaceAppliedEnds source wire sites spec (by
+                intro sourceWire removed endpoint incident
+                exact head_only_removed_exhausted sites sourceWire
+                  (by simpa [spec] using removed) endpoint incident)
+
+/-- Argument extension deletes exactly its acted relation head and no ambient
+wire. -/
+theorem argExtend_sourceRemovedWires_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (newArgument : Sig)
+    (attachments : List source.val.WireId)
+    (result : ArgumentResult source wire)
+    (accepted :
+      argExtend source wire position newArgument attachments = .ok result) :
+    result.sourceRemovedWires = [wire] := by
+  unfold argExtend at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validInsertionPosition relationArguments position then
+            .error .invalidPosition
+          else
+            match checkedArgumentSites source wire with
+            | .error error => Except.error error
+            | .ok sites =>
+                if attachments.length != sites.sites.length then
+                  Except.error ArgumentError.attachmentCoverage
+                else if !(attachments.all fun attachment =>
+                    (source.val.wires attachment).sig == newArgument) then
+                  Except.error ArgumentError.attachmentSignature
+                else if !((sites.sites.zip attachments).all fun pair =>
+                    source.val.Encloses
+                      (source.val.wires pair.2).scope pair.1.region) then
+                  Except.error ArgumentError.attachmentInvisible
+                else
+                  replaceAppliedEnds source wire sites
+                    { targetArguments :=
+                        insertAt relationArguments position newArgument
+                      removedWires := []
+                      localCount := 0
+                      localSignature := Fin.elim0
+                      localScope := Fin.elim0
+                      arguments := fun site =>
+                        existingReferences <|
+                          insertAt (sites.sites.get site).arguments position
+                            ((attachments[site.val]?).getD wire) }
+                    _) =
+          .ok result at accepted
+      cases valid : validInsertionPosition relationArguments position with
+      | false => simp [valid] at accepted
+      | true =>
+        simp [valid] at accepted
+        cases sitesAccepted : checkedArgumentSites source wire with
+        | error error =>
+            rw [sitesAccepted] at accepted
+            contradiction
+        | ok sites =>
+            rw [sitesAccepted] at accepted
+            split at accepted <;> try contradiction
+            next coverage _ =>
+              split at accepted <;> try contradiction
+              next signatures _ =>
+                split at accepted <;> try contradiction
+                next visible _ =>
+                  split at accepted <;> try contradiction
+                  next scope _ =>
+                    have exact :=
+                      replaceAppliedEnds_sourceRemovedWires_exact source wire
+                        coverage
+                        { targetArguments :=
+                            insertAt relationArguments position newArgument
+                          removedWires := []
+                          localCount := 0
+                          localSignature := Fin.elim0
+                          localScope := Fin.elim0
+                          arguments := fun site =>
+                            existingReferences <|
+                              insertAt (coverage.sites.get site).arguments
+                                position ((attachments[site.val]?).getD wire) }
+                        _ result accepted
+                    simpa using exact
+
+/-- Argument extension allocates no operation-local wire. -/
+theorem argExtend_localCount_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (newArgument : Sig)
+    (attachments : List source.val.WireId)
+    (result : ArgumentResult source wire)
+    (accepted :
+      argExtend source wire position newArgument attachments = .ok result) :
+    result.spec.localCount = 0 := by
+  unfold argExtend at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validInsertionPosition relationArguments position then
+            Except.error ArgumentError.invalidPosition
+          else
+            match checkedArgumentSites source wire with
+            | .error error => Except.error error
+            | .ok sites =>
+                if attachments.length != sites.sites.length then
+                  Except.error ArgumentError.attachmentCoverage
+                else if !(attachments.all fun attachment =>
+                    (source.val.wires attachment).sig == newArgument) then
+                  Except.error ArgumentError.attachmentSignature
+                else if !((sites.sites.zip attachments).all fun pair =>
+                    source.val.Encloses
+                      (source.val.wires pair.2).scope pair.1.region) then
+                  Except.error ArgumentError.attachmentInvisible
+                else
+                  replaceAppliedEnds source wire sites
+                    { targetArguments :=
+                        insertAt relationArguments position newArgument
+                      removedWires := []
+                      localCount := 0
+                      localSignature := Fin.elim0
+                      localScope := Fin.elim0
+                      arguments := fun site =>
+                        existingReferences <|
+                          insertAt (sites.sites.get site).arguments position
+                            ((attachments[site.val]?).getD wire) }
+                    _) =
+          .ok result at accepted
+      cases valid : validInsertionPosition relationArguments position with
+      | false => simp [valid] at accepted
+      | true =>
+        simp [valid] at accepted
+        cases sitesAccepted : checkedArgumentSites source wire with
+        | error error =>
+            rw [sitesAccepted] at accepted
+            contradiction
+        | ok sites =>
+            rw [sitesAccepted] at accepted
+            split at accepted <;> try contradiction
+            next coverage _ =>
+              split at accepted <;> try contradiction
+              next signatures _ =>
+                split at accepted <;> try contradiction
+                next visible _ =>
+                  split at accepted <;> try contradiction
+                  next scope _ =>
+                    exact replaceAppliedEnds_localCount_exact source wire
+                      coverage
+                      { targetArguments :=
+                          insertAt relationArguments position newArgument
+                        removedWires := []
+                        localCount := 0
+                        localSignature := Fin.elim0
+                        localScope := Fin.elim0
+                        arguments := fun site =>
+                          existingReferences <|
+                            insertAt (coverage.sites.get site).arguments
+                              position ((attachments[site.val]?).getD wire) }
+                      _ result accepted
 
 end ConcreteWirePrimitive
 
