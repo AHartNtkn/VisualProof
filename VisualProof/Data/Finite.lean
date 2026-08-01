@@ -115,6 +115,84 @@ theorem allFin_nodup (n : Nat) : (allFin n).Nodup := by
           apply Fin.ext
           exact Nat.succ.inj (congrArg Fin.val hs))
 
+/-- Lift an equivalence of finite tails across a common list head. -/
+def FiniteEquiv.finSucc
+    (equivalence : FiniteEquiv (Fin left) (Fin right)) :
+    FiniteEquiv (Fin (left + 1)) (Fin (right + 1)) where
+  toFun := Fin.cases 0 (fun index => Fin.succ (equivalence index))
+  invFun := Fin.cases 0 (fun index => Fin.succ (equivalence.symm index))
+  left_inv := by
+    intro index
+    refine Fin.cases rfl (fun tail => ?_) index
+    change Fin.succ (equivalence.symm (equivalence tail)) = Fin.succ tail
+    exact congrArg Fin.succ (equivalence.left_inv tail)
+  right_inv := by
+    intro index
+    refine Fin.cases rfl (fun tail => ?_) index
+    change Fin.succ (equivalence (equivalence.symm tail)) = Fin.succ tail
+    exact congrArg Fin.succ (equivalence.right_inv tail)
+
+/-- Swap the first two positions of a finite list carrier. -/
+def FiniteEquiv.finSwapHead (tail : Nat) :
+    FiniteEquiv (Fin (tail + 2)) (Fin (tail + 2)) where
+  toFun :=
+    Fin.cases 1 (Fin.cases 0 (fun index => Fin.succ (Fin.succ index)))
+  invFun :=
+    Fin.cases 1 (Fin.cases 0 (fun index => Fin.succ (Fin.succ index)))
+  left_inv := by
+    intro index
+    refine Fin.cases rfl (fun rest => ?_) index
+    refine Fin.cases rfl (fun tailIndex => ?_) rest
+    rfl
+  right_inv := by
+    intro index
+    refine Fin.cases rfl (fun rest => ?_) index
+    refine Fin.cases rfl (fun tailIndex => ?_) rest
+    rfl
+
+/--
+A list permutation owns an exact equivalence of dense positions.  The
+equivalence maps each source position to a target position containing the
+same value, retaining multiplicity rather than merely membership.
+-/
+theorem FiniteEquiv.exists_ofListPerm
+    {left right : List α} (permuted : left.Perm right) :
+    ∃ equivalence : FiniteEquiv (Fin left.length) (Fin right.length),
+      ∀ position, right.get (equivalence position) = left.get position := by
+  induction permuted with
+  | nil =>
+      exact ⟨FiniteEquiv.refl (Fin 0), fun position => Fin.elim0 position⟩
+  | @cons value left right permuted induction =>
+      obtain ⟨tailEquivalence, tailExact⟩ := induction
+      let equivalence := tailEquivalence.finSucc
+      refine ⟨equivalence, ?_⟩
+      intro position
+      refine Fin.cases rfl (fun tail => ?_) position
+      exact tailExact tail
+  | @swap leftValue rightValue tail =>
+      let equivalence := FiniteEquiv.finSwapHead tail.length
+      refine ⟨equivalence, ?_⟩
+      intro position
+      refine Fin.cases rfl (fun rest => ?_) position
+      refine Fin.cases rfl (fun tailPosition => ?_) rest
+      rfl
+  | @trans left middle right first second firstInduction secondInduction =>
+      obtain ⟨firstEquivalence, firstExact⟩ := firstInduction
+      obtain ⟨secondEquivalence, secondExact⟩ := secondInduction
+      let equivalence := firstEquivalence.trans secondEquivalence
+      refine ⟨equivalence, ?_⟩
+      intro position
+      exact (secondExact (firstEquivalence position)).trans
+        (firstExact position)
+
+/-- Noncomputable position equivalence selected from a permutation proof. -/
+noncomputable def FiniteEquiv.ofListPerm
+    {left right : List α} (permuted : left.Perm right) :
+    { equivalence : FiniteEquiv (Fin left.length) (Fin right.length) //
+      ∀ position, right.get (equivalence position) = left.get position } :=
+  ⟨Classical.choose (FiniteEquiv.exists_ofListPerm permuted),
+    Classical.choose_spec (FiniteEquiv.exists_ofListPerm permuted)⟩
+
 /-- Executably invert an explicitly supplied bijection of finite initial
 segments. The inverse is the first source whose forward image is the target;
 the bijection proof establishes totality and the inverse laws. -/
