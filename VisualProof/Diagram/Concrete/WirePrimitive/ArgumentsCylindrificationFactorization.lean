@@ -150,6 +150,24 @@ structure LocalCylindricalFrame
       (result.checked.val.wires result.targetWire).scope
   context :
     ContentAlignment.SiteContextFactorization sourceScope targetScope
+  sourceHead :
+    Var
+      (ContentAlignment.localSignatures source.val
+        (source.val.wires wire).scope)
+      (.rel sourceArguments)
+  sourceHead_origin :
+    ConcreteElaboration.WireContext.origin source.val
+      (source.val.wiresAt (source.val.wires wire).scope) sourceHead = wire
+  targetHead :
+    Var
+      (ContentAlignment.localSignatures result.checked.val
+        (result.checked.val.wires result.targetWire).scope)
+      (.rel result.targetArguments)
+  targetHead_origin :
+    ConcreteElaboration.WireContext.origin result.checked.val
+      (result.checked.val.wiresAt
+        (result.checked.val.wires result.targetWire).scope) targetHead =
+      result.targetWire
   sourceReduced : List Sig
   targetReduced : List Sig
   sourceRemoval :
@@ -157,11 +175,13 @@ structure LocalCylindricalFrame
       (ContentAlignment.localSignatures source.val
         (source.val.wires wire).scope)
       sourceReduced
+  sourceRemoval_head : sourceRemoval.head = sourceHead
   targetRemoval :
     LocalHeadRemoval (.rel result.targetArguments)
       (ContentAlignment.localSignatures result.checked.val
         (result.checked.val.wires result.targetWire).scope)
       targetReduced
+  targetRemoval_head : targetRemoval.head = targetHead
 
 def LocalCylindricalFrame.sourceShape
     {source : CheckedDiagram definitions}
@@ -234,13 +254,46 @@ def checkLocalCylindricalFrameFromSites
         (result.checked.val.wiresAt
           (result.checked.val.wires result.targetWire).scope)
         result.targetWire targetMember)
-  let ⟨sourceReduced, sourceRemoval⟩ :=
-    LocalHeadRemoval.ofVar sourceHead
-  let ⟨targetReduced, targetRemoval⟩ :=
-    LocalHeadRemoval.ofVar targetHead
+  let sourceRemovalResult := LocalHeadRemoval.ofVar sourceHead
+  let sourceReduced := sourceRemovalResult.1
+  let sourceRemoval := sourceRemovalResult.2
+  let targetRemovalResult := LocalHeadRemoval.ofVar targetHead
+  let targetReduced := targetRemovalResult.1
+  let targetRemoval := targetRemovalResult.2
   pure
-    ⟨targetSites, sourceScope, targetScope, context, sourceReduced, targetReduced,
-      sourceRemoval, targetRemoval⟩
+    { targetSites := targetSites
+      sourceScope := sourceScope
+      targetScope := targetScope
+      context := context
+      sourceHead := sourceHead
+      sourceHead_origin := by
+        exact
+          (InsertionCompilation.NaturalityInternal.origin_castVar source.val
+            (source.val.wiresAt (source.val.wires wire).scope)
+            sourceSignature _).trans
+            (InsertionCompilation.NaturalityInternal.varForMember_origin
+              source.val
+              (source.val.wiresAt (source.val.wires wire).scope) wire
+              sourceMember)
+      targetHead := targetHead
+      targetHead_origin := by
+        exact
+          (InsertionCompilation.NaturalityInternal.origin_castVar
+            result.checked.val
+            (result.checked.val.wiresAt
+              (result.checked.val.wires result.targetWire).scope)
+            result.targetWire_signature _).trans
+            (InsertionCompilation.NaturalityInternal.varForMember_origin
+              result.checked.val
+              (result.checked.val.wiresAt
+                (result.checked.val.wires result.targetWire).scope)
+              result.targetWire targetMember)
+      sourceReduced := sourceReduced
+      targetReduced := targetReduced
+      sourceRemoval := sourceRemoval
+      sourceRemoval_head := LocalHeadRemoval.ofVar_head sourceHead
+      targetRemoval := targetRemoval
+      targetRemoval_head := LocalHeadRemoval.ofVar_head targetHead }
 
 theorem checkLocalCylindricalFrameFromSites_complete
     {source : CheckedDiagram definitions}

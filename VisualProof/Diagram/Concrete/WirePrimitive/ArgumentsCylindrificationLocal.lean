@@ -52,6 +52,53 @@ theorem ofVar_head (selected : Var bound headSignature) :
       simp only [ofVar, head]
       rw [induction]
 
+/-- Ordered binder signatures after deleting the selected typed position. -/
+def eraseSelected : (selected : Var bound signature) → List Sig
+  | @Var.here signature rest => rest
+  | @Var.there rest signature head tail =>
+      head :: eraseSelected tail
+
+/-- `ofVar` computes exactly the ordered signature deletion. -/
+theorem ofVar_reduced (selected : Var bound signature) :
+    (ofVar selected).1 = eraseSelected selected := by
+  induction selected with
+  | here => rfl
+  | there tail induction =>
+      simp only [ofVar, eraseSelected]
+      rw [induction]
+
+/-- Every removal's reduced index is the signature list obtained by deleting
+its recorded head. -/
+theorem reduced_eq_erase_head
+    (removal : LocalHeadRemoval headSignature bound reduced) :
+    reduced = eraseSelected removal.head := by
+  induction removal with
+  | here => rfl
+  | there localSignature rest induction =>
+      exact congrArg (List.cons localSignature) induction
+
+/-- Typed position immediately after a retained prefix and before a suffix. -/
+def beforeSuffix
+    (pre suffix : List Sig) (signature : Sig) :
+    Var (pre ++ signature :: suffix) signature :=
+  Var.appendRight pre (.here : Var (signature :: suffix) signature)
+
+theorem eraseSelected_beforeSuffix
+    (pre suffix : List Sig) (signature : Sig) :
+    eraseSelected (beforeSuffix pre suffix signature) =
+      pre ++ suffix := by
+  induction pre with
+  | nil => rfl
+  | cons head tail induction =>
+      change head :: eraseSelected (beforeSuffix tail suffix signature) =
+        head :: (tail ++ suffix)
+      rw [induction]
+
+theorem ofVar_beforeSuffix_reduced
+    (pre suffix : List Sig) (signature : Sig) :
+    (ofVar (beforeSuffix pre suffix signature)).1 = pre ++ suffix := by
+  rw [ofVar_reduced, eraseSelected_beforeSuffix]
+
 private def keepPrefix
     (retainedPrefix : List Sig)
     (outer : WireRenaming source target) :
@@ -60,6 +107,32 @@ private def keepPrefix
   | [] => outer
   | signature :: rest =>
       WireRenaming.lift (keepPrefix rest outer) signature
+
+private theorem keepPrefix_appendLeft
+    (retainedPrefix : List Sig)
+    (outer : WireRenaming source target)
+    (value : Var retainedPrefix signature) :
+    keepPrefix retainedPrefix outer
+        (Var.appendLeft value source) =
+      Var.appendLeft value target := by
+  induction value with
+  | here => rfl
+  | there tail induction =>
+      change Var.there
+          (keepPrefix _ outer (Var.appendLeft tail source)) =
+        Var.there (Var.appendLeft tail target)
+      exact congrArg Var.there induction
+
+/-- Embed every retained local binder back into the original block. -/
+def retain
+    (removal : LocalHeadRemoval headSignature bound reduced) :
+    WireRenaming reduced bound :=
+  match removal with
+  | .here => fun value => .there value
+  | .there signature rest => fun value =>
+      match value with
+      | .here => .here
+      | .there tail => .there (rest.retain tail)
 
 /--
 Rename a complete local-plus-outer context after moving the selected head to
@@ -95,6 +168,28 @@ theorem rename_head
             (Var.appendLeft rest.head sourceOuter)) =
         Var.there (Var.appendRight _ headSlot)
       exact congrArg Var.there induction
+
+/-- Every non-head local binder keeps its exact ordered normalized position. -/
+theorem rename_retain
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (outer : WireRenaming sourceOuter targetOuter)
+    (headSlot : Var targetOuter headSignature)
+    (value : Var reduced signature) :
+    removal.rename outer headSlot
+        (Var.appendLeft (removal.retain value) sourceOuter) =
+      Var.appendLeft value targetOuter := by
+  induction removal with
+  | here =>
+      exact keepPrefix_appendLeft _ outer value
+  | there localSignature rest induction =>
+      cases value with
+      | here => rfl
+      | there tail =>
+          change Var.there
+              (rest.rename outer headSlot
+                (Var.appendLeft (rest.retain tail) sourceOuter)) =
+            Var.there (Var.appendLeft tail targetOuter)
+          exact congrArg Var.there (induction tail)
 
 /-- Split the selected semantic head from the retained local values. -/
 def splitValues
