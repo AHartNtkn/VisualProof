@@ -1,5 +1,6 @@
 import VisualProof.Rule.WirePrimitive.CompilerTermination
 import VisualProof.Rule.WirePrimitive.ArgumentsDropTransport
+import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
 import VisualProof.Rule.MonolithicWireQuantifier
 import VisualProof.Diagram.Concrete.IsomorphismSearch
 
@@ -1210,16 +1211,15 @@ private def invertStep
           normalizedIso := inverse.targetIso }
   | .arityShift _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
+      let wireExact := targetIso.wires.right_inv applied.targetWire
       let inversePosition := applied.sourceArgumentList.length
       let inverseApplied ←
         (applyArityUnshift real inverseWire inversePosition).mapError
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .arityUnshift inverseWire inversePosition inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let normalizedIso := applied.inverseTransportIso inverseApplied
+        targetIso wireExact
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .argPermute _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire

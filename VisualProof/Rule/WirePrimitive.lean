@@ -3,6 +3,7 @@ import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.WirePrimitive.Content
 import VisualProof.Rule.WirePrimitive.Arguments
 import VisualProof.Rule.WirePrimitive.ArgumentsDropTransport
+import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
 import VisualProof.Rule.WirePrimitive.Leaves
 import VisualProof.Rule.WirePrimitive.Program
 
