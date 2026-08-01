@@ -109,6 +109,63 @@ theorem recursiveOrdinary_abstractAppliedItems
                   (UniformIntrinsicRegion.abstractApplied head.there body)))
                 induction
 
+/-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
+its exact renaming. -/
+def recursiveLeafReceipt
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (embedding : WireRenaming smallerContext largerContext) :
+    (items : ItemSeq definitions smallerContext) →
+      CylindricalShapeItemSeq definitions insertion smallerContext largerContext
+  | .nil => .nil embedding
+  | .cons head tail =>
+      .cons (.leaf embedding head (head.renameWires embedding) rfl)
+        (recursiveLeafReceipt insertion embedding tail)
+
+@[simp] theorem recursiveLeafReceipt_smaller
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (embedding : WireRenaming smallerContext largerContext) :
+    ∀ items : ItemSeq definitions smallerContext,
+      (recursiveLeafReceipt insertion embedding items).smaller =
+        recursiveLeafItems items
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [recursiveLeafReceipt, CylindricalShapeItemSeq.smaller,
+        CylindricalShapeItem.smaller, recursiveLeafItems]
+      exact congrArg (UniformIntrinsicItemSeq.cons (.leaf head))
+        (recursiveLeafReceipt_smaller insertion embedding tail)
+
+@[simp] theorem recursiveLeafReceipt_larger
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (embedding : WireRenaming smallerContext largerContext) :
+    ∀ items : ItemSeq definitions smallerContext,
+      (recursiveLeafReceipt insertion embedding items).larger =
+        recursiveLeafItems (items.renameWires embedding)
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [recursiveLeafReceipt, CylindricalShapeItemSeq.larger,
+        CylindricalShapeItem.larger, recursiveLeafItems, ItemSeq.renameWires]
+      exact congrArg
+        (UniformIntrinsicItemSeq.cons (.leaf (head.renameWires embedding)))
+        (recursiveLeafReceipt_larger insertion embedding tail)
+
+@[simp] theorem recursiveLeafReceipt_embedding
+    (insertion :
+      TypedArguments.InsertionEvidence largerArguments smallerArguments
+        fixedSignature)
+    (embedding : WireRenaming smallerContext largerContext) :
+    ∀ (items : ItemSeq definitions smallerContext) {signature : Sig}
+      (value : Var smallerContext signature),
+      (recursiveLeafReceipt insertion embedding items).embedding value =
+        embedding value
+  | .nil, _, _ => rfl
+  | .cons head tail, _, _ => rfl
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
