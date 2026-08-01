@@ -1160,12 +1160,6 @@ private def compileResidual
       (ResidualCompilation orientation source context tracked.length) :=
   compileIntrinsicResidual source residual.execution tracked orientation
 
-private def subsets : List α → List (List α)
-  | [] => [[]]
-  | head :: tail =>
-      let rest := subsets tail
-      rest ++ rest.map (head :: ·)
-
 private def tuples (length : Nat) (values : List α) : List (List α) :=
   match length with
   | 0 => [[]]
@@ -1227,36 +1221,6 @@ private def endsSpawnCandidates
       | .error _ => none
       | .ok applied => some (.endsSpawn wire sites applied)
 
-private def abstractFormalCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.regionsList.flatMap fun scope =>
-    (subsets real.val.nodesList).filterMap fun nodes =>
-      match Leaves.applyAbstractFormal real nodes scope orientation with
-      | .error _ => none
-      | .ok applied => some (.abstractFormal nodes scope applied)
-
-private def identityAbstractCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.regionsList.flatMap fun scope =>
-    (subsets real.val.nodesList).filterMap fun nodes =>
-      match Leaves.applyIdentityAbstract real nodes scope orientation with
-      | .error _ => none
-      | .ok applied => some (.identityAbstract nodes scope applied)
-
-private def refAbstractCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.regionsList.flatMap fun scope =>
-    (subsets real.val.nodesList).filterMap fun nodes =>
-      match Leaves.applyRefAbstract real nodes scope orientation with
-      | .error _ => none
-      | .ok applied => some (.refAbstract nodes scope applied)
-
 private def inverseCandidates
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
@@ -1287,14 +1251,11 @@ private def inverseCandidates
   | .argContract .. => throw .malformedResidual
   | .argDrop .. => throw .malformedResidual
   | .argExtend .. => throw .malformedResidual
-  | .applyFormal .. =>
-      pure (abstractFormalCandidates real orientation)
+  | .applyFormal .. => throw .malformedResidual
   | .abstractFormal .. => throw .malformedResidual
-  | .identityLeaf .. =>
-      pure (identityAbstractCandidates real orientation)
+  | .identityLeaf .. => throw .malformedResidual
   | .identityAbstract .. => throw .malformedResidual
-  | .refLeaf .. =>
-      pure (refAbstractCandidates real orientation)
+  | .refLeaf .. => throw .malformedResidual
   | .refAbstract .. => throw .malformedResidual
 
 /-- Positional inverse of a checker-accepted permutation.  Each original
@@ -1379,6 +1340,48 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .argDrop inverseWire position inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .applyFormal _ _ applied => do
+      let inverseNodes :=
+        applied.inverseNodes.map targetIso.nodes.symm
+      let inverseScope := targetIso.regions.symm applied.inverseScope
+      let inverseApplied ←
+        (Leaves.applyAbstractFormal real inverseNodes inverseScope orientation)
+          |>.mapError .leafRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .abstractFormal inverseNodes inverseScope inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .identityLeaf _ applied => do
+      let inverseNodes :=
+        applied.inverseNodes.map targetIso.nodes.symm
+      let inverseScope := targetIso.regions.symm applied.inverseScope
+      let inverseApplied ←
+        (Leaves.applyIdentityAbstract real inverseNodes inverseScope
+          orientation).mapError .leafRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .identityAbstract inverseNodes inverseScope inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .refLeaf _ _ applied => do
+      let inverseNodes :=
+        applied.inverseNodes.map targetIso.nodes.symm
+      let inverseScope := targetIso.regions.symm applied.inverseScope
+      let inverseApplied ←
+        (Leaves.applyRefAbstract real inverseNodes inverseScope orientation)
+          |>.mapError .leafRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .refAbstract inverseNodes inverseScope inverseApplied
       let normalizedIso ←
         requireOption .redundancyMismatch <|
           ConcreteIsoSearch.findConcreteIso?
