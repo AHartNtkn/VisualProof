@@ -483,6 +483,65 @@ theorem relationWire_endpoints
   simp only [relationSeverCandidate, Fin.addCases_right]
   simp [List.map_map, Internal.checkedEndpoint, relationSeverAtom]
 
+/--
+The generated applications occupy the exact dense suffix and therefore occur
+in site order when a relation join scans source-node storage.  This is the
+batch sever/join alignment theorem; no identifier search is involved.
+-/
+theorem relationApplications_storage_order
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (RelationSeverSite source)}
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.nodesList.filter (fun node =>
+        decide
+          ((⟨node, .head⟩ : CEndpoint result.checked.val.nodeCount) ∈
+            (result.checked.val.wires result.relationWire).endpoints)) =
+      result.atoms := by
+  let retainedCount :=
+    (Internal.retainedNodes source (relationRemovedNodes sites)).length
+  have selectedExact :
+      ∀ node : result.checked.val.NodeId,
+        decide
+            ((⟨node, .head⟩ : CEndpoint result.checked.val.nodeCount) ∈
+              (result.checked.val.wires result.relationWire).endpoints) =
+          decide (retainedCount ≤ node.val) := by
+    intro node
+    apply decide_eq_decide.mpr
+    rw [result.relationWire_endpoints]
+    constructor
+    · intro member
+      obtain ⟨site, _, endpointExact⟩ := List.mem_map.mp member
+      have nodeExact : result.atom site = node := by
+        simpa using congrArg CEndpoint.node endpointExact
+      rw [← nodeExact, result.atom_val]
+      simp [retainedCount]
+    · intro lower
+      have upper : node.val < retainedCount + sites.length := by
+        rw [← result.nodeCount]
+        exact node.isLt
+      let site : Fin sites.length :=
+        ⟨node.val - retainedCount, by omega⟩
+      apply List.mem_map.mpr
+      refine ⟨site, Data.Finite.mem_allFin site, ?_⟩
+      have nodeExact : result.atom site = node := by
+        apply Fin.ext
+        rw [result.atom_val]
+        simp [site]
+        omega
+      simpa using nodeExact
+  rw [ConcreteDiagram.nodesList]
+  rw [Data.Finite.filter_allFin_suffix_of_eq
+    result.checked.val.nodeCount retainedCount sites.length result.nodeCount _
+    selectedExact]
+  unfold atoms retainedCount
+  apply List.map_congr_left
+  intro site _
+  apply Fin.ext
+  rw [result.atom_val]
+  rfl
+
 @[simp] theorem wireImage_signature
     (result : RelationSeverResult source scope sites)
     (wire : source.val.WireId)

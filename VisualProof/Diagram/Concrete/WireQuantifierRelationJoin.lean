@@ -65,6 +65,66 @@ private def relationJoinApplications?
   (relationApplicationNodes source wire).mapM
     (relationJoinApplicationAt? source args)
 
+private theorem relationJoinApplicationAt?_node
+    (source : CheckedDiagram definitions)
+    (args : List Sig)
+    (node : source.val.NodeId)
+    (application : RelationJoinApplication source)
+    (accepted :
+      relationJoinApplicationAt? source args node = some application) :
+    application.node = node := by
+  unfold relationJoinApplicationAt? at accepted
+  split at accepted <;> simp_all
+  rename_i region nodeArgs nodeExact
+  rcases accepted with ⟨_, accepted⟩
+  change
+    (relationArgumentWires? source node args 0).bind
+        (fun arguments =>
+          some
+            { node := node
+              region := region
+              arguments := arguments }) =
+      some application at accepted
+  rw [Option.bind_eq_some_iff] at accepted
+  obtain ⟨arguments, _, accepted⟩ := accepted
+  simp only [Option.some.injEq] at accepted
+  subst application
+  rfl
+
+private theorem relationJoinApplications?_nodes
+    (source : CheckedDiagram definitions)
+    (args : List Sig)
+    (nodes : List source.val.NodeId)
+    (applications : List (RelationJoinApplication source))
+    (accepted :
+      nodes.mapM (relationJoinApplicationAt? source args) =
+        some applications) :
+    applications.map RelationJoinApplication.node = nodes := by
+  induction nodes generalizing applications with
+  | nil =>
+      simp at accepted
+      subst applications
+      rfl
+  | cons node nodes induction =>
+      rw [List.mapM_cons] at accepted
+      change
+        (relationJoinApplicationAt? source args node).bind
+            (fun application =>
+              (List.mapM (relationJoinApplicationAt? source args) nodes).bind
+                (fun tail => some (application :: tail))) =
+          some applications at accepted
+      rw [Option.bind_eq_some_iff] at accepted
+      obtain ⟨application, applicationAccepted, accepted⟩ := accepted
+      rw [Option.bind_eq_some_iff] at accepted
+      obtain ⟨tail, tailAccepted, accepted⟩ := accepted
+      simp only [Option.some.injEq] at accepted
+      subst applications
+      simp only [List.map_cons, List.cons.injEq]
+      exact
+        ⟨relationJoinApplicationAt?_node source args node application
+            applicationAccepted,
+          induction tail tailAccepted⟩
+
 private def openBoundarySigs
     (content : CheckedOpenDiagram definitions) :
     List Sig :=
@@ -88,6 +148,8 @@ private structure RelationJoinPlan
     (source.val.wires wire).endpoints.all
         (relationEndpointIsApplied source args) = true
   applications : List (RelationJoinApplication source)
+  applicationsExact :
+    relationJoinApplications? source wire args = some applications
   boundaryExact :
     openBoundarySigs content = args ++ parameterSigs source parameters
   parametersSurvive :
@@ -127,6 +189,7 @@ private def checkRelationJoinPlan
                       relationSignature := relationData
                       endpointsApplied := endpointsApplied
                       applications := applications
+                      applicationsExact := applicationsAccepted
                       boundaryExact := boundaryExact
                       parametersSurvive := by
                         intro position
@@ -1093,6 +1156,34 @@ theorem applications_complete
     _ = result.plan.applications.map RelationJoinApplication.node := by
       rw [result.initial.processedEmpty]
       simp
+
+/--
+The accepted join retains its application order exactly: it is the source
+node-storage order filtered by incidence at the dying wire.  This positional
+equation is the bridge used by batch reconstruction; no later consumer needs
+to rediscover which splice step belongs to which source application.
+-/
+theorem applications_storage_order
+    (result : RelationJoinResult source wire content parameters) :
+    result.applications =
+      source.val.nodesList.filter fun node =>
+        decide
+          ((⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+            (source.val.wires wire).endpoints) := by
+  rw [result.applications_complete]
+  have mapped :=
+    relationJoinApplications?_nodes source result.args
+      (relationApplicationNodes source wire) result.plan.applications
+      (by
+        simpa [relationJoinApplications?] using
+          result.plan.applicationsExact)
+  simpa [relationApplicationNodes] using mapped
+
+/-- The retained splice trace has exactly one step per accepted application. -/
+theorem steps_application_order
+    (result : RelationJoinResult source wire content parameters) :
+    result.steps.map RelationJoinStep.application = result.applications :=
+  result.finalState.traceExact.trans result.applicationsExact.symm
 
 theorem endpoint_applied
     (result : RelationJoinResult source wire content parameters)

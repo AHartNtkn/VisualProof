@@ -463,6 +463,9 @@ private structure RelationSeverConcreteReceipt
     ConcreteWireQuantifier.joinRelation result.checked result.relationWire
         pattern parameters =
       .ok inverse
+  inverseStepsExact :
+    inverse.steps.map ConcreteWireQuantifier.RelationJoinStep.application =
+      result.atoms
   inverseIso : ConcreteIso inverse.plainFinal.val source.val
 
 /-- Opaque accepted strongest relation-join transformation. -/
@@ -1003,6 +1006,16 @@ def applyMonolithicRelationSever
                                 inverseChecked := inverseChecked
                                 inverse := inverse
                                 inverseAccepted := inverseAccepted
+                                inverseStepsExact := by
+                                  calc
+                                    inverse.steps.map
+                                          ConcreteWireQuantifier.RelationJoinStep.application =
+                                        inverse.applications :=
+                                      inverse.steps_application_order
+                                    _ = result.atoms := by
+                                      rw [inverse.applications_storage_order]
+                                      exact
+                                        result.relationApplications_storage_order
                                 inverseIso := inverseIso }
                               { orientation :=
                                   oppositeOrientation input.orientation

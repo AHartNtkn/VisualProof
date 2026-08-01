@@ -115,6 +115,69 @@ theorem allFin_nodup (n : Nat) : (allFin n).Nodup := by
           apply Fin.ext
           exact Nat.succ.inj (congrArg Fin.val hs))
 
+private theorem map_allFin_add
+    (m n : Nat) (f : Fin (m + n) → α) :
+    (allFin (m + n)).map f =
+      (allFin m).map (fun index => f (Fin.castAdd n index)) ++
+        (allFin n).map (fun index => f (Fin.natAdd m index)) := by
+  rw [allFin_eq_finRange, allFin_eq_finRange, allFin_eq_finRange]
+  unfold List.finRange
+  rw [List.map_ofFn, List.map_ofFn, List.map_ofFn, List.ofFn_add]
+  congr 1
+
+/-- Split a dense finite enumeration into its retained prefix and fresh suffix. -/
+theorem allFin_add (m n : Nat) :
+    allFin (m + n) =
+      (allFin m).map (Fin.castAdd n) ++
+        (allFin n).map (Fin.natAdd m) := by
+  have split := map_allFin_add m n (fun value => value)
+  change
+    (allFin (m + n)).map id =
+      (allFin m).map (Fin.castAdd n) ++
+        (allFin n).map (Fin.natAdd m) at split
+  simpa only [List.map_id] using split
+
+/-- Filtering a dense carrier by an exact suffix predicate preserves site order. -/
+theorem filter_allFin_suffix
+    (m n : Nat)
+    (selected : Fin (m + n) → Bool)
+    (selectedExact : ∀ value, selected value = decide (m ≤ value.val)) :
+    (allFin (m + n)).filter selected =
+      (allFin n).map (Fin.natAdd m) := by
+  rw [allFin_add, List.filter_append]
+  have prefixEmpty :
+      ((allFin m).map (Fin.castAdd n)).filter selected = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro value member accepted
+    rw [selectedExact] at accepted
+    have large : m ≤ value.val := of_decide_eq_true accepted
+    rcases List.mem_map.mp member with ⟨index, _, rfl⟩
+    change m ≤ index.val at large
+    exact (Nat.not_le_of_gt index.isLt) large
+  have suffixExact :
+      ((allFin n).map (Fin.natAdd m)).filter selected =
+        (allFin n).map (Fin.natAdd m) := by
+    apply List.filter_eq_self.mpr
+    intro value member
+    rw [selectedExact]
+    apply decide_eq_true
+    rcases List.mem_map.mp member with ⟨index, _, rfl⟩
+    simp
+  rw [prefixEmpty, suffixExact]
+  rfl
+
+/-- Suffix filtering transported across an explicit carrier-count equation. -/
+theorem filter_allFin_suffix_of_eq
+    (total m n : Nat)
+    (countExact : total = m + n)
+    (selected : Fin total → Bool)
+    (selectedExact : ∀ value, selected value = decide (m ≤ value.val)) :
+    (allFin total).filter selected =
+      (allFin n).map (fun value =>
+        Fin.cast countExact.symm (Fin.natAdd m value)) := by
+  subst total
+  exact filter_allFin_suffix m n selected selectedExact
+
 /-- Lift an equivalence of finite tails across a common list head. -/
 def FiniteEquiv.finSucc
     (equivalence : FiniteEquiv (Fin left) (Fin right)) :

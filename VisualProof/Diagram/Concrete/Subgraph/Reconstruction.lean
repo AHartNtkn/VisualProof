@@ -2756,7 +2756,7 @@ noncomputable def extract_splice_iso
       regionsExact nodesExact wiresExact
 
 /-- Compatibility surface for consumers that still sequence optional checks. -/
-noncomputable def extract_splice_iso?
+def extract_splice_iso?
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -2765,8 +2765,22 @@ noncomputable def extract_splice_iso?
     (accepted :
       reconstructionAttachment? occurrence removed =
         some attachment) :
-    Option (ConcreteIso attachment.diagram host.val) :=
-  some (extract_splice_iso occurrence removed attachment accepted)
+    Option (ConcreteIso attachment.diagram host.val) := by
+  have regionsExact : RegionsExact occurrence :=
+    fun region =>
+      occurrence.mem_toSelection_allRegions_iff_image region
+  have nodesExact : NodesExact occurrence :=
+    fun node =>
+      occurrence.mem_toSelection_allNodes_iff_image node
+  have wiresExact : WiresExact occurrence :=
+    fun wire =>
+      occurrence.mem_toSelection_internalWires_iff_image wire
+  have empty : attachment.identityRequests = [] :=
+    identityRequests_eq_nil occurrence removed attachment accepted
+  exact ConcreteIso.checkEquivs? attachment.diagram host.val
+    (regionEquiv occurrence removed attachment regionsExact)
+    (nodeEquiv occurrence removed attachment empty nodesExact)
+    (wireEquiv occurrence removed attachment wiresExact)
 
 end Reconstruction
 
