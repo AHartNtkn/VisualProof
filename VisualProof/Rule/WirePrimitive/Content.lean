@@ -120,6 +120,13 @@ def target
     CheckedDiagram definitions :=
   applied.checked.checked
 
+/-- Receipt-owned wire on which the exact inverse absorb acts. -/
+def inverseWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutWrap source wire) : applied.target.val.WireId :=
+  applied.checked.targetWire
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -183,6 +190,20 @@ def target
     (applied : AppliedParallelSplit source wire) :
     CheckedDiagram definitions :=
   applied.checked.checked
+
+/-- Receipt-owned first wire of the exact inverse fuse. -/
+def inverseLeft
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedParallelSplit source wire) : applied.target.val.WireId :=
+  applied.checked.firstWire
+
+/-- Receipt-owned second wire of the exact inverse fuse. -/
+def inverseRight
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedParallelSplit source wire) : applied.target.val.WireId :=
+  applied.checked.secondWire
 
 def tag
     {source : CheckedDiagram definitions}

@@ -1215,23 +1215,6 @@ private def vacuousBoundCandidate
         scope := site
         endpoints := [] }
 
-private def vacuousIntroCandidates
-    (real : CheckedDiagram definitions)
-    (signature : Sig)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.regionsList.filterMap fun site =>
-    let candidate := vacuousBoundCandidate real site signature
-    match _accepted :
-        ConcreteDiagram.checkWellFormed definitions candidate with
-    | .error _ => none
-    | .ok bound =>
-        let input : StructuralCore.VacuousInput real bound :=
-          { site := site, sig := signature }
-        match StructuralCore.checkVacuous input with
-        | .error _ => none
-        | .ok checked => some (.vacuousIntro input checked)
-
 private def endSiteCandidates
     (real : CheckedDiagram definitions)
     (wire : real.val.WireId) :
@@ -1285,56 +1268,6 @@ private def refAbstractCandidates
       | .error _ => none
       | .ok applied => some (.refAbstract nodes scope applied)
 
-private def cutAbsorbCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.filterMap fun wire =>
-    match applyCutAbsorb real wire with
-    | .error _ => none
-    | .ok applied => some (.cutAbsorb wire applied)
-
-private def cutWrapCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.filterMap fun wire =>
-    match applyCutWrap real wire with
-    | .error _ => none
-    | .ok applied => some (.cutWrap wire applied)
-
-private def parallelFuseCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun left =>
-    real.val.wiresList.filterMap fun right =>
-      match applyParallelFuse real left right with
-      | .error _ => none
-      | .ok applied => some (.parallelFuse left right applied)
-
-private def parallelSplitCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.filterMap fun wire =>
-    match applyParallelSplit real wire with
-    | .error _ => none
-    | .ok applied => some (.parallelSplit wire applied)
-
-private def arityUnshiftCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    match (real.val.wires wire).sig with
-    | .iota => []
-    | .rel arguments =>
-        (List.range arguments.length).filterMap fun position =>
-          match applyArityUnshift real wire position with
-          | .error _ => none
-          | .ok applied => some (.arityUnshift wire position applied)
-
 private def argDropCandidates
     (real : CheckedDiagram definitions)
     (position : Nat)
@@ -1376,32 +1309,6 @@ private def argPermuteCandidates
             | .error _ => none
             | .ok applied => some (.argPermute wire permutation applied)
 
-private def argContractCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    match (real.val.wires wire).sig with
-    | .iota => []
-    | .rel arguments =>
-        (List.range arguments.length).filterMap fun position =>
-          match applyArgContract real wire position with
-          | .error _ => none
-          | .ok applied => some (.argContract wire position applied)
-
-private def argDuplicateCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    match (real.val.wires wire).sig with
-    | .iota => []
-    | .rel arguments =>
-        (List.range arguments.length).filterMap fun position =>
-          match applyArgDuplicate real wire position with
-          | .error _ => none
-          | .ok applied => some (.argDuplicate wire position applied)
-
 private def inverseCandidates
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
@@ -1414,28 +1321,22 @@ private def inverseCandidates
   | .identityErase .. => throw .malformedResidual
   | .wireSever .. => throw .malformedResidual
   | .wireJoin .. => throw .malformedResidual
-  | .cutWrap .. => pure (cutAbsorbCandidates real orientation)
-  | .cutAbsorb .. => pure (cutWrapCandidates real orientation)
-  | .parallelSplit .. => pure (parallelFuseCandidates real orientation)
-  | .parallelFuse .. => pure (parallelSplitCandidates real orientation)
+  | .cutWrap .. => throw .malformedResidual
+  | .cutAbsorb .. => throw .malformedResidual
+  | .parallelSplit .. => throw .malformedResidual
+  | .parallelFuse .. => throw .malformedResidual
   | .endsDelete wire _ =>
       pure
         (endsSpawnCandidates real
           (planned.val.wires wire).endpoints.length orientation)
-  | .endsSpawn .. =>
-      pure <|
-        real.val.wiresList.filterMap fun wire =>
-          match applyEndsDelete real wire orientation with
-          | .error _ => none
-          | .ok applied => some (.endsDelete wire applied)
-  | .vacuousElim input _ =>
-      pure (vacuousIntroCandidates real input.sig orientation)
+  | .endsSpawn .. => throw .malformedResidual
+  | .vacuousElim .. => throw .malformedResidual
   | .vacuousIntro .. => throw .malformedResidual
-  | .arityShift .. => pure (arityUnshiftCandidates real orientation)
+  | .arityShift .. => throw .malformedResidual
   | .arityUnshift .. => throw .malformedResidual
   | .argPermute .. => pure (argPermuteCandidates real orientation)
-  | .argDuplicate .. => pure (argContractCandidates real orientation)
-  | .argContract .. => pure (argDuplicateCandidates real orientation)
+  | .argDuplicate .. => throw .malformedResidual
+  | .argContract .. => throw .malformedResidual
   | .argDrop wire position _ =>
       match (planned.val.wires wire).sig with
       | .iota => throw .malformedResidual
@@ -1481,6 +1382,74 @@ private def invertStep
         { step := .wireSever inverse.input inverse.orientationExact
             inverse.applied
           normalizedIso := inverse.targetIso }
+  | .arityShift _ _ applied => do
+      let inverseWire := targetIso.wires.symm applied.targetWire
+      let inversePosition := applied.sourceArgumentList.length
+      let inverseApplied ←
+        (applyArityUnshift real inverseWire inversePosition).mapError
+          .argumentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .arityUnshift inverseWire inversePosition inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .cutWrap _ applied => do
+      let inverseWire := targetIso.wires.symm applied.inverseWire
+      let inverseApplied ←
+        (applyCutAbsorb real inverseWire).mapError .contentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .cutAbsorb inverseWire inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .parallelSplit _ applied => do
+      let inverseLeft := targetIso.wires.symm applied.inverseLeft
+      let inverseRight := targetIso.wires.symm applied.inverseRight
+      let inverseApplied ←
+        (applyParallelFuse real inverseLeft inverseRight).mapError
+          .contentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .parallelFuse inverseLeft inverseRight inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .argDuplicate _ position applied => do
+      let inverseWire := targetIso.wires.symm applied.targetWire
+      let inverseApplied ←
+        (applyArgContract real inverseWire position).mapError
+          .argumentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .argContract inverseWire position inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .vacuousElim input _ => do
+      let inverseSite := targetIso.regions.symm input.site
+      let candidate := vacuousBoundCandidate real inverseSite input.sig
+      match accepted :
+          ConcreteDiagram.checkWellFormed definitions candidate with
+      | .error _ => throw .allocationMismatch
+      | .ok bound =>
+          let inverseInput : StructuralCore.VacuousInput real bound :=
+            { site := inverseSite, sig := input.sig }
+          let inverseChecked ←
+            (StructuralCore.checkVacuous inverseInput).mapError
+              .vacuousRejected
+          let inverseStep : CompiledPrimitiveStep orientation real :=
+            .vacuousIntro inverseInput inverseChecked
+          let normalizedIso ←
+            requireOption .redundancyMismatch <|
+              ConcreteIsoSearch.findConcreteIso?
+                inverseStep.target.val planned.val
+          pure { step := inverseStep, normalizedIso := normalizedIso }
   | _ => do
       let candidates ← inverseCandidates step real orientation
       requireOption .redundancyMismatch <|
