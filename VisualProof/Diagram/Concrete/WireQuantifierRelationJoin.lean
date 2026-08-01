@@ -324,6 +324,58 @@ structure RelationJoinStep
 
 namespace RelationJoinStep
 
+/-- Transport any prior region through atom deletion and this splice. -/
+def checkedPriorRegion
+    (step : RelationJoinStep source dying content)
+    (region : step.prior.val.RegionId) :
+    step.checked.val.RegionId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.regionCount step.generated).symm
+    (step.attachment.hostRegion
+      (Internal.checkedRegion step.baseGenerated
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          step.prior step.priorApplication region)))
+
+/-- Transport any non-application prior node through deletion and splice. -/
+def checkedPriorNode
+    (step : RelationJoinStep source dying content)
+    (node : step.prior.val.NodeId)
+    (different : node ≠ step.priorApplication) :
+    step.checked.val.NodeId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.nodeCount step.generated).symm
+    (step.attachment.hostNode
+      (Internal.checkedNode step.baseGenerated
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+          step.prior step.priorApplication node (by
+            simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+              ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+              different]))))
+
+/-- Transport any prior wire through atom deletion and this splice. -/
+def checkedPriorWire
+    (step : RelationJoinStep source dying content)
+    (wire : step.prior.val.WireId) :
+    step.checked.val.WireId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.wireCount step.generated).symm
+    (step.attachment.hostWire
+      (Internal.checkedWire step.baseGenerated
+        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+          step.prior step.priorApplication wire)))
+
+@[simp] theorem checkedPriorRegion_val
+    (step : RelationJoinStep source dying content)
+    (region : step.prior.val.RegionId) :
+    (step.checkedPriorRegion region).val = region.val := by
+  rfl
+
+@[simp] theorem checkedPriorWire_val
+    (step : RelationJoinStep source dying content)
+    (wire : step.prior.val.WireId) :
+    (step.checkedPriorWire wire).val = wire.val := by
+  rfl
+
 theorem attachment_accepted
     (step : RelationJoinStep source dying content) :
     checkConcreteSpliceAttachment step.base step.site content
@@ -911,6 +963,11 @@ private structure RelationJoinFinalRemoval
     Internal.BatchRemovalPlan state.checked [] [] [state.wireImage wire]
   generated :
     checked.val = Internal.batchRemovalCandidate plan
+  allRegionImage : state.checked.val.RegionId → checked.val.RegionId
+  allNodeImage : state.checked.val.NodeId → checked.val.NodeId
+  allWireImage :
+    ∀ boundWire : state.checked.val.WireId,
+      boundWire ≠ state.wireImage wire → checked.val.WireId
   regionImage : source.val.RegionId → checked.val.RegionId
   wireImage :
     ∀ sourceWire : source.val.WireId,
@@ -942,6 +999,28 @@ private def removeRelationJoinWire
             { checked := checked
               plan := plan
               generated := generated
+              allRegionImage := fun region =>
+                Internal.checkedRegion generated
+                  (Internal.retainedRegionIndex state.checked [] region (by
+                    simp [Internal.retainedRegions,
+                      ConcreteDiagram.regionsList,
+                      Data.Finite.mem_allFin]))
+              allNodeImage := fun node =>
+                Internal.checkedNode generated
+                  (Internal.retainedNodeIndex state.checked [] node (by
+                    simp [Internal.retainedNodes,
+                      ConcreteDiagram.nodesList,
+                      Data.Finite.mem_allFin]))
+              allWireImage := fun boundWire different =>
+                Internal.checkedWire generated
+                  (Internal.retainedWireIndex state.checked [dying]
+                    boundWire (by
+                      simp only [Internal.retainedWires,
+                        ConcreteDiagram.wiresList,
+                        List.mem_filter, Data.Finite.mem_allFin, true_and,
+                        List.mem_cons, List.not_mem_nil, or_false]
+                      apply decide_eq_true
+                      simpa [dying] using different))
               regionImage := fun region =>
                 Internal.checkedRegion generated
                   (Internal.retainedRegionIndex state.checked []
@@ -1054,6 +1133,26 @@ def plainFinal
     (result : RelationJoinResult source wire content parameters) :
     CheckedDiagram definitions :=
   result.finalRemoval.checked
+
+/-- Exact final-deletion landing for every region present after all splices. -/
+def plainBoundRegionImage
+    (result : RelationJoinResult source wire content parameters) :
+    result.boundFinal.val.RegionId → result.plainFinal.val.RegionId :=
+  result.finalRemoval.allRegionImage
+
+/-- Exact final-deletion landing for every node present after all splices. -/
+def plainBoundNodeImage
+    (result : RelationJoinResult source wire content parameters) :
+    result.boundFinal.val.NodeId → result.plainFinal.val.NodeId :=
+  result.finalRemoval.allNodeImage
+
+/-- Exact final-deletion landing for every surviving post-splice wire. -/
+def plainBoundWireImage
+    (result : RelationJoinResult source wire content parameters)
+    (boundWire : result.boundFinal.val.WireId)
+    (survives : boundWire ≠ result.boundDying) :
+    result.plainFinal.val.WireId :=
+  result.finalRemoval.allWireImage boundWire survives
 
 /-- Ordered occurrence-removal/splice steps retained by the accepted join. -/
 def steps
