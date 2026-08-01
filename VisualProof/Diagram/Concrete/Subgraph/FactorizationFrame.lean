@@ -2840,6 +2840,29 @@ theorem site_origin
     (WireContext.empty base.val) compiled.frame
     compiled.frame_generated
 
+/-- The site-body decomposition transported back to the canonical visible
+context of the retained compilation receipt. -/
+theorem siteBody_decomposition
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site) :
+    ∃ (fuel : Nat)
+      (nodes children : ItemSeq definitions compiled.frame.visible.sigs),
+      compileNodes? definitions base.val compiled.frame.visible
+          (base.val.nodesAt site) = some nodes ∧
+        compileChildrenWith? definitions base.val
+            (compileRegion? definitions base.val fuel)
+            compiled.frame.visible (base.val.childrenOf site) =
+          some children ∧
+        compiled.frame.siteBody = .mk (nodes.append children) := by
+  rcases compiled with ⟨⟨visible, siteBody, context⟩, generated⟩
+  obtain ⟨outer, fuel, nodes, children, visibleExact, nodesCompiled,
+      childrenCompiled, bodyExact⟩ :=
+    (SiteCompilation.mk ⟨visible, siteBody, context⟩ generated).site_origin
+  cases visibleExact
+  exact ⟨fuel, nodes, children, nodesCompiled, childrenCompiled, bodyExact⟩
+
 /-- Exact executable equation for ordinary checked root elaboration. -/
 theorem root_generated
     {definitions : List (List Sig)}
