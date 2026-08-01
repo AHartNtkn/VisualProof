@@ -848,16 +848,16 @@ def applyArgPermute
       (AppliedArgPermute source wire permutation) :=
   match accepted :
       ConcreteWirePrimitive.argPermute source wire permutation with
-  | .error error => exact .error (.concreteRejected error)
+  | .error error => .error (.concreteRejected error)
   | .ok result =>
       match sourceSignature : (source.val.wires wire).sig with
-      | .iota => exact .error .semanticLedgerRejected
+      | .iota => .error .semanticLedgerRejected
       | .rel sourceArguments =>
           match ArgumentsSemantics.checkPermutationLedger result
               sourceArguments sourceSignature permutation with
-          | none => exact .error .semanticLedgerRejected
+          | none => .error .semanticLedgerRejected
           | some ledger =>
-              exact .ok
+              .ok
                 ⟨result, sourceArguments, sourceSignature,
                   ConcreteWirePrimitive.argPermute_sourceRemovedWires_exact
                     source wire permutation result accepted,

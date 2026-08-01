@@ -1183,11 +1183,6 @@ private def vacuousBoundCandidate
         scope := site
         endpoints := [] }
 
-/-- Positional inverse of a checker-accepted permutation.  Each original
-position is sent to its unique index in the forward permutation. -/
-private def inversePermutation (permutation : List Nat) : List Nat :=
-  (List.range permutation.length).map permutation.idxOf
-
 private def invertStep
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
@@ -1227,7 +1222,7 @@ private def invertStep
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .argPermute _ permutation applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
-      let inverse := inversePermutation permutation
+      let inverse := applied.inversePermutation
       let inverseApplied ←
         (applyArgPermute real inverseWire inverse).mapError
           .argumentRejected
