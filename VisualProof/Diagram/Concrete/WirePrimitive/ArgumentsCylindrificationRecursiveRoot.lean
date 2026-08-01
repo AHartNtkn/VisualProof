@@ -986,6 +986,64 @@ theorem recursiveFinalRegionClassifier_site
       | cut body => simp [compiled] at accepted
       | bind signature body => simp [compiled] at accepted
 
+theorem recursiveFinalRegionClassifier_isSome
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (sites : AllAppliedSites source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (region : source.val.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions source.val
+      context (source.val.nodesAt region) = some items)
+    (contextNodup : context.ids.Nodup)
+    (sourceMap : WireRenaming context.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel sourceArguments))
+    (targetHead : Var normalizedTarget (.rel result.targetArguments))
+    (headNormalization : RecursiveHeadNormalization result sourceArguments
+      context targetContext sourceMap targetMap sourceHead targetHead)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt region) :
+    (recursiveFinalRegionClassifier definitions source.val context sourceMap
+      sourceHead node).isSome = decide (node ∈ argumentSiteNodes sites) := by
+  cases classified : recursiveFinalRegionClassifier definitions source.val
+      context sourceMap sourceHead node with
+  | none =>
+      simp only [Option.isSome_none]
+      symm
+      apply decide_eq_false_iff_not.mpr
+      intro member
+      have sourceNodeMember : node ∈ sourceSiteNodesAt sites region :=
+        List.mem_filter.mpr ⟨nodeAt, decide_eq_true member⟩
+      have orderedMember := (aritySiteNodesAt_mem_iff sites region node).mpr
+        sourceNodeMember
+      obtain ⟨siteIndex, siteIndexMember, nodeExact⟩ :=
+        List.mem_map.mp orderedMember
+      have siteRegion : (sites.sites.get siteIndex).region = region :=
+        eq_of_beq (List.mem_filter.mp siteIndexMember).2
+      obtain ⟨arguments, selected, _origins⟩ :=
+        recursiveFinalRegionClassifier_complete sourceArguments
+          sourceSignature result context targetContext region items compiled
+          contextNodup sourceMap targetMap sourceHead targetHead
+          headNormalization (sites.sites.get siteIndex) siteRegion
+      rw [nodeExact, classified] at selected
+      contradiction
+  | some values =>
+      simp only [Option.isSome_some]
+      symm
+      apply decide_eq_true
+      obtain ⟨site, siteMember, nodeExact⟩ :=
+        recursiveFinalRegionClassifier_site result sourceArguments sites
+          context targetContext sourceMap targetMap sourceHead targetHead
+          headNormalization node values classified
+      unfold argumentSiteNodes
+      exact List.mem_map.mpr ⟨site, siteMember, nodeExact⟩
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
