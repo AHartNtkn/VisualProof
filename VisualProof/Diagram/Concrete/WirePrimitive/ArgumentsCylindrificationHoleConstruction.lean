@@ -6,6 +6,11 @@ namespace ArgumentsSemantics
 
 open WirePrimitive
 
+private def transportVar
+    (same : left = right)
+    (value : Var left signature) : Var right signature :=
+  same ▸ value
+
 private theorem cast_through_middle
     (first : left = middle)
     (second : middle = right)
@@ -16,6 +21,123 @@ private theorem cast_through_middle
   cases second
   cases direct
   rfl
+
+private theorem cast_here_congrArg_cons_symm
+    (same : left = right) :
+    (congrArg (List.cons signature) same).symm ▸
+        (Var.here : Var (signature :: right) signature) =
+      (Var.here : Var (signature :: left) signature) := by
+  cases same
+  rfl
+
+private theorem cast_there_congrArg_cons_symm
+    (same : left = right)
+    (value : Var right signature) :
+    (congrArg (List.cons headSignature) same).symm ▸ Var.there value =
+      Var.there (same.symm ▸ value) := by
+  cases same
+  rfl
+
+/-- In a homogeneous concrete wire context, the canonical repeated-signature
+variable at one finite position names the wire stored at that same position.
+This is the concrete ownership fact needed to identify construction-owned
+fresh arity binders after dependent signature transport. -/
+private theorem origin_repeatedVar
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (fixedSignature : Sig)
+    (signatures :
+      ids.map (fun wire => (diagram.wires wire).sig) =
+        List.replicate ids.length fixedSignature)
+    (index : Fin ids.length) :
+    ConcreteElaboration.WireContext.origin diagram ids
+        (signatures.symm ▸
+          BoundCylindrification.repeatedVar fixedSignature ids.length index) =
+      ids.get index := by
+  induction ids with
+  | nil => exact Fin.elim0 index
+  | cons head tail induction =>
+      have signatures' :
+          (diagram.wires head).sig ::
+              tail.map (fun wire => (diagram.wires wire).sig) =
+            fixedSignature :: List.replicate tail.length fixedSignature := by
+        simpa [List.replicate_succ] using signatures
+      have headSignature : (diagram.wires head).sig = fixedSignature :=
+        List.cons.inj signatures' |>.1
+      have tailSignatures :
+          tail.map (fun wire => (diagram.wires wire).sig) =
+            List.replicate tail.length fixedSignature :=
+        List.cons.inj signatures' |>.2
+      cases headSignature
+      have replicateExact :
+          List.replicate (head :: tail).length (diagram.wires head).sig =
+            (diagram.wires head).sig ::
+              List.replicate tail.length (diagram.wires head).sig := rfl
+      refine Fin.cases ?_ (fun tailIndex => ?_) index
+      ·
+        have transported :
+            transportVar signatures.symm
+                (BoundCylindrification.repeatedVar
+                  (diagram.wires head).sig (head :: tail).length 0) =
+              (Var.here : Var
+                ((head :: tail).map
+                  (fun wire => (diagram.wires wire).sig))
+                (diagram.wires head).sig) := by
+          calc
+            _ = transportVar
+                  (congrArg (List.cons (diagram.wires head).sig)
+                    tailSignatures).symm
+                  (transportVar replicateExact
+                    (BoundCylindrification.repeatedVar
+                      (diagram.wires head).sig
+                        (head :: tail).length 0)) :=
+              by
+                unfold transportVar
+                exact cast_through_middle replicateExact
+                  (congrArg (List.cons (diagram.wires head).sig)
+                    tailSignatures).symm signatures.symm _
+            _ = _ := by
+              simpa only [transportVar, List.length_cons,
+                BoundCylindrification.repeatedVar, Fin.cases_zero] using
+                (cast_here_congrArg_cons_symm tailSignatures)
+        exact congrArg
+          (ConcreteElaboration.WireContext.origin diagram (head :: tail))
+          transported
+      ·
+        have transported :
+            transportVar signatures.symm
+                (BoundCylindrification.repeatedVar
+                  (diagram.wires head).sig (head :: tail).length
+                    tailIndex.succ) =
+              (Var.there
+                (tailSignatures.symm ▸
+                  BoundCylindrification.repeatedVar
+                    (diagram.wires head).sig tail.length tailIndex) :
+                Var ((head :: tail).map
+                  (fun wire => (diagram.wires wire).sig))
+                    (diagram.wires head).sig) := by
+          calc
+            _ = transportVar
+                  (congrArg (List.cons (diagram.wires head).sig)
+                    tailSignatures).symm
+                  (transportVar replicateExact
+                    (BoundCylindrification.repeatedVar
+                      (diagram.wires head).sig
+                        (head :: tail).length tailIndex.succ)) :=
+              by
+                unfold transportVar
+                exact cast_through_middle replicateExact
+                  (congrArg (List.cons (diagram.wires head).sig)
+                    tailSignatures).symm signatures.symm _
+            _ = _ := by
+              simpa only [transportVar, List.length_cons,
+                BoundCylindrification.repeatedVar, Fin.cases_succ] using
+                (cast_there_congrArg_cons_symm tailSignatures
+                  (BoundCylindrification.repeatedVar
+                    (diagram.wires head).sig tail.length tailIndex))
+        exact (congrArg
+          (ConcreteElaboration.WireContext.origin diagram (head :: tail))
+          transported).trans (induction tailSignatures tailIndex)
 
 /-- Once concrete source and target frame variables have corresponding
 construction-owned origins, normalization commutes with the root binder
