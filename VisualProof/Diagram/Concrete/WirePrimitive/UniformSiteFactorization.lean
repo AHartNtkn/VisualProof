@@ -692,6 +692,34 @@ theorem directAppliedArguments_rename_compileNodes
                     directAppliedArguments, renamedCompiledAppliedArguments?,
                     headCompiled, tailExact]
 
+/-- When classifier success is exactly a Boolean filter predicate, mapping
+`some` over its `filterMap` aligns position-for-position with mapping the
+classifier over the filtered source list. -/
+theorem map_some_filterMap_eq_map_filter
+    (classify : α → Option β)
+    (selected : α → Bool) :
+    ∀ values : List α,
+      (∀ value, value ∈ values →
+        (classify value).isSome = selected value) →
+      (values.filterMap classify).map some =
+        (values.filter selected).map classify
+  | [], _ => rfl
+  | head :: tail, exact => by
+      have headExact := exact head (by simp)
+      have tailExact := map_some_filterMap_eq_map_filter classify selected tail
+        (by
+          intro value member
+          exact exact value (by simp [member]))
+      cases classified : classify head with
+      | none =>
+          have rejected : selected head = false := by
+            simpa [classified] using headExact.symm
+          simp [classified, rejected, tailExact]
+      | some result =>
+          have accepted : selected head = true := by
+            simpa [classified] using headExact.symm
+          simp [classified, accepted, tailExact]
+
 /-- `abstractAppliedItems` exposes exactly the direct matching applications
 and preserves their item-sequence order. -/
 theorem abstractAppliedItems_holeValues

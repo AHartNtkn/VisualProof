@@ -1783,6 +1783,35 @@ theorem LocalCylindricalFrame.sourceClassifier_isSome
       apply List.mem_map.mpr
       exact ⟨site, siteMember, nodeExact⟩
 
+/-- The normalized source body's ordered hole tuple is position-for-position
+aligned with concrete source application nodes in node order. -/
+theorem LocalCylindricalFrame.sourceHoleValues_alignment
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ((UniformIntrinsicRegion.abstractApplied
+        (Var.appendRight frame.sourceReduced localSourceHead)
+        (frame.sourceScope.frame.siteBody.renameWires
+          frame.sourceFrameNormalization)).holeValues).map some =
+      (sourceSiteNodesAt result.sites
+        (source.val.wires wire).scope).map
+          (UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+            source.val frame.sourceScope.frame.visible
+            frame.sourceFrameNormalization
+            (Var.appendRight frame.sourceReduced localSourceHead)) := by
+  rw [UniformIntrinsicRegion.abstractApplied_rename_siteBody_holeValues]
+  unfold sourceSiteNodesAt
+  apply UniformIntrinsicRegion.map_some_filterMap_eq_map_filter
+  intro node nodeAt
+  exact frame.sourceClassifier_isSome sourceArguments sourceSignature result
+    pair node nodeAt
+
 /-- A generated target application local to the acted scope compiles in the
 canonical target frame with the replacement head and its exact ordered
 construction-owned argument wires. -/
