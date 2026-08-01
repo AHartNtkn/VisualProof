@@ -233,6 +233,73 @@ returns that exact position. -/
   simp [ArgumentResult.targetNode, sourcePositionOfTargetNode,
     Internal.checkedNode, replacementNode]
 
+/-- Dense replacement-base position represented by one retained checked
+target node. -/
+def retainedBaseNodeOfTarget
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId)
+    (retained : node ∉ argumentSiteNodes targetSites) :
+    (replacementBase result.plan).NodeId :=
+  ⟨node.val, by
+    have notLarge :
+        ¬ (replacementBase result.plan).nodeCount ≤ node.val := by
+      intro large
+      exact retained
+        ((result.targetSiteNode_iff_ge targetSites node).mpr large)
+    omega⟩
+
+/-- Recover the exact source node represented by one retained checked target
+node. -/
+def sourceNodeOfRetainedTarget
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId)
+    (retained : node ∉ argumentSiteNodes targetSites) :
+    source.val.NodeId :=
+  Internal.sourceRetainedNode source (argumentSiteNodes result.sites)
+    (result.retainedBaseNodeOfTarget targetSites node retained)
+
+/-- Re-embedding the recovered retained source node returns the exact checked
+target node. -/
+theorem retainedNodeImage_sourceNodeOfRetainedTarget
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId)
+    (retained : node ∉ argumentSiteNodes targetSites) :
+    result.retainedNodeImage
+        (result.sourceNodeOfRetainedTarget targetSites node retained)
+        (sourceRetainedNode_not_removed result.sites
+          (result.retainedBaseNodeOfTarget targetSites node retained)) =
+      node := by
+  unfold ArgumentResult.retainedNodeImage sourceNodeOfRetainedTarget
+  apply Fin.ext
+  simp [Internal.checkedNode, retainedBaseNodeOfTarget]
+
+/-- Recovering a retained-node image returns its exact source node. -/
+@[simp] theorem sourceNodeOfRetainedTarget_retainedNodeImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : source.val.NodeId)
+    (retained : node ∉ argumentSiteNodes result.sites)
+    (targetRetained :
+      result.retainedNodeImage node retained ∉
+        argumentSiteNodes targetSites) :
+    result.sourceNodeOfRetainedTarget targetSites
+        (result.retainedNodeImage node retained) targetRetained = node := by
+  unfold sourceNodeOfRetainedTarget retainedBaseNodeOfTarget
+    ArgumentResult.retainedNodeImage
+  apply Fin.ext
+  simp [Internal.checkedNode]
+
 private theorem targetRetainedNodes_exact
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
