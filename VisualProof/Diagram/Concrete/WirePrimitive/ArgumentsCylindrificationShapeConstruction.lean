@@ -47,6 +47,159 @@ private theorem cast_region_renameWires
   cases same
   rfl
 
+private theorem cast_var_roundtrip
+    (same : source = target)
+    (value : Var target signature) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+private theorem normalizeVisible_head
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (visibleExact : visible = bound ++ outer)
+    (outerRenaming : WireRenaming outer normalizedOuter)
+    (headSlot : Var normalizedOuter headSignature) :
+    removal.rename outerRenaming headSlot
+        (visibleExact ▸
+          (visibleExact.symm ▸
+            Var.appendLeft removal.head outer)) =
+      Var.appendRight reduced headSlot := by
+  rw [cast_var_roundtrip]
+  exact removal.rename_head outerRenaming headSlot
+
+private theorem normalizeVisible_retained
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (visibleExact : visible = bound ++ outer)
+    (outerRenaming : WireRenaming outer normalizedOuter)
+    (headSlot : Var normalizedOuter headSignature)
+    (value : Var reduced signature) :
+    removal.rename outerRenaming headSlot
+        (visibleExact ▸
+          (visibleExact.symm ▸
+            Var.appendLeft (removal.retain value) outer)) =
+      Var.appendLeft value normalizedOuter := by
+  rw [cast_var_roundtrip]
+  exact removal.rename_retain outerRenaming headSlot value
+
+private theorem normalizeVisible_outer
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (visibleExact : visible = bound ++ outer)
+    (outerRenaming : WireRenaming outer normalizedOuter)
+    (headSlot : Var normalizedOuter headSignature)
+    (value : Var outer signature) :
+    removal.rename outerRenaming headSlot
+        (visibleExact ▸
+          (visibleExact.symm ▸ Var.appendRight bound value)) =
+      Var.appendRight reduced (outerRenaming value) := by
+  rw [cast_var_roundtrip]
+  exact removal.rename_outer outerRenaming headSlot value
+
+/-- Source-frame normalization sends the selected relation head to the
+explicit normalized source-head slot. -/
+theorem LocalCylindricalFrame.sourceFrameNormalization_head
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.sourceFrameNormalization
+        (frame.context.sourceVisibleExact.symm ▸
+          Var.appendLeft frame.sourceRemoval.head frame.context.siteOuter) =
+      Var.appendRight frame.sourceReduced localSourceHead :=
+  normalizeVisible_head frame.sourceRemoval
+    frame.context.sourceVisibleExact localOuterRenaming localSourceHead
+
+/-- Source-frame normalization retains every non-head local variable at its
+exact normalized ordinal. -/
+theorem LocalCylindricalFrame.sourceFrameNormalization_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.sourceReduced signature) :
+    frame.sourceFrameNormalization
+        (frame.context.sourceVisibleExact.symm ▸
+          Var.appendLeft (frame.sourceRemoval.retain value)
+            frame.context.siteOuter) =
+      Var.appendLeft value
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter) :=
+  normalizeVisible_retained frame.sourceRemoval
+    frame.context.sourceVisibleExact localOuterRenaming localSourceHead value
+
+/-- Source-frame normalization sends a true outer variable beyond both
+explicit normalized head slots. -/
+theorem LocalCylindricalFrame.sourceFrameNormalization_outer
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.context.siteOuter signature) :
+    frame.sourceFrameNormalization
+        (frame.context.sourceVisibleExact.symm ▸
+          Var.appendRight
+            (ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope)
+            value) =
+      Var.appendRight frame.sourceReduced (localOuterRenaming value) :=
+  normalizeVisible_outer frame.sourceRemoval
+    frame.context.sourceVisibleExact localOuterRenaming localSourceHead value
+
+/-- Target-frame normalization sends the replacement relation head to the
+explicit normalized target-head slot. -/
+theorem LocalCylindricalFrame.targetFrameNormalization_head
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.targetFrameNormalization
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendLeft frame.targetRemoval.head frame.context.siteOuter) =
+      Var.appendRight frame.targetReduced localTargetHead :=
+  normalizeVisible_head frame.targetRemoval
+    frame.context.targetVisibleExact localOuterRenaming localTargetHead
+
+/-- Target-frame normalization retains every non-head target-local variable
+at its exact normalized ordinal. -/
+theorem LocalCylindricalFrame.targetFrameNormalization_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.targetReduced signature) :
+    frame.targetFrameNormalization
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendLeft (frame.targetRemoval.retain value)
+            frame.context.siteOuter) =
+      Var.appendLeft value
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter) :=
+  normalizeVisible_retained frame.targetRemoval
+    frame.context.targetVisibleExact localOuterRenaming localTargetHead value
+
+/-- Target-frame normalization sends a true outer variable beyond both
+explicit normalized head slots. -/
+theorem LocalCylindricalFrame.targetFrameNormalization_outer
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.context.siteOuter signature) :
+    frame.targetFrameNormalization
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendRight
+            (ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope)
+            value) =
+      Var.appendRight frame.targetReduced (localOuterRenaming value) :=
+  normalizeVisible_outer frame.targetRemoval
+    frame.context.targetVisibleExact localOuterRenaming localTargetHead value
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled

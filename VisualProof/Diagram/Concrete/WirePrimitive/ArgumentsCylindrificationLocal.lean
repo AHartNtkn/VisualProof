@@ -270,6 +270,38 @@ def classify :
       | .head => .head
       | .retained retained => .retained (.there retained)
 
+/-- Exhaustive typed classification of a variable in a concrete visible
+context whose local/outer signature decomposition is known exactly. -/
+inductive VisibleVariableClass
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (visibleExact : visible = bound ++ outer) :
+    {signature : Sig} → Var visible signature → Type
+  | head :
+      VisibleVariableClass removal visibleExact
+        (visibleExact.symm ▸ Var.appendLeft removal.head outer)
+  | retained (value : Var reduced signature) :
+      VisibleVariableClass removal visibleExact
+        (visibleExact.symm ▸
+          Var.appendLeft (removal.retain value) outer)
+  | outer (value : Var outer signature) :
+      VisibleVariableClass removal visibleExact
+        (visibleExact.symm ▸ Var.appendRight bound value)
+
+/-- Every compiled-frame variable is intrinsically one selected head, one
+retained local position, or one exact outer position. -/
+def classifyVisible
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (visibleExact : visible = bound ++ outer)
+    (value : Var visible signature) :
+    VisibleVariableClass removal visibleExact value := by
+  cases visibleExact
+  match classifyAppend bound value with
+  | .left localValue =>
+      match removal.classify localValue with
+      | .head => exact .head
+      | .retained retained => exact .retained retained
+  | .right outerValue => exact .outer outerValue
+
 /--
 Rename a complete local-plus-outer context after moving the selected head to
 an explicit slot in the new outer context.
