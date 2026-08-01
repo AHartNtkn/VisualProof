@@ -9,6 +9,72 @@ open WirePrimitive
 
 namespace ArgumentResult
 
+/-- Source application nodes occur exactly once in an exhaustive applied-site
+receipt. -/
+theorem argumentSiteNodes_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire) :
+    (argumentSiteNodes sites).Nodup := by
+  let embed : source.val.NodeId → CEndpoint source.val.nodeCount :=
+    fun node => ⟨node, .head⟩
+  have mappedNodup :
+      ((argumentSiteNodes sites).map embed).Nodup := by
+    simpa [argumentSiteNodes, AppliedSite.endpoint, List.map_map,
+      Function.comp_def, embed] using sites.endpoints_nodup
+  have reflectNodup : ∀ nodes : List source.val.NodeId,
+      (nodes.map embed).Nodup → nodes.Nodup := by
+    intro nodes
+    induction nodes with
+    | nil => simp
+    | cons head tail induction =>
+        intro mapped
+        rw [List.map_cons, List.nodup_cons] at mapped
+        rw [List.nodup_cons]
+        refine ⟨?_, induction mapped.2⟩
+        intro member
+        exact mapped.1 (List.mem_map.mpr ⟨head, member, rfl⟩)
+  exact reflectNodup (argumentSiteNodes sites) mappedNodup
+
+/-- Dense source-site position represented by one source application node. -/
+def sourcePositionOfNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (node : source.val.NodeId)
+    (member : node ∈ argumentSiteNodes sites) :
+    Fin sites.sites.length :=
+  Fin.cast (by simp [argumentSiteNodes]) <|
+    DenseList.index (argumentSiteNodes sites) node member
+
+/-- Decoding a source application node selects the exact owning site. -/
+theorem sourcePositionOfNode_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (node : source.val.NodeId)
+    (member : node ∈ argumentSiteNodes sites) :
+    (sites.sites.get (sourcePositionOfNode sites node member)).node = node := by
+  have exact := DenseList.get_index (argumentSiteNodes sites) node member
+  simpa [argumentSiteNodes, sourcePositionOfNode] using exact
+
+/-- Re-decoding the node stored at a source-site position returns that exact
+position. -/
+@[simp] theorem sourcePositionOfNode_get
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (position : Fin sites.sites.length)
+    (member :
+      (sites.sites.get position).node ∈ argumentSiteNodes sites) :
+    sourcePositionOfNode sites (sites.sites.get position).node member =
+      position := by
+  have exact := DenseList.index_get (argumentSiteNodes sites)
+    (ArgumentResult.argumentSiteNodes_nodup sites)
+    (Fin.cast (by simp [argumentSiteNodes]) position)
+  apply Fin.ext
+  simpa [argumentSiteNodes, sourcePositionOfNode] using congrArg Fin.val exact
+
 /-- Every endpoint of every source wire removed by the replacement belongs to
 one of the exhaustive source application sites. -/
 theorem sourceRemovedExhausted

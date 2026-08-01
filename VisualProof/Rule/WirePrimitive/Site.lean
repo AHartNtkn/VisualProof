@@ -959,7 +959,20 @@ theorem inverseTransportPosition_endpoint
   rw [endpointExact] at selected
   simpa [candidate, endpoint] using selected
 
+private theorem denseIndex_value_congr
+    [DecidableEq α]
+    (values : List α)
+    {left right : α}
+    (same : left = right)
+    (leftMember : left ∈ values)
+    (rightMember : right ∈ values) :
+    DenseList.index values left leftMember =
+      DenseList.index values right rightMember := by
+  subst right
+  rfl
+
 private theorem get_injective_of_nodup
+    [DecidableEq α]
     {values : List α}
     (nodup : values.Nodup) :
     Function.Injective values.get := by
@@ -969,7 +982,8 @@ private theorem get_injective_of_nodup
         (List.get_mem values left) :=
       (DenseList.index_get values nodup left).symm
     _ = DenseList.index values (values.get right)
-        (List.get_mem values right) := by rw [same]
+        (List.get_mem values right) :=
+      denseIndex_value_congr values same _ _
     _ = right := DenseList.index_get values nodup right
 
 /-- Exhaustive applied-site positions are transported bijectively through a
