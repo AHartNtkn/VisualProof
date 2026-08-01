@@ -3346,6 +3346,102 @@ theorem targetArguments_exact
       ConcreteWirePrimitive.eraseAt applied.sourceArgumentList position :=
   applied.target_arguments_exact
 
+def targetArgumentList
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) : List Sig :=
+  applied.result.targetArguments
+
+/-- Every generated drop application uses the exact checker-owned attachment
+vector at its source-site position. -/
+theorem siteArguments_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.result.spec.arguments site =
+      existingReferences
+        (ConcreteWirePrimitive.eraseAt
+          (applied.result.sites.sites.get site).arguments position) :=
+  applied.arguments_exact site
+
+/-- A generated drop argument endpoint is owned by the checked image of the
+exact attachment selected at that output position. -/
+theorem generatedArgument_endpointOwner
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (site : Fin applied.result.sites.sites.length)
+    (targetPosition : Nat)
+    (targetBound : targetPosition < applied.result.targetArguments.length)
+    (sourceWire : source.val.WireId)
+    (selected : (applied.result.spec.arguments site)[targetPosition]? =
+      some (.existing sourceWire)) :
+    applied.target.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg targetPosition⟩ =
+      some (applied.wireEquiv sourceWire) := by
+  by_cases different : sourceWire ≠ wire
+  · have retained : sourceWire ∉ applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simpa [different]
+    have owner := applied.result.generatedArgument_endpointOwner site
+      targetPosition targetBound sourceWire selected retained
+    simpa [AppliedArgDrop.wireEquiv,
+      ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly,
+      ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly, different]
+      using owner
+  · have same : sourceWire = wire := Classical.not_not.mp different
+    subst sourceWire
+    rw [applied.wireEquiv_head]
+    change applied.result.checked.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg targetPosition⟩ =
+      some applied.result.targetWire
+    rw [applied.result.targetNode_argument_owner site targetPosition
+      targetBound]
+    congr 1
+    unfold ConcreteWirePrimitive.replacementOwner
+      ConcreteWirePrimitive.replacementNode
+    simp only [Fin.addCases_right]
+    rw [selected]
+    simp only
+    rw [ConcreteWirePrimitive.retainedReplacementWire?_head_none]
+    exact applied.result.targetWire_exact.symm
+
+/-- Public list-indexed form of generated drop endpoint ownership. -/
+theorem generatedArgument_endpointOwner_of_selected
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (site : Fin applied.sourceSites.sites.length)
+    (targetPosition : Nat)
+    (targetBound : targetPosition < applied.targetArgumentList.length)
+    (sourceWire : source.val.WireId)
+    (selected :
+      (ConcreteWirePrimitive.eraseAt
+        (applied.sourceSites.sites.get site).arguments position)[
+          targetPosition]? = some sourceWire) :
+    applied.target.val.endpointOwner?
+        ⟨applied.targetNode site, .arg targetPosition⟩ =
+      some (applied.wireEquiv sourceWire) := by
+  apply applied.generatedArgument_endpointOwner site targetPosition
+    targetBound sourceWire
+  rw [applied.siteArguments_exact site]
+  unfold existingReferences
+  rw [List.getElem?_map, show
+    (ConcreteWirePrimitive.eraseAt
+      (applied.result.sites.sites.get site).arguments position)[
+        targetPosition]? = some sourceWire by
+      simpa [sourceSites] using selected]
+  rfl
+
 /-- Exact target image of any source wire through argument drop.  The acted
 head is replaced by the checked target head; every other wire is transported
 by the replacement receipt's retained-wire map. -/
@@ -3733,6 +3829,185 @@ theorem targetArguments_exact
       ConcreteWirePrimitive.insertAt applied.sourceArgumentList position
         newArgument :=
   applied.target_arguments_exact
+
+def targetArgumentList
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments) : List Sig :=
+  applied.result.targetArguments
+
+/-- Every generated extension application uses the exact checker-owned
+attachment vector at its source-site position. -/
+theorem siteArguments_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.result.spec.arguments site =
+      existingReferences
+        (ConcreteWirePrimitive.insertAt
+          (applied.result.sites.sites.get site).arguments position
+          ((attachments[site.val]?).getD wire)) :=
+  applied.arguments_exact site
+
+/-- A generated extension argument endpoint is owned by the checked image of
+the exact attachment selected at that output position. -/
+theorem generatedArgument_endpointOwner
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.result.sites.sites.length)
+    (targetPosition : Nat)
+    (targetBound : targetPosition < applied.result.targetArguments.length)
+    (sourceWire : source.val.WireId)
+    (selected : (applied.result.spec.arguments site)[targetPosition]? =
+      some (.existing sourceWire)) :
+    applied.target.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg targetPosition⟩ =
+      some (applied.wireEquiv sourceWire) := by
+  by_cases different : sourceWire ≠ wire
+  · have retained : sourceWire ∉ applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simpa [different]
+    have owner := applied.result.generatedArgument_endpointOwner site
+      targetPosition targetBound sourceWire selected retained
+    simpa [AppliedArgExtend.wireEquiv,
+      ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly,
+      ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly, different]
+      using owner
+  · have same : sourceWire = wire := Classical.not_not.mp different
+    subst sourceWire
+    rw [applied.wireEquiv_head]
+    change applied.result.checked.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg targetPosition⟩ =
+      some applied.result.targetWire
+    rw [applied.result.targetNode_argument_owner site targetPosition
+      targetBound]
+    congr 1
+    unfold ConcreteWirePrimitive.replacementOwner
+      ConcreteWirePrimitive.replacementNode
+    simp only [Fin.addCases_right]
+    rw [selected]
+    simp only
+    rw [ConcreteWirePrimitive.retainedReplacementWire?_head_none]
+    exact applied.result.targetWire_exact.symm
+
+/-- Public list-indexed form of generated extension endpoint ownership. -/
+theorem generatedArgument_endpointOwner_of_selected
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.sourceSites.sites.length)
+    (targetPosition : Nat)
+    (targetBound : targetPosition < applied.targetArgumentList.length)
+    (sourceWire : source.val.WireId)
+    (selected :
+      (ConcreteWirePrimitive.insertAt
+        (applied.sourceSites.sites.get site).arguments position
+        ((attachments[site.val]?).getD wire))[targetPosition]? =
+          some sourceWire) :
+    applied.target.val.endpointOwner?
+        ⟨applied.targetNode site, .arg targetPosition⟩ =
+      some (applied.wireEquiv sourceWire) := by
+  apply applied.generatedArgument_endpointOwner site targetPosition
+    targetBound sourceWire
+  rw [applied.siteArguments_exact site]
+  unfold existingReferences
+  rw [List.getElem?_map, show
+    (ConcreteWirePrimitive.insertAt
+      (applied.result.sites.sites.get site).arguments position
+        ((attachments[site.val]?).getD wire))[targetPosition]? =
+      some sourceWire by
+        simpa [sourceSites] using selected]
+  rfl
+
+/-- The head of every generated extension node is owned by the rebuilt head
+wire. -/
+theorem generatedHead_endpointOwner
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.target.val.endpointOwner?
+        ⟨applied.targetNode site, .head⟩ = some applied.targetWire := by
+  have generatedTarget :=
+    applied.result.generatedNode_targetSiteNode applied.targetSites site
+  unfold ConcreteWirePrimitive.argumentSiteNodes at generatedTarget
+  rcases List.mem_map.mp generatedTarget with
+    ⟨targetSite, _targetMember, targetNodeExact⟩
+  have owner := targetSite.endpoint_owner
+  change applied.target.val.endpointOwner?
+      ⟨targetSite.node, .head⟩ = some applied.targetWire at owner
+  rw [targetNodeExact] at owner
+  exact owner
+
+/-- A required argument port of a generated extension node is in the exact
+checked target argument vector. -/
+theorem generatedArgument_bound
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.sourceSites.sites.length)
+    (index : Nat)
+    (required : .arg index ∈
+      applied.target.val.requiredPorts (applied.targetNode site)) :
+    index < applied.targetArgumentList.length := by
+  change .arg index ∈ applied.result.checked.val.requiredPorts
+    (applied.result.targetNode site) at required
+  rw [ConcreteDiagram.requiredPorts,
+    applied.result.targetNode_data site] at required
+  simpa [targetArgumentList] using required
+
+/-- Generated extension nodes are atoms and therefore have no identity
+ports. -/
+theorem generatedIdentity_not_required
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.sourceSites.sites.length)
+    (index : Nat) :
+    .identity index ∉
+      applied.target.val.requiredPorts (applied.targetNode site) := by
+  change .identity index ∉ applied.result.checked.val.requiredPorts
+    (applied.result.targetNode site)
+  rw [ConcreteDiagram.requiredPorts,
+    applied.result.targetNode_data site]
+  simp
 
 /-- The inserted argument port at a generated node is owned by the exact
 site-indexed attachment selected by the accepted extension. -/
