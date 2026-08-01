@@ -598,6 +598,76 @@ def LocalCylindricalFrame.retainedVisibleContext
       LocalCylindricalFrame.sourceRetainedVisibleContext, List.map_append]
     rw [localContext.ids_exact, pair.siteOuterRetained.ids_exact]
 
+/-- The pruned source-local identifier block is the acted scope's concrete
+local order with exactly the rewritten relation wire removed. -/
+theorem LocalCylindricalFrame.sourceReducedContext_ids_filter
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.sourceReducedContext.ids =
+      (source.val.wiresAt (source.val.wires wire).scope).filter
+        (fun candidate => decide (candidate ≠ wire)) := by
+  have sourceNodup :
+      (source.val.wiresAt (source.val.wires wire).scope).Nodup := by
+    unfold ConcreteDiagram.wiresAt ConcreteDiagram.wiresList
+    exact (Data.Finite.allFin_nodup source.val.wireCount).filter _
+  unfold LocalCylindricalFrame.sourceReducedContext
+  rw [← filter_origin_ids source.val _ sourceNodup
+    frame.sourceRemoval.head]
+  rw [frame.sourceRemoval_head, frame.sourceHead_origin]
+
+/-- Every required port owner of an acted-scope retained source node occurs
+in the pruned source context; the removed relation head is excluded by site
+exhaustiveness, while true outer owners remain in the paired outer spine. -/
+theorem LocalCylindricalFrame.retainedSourceNode_port_visible
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt (source.val.wires wire).scope)
+    (nodeRetained : node ∉ argumentSiteNodes result.sites)
+    (port : CPort)
+    (sourceWire : source.val.WireId)
+    (sourceOwner :
+      source.val.endpointOwner? ⟨node, port⟩ = some sourceWire) :
+    sourceWire ∈ (frame.sourceRetainedVisibleContext pair).ids := by
+  have nodeRegion :
+      (source.val.nodes node).region = (source.val.wires wire).scope := by
+    unfold ConcreteDiagram.nodesAt at nodeAt
+    exact eq_of_beq (List.mem_filter.mp nodeAt).2
+  have ownerEncloses :
+      source.val.Encloses (source.val.wires sourceWire).scope
+        (source.val.wires wire).scope := by
+    have ownerScope := ConcreteElaboration.Internal.endpoint_scope definitions
+      source.val source.property ⟨node, port⟩ sourceWire sourceOwner
+    simpa [nodeRegion] using ownerScope
+  have visible := frame.sourceScope.visible_of_encloses sourceWire ownerEncloses
+  rw [pair.sourceVisibleContextExact] at visible
+  change sourceWire ∈
+      source.val.wiresAt (source.val.wires wire).scope ++
+        pair.sourceSiteOuter.ids at visible
+  rcases List.mem_append.mp visible with localMember | outerMember
+  · apply List.mem_append_left
+    rw [frame.sourceReducedContext_ids_filter]
+    apply List.mem_filter.mpr
+    refine ⟨localMember, decide_eq_true ?_⟩
+    intro same
+    subst sourceWire
+    apply result.ownerOfRetainedNode_not_removed node nodeRetained port wire
+      sourceOwner
+    rw [arityShift_sourceRemovedWires_exact source wire newArgument result
+      accepted]
+    simp
+  · exact List.mem_append_right _ outerMember
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled
