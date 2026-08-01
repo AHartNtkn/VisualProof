@@ -3865,6 +3865,64 @@ theorem inverseTransport_region_table
               congrArg (fun value => forward.result.regionEquiv.symm
                 (targetIso.regions value)) backwardParentCancel.symm
 
+/-- Planned source-site position represented by one real head endpoint after
+transport through the supplied target isomorphism. -/
+def inverseTransportSourcePosition
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (sourceEndpoint : CEndpoint real.val.nodeCount)
+    (sourceMember : sourceEndpoint ∈
+      (real.val.wires backwardWire).endpoints) :
+    Fin forward.result.sites.sites.length :=
+  let middleEndpoint := targetIso.endpointMap backwardWire sourceEndpoint
+  have middleMember : middleEndpoint ∈
+      (forward.target.val.wires forward.targetWire).endpoints := by
+    rw [← wireExact]
+    exact targetIso.endpointMap_mem backwardWire sourceEndpoint sourceMember
+  let middleEndpointPosition := DenseList.index
+    (forward.target.val.wires forward.targetWire).endpoints
+    middleEndpoint middleMember
+  let middlePosition := Fin.cast forward.targetSites.length.symm
+    middleEndpointPosition
+  let middleNode := (forward.targetSites.sites.get middlePosition).node
+  have generated : middleNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes forward.targetSites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨forward.targetSites.sites.get middlePosition,
+        List.get_mem _ _, rfl⟩
+  forward.result.sourcePositionOfTargetNode forward.targetSites
+    middleNode generated
+
+/-- Site-indexed inverse attachments in real source order.  Each real head
+endpoint is transported to its corresponding forward target site before the
+construction-owned dropped attachment is selected and pulled back. -/
+def inverseAttachments
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire) :
+    List real.val.WireId :=
+  List.ofFn fun endpointPosition =>
+    let sourceEndpoint :=
+      (real.val.wires backwardWire).endpoints.get endpointPosition
+    let plannedPosition := forward.inverseTransportSourcePosition targetIso
+      wireExact sourceEndpoint (List.get_mem _ _)
+    let sourceAttachment :=
+      ((forward.result.sites.sites.get plannedPosition).arguments[position]?).getD
+        forwardWire
+    targetIso.wires.symm (forward.transportWire sourceAttachment)
+
 /-- Planned source-site position represented by one real source site after
 transport through the supplied target isomorphism. -/
 def inverseTransportSitePosition
@@ -3888,25 +3946,8 @@ def inverseTransportSitePosition
     rw [← backward.result.sites.exhaustive]
     exact List.mem_map.mpr
       ⟨backward.result.sites.sites.get site, List.get_mem _ _, rfl⟩
-  let middleEndpoint := targetIso.endpointMap backwardWire sourceEndpoint
-  have middleMember : middleEndpoint ∈
-      (forward.target.val.wires forward.targetWire).endpoints := by
-    rw [← wireExact]
-    exact targetIso.endpointMap_mem backwardWire sourceEndpoint sourceMember
-  let middleEndpointPosition := DenseList.index
-    (forward.target.val.wires forward.targetWire).endpoints
-    middleEndpoint middleMember
-  let middlePosition := Fin.cast forward.targetSites.length.symm
-    middleEndpointPosition
-  let middleNode := (forward.targetSites.sites.get middlePosition).node
-  have generated : middleNode ∈
-      ConcreteWirePrimitive.argumentSiteNodes forward.targetSites := by
-    unfold ConcreteWirePrimitive.argumentSiteNodes
-    exact List.mem_map.mpr
-      ⟨forward.targetSites.sites.get middlePosition,
-        List.get_mem _ _, rfl⟩
-  forward.result.sourcePositionOfTargetNode forward.targetSites
-    middleNode generated
+  forward.inverseTransportSourcePosition targetIso wireExact
+    sourceEndpoint sourceMember
 
 /-- The transported inverse node carrier sends each rebuilt node to the
 exact planned source site selected by endpoint transport. -/
