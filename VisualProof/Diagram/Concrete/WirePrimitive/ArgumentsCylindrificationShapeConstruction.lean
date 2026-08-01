@@ -191,6 +191,11 @@ private theorem origin_extend_appendLeft
   exact InsertionCompilation.NaturalityInternal.appendLeftIds_origin
     diagram (diagram.wiresAt region) context.ids value
 
+private def castVarsArguments
+    (same : left = right)
+    (values : Vars context left) : Vars context right :=
+  same ▸ values
+
 /-- Rename a source compiled-frame variable into the source-normalized
 arity-shape context, including the explicit source/target head slots. -/
 def LocalCylindricalFrame.sourceFrameNormalization
@@ -1371,6 +1376,74 @@ theorem LocalCylindricalFrame.targetFrameNormalization_of_head_origin
         rw [frame.targetRemoval_head]
   rw [canonicalExact]
   exact frame.targetFrameNormalization_head
+
+private theorem LocalCylindricalFrame.targetFrameNormalization_of_head_origin_cast
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments atomArguments : List Sig}
+    {result : ArgumentResult source wire}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (signatures : atomArguments = result.targetArguments)
+    (head : Var frame.targetScope.frame.visible.sigs
+      (.rel atomArguments))
+    (headOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids head = result.targetWire) :
+    signatures ▸ frame.targetFrameNormalization head =
+      Var.appendRight frame.targetReduced localTargetHead := by
+  cases signatures
+  exact frame.targetFrameNormalization_of_head_origin pair head headOrigin
+
+/-- Every generated target application is recognized as a normalized target
+hole.  The checker-owned signature equality performs the only required
+dependent transport of its compiled argument tuple. -/
+theorem LocalCylindricalFrame.compileTargetAppliedSiteHole?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (site : Fin result.sites.sites.length)
+    (siteRegion :
+      (result.sites.sites.get site).region =
+        (source.val.wires wire).scope) :
+    ∃ (head : Var frame.targetScope.frame.visible.sigs
+          (.rel (targetAppliedSite result site).argumentSignatures))
+      (arguments : Vars frame.targetScope.frame.visible.sigs
+          (targetAppliedSite result site).argumentSignatures),
+      ConcreteElaboration.Internal.compileNode? definitions
+          result.checked.val frame.targetScope.frame.visible
+          (result.targetNode site) = some (.atom head arguments) ∧
+      UniformIntrinsicRegion.matchedHeadArguments?
+          (Var.appendRight frame.targetReduced localTargetHead)
+          (frame.targetFrameNormalization head)
+          (Vars.rename frame.targetFrameNormalization arguments) =
+        some (castVarsArguments
+          (targetAppliedSite_argumentSignatures result site)
+          (Vars.rename frame.targetFrameNormalization arguments)) ∧
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible arguments =
+        (targetAppliedSite result site).arguments := by
+  obtain ⟨head, arguments, compiled, headOrigin, argumentOrigins⟩ :=
+    frame.compileTargetAppliedSite?_complete result site siteRegion
+  let signatures := targetAppliedSite_argumentSignatures result site
+  have normalizedHead :=
+    frame.targetFrameNormalization_of_head_origin_cast pair signatures
+      head headOrigin
+  refine ⟨head, arguments, compiled, ?_, argumentOrigins⟩
+  unfold UniformIntrinsicRegion.matchedHeadArguments?
+  split
+  · rename_i foundSignatures
+    have signaturesExact : foundSignatures = signatures :=
+      Subsingleton.elim _ _
+    cases signaturesExact
+    simp only [castVarsArguments]
+  · rename_i rejected
+    exact False.elim (rejected signatures)
 
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
