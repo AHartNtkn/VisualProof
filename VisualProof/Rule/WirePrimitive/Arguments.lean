@@ -344,6 +344,7 @@ structure AppliedArgExtend
   private target_arguments_exact :
     result.targetArguments =
       ConcreteWirePrimitive.insertAt sourceArguments position newArgument
+  private position_valid : position ≤ sourceArguments.length
   private arguments_exact :
     ∀ site : Fin result.sites.sites.length,
       result.spec.arguments site =
@@ -3452,6 +3453,35 @@ def source
     {position : Nat}
     (_ : AppliedArgDrop source orientation wire position) := source
 
+/-- Checker-owned concrete construction receipt for transport proofs. -/
+def argumentResult
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :=
+  applied.result
+
+/-- Argument drop removes only its acted source head. -/
+theorem sourceRemovedWires_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    applied.argumentResult.sourceRemovedWires = [wire] :=
+  applied.source_removed_exact
+
+/-- Argument drop allocates no construction-local wires. -/
+theorem localCount_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    applied.argumentResult.spec.localCount = 0 :=
+  applied.local_count_exact
+
 def sourceArgumentList
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3927,6 +3957,26 @@ end AppliedArgDrop
 
 namespace AppliedArgExtend
 
+private theorem eraseAt_insertAt_of_le
+    (values : List α) (position : Nat) (value : α)
+    (valid : position ≤ values.length) :
+    ConcreteWirePrimitive.eraseAt
+        (ConcreteWirePrimitive.insertAt values position value) position =
+      values := by
+  induction values generalizing position with
+  | nil =>
+      simp only [List.length_nil] at valid
+      have positionZero : position = 0 := by omega
+      subst position
+      rfl
+  | cons head tail induction =>
+      cases position with
+      | zero => rfl
+      | succ position =>
+          simp only [List.length_cons, Nat.succ_le_succ_iff] at valid
+          simp [ConcreteWirePrimitive.insertAt,
+            ConcreteWirePrimitive.eraseAt, induction position valid]
+
 def source
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3937,6 +3987,47 @@ def source
     (_ :
       AppliedArgExtend source orientation wire position newArgument
         attachments) := source
+
+/-- Checker-owned concrete construction receipt for transport proofs. -/
+def argumentResult
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :=
+  applied.result
+
+/-- Argument extension removes only its acted source head. -/
+theorem sourceRemovedWires_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    applied.argumentResult.sourceRemovedWires = [wire] :=
+  applied.source_removed_exact
+
+/-- Argument extension allocates no construction-local wires. -/
+theorem localCount_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    applied.argumentResult.spec.localCount = 0 :=
+  applied.local_count_exact
 
 def sourceArgumentList
     {source : CheckedDiagram definitions}
@@ -4193,6 +4284,49 @@ def targetArgumentList
     (applied : AppliedArgExtend source orientation wire position newArgument
       attachments) : List Sig :=
   applied.result.targetArguments
+
+/-- Exact relation signature of the rebuilt extension head. -/
+theorem targetWire_signature
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments) :
+    (applied.target.val.wires applied.targetWire).sig =
+      .rel applied.targetArgumentList := by
+  exact applied.argumentResult.targetWire_signature
+
+/-- The checker-owned semantic deletion removes precisely the coordinate
+introduced by extension and recovers the complete source argument vector. -/
+theorem eraseTargetArguments_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments) :
+    ConcreteWirePrimitive.eraseAt applied.targetArgumentList position =
+      applied.sourceArgumentList := by
+  rw [targetArgumentList, applied.targetArguments_exact]
+  exact eraseAt_insertAt_of_le applied.sourceArgumentList
+    position newArgument applied.position_valid
+
+/-- The accepted extension coordinate is in range of its source vector. -/
+theorem positionValid
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments) : position ≤ applied.sourceArgumentList.length :=
+  applied.position_valid
 
 /-- Every generated extension application uses the exact checker-owned
 attachment vector at its source-site position. -/
@@ -6088,6 +6222,10 @@ def applyArgExtend
             ConcreteWirePrimitive.argExtend_targetArguments_exact source wire
               sourceArguments sourceSignature position newArgument attachments
               result accepted
+          let positionValid :=
+            ConcreteWirePrimitive.argExtend_position_valid source wire
+              sourceArguments sourceSignature position newArgument attachments
+              result accepted
           let argumentsExact := fun site =>
             ConcreteWirePrimitive.argExtend_arguments_exact source wire
               sourceArguments sourceSignature position newArgument attachments
@@ -6095,7 +6233,7 @@ def applyArgExtend
           pure
             ⟨gate, result, sourceArguments, sourceSignature,
               sourceRemovedExact, localCountExact, targetArgumentsExact,
-              argumentsExact, ledger, semantics⟩
+              positionValid, argumentsExact, ledger, semantics⟩
 
 /-- Checked arity shift is a full-model cylindrification equivalence. -/
 theorem arity_shift_sound

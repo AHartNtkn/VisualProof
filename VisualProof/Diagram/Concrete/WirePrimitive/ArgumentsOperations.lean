@@ -1931,6 +1931,29 @@ theorem argExtend_targetArguments_exact
                       ((attachments[site.val]?).getD wire) }
               _ result accepted
 
+/-- Acceptance records that the requested insertion coordinate is in range
+of the source relation argument vector. -/
+theorem argExtend_position_valid
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (position : Nat)
+    (newArgument : Sig)
+    (attachments : List source.val.WireId)
+    (result : ArgumentResult source wire)
+    (accepted :
+      argExtend source wire position newArgument attachments = .ok result) :
+    position ≤ sourceArguments.length := by
+  unfold argExtend checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  split at accepted
+  · contradiction
+  · rename_i valid
+    simpa [validInsertionPosition] using valid
+
 /-- A successful argument extension retains the exact inserted attachment
 tuple for every construction-owned source-site position. -/
 theorem argExtend_arguments_exact
