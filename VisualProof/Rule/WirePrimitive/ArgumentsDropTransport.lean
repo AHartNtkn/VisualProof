@@ -200,6 +200,50 @@ theorem inverseTransportEndpointMap_inserted
   · exact forward.inverseTransport_insertedWire targetIso wireExact
       backward site
 
+/-- Rebuilt head endpoints map directly to the original planned heads. -/
+theorem inverseTransportEndpointMap_head
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (site : Fin backward.sourceSites.sites.length) :
+    forward.inverseTransportEndpointMap backward targetIso
+        backward.targetWire ⟨backward.targetNode site, .head⟩ =
+      ⟨(forward.sourceSites.sites.get
+        (forward.inverseTransportSitePosition backward targetIso
+          wireExact site)).node, .head⟩ ∧
+    forward.inverseTransportWireEquiv backward targetIso
+        backward.targetWire = forwardWire := by
+  let realNode := (backward.sourceSites.sites.get site).node
+  have generated : realNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes backward.sourceSites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨backward.sourceSites.sites.get site, List.get_mem _ _, rfl⟩
+  have backwardNode : backward.nodeEquiv realNode =
+      backward.targetNode site := backward.nodeEquiv_generated site
+  have backwardInverse : backward.nodeEquiv.symm
+      (backward.targetNode site) = realNode := by
+    rw [← backwardNode]
+    exact backward.nodeEquiv.left_inv realNode
+  constructor
+  · unfold inverseTransportEndpointMap
+    rw [show backward.nodeEquiv.symm (backward.targetNode site) = realNode
+      from backwardInverse, dif_pos generated]
+    congr 1
+    exact forward.inverseTransport_targetNode backward targetIso
+      wireExact site
+  · exact forward.inverseTransportWireEquiv_head backward targetIso
+      wireExact
+
 end AppliedArgDrop
 
 end Arguments
