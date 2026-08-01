@@ -443,6 +443,107 @@ theorem LocalCylindricalFrame.rootBounds_embedLocal_origin
   rw [InsertionCompilation.NaturalityInternal.appendLeftIds_origin]
   exact retained.wireRenaming_origin sourceValue
 
+/-- Reindexing a normalized source-local retainer into its concrete reduced
+context preserves the wire named by the original local removal receipt. -/
+theorem LocalCylindricalFrame.sourceReducedContext_origin_retain
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.sourceReduced signature) :
+    ConcreteElaboration.WireContext.origin source.val
+        frame.sourceReducedContext.ids
+        (frame.sourceReducedContext_sigs.symm ▸ value) =
+      ConcreteElaboration.WireContext.origin source.val
+        (source.val.wiresAt (source.val.wires wire).scope)
+        (frame.sourceRemoval.retain value) := by
+  have variableExact :
+      frame.sourceReducedContext_sigs.symm ▸ value =
+        retainedSelectedVarInErasedIds source.val
+          (source.val.wiresAt (source.val.wires wire).scope)
+          frame.sourceRemoval.head
+          (frame.sourceRemoval.reduced_eq_erase_head ▸ value) := by
+    unfold retainedSelectedVarInErasedIds
+    exact cast_through_middle
+      frame.sourceRemoval.reduced_eq_erase_head
+      (eraseSelectedIds_signatures source.val
+        (source.val.wiresAt (source.val.wires wire).scope)
+        frame.sourceRemoval.head).symm
+      frame.sourceReducedContext_sigs.symm value
+  rw [variableExact]
+  exact eraseSelectedIds_origin_retain source.val
+    (source.val.wiresAt (source.val.wires wire).scope)
+    frame.sourceRemoval value
+
+/-- Reindexing a normalized target-local retainer into its concrete reduced
+context preserves the wire named by the replacement's local removal receipt. -/
+theorem LocalCylindricalFrame.targetReducedContext_origin_retain
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.targetReduced signature) :
+    ConcreteElaboration.WireContext.origin result.checked.val
+        frame.targetReducedContext.ids
+        (frame.targetReducedContext_sigs.symm ▸ value) =
+      ConcreteElaboration.WireContext.origin result.checked.val
+        (result.checked.val.wiresAt
+          (result.checked.val.wires result.targetWire).scope)
+        (frame.targetRemoval.retain value) := by
+  have variableExact :
+      frame.targetReducedContext_sigs.symm ▸ value =
+        retainedSelectedVarInErasedIds result.checked.val
+          (result.checked.val.wiresAt
+            (result.checked.val.wires result.targetWire).scope)
+          frame.targetRemoval.head
+          (frame.targetRemoval.reduced_eq_erase_head ▸ value) := by
+    unfold retainedSelectedVarInErasedIds
+    exact cast_through_middle
+      frame.targetRemoval.reduced_eq_erase_head
+      (eraseSelectedIds_signatures result.checked.val
+        (result.checked.val.wiresAt
+          (result.checked.val.wires result.targetWire).scope)
+        frame.targetRemoval.head).symm
+      frame.targetReducedContext_sigs.symm value
+  rw [variableExact]
+  exact eraseSelectedIds_origin_retain result.checked.val
+    (result.checked.val.wiresAt
+      (result.checked.val.wires result.targetWire).scope)
+    frame.targetRemoval value
+
+/-- Every normalized retained source local is carried to the concrete target
+local owned by the arity construction.  This is the local-wire form consumed
+by ordinary-node and nested-cut correspondence. -/
+theorem LocalCylindricalFrame.rootBounds_retainedLocal_origin
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.sourceReduced signature) :
+    let targetValue :=
+      (frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted).embedLocal value
+    ConcreteElaboration.WireContext.origin result.checked.val
+        (result.checked.val.wiresAt
+          (result.checked.val.wires result.targetWire).scope)
+        (frame.targetRemoval.retain targetValue) =
+      result.contextWireMap
+        (ConcreteElaboration.WireContext.origin source.val
+          (source.val.wiresAt (source.val.wires wire).scope)
+          (frame.sourceRemoval.retain value)) := by
+  dsimp only
+  rw [← frame.targetReducedContext_origin_retain]
+  rw [frame.rootBounds_embedLocal_origin sourceArguments sourceSignature
+    newArgument result accepted value]
+  rw [frame.sourceReducedContext_origin_retain]
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled
