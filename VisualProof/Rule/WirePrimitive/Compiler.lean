@@ -1239,7 +1239,8 @@ private def invertStep
             requireOption .malformedResidual arguments[position]?
       let inverseWire := targetIso.wires.symm applied.targetWire
       let inverseAttachments :=
-        applied.targetAttachments.map targetIso.wires.symm
+        applied.inverseAttachments targetIso
+          (targetIso.wires.right_inv applied.targetWire)
       let inverseApplied ←
         (applyArgExtend real inverseWire position signature
           inverseAttachments orientation).mapError .argumentRejected
