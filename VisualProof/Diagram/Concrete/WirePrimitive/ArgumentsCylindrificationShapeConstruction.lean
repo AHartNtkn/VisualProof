@@ -167,6 +167,40 @@ private theorem cast_appendLeft_eq_appendLeftIds
                 (rightIds.map fun wire => (diagram.wires wire).sig))).trans
               (congrArg Var.there (induction rest))
 
+private theorem cast_appendRight_eq_appendRightVar
+    (diagram : ConcreteDiagram definitionCount)
+    (leftIds rightIds : List diagram.WireId)
+    {signature : Sig}
+    (value : Var (rightIds.map fun wire => (diagram.wires wire).sig)
+      signature) :
+    (List.map_append (f := fun wire => (diagram.wires wire).sig)
+          (l₁ := leftIds) (l₂ := rightIds)).symm ▸
+        Var.appendRight
+          (leftIds.map fun wire => (diagram.wires wire).sig) value =
+      ConcreteElaboration.appendRightVar diagram leftIds value := by
+  induction leftIds with
+  | nil => rfl
+  | cons head tail induction =>
+      have proofExact :
+          (List.map_append
+              (f := fun wire => (diagram.wires wire).sig)
+              (l₁ := head :: tail) (l₂ := rightIds)).symm =
+            (congrArg (List.cons (diagram.wires head).sig)
+              (List.map_append
+                (f := fun wire => (diagram.wires wire).sig)
+                (l₁ := tail) (l₂ := rightIds))).symm :=
+        Subsingleton.elim _ _
+      rw [proofExact]
+      simp only [ConcreteElaboration.appendRightVar]
+      exact
+        (cast_there_congrArg_cons_symm
+          (List.map_append
+            (f := fun wire => (diagram.wires wire).sig)
+            (l₁ := tail) (l₂ := rightIds))
+          (Var.appendRight
+            (tail.map fun wire => (diagram.wires wire).sig) value)).trans
+          (congrArg Var.there induction)
+
 private theorem origin_extend_appendLeft
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
@@ -215,6 +249,40 @@ private theorem origin_visible_local
     Subsingleton.elim _ _
   rw [proofExact]
   exact origin_extend_appendLeft diagram outerContext region value
+
+private theorem origin_visible_outer
+    (diagram : ConcreteDiagram definitionCount)
+    (region : diagram.RegionId)
+    (visible outerContext : ConcreteElaboration.WireContext diagram)
+    (visibleContextExact : visible = outerContext.extend region)
+    (normalizedOuter : List Sig)
+    (outerExact : normalizedOuter = outerContext.sigs)
+    (visibleSigsExact : visible.sigs =
+      ContentAlignment.localSignatures diagram region ++ normalizedOuter)
+    {signature : Sig}
+    (value : Var normalizedOuter signature) :
+    ConcreteElaboration.WireContext.origin diagram visible.ids
+        (visibleSigsExact.symm ▸
+          Var.appendRight
+            (ContentAlignment.localSignatures diagram region) value) =
+      ConcreteElaboration.WireContext.origin diagram outerContext.ids
+        (outerExact ▸ value) := by
+  subst visible
+  subst normalizedOuter
+  have proofExact : visibleSigsExact =
+      ConcreteElaboration.WireContext.sigs_extend outerContext region :=
+    Subsingleton.elim _ _
+  rw [proofExact]
+  unfold ConcreteElaboration.WireContext.extend
+    ConcreteElaboration.WireContext.sigs
+    ContentAlignment.localSignatures
+  rw [show ConcreteElaboration.WireContext.sigs_extend outerContext region =
+      List.map_append (f := fun wire => (diagram.wires wire).sig)
+        (l₁ := diagram.wiresAt region) (l₂ := outerContext.ids) from
+      Subsingleton.elim _ _]
+  rw [cast_appendRight_eq_appendRightVar]
+  exact ConcreteElaboration.origin_appendRightVar diagram
+    (diagram.wiresAt region) value
 
 private def castVarsArguments
     (same : left = right)
@@ -825,6 +893,59 @@ theorem LocalCylindricalFrame.targetFrameVisible_origin_retained
     pair.targetVisibleContextExact frame.context.siteOuter
     (frame.targetSiteOuter_sigs_exact pair)
     frame.context.targetVisibleExact (frame.targetRemoval.retain value)
+
+/-- A normalized source outer variable preserves the concrete origin selected
+by the paired source site context. -/
+theorem LocalCylindricalFrame.sourceFrameVisible_origin_outer
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (value : Var frame.context.siteOuter signature) :
+    ConcreteElaboration.WireContext.origin source.val
+        frame.sourceScope.frame.visible.ids
+        (frame.context.sourceVisibleExact.symm ▸
+          Var.appendRight
+            (ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope) value) =
+      ConcreteElaboration.WireContext.origin source.val
+        pair.sourceSiteOuter.ids
+        ((frame.sourceSiteOuter_sigs_exact pair) ▸ value) :=
+  origin_visible_outer source.val (source.val.wires wire).scope
+    frame.sourceScope.frame.visible pair.sourceSiteOuter
+    pair.sourceVisibleContextExact frame.context.siteOuter
+    (frame.sourceSiteOuter_sigs_exact pair)
+    frame.context.sourceVisibleExact value
+
+/-- A normalized target outer variable preserves the concrete origin selected
+by the paired target site context. -/
+theorem LocalCylindricalFrame.targetFrameVisible_origin_outer
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (value : Var frame.context.siteOuter signature) :
+    ConcreteElaboration.WireContext.origin result.checked.val
+        frame.targetScope.frame.visible.ids
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendRight
+            (ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope) value) =
+      ConcreteElaboration.WireContext.origin result.checked.val
+        pair.targetSiteOuter.ids
+        ((frame.targetSiteOuter_sigs_exact pair) ▸ value) :=
+  origin_visible_outer result.checked.val
+    (result.checked.val.wires result.targetWire).scope
+    frame.targetScope.frame.visible pair.targetSiteOuter
+    pair.targetVisibleContextExact frame.context.siteOuter
+    (frame.targetSiteOuter_sigs_exact pair)
+    frame.context.targetVisibleExact value
 
 /-- Concrete acted-scope context containing only retained source locals and
 the construction-owned outer spine. -/
