@@ -808,6 +808,46 @@ def RecursiveHeadNormalization.extend
         rw [recursive_origin_extend_outer]
         exact normalization.target_reflect outerValue outerExact }
 
+/-- Classify one compiled node directly in its final independently normalized
+context. -/
+def recursiveFinalRegionClassifier
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments))
+    (node : diagram.NodeId) : Option (Vars normalizedContext arguments) :=
+  UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions diagram
+    context rho head node
+
+/-- Once the final-map classifier's success predicate is characterized, its
+ordered results are exactly the direct holes exposed by abstraction. -/
+theorem recursiveFinalRegionHoleValues_alignment
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments))
+    (nodes : List diagram.NodeId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions diagram context
+      nodes = some items)
+    (selected : diagram.NodeId → Bool)
+    (classifierExact : ∀ node, node ∈ nodes →
+      (recursiveFinalRegionClassifier definitions diagram context rho head
+        node).isSome = selected node) :
+    (UniformIntrinsicRegion.abstractAppliedItems head
+      (items.renameWires rho)).holeValues.map some =
+      (nodes.filter fun node => selected node).map
+        (recursiveFinalRegionClassifier definitions diagram context rho
+          head) := by
+  rw [UniformIntrinsicRegion.abstractAppliedItems_holeValues]
+  rw [UniformIntrinsicRegion.directAppliedArguments_rename_compileNodes
+    definitions diagram context rho head nodes items compiled]
+  apply UniformIntrinsicRegion.map_some_filterMap_eq_map_filter
+  intro node nodeAt
+  exact classifierExact node nodeAt
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
