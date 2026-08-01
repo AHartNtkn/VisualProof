@@ -225,6 +225,24 @@ def target
     CheckedDiagram definitions :=
   checked.result.checked
 
+/-- The exact checked splice candidate before eager identity normalization. -/
+def rawTarget
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    CheckedDiagram definitions :=
+  checked.result.raw
+
+/-- The construction-owned raw-to-public normalization receipt. -/
+def normalization
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    ConcreteDiagram.IdentityNormalization checked.rawTarget :=
+  checked.result.normalization
+
 /--
 A checked splice into a negative context is sound in the insertion direction.
 This is the direct negative-splice theorem used by backward erasure; it does

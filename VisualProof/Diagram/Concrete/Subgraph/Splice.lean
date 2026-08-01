@@ -1205,8 +1205,10 @@ def reconstructionAttachment?
     exact none
 
 /--
-The normalized checked endpoint and total source-wire transport produced by a
-successful concrete splice.  Only `splice` can construct this receipt.
+The checked raw splice candidate and its construction-owned eager
+normalization.  Keeping the normalization object prevents consumers from
+having to rediscover how the raw candidate reached its public normal form.
+Only `splice` can construct this receipt.
 -/
 structure ConcreteSpliceResult
     {definitions : List (List Sig)}
@@ -1215,14 +1217,58 @@ structure ConcreteSpliceResult
     {fragment : CheckedOpenDiagram definitions}
     (attachment : ConcreteSpliceAttachment base site fragment) : Type where
   private mk ::
-  checked : CheckedDiagram definitions
-  wireImage : attachment.diagram.WireId → checked.val.WireId
-  wireImage_signature :
-    ∀ wire,
-      (checked.val.wires (wireImage wire)).sig =
-        (attachment.diagram.wires wire).sig
+  private rawWellFormed : attachment.diagram.WellFormed definitions
+  normalization :
+    ConcreteDiagram.IdentityNormalization
+      (⟨attachment.diagram, rawWellFormed⟩ : CheckedDiagram definitions)
 
 namespace ConcreteSpliceResult
+
+/-- The exact checked pre-normalization splice candidate. -/
+def raw
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    (result : ConcreteSpliceResult attachment) :
+    CheckedDiagram definitions :=
+  ⟨attachment.diagram, result.rawWellFormed⟩
+
+/-- The public splice result is exactly the retained eager normal form. -/
+def checked
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    (result : ConcreteSpliceResult attachment) :
+    CheckedDiagram definitions :=
+  result.normalization.target
+
+/-- Total raw-candidate wire transport retained by eager normalization. -/
+def wireImage
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    (result : ConcreteSpliceResult attachment) :
+    attachment.diagram.WireId → result.checked.val.WireId :=
+  fun wire =>
+    result.normalization.wireImage wire
+
+theorem wireImage_signature
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    (result : ConcreteSpliceResult attachment)
+    (wire : attachment.diagram.WireId) :
+    (result.checked.val.wires (result.wireImage wire)).sig =
+      (attachment.diagram.wires wire).sig := by
+  exact result.normalization.wire_signature wire
 
 /-- The normalized image of one supplied boundary position. -/
 def boundaryTarget
@@ -1291,8 +1337,7 @@ def splice
       let normalized :=
         ConcreteDiagram.normalizeIdentities generated
       exact .ok
-        (ConcreteSpliceResult.mk normalized.target
-          normalized.wireImage normalized.wire_signature)
+        (ConcreteSpliceResult.mk generated.property normalized)
 
 /--
 Raw generated-candidate well-formedness is recoverable only by presenting the
