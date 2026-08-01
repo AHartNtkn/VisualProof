@@ -50,6 +50,53 @@ theorem recursiveVar_append_cases
               congrArg Var.there localExact⟩
           · exact Or.inr ⟨outerValue, congrArg Var.there outerExact⟩
 
+private theorem recursiveRelationSignature_not_mem
+    (arguments : List Sig) : Sig.rel arguments ∉ arguments := by
+  intro member
+  have smaller : sizeOf (Sig.rel arguments) < sizeOf arguments :=
+    List.sizeOf_lt_of_mem member
+  have larger : sizeOf arguments < sizeOf (Sig.rel arguments) := by
+    simp_wf
+  omega
+
+theorem recursiveVariableOrigin_signature_mem
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram) :
+    ∀ {arguments : List Sig} (values : Vars context.sigs arguments)
+      (origin : diagram.WireId),
+      origin ∈ ConcreteElaboration.variableOrigins diagram context values →
+      (diagram.wires origin).sig ∈ arguments
+  | [], .nil, origin, member =>
+      False.elim (List.not_mem_nil member)
+  | _ :: _, .cons head tail, origin, member => by
+      simp only [ConcreteElaboration.variableOrigins, List.mem_cons] at member
+      rcases member with rfl | tailMember
+      · apply List.mem_cons.mpr
+        left
+        exact ConcreteElaboration.WireContext.origin_signature diagram
+          context.ids head
+      · exact List.mem_cons_of_mem _
+          (recursiveVariableOrigin_signature_mem diagram context tail origin
+            tailMember)
+
+theorem recursiveVariableOrigins_exclude_relation_head
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (context : ConcreteElaboration.WireContext source.val)
+    (values : Vars context.sigs sourceArguments) :
+    ∀ sourceWire,
+      sourceWire ∈ ConcreteElaboration.variableOrigins source.val context
+        values → sourceWire ≠ wire := by
+  intro sourceWire member same
+  subst sourceWire
+  have signatureMember := recursiveVariableOrigin_signature_mem source.val
+    context values wire member
+  rw [sourceSignature] at signatureMember
+  exact recursiveRelationSignature_not_mem sourceArguments signatureMember
+
 theorem recursiveExtendedNormalization_cases
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
