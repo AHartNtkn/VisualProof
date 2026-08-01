@@ -798,6 +798,68 @@ theorem arityShift_regionEmbedding_below_origin
     rw [outerOrigin]
     rw [recursive_origin_extend_outer]
 
+/-- Every retained ordinary node below the acted head compiles to the
+canonical cylindrification of its source item under the recursively extended
+context action. -/
+theorem arityShift_compileNode_below_natural
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter :
+      ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (sourceNode : source.val.NodeId)
+    (nodeRetained : sourceNode ∉ argumentSiteNodes result.sites)
+    (sourceItem :
+      Item definitions (sourceOuter.extend region).sigs)
+    (sourceCompiled :
+      ConcreteElaboration.Internal.compileNode? definitions source.val
+          (sourceOuter.extend region) sourceNode = some sourceItem) :
+    ConcreteElaboration.Internal.compileNode? definitions result.checked.val
+        (targetOuter.extend (result.regionImage region))
+        (result.retainedNodeImage sourceNode nodeRetained) =
+      some (sourceItem.renameWires
+        (arityShift_regionEmbedding_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead
+          sourceOuter targetOuter outer)) := by
+  exact ConcreteElaboration.compileNode?_natural
+    (leftNode := sourceNode)
+    (rightNode := result.retainedNodeImage sourceNode nodeRetained)
+    result.checked.property targetNodup
+    (arityShift_regionEmbedding_below source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead sourceOuter
+      targetOuter outer)
+    result.contextWireMap
+    (arityShift_regionEmbedding_below_origin source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead sourceOuter
+      targetOuter outer outerOrigin)
+    result.regionEquiv
+    (by
+      rw [result.retainedNodeImage_data sourceNode nodeRetained]
+      cases source.val.nodes sourceNode <;> rfl)
+    (by
+      intro port sourceWire incident
+      exact result.retainedNode_forwardIncident sourceNode nodeRetained port
+        sourceWire incident)
+    sourceCompiled
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
