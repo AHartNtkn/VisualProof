@@ -498,6 +498,341 @@ theorem LocalCylindricalFrame.rootRetainedItems_exact
         (fun {_} value => embedding (sourceMap value))
         (fun _ => rfl) sourceItems).symm
 
+/-- Root source abstraction removes exactly the exhaustive acted
+applications and leaves the normalized retained prefix. -/
+theorem LocalCylindricalFrame.rootSourceOrdinary_eq_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (nodes retained : ItemSeq definitions
+      frame.sourceScope.frame.visible.sigs)
+    (nodesCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          frame.sourceScope.frame.visible
+          (source.val.nodesAt (source.val.wires wire).scope) = some nodes)
+    (retainedCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          frame.sourceScope.frame.visible
+          ((source.val.nodesAt (source.val.wires wire).scope).filter
+            (fun node => decide (node ∉ argumentSiteNodes result.sites))) =
+        some retained) :
+    recursiveOrdinary
+        (UniformIntrinsicRegion.abstractAppliedItems
+          (Var.appendRight frame.sourceReduced localSourceHead)
+          (nodes.renameWires frame.sourceFrameNormalization)) =
+      recursiveLeafItems
+        (retained.renameWires frame.sourceFrameNormalization) := by
+  rw [recursiveOrdinary_abstractAppliedItems]
+  apply recursiveAbstractOrdinaryItems_compileFilter definitions source.val
+    frame.sourceScope.frame.visible frame.sourceFrameNormalization
+    (Var.appendRight frame.sourceReduced localSourceHead)
+    (argumentSiteNodes result.sites)
+    (source.val.nodesAt (source.val.wires wire).scope) nodes retained
+    nodesCompiled
+  · simpa only [decide_not] using retainedCompiled
+  · intro node nodeAt
+    exact frame.sourceClassifier_isSome sourceArguments sourceSignature result
+      pair node nodeAt
+
+/-- Root target abstraction removes exactly the generated target application
+sites and leaves the checked retained prefix. -/
+theorem LocalCylindricalFrame.rootTargetOrdinary_eq_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (nodes retained : ItemSeq definitions
+      frame.targetScope.frame.visible.sigs)
+    (nodesCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          frame.targetScope.frame.visible
+          (result.checked.val.nodesAt
+            (result.checked.val.wires result.targetWire).scope) = some nodes)
+    (retainedCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          frame.targetScope.frame.visible
+          (((replacementBase result.plan).nodesAt
+              (retainedRegion source (source.val.wires wire).scope)).map
+            (fun retained => ConcreteWireQuantifier.Internal.checkedNode
+              result.generated
+              (Fin.castAdd result.sites.sites.length retained))) =
+        some retained) :
+    recursiveOrdinary
+        (UniformIntrinsicRegion.abstractAppliedItems
+          (Var.appendRight frame.targetReduced localTargetHead)
+          (nodes.renameWires frame.targetFrameNormalization)) =
+      recursiveLeafItems
+        (retained.renameWires frame.targetFrameNormalization) := by
+  rw [recursiveOrdinary_abstractAppliedItems]
+  apply recursiveAbstractOrdinaryItems_compileFilter definitions
+    result.checked.val frame.targetScope.frame.visible
+    frame.targetFrameNormalization
+    (Var.appendRight frame.targetReduced localTargetHead)
+    (argumentSiteNodes result.targetSites)
+    (result.checked.val.nodesAt
+      (result.checked.val.wires result.targetWire).scope) nodes retained
+    nodesCompiled
+  · have retainedNodesExact :
+        (result.checked.val.nodesAt
+          (result.checked.val.wires result.targetWire).scope).filter
+            (fun node => !decide
+              (node ∈ argumentSiteNodes result.targetSites)) =
+          ((replacementBase result.plan).nodesAt
+              (retainedRegion source (source.val.wires wire).scope)).map
+            (fun retained => ConcreteWireQuantifier.Internal.checkedNode
+              result.generated
+              (Fin.castAdd result.sites.sites.length retained)) := by
+      calc
+        _ = (result.checked.val.nodesAt
+              (result.regionImage (source.val.wires wire).scope)).filter
+                (fun node => !decide
+                  (node ∈ argumentSiteNodes result.targetSites)) :=
+          congrArg (fun region =>
+            (result.checked.val.nodesAt region).filter fun node => !decide
+              (node ∈ argumentSiteNodes result.targetSites))
+              result.targetWire_scope_regionImage
+        _ = _ := ArgumentResult.targetRetainedNodesAt_exact result
+          (source.val.wires wire).scope
+    rw [retainedNodesExact]
+    exact retainedCompiled
+  · intro node nodeAt
+    exact frame.targetClassifier_isSome result pair node nodeAt
+
+/-- Once ordered child compilations have been lifted to normalized recursive
+cut receipts, the retained root leaves and exact root holes assemble the
+complete identity-outer cylindrical shape. -/
+theorem LocalCylindricalFrame.rootCylindricalShape_of_children
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (buildChildren : ∀ (fuel : Nat)
+      (sourceChildren : ItemSeq definitions
+        frame.sourceScope.frame.visible.sigs)
+      (targetChildren : ItemSeq definitions
+        frame.targetScope.frame.visible.sigs),
+      ConcreteElaboration.compileChildrenWith? definitions source.val
+          (ConcreteElaboration.compileRegion? definitions source.val
+            fuel)
+          frame.sourceScope.frame.visible
+          (source.val.childrenOf (source.val.wires wire).scope) =
+        some sourceChildren →
+      ConcreteElaboration.compileChildrenWith? definitions result.checked.val
+          (ConcreteElaboration.compileRegion? definitions result.checked.val
+            fuel)
+          frame.targetScope.frame.visible
+          (result.checked.val.childrenOf
+            (result.checked.val.wires result.targetWire).scope) =
+        some targetChildren →
+      ∃ shapes : List (CylindricalShape definitions
+          (arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted)
+          (frame.sourceReduced ++
+            ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+              frame.context.siteOuter))
+          (frame.targetReduced ++
+            ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+              frame.context.siteOuter))),
+        (∀ shape, shape ∈ shapes → shape.consistent ∧
+          ∀ {signature : Sig}
+            (value : Var
+              (frame.sourceReduced ++
+                ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+                  frame.context.siteOuter)) signature),
+            shape.embedding value =
+              (frame.rootBounds sourceArguments sourceSignature newArgument
+                result accepted).embed (fun {_} selected => selected) value) ∧
+        UniformIntrinsicRegion.abstractAppliedItems
+            (Var.appendRight frame.sourceReduced localSourceHead)
+            (sourceChildren.renameWires frame.sourceFrameNormalization) =
+          .mk (recursiveChildSmallerItems
+            (arityShiftInsertion source wire sourceArguments sourceSignature
+              newArgument result accepted) shapes) ⟨[]⟩ ∧
+        UniformIntrinsicRegion.abstractAppliedItems
+            (Var.appendRight frame.targetReduced localTargetHead)
+            (targetChildren.renameWires frame.targetFrameNormalization) =
+          .mk (recursiveChildLargerItems
+            (arityShiftInsertion source wire sourceArguments sourceSignature
+              newArgument result accepted) shapes) ⟨[]⟩) :
+    ∃ shape : CylindricalShape definitions
+        (arityShiftInsertion source wire sourceArguments sourceSignature
+          newArgument result accepted)
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter),
+      shape.consistent ∧
+      (∀ {signature : Sig}
+        (value : Var
+          ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+            frame.context.siteOuter) signature),
+        shape.embedding value = value) ∧
+      shape.smaller = frame.sourceShape ∧
+      shape.larger = frame.targetShape := by
+  obtain ⟨sourceFuel, sourceNodes, sourceChildren, sourceNodesCompiled,
+      sourceChildrenCompiled, sourceBodyExact⟩ :=
+    frame.sourceScope.siteBody_decomposition
+  obtain ⟨targetFuel, targetNodes, targetChildren, targetNodesCompiled,
+      targetChildrenCompiled, targetBodyExact⟩ :=
+    frame.targetScope.siteBody_decomposition
+  let commonFuel := max sourceFuel targetFuel
+  have sourceChildrenLifted := recursiveCompileChildren_fuel_mono definitions
+    source.val sourceFuel commonFuel (Nat.le_max_left _ _)
+    frame.sourceScope.frame.visible
+    (source.val.childrenOf (source.val.wires wire).scope) sourceChildren
+    sourceChildrenCompiled
+  have targetChildrenLifted := recursiveCompileChildren_fuel_mono definitions
+    result.checked.val targetFuel commonFuel (Nat.le_max_right _ _)
+    frame.targetScope.frame.visible
+    (result.checked.val.childrenOf
+      (result.checked.val.wires result.targetWire).scope) targetChildren
+    targetChildrenCompiled
+  obtain ⟨childShapes, childShapesValid, sourceChildrenExact,
+      targetChildrenExact⟩ :=
+    buildChildren commonFuel sourceChildren targetChildren sourceChildrenLifted
+      targetChildrenLifted
+  obtain ⟨sourcePruned, targetPruned, sourceFrameItems, targetFrameItems,
+      sourcePrunedCompiled, targetPrunedCompiled, sourceFrameCompiled,
+      targetFrameCompiled, sourceFrameExact, targetFrameExact,
+      targetPrunedExact⟩ :=
+    frame.compileRetainedNodePrefixFramePair?_complete sourceArguments
+      newArgument result accepted pair
+  have sourceOrdinary := frame.rootSourceOrdinary_eq_retained
+    sourceArguments sourceSignature result pair sourceNodes sourceFrameItems
+    sourceNodesCompiled sourceFrameCompiled
+  have targetOrdinary := frame.rootTargetOrdinary_eq_retained result pair
+    targetNodes targetFrameItems targetNodesCompiled targetFrameCompiled
+  have normalizedRetained := frame.rootRetainedItems_exact sourceArguments
+    sourceSignature newArgument result accepted pair
+  obtain ⟨sourcePruned', targetPruned', sourcePrunedCompiled',
+      targetPrunedCompiled', normalizedRetainedExact⟩ := normalizedRetained
+  have sourcePrunedSame : sourcePruned' = sourcePruned := by
+    exact Option.some.inj (sourcePrunedCompiled'.symm.trans sourcePrunedCompiled)
+  have targetPrunedSame : targetPruned' = targetPruned := by
+    exact Option.some.inj (targetPrunedCompiled'.symm.trans targetPrunedCompiled)
+  subst sourcePruned'
+  subst targetPruned'
+  let insertion := arityShiftInsertion source wire sourceArguments
+    sourceSignature newArgument result accepted
+  let bounds := frame.rootBounds sourceArguments sourceSignature newArgument
+    result accepted
+  let outer : WireRenaming
+      ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+        frame.context.siteOuter)
+      ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+        frame.context.siteOuter) := fun {_} value => value
+  let sourceRetained := sourcePruned.renameWires
+    (frame.sourceRetainedNormalization pair)
+  let holes := frame.rootHoles sourceArguments sourceSignature newArgument
+    result accepted pair
+  let shape := recursiveBlockReceipt insertion bounds outer sourceRetained
+    childShapes holes
+  have shapeValid := recursiveBlockReceipt_valid insertion bounds outer
+    sourceRetained childShapes childShapesValid holes
+  refine ⟨shape, shapeValid.1, shapeValid.2, ?_, ?_⟩
+  · rw [frame.sourceShape_compiled]
+    unfold shape
+    rw [recursiveBlockReceipt_smaller]
+    rw [sourceBodyExact]
+    simp only [Region.renameWires,
+      UniformIntrinsicRegion.ItemSeq.renameWires_append]
+    simp only [UniformIntrinsicRegion.abstractApplied]
+    rw [UniformIntrinsicRegion.abstractAppliedItems_append]
+    apply congrArg (wrapArgumentBinds frame.sourceReduced)
+    cases sourceNodeShape :
+        UniformIntrinsicRegion.abstractAppliedItems
+          (Var.appendRight frame.sourceReduced localSourceHead)
+          (sourceNodes.renameWires frame.sourceFrameNormalization) with
+    | mk sourceOrdinaryItems sourceNodeHoles =>
+        rw [sourceNodeShape] at sourceOrdinary
+        change sourceOrdinaryItems = _ at sourceOrdinary
+        rw [sourceChildrenExact]
+        simp only [UniformIntrinsicRegion.appendAbstracted]
+        rw [sourceOrdinary, sourceFrameExact]
+        congr 1
+        · rw [recursiveChildSmallerItems_eq]
+          rw [recursiveItemSeqRename_comp
+            (frame.sourceRetainedFrameEmbedding pair)
+            frame.sourceFrameNormalization
+            (frame.sourceRetainedNormalization pair)
+            (fun _ => rfl) sourcePruned]
+        · congr 1
+          simp only [List.append_nil]
+          change
+            (UniformIntrinsicRegion.abstractApplied
+              (Var.appendRight frame.sourceReduced localSourceHead)
+              (frame.sourceScope.frame.siteBody.renameWires
+                frame.sourceFrameNormalization)).holeValues =
+              sourceNodeHoles.values
+          rw [sourceBodyExact]
+          simp only [Region.renameWires,
+            UniformIntrinsicRegion.ItemSeq.renameWires_append,
+            UniformIntrinsicRegion.abstractApplied]
+          rw [UniformIntrinsicRegion.abstractAppliedItems_append,
+            sourceNodeShape, sourceChildrenExact]
+          simp [UniformIntrinsicRegion.holeValues,
+            UniformIntrinsicRegion.appendAbstracted]
+  · rw [frame.targetShape_compiled]
+    unfold shape
+    rw [recursiveBlockReceipt_larger]
+    rw [targetBodyExact]
+    simp only [Region.renameWires,
+      UniformIntrinsicRegion.ItemSeq.renameWires_append]
+    simp only [UniformIntrinsicRegion.abstractApplied]
+    rw [UniformIntrinsicRegion.abstractAppliedItems_append]
+    apply congrArg (wrapArgumentBinds frame.targetReduced)
+    cases targetNodeShape :
+        UniformIntrinsicRegion.abstractAppliedItems
+          (Var.appendRight frame.targetReduced localTargetHead)
+          (targetNodes.renameWires frame.targetFrameNormalization) with
+    | mk targetOrdinaryItems targetNodeHoles =>
+        rw [targetNodeShape] at targetOrdinary
+        change targetOrdinaryItems = _ at targetOrdinary
+        rw [targetChildrenExact]
+        simp only [UniformIntrinsicRegion.appendAbstracted]
+        rw [targetOrdinary, targetFrameExact]
+        rw [recursiveItemSeqRename_comp
+          (frame.targetRetainedFrameEmbedding sourceArguments newArgument
+            result accepted pair)
+          frame.targetFrameNormalization
+          (frame.targetRetainedNormalization sourceArguments newArgument
+            result accepted pair)
+          (fun _ => rfl) targetPruned]
+        rw [normalizedRetainedExact]
+        congr 1
+        · rw [recursiveChildLargerItems_eq]
+        · congr 1
+          simp only [List.append_nil]
+          change
+            (UniformIntrinsicRegion.abstractApplied
+              (Var.appendRight frame.targetReduced localTargetHead)
+              (frame.targetScope.frame.siteBody.renameWires
+                frame.targetFrameNormalization)).holeValues =
+              targetNodeHoles.values
+          rw [targetBodyExact]
+          simp only [Region.renameWires,
+            UniformIntrinsicRegion.ItemSeq.renameWires_append,
+            UniformIntrinsicRegion.abstractApplied]
+          rw [UniformIntrinsicRegion.abstractAppliedItems_append,
+            targetNodeShape, targetChildrenExact]
+          simp [UniformIntrinsicRegion.holeValues,
+            UniformIntrinsicRegion.appendAbstracted]
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
