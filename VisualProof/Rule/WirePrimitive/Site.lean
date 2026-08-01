@@ -712,6 +712,15 @@ theorem checkAllAppliedSites_complete
 
 namespace AllAppliedSites
 
+private theorem get_of_list_eq
+    {left right : List α}
+    (same : left = right)
+    (position : Fin right.length) :
+    left.get (Fin.cast (congrArg List.length same).symm position) =
+      right.get position := by
+  subst right
+  rfl
+
 /-- Every acted-on endpoint occurs at exactly one retained applied site. -/
 theorem exhaustive
     {source : CheckedDiagram definitions}
@@ -728,6 +737,69 @@ theorem length
     (all : AllAppliedSites source wire) :
     all.sites.length = (source.val.wires wire).endpoints.length := by
   rw [← all.exhaustive, List.length_map]
+
+/-- Transport one exhaustive applied-site position through an explicitly
+supplied concrete isomorphism.  The target position is the dense index of the
+mapped head occurrence in the target wire's exhaustive endpoint list. -/
+def transportPosition
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire))
+    (position : Fin sourceSites.sites.length) :
+    Fin targetSites.sites.length :=
+  let endpoint := (sourceSites.sites.get position).endpoint
+  have sourceMember : endpoint ∈ (source.val.wires wire).endpoints := by
+    rw [← sourceSites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨sourceSites.sites.get position, List.get_mem _ _, rfl⟩
+  let mapped := iso.endpointMap wire endpoint
+  have targetMember :
+      mapped ∈ (target.val.wires (iso.wires wire)).endpoints :=
+    iso.endpointMap_mem wire endpoint sourceMember
+  Fin.cast targetSites.length.symm <|
+    DenseList.index (target.val.wires (iso.wires wire)).endpoints
+      mapped targetMember
+
+/-- The target site selected by `transportPosition` is exactly the source
+head occurrence transported through the supplied isomorphism. -/
+theorem transportPosition_endpoint
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire))
+    (position : Fin sourceSites.sites.length) :
+    (targetSites.sites.get
+        (transportPosition iso sourceSites targetSites position)).endpoint =
+      iso.endpointMap wire (sourceSites.sites.get position).endpoint := by
+  let endpoint := (sourceSites.sites.get position).endpoint
+  have sourceMember : endpoint ∈ (source.val.wires wire).endpoints := by
+    rw [← sourceSites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨sourceSites.sites.get position, List.get_mem _ _, rfl⟩
+  let mapped := iso.endpointMap wire endpoint
+  have targetMember :
+      mapped ∈ (target.val.wires (iso.wires wire)).endpoints :=
+    iso.endpointMap_mem wire endpoint sourceMember
+  let endpointPosition :=
+    DenseList.index (target.val.wires (iso.wires wire)).endpoints
+      mapped targetMember
+  have selected := get_of_list_eq targetSites.exhaustive endpointPosition
+  have selectedPosition :
+      Fin.cast (congrArg List.length targetSites.exhaustive).symm
+          endpointPosition =
+        Fin.cast (by simp)
+          (transportPosition iso sourceSites targetSites position) := by
+    apply Fin.ext
+    rfl
+  rw [selectedPosition] at selected
+  have endpointExact :=
+    DenseList.get_index
+      (target.val.wires (iso.wires wire)).endpoints mapped targetMember
+  rw [endpointExact] at selected
+  simpa [endpoint, mapped] using selected
 
 private theorem sites_mapM_checked
     {source : CheckedDiagram definitions}
