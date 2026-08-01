@@ -302,6 +302,12 @@ structure AppliedArgDrop
   private target_arguments_exact :
     result.targetArguments =
       ConcreteWirePrimitive.eraseAt sourceArguments position
+  private arguments_exact :
+    ∀ site : Fin result.sites.sites.length,
+      result.spec.arguments site =
+        existingReferences
+          (ConcreteWirePrimitive.eraseAt
+            (result.sites.sites.get site).arguments position)
   private ledger :
     ArgumentsSemantics.DropLedger result sourceArguments
   private semantics :
@@ -3139,6 +3145,16 @@ def sourceArgumentList
     (applied : AppliedArgDrop source orientation wire position) : List Sig :=
   applied.sourceArguments
 
+/-- Checker-owned source sites rebuilt by argument drop. -/
+def sourceSites
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    AllAppliedSites source wire :=
+  applied.result.sites
+
 theorem sourceWire_signature
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3225,6 +3241,27 @@ theorem nodeEquiv_generated
   rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_pos generated]
   rw [ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_get
     applied.result.sites site generated]
+
+theorem nodeEquiv_generated_mem
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (node : source.val.NodeId)
+    (generated : node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.sourceSites) :
+    applied.nodeEquiv node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.targetSites := by
+  let site := ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode
+    applied.sourceSites node generated
+  have sourceExact : (applied.sourceSites.sites.get site).node = node :=
+    ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_exact
+      applied.sourceSites node generated
+  rw [← sourceExact]
+  change applied.nodeEquiv (applied.result.sites.sites.get site).node ∈ _
+  rw [applied.nodeEquiv_generated site]
+  exact applied.result.generatedNode_targetSiteNode applied.targetSites site
 
 theorem nodeEquiv_retained
     {source : CheckedDiagram definitions}
@@ -3330,6 +3367,84 @@ theorem transportWire_eq_wireEquiv
     ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly
   rfl
 
+/-- Pulling an endpoint of a retained rebuilt node through argument drop
+preserves its port and recovers incidence on the exact source wire. -/
+theorem retainedEndpointInverse_mem
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId)
+    (candidate : CEndpoint applied.target.val.nodeCount)
+    (incident : candidate ∈
+      (applied.target.val.wires
+        (applied.wireEquiv sourceWire)).endpoints)
+    (retained : applied.nodeEquiv.symm candidate.node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.sourceSites) :
+    (⟨applied.nodeEquiv.symm candidate.node, candidate.port⟩ :
+      CEndpoint source.val.nodeCount) ∈
+      (source.val.wires sourceWire).endpoints := by
+  let sourceNode := applied.nodeEquiv.symm candidate.node
+  have nodeRecover : applied.nodeEquiv sourceNode = candidate.node :=
+    applied.nodeEquiv.right_inv candidate.node
+  have targetRequired : candidate.port ∈
+      applied.target.val.requiredPorts candidate.node :=
+    ConcreteDiagram.incident_port_required definitions applied.target.val
+      applied.target.property (applied.wireEquiv sourceWire) candidate incident
+  have targetNodeImage : applied.result.retainedNodeImage sourceNode retained =
+      candidate.node := by
+    rw [← applied.nodeEquiv_retained sourceNode retained]
+    exact nodeRecover
+  have sourceRequired : candidate.port ∈
+      source.val.requiredPorts sourceNode := by
+    have retainedData : applied.target.val.nodes
+        (applied.result.retainedNodeImage sourceNode retained) =
+          (source.val.nodes sourceNode).rename applied.result.regionEquiv :=
+      applied.result.retainedNodeImage_data sourceNode retained
+    rw [ConcreteDiagram.requiredPorts] at targetRequired ⊢
+    rw [← targetNodeImage, retainedData] at targetRequired
+    cases sourceData : source.val.nodes sourceNode <;>
+      simp [sourceData, CNode.rename] at targetRequired ⊢
+    all_goals exact targetRequired
+  obtain ⟨actualWire, sourceOwner⟩ :=
+    ConcreteDiagram.endpointOwner?_complete definitions source.val
+      source.property sourceNode candidate.port sourceRequired
+  have actualDifferent : actualWire ≠ wire := by
+    intro same
+    subst actualWire
+    have actualIncident := ConcreteDiagram.endpointOwner?_incident source.val
+      ⟨sourceNode, candidate.port⟩ wire sourceOwner
+    have removed : wire ∈ applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simp
+    exact retained (applied.result.sourceRemovedExhausted wire removed
+      ⟨sourceNode, candidate.port⟩ actualIncident)
+  have actualRetained : actualWire ∉
+      applied.result.sourceRemovedWires := by
+    rw [applied.source_removed_exact]
+    simpa [actualDifferent]
+  have forwardOwner := applied.result.retainedNodeImage_endpointOwner
+    sourceNode retained candidate.port sourceRequired actualWire sourceOwner
+  change applied.target.val.endpointOwner?
+      ⟨applied.result.retainedNodeImage sourceNode retained,
+        candidate.port⟩ =
+    some (applied.result.retainedWireImage actualWire actualRetained)
+    at forwardOwner
+  have targetOwner : applied.target.val.endpointOwner? candidate =
+      some (applied.wireEquiv sourceWire) :=
+    ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+      applied.target.val applied.target.property candidate.node candidate.port
+      targetRequired (applied.wireEquiv sourceWire) incident
+  rw [targetNodeImage, targetOwner,
+    ← applied.wireEquiv_retained actualWire actualDifferent]
+    at forwardOwner
+  have actualExact : actualWire = sourceWire :=
+    applied.wireEquiv.injective (Option.some.inj forwardOwner).symm
+  subst actualWire
+  exact ConcreteDiagram.endpointOwner?_incident source.val
+    ⟨sourceNode, candidate.port⟩ sourceWire sourceOwner
+
 /-- The exact ordered attachment tuple erased by drop, transported into the
 checked target.  Positions and repeated aliases are preserved. -/
 def targetAttachments
@@ -3375,6 +3490,19 @@ def sourceArgumentList
       AppliedArgExtend source orientation wire position newArgument
         attachments) : List Sig :=
   applied.sourceArguments
+
+/-- Checker-owned source sites rebuilt by argument extension. -/
+def sourceSites
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) : AllAppliedSites source wire :=
+  applied.result.sites
 
 theorem sourceWire_signature
     {source : CheckedDiagram definitions}
@@ -3654,6 +3782,87 @@ theorem generatedInserted_endpointOwner
     simp only [same]
     rw [ConcreteWirePrimitive.retainedReplacementWire?_head_none]
     exact applied.result.targetWire_exact.symm
+
+/-- Pulling an endpoint of a retained rebuilt node through argument extension
+preserves its port and recovers incidence on the exact source wire. -/
+theorem retainedEndpointInverse_mem
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (sourceWire : source.val.WireId)
+    (candidate : CEndpoint applied.target.val.nodeCount)
+    (incident : candidate ∈
+      (applied.target.val.wires
+        (applied.wireEquiv sourceWire)).endpoints)
+    (retained : applied.nodeEquiv.symm candidate.node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.sourceSites) :
+    (⟨applied.nodeEquiv.symm candidate.node, candidate.port⟩ :
+      CEndpoint source.val.nodeCount) ∈
+      (source.val.wires sourceWire).endpoints := by
+  let sourceNode := applied.nodeEquiv.symm candidate.node
+  have nodeRecover : applied.nodeEquiv sourceNode = candidate.node :=
+    applied.nodeEquiv.right_inv candidate.node
+  have targetRequired : candidate.port ∈
+      applied.target.val.requiredPorts candidate.node :=
+    ConcreteDiagram.incident_port_required definitions applied.target.val
+      applied.target.property (applied.wireEquiv sourceWire) candidate incident
+  have targetNodeImage : applied.result.retainedNodeImage sourceNode retained =
+      candidate.node := by
+    rw [← applied.nodeEquiv_retained sourceNode retained]
+    exact nodeRecover
+  have sourceRequired : candidate.port ∈
+      source.val.requiredPorts sourceNode := by
+    have retainedData : applied.target.val.nodes
+        (applied.result.retainedNodeImage sourceNode retained) =
+          (source.val.nodes sourceNode).rename applied.result.regionEquiv :=
+      applied.result.retainedNodeImage_data sourceNode retained
+    rw [ConcreteDiagram.requiredPorts] at targetRequired ⊢
+    rw [← targetNodeImage, retainedData] at targetRequired
+    cases sourceData : source.val.nodes sourceNode <;>
+      simp [sourceData, CNode.rename] at targetRequired ⊢
+    all_goals exact targetRequired
+  obtain ⟨actualWire, sourceOwner⟩ :=
+    ConcreteDiagram.endpointOwner?_complete definitions source.val
+      source.property sourceNode candidate.port sourceRequired
+  have actualDifferent : actualWire ≠ wire := by
+    intro same
+    subst actualWire
+    have actualIncident := ConcreteDiagram.endpointOwner?_incident source.val
+      ⟨sourceNode, candidate.port⟩ wire sourceOwner
+    have removed : wire ∈ applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simp
+    exact retained (applied.result.sourceRemovedExhausted wire removed
+      ⟨sourceNode, candidate.port⟩ actualIncident)
+  have actualRetained : actualWire ∉
+      applied.result.sourceRemovedWires := by
+    rw [applied.source_removed_exact]
+    simpa [actualDifferent]
+  have forwardOwner := applied.result.retainedNodeImage_endpointOwner
+    sourceNode retained candidate.port sourceRequired actualWire sourceOwner
+  change applied.target.val.endpointOwner?
+      ⟨applied.result.retainedNodeImage sourceNode retained,
+        candidate.port⟩ =
+    some (applied.result.retainedWireImage actualWire actualRetained)
+    at forwardOwner
+  have targetOwner : applied.target.val.endpointOwner? candidate =
+      some (applied.wireEquiv sourceWire) :=
+    ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+      applied.target.val applied.target.property candidate.node candidate.port
+      targetRequired (applied.wireEquiv sourceWire) incident
+  rw [targetNodeImage, targetOwner,
+    ← applied.wireEquiv_retained actualWire actualDifferent]
+    at forwardOwner
+  have actualExact : actualWire = sourceWire :=
+    applied.wireEquiv.injective (Option.some.inj forwardOwner).symm
+  subst actualWire
+  exact ConcreteDiagram.endpointOwner?_incident source.val
+    ⟨sourceNode, candidate.port⟩ sourceWire sourceOwner
 
 def tag
     {source : CheckedDiagram definitions}
@@ -5121,10 +5330,13 @@ def applyArgDrop
           let targetArgumentsExact :=
             ConcreteWirePrimitive.argDrop_targetArguments_exact source wire
               sourceArguments sourceSignature position result accepted
+          let argumentsExact := fun site =>
+            ConcreteWirePrimitive.argDrop_arguments_exact source wire
+              sourceArguments sourceSignature position result accepted site
           pure
             ⟨attachments, gate, result, sourceArguments, sourceSignature,
               sourceRemovedExact, localCountExact, targetArgumentsExact,
-              ledger, semantics⟩
+              argumentsExact, ledger, semantics⟩
 
 def applyArgExtend
     (source : CheckedDiagram definitions)

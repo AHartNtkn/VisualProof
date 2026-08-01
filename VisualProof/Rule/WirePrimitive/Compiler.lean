@@ -1,4 +1,5 @@
 import VisualProof.Rule.WirePrimitive.CompilerTermination
+import VisualProof.Rule.WirePrimitive.ArgumentsDropTransport
 import VisualProof.Rule.MonolithicWireQuantifier
 import VisualProof.Diagram.Concrete.IsomorphismSearch
 
