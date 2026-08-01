@@ -72,6 +72,29 @@ private theorem resolvePort?_complete
   exact ⟨signature ▸ wireVar, by
     simp [resolvePort?, owner, resolveExpected?, signature, wireResolved]⟩
 
+private theorem resolvePort?_complete_of_owner_visible
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (context : WireContext diagram)
+    (node : diagram.NodeId)
+    (port : CPort) (expected : Sig)
+    (required : port ∈ diagram.requiredPorts node)
+    (visible : ∀ wire,
+      diagram.endpointOwner? ⟨node, port⟩ = some wire →
+        wire ∈ context.ids)
+    (typed : ∀ wire, diagram.endpointOwner? ⟨node, port⟩ = some wire →
+      (diagram.wires wire).sig = expected) :
+    ∃ resolved,
+      resolvePort? diagram context node port expected = some resolved := by
+  obtain ⟨wire, owner⟩ :=
+    endpointOwner?_complete definitions diagram wellFormed node port required
+  obtain ⟨wireVar, wireResolved⟩ :=
+    resolveWire?_complete diagram context wire (visible wire owner)
+  have signature := typed wire owner
+  exact ⟨signature ▸ wireVar, by
+    simp [resolvePort?, owner, resolveExpected?, signature, wireResolved]⟩
+
 private theorem atom_head_typed
     (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
@@ -473,6 +496,85 @@ private theorem reference_signature
     (Data.Finite.mem_allFin node)
   rw [nodeData] at nodeChecked
   exact (eq_of_beq nodeChecked).symm
+
+/-- Compile one checked node from the exact visibility of its required port
+owners.  This is the node-local completeness boundary for construction-owned
+subcontexts that deliberately omit unrelated visible wires. -/
+theorem compileNode?_complete_of_required_visible
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (context : WireContext diagram)
+    (node : diagram.NodeId)
+    (portsVisible :
+      ∀ port, port ∈ diagram.requiredPorts node →
+        ∀ wire, diagram.endpointOwner? ⟨node, port⟩ = some wire →
+          wire ∈ context.ids) :
+    ∃ item, compileNode? definitions diagram context node = some item := by
+  cases nodeData : diagram.nodes node with
+  | atom storedRegion args =>
+      obtain ⟨head, headResolved⟩ :=
+        resolvePort?_complete_of_owner_visible definitions diagram wellFormed
+          context node .head (.rel args)
+          (by simp [ConcreteDiagram.requiredPorts, nodeData])
+          (portsVisible .head
+            (by simp [ConcreteDiagram.requiredPorts, nodeData]))
+          (atom_head_typed definitions diagram wellFormed node storedRegion
+            args nodeData)
+      obtain ⟨arguments, argumentsResolved⟩ :=
+        resolveArgs?_complete diagram context node args 0 (by
+          intro offset bound
+          apply resolvePort?_complete_of_owner_visible definitions diagram
+            wellFormed context node
+          · simp [ConcreteDiagram.requiredPorts, nodeData, bound]
+          · simpa using portsVisible (.arg offset)
+              (by simp [ConcreteDiagram.requiredPorts, nodeData, bound])
+          · simpa using atom_arg_typed definitions diagram wellFormed node
+              storedRegion args nodeData offset bound)
+      exact ⟨.atom head arguments, by
+        unfold compileNode?
+        rw [nodeData]
+        simp [headResolved, argumentsResolved]⟩
+  | ref storedRegion definition args =>
+      have signature := reference_signature definitions diagram wellFormed
+        node storedRegion definition args nodeData
+      have signatureGetElem : definitions[definition.val] = args := by
+        change definitions.get definition = args
+        exact signature
+      obtain ⟨arguments, argumentsResolved⟩ :=
+        resolveArgs?_complete diagram context node args 0 (by
+          intro offset bound
+          apply resolvePort?_complete_of_owner_visible definitions diagram
+            wellFormed context node
+          · simp [ConcreteDiagram.requiredPorts, nodeData, bound]
+          · simpa using portsVisible (.arg offset)
+              (by simp [ConcreteDiagram.requiredPorts, nodeData, bound])
+          · simpa using ref_arg_typed definitions diagram wellFormed node
+              storedRegion definition args nodeData offset bound)
+      exact ⟨.named (signature ▸ definitionVarAt definitions definition)
+        arguments, by
+          unfold compileNode?
+          rw [nodeData]
+          simp [signatureGetElem, argumentsResolved]⟩
+  | identity storedRegion sig arity =>
+      have arityWitness := ConcreteDiagram.identity_arity definitions diagram
+        wellFormed node storedRegion sig arity nodeData
+      obtain ⟨ports, portsResolved⟩ :=
+        resolveIdentityPorts?_complete diagram context node sig arity 0 (by
+          intro offset bound
+          apply resolvePort?_complete_of_owner_visible definitions diagram
+            wellFormed context node
+          · simp [ConcreteDiagram.requiredPorts, nodeData, bound]
+          · simpa using portsVisible (.identity offset)
+              (by simp [ConcreteDiagram.requiredPorts, nodeData, bound])
+          · simpa using ConcreteDiagram.identity_port_typed definitions
+              diagram wellFormed node storedRegion sig arity nodeData offset
+              bound)
+      exact ⟨.identity sig ports.val (by
+        simpa [ports.property] using arityWitness), by
+          unfold compileNode?
+          rw [nodeData]
+          simp [arityWitness, portsResolved]⟩
 
 private theorem compileNode?_complete
     (definitions : List (List Sig))
