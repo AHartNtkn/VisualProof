@@ -277,6 +277,63 @@ theorem compileChildrenWith?_cons_decomposition
             simpa [bodyCompiled, restCompiled] using compiled
           exact (Option.some.inj itemsExact).symm
 
+/-- Smaller cut-item projection of an ordered list of child shapes. -/
+def recursiveSmallerCutItems
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature) :
+    List (CylindricalShape definitions insertion smallerContext largerContext) →
+      UniformIntrinsicItemSeq definitions smallerArguments smallerContext
+  | [] => .nil
+  | shape :: tail =>
+      .cons (.cut shape.smaller) (recursiveSmallerCutItems insertion tail)
+
+/-- Larger cut-item projection of an ordered list of child shapes. -/
+def recursiveLargerCutItems
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature) :
+    List (CylindricalShape definitions insertion smallerContext largerContext) →
+      UniformIntrinsicItemSeq definitions largerArguments largerContext
+  | [] => .nil
+  | shape :: tail =>
+      .cons (.cut shape.larger) (recursiveLargerCutItems insertion tail)
+
+/-- Ordered child shapes become an item-sequence receipt consisting only of
+`CylindricalShapeItem.cut` constructors. -/
+def recursiveCutReceipt
+    (outer : WireRenaming smallerContext largerContext) :
+    List (CylindricalShape definitions insertion smallerContext largerContext) →
+      CylindricalShapeItemSeq definitions insertion
+        smallerContext largerContext
+  | [] => .nil outer
+  | shape :: tail =>
+      .cons (.cut shape) (recursiveCutReceipt outer tail)
+
+@[simp] theorem recursiveCutReceipt_smaller
+    (outer : WireRenaming smallerContext largerContext) :
+    ∀ shapes :
+      List (CylindricalShape definitions insertion smallerContext largerContext),
+      (recursiveCutReceipt outer shapes).smaller =
+        recursiveSmallerCutItems insertion shapes
+  | [] => rfl
+  | shape :: tail => by
+      simp only [recursiveCutReceipt, CylindricalShapeItemSeq.smaller,
+        CylindricalShapeItem.smaller, recursiveSmallerCutItems]
+      exact congrArg (UniformIntrinsicItemSeq.cons (.cut shape.smaller))
+        (recursiveCutReceipt_smaller outer tail)
+
+@[simp] theorem recursiveCutReceipt_larger
+    (outer : WireRenaming smallerContext largerContext) :
+    ∀ shapes :
+      List (CylindricalShape definitions insertion smallerContext largerContext),
+      (recursiveCutReceipt outer shapes).larger =
+        recursiveLargerCutItems insertion shapes
+  | [] => rfl
+  | shape :: tail => by
+      simp only [recursiveCutReceipt, CylindricalShapeItemSeq.larger,
+        CylindricalShapeItem.larger, recursiveLargerCutItems]
+      exact congrArg (UniformIntrinsicItemSeq.cons (.cut shape.larger))
+        (recursiveCutReceipt_larger outer tail)
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
