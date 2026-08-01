@@ -569,12 +569,19 @@ The exhaustive checker-owned source sites implied by an accepted strongest
 join.  This is derived from checked concrete incidence, not retained as a
 second authority in the monolithic receipt.
 -/
-noncomputable def sourceSites
+def sourceSites
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
     (applied : AppliedMonolithicRelationJoin source input) :
     WirePrimitive.AllAppliedSites source input.wire :=
-  Classical.choose applied.sourceSites_exists
+  match accepted :
+      WirePrimitive.checkAllAppliedSites source input.wire with
+  | some sites => sites
+  | none => by
+      exfalso
+      obtain ⟨sites, complete⟩ := applied.sourceSites_exists
+      rw [accepted] at complete
+      contradiction
 
 /-- The executable exhaustive-site checker accepts the derived source sites. -/
 theorem sourceSites_accepted
@@ -583,7 +590,14 @@ theorem sourceSites_accepted
     (applied : AppliedMonolithicRelationJoin source input) :
     WirePrimitive.checkAllAppliedSites source input.wire =
       some applied.sourceSites :=
-  Classical.choose_spec applied.sourceSites_exists
+  by
+    unfold sourceSites
+    split
+    next sites accepted => exact accepted
+    next accepted =>
+      obtain ⟨sites, complete⟩ := applied.sourceSites_exists
+      rw [accepted] at complete
+      contradiction
 
 /-- The checker-owned site compilation at the dying relation's scope. -/
 def sourceSite

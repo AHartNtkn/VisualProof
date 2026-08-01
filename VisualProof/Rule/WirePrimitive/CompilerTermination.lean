@@ -9,9 +9,7 @@ namespace WirePrimitive
 
 `OpenCompilation.body` is the checked, intrinsically typed content syntax.
 The total compiler recurses over that syntax rather than reconstructing a
-possibly-invalid concrete slice.  The older concrete `ContentResidual` below
-remains temporarily as the executable comparison path while the compiler is
-migrated; it is not sufficient evidence for totality by itself.
+possibly-invalid concrete slice.
 -/
 
 /-- The signature carried by one existentially packed intrinsic variable. -/
@@ -44,7 +42,6 @@ structure AmbientBinding
   value : PackedVar context
   wire : source.val.WireId
   different : wire ≠ live
-  signature : (source.val.wires wire).sig = value.1
 
 /--
 The complete live obligation consumed by the total structural compiler.
@@ -87,10 +84,6 @@ def ofBoundaryLists
     List (AmbientBinding source context live)
   | [], [], _, _ => []
   | value :: values, wire :: wires, signatures, different => by
-      have headSignature :
-          (source.val.wires wire).sig = value.1 := by
-        have heads := congrArg List.head? signatures
-        simpa [packedVarSignature] using heads.symm
       have tailSignatures :
           values.map packedVarSignature =
             wires.map (fun candidate =>
@@ -107,8 +100,7 @@ def ofBoundaryLists
       exact
         { value := value
           wire := wire
-          different := wireDifferent
-          signature := headSignature } ::
+          different := wireDifferent } ::
         ofBoundaryLists values wires tailSignatures tailDifferent
   | [], _ :: _, signatures, _ => by
       simp at signatures
@@ -178,9 +170,6 @@ def liftThroughArityShift
   different :=
     applied.transportRetainedWire_ne_targetWire
       binding.wire binding.different
-  signature :=
-    (applied.transportRetainedWire_signature
-      binding.wire binding.different).trans binding.signature
 
 end AmbientBinding
 
@@ -388,83 +377,8 @@ theorem measure_fst
     (residual : IntrinsicCompilerResidual source context) :
     residual.measure.1 = intrinsicRegionSize residual.body := rfl
 
-end IntrinsicCompilerResidual
-
-/-!
-# Structural compiler residual and termination order
-
-The content-side identifiers remain those of the one checked open diagram.
-A slice records only the live subgraph selected by previous parallel/cut
-decompositions.  Host identifiers are carried separately by the compiler's
-dependent state and therefore cannot be confused with content identifiers.
--/
-
-/-- The live content slice still owed by one host relation wire. -/
-structure ContentResidual
-    (content : CheckedOpenDiagram definitions) where
-  compilation : OpenCompilation content
-  root : content.val.diagram.RegionId
-  regions : List content.val.diagram.RegionId
-  nodes : List content.val.diagram.NodeId
-  wires : List content.val.diagram.WireId
-  boundary : List content.val.diagram.WireId
-  formals : Nat
-
-namespace ContentResidual
-
-/-- Root-scoped binders not yet promoted to formal positions. -/
-def internalRootWires
-    (residual : ContentResidual content) :
-    List content.val.diagram.WireId :=
-  residual.wires.filter fun wire =>
-    decide (
-      (content.val.diagram.wires wire).scope = residual.root ∧
-      wire ∉ residual.boundary)
-
-/-- Direct active nodes at the residual root. -/
-def rootNodes
-    (residual : ContentResidual content) :
-    List content.val.diagram.NodeId :=
-  residual.nodes.filter fun node =>
-    decide ((content.val.diagram.nodes node).region = residual.root)
-
-/-- Direct active cut children at the residual root. -/
-def rootCuts
-    (residual : ContentResidual content) :
-    List content.val.diagram.RegionId :=
-  residual.regions.filter fun region =>
-    match content.val.diagram.regions region with
-    | .sheet => false
-    | .cut parent => decide (parent = residual.root)
-
-/--
-Primary structural component: active nodes, active regions, and precisely the
-internal (not boundary) wires.  Promoting a root binder therefore decreases
-this component even though the graph itself is unchanged.
--/
-def structuralSize
-    (residual : ContentResidual content) : Nat :=
-  residual.nodes.length +
-    (residual.wires.filter fun wire =>
-      decide (wire ∉ residual.boundary)).length +
-    residual.regions.length
-
-/--
-Secondary component used only while arranging a leaf's exact ordered
-argument tuple.
--/
-def plumbingSize
-    (residual : ContentResidual content) : Nat :=
-  residual.boundary.length + residual.formals
-
-/-- The plan-mandated lexicographic termination measure. -/
-def measure
-    (residual : ContentResidual content) : Nat × Nat :=
-  (residual.structuralSize, residual.plumbingSize)
-
-/-- Exact lexicographic order used by the structural compiler. -/
-abbrev Before :
-    (Nat × Nat) → (Nat × Nat) → Prop :=
+/-- Exact lexicographic order for intrinsic structural compilation. -/
+abbrev Before : (Nat × Nat) → (Nat × Nat) → Prop :=
   Prod.Lex Nat.lt Nat.lt
 
 instance beforeDecidable (left right : Nat × Nat) :
@@ -480,40 +394,7 @@ theorem before_wellFounded : WellFounded Before :=
     (inferInstance : WellFoundedRelation Nat)
     (inferInstance : WellFoundedRelation Nat)).wf
 
-theorem before_of_structural
-    {next current : ContentResidual content}
-    (smaller : next.structuralSize < current.structuralSize) :
-    Before next.measure current.measure :=
-  Prod.Lex.left _ _ smaller
-
-theorem before_of_plumbing
-    {next current : ContentResidual content}
-    (same :
-      next.structuralSize = current.structuralSize)
-    (smaller : next.plumbingSize < current.plumbingSize) :
-    Before next.measure current.measure := by
-  rw [measure, measure, same]
-  exact Prod.Lex.right _ smaller
-
-end ContentResidual
-
-/--
-One live host wire paired with its remaining content and chronological ambient
-stub map.  The map is ordered rather than keyed so repeated boundary
-positions remain visible.
--/
-structure CompilerResidual
-    (source : CheckedDiagram definitions)
-    (content : CheckedOpenDiagram definitions) where
-  wire : source.val.WireId
-  contentState : ContentResidual content
-  ambients :
-    List (content.val.diagram.WireId × source.val.WireId)
-
-/-- Compiler recursion is well founded solely by the content residual. -/
-def compilerResidualMeasure
-    (residual : CompilerResidual source content) : Nat × Nat :=
-  residual.contentState.measure
+end IntrinsicCompilerResidual
 
 end WirePrimitive
 

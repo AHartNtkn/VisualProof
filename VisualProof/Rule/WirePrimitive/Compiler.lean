@@ -86,7 +86,7 @@ Unlike the executable comparison compiler below, this construction has no
 failure case: the monolithic checker already owns the exact open compilation,
 applied-site, ordered-boundary, and non-aliasing evidence.
 -/
-noncomputable def initialIntrinsicResidual
+def initialIntrinsicResidual
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
     (monolithic : AppliedMonolithicRelationJoin source input) :
@@ -505,172 +505,28 @@ private def runEmptyResidual
                   simpa using carriedLength
                 exact finalTracked.property.trans trackedLength }
 
-private def initialContentResidual
-    (content : CheckedOpenDiagram definitions)
-    (compilation : OpenCompilation content)
-    (formals : Nat) :
-    ContentResidual content where
-  compilation := compilation
-  root := content.val.diagram.root
-  regions := content.val.diagram.regionsList
-  nodes := content.val.diagram.nodesList
-  wires := content.val.diagram.wiresList
-  boundary := content.val.boundary
-  formals := formals
-
-private def promoteBinder
-    (residual : ContentResidual content)
-    (binder : content.val.diagram.WireId) :
-    ContentResidual content where
-  compilation := residual.compilation
-  root := residual.root
-  regions := residual.regions
-  nodes := residual.nodes
-  wires := residual.wires
-  boundary :=
-    residual.boundary.take residual.formals ++
-      [binder] ++ residual.boundary.drop residual.formals
-  formals := residual.formals + 1
-
-private def subtreeRegions
-    (residual : ContentResidual content)
-    (root : content.val.diagram.RegionId) :
-    List content.val.diagram.RegionId :=
-  residual.regions.filter fun region =>
-    decide (content.val.diagram.Encloses root region)
-
-private def boundaryOrScopedIn
-    (residual : ContentResidual content)
-    (regions : List content.val.diagram.RegionId)
-    (wire : content.val.diagram.WireId) : Bool :=
-  decide (
-    wire ∈ residual.boundary ∨
-      (content.val.diagram.wires wire).scope ∈ regions)
-
-private def onlyRootNode
-    (residual : ContentResidual content)
-    (node : content.val.diagram.NodeId) :
-    ContentResidual content where
-  compilation := residual.compilation
-  root := residual.root
-  regions := [residual.root]
-  nodes := [node]
-  wires :=
-    residual.wires.filter fun wire =>
-      decide (wire ∈ residual.boundary)
-  boundary := residual.boundary
-  formals := residual.formals
-
-private def withoutRootNode
-    (residual : ContentResidual content)
-    (node : content.val.diagram.NodeId) :
-    ContentResidual content where
-  compilation := residual.compilation
-  root := residual.root
-  regions := residual.regions
-  nodes := residual.nodes.filter fun candidate => decide (candidate ≠ node)
-  wires :=
-    residual.wires.filter fun wire =>
-      decide (
-        wire ∈ residual.boundary ∨
-          (content.val.diagram.wires wire).scope ≠ residual.root)
-  boundary := residual.boundary
-  formals := residual.formals
-
-private def onlyRootCut
-    (residual : ContentResidual content)
-    (cut : content.val.diagram.RegionId) :
-    ContentResidual content :=
-  let subtree := subtreeRegions residual cut
-  { compilation := residual.compilation
-    root := residual.root
-    regions := residual.root :: subtree
-    nodes :=
-      residual.nodes.filter fun node =>
-        decide ((content.val.diagram.nodes node).region ∈ subtree)
-    wires :=
-      residual.wires.filter fun wire =>
-        boundaryOrScopedIn residual subtree wire
-    boundary := residual.boundary
-    formals := residual.formals }
-
-private def withoutRootCut
-    (residual : ContentResidual content)
-    (cut : content.val.diagram.RegionId) :
-    ContentResidual content :=
-  let subtree := subtreeRegions residual cut
-  let retainedRegions :=
-    residual.regions.filter fun region => decide (region ∉ subtree)
-  { compilation := residual.compilation
-    root := residual.root
-    regions := retainedRegions
-    nodes :=
-      residual.nodes.filter fun node =>
-        decide ((content.val.diagram.nodes node).region ∉ subtree)
-    wires :=
-      residual.wires.filter fun wire =>
-        boundaryOrScopedIn residual retainedRegions wire
-    boundary := residual.boundary
-    formals := residual.formals }
-
-private def insideRootCut
-    (residual : ContentResidual content)
-    (cut : content.val.diagram.RegionId) :
-    ContentResidual content :=
-  let subtree := subtreeRegions residual cut
-  { compilation := residual.compilation
-    root := cut
-    regions := subtree
-    nodes :=
-      residual.nodes.filter fun node =>
-        decide ((content.val.diagram.nodes node).region ∈ subtree)
-    wires :=
-      residual.wires.filter fun wire =>
-        boundaryOrScopedIn residual subtree wire
-    boundary := residual.boundary
-    formals := residual.formals }
-
-private def ambientLookup?
-    {content : CheckedOpenDiagram definitions}
-    {source : CheckedDiagram definitions}
-    (ambients :
-      List (content.val.diagram.WireId × source.val.WireId))
-    (stub : content.val.diagram.WireId) :
-    Option source.val.WireId :=
-  (ambients.find? fun pair => decide (pair.1 = stub)).map Prod.snd
-
-private def portOwner?
-    (content : CheckedOpenDiagram definitions)
-    (node : content.val.diagram.NodeId)
-    (port : CPort) :
-    Option content.val.diagram.WireId :=
-  content.val.diagram.endpointOwner? ⟨node, port⟩
-
-private def argumentOwners?
-    (content : CheckedOpenDiagram definitions)
-    (node : content.val.diagram.NodeId)
-    (kind : Nat → CPort)
-    (arity : Nat) :
-    Option (List content.val.diagram.WireId) :=
-  (List.range arity).mapM fun position =>
-    portOwner? content node (kind position)
-
 private structure TransportState
-    (content : CheckedOpenDiagram definitions)
+    (context : List Sig)
     (target : CheckedDiagram definitions)
     (trackedCount : Nat) where
   tracked : List target.val.WireId
   trackedLength : tracked.length = trackedCount
   ambients :
-    List (content.val.diagram.WireId × target.val.WireId)
+    List (PackedVar context × target.val.WireId)
+
+private def ambientLookup?
+    {source : CheckedDiagram definitions}
+    (ambients : List (PackedVar context × source.val.WireId))
+    (value : PackedVar context) : Option source.val.WireId :=
+  (ambients.find? fun pair => decide (pair.1 = value)).map Prod.snd
 
 private def unpackTransport?
-    {content : CheckedOpenDiagram definitions}
+    {context : List Sig}
     {target : CheckedDiagram definitions}
-    (ambientStubs : List content.val.diagram.WireId)
+    (ambientStubs : List (PackedVar context))
     (trackedCount : Nat)
     (mapped : List target.val.WireId) :
-    Option (TransportState content target trackedCount) := by
+    Option (TransportState context target trackedCount) := by
   if exact :
       mapped.length = trackedCount + ambientStubs.length then
     exact some
@@ -682,32 +538,32 @@ private def unpackTransport?
   else exact none
 
 private def packedTracked
-    {content : CheckedOpenDiagram definitions}
+    {context : List Sig}
     {source : CheckedDiagram definitions}
     (tracked : List source.val.WireId)
     (ambients :
-      List (content.val.diagram.WireId × source.val.WireId)) :
+      List (PackedVar context × source.val.WireId)) :
     List source.val.WireId :=
   tracked ++ ambients.map Prod.snd
 
 private structure ResidualCompilation
     (orientation : Orientation)
     (source : CheckedDiagram definitions)
-    (content : CheckedOpenDiagram definitions)
+    (context : List Sig)
     (trackedCount : Nat) where
   program : PrimitiveProgram orientation source
   tracked : List program.target.val.WireId
   trackedLength : tracked.length = trackedCount
   ambients :
-    List (content.val.diagram.WireId × program.target.val.WireId)
+    List (PackedVar context × program.target.val.WireId)
 
 namespace ResidualCompilation
 
 private def castTracked
     (compiled :
-      ResidualCompilation orientation source content currentCount)
+      ResidualCompilation orientation source context currentCount)
     (exact : currentCount = targetCount) :
-    ResidualCompilation orientation source content targetCount where
+    ResidualCompilation orientation source context targetCount where
   program := compiled.program
   tracked := compiled.tracked
   trackedLength := compiled.trackedLength.trans exact
@@ -717,8 +573,8 @@ private def prepend
     {source : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep orientation source)
     (tail :
-      ResidualCompilation orientation step.target content trackedCount) :
-    ResidualCompilation orientation source content trackedCount where
+      ResidualCompilation orientation step.target context trackedCount) :
+    ResidualCompilation orientation source context trackedCount where
   program := .cons step tail.program
   tracked := tail.tracked
   trackedLength := tail.trackedLength
@@ -731,9 +587,9 @@ private def combineParallel
     (step : CompiledPrimitiveStep orientation source)
     (leftProgram : PrimitiveProgram orientation step.target)
     (right :
-      ResidualCompilation orientation leftProgram.target content currentCount)
+      ResidualCompilation orientation leftProgram.target context currentCount)
     (countExact : currentCount = targetCount) :
-    ResidualCompilation orientation source content targetCount := by
+    ResidualCompilation orientation source context targetCount := by
   let right' := right.castTracked countExact
   let tailProgram := leftProgram.append right'.program
   let finalProgram := PrimitiveProgram.cons step tailProgram
@@ -751,13 +607,13 @@ private def combineParallel
         exact right'.ambients }
 
 private def terminalCompilation
-    (content : CheckedOpenDiagram definitions)
+    (context : List Sig)
     (trackedCount : Nat)
-    (ambientStubs : List content.val.diagram.WireId)
+    (ambientStubs : List (PackedVar context))
     (terminal : TerminalStepRun orientation source
       (trackedCount + ambientStubs.length)) :
     Except CompilerError
-      (ResidualCompilation orientation source content trackedCount) := do
+      (ResidualCompilation orientation source context trackedCount) := do
   let transported ←
     requireOption .allocationMismatch <|
       unpackTransport? ambientStubs trackedCount terminal.tracked
@@ -768,13 +624,13 @@ private def terminalCompilation
       ambients := transported.ambients }
 
 private def primitiveCompilation
-    (content : CheckedOpenDiagram definitions)
+    (context : List Sig)
     (trackedCount : Nat)
-    (ambientStubs : List content.val.diagram.WireId)
+    (ambientStubs : List (PackedVar context))
     (run : PrimitiveRun orientation source
       (trackedCount + ambientStubs.length)) :
     Except CompilerError
-      (ResidualCompilation orientation source content trackedCount) := do
+      (ResidualCompilation orientation source context trackedCount) := do
   let transported ←
     requireOption .allocationMismatch <|
       unpackTransport? ambientStubs trackedCount run.tracked
@@ -786,8 +642,8 @@ private def primitiveCompilation
 
 /-- One content-side argument-normalization instruction. -/
 private inductive PlumbingOp
-    (content : CheckedOpenDiagram definitions)
-  | extend (stub : content.val.diagram.WireId) (position : Nat)
+    (context : List Sig)
+  | extend (stub : PackedVar context) (position : Nat)
   | drop (position : Nat)
   | permute (permutation : List Nat)
   | duplicate (position : Nat)
@@ -809,14 +665,14 @@ private def moveAt?
   pure (insertAt target value (eraseAt source values))
 
 private structure PlumbingPlan
-    (content : CheckedOpenDiagram definitions) where
-  positions : List content.val.diagram.WireId
-  operations : List (PlumbingOp content)
+    (context : List Sig) where
+  positions : List (PackedVar context)
+  operations : List (PlumbingOp context)
 
 private def materializePlan
-    (content : CheckedOpenDiagram definitions)
-    (initial target : List content.val.diagram.WireId) :
-    PlumbingPlan content :=
+    (context : List Sig)
+    (initial target : List (PackedVar context)) :
+    PlumbingPlan context :=
   target.foldl
     (fun plan stub =>
       if stub ∈ plan.positions then
@@ -828,9 +684,9 @@ private def materializePlan
     { positions := initial, operations := [] }
 
 private def dropUnusedPlan
-    (target : List content.val.diagram.WireId)
-    (initial : PlumbingPlan content) :
-    PlumbingPlan content :=
+    (target : List (PackedVar context))
+    (initial : PlumbingPlan context) :
+    PlumbingPlan context :=
   (List.range initial.positions.length).reverse.foldl
     (fun plan position =>
       match plan.positions[position]? with
@@ -844,10 +700,10 @@ private def dropUnusedPlan
     initial
 
 private def arrangeOne
-    (target : List content.val.diagram.WireId)
-    (plan : PlumbingPlan content)
+    (target : List (PackedVar context))
+    (plan : PlumbingPlan context)
     (position : Nat) :
-    Option (PlumbingPlan content) := do
+    Option (PlumbingPlan context) := do
   let wanted ← target[position]?
   match plan.positions[position]? with
   | some current =>
@@ -858,7 +714,7 @@ private def arrangeOne
         if found.val < position then
           let duplicated :=
             insertAt (found.val + 1) wanted plan.positions
-          let afterDuplicate : PlumbingPlan content :=
+          let afterDuplicate : PlumbingPlan context :=
             { positions := duplicated
               operations :=
                 plan.operations ++ [.duplicate found.val] }
@@ -886,7 +742,7 @@ private def arrangeOne
       if found.val < position then
         let duplicated :=
           insertAt (found.val + 1) wanted plan.positions
-        let afterDuplicate : PlumbingPlan content :=
+        let afterDuplicate : PlumbingPlan context :=
           { positions := duplicated
             operations :=
               plan.operations ++ [.duplicate found.val] }
@@ -906,9 +762,9 @@ private def arrangeOne
         none
 
 private def arrangePlan
-    (target : List content.val.diagram.WireId)
-    (initial : PlumbingPlan content) :
-    Option (PlumbingPlan content) :=
+    (target : List (PackedVar context))
+    (initial : PlumbingPlan context) :
+    Option (PlumbingPlan context) :=
   (List.range target.length).foldlM (arrangeOne target) initial
 
 /--
@@ -917,10 +773,10 @@ primitive checkers subsequently validate every emitted operation against the
 live host diagram.
 -/
 private def planPlumbing
-    (content : CheckedOpenDiagram definitions)
-    (initial target : List content.val.diagram.WireId) :
-    Option (List (PlumbingOp content)) := do
-  let materialized := materializePlan content initial target
+    (context : List Sig)
+    (initial target : List (PackedVar context)) :
+    Option (List (PlumbingOp context)) := do
+  let materialized := materializePlan context initial target
   let dropped := dropUnusedPlan target materialized
   let arranged ← arrangePlan target dropped
   if arranged.positions = target then
@@ -931,22 +787,22 @@ private def planPlumbing
 private structure LiveResidualCompilation
     (orientation : Orientation)
     (source : CheckedDiagram definitions)
-    (content : CheckedOpenDiagram definitions)
+    (context : List Sig)
     (trackedCount : Nat) where
   program : PrimitiveProgram orientation source
   live : program.target.val.WireId
   tracked : List program.target.val.WireId
   trackedLength : tracked.length = trackedCount
   ambients :
-    List (content.val.diagram.WireId × program.target.val.WireId)
+    List (PackedVar context × program.target.val.WireId)
 
 namespace LiveResidualCompilation
 
 private def castTracked
     (compiled :
-      LiveResidualCompilation orientation source content currentCount)
+      LiveResidualCompilation orientation source context currentCount)
     (exact : currentCount = targetCount) :
-    LiveResidualCompilation orientation source content targetCount where
+    LiveResidualCompilation orientation source context targetCount where
   program := compiled.program
   live := compiled.live
   tracked := compiled.tracked
@@ -957,8 +813,8 @@ private def prepend
     {source : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep orientation source)
     (tail :
-      LiveResidualCompilation orientation step.target content trackedCount) :
-    LiveResidualCompilation orientation source content trackedCount where
+      LiveResidualCompilation orientation step.target context trackedCount) :
+    LiveResidualCompilation orientation source context trackedCount where
   program := .cons step tail.program
   live := tail.live
   tracked := tail.tracked
@@ -969,16 +825,16 @@ end LiveResidualCompilation
 
 private def executePlumbing
     {definitions : List (List Sig)}
-    {content : CheckedOpenDiagram definitions} :
-    (operations : List (PlumbingOp content)) →
+    {context : List Sig} :
+    (operations : List (PlumbingOp context)) →
     (source : CheckedDiagram definitions) →
     (wire : source.val.WireId) →
     (ambients :
-      List (content.val.diagram.WireId × source.val.WireId)) →
+      List (PackedVar context × source.val.WireId)) →
     (tracked : List source.val.WireId) →
     (orientation : Orientation) →
     Except CompilerError
-      (LiveResidualCompilation orientation source content tracked.length)
+      (LiveResidualCompilation orientation source context tracked.length)
   | [], source, wire, ambients, tracked, _ =>
       .ok
         { program := .nil source
@@ -996,7 +852,7 @@ private def executePlumbing
               requireOption .missingAmbient <|
                 ambientLookup? ambients stub
             runArgExtend source wire position
-              (content.val.diagram.wires stub).sig attachment orientation packed
+              stub.1 attachment orientation packed
         | .drop position =>
             runArgDrop source wire position orientation packed
         | .permute permutation =>
@@ -1013,14 +869,14 @@ private def executePlumbing
         ((tail.castTracked transported.trackedLength).prepend stepRun.step)
 
 private def finishPlumbed
-    (content : CheckedOpenDiagram definitions)
+    (context : List Sig)
     (plumbed :
-      LiveResidualCompilation orientation source content trackedCount)
+      LiveResidualCompilation orientation source context trackedCount)
     (terminal :
       TerminalStepRun orientation plumbed.program.target
         (plumbed.tracked.length + plumbed.ambients.length)) :
     Except CompilerError
-      (ResidualCompilation orientation source content trackedCount) := do
+      (ResidualCompilation orientation source context trackedCount) := do
   let ambientStubs := plumbed.ambients.map Prod.fst
   let transported ←
     requireOption .allocationMismatch <|
@@ -1041,275 +897,268 @@ private def finishPlumbed
         rw [finalTarget]
         exact transported.ambients }
 
-private def compileLeaf
+private def defVarIndex :
+    {arguments : List Sig} → DefVar definitions arguments →
+      Fin definitions.length
+  | _, .here => ⟨0, by simp⟩
+  | _, .there tail =>
+      let index := defVarIndex tail
+      ⟨index.val + 1, by simp only [List.length_cons]; omega⟩
+
+/-- The executable part of the proof-carrying intrinsic obligation. -/
+private structure IntrinsicExecutionResidual
+    (source : CheckedDiagram definitions)
+    (context : List Sig) where
+  body : Region definitions context
+  wire : source.val.WireId
+  formals : List (PackedVar context)
+  ambients : List (PackedVar context × source.val.WireId)
+
+private def IntrinsicCompilerResidual.execution
+    (residual : IntrinsicCompilerResidual source context) :
+    IntrinsicExecutionResidual source context where
+  body := residual.body
+  wire := residual.wire
+  formals := residual.formals
+  ambients := residual.ambients.map fun binding =>
+    (binding.value, binding.wire)
+
+private def lowerPackedVar?
+    (value : PackedVar (bound :: context)) : Option (PackedVar context) :=
+  match value with
+  | ⟨_, .here⟩ => none
+  | ⟨signature, .there outer⟩ => some ⟨signature, outer⟩
+
+private def lowerAmbients?
+    {source : CheckedDiagram definitions}
+    (ambients : List (PackedVar (bound :: context) × source.val.WireId)) :
+    Option (List (PackedVar context × source.val.WireId)) :=
+  ambients.mapM fun binding => do
+    let value ← lowerPackedVar? binding.1
+    pure (value, binding.2)
+
+private theorem intrinsicItemSize_positive
+    (item : Item definitions context) : 0 < intrinsicItemSize item := by
+  cases item <;> simp [intrinsicItemSize] <;> omega
+
+private theorem intrinsicHead_smaller
+    (head next : Item definitions context)
+    (rest : ItemSeq definitions context) :
+    intrinsicItemSize head <
+      intrinsicItemSize head +
+        (intrinsicItemSize next + intrinsicItemSeqSize rest) := by
+  have positive := intrinsicItemSize_positive next
+  omega
+
+private theorem intrinsicTail_smaller
+    (head next : Item definitions context)
+    (rest : ItemSeq definitions context) :
+    intrinsicItemSize next + intrinsicItemSeqSize rest <
+      intrinsicItemSize head +
+        (intrinsicItemSize next + intrinsicItemSeqSize rest) := by
+  have positive := intrinsicItemSize_positive head
+  omega
+
+private def compileIntrinsicLeaf
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
-    (content : CheckedOpenDiagram definitions)
-    (residual : ContentResidual content)
-    (node : content.val.diagram.NodeId)
-    (ambients :
-      List (content.val.diagram.WireId × source.val.WireId))
+    (formals : List (PackedVar context))
+    (ambients : List (PackedVar context × source.val.WireId))
+    (item : Item definitions context)
     (tracked : List source.val.WireId)
     (orientation : Orientation) :
     Except CompilerError
-      (ResidualCompilation orientation source content tracked.length) := do
-  let positions := residual.boundary.take residual.formals
-  match content.val.diagram.nodes node with
-  | .atom _ signatures =>
-      let head ←
-        requireOption .malformedResidual <|
-          portOwner? content node .head
-      let arguments ←
-        requireOption .malformedResidual <|
-          argumentOwners? content node CPort.arg signatures.length
-      if formal : head ∈ positions then
+      (ResidualCompilation orientation source context tracked.length) := do
+  match item with
+  | .atom head arguments =>
+      let headValue : PackedVar context := ⟨.rel _, head⟩
+      let argumentValues := arguments.entries
+      if _formal : headValue ∈ formals then
         let operations ←
           requireOption .malformedResidual <|
-            planPlumbing content positions (head :: arguments)
+            planPlumbing context formals (headValue :: argumentValues)
         let plumbed ←
           executePlumbing operations source wire ambients tracked orientation
         let packed := packedTracked plumbed.tracked plumbed.ambients
         let terminal ←
           runApplyFormal plumbed.program.target plumbed.live 0 orientation
             packed
-        finishPlumbed content plumbed
-          (by
-            simpa [packed, packedTracked] using terminal)
+        finishPlumbed context plumbed
+          (by simpa [packed, packedTracked] using terminal)
       else
-        let fixed ←
+        let _fixed ←
           requireOption .missingAmbient <|
-            ambientLookup? ambients head
+            ambientLookup? ambients headValue
         let operations ←
           requireOption .malformedResidual <|
-            planPlumbing content positions arguments
+            planPlumbing context formals argumentValues
         let plumbed ←
           executePlumbing operations source wire ambients tracked orientation
-        let fixed' ←
+        let fixed ←
           requireOption .missingAmbient <|
-            ambientLookup? plumbed.ambients head
+            ambientLookup? plumbed.ambients headValue
         let packed := packedTracked plumbed.tracked plumbed.ambients
         let terminal ←
-          runWireJoin plumbed.program.target fixed' plumbed.live orientation
+          runWireJoin plumbed.program.target fixed plumbed.live orientation
             packed
-        finishPlumbed content plumbed
-          (by
-            simpa [packed, packedTracked] using terminal)
-  | .ref _ definition signatures =>
-      let arguments ←
-        requireOption .malformedResidual <|
-          argumentOwners? content node CPort.arg signatures.length
+        finishPlumbed context plumbed
+          (by simpa [packed, packedTracked] using terminal)
+  | .named definition arguments =>
       let operations ←
         requireOption .malformedResidual <|
-          planPlumbing content positions arguments
+          planPlumbing context formals arguments.entries
       let plumbed ←
         executePlumbing operations source wire ambients tracked orientation
       let packed := packedTracked plumbed.tracked plumbed.ambients
       let terminal ←
-        runRefLeaf plumbed.program.target plumbed.live definition orientation
-          packed
-      finishPlumbed content plumbed
-        (by
-          simpa [packed, packedTracked] using terminal)
-  | .identity _ _ arity =>
-      let arguments ←
-        requireOption .malformedResidual <|
-          argumentOwners? content node CPort.identity arity
+        runRefLeaf plumbed.program.target plumbed.live
+          (defVarIndex definition) orientation packed
+      finishPlumbed context plumbed
+        (by simpa [packed, packedTracked] using terminal)
+  | .identity signature ports _ =>
+      let portValues : List (PackedVar context) :=
+        ports.map fun port => ⟨signature, port⟩
       let operations ←
         requireOption .malformedResidual <|
-          planPlumbing content positions arguments
+          planPlumbing context formals portValues
       let plumbed ←
         executePlumbing operations source wire ambients tracked orientation
       let packed := packedTracked plumbed.tracked plumbed.ambients
       let terminal ←
         runIdentityLeaf plumbed.program.target plumbed.live orientation packed
-      finishPlumbed content plumbed
-        (by
-          simpa [packed, packedTracked] using terminal)
+      finishPlumbed context plumbed
+        (by simpa [packed, packedTracked] using terminal)
+  | .cut _ => throw .malformedResidual
+  | .bind _ _ => throw .malformedResidual
+
+private def compileIntrinsicResidual :
+    (source : CheckedDiagram definitions) →
+    (residual : IntrinsicExecutionResidual source context) →
+    (tracked : List source.val.WireId) →
+    (orientation : Orientation) →
+    Except CompilerError
+      (ResidualCompilation orientation source context tracked.length)
+  | source, residual, tracked, orientation => do
+      let ambientValues := residual.ambients.map Prod.fst
+      let packed := packedTracked tracked residual.ambients
+      match bodyExact : residual.body with
+      | .mk (.cons (.bind signature body) .nil) =>
+          let shifted ←
+            runArityShift source residual.wire signature orientation packed
+          let transported ←
+            requireOption .allocationMismatch <|
+              unpackTransport? ambientValues tracked.length shifted.tracked
+          let nested : IntrinsicExecutionResidual shifted.step.target
+              (signature :: context) :=
+            { body := body
+              wire := shifted.live
+              formals :=
+                residual.formals.map
+                    (liftPackedVar (bound := signature)) ++
+                  [⟨signature, .here⟩]
+              ambients := transported.ambients.map fun binding =>
+                (liftPackedVar (bound := signature) binding.1, binding.2) }
+          let tail ←
+            compileIntrinsicResidual shifted.step.target nested
+              transported.tracked orientation
+          let lowered ←
+            requireOption .malformedResidual <| lowerAmbients? tail.ambients
+          let loweredTail :
+              ResidualCompilation orientation shifted.step.target context
+                transported.tracked.length :=
+            { program := tail.program
+              tracked := tail.tracked
+              trackedLength := tail.trackedLength
+              ambients := lowered }
+          pure
+            ((loweredTail.castTracked transported.trackedLength).prepend
+              shifted.step)
+      | .mk .nil =>
+          let emptied ←
+            runEmptyResidual source residual.wire orientation packed
+          let emptied' : PrimitiveRun orientation source
+              (tracked.length + ambientValues.length) :=
+            { program := emptied.program
+              tracked := emptied.tracked
+              trackedLength := by
+                simpa [packed, packedTracked, ambientValues] using
+                  emptied.trackedLength }
+          primitiveCompilation context tracked.length ambientValues
+            emptied'
+      | .mk (.cons (.cut body) .nil) =>
+          let wrapped ←
+            runCutWrap source residual.wire orientation packed
+          let transported ←
+            requireOption .allocationMismatch <|
+              unpackTransport? ambientValues tracked.length wrapped.tracked
+          let nested : IntrinsicExecutionResidual wrapped.step.target context :=
+            { body := body
+              wire := wrapped.live
+              formals := residual.formals
+              ambients := transported.ambients }
+          let tail ←
+            compileIntrinsicResidual wrapped.step.target nested
+              transported.tracked orientation
+          pure
+            ((tail.castTracked transported.trackedLength).prepend wrapped.step)
+      | .mk (.cons item .nil) =>
+          compileIntrinsicLeaf source residual.wire residual.formals
+            residual.ambients item tracked orientation
+      | .mk (.cons head (.cons next rest)) =>
+          let split ←
+            runParallelSplit source residual.wire orientation packed
+          let transported ←
+            requireOption .allocationMismatch <|
+              unpackTransport? ambientValues tracked.length split.tracked
+          let leftResidual :
+              IntrinsicExecutionResidual split.step.target context :=
+            { body := .mk (.cons head .nil)
+              wire := split.left
+              formals := residual.formals
+              ambients := transported.ambients }
+          let left ←
+            compileIntrinsicResidual split.step.target leftResidual
+              (split.right :: transported.tracked) orientation
+          match rightSplit : left.tracked with
+          | [] => throw .allocationMismatch
+          | right :: remainingTracked =>
+              let rightResidual :
+                  IntrinsicExecutionResidual left.program.target context :=
+                { body := .mk (.cons next rest)
+                  wire := right
+                  formals := residual.formals
+                  ambients := left.ambients }
+              let rightCompiled ←
+                compileIntrinsicResidual left.program.target rightResidual
+                  remainingTracked orientation
+              have remainingLength :
+                  remainingTracked.length = tracked.length := by
+                have leftLength := left.trackedLength
+                rw [rightSplit] at leftLength
+                have transportedLength := transported.trackedLength
+                simp only [List.length_cons] at leftLength
+                omega
+              pure
+                (combineParallel split.step left.program rightCompiled
+                  remainingLength)
+termination_by source residual tracked orientation =>
+  intrinsicRegionSize residual.body
+decreasing_by
+  all_goals
+    try simp_all [bodyExact, intrinsicRegionSize, intrinsicItemSeqSize,
+      intrinsicItemSize]
+  all_goals
+    have headPositive := intrinsicItemSize_positive head
+    have nextPositive := intrinsicItemSize_positive next
+    omega
 
 private def compileResidual
-    (source : CheckedDiagram definitions)
-    (wire : source.val.WireId)
-    (content : CheckedOpenDiagram definitions)
-    (residual : ContentResidual content)
-    (ambients :
-      List (content.val.diagram.WireId × source.val.WireId))
+    (residual : IntrinsicCompilerResidual source context)
     (tracked : List source.val.WireId)
     (orientation : Orientation) :
     Except CompilerError
-      (ResidualCompilation orientation source content tracked.length) := do
-      let ambientStubs := ambients.map Prod.fst
-      let packed := packedTracked tracked ambients
-      match residual.internalRootWires with
-      | binder :: _ =>
-          let shifted ←
-            runArityShift source wire
-              (content.val.diagram.wires binder).sig orientation packed
-          let transported ←
-            requireOption .allocationMismatch <|
-              unpackTransport? ambientStubs tracked.length shifted.tracked
-          let nextResidual := promoteBinder residual binder
-          if smaller :
-              ContentResidual.Before nextResidual.measure residual.measure then
-            let tail ←
-              compileResidual shifted.step.target shifted.live content
-                nextResidual transported.ambients transported.tracked
-                orientation
-            pure
-              ((tail.castTracked transported.trackedLength).prepend
-                shifted.step)
-          else
-            throw .malformedResidual
-      | [] =>
-          let nodes := residual.rootNodes
-          let cuts := residual.rootCuts
-          match nodes, cuts with
-          | [], [] =>
-              let emptied ←
-                runEmptyResidual source wire orientation packed
-              primitiveCompilation content tracked.length ambientStubs
-                (by
-                  simpa [packed, packedTracked, ambientStubs] using emptied)
-          | [node], [] =>
-              compileLeaf source wire content residual node ambients
-                tracked orientation
-          | [], [cut] =>
-              let wrapped ← runCutWrap source wire orientation packed
-              let transported ←
-                requireOption .allocationMismatch <|
-                  unpackTransport? ambientStubs tracked.length wrapped.tracked
-              let nextResidual := insideRootCut residual cut
-              if smaller :
-                  ContentResidual.Before nextResidual.measure
-                    residual.measure then
-                let tail ←
-                  compileResidual wrapped.step.target wrapped.live content
-                    nextResidual transported.ambients transported.tracked
-                    orientation
-                pure
-                  ((tail.castTracked transported.trackedLength).prepend
-                    wrapped.step)
-              else
-                throw .malformedResidual
-          | node :: _ :: _, _ =>
-              let split ←
-                runParallelSplit source wire orientation packed
-              let transported ←
-                requireOption .allocationMismatch <|
-                  unpackTransport? ambientStubs tracked.length split.tracked
-              let leftResidual := onlyRootNode residual node
-              let rightResidual := withoutRootNode residual node
-              if leftSmaller :
-                  ContentResidual.Before leftResidual.measure
-                    residual.measure then
-                let left ←
-                  compileResidual split.step.target split.left content
-                    leftResidual transported.ambients
-                    (split.right :: transported.tracked) orientation
-                match rightSplit : left.tracked with
-                | [] => throw .allocationMismatch
-                | right :: remainingTracked =>
-                    if rightSmaller :
-                        ContentResidual.Before rightResidual.measure
-                          residual.measure then
-                      let rightCompiled ←
-                        compileResidual left.program.target right content
-                          rightResidual left.ambients remainingTracked
-                          orientation
-                      have remainingLength :
-                          remainingTracked.length = tracked.length := by
-                        have leftLength := left.trackedLength
-                        rw [rightSplit] at leftLength
-                        have transportedLength := transported.trackedLength
-                        simp only [List.length_cons] at leftLength
-                        omega
-                      pure
-                        (combineParallel split.step left.program rightCompiled
-                          remainingLength)
-                    else
-                      throw .malformedResidual
-              else
-                throw .malformedResidual
-          | node :: _, _ :: _ =>
-              let split ←
-                runParallelSplit source wire orientation packed
-              let transported ←
-                requireOption .allocationMismatch <|
-                  unpackTransport? ambientStubs tracked.length split.tracked
-              let leftResidual := onlyRootNode residual node
-              let rightResidual := withoutRootNode residual node
-              if leftSmaller :
-                  ContentResidual.Before leftResidual.measure
-                    residual.measure then
-                let left ←
-                  compileResidual split.step.target split.left content
-                    leftResidual transported.ambients
-                    (split.right :: transported.tracked) orientation
-                match rightSplit : left.tracked with
-                | [] => throw .allocationMismatch
-                | right :: remainingTracked =>
-                    if rightSmaller :
-                        ContentResidual.Before rightResidual.measure
-                          residual.measure then
-                      let rightCompiled ←
-                        compileResidual left.program.target right content
-                          rightResidual left.ambients remainingTracked
-                          orientation
-                      have remainingLength :
-                          remainingTracked.length = tracked.length := by
-                        have leftLength := left.trackedLength
-                        rw [rightSplit] at leftLength
-                        have transportedLength := transported.trackedLength
-                        simp only [List.length_cons] at leftLength
-                        omega
-                      pure
-                        (combineParallel split.step left.program rightCompiled
-                          remainingLength)
-                    else
-                      throw .malformedResidual
-              else
-                throw .malformedResidual
-          | [], cut :: _ :: _ =>
-              let split ←
-                runParallelSplit source wire orientation packed
-              let transported ←
-                requireOption .allocationMismatch <|
-                  unpackTransport? ambientStubs tracked.length split.tracked
-              let leftResidual := onlyRootCut residual cut
-              let rightResidual := withoutRootCut residual cut
-              if leftSmaller :
-                  ContentResidual.Before leftResidual.measure
-                    residual.measure then
-                let left ←
-                  compileResidual split.step.target split.left content
-                    leftResidual transported.ambients
-                    (split.right :: transported.tracked) orientation
-                match rightSplit : left.tracked with
-                | [] => throw .allocationMismatch
-                | right :: remainingTracked =>
-                    if rightSmaller :
-                        ContentResidual.Before rightResidual.measure
-                          residual.measure then
-                      let rightCompiled ←
-                        compileResidual left.program.target right content
-                          rightResidual left.ambients remainingTracked
-                          orientation
-                      have remainingLength :
-                          remainingTracked.length = tracked.length := by
-                        have leftLength := left.trackedLength
-                        rw [rightSplit] at leftLength
-                        have transportedLength := transported.trackedLength
-                        simp only [List.length_cons] at leftLength
-                        omega
-                      pure
-                        (combineParallel split.step left.program rightCompiled
-                          remainingLength)
-                    else
-                      throw .malformedResidual
-              else
-                throw .malformedResidual
-termination_by residual.measure
-decreasing_by
-  all_goals assumption
+      (ResidualCompilation orientation source context tracked.length) :=
+  compileIntrinsicResidual source residual.execution tracked orientation
 
 private def subsets : List α → List (List α)
   | [] => [[]]
@@ -1783,14 +1632,9 @@ private def compileAppliedRelationJoin
       boundaryLength := monolithic.boundaryLength
       formalSignatures := monolithic.formalSignatures
       parameterSignatures := monolithic.parameterSignatures }
-  let ambientStubs := input.content.val.boundary.drop arguments.length
-  let ambients := ambientStubs.zip input.parameters
-  let residual :=
-    initialContentResidual input.content monolithic.contentCompilation
-      arguments.length
+  let residual := initialIntrinsicResidual monolithic
   let compiled ←
-    compileResidual source input.wire input.content residual ambients []
-      input.orientation
+    compileResidual residual [] input.orientation
   have trackedEmpty : compiled.tracked = [] :=
     List.eq_nil_of_length_eq_zero compiled.trackedLength
   let normalizedIso ←
