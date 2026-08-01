@@ -21,17 +21,6 @@ structure IdentityRewrite
         (source.val.wires wire).sig
   nodeCount_lt : target.val.nodeCount < source.val.nodeCount
 
-/-- The checked fixpoint and the composed representation of every input wire. -/
-structure IdentityNormalization
-    {definitions : List (List Sig)}
-    (source : CheckedDiagram definitions) : Type where
-  target : CheckedDiagram definitions
-  wireImage : source.val.WireId → target.val.WireId
-  wire_signature :
-    ∀ wire,
-      (target.val.wires (wireImage wire)).sig =
-        (source.val.wires wire).sig
-
 private def dropRewrite
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
@@ -100,6 +89,76 @@ def fuseSameRegion
     Option (IdentityRewrite source) :=
   (fusionEligibility? source left right).map
     (fusionRewrite source left right)
+
+/-- Chronological construction trace retained by eager normalization. -/
+inductive IdentityNormalizationTrace
+    (definitions : List (List Sig)) :
+    (source : CheckedDiagram definitions) → Type
+  | done (source) : IdentityNormalizationTrace definitions source
+  | step (first : IdentityRewrite source)
+      (rest : IdentityNormalizationTrace definitions first.target) :
+      IdentityNormalizationTrace definitions source
+
+namespace IdentityNormalizationTrace
+
+def target : IdentityNormalizationTrace definitions source →
+    CheckedDiagram definitions
+  | .done source => source
+  | .step _ rest => rest.target
+
+def wireImage :
+    (trace : IdentityNormalizationTrace definitions source) →
+      source.val.WireId → trace.target.val.WireId
+  | .done _, wire => wire
+  | .step first rest, wire => rest.wireImage (first.wireImage wire)
+
+theorem wire_signature
+    (trace : IdentityNormalizationTrace definitions source)
+    (wire : source.val.WireId) :
+    (trace.target.val.wires (trace.wireImage wire)).sig =
+      (source.val.wires wire).sig := by
+  induction trace with
+  | done => rfl
+  | step first rest induction =>
+      exact (induction (first.wireImage wire)).trans
+        (first.wire_signature wire)
+
+end IdentityNormalizationTrace
+
+/-- The checked fixpoint with its chronological construction trace. -/
+structure IdentityNormalization
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions) : Type where
+  private mk ::
+  trace : IdentityNormalizationTrace definitions source
+
+namespace IdentityNormalization
+
+def target
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (normalization : IdentityNormalization source) :
+    CheckedDiagram definitions :=
+  normalization.trace.target
+
+def wireImage
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (normalization : IdentityNormalization source) :
+    source.val.WireId → normalization.target.val.WireId :=
+  normalization.trace.wireImage
+
+theorem wire_signature
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (normalization : IdentityNormalization source)
+    (wire : source.val.WireId) :
+    (normalization.target.val.wires
+      (normalization.wireImage wire)).sig =
+      (source.val.wires wire).sig :=
+  normalization.trace.wire_signature wire
+
+end IdentityNormalization
 
 private def firstDrop?
     (source : CheckedDiagram definitions) :
@@ -229,20 +288,14 @@ theorem normalizeOne_provenance
 
 private def identityNormalizationRefl
     (source : CheckedDiagram definitions) :
-    IdentityNormalization source where
-  target := source
-  wireImage := id
-  wire_signature := fun _ => rfl
+    IdentityNormalization source :=
+  ⟨.done source⟩
 
 private def composeNormalization
     (first : IdentityRewrite source)
     (rest : IdentityNormalization first.target) :
-    IdentityNormalization source where
-  target := rest.target
-  wireImage := fun wire => rest.wireImage (first.wireImage wire)
-  wire_signature := fun wire =>
-    (rest.wire_signature (first.wireImage wire)).trans
-      (first.wire_signature wire)
+    IdentityNormalization source :=
+  ⟨.step first rest.trace⟩
 
 /--
 Deterministic eager Rule 1→2→3 fixpoint. Recursion is justified directly by
