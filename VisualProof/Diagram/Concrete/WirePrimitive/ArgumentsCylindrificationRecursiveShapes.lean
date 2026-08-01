@@ -903,6 +903,120 @@ theorem recursiveRegionNormalization_region
   exact (recursiveCastRegion_eq_rename
     (ConcreteElaboration.WireContext.sigs_extend context region) body).symm
 
+/-- Positive climbing from a checked root always fails. -/
+theorem recursiveClimb_succ_root_none
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (steps : Nat) :
+    diagram.climb (steps + 1) diagram.root = none := by
+  have rootData : diagram.regions diagram.root = .sheet :=
+    wellFormed.root_is_sheet
+  simp [ConcreteDiagram.climb, rootData]
+
+/-- A checked region has a unique distance to the root. -/
+theorem recursiveClimb_to_root_unique
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    {region : diagram.RegionId} {left right : Nat}
+    (leftClimb : diagram.climb left region = some diagram.root)
+    (rightClimb : diagram.climb right region = some diagram.root) :
+    left = right := by
+  induction left generalizing right region with
+  | zero =>
+      have regionRoot : region = diagram.root := by
+        simpa [ConcreteDiagram.climb] using leftClimb
+      subst region
+      cases right with
+      | zero => rfl
+      | succ right =>
+          rw [recursiveClimb_succ_root_none definitions diagram wellFormed
+            right] at rightClimb
+          contradiction
+  | succ left induction =>
+      cases right with
+      | zero =>
+          have regionRoot : region = diagram.root := by
+            simpa [ConcreteDiagram.climb] using rightClimb
+          subst region
+          rw [recursiveClimb_succ_root_none definitions diagram wellFormed
+            left] at leftClimb
+          contradiction
+      | succ right =>
+          cases regionData : diagram.regions region with
+          | sheet => simp [ConcreteDiagram.climb, regionData] at leftClimb
+          | cut parent =>
+              have leftParent :
+                  diagram.climb left parent = some diagram.root := by
+                simpa [ConcreteDiagram.climb, regionData] using leftClimb
+              have rightParent :
+                  diagram.climb right parent = some diagram.root := by
+                simpa [ConcreteDiagram.climb, regionData] using rightClimb
+              exact congrArg Nat.succ
+                (induction leftParent rightParent)
+
+/-- A strictly deeper recursive region cannot be the acted head region. -/
+theorem recursiveBelow_ne_head
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (head region : diagram.RegionId)
+    (headDepth regionDepth : Nat)
+    (headClimb : diagram.climb headDepth head = some diagram.root)
+    (regionClimb : diagram.climb regionDepth region = some diagram.root)
+    (below : headDepth < regionDepth) : region ≠ head := by
+  intro same
+  subst region
+  have depthsEqual := recursiveClimb_to_root_unique definitions diagram
+    wellFormed headClimb regionClimb
+  omega
+
+/-- Casting back across an equality returns the original dependent value. -/
+theorem recursiveCast_symm_cancel
+    (same : sourceContext = targetContext)
+    (value : Var targetContext signature) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+/-- Exact normalized abstraction of one child body after transporting the
+child shape into its parent's explicit local/outer context. -/
+theorem recursiveTransportedChild_smaller
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (sourceHead : Var normalizedSourceContext (.rel smallerArguments))
+    (sourceBody : Region definitions sourceContext)
+    (shape : CylindricalShape definitions insertion
+      sourceContext targetContext)
+    (shapeExact : shape.smaller =
+      UniformIntrinsicRegion.abstractApplied
+        (sourceExact.symm ▸ sourceHead) sourceBody) :
+    (recursiveShapeTransport sourceExact targetExact shape).smaller =
+      UniformIntrinsicRegion.abstractApplied sourceHead
+        (sourceExact ▸ sourceBody) := by
+  rw [recursiveShapeTransport_smaller, shapeExact,
+    recursiveCast_abstractApplied]
+  rw [recursiveCast_symm_cancel]
+
+/-- Target counterpart of `recursiveTransportedChild_smaller`. -/
+theorem recursiveTransportedChild_larger
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (targetHead : Var normalizedTargetContext (.rel largerArguments))
+    (targetBody : Region definitions targetContext)
+    (shape : CylindricalShape definitions insertion
+      sourceContext targetContext)
+    (shapeExact : shape.larger =
+      UniformIntrinsicRegion.abstractApplied
+        (targetExact.symm ▸ targetHead) targetBody) :
+    (recursiveShapeTransport sourceExact targetExact shape).larger =
+      UniformIntrinsicRegion.abstractApplied targetHead
+        (targetExact ▸ targetBody) := by
+  rw [recursiveShapeTransport_larger, shapeExact,
+    recursiveCast_abstractApplied]
+  rw [recursiveCast_symm_cancel]
+
 /-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
 its exact renaming. -/
 def recursiveLeafReceipt
