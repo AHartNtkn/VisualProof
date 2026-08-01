@@ -3570,6 +3570,78 @@ theorem targetArguments_exact
         newArgument :=
   applied.target_arguments_exact
 
+/-- The inserted argument port at a generated node is owned by the exact
+site-indexed attachment selected by the accepted extension. -/
+theorem generatedInserted_endpointOwner
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (positionValid : position ≤ applied.sourceArgumentList.length)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.target.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg position⟩ =
+      some (applied.wireEquiv ((attachments[site.val]?).getD wire)) := by
+  let sourceSite := applied.result.sites.sites.get site
+  have siteLength : sourceSite.arguments.length =
+      applied.sourceArgumentList.length :=
+    sourceSite.arguments_length.trans
+      (congrArg List.length
+        (ConcreteWirePrimitive.appliedSite_arguments_eq_relationArguments
+          applied.sourceArgumentList applied.sourceWire_signature sourceSite))
+  have siteValid : position ≤ sourceSite.arguments.length := by
+    rw [siteLength]
+    exact positionValid
+  have inserted := ConcreteWirePrimitive.insertAt_getElem?_self
+    sourceSite.arguments position ((attachments[site.val]?).getD wire)
+    siteValid
+  have targetInserted := ConcreteWirePrimitive.insertAt_getElem?_self
+    applied.sourceArgumentList position newArgument positionValid
+  have targetGet : applied.result.targetArguments[position]? =
+      some newArgument := by
+    rw [applied.targetArguments_exact]
+    exact targetInserted
+  have targetBound : position < applied.result.targetArguments.length := by
+    exact (List.getElem?_eq_some_iff.mp targetGet).choose
+  have selected : (applied.result.spec.arguments site)[position]? =
+      some (.existing ((attachments[site.val]?).getD wire)) := by
+    rw [applied.arguments_exact site]
+    unfold existingReferences
+    rw [List.getElem?_map, inserted]
+    rfl
+  by_cases different : ((attachments[site.val]?).getD wire) ≠ wire
+  · have retained : ((attachments[site.val]?).getD wire) ∉
+        applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simpa [different]
+    have owner := applied.result.generatedArgument_endpointOwner site
+      position targetBound ((attachments[site.val]?).getD wire) selected
+      retained
+    simpa [AppliedArgExtend.wireEquiv,
+      ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly,
+      ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly, different]
+      using owner
+  · have same : (attachments[site.val]?).getD wire = wire :=
+      Classical.not_not.mp different
+    rw [same]
+    rw [applied.wireEquiv_head]
+    change applied.result.checked.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg position⟩ =
+      some applied.result.targetWire
+    rw [applied.result.targetNode_argument_owner site position targetBound]
+    congr 1
+    unfold ConcreteWirePrimitive.replacementOwner
+      ConcreteWirePrimitive.replacementNode
+    simp only [Fin.addCases_right]
+    rw [selected]
+    simp only [same]
+    rw [ConcreteWirePrimitive.retainedReplacementWire?_head_none]
+    exact applied.result.targetWire_exact.symm
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}

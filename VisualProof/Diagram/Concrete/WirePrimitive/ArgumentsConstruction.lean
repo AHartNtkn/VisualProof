@@ -901,6 +901,25 @@ def insertAt : List α → Nat → α → List α
   | head :: tail, position + 1, value =>
       head :: insertAt tail position value
 
+/-- An in-range insertion position contains the inserted value exactly. -/
+theorem insertAt_getElem?_self
+    (values : List α)
+    (position : Nat)
+    (value : α)
+    (valid : position ≤ values.length) :
+    (insertAt values position value)[position]? = some value := by
+  induction values generalizing position with
+  | nil =>
+      have : position = 0 := Nat.eq_zero_of_le_zero (by simpa using valid)
+      subst position
+      rfl
+  | cons head tail induction =>
+      cases position with
+      | zero => rfl
+      | succ position =>
+          simp only [List.length_cons, Nat.succ_le_succ_iff] at valid
+          simp [insertAt, induction position valid]
+
 /-- Erasing an in-range position and reinserting its exact value cancels. -/
 theorem insertAt_eraseAt_of_getElem?_eq_some
     (values : List α)
@@ -1338,6 +1357,18 @@ theorem retainedReplacementWire?_some
   unfold retainedReplacementWire?
   rw [retainedCandidateWire?_some plan sourceWire retained]
   rfl
+
+/-- The acted head is never a retained replacement wire. -/
+@[simp] theorem retainedReplacementWire?_head_none
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : AllAppliedSites source wire}
+    {spec : ReplacementSpec source wire sites}
+    (plan : ReplacementPlan source wire sites spec) :
+    retainedReplacementWire? plan wire = none := by
+  unfold retainedReplacementWire? retainedCandidateWire?
+    Internal.retainedWires
+  simp
 
 theorem replacementSkeleton_retained_wire_signature
     {source : CheckedDiagram definitions}
