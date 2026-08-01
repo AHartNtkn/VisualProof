@@ -1250,6 +1250,190 @@ theorem recursiveReindexItemSeq_valid
 
 end
 
+mutual
+/-- Rename the free context of an already-abstracted uniform region. -/
+def recursiveUniformRegionRename
+    (rho : WireRenaming source target) :
+    UniformIntrinsicRegion definitions arguments source →
+      UniformIntrinsicRegion definitions arguments target
+  | .mk ordinary holes =>
+      .mk (recursiveUniformItemSeqRename rho ordinary)
+        ⟨holes.values.map fun values => Vars.rename rho values⟩
+
+/-- Rename the free context of one already-abstracted uniform item. -/
+def recursiveUniformItemRename
+    (rho : WireRenaming source target) :
+    UniformIntrinsicItem definitions arguments source →
+      UniformIntrinsicItem definitions arguments target
+  | .leaf item => .leaf (item.renameWires rho)
+  | .cut body => .cut (recursiveUniformRegionRename rho body)
+  | .bind signature body =>
+      .bind signature
+        (recursiveUniformRegionRename (WireRenaming.lift rho signature) body)
+
+/-- Rename the free context of an ordered already-abstracted item sequence. -/
+def recursiveUniformItemSeqRename
+    (rho : WireRenaming source target) :
+    UniformIntrinsicItemSeq definitions arguments source →
+      UniformIntrinsicItemSeq definitions arguments target
+  | .nil => .nil
+  | .cons head tail =>
+      .cons (recursiveUniformItemRename rho head)
+        (recursiveUniformItemSeqRename rho tail)
+end
+
+/-- Uniform context renaming commutes with one explicit argument binder. -/
+theorem recursiveUniformRename_wrapArgumentBind
+    (rho : WireRenaming source target)
+    (signature : Sig)
+    (body : UniformIntrinsicRegion definitions arguments
+      (signature :: source)) :
+    recursiveUniformRegionRename rho (wrapArgumentBind signature body) =
+      wrapArgumentBind signature
+        (recursiveUniformRegionRename (WireRenaming.lift rho signature)
+          body) := rfl
+
+/-- Uniform context renaming commutes with an ordered argument binder block. -/
+theorem recursiveUniformRename_wrapArgumentBinds
+    (rho : WireRenaming source target) :
+    ∀ (bound : List Sig)
+      (body : UniformIntrinsicRegion definitions arguments (bound ++ source)),
+      recursiveUniformRegionRename rho (wrapArgumentBinds bound body) =
+        wrapArgumentBinds bound
+          (recursiveUniformRegionRename
+            (recursiveLiftOuterRenaming bound rho) body)
+  | [], body => rfl
+  | signature :: rest, body => by
+      simp only [wrapArgumentBinds]
+      rw [recursiveUniformRename_wrapArgumentBinds rho rest]
+      rfl
+
+mutual
+
+/-- Reindexing a shape renames its two uniform projections exactly. -/
+theorem recursiveReindexShape_projections
+    (sourceRenaming : WireRenaming smallerOuter normalizedSmallerOuter)
+    (targetRenaming : WireRenaming largerOuter normalizedLargerOuter)
+    (newOuter : WireRenaming normalizedSmallerOuter normalizedLargerOuter)
+    (shape : CylindricalShape definitions insertion smallerOuter largerOuter)
+    (consistent : shape.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerOuter signature),
+      newOuter (sourceRenaming value) =
+        targetRenaming (shape.embedding value)) :
+    let reindexed := recursiveReindexShape sourceRenaming targetRenaming
+      newOuter shape consistent commutes
+    reindexed.smaller =
+        recursiveUniformRegionRename sourceRenaming shape.smaller ∧
+      reindexed.larger =
+        recursiveUniformRegionRename targetRenaming shape.larger := by
+  cases shape with
+  | block oldOuter bounds items holes =>
+      rename_i smallerBound largerBound freshCount smallerHoles largerHoles
+      simp only [recursiveReindexShape, CylindricalShape.smaller,
+        CylindricalShape.larger]
+      rw [recursiveUniformRename_wrapArgumentBinds,
+        recursiveUniformRename_wrapArgumentBinds]
+      let sourceMap : WireRenaming (smallerBound ++ smallerOuter)
+          (smallerBound ++ normalizedSmallerOuter) :=
+        recursiveLiftOuterRenaming smallerBound sourceRenaming
+      let targetMap : WireRenaming (largerBound ++ largerOuter)
+          (largerBound ++ normalizedLargerOuter) :=
+        recursiveLiftOuterRenaming largerBound targetRenaming
+      let newEmbedding : WireRenaming
+          (smallerBound ++ normalizedSmallerOuter)
+          (largerBound ++ normalizedLargerOuter) := bounds.embed newOuter
+      have innerCommutes : ∀ {signature : Sig}
+          (value : Var (smallerBound ++ smallerOuter) signature),
+          newEmbedding (sourceMap value) =
+            targetMap (items.embedding value) := by
+        intro signature value
+        calc
+          newEmbedding (sourceMap value) =
+              targetMap (bounds.embed oldOuter value) :=
+            (recursiveBoundEmbed_natural bounds oldOuter sourceRenaming
+              targetRenaming newOuter commutes value).symm
+          _ = targetMap (items.embedding value) :=
+            congrArg targetMap (consistent.2 value).symm
+      have itemExact := recursiveReindexItemSeq_projections sourceMap
+        targetMap newEmbedding items consistent.1 innerCommutes
+      constructor
+      · apply congrArg (wrapArgumentBinds smallerBound)
+        rw [itemExact.1]
+        rfl
+      · apply congrArg (wrapArgumentBinds largerBound)
+        rw [itemExact.2]
+        rfl
+
+/-- Reindexing an item renames its two uniform projections exactly. -/
+theorem recursiveReindexItem_projections
+    (sourceRenaming : WireRenaming smallerContext normalizedSmallerContext)
+    (targetRenaming : WireRenaming largerContext normalizedLargerContext)
+    (newEmbedding : WireRenaming normalizedSmallerContext
+      normalizedLargerContext)
+    (item : CylindricalShapeItem definitions insertion smallerContext
+      largerContext)
+    (consistent : item.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      newEmbedding (sourceRenaming value) =
+        targetRenaming (item.embedding value)) :
+    let reindexed := recursiveReindexItem sourceRenaming targetRenaming
+      newEmbedding item consistent commutes
+    reindexed.smaller =
+        recursiveUniformItemRename sourceRenaming item.smaller ∧
+      reindexed.larger =
+        recursiveUniformItemRename targetRenaming item.larger := by
+  cases item with
+  | leaf oldEmbedding smaller larger exact => exact ⟨rfl, rfl⟩
+  | cut body =>
+      have bodyExact := recursiveReindexShape_projections sourceRenaming
+        targetRenaming newEmbedding body consistent commutes
+      exact ⟨congrArg UniformIntrinsicItem.cut bodyExact.1,
+        congrArg UniformIntrinsicItem.cut bodyExact.2⟩
+
+/-- Reindexing an item sequence renames its two uniform projections exactly. -/
+theorem recursiveReindexItemSeq_projections
+    (sourceRenaming : WireRenaming smallerContext normalizedSmallerContext)
+    (targetRenaming : WireRenaming largerContext normalizedLargerContext)
+    (newEmbedding : WireRenaming normalizedSmallerContext
+      normalizedLargerContext)
+    (items : CylindricalShapeItemSeq definitions insertion smallerContext
+      largerContext)
+    (consistent : items.consistent)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      newEmbedding (sourceRenaming value) =
+        targetRenaming (items.embedding value)) :
+    let reindexed := recursiveReindexItemSeq sourceRenaming targetRenaming
+      newEmbedding items consistent commutes
+    reindexed.smaller =
+        recursiveUniformItemSeqRename sourceRenaming items.smaller ∧
+      reindexed.larger =
+        recursiveUniformItemSeqRename targetRenaming items.larger := by
+  cases items with
+  | nil oldEmbedding => exact ⟨rfl, rfl⟩
+  | cons head tail =>
+      simp only [recursiveReindexItemSeq,
+        CylindricalShapeItemSeq.smaller, CylindricalShapeItemSeq.larger,
+        recursiveUniformItemSeqRename]
+      have headExact := recursiveReindexItem_projections sourceRenaming
+        targetRenaming newEmbedding head consistent.1 commutes
+      have tailCommutes : ∀ {signature : Sig}
+          (value : Var smallerContext signature),
+          newEmbedding (sourceRenaming value) =
+            targetRenaming (tail.embedding value) := by
+        intro signature value
+        exact (commutes value).trans
+          (congrArg targetRenaming (consistent.2.2 value).symm)
+      have tailExact := recursiveReindexItemSeq_projections sourceRenaming
+        targetRenaming newEmbedding tail consistent.2.1 tailCommutes
+      constructor
+      · rw [headExact.1, tailExact.1]
+      · rw [headExact.2, tailExact.2]
+
+end
+
 /-- Transport a cylindrical shape across exact source and target context
 equalities. -/
 def recursiveShapeTransport
