@@ -1,0 +1,292 @@
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationConstruction
+
+namespace VisualProof
+namespace ConcreteWirePrimitive
+namespace ArgumentsSemantics
+
+open WirePrimitive
+
+private theorem eraseDups_length_le
+    [BEq α] [LawfulBEq α] (values : List α) :
+    values.eraseDups.length ≤ values.length := by
+  match values with
+  | [] => simp
+  | head :: tail =>
+      rw [List.eraseDups_cons]
+      simp only [List.length_cons, Nat.succ_le_succ_iff]
+      exact Nat.le_trans
+        (eraseDups_length_le
+          (tail.filter fun value => !value == head))
+        (List.length_filter_le _ tail)
+termination_by values.length
+decreasing_by
+  simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
+private theorem nodup_of_eraseDups_length_eq
+    [BEq α] [LawfulBEq α]
+    (values : List α)
+    (exact : values.eraseDups.length = values.length) :
+    values.Nodup := by
+  match values with
+  | [] => simp
+  | head :: tail =>
+      rw [List.eraseDups_cons] at exact
+      simp only [List.length_cons, Nat.succ.injEq] at exact
+      let retained := tail.filter fun value => !value == head
+      have retainedLength : retained.length = tail.length := by
+        apply Nat.le_antisymm
+        · exact List.length_filter_le _ tail
+        · rw [← exact]
+          exact eraseDups_length_le retained
+      have retainedEquality : retained = tail :=
+        List.Sublist.eq_of_length List.filter_sublist retainedLength
+      rw [List.nodup_cons]
+      constructor
+      · intro member
+        have accepted : (!head == head) = true := by
+          have : head ∈ retained := by
+            rw [retainedEquality]
+            exact member
+          exact (List.mem_filter.mp this).2
+        simp at accepted
+      · apply nodup_of_eraseDups_length_eq tail
+        simpa [retained, retainedEquality] using exact
+termination_by values.length
+decreasing_by simp_wf
+
+private theorem component_sublist_flatMap
+    (values : List α)
+    (value : α)
+    (member : value ∈ values)
+    (function : α → List β) :
+    (function value).Sublist (values.flatMap function) := by
+  induction values with
+  | nil => contradiction
+  | cons head tail induction =>
+      rw [List.mem_cons] at member
+      cases member with
+      | inl same =>
+          subst head
+          exact List.sublist_append_left _ _
+      | inr member =>
+          exact (induction member).trans
+            (List.sublist_append_right _ _)
+
+private theorem map_get_allFin (values : List α) :
+    (Data.Finite.allFin values.length).map values.get = values := by
+  rw [Data.Finite.allFin_eq_finRange]
+  unfold List.finRange
+  rw [List.map_ofFn]
+  simpa only [Function.comp_apply, List.get_eq_getElem] using
+    (List.ofFn_getElem (xs := values))
+
+/-- Every checked wire's stored endpoint sequence is duplicate-free. -/
+theorem checkedWire_endpoints_nodup
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :
+    (source.val.wires wire).endpoints.Nodup := by
+  have allNodup :
+      (source.val.endpointOccurrences.map Prod.snd).Nodup := by
+    apply nodup_of_eraseDups_length_eq
+    have exact := source.property.no_duplicate_endpoints
+    unfold ConcreteDiagram.NoDuplicateEndpoints at exact
+    simpa using exact
+  have component :
+      ((source.val.wires wire).endpoints.map fun endpoint =>
+          (wire, endpoint)).Sublist source.val.endpointOccurrences := by
+    unfold ConcreteDiagram.endpointOccurrences
+    exact component_sublist_flatMap source.val.wiresList wire
+      (Data.Finite.mem_allFin wire)
+      (fun candidate =>
+        (source.val.wires candidate).endpoints.map fun endpoint =>
+          (candidate, endpoint))
+  have endpointComponent := component.map Prod.snd
+  have simplified :
+      ((source.val.wires wire).endpoints.map fun endpoint =>
+          (wire, endpoint)).map Prod.snd =
+        (source.val.wires wire).endpoints := by
+    simp [List.map_map, Function.comp_def]
+  rw [simplified] at endpointComponent
+  exact endpointComponent.nodup allNodup
+
+/-- Exhaustively checked applications have pairwise-distinct source nodes. -/
+theorem appliedSiteNodes_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire) :
+    (sites.sites.map AppliedSite.node).Nodup := by
+  have endpointsNodup := checkedWire_endpoints_nodup source wire
+  rw [← sites.exhaustive] at endpointsNodup
+  have general : ∀ values : List (AppliedSite source wire),
+      (values.map AppliedSite.endpoint).Nodup →
+        (values.map AppliedSite.node).Nodup := by
+    intro values
+    induction values with
+    | nil => simp
+    | cons head tail induction =>
+        simp only [List.map_cons, List.nodup_cons]
+        rintro ⟨headEndpointFresh, tailNodup⟩
+        constructor
+        · intro headNodeMember
+          obtain ⟨candidate, candidateMember, nodeExact⟩ :=
+            List.mem_map.mp headNodeMember
+          apply headEndpointFresh
+          apply List.mem_map.mpr
+          refine ⟨candidate, candidateMember, ?_⟩
+          unfold AppliedSite.endpoint
+          exact congrArg (fun node => CEndpoint.mk node .head) nodeExact
+        · exact induction tailNodup
+  exact general sites.sites endpointsNodup
+
+/-- Exhaustive site indices whose source applications are local to `region`,
+preserving the acted wire's endpoint order. -/
+def aritySitesAt
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId) :
+    List (Fin sites.sites.length) :=
+  (Data.Finite.allFin sites.sites.length).filter fun site =>
+    (sites.sites.get site).region == region
+
+/-- Source application nodes local to `region`, preserving concrete node
+order rather than endpoint order. -/
+def sourceSiteNodesAt
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId) :
+    List source.val.NodeId :=
+  (source.val.nodesAt region).filter fun node =>
+    decide (node ∈ argumentSiteNodes sites)
+
+theorem aritySiteNodesAt_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId) :
+    ((aritySitesAt sites region).map fun site =>
+      (sites.sites.get site).node).Nodup := by
+  have allExact :
+      (Data.Finite.allFin sites.sites.length).map (fun site =>
+          (sites.sites.get site).node) =
+        sites.sites.map AppliedSite.node := by
+    calc
+      _ = ((Data.Finite.allFin sites.sites.length).map
+            sites.sites.get).map AppliedSite.node := by
+          simpa [Function.comp_def] using
+            (List.map_map sites.sites.get AppliedSite.node
+              (Data.Finite.allFin sites.sites.length)).symm
+      _ = _ := congrArg (List.map AppliedSite.node)
+        (map_get_allFin sites.sites)
+  have filteredSublist :
+      (aritySitesAt sites region).Sublist
+        (Data.Finite.allFin sites.sites.length) :=
+    List.filter_sublist
+  have mappedSublist := filteredSublist.map fun site =>
+    (sites.sites.get site).node
+  rw [allExact] at mappedSublist
+  exact mappedSublist.nodup (appliedSiteNodes_nodup sites)
+
+theorem sourceSiteNodesAt_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId) :
+    (sourceSiteNodesAt sites region).Nodup := by
+  unfold sourceSiteNodesAt ConcreteDiagram.nodesAt
+  exact (Data.Finite.allFin_nodup source.val.nodeCount).filter _ |>.filter _
+
+theorem aritySiteNodesAt_mem_iff
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId)
+    (node : source.val.NodeId) :
+    node ∈ (aritySitesAt sites region).map (fun site =>
+        (sites.sites.get site).node) ↔
+      node ∈ sourceSiteNodesAt sites region := by
+  constructor
+  · intro member
+    obtain ⟨site, siteMember, nodeExact⟩ := List.mem_map.mp member
+    unfold aritySitesAt at siteMember
+    have siteRegion := eq_of_beq (List.mem_filter.mp siteMember).2
+    unfold sourceSiteNodesAt
+    apply List.mem_filter.mpr
+    constructor
+    · unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+      apply List.mem_filter.mpr
+      constructor
+      · exact Data.Finite.mem_allFin node
+      · rw [← nodeExact, (sites.sites.get site).node_data]
+        exact beq_iff_eq.mpr siteRegion
+    · apply decide_eq_true
+      unfold argumentSiteNodes
+      apply List.mem_map.mpr
+      exact ⟨sites.sites.get site, List.get_mem _ _, nodeExact⟩
+  · intro member
+    unfold sourceSiteNodesAt at member
+    obtain ⟨nodeAt, siteNode⟩ := List.mem_filter.mp member
+    have siteNode := of_decide_eq_true siteNode
+    unfold argumentSiteNodes at siteNode
+    obtain ⟨site, siteMember, nodeExact⟩ := List.mem_map.mp siteNode
+    obtain ⟨index, siteExact⟩ := List.get_of_mem siteMember
+    apply List.mem_map.mpr
+    refine ⟨index, ?_, ?_⟩
+    · unfold aritySitesAt
+      apply List.mem_filter.mpr
+      refine ⟨Data.Finite.mem_allFin index, ?_⟩
+      apply beq_iff_eq.mpr
+      rw [siteExact]
+      rw [ConcreteDiagram.nodesAt, List.mem_filter] at nodeAt
+      have nodeRegion := eq_of_beq nodeAt.2
+      rw [← nodeExact, site.node_data] at nodeRegion
+      exact nodeRegion
+    · rw [siteExact]
+      exact nodeExact
+
+/-- Canonical finite equivalence from endpoint/site order to source-node
+order for the application holes local to one region. -/
+noncomputable def aritySiteNodeOrder
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId) :
+    Data.Finite.FiniteEquiv
+      (Fin (aritySitesAt sites region).length)
+      (Fin (sourceSiteNodesAt sites region).length) := by
+  exact (finEquivOfEq (by simp)).trans
+    (Data.Finite.FiniteEquiv.restrictLists
+        (Data.Finite.FiniteEquiv.refl source.val.NodeId)
+        ((aritySitesAt sites region).map fun site =>
+          (sites.sites.get site).node)
+        (sourceSiteNodesAt sites region)
+        (aritySiteNodesAt_nodup sites region)
+        (sourceSiteNodesAt_nodup sites region)
+        (fun node => (aritySiteNodesAt_mem_iff sites region node).symm))
+
+/-- The source node selected by the canonical order equivalence is the node
+of the corresponding endpoint-ordered site. -/
+theorem aritySiteNodeOrder_spec
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId)
+    (index : Fin (aritySitesAt sites region).length) :
+    (sourceSiteNodesAt sites region).get
+        (aritySiteNodeOrder sites region index) =
+      (sites.sites.get ((aritySitesAt sites region).get index)).node := by
+  simpa [aritySiteNodeOrder, finEquivOfEq] using
+    Data.Finite.FiniteEquiv.restrictLists_spec
+    (Data.Finite.FiniteEquiv.refl source.val.NodeId)
+    ((aritySitesAt sites region).map fun site =>
+      (sites.sites.get site).node)
+    (sourceSiteNodesAt sites region)
+    (aritySiteNodesAt_nodup sites region)
+    (sourceSiteNodesAt_nodup sites region)
+    (fun node => (aritySiteNodesAt_mem_iff sites region node).symm)
+    (finEquivOfEq (by simp) index)
+
+end ArgumentsSemantics
+end ConcreteWirePrimitive
+end VisualProof
