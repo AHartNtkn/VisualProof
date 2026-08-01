@@ -336,6 +336,55 @@ def relationWire
       (Internal.retainedWires source (relationRemovedWires sites)).length
       (0 : Fin 1))
 
+/-- Retained regions preserve the exact dense batch-removal index. -/
+@[simp] theorem regionImage_val
+    (result : RelationSeverResult source scope sites)
+    (region : source.val.RegionId)
+    (survives :
+      region ∈ Internal.retainedRegions source (relationRemovedRegions sites)) :
+    (result.regionImage region survives).val =
+      (Internal.retainedRegionIndex source (relationRemovedRegions sites)
+        region survives).val := by
+  rfl
+
+/-- Retained nodes occupy the original dense-removal prefix in exact order. -/
+@[simp] theorem nodeImage_val
+    (result : RelationSeverResult source scope sites)
+    (node : source.val.NodeId)
+    (survives :
+      node ∈ Internal.retainedNodes source (relationRemovedNodes sites)) :
+    (result.nodeImage node survives).val =
+      (Internal.retainedNodeIndex source (relationRemovedNodes sites)
+        node survives).val := by
+  rfl
+
+/-- Retained wires occupy the original dense-removal prefix in exact order. -/
+@[simp] theorem wireImage_val
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (survives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites)) :
+    (result.wireImage wire survives).val =
+      (Internal.retainedWireIndex source (relationRemovedWires sites)
+        wire survives).val := by
+  rfl
+
+/-- Generated relation atoms follow the retained-node prefix in site order. -/
+@[simp] theorem atom_val
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    (result.atom site).val =
+      (Internal.retainedNodes source (relationRemovedNodes sites)).length +
+        site.val := by
+  rfl
+
+/-- The generated relation wire is the unique final dense wire. -/
+@[simp] theorem relationWire_val
+    (result : RelationSeverResult source scope sites) :
+    result.relationWire.val =
+      (Internal.retainedWires source (relationRemovedWires sites)).length := by
+  rfl
+
 def retainedEndpoints
     (result : RelationSeverResult source scope sites)
     (wire : source.val.WireId) :
