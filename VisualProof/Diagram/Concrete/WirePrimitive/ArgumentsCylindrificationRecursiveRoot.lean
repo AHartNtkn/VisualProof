@@ -887,6 +887,105 @@ theorem recursiveFinalRegionClassifier_complete
     UniformIntrinsicRegion.renamedCompiledAppliedArguments?, nodeCompiled,
     UniformIntrinsicRegion.matchedHeadArguments?, normalizedHead]
 
+theorem recursiveFinalRegionClassifier_site
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceArguments : List Sig)
+    (sites : AllAppliedSites source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceMap : WireRenaming context.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel sourceArguments))
+    (targetHead : Var normalizedTarget (.rel result.targetArguments))
+    (headNormalization : RecursiveHeadNormalization result sourceArguments
+      context targetContext sourceMap targetMap sourceHead targetHead)
+    (node : source.val.NodeId)
+    (values : Vars normalizedSource sourceArguments)
+    (accepted : recursiveFinalRegionClassifier definitions source.val context
+      sourceMap sourceHead node = some values) :
+    ∃ site, site ∈ sites.sites ∧ site.node = node := by
+  unfold recursiveFinalRegionClassifier at accepted
+  unfold UniformIntrinsicRegion.renamedCompiledAppliedArguments? at accepted
+  cases compiled : ConcreteElaboration.Internal.compileNode? definitions
+      source.val context node with
+  | none => simp [compiled] at accepted
+  | some item =>
+      cases item with
+      | atom atomHead arguments =>
+          have matched :
+              UniformIntrinsicRegion.matchedHeadArguments? sourceHead
+                (sourceMap atomHead) (Vars.rename sourceMap arguments) =
+                  some values := by
+            simpa [compiled] using accepted
+          obtain ⟨same, normalized⟩ :=
+            UniformIntrinsicRegion.matchedHeadArguments_head_exact _ _ _
+              matched
+          have headOrigin :
+              ConcreteElaboration.WireContext.origin source.val context.ids
+                atomHead = wire := by
+            cases same
+            exact headNormalization.source_reflect atomHead normalized
+          have nodeShape : ∃ nodeRegion atomArguments,
+              source.val.nodes node = .atom nodeRegion atomArguments := by
+            cases nodeData : source.val.nodes node with
+            | atom nodeRegion atomArguments =>
+                exact ⟨nodeRegion, atomArguments, rfl⟩
+            | ref nodeRegion definition refArguments =>
+                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                  at compiled
+                cases resolved :
+                    ConcreteElaboration.Internal.resolveArgs? source.val
+                      context node refArguments 0 <;> simp [resolved] at compiled
+            | identity nodeRegion signature arity =>
+                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                  at compiled
+                cases resolved :
+                    ConcreteElaboration.Internal.resolveIdentityPorts?
+                      source.val context node signature arity 0 <;>
+                  simp [resolved] at compiled
+          obtain ⟨nodeRegion, atomArguments, nodeData⟩ := nodeShape
+          have singletonCompiled :
+              ConcreteElaboration.compileNodes? definitions source.val context
+                  [node] = some (.cons (.atom atomHead arguments) .nil) := by
+            simp [ConcreteElaboration.compileNodes?, compiled]
+          obtain ⟨shapeHead, shapeArguments, itemExact, ownerExact,
+              _argumentOrigins⟩ :=
+            ConcreteElaboration.compileNodes?_atom_shape source.val context
+              node nodeData singletonCompiled
+          have atomExact :
+              (.atom atomHead arguments : Item definitions context.sigs) =
+                .atom shapeHead shapeArguments := ItemSeq.cons.inj itemExact |>.1
+          cases atomExact
+          have owner : source.val.endpointOwner? ⟨node, .head⟩ =
+              some wire := by simpa [headOrigin] using ownerExact
+          have endpointMember :
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+                (source.val.wires wire).endpoints := by
+            have occurrence := ConcreteDiagram.endpointOwner?_occurs
+              source.val ⟨node, .head⟩ wire owner
+            simp only [ConcreteDiagram.endpointOccurrences,
+              List.mem_flatMap] at occurrence
+            obtain ⟨candidate, _candidateMember, endpointOccurrence⟩ :=
+              occurrence
+            obtain ⟨candidateEndpoint, incident, exact⟩ :=
+              List.mem_map.mp endpointOccurrence
+            cases exact
+            exact incident
+          have siteEndpointMember :
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+                sites.sites.map AppliedSite.endpoint := by
+            rw [sites.exhaustive]
+            exact endpointMember
+          obtain ⟨site, siteMember, endpointExact⟩ :=
+            List.mem_map.mp siteEndpointMember
+          exact ⟨site, siteMember, congrArg CEndpoint.node endpointExact⟩
+      | named definition arguments => simp [compiled] at accepted
+      | identity signature ports atLeastTwo => simp [compiled] at accepted
+      | cut body => simp [compiled] at accepted
+      | bind signature body => simp [compiled] at accepted
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
