@@ -27,6 +27,17 @@ inductive IdentityRewriteKind
 
 namespace IdentityRewriteKind
 
+/-- Source nodes deleted by the rewrite, in construction order. -/
+def removedNodes : IdentityRewriteKind source → List source.val.NodeId
+  | .drop node _ => [node]
+  | .collapse node _ => [node]
+  | .fusion _ right _ => [right]
+
+/-- Source nodes retained by the rewrite, in canonical dense order. -/
+def retainedNodes (kind : IdentityRewriteKind source) :
+    List source.val.NodeId :=
+  IdentityNormalizationCore.retainedNodes source.val kind.removedNodes
+
 /-- Original storage-port owners, in port-index order, for every identity
 represented by this rewrite.  Fusion deliberately retains two separate
 attachment lists rather than only their distinct-wire union. -/
@@ -62,6 +73,92 @@ structure IdentityRewrite
       (target.val.wires (wireImage wire)).sig =
         (source.val.wires wire).sig
   nodeCount_lt : target.val.nodeCount < source.val.nodeCount
+
+namespace IdentityRewrite
+
+/-- Every normalization rewrite preserves regions and their dense ids. -/
+def regionImage
+    (rewrite : IdentityRewrite source)
+    (region : source.val.RegionId) : rewrite.target.val.RegionId := by
+  refine ⟨region.val, ?_⟩
+  cases kindEquation : rewrite.kind with
+  | drop node eligible =>
+      have generated := rewrite.target_generated
+      rw [kindEquation] at generated
+      rw [generated]
+      simpa [dropCandidate, eraseNodeCandidate] using region.isLt
+  | collapse node eligible =>
+      have generated := rewrite.target_generated
+      rw [kindEquation] at generated
+      rw [generated]
+      simpa [collapseCandidate] using region.isLt
+  | fusion left right eligible =>
+      have generated := rewrite.target_generated
+      rw [kindEquation] at generated
+      rw [generated]
+      simpa [fusionCandidate] using region.isLt
+
+/-- Exact dense image of a retained source node. -/
+def nodeImage?
+    (rewrite : IdentityRewrite source)
+    (node : source.val.NodeId) : Option rewrite.target.val.NodeId := by
+  let retained := rewrite.kind.retainedNodes
+  match found : Data.Finite.indexOf? retained node with
+  | none => exact none
+  | some position =>
+      exact some ⟨position.val, by
+        have positionBound := position.isLt
+        cases kindEquation : rewrite.kind with
+        | drop removed eligible =>
+            have generated := rewrite.target_generated
+            rw [kindEquation] at generated
+            rw [generated]
+            have retainedExact :
+                retained =
+                  IdentityNormalizationCore.retainedNodes source.val
+                    [removed] := by
+              simp [retained, IdentityRewriteKind.retainedNodes,
+                kindEquation, IdentityRewriteKind.removedNodes]
+            have countExact :
+                retained.length =
+                  (dropCandidate source removed eligible).nodeCount := by
+              rw [retainedExact]
+              rfl
+            omega
+        | collapse removed eligible =>
+            have generated := rewrite.target_generated
+            rw [kindEquation] at generated
+            rw [generated]
+            have retainedExact :
+                retained =
+                  IdentityNormalizationCore.retainedNodes source.val
+                    [removed] := by
+              simp [retained, IdentityRewriteKind.retainedNodes,
+                kindEquation, IdentityRewriteKind.removedNodes]
+            have countExact :
+                retained.length =
+                  (collapseCandidate source removed eligible).nodeCount := by
+              rw [retainedExact]
+              rfl
+            omega
+        | fusion left right eligible =>
+            have generated := rewrite.target_generated
+            rw [kindEquation] at generated
+            rw [generated]
+            have retainedExact :
+                retained =
+                  IdentityNormalizationCore.retainedNodes source.val
+                    [right] := by
+              simp [retained, IdentityRewriteKind.retainedNodes,
+                kindEquation, IdentityRewriteKind.removedNodes]
+            have countExact :
+                retained.length =
+                  (fusionCandidate source left right eligible).nodeCount := by
+              rw [retainedExact]
+              rfl
+            omega⟩
+
+end IdentityRewrite
 
 private def dropRewrite
     (source : CheckedDiagram definitions)

@@ -10,6 +10,44 @@ def identityOwners (diagram : ConcreteDiagram definitionCount)
   (List.range arity).filterMap fun index =>
     diagram.endpointOwner? ⟨node, .identity index⟩
 
+private theorem length_filterMap_of_isSome
+    (values : List α) (select : α → Option β)
+    (total : ∀ value, value ∈ values → (select value).isSome = true) :
+    (values.filterMap select).length = values.length := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      have headSome := total head (by simp)
+      have tailTotal :
+          ∀ value, value ∈ tail → (select value).isSome = true := by
+        intro value member
+        exact total value (List.mem_cons_of_mem head member)
+      cases selected : select head with
+      | none => simp [selected] at headSome
+      | some value =>
+          simp [selected, induction tailTotal]
+
+/-- A checked identity retains one ordered owner for every storage port. -/
+theorem identityOwners_length
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (node : diagram.NodeId)
+    (region : diagram.RegionId)
+    (signature : Sig)
+    (arity : Nat)
+    (nodeData : diagram.nodes node = .identity region signature arity) :
+    (diagram.identityOwners node arity).length = arity := by
+  unfold identityOwners
+  rw [length_filterMap_of_isSome]
+  · simp
+  · intro index member
+    apply Option.isSome_iff_exists.mpr
+    exact endpointOwner?_complete definitions diagram wellFormed node
+      (.identity index) (by
+        simp [requiredPorts, nodeData] at member ⊢
+        exact member)
+
 /--
 The distinct wires physically incident to one node, in concrete wire order.
 Identity storage indices neither select nor order these wires.
