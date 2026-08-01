@@ -725,6 +725,30 @@ theorem arityShift_localSignatures_below
     retainedAll, headEmpty]
   simp
 
+/-- Exact append form used to define every below-region binder certificate. -/
+theorem arityShift_regionBounds_below_rawExact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope) :
+    (result.checked.val.wiresAt (result.regionImage region)).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      (source.val.wiresAt region).map
+          (fun sourceWire => (source.val.wires sourceWire).sig) ++
+        List.replicate
+          ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+            retainedRegion source (result.spec.localScope fresh) ==
+              retainedRegion source region).length newArgument := by
+  rw [arityShift_localSignatures_below source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead]
+  rw [List.map_const']
+
 /-- Canonical binder certificate for every region below the acted head. -/
 def arityShift_regionBounds_below
     (source : CheckedDiagram definitions)
@@ -745,10 +769,9 @@ def arityShift_regionBounds_below
       ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
         retainedRegion source (result.spec.localScope fresh) ==
           retainedRegion source region).length := by
-  rw [arityShift_localSignatures_below source wire sourceArguments
-    sourceSignature newArgument result accepted region notHead]
-  rw [List.map_const']
-  exact BoundCylindrification.appendFresh newArgument _ _
+  exact (arityShift_regionBounds_below_rawExact source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead).symm ▸
+      BoundCylindrification.appendFresh newArgument _ _
 
 /-- Fresh arity wires scoped at one region have exactly the same order as
 the corresponding checked source occurrences at that region. -/

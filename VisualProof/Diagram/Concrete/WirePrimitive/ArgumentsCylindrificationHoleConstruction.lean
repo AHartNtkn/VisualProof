@@ -292,7 +292,7 @@ private theorem origin_repeatedVar
           (ConcreteElaboration.WireContext.origin diagram (head :: tail))
           transported).trans (induction tailSignatures tailIndex)
 
-private theorem origin_repeatedVar_of_length
+theorem origin_repeatedVar_of_length
     (diagram : ConcreteDiagram definitionCount)
     (ids : List diagram.WireId)
     (fixedSignature : Sig)
