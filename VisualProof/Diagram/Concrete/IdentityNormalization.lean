@@ -25,12 +25,37 @@ inductive IdentityRewriteKind
       (left right : source.val.NodeId)
       (eligible : FusionEligibility source left right)
 
+namespace IdentityRewriteKind
+
+/-- Original storage-port owners, in port-index order, for every identity
+represented by this rewrite.  Fusion deliberately retains two separate
+attachment lists rather than only their distinct-wire union. -/
+def sourceIdentityAttachments :
+    IdentityRewriteKind source → List (List source.val.WireId)
+  | .drop node eligible =>
+      [source.val.identityOwners node eligible.identity.arity]
+  | .collapse node eligible =>
+      [source.val.identityOwners node eligible.identity.arity]
+  | .fusion left right eligible =>
+      [ source.val.identityOwners left eligible.leftIdentity.arity
+      , source.val.identityOwners right eligible.rightIdentity.arity ]
+
+end IdentityRewriteKind
+
 /-- One checked eager rewrite with total signature-preserving wire transport. -/
 structure IdentityRewrite
     {definitions : List (List Sig)}
     (source : CheckedDiagram definitions) : Type where
   kind : IdentityRewriteKind source
   target : CheckedDiagram definitions
+  target_generated :
+    match kind with
+    | .drop node eligible =>
+        target.val = dropCandidate source node eligible
+    | .collapse node eligible =>
+        target.val = collapseCandidate source node eligible
+    | .fusion left right eligible =>
+        target.val = fusionCandidate source left right eligible
   wireImage : source.val.WireId → target.val.WireId
   wire_signature :
     ∀ wire,
@@ -49,6 +74,7 @@ private def dropRewrite
   let transport := dropWireTransport source node eligible
   { kind := .drop node eligible
     target := target
+    target_generated := rfl
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
     nodeCount_lt := dropCandidate_nodeCount_lt source node eligible }
@@ -71,6 +97,7 @@ private def collapseRewrite
   let transport := collapseWireTransport source node eligible
   { kind := .collapse node eligible
     target := target
+    target_generated := rfl
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
     nodeCount_lt := collapseCandidate_nodeCount_lt source node eligible }
@@ -97,6 +124,7 @@ private def fusionRewrite
   let transport := fusionWireTransport source left right eligible
   { kind := .fusion left right eligible
     target := target
+    target_generated := rfl
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
     nodeCount_lt :=
