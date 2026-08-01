@@ -967,6 +967,47 @@ def LocalCylindricalFrame.mappedSourceReducedContext
     ConcreteElaboration.WireContext result.checked.val :=
   ⟨frame.sourceReducedContext.ids.map result.contextWireMap⟩
 
+/-- Concrete target context obtained by deleting the replacement relation
+head while retaining the construction-owned fresh arity suffix. -/
+def LocalCylindricalFrame.targetReducedContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    ConcreteElaboration.WireContext result.checked.val :=
+  ⟨eraseSelectedIds result.checked.val
+    (result.checked.val.wiresAt
+      (result.checked.val.wires result.targetWire).scope)
+    frame.targetRemoval.head⟩
+
+/-- The concrete source-reduced context has exactly the intrinsic signature
+block stored by the source head-removal receipt. -/
+theorem LocalCylindricalFrame.sourceReducedContext_sigs
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.sourceReducedContext.sigs = frame.sourceReduced :=
+  eraseSelectedIds_removal_signatures source.val
+    (source.val.wiresAt (source.val.wires wire).scope)
+    frame.sourceRemoval
+
+/-- The concrete target-reduced context has exactly the intrinsic signature
+block stored by the target head-removal receipt. -/
+theorem LocalCylindricalFrame.targetReducedContext_sigs
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.targetReducedContext.sigs = frame.targetReduced :=
+  eraseSelectedIds_removal_signatures result.checked.val
+    (result.checked.val.wiresAt
+      (result.checked.val.wires result.targetWire).scope)
+    frame.targetRemoval
+
 /-- The reduced source-local context and its mapped target image form a
 genuine retained context; the acted relation head is the only removed source
 wire in an arity shift. -/

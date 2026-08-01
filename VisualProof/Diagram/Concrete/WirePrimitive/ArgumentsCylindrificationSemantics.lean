@@ -374,6 +374,53 @@ def embed
   | .fresh rest =>
       weakenOuter (rest.embed outer) fixedSignature
 
+/-- Restrict a bound cylindrification to the binder block itself. -/
+def embedLocal
+    (evidence :
+      BoundCylindrification fixedSignature smaller larger freshCount) :
+    WireRenaming smaller larger :=
+  match evidence with
+  | .nil => fun value => nomatch value
+  | .retained signature rest =>
+      WireRenaming.lift rest.embedLocal signature
+  | .fresh rest =>
+      weakenOuter rest.embedLocal fixedSignature
+
+/-- Extending a bound cylindrification by an outer renaming preserves the
+local/outer decomposition on every retained local variable. -/
+theorem embed_appendLeft
+    (evidence :
+      BoundCylindrification fixedSignature smaller larger freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (value : Var smaller signature) :
+    evidence.embed outer (Var.appendLeft value smallerOuter) =
+      Var.appendLeft (evidence.embedLocal value) largerOuter := by
+  induction evidence with
+  | nil => nomatch value
+  | retained bound rest induction =>
+      cases value with
+      | here => rfl
+      | there value =>
+          exact congrArg Var.there (induction value)
+  | fresh rest induction =>
+      exact congrArg Var.there (induction value)
+
+/-- Extending a bound cylindrification applies the supplied outer renaming
+exactly once to every true outer variable. -/
+theorem embed_appendRight
+    (evidence :
+      BoundCylindrification fixedSignature smaller larger freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (value : Var smallerOuter signature) :
+    evidence.embed outer (Var.appendRight smaller value) =
+      Var.appendRight larger (outer value) := by
+  induction evidence with
+  | nil => rfl
+  | retained bound rest induction =>
+      exact congrArg Var.there induction
+  | fresh rest induction =>
+      exact congrArg Var.there induction
+
 /-- The intrinsically typed variable owned by each fresh binder. -/
 def freshVar
     (evidence :
