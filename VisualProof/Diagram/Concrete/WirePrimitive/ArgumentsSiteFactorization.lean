@@ -339,7 +339,19 @@ structure ArgumentResult.FrameContextPair
     (outer : result.RetainedContext sourceOuter targetOuter)
     (sourceFrame : RegionFrame definitions source.val sourceOuter)
     (targetFrame : RegionFrame definitions result.checked.val targetOuter) where
+  sourceSiteOuter : WireContext source.val
+  targetSiteOuter : WireContext result.checked.val
+  siteOuterRetained :
+    result.RetainedContext sourceSiteOuter targetSiteOuter
+  sourceVisibleContextExact :
+    sourceFrame.visible =
+      sourceSiteOuter.extend (source.val.wires wire).scope
+  targetVisibleContextExact :
+    targetFrame.visible =
+      targetSiteOuter.extend
+        (result.checked.val.wires result.targetWire).scope
   siteOuter : List Sig
+  siteOuter_exact : siteOuter = sourceSiteOuter.sigs
   sourceVisibleExact :
     sourceFrame.visible.sigs =
       ContentAlignment.localSignatures source.val
@@ -393,7 +405,13 @@ private def ArgumentResult.FrameContextPair.atSite
             (result.checked.val.wires result.targetWire).scope))
         outer.sigs_exact)
   refine
-    { siteOuter := sourceOuter.sigs
+    { sourceSiteOuter := sourceOuter
+      targetSiteOuter := targetOuter
+      siteOuterRetained := outer
+      sourceVisibleContextExact := rfl
+      targetVisibleContextExact := rfl
+      siteOuter := sourceOuter.sigs
+      siteOuter_exact := rfl
       sourceVisibleExact := sourceVisibleExact
       targetVisibleExact := targetVisibleExact
       paired := ?_ }
@@ -509,7 +527,13 @@ private def ArgumentResult.FrameContextPair.surround
         context := .surround targetLeading (.cut targetNested.context)
           targetSuffix } := by
   refine
-    { siteOuter := nested.siteOuter
+    { sourceSiteOuter := nested.sourceSiteOuter
+      targetSiteOuter := nested.targetSiteOuter
+      siteOuterRetained := nested.siteOuterRetained
+      sourceVisibleContextExact := nested.sourceVisibleContextExact
+      targetVisibleContextExact := nested.targetVisibleContextExact
+      siteOuter := nested.siteOuter
+      siteOuter_exact := nested.siteOuter_exact
       sourceVisibleExact := nested.sourceVisibleExact
       targetVisibleExact := nested.targetVisibleExact
       paired := ?_ }
@@ -572,7 +596,13 @@ private noncomputable def ArgumentResult.FrameContextPair.bindRegion
         context := bindContextFor result.checked.val targetOuter.ids
           (result.checked.val.wiresAt targetRegion) targetNested.context } := by
   refine
-    { siteOuter := nested.siteOuter
+    { sourceSiteOuter := nested.sourceSiteOuter
+      targetSiteOuter := nested.targetSiteOuter
+      siteOuterRetained := nested.siteOuterRetained
+      sourceVisibleContextExact := nested.sourceVisibleContextExact
+      targetVisibleContextExact := nested.targetVisibleContextExact
+      siteOuter := nested.siteOuter
+      siteOuter_exact := nested.siteOuter_exact
       sourceVisibleExact := nested.sourceVisibleExact
       targetVisibleExact := nested.targetVisibleExact
       paired := ?_ }
@@ -1045,10 +1075,10 @@ private theorem compileRegionFrame_pair
         exact ⟨aroundPair.bindRegion outer region (result.regionImage region)
           localExact extended⟩
 
-/-- The two canonical scope compilers for an argument replacement always
-expose one exactly shared outer spine, and the executable alignment checker
-rediscovers that construction-owned receipt. -/
-theorem checkSiteContextFactorization_argument_complete
+/-- Construction-owned source/target frame pair at the acted scope.  Unlike
+the later signature-only factorization, this receipt retains the concrete
+site-outer contexts and their exact wire map. -/
+noncomputable def ArgumentResult.actedScopeFramePair
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
@@ -1056,9 +1086,8 @@ theorem checkSiteContextFactorization_argument_complete
     (sourceScope : SiteCompilation source (source.val.wires wire).scope)
     (targetScope : SiteCompilation result.checked
       (result.checked.val.wires result.targetWire).scope) :
-    ∃ found,
-      ContentAlignment.checkSiteContextFactorization sourceScope targetScope =
-        some found := by
+    result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      sourceScope.frame targetScope.frame := by
   have rootEncloses :
       source.val.Encloses source.val.root (source.val.wires wire).scope :=
     of_decide_eq_true
@@ -1084,11 +1113,27 @@ theorem checkSiteContextFactorization_argument_complete
         some targetScope.frame := by
     rw [← fuelExact]
     exact targetGenerated
-  obtain ⟨pair⟩ := compileRegionFrame_pair result localized
+  exact Classical.choice (compileRegionFrame_pair result localized
     (source.val.regionCount + 1) source.val.root
     (WireContext.empty source.val) (WireContext.empty result.checked.val)
     (ArgumentResult.RetainedContext.empty result) rootEncloses
-    targetRootAbove sourceGenerated targetGenerated'
+    targetRootAbove sourceGenerated targetGenerated')
+
+/-- The two canonical scope compilers for an argument replacement always
+expose one exactly shared outer spine, and the executable alignment checker
+rediscovers that construction-owned receipt. -/
+theorem checkSiteContextFactorization_argument_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localized : result.ScopeLocalization)
+    (sourceScope : SiteCompilation source (source.val.wires wire).scope)
+    (targetScope : SiteCompilation result.checked
+      (result.checked.val.wires result.targetWire).scope) :
+    ∃ found,
+      ContentAlignment.checkSiteContextFactorization sourceScope targetScope =
+        some found := by
+  let pair := result.actedScopeFramePair localized sourceScope targetScope
   have paired : ContentAlignment.PairedContext definitions
       (ContentAlignment.localSignatures source.val
         (source.val.wires wire).scope)
