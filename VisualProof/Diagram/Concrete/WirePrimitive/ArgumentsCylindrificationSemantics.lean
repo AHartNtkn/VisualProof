@@ -1,25 +1,16 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsFixedSemantics
-
 namespace VisualProof
-
 namespace ConcreteWirePrimitive
-
 namespace ArgumentsSemantics
-
 universe u
-
 open WirePrimitive
-
 /-!
 ## Typed insertion decomposition
-
 Arity shift and unshift differ from ordinary argument extension and deletion:
 the inserted coordinate is carried by a fresh existential wire at each acted
 endpoint.  The receipt below starts by retaining both halves of that fact.
 -/
-
 namespace TypedArguments
-
 private def splitInsertedCore
     (smaller : List Sig)
     (position : Nat)
@@ -37,7 +28,6 @@ private def splitInsertedCore
           let split :=
             splitInsertedCore rest position fixedSignature tail
           ⟨split.1, .cons head split.2⟩
-
 /-- Split the checker-selected inserted coordinate from a larger tuple. -/
 def InsertionEvidence.splitVars
     (evidence :
@@ -46,7 +36,6 @@ def InsertionEvidence.splitVars
     Var context fixedSignature × Vars context smaller :=
   splitInsertedCore smaller evidence.position fixedSignature
     (evidence.largerExact.symm ▸ values)
-
 private def splitInsertedValuesCore
     (smaller : List Sig)
     (position : Nat)
@@ -64,7 +53,6 @@ private def splitInsertedValuesCore
           let split :=
             splitInsertedValuesCore rest position fixedSignature tail
           ⟨split.1, ⟨head, split.2⟩⟩
-
 /-- Semantic counterpart of `splitVars`. -/
 def InsertionEvidence.splitValues
     (evidence :
@@ -73,7 +61,6 @@ def InsertionEvidence.splitValues
     Domain fixedSignature × PreModel.Args Domain smaller :=
   splitInsertedValuesCore smaller evidence.position fixedSignature
     (evidence.largerExact.symm ▸ values)
-
 private theorem splitInsertedCore_reconstruct
     (smaller : List Sig)
     (position : Nat)
@@ -91,7 +78,6 @@ private theorem splitInsertedCore_reconstruct
   | _ :: rest, position + 1, .cons head tail =>
       congrArg (Vars.cons head)
         (splitInsertedCore_reconstruct rest position fixedSignature tail)
-
 /-- Splitting and reinserting is definitionally faithful to the checked tuple. -/
 theorem InsertionEvidence.reconstruct
     (evidence :
@@ -105,7 +91,6 @@ theorem InsertionEvidence.reconstruct
       subst larger
       exact
         splitInsertedCore_reconstruct smaller position fixedSignature values
-
 /-- Splitting a tuple produced by the checked insertion recovers exactly the
 inserted coordinate and the original ordered tuple. -/
 theorem InsertionEvidence.split_forwardVars
@@ -135,7 +120,6 @@ theorem InsertionEvidence.split_forwardVars
                 InsertionEvidence.splitVars, insertVars,
                 splitInsertedCore]
               rw [tailExact]
-
 private theorem splitInsertedCore_rename
     (smaller : List Sig)
     (position : Nat)
@@ -162,7 +146,6 @@ private theorem splitInsertedCore_rename
           | cons head tail =>
               simp only [splitInsertedCore, Vars.rename]
               rw [induction position tail]
-
 /-- Splitting a checked inserted tuple commutes with any wire renaming. -/
 theorem InsertionEvidence.splitVars_rename
     (evidence :
@@ -176,7 +159,6 @@ theorem InsertionEvidence.splitVars_rename
   | mk position largerExact =>
       subst larger
       exact splitInsertedCore_rename smaller position fixedSignature rho values
-
 /-- Concrete origins of a typed insertion are inserted at the same checked
 tuple position. -/
 theorem InsertionEvidence.variableOrigins_forwardVars
@@ -208,7 +190,6 @@ theorem InsertionEvidence.variableOrigins_forwardVars
               exact congrArg (List.cons
                 (ConcreteElaboration.WireContext.origin diagram
                   context.ids head)) (induction position)
-
 /-- Splitting any checked tuple recovers a concrete-origin insertion receipt
 without inspecting raw variable ordinals. -/
 theorem InsertionEvidence.variableOrigins_splitVars
@@ -233,7 +214,6 @@ theorem InsertionEvidence.variableOrigins_splitVars
         (evidence.reconstruct values).symm
     _ = _ := evidence.variableOrigins_forwardVars diagram context split.1
       split.2
-
 /-- Concrete origin extraction preserves the signature-indexed tuple length. -/
 theorem variableOrigins_length
     (diagram : ConcreteDiagram definitionCount)
@@ -246,7 +226,6 @@ theorem variableOrigins_length
   | nil => rfl
   | cons head tail induction =>
       simp [ConcreteElaboration.variableOrigins, induction]
-
 private theorem insertAt_end
     (values : List α)
     (value : α) :
@@ -256,7 +235,6 @@ private theorem insertAt_end
   | nil => rfl
   | cons head tail induction =>
       simp [ConcreteWirePrimitive.insertAt, induction]
-
 private theorem append_singleton_eq_append_singleton
     {left right : List α}
     {leftLast rightLast : α}
@@ -278,7 +256,6 @@ private theorem append_singleton_eq_append_singleton
           obtain ⟨tailExact, lastExact⟩ :=
             induction tailLength exact.2
           exact ⟨by rw [exact.1, tailExact], lastExact⟩
-
 /-- For an append-position insertion, an exact concrete-origin suffix
 decomposes the checked split into its retained prefix and inserted owner. -/
 theorem InsertionEvidence.splitVars_origins_of_append
@@ -315,7 +292,6 @@ theorem InsertionEvidence.splitVars_origins_of_append
   exact append_singleton_eq_append_singleton
     (retainedLength.trans prefixLength.symm)
     (splitLayout.symm.trans originsExact)
-
 private theorem splitInsertedValuesCore_reconstruct
     (smaller : List Sig)
     (position : Nat)
@@ -334,7 +310,6 @@ private theorem splitInsertedValuesCore_reconstruct
       congrArg (fun suffix => (head, suffix))
         (splitInsertedValuesCore_reconstruct rest position
           fixedSignature tail)
-
 theorem InsertionEvidence.reconstructValues
     (evidence :
       InsertionEvidence larger smaller fixedSignature)
@@ -348,7 +323,6 @@ theorem InsertionEvidence.reconstructValues
       exact
         splitInsertedValuesCore_reconstruct smaller position
           fixedSignature values
-
 private theorem splitInsertedCore_denote
     (smaller : List Sig)
     (position : Nat)
@@ -372,7 +346,6 @@ private theorem splitInsertedCore_denote
       exact congrArg
         (fun split => (split.1, (env _ head, split.2)))
         (splitInsertedCore_denote rest position fixedSignature env tail)
-
 theorem InsertionEvidence.denote_split
     (evidence :
       InsertionEvidence larger smaller fixedSignature)
@@ -386,11 +359,9 @@ theorem InsertionEvidence.denote_split
       subst larger
       exact
         splitInsertedCore_denote smaller position fixedSignature env values
-
 private def sameVar
     (left right : Var context signature) : Bool :=
   sameVars (.cons left .nil) (.cons right .nil)
-
 theorem sameVar_eq_true
     {left right : Var context signature}
     (accepted : sameVar left right = true) :
@@ -401,17 +372,13 @@ theorem sameVar_eq_true
     sameVars_eq_true accepted
   cases exact
   rfl
-
 end TypedArguments
-
 /-!
 ## Binder-context cylindrification
-
 Each endpoint-local wire contributes one extra binder on the larger side.
 `BoundCylindrification` records the retained binders and the fresh binders
 without identifying contexts by untyped positions.
 -/
-
 inductive BoundCylindrification
     (fixedSignature : Sig) :
     List Sig → List Sig → Nat → Type
@@ -428,9 +395,7 @@ inductive BoundCylindrification
         BoundCylindrification fixedSignature smaller larger freshCount) :
       BoundCylindrification fixedSignature
         smaller (fixedSignature :: larger) (freshCount + 1)
-
 namespace BoundCylindrification
-
 /-- A binder block consisting only of fresh variables of the fixed
 signature. -/
 def freshSuffix (fixedSignature : Sig) :
@@ -439,7 +404,6 @@ def freshSuffix (fixedSignature : Sig) :
         (List.replicate count fixedSignature) count
   | 0 => .nil
   | count + 1 => .fresh (freshSuffix fixedSignature count)
-
 /-- Retain an ordered binder block and append an ordered suffix of fresh
 variables.  This is the canonical binder receipt produced by arity shift at
 each concrete region. -/
@@ -450,7 +414,6 @@ def appendFresh (fixedSignature : Sig) :
   | [], count => freshSuffix fixedSignature count
   | signature :: rest, count =>
       .retained signature (appendFresh fixedSignature rest count)
-
 /-- Typed ordinal in a homogeneous binder block. -/
 def repeatedVar (signature : Sig) :
     (count : Nat) →
@@ -459,7 +422,6 @@ def repeatedVar (signature : Sig) :
   | count + 1 => fun index =>
       Fin.cases .here
         (fun tail => .there (repeatedVar signature count tail)) index
-
 /-- Canonical target position of a retained binder when a fresh suffix is
 appended after the complete source binder block. -/
 def appendFreshRetained (fixedSignature : Sig) (count : Nat) :
@@ -471,13 +433,11 @@ def appendFreshRetained (fixedSignature : Sig) (count : Nat) :
   | _ :: _, .here => .here
   | _ :: _, .there tail =>
       .there (appendFreshRetained fixedSignature count tail)
-
 def count
     (_ :
       BoundCylindrification fixedSignature smaller larger freshCount) :
     Nat :=
   freshCount
-
 /--
 Enumerate every typed way the larger local binder block can arise by
 inserting fresh binders of one signature into the smaller block.  Retained
@@ -526,7 +486,6 @@ def candidates
           []
       retained ++ fresh
 termination_by smaller larger => smaller.length + larger.length
-
 theorem mem_candidates
     (evidence :
       BoundCylindrification fixedSignature smaller larger freshCount) :
@@ -555,7 +514,6 @@ theorem mem_candidates
           apply Or.inr
           apply List.mem_map.mpr
           exact ⟨⟨_, rest⟩, mem_candidates rest, rfl⟩
-
 def check
     (fixedSignature : Sig)
     (smaller larger : List Sig) :
@@ -564,13 +522,11 @@ def check
         BoundCylindrification fixedSignature
           smaller larger freshCount) :=
   (candidates fixedSignature smaller larger).head?
-
 private def weakenOuter
     (rho : WireRenaming source target)
     (head : Sig) :
     WireRenaming source (head :: target) :=
   fun {_} value => .there (rho value)
-
 /-- Embed the smaller binder context into the larger binder context. -/
 def embed
     (evidence :
@@ -583,7 +539,6 @@ def embed
       WireRenaming.lift (rest.embed outer) signature
   | .fresh rest =>
       weakenOuter (rest.embed outer) fixedSignature
-
 /-- Restrict a bound cylindrification to the binder block itself. -/
 def embedLocal
     (evidence :
@@ -595,7 +550,6 @@ def embedLocal
       WireRenaming.lift rest.embedLocal signature
   | .fresh rest =>
       weakenOuter rest.embedLocal fixedSignature
-
 /-- Transporting the larger binder index of a receipt and then transporting
 its local result back is observationally neutral. -/
 theorem embedLocal_transport
@@ -607,7 +561,6 @@ theorem embedLocal_transport
       evidence.embedLocal value := by
   cases same
   rfl
-
 /-- The local embedding of the canonical fresh-suffix receipt is ordinary
 left injection past that suffix. -/
 theorem appendFresh_embedLocal
@@ -620,7 +573,6 @@ theorem appendFresh_embedLocal
   induction value with
   | here => rfl
   | there tail induction => exact congrArg Var.there induction
-
 /-- Extending a bound cylindrification by an outer renaming preserves the
 local/outer decomposition on every retained local variable. -/
 theorem embed_appendLeft
@@ -639,7 +591,6 @@ theorem embed_appendLeft
           exact congrArg Var.there (induction value)
   | fresh rest induction =>
       exact congrArg Var.there (induction value)
-
 /-- Extending a bound cylindrification applies the supplied outer renaming
 exactly once to every true outer variable. -/
 theorem embed_appendRight
@@ -655,7 +606,6 @@ theorem embed_appendRight
       exact congrArg Var.there induction
   | fresh rest induction =>
       exact congrArg Var.there induction
-
 /-- The intrinsically typed variable owned by each fresh binder. -/
 def freshVar
     (evidence :
@@ -672,7 +622,6 @@ def freshVar
         Fin.cases .here
           (fun tail => .there (rest.freshVar outer tail))
           index
-
 /-- `appendFresh` retains every source-local variable at its exact typed
 ordinal, independently of signatures in the fresh suffix. -/
 theorem appendFresh_embed_local
@@ -691,7 +640,6 @@ theorem appendFresh_embed_local
       simp only [appendFresh, embed, WireRenaming.lift, Var.appendLeft,
         appendFreshRetained]
       exact congrArg Var.there induction
-
 /-- The retained target ordinal selected by `appendFresh` is the ordinary
 left embedding past the fresh suffix and outer context. -/
 theorem appendFreshRetained_eq_appendLeft
@@ -706,7 +654,6 @@ theorem appendFreshRetained_eq_appendLeft
   | here => rfl
   | there tail induction =>
       exact congrArg Var.there induction
-
 /-- `appendFresh` sends every outer variable past the complete retained block
 and fresh suffix while applying the supplied outer renaming exactly once. -/
 theorem appendFresh_embed_outer
@@ -731,7 +678,6 @@ theorem appendFresh_embed_outer
   | cons head tail induction =>
       simp only [appendFresh, embed, WireRenaming.lift, Var.appendRight]
       exact congrArg Var.there induction
-
 /-- `appendFresh` enumerates fresh variables by their exact typed ordinal in
 the appended suffix. -/
 theorem appendFresh_freshVar
@@ -759,7 +705,6 @@ theorem appendFresh_freshVar
   | cons head tail induction =>
       simp only [appendFresh, freshVar, Var.appendRight, Var.appendLeft]
       exact congrArg Var.there induction
-
 /-- Forget the fresh values while retaining every shared binder value. -/
 def projectValues
     (evidence :
@@ -772,7 +717,6 @@ def projectValues
       | .cons head tail => .cons head (rest.projectValues tail)
   | .fresh rest => fun
       | .cons _ tail => rest.projectValues tail
-
 /-- Read every fresh value in the same order as `freshVar`. -/
 def freshValues
     (evidence :
@@ -787,7 +731,6 @@ def freshValues
       | .cons head tail =>
           fun index =>
             Fin.cases head (rest.freshValues tail) index
-
 /-- Reassemble the larger binder tuple from retained and fresh values. -/
 def assembleValues
     (evidence :
@@ -806,7 +749,6 @@ def assembleValues
       .cons (assignment 0)
         (rest.assembleValues smallerValues
           (fun index => assignment index.succ))
-
 @[simp] theorem project_assemble
     (evidence :
       BoundCylindrification fixedSignature smaller larger freshCount)
@@ -829,7 +771,6 @@ def assembleValues
       simp only [assembleValues, projectValues]
       exact induction smallerValues
         (fun index => assignment index.succ)
-
 @[simp] theorem assemble_project_fresh
     (evidence :
       BoundCylindrification fixedSignature smaller larger freshCount)
@@ -855,14 +796,12 @@ def assembleValues
             Fin.cases_zero, Fin.cases_succ]
           exact congrArg (ConcreteElaboration.WireValues.cons head)
             (induction tail)
-
 private noncomputable def arbitraryFresh
     (pre : PreModel.{u})
     (fixedSignature : Sig)
     (freshCount : Nat) :
     Fin freshCount → pre.Domain fixedSignature :=
   fun _ => chooseInhabitant pre fixedSignature
-
 theorem comp_assembled
     (evidence :
       BoundCylindrification fixedSignature smaller larger freshCount)
@@ -908,7 +847,6 @@ theorem comp_assembled
             smallerValues smallerOuterEnv
       exact
         induction smallerValues (fun index => assignment index.succ)
-
 theorem freshVar_assembled
     (evidence :
       BoundCylindrification fixedSignature smaller larger freshCount)
@@ -937,17 +875,13 @@ theorem freshVar_assembled
         exact
           induction smallerValues
             (fun index => assignment index.succ) tail
-
 end BoundCylindrification
-
 /-!
 ## Intrinsic binder blocks
-
 The concrete elaborator wraps all wires scoped at one region with the same
 `bindMany` order.  This intrinsic counterpart exposes the complete block to
 the cylindrification checker.
 -/
-
 def wrapArgumentBind
     (signature : Sig)
     (body :
@@ -956,7 +890,6 @@ def wrapArgumentBind
   .mk
     (.cons (.bind signature body) .nil)
     ⟨[]⟩
-
 theorem wrapArgumentBind_transport
     {left right : List Sig}
     (equality : left = right)
@@ -968,7 +901,6 @@ theorem wrapArgumentBind_transport
         (congrArg (List.cons signature) equality ▸ body) := by
   cases equality
   rfl
-
 theorem transportedArgumentRegion_roundtrip
     {left right : List Sig}
     (equality : left = right)
@@ -984,7 +916,6 @@ theorem transportedArgumentRegion_roundtrip
         UniformIntrinsicRegion definitions arguments right) := by
   cases equality
   rfl
-
 def wrapArgumentBinds
     (bound : List Sig)
     (body :
@@ -995,7 +926,6 @@ def wrapArgumentBinds
   | signature :: rest =>
       wrapArgumentBinds rest
         (wrapArgumentBind signature body)
-
 theorem wrapArgumentBinds_denotes
     (bound : List Sig)
     (body :
@@ -1040,7 +970,6 @@ theorem wrapArgumentBinds_denotes
             exact
               ⟨⟨head, holds⟩,
                 fun _ member => by simp at member⟩
-
 theorem wrapArgumentBinds_append
     (left right : List Sig)
     (body :
@@ -1060,7 +989,6 @@ theorem wrapArgumentBinds_append
       exact
         wrapArgumentBind_transport
           (List.append_assoc rest right outer) signature body
-
 structure PeeledArgumentShape
     (shape :
       UniformIntrinsicRegion definitions arguments outer) where
@@ -1071,7 +999,6 @@ structure PeeledArgumentShape
   exact :
     shape =
       wrapArgumentBinds bound (.mk items ⟨holes⟩)
-
 def peelArgumentShape
     (shape :
       UniformIntrinsicRegion definitions arguments outer) :
@@ -1135,16 +1062,13 @@ def peelArgumentShape
         items := items
         holes := holes
         exact := rfl }
-
 /-!
 ## Recursive endpoint-local shape certificate
-
 At each concrete region the certificate peels the complete local binder
 blocks, relates every retained ordinary item, and pairs every fresh binder
 with exactly one acted hole.  Fresh binders are neither shared nor permitted
 to escape into nested regions.
 -/
-
 private def checkFinBijection (mapping : Fin count → Fin count) : Bool :=
   ((Data.Finite.allFin count).all fun left =>
     (Data.Finite.allFin count).all fun right =>
@@ -1152,7 +1076,6 @@ private def checkFinBijection (mapping : Fin count → Fin count) : Bool :=
   ((Data.Finite.allFin count).all fun target =>
     (Data.Finite.allFin count).any fun source =>
       mapping source == target)
-
 private theorem checkFinBijection_eq_true
     (mapping : Fin count → Fin count)
     (accepted : checkFinBijection mapping = true) :
@@ -1178,7 +1101,6 @@ private theorem checkFinBijection_eq_true
         (Data.Finite.mem_allFin target)
     obtain ⟨source, _member, equal⟩ := List.any_eq_true.mp checked
     exact ⟨source, beq_iff_eq.mp equal⟩
-
 private theorem checkFinBijection_complete
     (mapping : Fin count → Fin count)
     (injective : Function.Injective mapping)
@@ -1199,7 +1121,6 @@ private theorem checkFinBijection_complete
     obtain ⟨source, same⟩ := surjective target
     apply List.any_eq_true.mpr
     exact ⟨source, Data.Finite.mem_allFin source, beq_iff_eq.mpr same⟩
-
 structure CylindricalHoles
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1232,7 +1153,6 @@ structure CylindricalHoles
           Vars.rename (bounds.embed outer)
             (smaller.get
               (Fin.cast smaller_length.symm (sourceIndex index)))
-
 private def checkSourceIndex
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1256,7 +1176,6 @@ private def checkSourceIndex
             Vars.rename (bounds.embed outer)
               (smaller.get
                 (Fin.cast smallerLength.symm (mapping index))))
-
 private def checkFreshIndex
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1275,7 +1194,6 @@ private def checkFreshIndex
         (insertion.splitVars
           (larger.get (Fin.cast largerLength.symm index))).1 =
             bounds.freshVar outer (mapping index))
-
 private def findSourceIndex?
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1294,7 +1212,6 @@ private def findSourceIndex?
   (Data.Finite.enumerateFinFunctions freshCount freshCount).find? fun mapping =>
     checkSourceIndex insertion bounds outer smaller larger
       smallerLength largerLength mapping
-
 private def findFreshIndex?
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1309,7 +1226,6 @@ private def findFreshIndex?
     Option (Fin freshCount → Fin freshCount) :=
   (Data.Finite.enumerateFinFunctions freshCount freshCount).find? fun mapping =>
     checkFreshIndex insertion bounds outer larger largerLength mapping
-
 def checkCylindricalHoles
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1332,7 +1248,6 @@ def checkCylindricalHoles
       false
   else
     false
-
 private theorem checkSourceIndex_eq_true
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1363,7 +1278,6 @@ private theorem checkSourceIndex_eq_true
     ⟨(checkFinBijection_eq_true mapping accepted.1).1,
       (checkFinBijection_eq_true mapping accepted.1).2,
       of_decide_eq_true accepted.2⟩
-
 private theorem checkSourceIndex_complete
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1394,7 +1308,6 @@ private theorem checkSourceIndex_complete
   exact
     ⟨checkFinBijection_complete mapping injective surjective,
       decide_eq_true exact⟩
-
 private theorem checkFreshIndex_eq_true
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1420,7 +1333,6 @@ private theorem checkFreshIndex_eq_true
     ⟨(checkFinBijection_eq_true mapping accepted.1).1,
       (checkFinBijection_eq_true mapping accepted.1).2,
       of_decide_eq_true accepted.2⟩
-
 private theorem checkFreshIndex_complete
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1446,7 +1358,6 @@ private theorem checkFreshIndex_complete
   exact
     ⟨checkFinBijection_complete mapping injective surjective,
       decide_eq_true exact⟩
-
 theorem checkCylindricalHoles_complete
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1486,7 +1397,6 @@ theorem checkCylindricalHoles_complete
     intro index
     simpa only [Subsingleton.elim _ holes.larger_length] using
       holes.inserted_exact index
-
 def checkCylindricalHoles_eq_true
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1557,7 +1467,6 @@ def cylindricalLift
       PreModel.Args Domain smallerArguments → Prop)
     (largerValues : PreModel.Args Domain largerArguments) : Prop :=
   smallerSite (insertion.splitValues largerValues).2
-
 def cylindricalProject
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1567,9 +1476,7 @@ def cylindricalProject
     (smallerValues : PreModel.Args Domain smallerArguments) : Prop :=
   ∃ fixed : Domain fixedSignature,
     largerSite (insertion.forwardValues fixed smallerValues)
-
 namespace CylindricalHoles
-
 noncomputable def targetForSource
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1586,7 +1493,6 @@ noncomputable def targetForSource
       CylindricalHoles insertion bounds outer smaller larger)
     (source : Fin freshCount) : Fin freshCount :=
   Classical.choose (holes.sourceIndex_surjective source)
-
 theorem sourceIndex_targetForSource
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1604,7 +1510,6 @@ theorem sourceIndex_targetForSource
     (source : Fin freshCount) :
     holes.sourceIndex (holes.targetForSource source) = source :=
   Classical.choose_spec (holes.sourceIndex_surjective source)
-
 noncomputable def targetForFresh
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1621,7 +1526,6 @@ noncomputable def targetForFresh
       CylindricalHoles insertion bounds outer smaller larger)
     (fresh : Fin freshCount) : Fin freshCount :=
   Classical.choose (holes.freshIndex_surjective fresh)
-
 theorem freshIndex_targetForFresh
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1639,7 +1543,6 @@ theorem freshIndex_targetForFresh
     (fresh : Fin freshCount) :
     holes.freshIndex (holes.targetForFresh fresh) = fresh :=
   Classical.choose_spec (holes.freshIndex_surjective fresh)
-
 theorem forward_pointwise
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1675,7 +1578,6 @@ theorem forward_pointwise
   rw [holes.retained_exact index]
   rw [Vars.denote_rename]
   rw [envExact]
-
 theorem forward
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1741,7 +1643,6 @@ theorem forward
       (holes.forward_pointwise pre smallerEnv largerEnv envExact
         smallerSite targetIndex).mpr atSmaller
     simpa [targetIndex] using result
-
 theorem backward_pointwise
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1792,7 +1693,6 @@ theorem backward_pointwise
         (Vars.denote smallerEnv smallerVars))
   rw [denoted]
   exact holds
-
 theorem backward_from_larger
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1843,7 +1743,6 @@ theorem backward_from_larger
     simp [sourceIndex]
   rw [positionExact] at result
   exact result
-
 noncomputable def backwardAssignment
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1877,7 +1776,6 @@ noncomputable def backwardAssignment
               (holes.sourceIndex target)))
           (List.get_mem smaller _)
       exact holds
-
 theorem backwardAssignment_spec
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1917,7 +1815,6 @@ theorem backwardAssignment_spec
             (holes.sourceIndex (holes.targetForFresh fresh))))
         (List.get_mem smaller _)
     exact holds
-
 theorem backward_to_larger
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -1982,9 +1879,7 @@ theorem backward_to_larger
     rw [← denoted]
     exact chosen
   simpa [largerVars, targetIndex] using result
-
 end CylindricalHoles
-
 /--
 Semantic certificate synthesized by the recursive cylindrification checker.
 The two fields are intentionally operation-generic: arity shift and unshift
@@ -2022,7 +1917,6 @@ structure CylindricalRegionCertificate
         smaller.denote pre definitionEnv smallerEnv
             (cylindricalProject insertion largerSite) ↔
           larger.denote pre definitionEnv largerEnv largerSite
-
 structure CylindricalItemCertificate
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2059,7 +1953,6 @@ structure CylindricalItemCertificate
               (cylindricalProject insertion largerSite) smaller ↔
           UniformIntrinsicRegion.UniformIntrinsicItem.denote
             pre definitionEnv largerEnv largerSite larger
-
 structure CylindricalItemSeqCertificate
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2096,9 +1989,7 @@ structure CylindricalItemSeqCertificate
               (cylindricalProject insertion largerSite) smaller ↔
           UniformIntrinsicRegion.UniformIntrinsicItemSeq.denote
             pre definitionEnv largerEnv largerSite larger
-
 mutual
-
 inductive CylindricalShape
     (definitions : List (List Sig))
     (insertion :
@@ -2126,7 +2017,6 @@ inductive CylindricalShape
       (holes :
         CylindricalHoles insertion bounds outer smallerHoles largerHoles) :
       CylindricalShape definitions insertion smallerOuter largerOuter
-
 inductive CylindricalShapeItem
     (definitions : List (List Sig))
     (insertion :
@@ -2148,7 +2038,6 @@ inductive CylindricalShapeItem
           smallerContext largerContext) :
       CylindricalShapeItem definitions insertion
         smallerContext largerContext
-
 inductive CylindricalShapeItemSeq
     (definitions : List (List Sig))
     (insertion :
@@ -2171,11 +2060,8 @@ inductive CylindricalShapeItemSeq
       :
       CylindricalShapeItemSeq definitions insertion
         smallerContext largerContext
-
 end
-
 mutual
-
 def CylindricalShape.embedding
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2183,7 +2069,6 @@ def CylindricalShape.embedding
     CylindricalShape definitions insertion smallerContext largerContext →
       WireRenaming smallerContext largerContext
   | .block outer _ _ _ => outer
-
 def CylindricalShapeItem.embedding
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2193,7 +2078,6 @@ def CylindricalShapeItem.embedding
       WireRenaming smallerContext largerContext
   | .leaf embedding _ _ _ => embedding
   | .cut body => body.embedding
-
 def CylindricalShapeItemSeq.embedding
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2203,7 +2087,6 @@ def CylindricalShapeItemSeq.embedding
       WireRenaming smallerContext largerContext
   | .nil embedding => embedding
   | .cons head _ => head.embedding
-
 def CylindricalShape.smaller
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2213,7 +2096,6 @@ def CylindricalShape.smaller
   | .block (smallerHoles := smallerHoles) _ bounds items _ =>
       wrapArgumentBinds _
         (.mk items.smaller ⟨smallerHoles⟩)
-
 def CylindricalShape.larger
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2223,7 +2105,6 @@ def CylindricalShape.larger
   | .block (largerHoles := largerHoles) _ bounds items _ =>
       wrapArgumentBinds _
         (.mk items.larger ⟨largerHoles⟩)
-
 def CylindricalShapeItem.smaller
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2233,7 +2114,6 @@ def CylindricalShapeItem.smaller
       UniformIntrinsicItem definitions smallerArguments smallerContext
   | .leaf _ smaller _ _ => .leaf smaller
   | .cut body => .cut body.smaller
-
 def CylindricalShapeItem.larger
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2243,7 +2123,6 @@ def CylindricalShapeItem.larger
       UniformIntrinsicItem definitions largerArguments largerContext
   | .leaf _ _ larger _ => .leaf larger
   | .cut body => .cut body.larger
-
 def CylindricalShapeItemSeq.smaller
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2253,7 +2132,6 @@ def CylindricalShapeItemSeq.smaller
       UniformIntrinsicItemSeq definitions smallerArguments smallerContext
   | .nil _ => .nil
   | .cons head tail => .cons head.smaller tail.smaller
-
 def CylindricalShapeItemSeq.larger
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2263,11 +2141,8 @@ def CylindricalShapeItemSeq.larger
       UniformIntrinsicItemSeq definitions largerArguments largerContext
   | .nil _ => .nil
   | .cons head tail => .cons head.larger tail.larger
-
 end
-
 mutual
-
 def CylindricalShape.consistent :
     CylindricalShape definitions insertion smallerContext largerContext →
       Prop
@@ -2276,14 +2151,12 @@ def CylindricalShape.consistent :
         ∀ {signature : Sig}
           (value : Var _ signature),
           items.embedding value = bounds.embed outer value
-
 def CylindricalShapeItem.consistent :
     CylindricalShapeItem definitions insertion
         smallerContext largerContext →
       Prop
   | .leaf _ _ _ _ => True
   | .cut body => body.consistent
-
 def CylindricalShapeItemSeq.consistent :
     CylindricalShapeItemSeq definitions insertion
         smallerContext largerContext →
@@ -2294,9 +2167,7 @@ def CylindricalShapeItemSeq.consistent :
         ∀ {signature : Sig}
           (value : Var smallerContext signature),
           tail.embedding value = head.embedding value
-
 end
-
 structure CheckedCylindricalShape
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2314,7 +2185,6 @@ structure CheckedCylindricalShape
   smaller_exact : receipt.smaller = smaller
   larger_exact : receipt.larger = larger
   consistent : receipt.consistent
-
 structure CheckedCylindricalShapeItem
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2333,7 +2203,6 @@ structure CheckedCylindricalShapeItem
   smaller_exact : receipt.smaller = smaller
   larger_exact : receipt.larger = larger
   consistent : receipt.consistent
-
 structure CheckedCylindricalShapeItemSeq
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2352,27 +2221,21 @@ structure CheckedCylindricalShapeItemSeq
   smaller_exact : receipt.smaller = smaller
   larger_exact : receipt.larger = larger
   consistent : receipt.consistent
-
 mutual
-
 def argumentShapeDepth :
     UniformIntrinsicRegion definitions arguments context → Nat
   | .mk items _ => argumentShapeItemSeqDepth items + 1
-
 def argumentShapeItemDepth :
     UniformIntrinsicItem definitions arguments context → Nat
   | .leaf _ => 1
   | .cut body => argumentShapeDepth body + 1
   | .bind _ body => argumentShapeDepth body + 1
-
 def argumentShapeItemSeqDepth :
     UniformIntrinsicItemSeq definitions arguments context → Nat
   | .nil => 1
   | .cons head tail =>
       argumentShapeItemDepth head + argumentShapeItemSeqDepth tail + 1
-
 end
-
 def checkCylindricalShapeFromPeeled
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2436,9 +2299,7 @@ def checkCylindricalShapeFromPeeled
             consistent := receiptConsistent }
       else
         none
-
 mutual
-
 def checkCylindricalShapeFuel
     (fuel : Nat)
     (insertion :
@@ -2459,7 +2320,6 @@ def checkCylindricalShapeFuel
       checkCylindricalShapeFromPeeled insertion outer smaller larger
         smallerPeeled largerPeeled fun inner =>
           checkCylindricalShapeItemSeqFuel fuel insertion inner
-
 def checkCylindricalShapeItemFuel
     (fuel : Nat)
     (insertion :
@@ -2499,7 +2359,6 @@ def checkCylindricalShapeItemFuel
                 body.larger_exact
               consistent := body.consistent }
       | _, _ => none
-
 def checkCylindricalShapeItemSeqFuel
     (fuel : Nat)
     (insertion :
@@ -2560,9 +2419,7 @@ def checkCylindricalShapeItemSeqFuel
                 rw [head.larger_exact, tail.larger_exact]
               consistent := receiptConsistent }
       | _, _ => none
-
 end
-
 def checkCylindricalShape
     (insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2577,9 +2434,7 @@ def checkCylindricalShape
   checkCylindricalShapeFuel
     (argumentShapeDepth smaller + argumentShapeDepth larger + 1)
     insertion outer smaller larger
-
 mutual
-
 theorem CylindricalShape.forward_denotes
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2705,7 +2560,6 @@ theorem CylindricalShape.forward_denotes
               smallerSite).mpr largerHolds.1,
             (holes.forward pre innerSmallerEnv innerLargerEnv
               boundsExact smallerSite).mp largerHolds.2⟩
-
 theorem CylindricalShapeItem.forward_denotes
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2748,7 +2602,6 @@ theorem CylindricalShapeItem.forward_denotes
         (CylindricalShape.forward_denotes body_consistent
           pre definitionEnv
           smallerEnv largerEnv envExact smallerSite)
-
 theorem CylindricalShapeItemSeq.forward_denotes
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2789,11 +2642,8 @@ theorem CylindricalShapeItemSeq.forward_denotes
         (CylindricalShapeItemSeq.forward_denotes tail_consistent
           pre definitionEnv
           smallerEnv largerEnv tailExact smallerSite)
-
 end
-
 mutual
-
 theorem CylindricalShape.backward_denotes
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2923,7 +2773,6 @@ theorem CylindricalShape.backward_denotes
               innerLargerEnv innerExact largerSite).mpr largerHolds.1,
             holes.backward_from_larger pre innerSmallerEnv
               innerLargerEnv boundsExact largerSite largerHolds.2⟩
-
 theorem CylindricalShapeItem.backward_denotes
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -2965,7 +2814,6 @@ theorem CylindricalShapeItem.backward_denotes
       exact not_congr
         (CylindricalShape.backward_denotes body_consistent
           pre definitionEnv smallerEnv largerEnv envExact largerSite)
-
 theorem CylindricalShapeItemSeq.backward_denotes
     {insertion :
       TypedArguments.InsertionEvidence largerArguments smallerArguments
@@ -3004,11 +2852,7 @@ theorem CylindricalShapeItemSeq.backward_denotes
           pre definitionEnv smallerEnv largerEnv envExact largerSite)
         (CylindricalShapeItemSeq.backward_denotes tail_consistent
           pre definitionEnv smallerEnv largerEnv tailExact largerSite)
-
 end
-
 end ArgumentsSemantics
-
 end ConcreteWirePrimitive
-
 end VisualProof
