@@ -3317,6 +3317,19 @@ def transportWire
       rw [applied.source_removed_exact]
       simpa [same])
 
+theorem transportWire_eq_wireEquiv
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId) :
+    applied.transportWire sourceWire = applied.wireEquiv sourceWire := by
+  unfold transportWire wireEquiv
+    ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly
+    ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly
+  rfl
+
 /-- The exact ordered attachment tuple erased by drop, transported into the
 checked target.  Positions and repeated aliases are preserved. -/
 def targetAttachments
@@ -4134,6 +4147,41 @@ theorem inverseAttachments_site
       (((forward.result.sites.sites.get plannedPosition).arguments[position]?).getD
         forwardWire))) positionsEqual
 
+/-- Executable optional lookup at a real site reduces to the exact
+site-indexed inverse attachment. -/
+theorem inverseAttachments_getD_site
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument (forward.inverseAttachments targetIso wireExact))
+    (site : Fin backward.result.sites.sites.length) :
+    ((forward.inverseAttachments targetIso wireExact)[site.val]?).getD
+        backwardWire =
+      targetIso.wires.symm (forward.transportWire
+        (((forward.result.sites.sites.get
+          (forward.inverseTransportSitePosition backward targetIso
+            wireExact site)).arguments[position]?).getD forwardWire)) := by
+  have bound : site.val <
+      (forward.inverseAttachments targetIso wireExact).length := by
+    rw [forward.inverseAttachments_length targetIso wireExact,
+      ← backward.result.sites.length]
+    exact site.isLt
+  rw [List.getElem?_eq_getElem bound]
+  have exact := forward.inverseAttachments_site targetIso wireExact
+    backward site
+  dsimp only at exact
+  rw [← exact]
+  apply congrArg (forward.inverseAttachments targetIso wireExact).get
+  apply Fin.ext
+  rfl
+
 /-- The transported inverse node carrier sends each rebuilt node to the
 exact planned source site selected by endpoint transport. -/
 theorem inverseTransport_targetNode
@@ -4860,6 +4908,49 @@ theorem inverseTransport_wire_scope
                 (real.val.wires realWire).scope))) :=
         congrArg (fun value => forward.result.regionEquiv.symm
           (targetIso.regions value)) backwardCancel.symm
+
+/-- The final inserted argument owner's wire is transported back to the
+exact dropped source attachment at the corresponding planned site. -/
+theorem inverseTransport_insertedWire
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument (forward.inverseAttachments targetIso wireExact))
+    (site : Fin backward.result.sites.sites.length) :
+    forward.inverseTransportWireEquiv backward targetIso
+        (backward.wireEquiv
+          (((forward.inverseAttachments targetIso wireExact)[site.val]?).getD
+            backwardWire)) =
+      ((forward.result.sites.sites.get
+        (forward.inverseTransportSitePosition backward targetIso
+          wireExact site)).arguments[position]?).getD forwardWire := by
+  rw [forward.inverseTransport_wireEquiv_image]
+  rw [forward.inverseAttachments_getD_site targetIso wireExact backward site]
+  let sourceAttachment :=
+    ((forward.result.sites.sites.get
+      (forward.inverseTransportSitePosition backward targetIso
+        wireExact site)).arguments[position]?).getD forwardWire
+  have middleCancel : targetIso.wires
+      (targetIso.wires.symm (forward.transportWire sourceAttachment)) =
+        forward.transportWire sourceAttachment :=
+    targetIso.wires.right_inv _
+  calc
+    forward.wireEquiv.symm
+        (targetIso.wires
+          (targetIso.wires.symm
+            (forward.transportWire sourceAttachment))) =
+      forward.wireEquiv.symm (forward.transportWire sourceAttachment) :=
+        congrArg forward.wireEquiv.symm middleCancel
+    _ = forward.wireEquiv.symm (forward.wireEquiv sourceAttachment) := by
+      rw [forward.transportWire_eq_wireEquiv]
+    _ = sourceAttachment := forward.wireEquiv.left_inv _
 
 end AppliedArgDrop
 
