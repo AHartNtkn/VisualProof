@@ -1085,6 +1085,82 @@ theorem retainedWire_ne_targetWire
       sourceWire retained).isLt
   omega
 
+/-- Dense replacement-base position represented by one retained checked
+target wire. -/
+def retainedBaseWireOfTarget
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetWire : result.checked.val.WireId)
+    (retained : targetWire ∉ result.targetRemovedWires) :
+    (replacementBase result.plan).WireId :=
+  ⟨targetWire.val, by
+    have notLarge :
+        ¬ (replacementBase result.plan).wireCount ≤ targetWire.val := by
+      intro large
+      exact retained ((result.targetRemovedWire_iff_ge targetWire).mpr large)
+    omega⟩
+
+/-- A dense retained-wire selection always denotes a source wire outside the
+replacement's removal set. -/
+theorem sourceRetainedWire_not_removed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (position : (replacementBase result.plan).WireId) :
+    Internal.sourceRetainedWire source result.sourceRemovedWires position ∉
+      result.sourceRemovedWires := by
+  have member := List.get_mem
+    (Internal.retainedWires source result.sourceRemovedWires) position
+  exact of_decide_eq_true (List.mem_filter.mp member).2
+
+/-- Recover the exact source wire represented by one retained checked target
+wire. -/
+def sourceWireOfRetainedTarget
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetWire : result.checked.val.WireId)
+    (retained : targetWire ∉ result.targetRemovedWires) :
+    source.val.WireId :=
+  Internal.sourceRetainedWire source result.sourceRemovedWires
+    (result.retainedBaseWireOfTarget targetWire retained)
+
+/-- Re-embedding the recovered retained source wire returns the exact checked
+target wire. -/
+theorem retainedWireImage_sourceWireOfRetainedTarget
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetWire : result.checked.val.WireId)
+    (retained : targetWire ∉ result.targetRemovedWires) :
+    result.retainedWireImage
+        (result.sourceWireOfRetainedTarget targetWire retained)
+        (result.sourceRetainedWire_not_removed
+          (result.retainedBaseWireOfTarget targetWire retained)) =
+      targetWire := by
+  unfold ArgumentResult.retainedWireImage sourceWireOfRetainedTarget
+  apply Fin.ext
+  simp [Internal.checkedWire, retainedBaseWireOfTarget]
+
+/-- Recovering a retained-wire image returns its exact source wire. -/
+@[simp] theorem sourceWireOfRetainedTarget_retainedWireImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires)
+    (targetRetained :
+      result.retainedWireImage sourceWire retained ∉
+        result.targetRemovedWires) :
+    result.sourceWireOfRetainedTarget
+        (result.retainedWireImage sourceWire retained) targetRetained =
+      sourceWire := by
+  unfold sourceWireOfRetainedTarget retainedBaseWireOfTarget
+    ArgumentResult.retainedWireImage
+  apply Fin.ext
+  simp [Internal.checkedWire]
+
 end ArgumentResult
 
 end ConcreteWirePrimitive
