@@ -1393,6 +1393,89 @@ def recursiveCutReceipt
       exact congrArg (UniformIntrinsicItemSeq.cons (.cut shape.larger))
         (recursiveCutReceipt_larger outer tail)
 
+theorem recursiveChildSmallerItems_eq
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature) :
+    ∀ shapes : List (CylindricalShape definitions insertion
+      smallerContext largerContext),
+      recursiveChildSmallerItems insertion shapes =
+        recursiveSmallerCutItems insertion shapes
+  | [] => rfl
+  | shape :: tail => by
+      simp only [recursiveChildSmallerItems, recursiveSmallerCutItems]
+      rw [recursiveChildSmallerItems_eq insertion tail]
+
+theorem recursiveChildLargerItems_eq
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature) :
+    ∀ shapes : List (CylindricalShape definitions insertion
+      smallerContext largerContext),
+      recursiveChildLargerItems insertion shapes =
+        recursiveLargerCutItems insertion shapes
+  | [] => rfl
+  | shape :: tail => by
+      simp only [recursiveChildLargerItems, recursiveLargerCutItems]
+      rw [recursiveChildLargerItems_eq insertion tail]
+
+/-- Assemble one recursive region block from its normalized retained leaves,
+ordered child shapes, and exact hole receipt. -/
+noncomputable def recursiveBlockReceipt
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (sourceRetained : ItemSeq definitions (smallerBound ++ smallerOuter))
+    (children : List (CylindricalShape definitions insertion
+      (smallerBound ++ smallerOuter) (largerBound ++ largerOuter)))
+    (holes : CylindricalHoles insertion bounds outer smallerHoles largerHoles) :
+    CylindricalShape definitions insertion smallerOuter largerOuter :=
+  .block outer bounds
+    (recursiveReceiptAppend
+      (recursiveLeafReceipt insertion (bounds.embed outer) sourceRetained)
+      (recursiveCutReceipt (bounds.embed outer) children)) holes
+
+@[simp] theorem recursiveBlockReceipt_smaller
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (sourceRetained : ItemSeq definitions (smallerBound ++ smallerOuter))
+    (children : List (CylindricalShape definitions insertion
+      (smallerBound ++ smallerOuter) (largerBound ++ largerOuter)))
+    (holes : CylindricalHoles insertion bounds outer smallerHoles largerHoles) :
+    (recursiveBlockReceipt insertion bounds outer sourceRetained children
+      holes).smaller =
+      wrapArgumentBinds smallerBound
+        (.mk (UniformIntrinsicRegion.UniformIntrinsicItemSeq.append
+          (recursiveLeafItems sourceRetained)
+          (recursiveSmallerCutItems insertion children)) ⟨smallerHoles⟩) := by
+  unfold recursiveBlockReceipt
+  simp only [CylindricalShape.smaller, recursiveReceiptAppend_smaller,
+    recursiveLeafReceipt_smaller, recursiveCutReceipt_smaller]
+
+@[simp] theorem recursiveBlockReceipt_larger
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (sourceRetained : ItemSeq definitions (smallerBound ++ smallerOuter))
+    (children : List (CylindricalShape definitions insertion
+      (smallerBound ++ smallerOuter) (largerBound ++ largerOuter)))
+    (holes : CylindricalHoles insertion bounds outer smallerHoles largerHoles) :
+    (recursiveBlockReceipt insertion bounds outer sourceRetained children
+      holes).larger =
+      wrapArgumentBinds largerBound
+        (.mk (UniformIntrinsicRegion.UniformIntrinsicItemSeq.append
+          (recursiveLeafItems
+            (sourceRetained.renameWires (bounds.embed outer)))
+          (recursiveLargerCutItems insertion children)) ⟨largerHoles⟩) := by
+  unfold recursiveBlockReceipt
+  simp only [CylindricalShape.larger, recursiveReceiptAppend_larger,
+    recursiveLeafReceipt_larger, recursiveCutReceipt_larger]
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
