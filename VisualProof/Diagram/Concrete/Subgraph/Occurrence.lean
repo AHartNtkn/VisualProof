@@ -693,6 +693,33 @@ theorem identityPortEquiv_owner
   rw [targetPositioned] at targetOwner
   exact targetOwner
 
+/-- Deterministic endpoint transport for an explicitly exposed source node. -/
+noncomputable def endpointMapForNode
+    {definitions : List (List Sig)}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
+    (occurrence : Occurrence pattern host)
+    (endpoint : CEndpoint pattern.val.diagram.nodeCount)
+    (data : CNode pattern.val.diagram.regionCount definitions.length)
+    (nodeData : pattern.val.diagram.nodes endpoint.node = data) :
+    CEndpoint host.val.nodeCount := by
+  cases data with
+  | atom => exact ⟨occurrence.nodeMap endpoint.node, endpoint.port⟩
+  | ref => exact ⟨occurrence.nodeMap endpoint.node, endpoint.port⟩
+  | identity region sig arity =>
+      cases portData : endpoint.port with
+      | head => exact ⟨occurrence.nodeMap endpoint.node, .head⟩
+      | arg index => exact ⟨occurrence.nodeMap endpoint.node, .arg index⟩
+      | identity index =>
+          if bound : index < arity then
+            exact
+              ⟨occurrence.nodeMap endpoint.node,
+                .identity
+                  ((occurrence.identityPortEquiv endpoint.node region sig
+                    arity nodeData) ⟨index, bound⟩).val⟩
+          else
+            exact ⟨occurrence.nodeMap endpoint.node, .identity index⟩
+
 theorem properChildren_exact
     (occurrence : Occurrence pattern host) :
     ∀ region, region ≠ pattern.val.diagram.root →

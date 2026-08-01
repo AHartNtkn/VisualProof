@@ -1236,6 +1236,90 @@ private theorem occurrenceEndpoint_forward
       ⟨candidate, candidateIncident, equality⟩
     exact ⟨candidate, candidateIncident, equality.symm⟩
 
+/-- The occurrence-owned positional endpoint map lands on the mapped wire. -/
+theorem occurrenceEndpointMap_mem
+    {definitions : List (List Sig)}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
+    (occurrence : Occurrence pattern host)
+    (wire : pattern.val.diagram.WireId)
+    (endpoint : CEndpoint pattern.val.diagram.nodeCount)
+    (data : CNode pattern.val.diagram.regionCount definitions.length)
+    (nodeData : pattern.val.diagram.nodes endpoint.node = data)
+    (incident : endpoint ∈ (pattern.val.diagram.wires wire).endpoints) :
+    occurrence.endpointMapForNode endpoint data nodeData ∈
+      (host.val.wires (occurrence.wireMap wire)).endpoints := by
+  have required :=
+    ConcreteDiagram.incident_port_required _ pattern.val.diagram
+      pattern.property.diagram wire endpoint incident
+  cases endpoint with
+  | mk node port =>
+      cases data with
+      | identity region sig arity =>
+          have sourceNode :
+              pattern.val.diagram.nodes node = .identity region sig arity :=
+            nodeData
+          have requiredIdentity :
+              port ∈ (List.range arity).map CPort.identity := by
+            simpa [ConcreteDiagram.requiredPorts, sourceNode] using required
+          obtain ⟨index, bound, portExact⟩ := List.mem_map.mp requiredIdentity
+          have boundLt : index < arity := List.mem_range.mp bound
+          subst port
+          have sourceOwner :=
+            ConcreteDiagram.endpointOwner?_eq_of_incident _
+              pattern.val.diagram pattern.property.diagram node
+              (.identity index)
+              (by simp [ConcreteDiagram.requiredPorts, sourceNode, boundLt])
+              wire incident
+          have targetOwner := occurrence.identityPortEquiv_owner node region
+            sig arity sourceNode ⟨index, boundLt⟩ wire sourceOwner
+          have targetIncident :=
+            ConcreteDiagram.endpointOwner?_incident host.val
+              ⟨occurrence.nodeMap node,
+                .identity
+                  ((occurrence.identityPortEquiv node region sig arity
+                    sourceNode) ⟨index, boundLt⟩).val⟩
+              (occurrence.wireMap wire) targetOwner
+          simpa [Occurrence.endpointMapForNode, boundLt] using targetIncident
+      | atom region args =>
+          have sourceNode :
+              pattern.val.diagram.nodes node = .atom region args := nodeData
+          have sourcePortRequired := required
+          simp [ConcreteDiagram.requiredPorts, sourceNode] at sourcePortRequired
+          rcases occurrenceEndpoint_forward occurrence wire ⟨node, port⟩
+              incident with
+            ⟨candidate, candidateIncident, sameKey⟩
+          have candidateExact :
+              candidate = occurrence.endpointMapForNode ⟨node, port⟩
+                (.atom region args) sourceNode := by
+            rcases candidate with ⟨candidateNode, candidatePort⟩
+            simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
+              Occurrence.endpointMapForNode, sourceNode] at sameKey ⊢
+            rcases sameKey with ⟨nodeExact, portExact⟩
+            subst candidateNode
+            cases port <;> cases candidatePort <;>
+              simp_all [OccurrencePort.ofConcrete]
+          simpa [candidateExact] using candidateIncident
+      | ref region definition args =>
+          have sourceNode :
+              pattern.val.diagram.nodes node =
+                .ref region definition args := nodeData
+          have sourcePortRequired := required
+          simp [ConcreteDiagram.requiredPorts, sourceNode] at sourcePortRequired
+          rcases occurrenceEndpoint_forward occurrence wire ⟨node, port⟩
+              incident with
+            ⟨candidate, candidateIncident, sameKey⟩
+          have candidateExact :
+              candidate = occurrence.endpointMapForNode ⟨node, port⟩
+                (.ref region definition args) sourceNode := by
+            rcases candidate with ⟨candidateNode, candidatePort⟩
+            simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
+              Occurrence.endpointMapForNode, sourceNode] at sameKey ⊢
+            rcases sameKey with ⟨nodeExact, portExact⟩
+            subst candidateNode
+            cases port <;> cases candidatePort <;>
+              simp_all [OccurrencePort.ofConcrete]
+          simpa [candidateExact] using candidateIncident
 /-- Exact reconstructed region table under the construction-owned correspondence. -/
 theorem regionTable_exact
     (occurrence : Occurrence pattern host)
