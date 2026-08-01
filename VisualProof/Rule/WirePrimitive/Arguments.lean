@@ -3865,6 +3865,576 @@ theorem inverseTransport_region_table
               congrArg (fun value => forward.result.regionEquiv.symm
                 (targetIso.regions value)) backwardParentCancel.symm
 
+/-- Planned source-site position represented by one real source site after
+transport through the supplied target isomorphism. -/
+def inverseTransportSitePosition
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (site : Fin backward.result.sites.sites.length) :
+    Fin forward.result.sites.sites.length :=
+  let sourceEndpoint := (backward.result.sites.sites.get site).endpoint
+  have sourceMember : sourceEndpoint ∈
+      (real.val.wires backwardWire).endpoints := by
+    rw [← backward.result.sites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨backward.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  let middleEndpoint := targetIso.endpointMap backwardWire sourceEndpoint
+  have middleMember : middleEndpoint ∈
+      (forward.target.val.wires forward.targetWire).endpoints := by
+    rw [← wireExact]
+    exact targetIso.endpointMap_mem backwardWire sourceEndpoint sourceMember
+  let middleEndpointPosition := DenseList.index
+    (forward.target.val.wires forward.targetWire).endpoints
+    middleEndpoint middleMember
+  let middlePosition := Fin.cast forward.targetSites.length.symm
+    middleEndpointPosition
+  let middleNode := (forward.targetSites.sites.get middlePosition).node
+  have generated : middleNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes forward.targetSites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨forward.targetSites.sites.get middlePosition,
+        List.get_mem _ _, rfl⟩
+  forward.result.sourcePositionOfTargetNode forward.targetSites
+    middleNode generated
+
+/-- The transported inverse node carrier sends each rebuilt node to the
+exact planned source site selected by endpoint transport. -/
+theorem inverseTransport_targetNode
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (site : Fin backward.result.sites.sites.length) :
+    forward.inverseTransportNodeEquiv backward targetIso
+        (backward.result.targetNode site) =
+      (forward.result.sites.sites.get
+        (forward.inverseTransportSitePosition backward targetIso
+          wireExact site)).node := by
+  let backwardNode := (backward.result.sites.sites.get site).node
+  have backwardMember : backwardNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes backward.result.sites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨backward.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  have backwardImage : backward.nodeEquiv backwardNode =
+      backward.result.targetNode site := by
+    unfold AppliedArgExtend.nodeEquiv
+      ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+    change backward.result.nodeImage backwardNode = _
+    rw [ConcreteWirePrimitive.ArgumentResult.nodeImage,
+      dif_pos backwardMember,
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_get]
+  have backwardInverse : backward.nodeEquiv.symm
+      (backward.result.targetNode site) = backwardNode := by
+    rw [← backwardImage]
+    exact backward.nodeEquiv.left_inv backwardNode
+  let sourceEndpoint := (backward.result.sites.sites.get site).endpoint
+  have sourceMember : sourceEndpoint ∈
+      (real.val.wires backwardWire).endpoints := by
+    rw [← backward.result.sites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨backward.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  let middleEndpoint := targetIso.endpointMap backwardWire sourceEndpoint
+  have middleMember : middleEndpoint ∈
+      (forward.target.val.wires forward.targetWire).endpoints := by
+    rw [← wireExact]
+    exact targetIso.endpointMap_mem backwardWire sourceEndpoint sourceMember
+  let middleEndpointPosition := DenseList.index
+    (forward.target.val.wires forward.targetWire).endpoints
+    middleEndpoint middleMember
+  let middlePosition := Fin.cast forward.targetSites.length.symm
+    middleEndpointPosition
+  let middleSite := forward.targetSites.sites.get middlePosition
+  have middleNodeExact : middleSite.node = targetIso.nodes backwardNode := by
+    have selected := get_of_list_eq forward.targetSites.exhaustive
+      middleEndpointPosition
+    have endpointExact := DenseList.get_index
+      (forward.target.val.wires forward.targetWire).endpoints
+      middleEndpoint middleMember
+    rw [endpointExact] at selected
+    have selectedPosition :
+        Fin.cast (congrArg List.length
+          forward.targetSites.exhaustive).symm middleEndpointPosition =
+          Fin.cast (by simp) middlePosition := by
+      apply Fin.ext
+      rfl
+    rw [selectedPosition] at selected
+    have corresponds := targetIso.endpointMap_corresponds backwardWire
+      sourceEndpoint sourceMember
+    simpa [middleSite, sourceEndpoint, backwardNode, AppliedSite.endpoint]
+      using (congrArg CEndpoint.node selected).trans corresponds.1
+  have middleGenerated : middleSite.node ∈
+      ConcreteWirePrimitive.argumentSiteNodes forward.targetSites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr ⟨middleSite, List.get_mem _ _, rfl⟩
+  let plannedPosition := forward.result.sourcePositionOfTargetNode
+    forward.targetSites middleSite.node middleGenerated
+  have forwardTarget : forward.result.targetNode plannedPosition =
+      middleSite.node :=
+    forward.result.targetNode_sourcePositionOfTargetNode
+      forward.targetSites middleSite.node middleGenerated
+  let plannedNode :=
+    (forward.result.sites.sites.get plannedPosition).node
+  have plannedMember : plannedNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes forward.result.sites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨forward.result.sites.sites.get plannedPosition,
+        List.get_mem _ _, rfl⟩
+  have forwardImage : forward.nodeEquiv plannedNode =
+      forward.result.targetNode plannedPosition := by
+    unfold AppliedArgDrop.nodeEquiv
+      ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+    change forward.result.nodeImage plannedNode = _
+    rw [ConcreteWirePrimitive.ArgumentResult.nodeImage,
+      dif_pos plannedMember,
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_get]
+  unfold inverseTransportNodeEquiv
+  change forward.nodeEquiv.symm
+      (targetIso.nodes
+        (backward.nodeEquiv.symm (backward.result.targetNode site))) = _
+  rw [backwardInverse, ← middleNodeExact,
+    ← forwardTarget, ← forwardImage]
+  change forward.nodeEquiv.symm (forward.nodeEquiv plannedNode) = plannedNode
+  exact forward.nodeEquiv.left_inv plannedNode
+
+/-- The exact forward target node underlying a transported backward site. -/
+theorem inverseTransport_middleNode
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (site : Fin backward.result.sites.sites.length) :
+    targetIso.nodes (backward.result.sites.sites.get site).node =
+      forward.result.targetNode
+        (forward.inverseTransportSitePosition backward targetIso
+          wireExact site) := by
+  let backwardNode := (backward.result.sites.sites.get site).node
+  have backwardMember : backwardNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes backward.result.sites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨backward.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  have backwardImage : backward.nodeEquiv backwardNode =
+      backward.result.targetNode site := by
+    exact backward.nodeEquiv_generated site
+  have backwardInverse : backward.nodeEquiv.symm
+      (backward.result.targetNode site) = backwardNode := by
+    rw [← backwardImage]
+    exact backward.nodeEquiv.left_inv backwardNode
+  let plannedPosition := forward.inverseTransportSitePosition backward
+    targetIso wireExact site
+  let plannedNode :=
+    (forward.result.sites.sites.get plannedPosition).node
+  have forwardImage : forward.nodeEquiv plannedNode =
+      forward.result.targetNode plannedPosition := by
+    exact forward.nodeEquiv_generated plannedPosition
+  have carrierExact := forward.inverseTransport_targetNode backward
+    targetIso wireExact site
+  unfold inverseTransportNodeEquiv at carrierExact
+  change forward.nodeEquiv.symm
+      (targetIso.nodes
+        (backward.nodeEquiv.symm (backward.result.targetNode site))) =
+      plannedNode at carrierExact
+  rw [backwardInverse] at carrierExact
+  have lifted := congrArg forward.nodeEquiv carrierExact
+  have forwardCancel := forward.nodeEquiv.right_inv
+    (targetIso.nodes backwardNode)
+  change forward.nodeEquiv
+      (forward.nodeEquiv.symm (targetIso.nodes backwardNode)) =
+    targetIso.nodes backwardNode at forwardCancel
+  have exactMiddle : targetIso.nodes backwardNode =
+      forward.nodeEquiv plannedNode :=
+    forwardCancel.symm.trans lifted
+  rw [forwardImage] at exactMiddle
+  exact exactMiddle
+
+/-- Rebuilt nodes satisfy the transported node-table law; the erased and
+reinserted argument vector cancels at the selected position. -/
+theorem inverseTransport_generated_node_table
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (argumentExact :
+      forward.sourceArgumentList[position]? = some newArgument)
+    (site : Fin backward.result.sites.sites.length) :
+    planned.val.nodes
+        (forward.inverseTransportNodeEquiv backward targetIso
+          (backward.result.targetNode site)) =
+      (backward.target.val.nodes
+        (backward.result.targetNode site)).rename
+          (forward.inverseTransportRegionEquiv backward targetIso) := by
+  let backwardSite := backward.result.sites.sites.get site
+  let plannedPosition := forward.inverseTransportSitePosition backward
+    targetIso wireExact site
+  let plannedSite := forward.result.sites.sites.get plannedPosition
+  have nodeExact := forward.inverseTransport_targetNode backward
+    targetIso wireExact site
+  have backwardTargetData : backward.target.val.nodes
+      (backward.result.targetNode site) =
+    .atom (backward.result.regionImage backwardSite.region)
+      backward.result.targetArguments := by
+    exact backward.result.targetNode_data site
+  rw [nodeExact, plannedSite.node_data, backwardTargetData]
+  have targetNodeExact := forward.inverseTransport_middleNode backward
+    targetIso wireExact site
+  have mappedData := targetIso.node_table backwardSite.node
+  rw [backwardSite.node_data, targetNodeExact] at mappedData
+  have forwardTargetData : forward.target.val.nodes
+      (forward.result.targetNode plannedPosition) =
+    .atom (forward.result.regionImage plannedSite.region)
+      forward.result.targetArguments := by
+    exact forward.result.targetNode_data plannedPosition
+  rw [forwardTargetData] at mappedData
+  have regionExact : forward.result.regionImage plannedSite.region =
+      targetIso.regions backwardSite.region :=
+    (CNode.atom.inj mappedData).1
+  have restored := forward.inverseTargetArguments_exact backward
+    targetIso wireExact argumentExact
+  rw [restored]
+  have plannedArguments : plannedSite.argumentSignatures =
+      forward.sourceArgumentList :=
+    ConcreteWirePrimitive.appliedSite_arguments_eq_relationArguments
+      forward.sourceArgumentList forward.sourceWire_signature plannedSite
+  rw [plannedArguments]
+  congr 2
+  unfold inverseTransportRegionEquiv
+  change plannedSite.region = forward.result.regionEquiv.symm
+    (targetIso.regions
+      (backward.result.regionEquiv.symm
+        (backward.result.regionImage backwardSite.region)))
+  rw [backward.result.regionImage_exact]
+  have backwardCancel :=
+    backward.result.regionEquiv.left_inv backwardSite.region
+  change backward.result.regionEquiv.invFun
+      (backward.result.regionEquiv backwardSite.region) =
+    backwardSite.region at backwardCancel
+  have forwardRegionExact :=
+    forward.result.regionImage_exact plannedSite.region
+  calc
+    plannedSite.region = forward.result.regionEquiv.symm
+        (forward.result.regionEquiv plannedSite.region) :=
+      (forward.result.regionEquiv.left_inv plannedSite.region).symm
+    _ = forward.result.regionEquiv.symm
+        (forward.result.regionImage plannedSite.region) := by
+      rw [forwardRegionExact]
+    _ = forward.result.regionEquiv.symm
+        (targetIso.regions backwardSite.region) :=
+      congrArg forward.result.regionEquiv.symm regionExact
+    _ = forward.result.regionEquiv.symm
+        (targetIso.regions
+          (backward.result.regionEquiv.symm
+            (backward.result.regionEquiv backwardSite.region))) :=
+      congrArg (fun value => forward.result.regionEquiv.symm
+        (targetIso.regions value)) backwardCancel.symm
+
+/-- A real node retained by extension cannot transport to a generated
+forward drop target site. -/
+theorem inverseTransport_middleNode_retained
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (realNode : real.val.NodeId)
+    (retained : realNode ∉
+      ConcreteWirePrimitive.argumentSiteNodes backward.result.sites) :
+    targetIso.nodes realNode ∉
+      ConcreteWirePrimitive.argumentSiteNodes forward.targetSites := by
+  intro generated
+  unfold ConcreteWirePrimitive.argumentSiteNodes at generated
+  rcases List.mem_map.mp generated with
+    ⟨middleSite, middleMember, middleNodeExact⟩
+  have targetOwner : forward.target.val.endpointOwner?
+      ⟨targetIso.nodes realNode, .head⟩ = some forward.targetWire := by
+    rw [← middleNodeExact]
+    exact middleSite.endpoint_owner
+  have mappedData := targetIso.node_table realNode
+  have middleData : forward.target.val.nodes (targetIso.nodes realNode) =
+      .atom middleSite.region middleSite.argumentSignatures := by
+    rw [← middleNodeExact]
+    exact middleSite.node_data
+  cases sourceData : real.val.nodes realNode with
+  | atom region arguments =>
+      have sourceOwner := targetIso.atom_owner_backward real.property
+        sourceData targetOwner
+      have inverseWireExact : targetIso.wires.symm forward.targetWire =
+          backwardWire := by
+        calc
+          targetIso.wires.symm forward.targetWire =
+              targetIso.wires.symm (targetIso.wires backwardWire) := by
+            rw [wireExact]
+          _ = backwardWire := targetIso.wires.left_inv backwardWire
+      rw [inverseWireExact] at sourceOwner
+      have incident := ConcreteDiagram.endpointOwner?_incident real.val
+        ⟨realNode, .head⟩ backwardWire sourceOwner
+      rw [← backward.result.sites.exhaustive] at incident
+      rcases List.mem_map.mp incident with
+        ⟨sourceSite, sourceMember, endpointExact⟩
+      apply retained
+      unfold ConcreteWirePrimitive.argumentSiteNodes
+      exact List.mem_map.mpr
+        ⟨sourceSite, sourceMember,
+          congrArg CEndpoint.node endpointExact⟩
+  | ref region definition arguments =>
+      rw [middleData, sourceData] at mappedData
+      contradiction
+  | identity region signature arity =>
+      rw [middleData, sourceData] at mappedData
+      contradiction
+
+/-- Retained extension nodes satisfy the complete transported node-table
+law. -/
+theorem inverseTransport_retained_node_table
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (realNode : real.val.NodeId)
+    (retained : realNode ∉
+      ConcreteWirePrimitive.argumentSiteNodes backward.result.sites) :
+    planned.val.nodes
+        (forward.inverseTransportNodeEquiv backward targetIso
+          (backward.result.retainedNodeImage realNode retained)) =
+      (backward.target.val.nodes
+        (backward.result.retainedNodeImage realNode retained)).rename
+          (forward.inverseTransportRegionEquiv backward targetIso) := by
+  have middleRetained := forward.inverseTransport_middleNode_retained
+    backward targetIso wireExact realNode retained
+  let plannedNode := forward.result.sourceNodeOfRetainedTarget
+    forward.targetSites (targetIso.nodes realNode) middleRetained
+  have plannedRetained : plannedNode ∉
+      ConcreteWirePrimitive.argumentSiteNodes forward.result.sites :=
+    ConcreteWirePrimitive.sourceRetainedNode_not_removed
+      forward.result.sites
+      (forward.result.retainedBaseNodeOfTarget forward.targetSites
+        (targetIso.nodes realNode) middleRetained)
+  have backwardImage : backward.nodeEquiv realNode =
+      backward.result.retainedNodeImage realNode retained :=
+    backward.nodeEquiv_retained realNode retained
+  have backwardInverse : backward.nodeEquiv.symm
+      (backward.result.retainedNodeImage realNode retained) = realNode := by
+    rw [← backwardImage]
+    exact backward.nodeEquiv.left_inv realNode
+  have forwardInverse : forward.nodeEquiv.symm
+      (targetIso.nodes realNode) = plannedNode := by
+    unfold AppliedArgDrop.nodeEquiv
+      ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+    change forward.result.sourceNode forward.targetSites
+      (targetIso.nodes realNode) = plannedNode
+    unfold ConcreteWirePrimitive.ArgumentResult.sourceNode
+    split
+    next generated => exact (middleRetained generated).elim
+    next _ => rfl
+  have carrierExact : forward.inverseTransportNodeEquiv backward targetIso
+      (backward.result.retainedNodeImage realNode retained) =
+        plannedNode := by
+    unfold inverseTransportNodeEquiv
+    change forward.nodeEquiv.symm
+      (targetIso.nodes
+        (backward.nodeEquiv.symm
+          (backward.result.retainedNodeImage realNode retained))) = _
+    rw [backwardInverse, forwardInverse]
+  rw [carrierExact]
+  have backwardData : backward.target.val.nodes
+      (backward.result.retainedNodeImage realNode retained) =
+        (real.val.nodes realNode).rename backward.result.regionEquiv :=
+    backward.result.retainedNodeImage_data realNode retained
+  rw [backwardData]
+  have forwardImage : forward.result.retainedNodeImage plannedNode
+      plannedRetained = targetIso.nodes realNode :=
+    forward.result.retainedNodeImage_sourceNodeOfRetainedTarget
+      forward.targetSites (targetIso.nodes realNode) middleRetained
+  have forwardData : forward.target.val.nodes (targetIso.nodes realNode) =
+      (planned.val.nodes plannedNode).rename forward.result.regionEquiv := by
+    rw [← forwardImage]
+    exact forward.result.retainedNodeImage_data plannedNode plannedRetained
+  have middleData := targetIso.node_table realNode
+  rw [forwardData] at middleData
+  cases realData : real.val.nodes realNode with
+  | atom realRegion realArguments =>
+      cases plannedData : planned.val.nodes plannedNode with
+      | atom plannedRegion plannedArguments =>
+          rw [realData, plannedData] at middleData
+          simp only [CNode.rename] at middleData ⊢
+          have parts := CNode.atom.inj middleData
+          cases parts.2
+          congr 1
+          have regionRelation := parts.1
+          unfold inverseTransportRegionEquiv
+          have backwardCancel :=
+            backward.result.regionEquiv.left_inv realRegion
+          change backward.result.regionEquiv.invFun
+              (backward.result.regionEquiv realRegion) = realRegion
+            at backwardCancel
+          exact (forward.result.regionEquiv.left_inv plannedRegion).symm.trans
+            ((congrArg forward.result.regionEquiv.symm
+              regionRelation).trans
+              (congrArg (fun value => forward.result.regionEquiv.symm
+                (targetIso.regions value)) backwardCancel.symm))
+      | ref plannedRegion definition plannedArguments =>
+          rw [realData, plannedData] at middleData
+          contradiction
+      | identity plannedRegion signature arity =>
+          rw [realData, plannedData] at middleData
+          contradiction
+  | ref realRegion realDefinition realArguments =>
+      cases plannedData : planned.val.nodes plannedNode with
+      | atom plannedRegion plannedArguments =>
+          rw [realData, plannedData] at middleData
+          contradiction
+      | ref plannedRegion plannedDefinition plannedArguments =>
+          rw [realData, plannedData] at middleData
+          simp only [CNode.rename] at middleData ⊢
+          have parts := CNode.ref.inj middleData
+          cases parts.2.1
+          cases parts.2.2
+          congr 1
+          have regionRelation := parts.1
+          unfold inverseTransportRegionEquiv
+          have backwardCancel :=
+            backward.result.regionEquiv.left_inv realRegion
+          change backward.result.regionEquiv.invFun
+              (backward.result.regionEquiv realRegion) = realRegion
+            at backwardCancel
+          exact (forward.result.regionEquiv.left_inv plannedRegion).symm.trans
+            ((congrArg forward.result.regionEquiv.symm
+              regionRelation).trans
+              (congrArg (fun value => forward.result.regionEquiv.symm
+                (targetIso.regions value)) backwardCancel.symm))
+      | identity plannedRegion signature arity =>
+          rw [realData, plannedData] at middleData
+          contradiction
+  | identity realRegion realSignature realArity =>
+      cases plannedData : planned.val.nodes plannedNode with
+      | atom plannedRegion plannedArguments =>
+          rw [realData, plannedData] at middleData
+          contradiction
+      | ref plannedRegion definition plannedArguments =>
+          rw [realData, plannedData] at middleData
+          contradiction
+      | identity plannedRegion plannedSignature plannedArity =>
+          rw [realData, plannedData] at middleData
+          simp only [CNode.rename] at middleData ⊢
+          have parts := CNode.identity.inj middleData
+          cases parts.2.1
+          cases parts.2.2
+          congr 1
+          have regionRelation := parts.1
+          unfold inverseTransportRegionEquiv
+          have backwardCancel :=
+            backward.result.regionEquiv.left_inv realRegion
+          change backward.result.regionEquiv.invFun
+              (backward.result.regionEquiv realRegion) = realRegion
+            at backwardCancel
+          exact (forward.result.regionEquiv.left_inv plannedRegion).symm.trans
+            ((congrArg forward.result.regionEquiv.symm
+              regionRelation).trans
+              (congrArg (fun value => forward.result.regionEquiv.symm
+                (targetIso.regions value)) backwardCancel.symm))
+
+/-- Complete node-table law for the transported inverse drop/extension
+carrier. -/
+theorem inverseTransport_node_table
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (argumentExact :
+      forward.sourceArgumentList[position]? = some newArgument)
+    (node : backward.target.val.NodeId) :
+    planned.val.nodes
+        (forward.inverseTransportNodeEquiv backward targetIso node) =
+      (backward.target.val.nodes node).rename
+        (forward.inverseTransportRegionEquiv backward targetIso) := by
+  let realNode := backward.nodeEquiv.symm node
+  have nodeRecover : backward.nodeEquiv realNode = node :=
+    backward.nodeEquiv.right_inv node
+  by_cases generated : realNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes backward.result.sites
+  · let site := ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode
+      backward.result.sites realNode generated
+    have imageExact : backward.nodeEquiv realNode =
+        backward.result.targetNode site := by
+      unfold AppliedArgExtend.nodeEquiv
+        ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+      change backward.result.nodeImage realNode = _
+      rw [ConcreteWirePrimitive.ArgumentResult.nodeImage,
+        dif_pos generated]
+    have nodeExact : node = backward.result.targetNode site :=
+      nodeRecover.symm.trans imageExact
+    rw [nodeExact]
+    exact forward.inverseTransport_generated_node_table backward
+      targetIso wireExact argumentExact site
+  · have imageExact : backward.nodeEquiv realNode =
+        backward.result.retainedNodeImage realNode generated :=
+      backward.nodeEquiv_retained realNode generated
+    have nodeExact : node =
+        backward.result.retainedNodeImage realNode generated :=
+      nodeRecover.symm.trans imageExact
+    rw [nodeExact]
+    exact forward.inverseTransport_retained_node_table backward
+      targetIso wireExact realNode generated
+
 /-- The transported inverse wire carrier acts on every inverse-construction
 image by composing the three construction-owned wire equivalences. -/
 theorem inverseTransport_wireEquiv_image
