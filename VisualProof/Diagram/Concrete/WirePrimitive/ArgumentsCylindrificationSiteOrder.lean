@@ -80,6 +80,84 @@ private theorem map_get_allFin (values : List α) :
   simpa only [Function.comp_apply, List.get_eq_getElem] using
     (List.ofFn_getElem (xs := values))
 
+private theorem move_to_front
+    (value : α) (pre suffix : List α) :
+    (value :: pre ++ suffix).Perm
+      (pre ++ value :: suffix) := by
+  induction pre with
+  | nil => simp
+  | cons head tail induction =>
+      exact
+        (List.Perm.swap value head (tail ++ suffix)).symm.trans
+          (List.Perm.cons head induction)
+
+private theorem perm_of_nodup_same_membership [DecidableEq α]
+    {left right : List α}
+    (leftNodup : left.Nodup)
+    (rightNodup : right.Nodup)
+    (same : ∀ value, value ∈ left ↔ value ∈ right) :
+    left.Perm right := by
+  induction left generalizing right with
+  | nil =>
+      cases right with
+      | nil => exact .nil
+      | cons head tail =>
+          have : head ∈ ([] : List α) :=
+            (same head).mpr (by simp)
+          contradiction
+  | cons head tail induction =>
+      have headMember : head ∈ right :=
+        (same head).mp (by simp)
+      obtain ⟨pre, suffix, rightExact⟩ :=
+        List.append_of_mem headMember
+      subst right
+      have headNotTail : head ∉ tail :=
+        (List.nodup_cons.mp leftNodup).1
+      have rightParts := List.nodup_append.mp rightNodup
+      have headNotPre : head ∉ pre := by
+        intro member
+        exact rightParts.2.2 head member head (by simp) rfl
+      have headNotSuffix : head ∉ suffix :=
+        (List.nodup_cons.mp rightParts.2.1).1
+      have tailNodup : tail.Nodup :=
+        (List.nodup_cons.mp leftNodup).2
+      have restNodup : (pre ++ suffix).Nodup := by
+        apply List.Sublist.nodup _ rightNodup
+        exact List.Sublist.append (List.Sublist.refl pre)
+          ((List.Sublist.refl suffix).cons head)
+      have restSame : ∀ value,
+          value ∈ tail ↔ value ∈ pre ++ suffix := by
+        intro value
+        constructor
+        · intro member
+          have inRight : value ∈ pre ++ head :: suffix :=
+            (same value).mp (by simp [member])
+          rw [List.mem_append] at inRight ⊢
+          rcases inRight with inPre | inHead
+          · exact Or.inl inPre
+          · simp only [List.mem_cons] at inHead
+            rcases inHead with exact | inSuffix
+            · subst value; contradiction
+            · exact Or.inr inSuffix
+        · intro member
+          have inRight : value ∈ pre ++ head :: suffix := by
+            rw [List.mem_append] at member ⊢
+            rcases member with inPre | inSuffix
+            · exact Or.inl inPre
+            · exact Or.inr (by simp [inSuffix])
+          have inLeft := (same value).mpr inRight
+          simp only [List.mem_cons] at inLeft
+          rcases inLeft with exact | inTail
+          · subst value
+            rw [List.mem_append] at member
+            rcases member with inPre | inSuffix <;> contradiction
+          · exact inTail
+      have restPerm : tail.Perm (pre ++ suffix) :=
+        induction tailNodup restNodup restSame
+      exact
+        (List.Perm.cons head restPerm).trans
+          (move_to_front head pre suffix)
+
 /-- Every checked wire's stored endpoint sequence is duplicate-free. -/
 theorem checkedWire_endpoints_nodup
     (source : CheckedDiagram definitions)
@@ -322,6 +400,21 @@ theorem aritySiteNodesAt_mem_iff
       exact nodeRegion
     · rw [siteExact]
       exact nodeExact
+
+/-- Source-node order and endpoint/site order contain the same number of
+application holes at every region. -/
+theorem sourceSiteNodesAt_length
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire)
+    (region : source.val.RegionId) :
+    (sourceSiteNodesAt sites region).length =
+      (aritySitesAt sites region).length := by
+  have permutation := perm_of_nodup_same_membership
+    (aritySiteNodesAt_nodup sites region)
+    (sourceSiteNodesAt_nodup sites region)
+    (fun node => aritySiteNodesAt_mem_iff sites region node)
+  simpa using permutation.length_eq.symm
 
 /-- Canonical finite equivalence from endpoint/site order to source-node
 order for the application holes local to one region. -/
