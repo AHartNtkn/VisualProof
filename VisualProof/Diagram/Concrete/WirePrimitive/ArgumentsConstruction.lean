@@ -901,6 +901,23 @@ def insertAt : List α → Nat → α → List α
   | head :: tail, position + 1, value =>
       head :: insertAt tail position value
 
+/-- Erasing an in-range position and reinserting its exact value cancels. -/
+theorem insertAt_eraseAt_of_getElem?_eq_some
+    (values : List α)
+    (position : Nat)
+    (value : α)
+    (exact : values[position]? = some value) :
+    insertAt (eraseAt values position) position value = values := by
+  induction values generalizing position with
+  | nil => simp at exact
+  | cons head tail induction =>
+      cases position with
+      | zero =>
+          cases tail <;> simp_all [eraseAt, insertAt]
+      | succ position =>
+          simp only [List.getElem?_cons_succ] at exact
+          simp [eraseAt, insertAt, induction position exact]
+
 /-- Select the requested positions in order. -/
 def permute (values : List α) (permutation : List Nat) : List α :=
   permutation.filterMap fun position => values[position]?

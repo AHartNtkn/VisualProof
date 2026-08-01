@@ -1401,6 +1401,48 @@ theorem argExtend_localCount_exact
                               position ((attachments[site.val]?).getD wire) }
                       _ result accepted
 
+/-- A successful argument extension retains the exact inserted relation
+signature selected by the construction. -/
+theorem argExtend_targetArguments_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (position : Nat)
+    (newArgument : Sig)
+    (attachments : List source.val.WireId)
+    (result : ArgumentResult source wire)
+    (accepted :
+      argExtend source wire position newArgument attachments = .ok result) :
+    result.targetArguments =
+      insertAt sourceArguments position newArgument := by
+  unfold argExtend checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  split at accepted <;> try contradiction
+  next valid =>
+    split at accepted <;> try contradiction
+    next sites _ =>
+      split at accepted <;> try contradiction
+      next coverage _ =>
+        split at accepted <;> try contradiction
+        next signatures _ =>
+          split at accepted <;> try contradiction
+          next visible _ =>
+            exact replaceAppliedEnds_targetArguments_exact source wire sites
+              { targetArguments :=
+                  insertAt sourceArguments position newArgument
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    insertAt (sites.sites.get site).arguments position
+                      ((attachments[site.val]?).getD wire) }
+              _ result accepted
+
 end ConcreteWirePrimitive
 
 end VisualProof
