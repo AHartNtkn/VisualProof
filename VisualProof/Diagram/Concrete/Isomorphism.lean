@@ -27,6 +27,32 @@ structure EndpointFiberEquiv
       PortCorresponds left right nodes endpoint.1
         (equivalence endpoint).1
 
+/-- Restrict an existing concrete isomorphism to one incident-endpoint fiber. -/
+def EndpointFiberEquiv.ofIso
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (wire : left.WireId) :
+    EndpointFiberEquiv iso.nodes iso.wires wire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨iso.endpointMap wire endpoint.1,
+          iso.endpointMap_mem wire endpoint.1 endpoint.2⟩
+      invFun := fun candidate =>
+        ⟨iso.endpointInverse wire candidate.1,
+          iso.endpointInverse_mem wire candidate.1 candidate.2⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact iso.endpointMap_left_inv wire endpoint.1 endpoint.2
+      right_inv := by
+        intro candidate
+        apply Subtype.ext
+        exact iso.endpointMap_right_inv wire candidate.1 candidate.2 }
+  corresponds := by
+    intro endpoint
+    exact iso.endpointMap_corresponds wire endpoint.1 endpoint.2
+
 /--
 Assemble a raw concrete isomorphism from exact identifier tables and total
 per-wire endpoint fibers.  This is the non-searching construction boundary;
