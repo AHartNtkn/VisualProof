@@ -1486,6 +1486,59 @@ def wireEquivHeadOnly
   right_inv := result.wireImageHeadOnly_sourceWireHeadOnly sourceRemoved
     localCount
 
+/-- Region carrier of a transported inverse argument run.  The inverse
+construction first returns to its real source, the supplied isomorphism
+lands on the canonical forward target, and the forward construction then
+returns to the original planned source. -/
+def inverseTransportRegionEquiv
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {backwardWire : real.val.WireId}
+    (forward : ArgumentResult planned forwardWire)
+    (backward : ArgumentResult real backwardWire)
+    (targetIso : ConcreteIso real.val forward.checked.val) :
+    Data.Finite.FiniteEquiv backward.checked.val.RegionId
+      planned.val.RegionId :=
+  backward.regionEquiv.symm.trans
+    (targetIso.regions.trans forward.regionEquiv.symm)
+
+/-- Node carrier of a transported inverse argument run, composed solely from
+construction-owned node equivalences and the supplied source isomorphism. -/
+def inverseTransportNodeEquiv
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {backwardWire : real.val.WireId}
+    (forward : ArgumentResult planned forwardWire)
+    (backward : ArgumentResult real backwardWire)
+    (forwardTargetSites :
+      AllAppliedSites forward.checked forward.targetWire)
+    (backwardTargetSites :
+      AllAppliedSites backward.checked backward.targetWire)
+    (targetIso : ConcreteIso real.val forward.checked.val) :
+    Data.Finite.FiniteEquiv backward.checked.val.NodeId planned.val.NodeId :=
+  (backward.nodeEquiv backwardTargetSites).symm.trans
+    (targetIso.nodes.trans (forward.nodeEquiv forwardTargetSites).symm)
+
+/-- Wire carrier of a transported inverse run when both argument
+constructions are head-only. -/
+def inverseTransportWireEquivHeadOnly
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {backwardWire : real.val.WireId}
+    (forward : ArgumentResult planned forwardWire)
+    (backward : ArgumentResult real backwardWire)
+    (forwardSourceRemoved : forward.sourceRemovedWires = [forwardWire])
+    (forwardLocalCount : forward.spec.localCount = 0)
+    (backwardSourceRemoved : backward.sourceRemovedWires = [backwardWire])
+    (backwardLocalCount : backward.spec.localCount = 0)
+    (targetIso : ConcreteIso real.val forward.checked.val) :
+    Data.Finite.FiniteEquiv backward.checked.val.WireId planned.val.WireId :=
+  (backward.wireEquivHeadOnly backwardSourceRemoved
+      backwardLocalCount).symm.trans
+    (targetIso.wires.trans
+      (forward.wireEquivHeadOnly forwardSourceRemoved
+        forwardLocalCount).symm)
+
 end ArgumentResult
 
 end ConcreteWirePrimitive
