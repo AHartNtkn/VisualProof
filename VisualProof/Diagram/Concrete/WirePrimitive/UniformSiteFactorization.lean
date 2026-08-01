@@ -418,6 +418,65 @@ def directAppliedArguments
       | .cut .. => rest
       | .bind .. => rest
 
+/-- Direct matching applications distribute over the concrete compiler's
+ordered item-sequence append. -/
+theorem directAppliedArguments_append
+    (head : Var context (.rel arguments)) :
+    ∀ (left right : ItemSeq definitions context),
+      directAppliedArguments head (left.append right) =
+        directAppliedArguments head left ++
+          directAppliedArguments head right
+  | .nil, right => rfl
+  | .cons item tail, right => by
+      have tailExact := directAppliedArguments_append head tail right
+      cases item with
+      | atom atomHead values =>
+          simp only [ItemSeq.append, directAppliedArguments]
+          split <;> simp [tailExact]
+      | named definition values =>
+          simp only [ItemSeq.append, directAppliedArguments]
+          exact tailExact
+      | identity signature ports atLeastTwo =>
+          simp only [ItemSeq.append, directAppliedArguments]
+          exact tailExact
+      | cut body =>
+          simp only [ItemSeq.append, directAppliedArguments]
+          exact tailExact
+      | bind signature body =>
+          simp only [ItemSeq.append, directAppliedArguments]
+          exact tailExact
+
+/-- A compiled child-region sequence consists only of cut items, so it
+contributes no application hole at its parent region. -/
+theorem directAppliedArguments_compileChildrenWith_eq_nil
+    (head : Var context.sigs (.rel arguments))
+    (children : List diagram.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled :
+      ConcreteElaboration.compileChildrenWith? definitions diagram recurse
+          context children = some items) :
+    directAppliedArguments head items = [] := by
+  induction children generalizing items with
+  | nil =>
+      simp [ConcreteElaboration.compileChildrenWith?] at compiled
+      subst items
+      rfl
+  | cons child tail induction =>
+      simp only [ConcreteElaboration.compileChildrenWith?] at compiled
+      cases childCompiled : recurse child context with
+      | none => simp [childCompiled] at compiled
+      | some body =>
+          cases tailCompiled :
+              ConcreteElaboration.compileChildrenWith? definitions diagram
+                recurse context tail with
+          | none => simp [childCompiled, tailCompiled] at compiled
+          | some rest =>
+              have itemsExact : items = .cons (.cut body) rest := by
+                exact (Option.some.inj (by
+                  simpa [childCompiled, tailCompiled] using compiled)).symm
+              subst items
+              simpa [directAppliedArguments] using induction rest tailCompiled
+
 /-- `abstractAppliedItems` exposes exactly the direct matching applications
 and preserves their item-sequence order. -/
 theorem abstractAppliedItems_holeValues
