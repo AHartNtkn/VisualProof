@@ -1166,14 +1166,6 @@ private structure InverseStepRun
   step : CompiledPrimitiveStep orientation real
   normalizedIso : ConcreteIso step.target.val planned.val
 
-private def selectInverse?
-    (planned : CheckedDiagram definitions)
-    (candidates : List (CompiledPrimitiveStep orientation real)) :
-    Option (InverseStepRun orientation real planned) :=
-  candidates.findSome? fun step =>
-    (ConcreteIsoSearch.findConcreteIso? step.target.val planned.val).map
-      fun normalizedIso => ⟨step, normalizedIso⟩
-
 private def vacuousBoundCandidate
     (plain : CheckedDiagram definitions)
     (site : plain.val.RegionId)
@@ -1190,40 +1182,6 @@ private def vacuousBoundCandidate
       { sig := signature
         scope := site
         endpoints := [] }
-
-private def inverseCandidates
-    {planned : CheckedDiagram definitions}
-    (step : CompiledPrimitiveStep joinOrientation planned)
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    Except CompilerError
-      (List (CompiledPrimitiveStep orientation real)) :=
-  match step with
-  | .identityInsert .. => throw .malformedResidual
-  | .identityErase .. => throw .malformedResidual
-  | .wireSever .. => throw .malformedResidual
-  | .wireJoin .. => throw .malformedResidual
-  | .cutWrap .. => throw .malformedResidual
-  | .cutAbsorb .. => throw .malformedResidual
-  | .parallelSplit .. => throw .malformedResidual
-  | .parallelFuse .. => throw .malformedResidual
-  | .endsDelete .. => throw .malformedResidual
-  | .endsSpawn .. => throw .malformedResidual
-  | .vacuousElim .. => throw .malformedResidual
-  | .vacuousIntro .. => throw .malformedResidual
-  | .arityShift .. => throw .malformedResidual
-  | .arityUnshift .. => throw .malformedResidual
-  | .argPermute .. => throw .malformedResidual
-  | .argDuplicate .. => throw .malformedResidual
-  | .argContract .. => throw .malformedResidual
-  | .argDrop .. => throw .malformedResidual
-  | .argExtend .. => throw .malformedResidual
-  | .applyFormal .. => throw .malformedResidual
-  | .abstractFormal .. => throw .malformedResidual
-  | .identityLeaf .. => throw .malformedResidual
-  | .identityAbstract .. => throw .malformedResidual
-  | .refLeaf .. => throw .malformedResidual
-  | .refAbstract .. => throw .malformedResidual
 
 /-- Positional inverse of a checker-accepted permutation.  Each original
 position is sent to its unique index in the forward permutation. -/
@@ -1426,10 +1384,7 @@ private def invertStep
               ConcreteIsoSearch.findConcreteIso?
                 inverseStep.target.val planned.val
           pure { step := inverseStep, normalizedIso := normalizedIso }
-  | _ => do
-      let candidates ← inverseCandidates step real orientation
-      requireOption .redundancyMismatch <|
-        selectInverse? planned candidates
+  | _ => throw .malformedResidual
 
 private structure ReversedProgram
     (orientation : Orientation)
