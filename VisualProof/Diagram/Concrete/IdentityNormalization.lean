@@ -198,6 +198,19 @@ def normalizeOneIdentity
       | some result => some result
       | none => firstFusion? source
 
+/-- Evidence that a retained trace follows the executable normalization
+priority exactly, rather than merely chaining arbitrary rewrites. -/
+inductive IdentityNormalizationTrace.Valid :
+    {source : CheckedDiagram definitions} →
+      IdentityNormalizationTrace definitions source → Prop
+  | done
+      (exhausted : normalizeOneIdentity source = none) :
+      Valid (.done source)
+  | step
+      (selected : normalizeOneIdentity source = some first)
+      (restValid : Valid rest) :
+      Valid (.step first rest)
+
 private theorem findSome?_provenance
     {items : List α}
     {select : α → Option β}
@@ -308,6 +321,19 @@ def normalizeIdentities
   | none => identityNormalizationRefl source
   | some first =>
       composeNormalization first (normalizeIdentities first.target)
+termination_by source.val.nodeCount
+decreasing_by
+  exact first.nodeCount_lt
+
+/-- The retained chronological trace is exactly the deterministic eager run. -/
+theorem normalizeIdentities_trace_valid
+    (source : CheckedDiagram definitions) :
+    (normalizeIdentities source).trace.Valid := by
+  rw [normalizeIdentities]
+  cases selected : normalizeOneIdentity source with
+  | none => exact .done selected
+  | some first =>
+      exact .step selected (normalizeIdentities_trace_valid first.target)
 termination_by source.val.nodeCount
 decreasing_by
   exact first.nodeCount_lt
