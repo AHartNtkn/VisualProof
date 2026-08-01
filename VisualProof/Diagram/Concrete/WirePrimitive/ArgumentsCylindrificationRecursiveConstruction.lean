@@ -860,6 +860,92 @@ theorem arityShift_compileNode_below_natural
         sourceWire incident)
     sourceCompiled
 
+/-- Ordered retained node sequences below the acted head compile by the
+same recursively extended context action. -/
+theorem arityShift_compileNodes_below_natural
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter :
+      ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    {sourceNodes : List source.val.NodeId}
+    {targetNodes : List result.checked.val.NodeId}
+    (nodes : ArgumentResult.RetainedContext.RetainedNodeList result
+      sourceNodes targetNodes)
+    {sourceItems :
+      ItemSeq definitions (sourceOuter.extend region).sigs}
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceOuter.extend region) sourceNodes = some sourceItems) :
+    ∃ targetItems :
+        ItemSeq definitions
+          (targetOuter.extend (result.regionImage region)).sigs,
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (targetOuter.extend (result.regionImage region)) targetNodes =
+        some targetItems ∧
+      targetItems = sourceItems.renameWires
+        (arityShift_regionEmbedding_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead
+          sourceOuter targetOuter outer) := by
+  induction nodes generalizing sourceItems with
+  | nil =>
+      simp only [ConcreteElaboration.compileNodes?, Option.some.injEq]
+        at sourceCompiled ⊢
+      subst sourceItems
+      exact ⟨.nil, rfl, rfl⟩
+  | @cons sourceTail targetTail sourceNode retained tail induction =>
+      simp only [ConcreteElaboration.compileNodes?] at sourceCompiled ⊢
+      cases sourceHeadEquation :
+          ConcreteElaboration.Internal.compileNode? definitions source.val
+            (sourceOuter.extend region) sourceNode with
+      | none => simp [sourceHeadEquation] at sourceCompiled
+      | some sourceHead =>
+          cases sourceTailEquation :
+              ConcreteElaboration.compileNodes? definitions source.val
+                (sourceOuter.extend region) sourceTail with
+          | none =>
+              simp [sourceHeadEquation, sourceTailEquation] at sourceCompiled
+          | some sourceRest =>
+              have sourceItemsExact :
+                  sourceItems = .cons sourceHead sourceRest := by
+                exact (Option.some.inj (by
+                  simpa [sourceHeadEquation, sourceTailEquation] using
+                    sourceCompiled)).symm
+              subst sourceItems
+              have targetHeadEquation :=
+                arityShift_compileNode_below_natural source wire
+                  sourceArguments sourceSignature newArgument result accepted
+                  region notHead sourceOuter targetOuter outer outerOrigin
+                  targetNodup sourceNode retained sourceHead sourceHeadEquation
+              obtain ⟨targetRest, targetTailEquation, targetRestExact⟩ :=
+                induction sourceTailEquation
+              refine ⟨.cons
+                (sourceHead.renameWires
+                  (arityShift_regionEmbedding_below source wire
+                    sourceArguments sourceSignature newArgument result
+                    accepted region notHead sourceOuter targetOuter outer))
+                targetRest, ?_, ?_⟩
+              · simp [targetHeadEquation, targetTailEquation]
+              · simp [ItemSeq.renameWires, targetRestExact]
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
