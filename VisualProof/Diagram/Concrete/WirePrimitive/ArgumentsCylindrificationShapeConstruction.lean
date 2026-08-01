@@ -761,6 +761,94 @@ theorem LocalCylindricalFrame.compileRetainedNodePair?_complete
     (frame.targetRetainedVisibleContext_nodup newArgument result accepted pair)
     node nodeRetained sourceItem sourceCompiled
 
+/-- The exact retained source subsequence at the acted scope compiles in
+source node order inside the pruned construction context. -/
+theorem LocalCylindricalFrame.compileRetainedSourceNodes?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ∃ items,
+      ConcreteElaboration.compileNodes? definitions source.val
+          (frame.sourceRetainedVisibleContext pair)
+          ((source.val.nodesAt (source.val.wires wire).scope).filter
+            (fun node => decide (node ∉ argumentSiteNodes result.sites))) =
+        some items := by
+  let retainedNodes :=
+    (source.val.nodesAt (source.val.wires wire).scope).filter
+      (fun node => decide (node ∉ argumentSiteNodes result.sites))
+  have members : ∀ node, node ∈ retainedNodes →
+      node ∈ source.val.nodesAt (source.val.wires wire).scope ∧
+        node ∉ argumentSiteNodes result.sites := by
+    intro node member
+    exact ⟨(List.mem_filter.mp member).1,
+      of_decide_eq_true (List.mem_filter.mp member).2⟩
+  have compileList : ∀ nodes : List source.val.NodeId,
+      (∀ node, node ∈ nodes →
+        node ∈ source.val.nodesAt (source.val.wires wire).scope ∧
+          node ∉ argumentSiteNodes result.sites) →
+      ∃ items,
+        ConcreteElaboration.compileNodes? definitions source.val
+            (frame.sourceRetainedVisibleContext pair) nodes = some items := by
+    intro nodes allMembers
+    induction nodes with
+    | nil => exact ⟨.nil, rfl⟩
+    | cons head tail induction =>
+        have headFacts := allMembers head (by simp)
+        obtain ⟨headItem, headCompiled⟩ :=
+          frame.compileRetainedSourceNode?_complete sourceArguments
+            newArgument result accepted pair head headFacts.1 headFacts.2
+        obtain ⟨tailItems, tailCompiled⟩ := induction (by
+          intro node member
+          exact allMembers node (by simp [member]))
+        exact ⟨.cons headItem tailItems, by
+          simp [ConcreteElaboration.compileNodes?, headCompiled, tailCompiled]⟩
+  simpa [retainedNodes] using compileList retainedNodes members
+
+/-- Ordered ordinary nodes at the acted scope compile to the exact canonical
+target retained prefix, pointwise renamed by the retained context. -/
+theorem LocalCylindricalFrame.compileRetainedNodePrefixPair?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ∃ sourceItems targetItems,
+      ConcreteElaboration.compileNodes? definitions source.val
+          (frame.sourceRetainedVisibleContext pair)
+          ((source.val.nodesAt (source.val.wires wire).scope).filter
+            (fun node => decide (node ∉ argumentSiteNodes result.sites))) =
+          some sourceItems ∧
+        ConcreteElaboration.compileNodes? definitions result.checked.val
+            (frame.targetRetainedVisibleContext pair)
+            (((replacementBase result.plan).nodesAt
+                (retainedRegion source (source.val.wires wire).scope)).map
+              (fun retained => ConcreteWireQuantifier.Internal.checkedNode
+                result.generated
+                (Fin.castAdd result.sites.sites.length retained))) =
+          some targetItems ∧
+        targetItems = sourceItems.renameWires
+          (frame.retainedVisibleContext newArgument result accepted pair).wireRenaming := by
+  obtain ⟨sourceItems, sourceCompiled⟩ :=
+    frame.compileRetainedSourceNodes?_complete sourceArguments newArgument
+      result accepted pair
+  obtain ⟨targetItems, targetCompiled, targetExact⟩ :=
+    (frame.retainedVisibleContext newArgument result accepted pair).compileNodes_natural
+      (frame.targetRetainedVisibleContext_nodup newArgument result accepted pair)
+      (ArgumentResult.RetainedContext.nodesAt_retainedPrefix result
+        (source.val.wires wire).scope)
+      sourceCompiled
+  exact ⟨sourceItems, targetItems, sourceCompiled, targetCompiled, targetExact⟩
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled

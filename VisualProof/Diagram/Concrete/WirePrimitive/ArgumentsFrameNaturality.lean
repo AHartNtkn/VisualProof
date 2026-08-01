@@ -936,6 +936,35 @@ noncomputable def RetainedNodeList.ofDense
           (sourceRetainedNode_not_removed result.sites retained)
           induction
 
+/-- At every region, the retained source subsequence is the canonical
+checked retained prefix. Generated replacement nodes are intentionally not
+part of this correspondence. -/
+noncomputable def nodesAt_retainedPrefix
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    RetainedNodeList result
+      ((source.val.nodesAt region).filter
+        (fun node => decide (node ∉ argumentSiteNodes result.sites)))
+      (((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+        Internal.checkedNode result.generated
+          (Fin.castAdd result.sites.sites.length retained))) := by
+  let dense := (replacementBase result.plan).nodesAt
+    (retainedRegion source region)
+  have correspondence := RetainedNodeList.ofDense result dense
+  have baseSources := batchRemovalCandidate_nodesAt_sources
+    result.plan.removal region
+  rw [← retainedRegion_eq_noRegionRemovalEquiv] at baseSources
+  change dense.map (Internal.sourceRetainedNode source
+      (argumentSiteNodes result.sites)) =
+    (source.val.nodesAt region).filter
+      (fun node => decide (node ∉ argumentSiteNodes result.sites))
+    at baseSources
+  rw [baseSources] at correspondence
+  exact correspondence
+
 /-- At any region not enclosed by the acted scope, ordered local node
 identifiers are exactly the retained source nodes and their canonical checked
 images. -/
