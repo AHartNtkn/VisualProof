@@ -286,6 +286,7 @@ structure AppliedArgDrop
   private sourceArguments : List Sig
   private sourceSignature :
     (source.val.wires wire).sig = .rel sourceArguments
+  private source_removed_exact : result.sourceRemovedWires = [wire]
   private ledger :
     ArgumentsSemantics.DropLedger result sourceArguments
   private semantics :
@@ -643,6 +644,35 @@ def targetSites
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.factorization.targetSites
 
+/-- Exact target image of any source wire through argument drop.  The acted
+head is replaced by the checked target head; every other wire is transported
+by the replacement receipt's retained-wire map. -/
+def transportWire
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId) :
+    applied.target.val.WireId :=
+  if same : sourceWire = wire then
+    applied.targetWire
+  else
+    applied.result.retainedWireImage sourceWire (by
+      rw [applied.source_removed_exact]
+      simpa [same])
+
+/-- The exact ordered attachment tuple erased by drop, transported into the
+checked target.  Positions and repeated aliases are preserved. -/
+def targetAttachments
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    List applied.target.val.WireId :=
+  applied.attachments.map applied.transportWire
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -828,39 +858,42 @@ def applyArgDrop
     (orientation : Orientation) :
     Except WireArgumentError
       (AppliedArgDrop source orientation wire position) := do
-  let result ←
-    (ConcreteWirePrimitive.argDrop source wire position).mapError
-      .concreteRejected
-  let attachments :=
-    result.sites.sites.filterMap fun site => site.arguments[position]?
-  let gate ← checkDropGate source orientation wire attachments
-  match sourceSignature : (source.val.wires wire).sig with
-  | .iota => throw .semanticLedgerRejected
-  | .rel sourceArguments =>
-      let ledger ←
-        optionToExcept .semanticLedgerRejected <|
-          ArgumentsSemantics.checkDropLedger result sourceArguments
-            sourceSignature position
-      let semanticCheck :
-          Except WireArgumentError
-            (DropSemanticReceipt (orientation := orientation)
-              (position := position) ledger) :=
-        match gate with
-        | .uniform _ =>
-            match attachments with
-            | [] => throw .semanticLedgerRejected
-            | attachment :: _ => do
-                let fixed ←
-                  optionToExcept .semanticLedgerRejected <|
-                    ArgumentsSemantics.checkFixedDropLedger ledger
-                      attachment position
-                pure (DropSemanticReceipt.uniform fixed)
-        | .gated _ polarity =>
-            pure (DropSemanticReceipt.gated polarity)
-      let semantics ← semanticCheck
-      pure
-        ⟨attachments, gate, result, sourceArguments, sourceSignature,
-          ledger, semantics⟩
+  match accepted : ConcreteWirePrimitive.argDrop source wire position with
+  | .error error => throw (.concreteRejected error)
+  | .ok result =>
+      let attachments :=
+        result.sites.sites.filterMap fun site => site.arguments[position]?
+      let gate ← checkDropGate source orientation wire attachments
+      match sourceSignature : (source.val.wires wire).sig with
+      | .iota => throw .semanticLedgerRejected
+      | .rel sourceArguments =>
+          let ledger ←
+            optionToExcept .semanticLedgerRejected <|
+              ArgumentsSemantics.checkDropLedger result sourceArguments
+                sourceSignature position
+          let semanticCheck :
+              Except WireArgumentError
+                (DropSemanticReceipt (orientation := orientation)
+                  (position := position) ledger) :=
+            match gate with
+            | .uniform _ =>
+                match attachments with
+                | [] => throw .semanticLedgerRejected
+                | attachment :: _ => do
+                    let fixed ←
+                      optionToExcept .semanticLedgerRejected <|
+                        ArgumentsSemantics.checkFixedDropLedger ledger
+                          attachment position
+                    pure (DropSemanticReceipt.uniform fixed)
+            | .gated _ polarity =>
+                pure (DropSemanticReceipt.gated polarity)
+          let semantics ← semanticCheck
+          let sourceRemovedExact :=
+            ConcreteWirePrimitive.argDrop_sourceRemovedWires_exact
+              source wire position result accepted
+          pure
+            ⟨attachments, gate, result, sourceArguments, sourceSignature,
+              sourceRemovedExact, ledger, semantics⟩
 
 def applyArgExtend
     (source : CheckedDiagram definitions)

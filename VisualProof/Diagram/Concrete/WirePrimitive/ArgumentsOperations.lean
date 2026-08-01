@@ -829,6 +829,61 @@ def argDrop
     exact head_only_removed_exhausted sites sourceWire
       (by simpa [spec] using removed) endpoint incident)
 
+/-- Argument drop deletes exactly its acted relation head and no ambient
+wire. -/
+theorem argDrop_sourceRemovedWires_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argDrop source wire position = .ok result) :
+  result.sourceRemovedWires = [wire] := by
+  unfold argDrop at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validPosition relationArguments position then
+            .error .invalidPosition
+          else do
+            let sites ← checkedArgumentSites source wire
+            let spec : ReplacementSpec source wire sites :=
+              { targetArguments := eraseAt relationArguments position
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    eraseAt (sites.sites.get site).arguments position }
+            replaceAppliedEnds source wire sites spec _) =
+          .ok result at accepted
+      cases valid : validPosition relationArguments position with
+      | false => simp [valid] at accepted
+      | true =>
+        simp [valid] at accepted
+        cases sitesAccepted : checkedArgumentSites source wire with
+        | error error =>
+            rw [sitesAccepted] at accepted
+            contradiction
+        | ok sites =>
+            rw [sitesAccepted] at accepted
+            have exact :=
+              replaceAppliedEnds_sourceRemovedWires_exact source wire sites
+                { targetArguments := eraseAt relationArguments position
+                  removedWires := []
+                  localCount := 0
+                  localSignature := Fin.elim0
+                  localScope := Fin.elim0
+                  arguments := fun site =>
+                    existingReferences <|
+                      eraseAt (sites.sites.get site).arguments position }
+                _ result accepted
+            simpa using exact
+
 /-- Insert one caller-selected visible attachment at every applied end. -/
 def argExtend
     (source : CheckedDiagram definitions)
