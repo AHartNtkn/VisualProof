@@ -636,6 +636,57 @@ def nodeEquiv
     (nodeForward occurrence removed attachment empty)
     (nodeForward_bijective occurrence removed attachment empty exact)
 
+/--
+Port renaming owned by one allocated reconstruction node. Retained nodes keep
+their concrete storage positions; copied identity nodes use the occurrence's
+positional owner equivalence.
+-/
+private noncomputable def allocatedPortEquiv
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (node : attachment.diagram.NodeId) :
+    Data.Finite.FiniteEquiv CPort CPort :=
+  Fin.addCases
+    (fun _ => Data.Finite.FiniteEquiv.refl _)
+    (Fin.addCases
+      (fun source => occurrence.portEquivForNode source)
+      (eliminateIdentityRequest attachment empty))
+    node
+
+/-- Total splice-wide endpoint transport before restriction to wire fibers. -/
+private noncomputable def endpointEquiv
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (nodesExact : NodesExact occurrence) :
+    Data.Finite.FiniteEquiv
+      (CEndpoint attachment.diagram.nodeCount)
+      (CEndpoint host.val.nodeCount) where
+  toFun := fun endpoint =>
+    ⟨nodeEquiv occurrence removed attachment empty nodesExact endpoint.node,
+      allocatedPortEquiv occurrence removed attachment empty endpoint.node
+        endpoint.port⟩
+  invFun := fun candidate =>
+    let node :=
+      (nodeEquiv occurrence removed attachment empty nodesExact).symm
+        candidate.node
+    ⟨node,
+      (allocatedPortEquiv occurrence removed attachment empty node).symm
+        candidate.port⟩
+  left_inv := by
+    rintro ⟨node, port⟩
+    simp only [Data.Finite.FiniteEquiv.symm_apply_apply]
+  right_inv := by
+    rintro ⟨node, port⟩
+    simp only [Data.Finite.FiniteEquiv.apply_symm_apply]
+
 private def wireForward
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
@@ -916,6 +967,79 @@ private theorem nodeEquiv_fragmentNode
           (Fin.castAdd attachment.identityRequests.length node) :=
       Fin.addCases_right _
     _ = occurrence.nodeMap node := Fin.addCases_left node
+
+private theorem allocatedPortEquiv_hostNode
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (node : removed.complement.val.NodeId) :
+    allocatedPortEquiv occurrence removed attachment empty
+        (attachment.hostNode node) =
+      Data.Finite.FiniteEquiv.refl CPort := by
+  unfold allocatedPortEquiv ConcreteSpliceAttachment.hostNode
+  exact Fin.addCases_left node
+
+private theorem allocatedPortEquiv_fragmentNode
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (node : pattern.val.diagram.NodeId) :
+    allocatedPortEquiv occurrence removed attachment empty
+        (attachment.fragmentNode node) =
+      occurrence.portEquivForNode node := by
+  have allocated :
+      attachment.fragmentNode node =
+        Fin.natAdd removed.complement.val.nodeCount
+          (Fin.castAdd attachment.identityRequests.length node) :=
+    Fin.ext (by simp [ConcreteSpliceAttachment.fragmentNode])
+  rw [allocated]
+  unfold allocatedPortEquiv
+  rw [Fin.addCases_right]
+  exact Fin.addCases_left node
+
+private theorem endpointEquiv_hostEndpoint
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (nodesExact : NodesExact occurrence)
+    (endpoint : CEndpoint removed.complement.val.nodeCount) :
+    endpointEquiv occurrence removed attachment empty nodesExact
+        (attachment.hostEndpoint endpoint) =
+      Removal.sourceEndpoint occurrence endpoint := by
+  rcases endpoint with ⟨node, port⟩
+  simp only [endpointEquiv, ConcreteSpliceAttachment.hostEndpoint,
+    Removal.sourceEndpoint]
+  rw [nodeEquiv_hostNode occurrence removed attachment empty nodesExact]
+  rw [allocatedPortEquiv_hostNode occurrence removed attachment empty]
+  rfl
+
+private theorem endpointEquiv_fragmentEndpoint
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (nodesExact : NodesExact occurrence)
+    (endpoint : CEndpoint pattern.val.diagram.nodeCount) :
+    endpointEquiv occurrence removed attachment empty nodesExact
+        (attachment.fragmentEndpoint endpoint) =
+      occurrence.endpointMapForNode endpoint
+        := by
+  rcases endpoint with ⟨node, port⟩
+  simp only [endpointEquiv, ConcreteSpliceAttachment.fragmentEndpoint,
+    Occurrence.endpointMapForNode]
+  rw [nodeEquiv_fragmentNode occurrence removed attachment empty nodesExact]
+  rw [allocatedPortEquiv_fragmentNode occurrence removed attachment empty]
 
 private theorem wireEquiv_hostWire
     (occurrence : Occurrence pattern host)
@@ -1244,17 +1368,15 @@ theorem occurrenceEndpointMap_mem
     (occurrence : Occurrence pattern host)
     (wire : pattern.val.diagram.WireId)
     (endpoint : CEndpoint pattern.val.diagram.nodeCount)
-    (data : CNode pattern.val.diagram.regionCount definitions.length)
-    (nodeData : pattern.val.diagram.nodes endpoint.node = data)
     (incident : endpoint ∈ (pattern.val.diagram.wires wire).endpoints) :
-    occurrence.endpointMapForNode endpoint data nodeData ∈
+    occurrence.endpointMapForNode endpoint ∈
       (host.val.wires (occurrence.wireMap wire)).endpoints := by
   have required :=
     ConcreteDiagram.incident_port_required _ pattern.val.diagram
       pattern.property.diagram wire endpoint incident
   cases endpoint with
   | mk node port =>
-      cases data with
+      cases nodeData : pattern.val.diagram.nodes node with
       | identity region sig arity =>
           have sourceNode :
               pattern.val.diagram.nodes node = .identity region sig arity :=
@@ -1280,7 +1402,11 @@ theorem occurrenceEndpointMap_mem
                   ((occurrence.identityPortEquiv node region sig arity
                     sourceNode) ⟨index, boundLt⟩).val⟩
               (occurrence.wireMap wire) targetOwner
-          simpa [Occurrence.endpointMapForNode, boundLt] using targetIncident
+          simpa [Occurrence.endpointMapForNode,
+            Occurrence.portEquivForNode_identity occurrence node region sig
+              arity sourceNode,
+            Occurrence.identityCPortEquiv,
+            boundLt] using targetIncident
       | atom region args =>
           have sourceNode :
               pattern.val.diagram.nodes node = .atom region args := nodeData
@@ -1290,11 +1416,12 @@ theorem occurrenceEndpointMap_mem
               incident with
             ⟨candidate, candidateIncident, sameKey⟩
           have candidateExact :
-              candidate = occurrence.endpointMapForNode ⟨node, port⟩
-                (.atom region args) sourceNode := by
+              candidate = occurrence.endpointMapForNode ⟨node, port⟩ := by
             rcases candidate with ⟨candidateNode, candidatePort⟩
             simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
-              Occurrence.endpointMapForNode, sourceNode] at sameKey ⊢
+              Occurrence.endpointMapForNode,
+              Occurrence.portEquivForNode_atom occurrence node region args
+                sourceNode] at sameKey ⊢
             rcases sameKey with ⟨nodeExact, portExact⟩
             subst candidateNode
             cases port <;> cases candidatePort <;>
@@ -1310,16 +1437,127 @@ theorem occurrenceEndpointMap_mem
               incident with
             ⟨candidate, candidateIncident, sameKey⟩
           have candidateExact :
-              candidate = occurrence.endpointMapForNode ⟨node, port⟩
-                (.ref region definition args) sourceNode := by
+              candidate = occurrence.endpointMapForNode ⟨node, port⟩ := by
             rcases candidate with ⟨candidateNode, candidatePort⟩
             simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
-              Occurrence.endpointMapForNode, sourceNode] at sameKey ⊢
+              Occurrence.endpointMapForNode,
+              Occurrence.portEquivForNode_ref occurrence node region
+                definition args sourceNode] at sameKey ⊢
             rcases sameKey with ⟨nodeExact, portExact⟩
             subst candidateNode
             cases port <;> cases candidatePort <;>
               simp_all [OccurrencePort.ofConcrete]
           simpa [candidateExact] using candidateIncident
+
+/-- Positional occurrence transport preserves the semantic endpoint key. -/
+private theorem occurrenceEndpointMap_key
+    (occurrence : Occurrence pattern host)
+    (wire : pattern.val.diagram.WireId)
+    (endpoint : CEndpoint pattern.val.diagram.nodeCount)
+    (incident : endpoint ∈ (pattern.val.diagram.wires wire).endpoints) :
+    mappedOccurrenceEndpointKey occurrence.nodeMap endpoint =
+      occurrenceEndpointKey (occurrence.endpointMapForNode endpoint) := by
+  have required :=
+    ConcreteDiagram.incident_port_required _ pattern.val.diagram
+      pattern.property.diagram wire endpoint incident
+  rcases endpoint with ⟨node, port⟩
+  unfold Occurrence.endpointMapForNode
+  cases nodeData : pattern.val.diagram.nodes node with
+  | atom region args =>
+      rw [Occurrence.portEquivForNode_atom occurrence node region args
+        nodeData]
+      simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
+        Occurrence.endpointMapForNode]
+  | ref region definition args =>
+      rw [Occurrence.portEquivForNode_ref occurrence node region definition
+        args nodeData]
+      simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
+        Occurrence.endpointMapForNode]
+  | identity region sig arity =>
+      rw [Occurrence.portEquivForNode_identity occurrence node region sig
+        arity nodeData]
+      have requiredIdentity :
+          port ∈ (List.range arity).map CPort.identity := by
+        simpa [ConcreteDiagram.requiredPorts, nodeData] using required
+      obtain ⟨index, bound, portExact⟩ := List.mem_map.mp requiredIdentity
+      have boundLt : index < arity := List.mem_range.mp bound
+      subst port
+      simp [mappedOccurrenceEndpointKey, occurrenceEndpointKey,
+        Occurrence.endpointMapForNode, Occurrence.identityCPortEquiv,
+        boundLt, OccurrencePort.ofConcrete]
+
+/-- The splice-wide positional endpoint transport lands on the exact wire. -/
+private theorem endpointEquiv_mem
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (accepted :
+      reconstructionAttachment? occurrence removed = some attachment)
+    (empty : attachment.identityRequests = [])
+    (nodesExact : NodesExact occurrence)
+    (wiresExact : WiresExact occurrence)
+    (wire : attachment.diagram.WireId)
+    (endpoint : CEndpoint attachment.diagram.nodeCount)
+    (member : endpoint ∈ (attachment.diagram.wires wire).endpoints) :
+    endpointEquiv occurrence removed attachment empty nodesExact endpoint ∈
+      (host.val.wires
+        (wireEquiv occurrence removed attachment wiresExact wire)).endpoints := by
+  have generatedCase :
+      ∀ candidateWire generatedEndpoint,
+        generatedEndpoint ∈ attachment.generatedEndpoints candidateWire →
+          endpointEquiv occurrence removed attachment empty nodesExact
+              generatedEndpoint ∈
+            (host.val.wires
+              (wireEquiv occurrence removed attachment wiresExact
+                candidateWire)).endpoints := by
+    intro candidateWire generatedEndpoint generatedMember
+    rcases attachment.generatedEndpoint_origin empty candidateWire
+        generatedEndpoint generatedMember with
+      ⟨sourceWire, sourceEndpoint, sourceIncident, mappedWire,
+        mappedEndpoint⟩
+    subst generatedEndpoint
+    rw [endpointEquiv_fragmentEndpoint occurrence removed attachment empty
+      nodesExact]
+    have landed := occurrenceEndpointMap_mem occurrence sourceWire
+      sourceEndpoint (by simpa [] using sourceIncident)
+    have mappedHostWire :
+        wireEquiv occurrence removed attachment wiresExact candidateWire =
+          occurrence.wireMap sourceWire := by
+      rw [← mappedWire]
+      exact wireEquiv_fragmentWire occurrence removed attachment accepted
+        wiresExact sourceWire
+    simpa [mappedHostWire] using landed
+  revert endpoint
+  refine Fin.addCases ?_ ?_ wire
+  · intro retained endpoint member
+    unfold ConcreteSpliceAttachment.diagram
+      ConcreteSpliceAttachment.wireTable at member
+    simp only [ConcreteSpliceAttachment.hostWire,
+      Fin.addCases_left] at member
+    rcases List.mem_append.mp member with retainedMember | generatedMember
+    · rcases List.mem_map.mp retainedMember with
+        ⟨sourceEndpoint, sourceIncident, rfl⟩
+      rw [endpointEquiv_hostEndpoint occurrence removed attachment empty
+        nodesExact]
+      change
+        Removal.sourceEndpoint occurrence sourceEndpoint ∈
+          (host.val.wires
+            (wireEquiv occurrence removed attachment wiresExact
+              (attachment.hostWire retained))).endpoints
+      rw [wireEquiv_hostWire occurrence removed attachment wiresExact]
+      exact
+        (Removal.diagramEndpoint_mem_iff occurrence retained sourceEndpoint).mp
+          sourceIncident
+    · exact generatedCase (attachment.hostWire retained) endpoint
+        generatedMember
+  · intro fresh endpoint member
+    unfold ConcreteSpliceAttachment.diagram
+      ConcreteSpliceAttachment.wireTable at member
+    simp only [ConcreteSpliceAttachment.freshWire,
+      Fin.addCases_right] at member
+    exact generatedCase (attachment.freshWire fresh) endpoint member
 /-- Exact reconstructed region table under the construction-owned correspondence. -/
 theorem regionTable_exact
     (occurrence : Occurrence pattern host)
@@ -1965,6 +2203,134 @@ private theorem occurrenceEndpoint_backward_selected
             simp [sourceEndpoint, sourceNodeMap, candidatePort,
               OccurrencePort.ofConcrete]⟩
 
+/-- Selected host incidences invert the positional occurrence endpoint map. -/
+private theorem occurrenceEndpoint_backward_selected_positional
+    (occurrence : Occurrence pattern host)
+    (nodesExact : NodesExact occurrence)
+    (hostWire : host.val.WireId)
+    (candidate : CEndpoint host.val.nodeCount)
+    (incident : candidate ∈ (host.val.wires hostWire).endpoints)
+    (selected : candidate.node ∈ occurrence.toSelection.allNodes) :
+    ∃ sourceWire : pattern.val.diagram.WireId,
+      ∃ sourceEndpoint : CEndpoint pattern.val.diagram.nodeCount,
+        sourceEndpoint ∈
+            (pattern.val.diagram.wires sourceWire).endpoints ∧
+          occurrence.wireMap sourceWire = hostWire ∧
+          occurrence.endpointMapForNode sourceEndpoint =
+            candidate := by
+  let sourceNode := Classical.choose ((nodesExact candidate.node).mp selected)
+  have sourceNodeMap : occurrence.nodeMap sourceNode = candidate.node :=
+    Classical.choose_spec ((nodesExact candidate.node).mp selected)
+  have candidateRequired :=
+    ConcreteDiagram.incident_port_required _ host.val host.property
+      hostWire candidate incident
+  cases sourceData : pattern.val.diagram.nodes sourceNode with
+  | atom region args =>
+      rcases occurrenceEndpoint_backward_selected occurrence nodesExact
+          hostWire candidate incident selected with
+        ⟨sourceWire, sourceEndpoint, sourceIncident, wireExact, keyExact⟩
+      have endpointNode : sourceEndpoint.node = sourceNode := by
+        apply occurrence.nodeMap_injective
+        exact (congrArg Prod.fst keyExact).trans sourceNodeMap.symm
+      rcases sourceEndpoint with ⟨sourceEndpointNode, sourcePort⟩
+      simp only at endpointNode
+      subst sourceEndpointNode
+      refine ⟨sourceWire, ⟨sourceNode, sourcePort⟩, sourceIncident,
+        wireExact, ?_⟩
+      have sourceRequired :=
+        ConcreteDiagram.incident_port_required _ pattern.val.diagram
+          pattern.property.diagram sourceWire ⟨sourceNode, sourcePort⟩
+            sourceIncident
+      simp [ConcreteDiagram.requiredPorts, sourceData] at sourceRequired
+      rcases candidate with ⟨candidateNode, candidatePort⟩
+      simp only [mappedOccurrenceEndpointKey, occurrenceEndpointKey] at keyExact
+      have portExact := congrArg Prod.snd keyExact
+      simp [Occurrence.endpointMapForNode,
+        Occurrence.portEquivForNode_atom occurrence sourceNode region args
+          sourceData,
+        sourceNodeMap]
+      cases sourcePort <;> cases candidatePort <;>
+        simp_all [OccurrencePort.ofConcrete]
+  | ref region definition args =>
+      rcases occurrenceEndpoint_backward_selected occurrence nodesExact
+          hostWire candidate incident selected with
+        ⟨sourceWire, sourceEndpoint, sourceIncident, wireExact, keyExact⟩
+      have endpointNode : sourceEndpoint.node = sourceNode := by
+        apply occurrence.nodeMap_injective
+        exact (congrArg Prod.fst keyExact).trans sourceNodeMap.symm
+      rcases sourceEndpoint with ⟨sourceEndpointNode, sourcePort⟩
+      simp only at endpointNode
+      subst sourceEndpointNode
+      refine ⟨sourceWire, ⟨sourceNode, sourcePort⟩, sourceIncident,
+        wireExact, ?_⟩
+      have sourceRequired :=
+        ConcreteDiagram.incident_port_required _ pattern.val.diagram
+          pattern.property.diagram sourceWire ⟨sourceNode, sourcePort⟩
+            sourceIncident
+      simp [ConcreteDiagram.requiredPorts, sourceData] at sourceRequired
+      rcases candidate with ⟨candidateNode, candidatePort⟩
+      simp only [mappedOccurrenceEndpointKey, occurrenceEndpointKey] at keyExact
+      have portExact := congrArg Prod.snd keyExact
+      simp [Occurrence.endpointMapForNode,
+        Occurrence.portEquivForNode_ref occurrence sourceNode region definition
+          args sourceData,
+        sourceNodeMap]
+      cases sourcePort <;> cases candidatePort <;>
+        simp_all [OccurrencePort.ofConcrete]
+  | identity region sig arity =>
+      have nodeCorresponds := occurrence.node_correspondence sourceNode
+      simp [OccurrenceNodeCorresponds, sourceData] at nodeCorresponds
+      have hostData :
+          host.val.nodes candidate.node =
+            .identity (occurrence.regionMap region) sig arity := by
+        rw [← sourceNodeMap]
+        exact nodeCorresponds
+      obtain ⟨candidateIndex, candidateBound, candidatePort⟩ := by
+        simpa [ConcreteDiagram.requiredPorts, hostData] using
+          candidateRequired
+      have targetOwner :=
+        ConcreteDiagram.endpointOwner?_eq_of_incident _ host.val host.property
+          candidate.node candidate.port candidateRequired hostWire incident
+      have targetOwnerAtIndex :
+          host.val.endpointOwner?
+              ⟨occurrence.nodeMap sourceNode,
+                .identity candidateIndex⟩ = some hostWire := by
+        simpa [sourceNodeMap, candidatePort] using targetOwner
+      let targetIndex : Fin arity := ⟨candidateIndex, candidateBound⟩
+      rcases occurrence.identityPortEquiv_symm_owner sourceNode region sig
+          arity sourceData targetIndex hostWire targetOwnerAtIndex with
+        ⟨sourceWire, sourceOwner, wireExact⟩
+      let sourceIndex :=
+        (occurrence.identityPortEquiv sourceNode region sig arity sourceData).symm
+          targetIndex
+      let sourceEndpoint : CEndpoint pattern.val.diagram.nodeCount :=
+        ⟨sourceNode, .identity sourceIndex.val⟩
+      have sourceIncident :
+          sourceEndpoint ∈
+            (pattern.val.diagram.wires sourceWire).endpoints :=
+        ConcreteDiagram.endpointOwner?_incident pattern.val.diagram
+          sourceEndpoint sourceWire (by simpa [sourceEndpoint, sourceIndex]
+            using sourceOwner)
+      refine ⟨sourceWire, sourceEndpoint, sourceIncident, wireExact, ?_⟩
+      have forwardIndex :
+          occurrence.identityPortEquiv sourceNode region sig arity sourceData
+              sourceIndex = targetIndex :=
+        Data.Finite.FiniteEquiv.apply_symm_apply
+          (occurrence.identityPortEquiv sourceNode region sig arity sourceData)
+          targetIndex
+      have candidateExact :
+          candidate = ⟨candidate.node, .identity candidateIndex⟩ := by
+        rcases candidate with ⟨candidateNode, candidatePortValue⟩
+        simp only at candidatePort ⊢
+        subst candidatePortValue
+        rfl
+      rw [candidateExact]
+      simp [sourceEndpoint, Occurrence.endpointMapForNode,
+        Occurrence.portEquivForNode_identity occurrence sourceNode region sig
+          arity sourceData,
+        Occurrence.identityCPortEquiv,
+        sourceIndex.isLt, forwardIndex, sourceNodeMap, targetIndex]
+
 private theorem generatedEndpoint_mem_diagram
     (attachment : ConcreteSpliceAttachment base site fragment)
     (wire : attachment.diagram.WireId)
@@ -2011,6 +2377,228 @@ private theorem unselected_incident_wire_not_internal
   apply (nodesExact candidate.node).mpr
   refine ⟨sourceEndpoint.node, ?_⟩
   exact congrArg Prod.fst sameKey
+
+/-- Exact per-wire incidence preservation by the splice-wide endpoint map. -/
+private theorem endpointEquiv_mem_iff
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (accepted :
+      reconstructionAttachment? occurrence removed = some attachment)
+    (empty : attachment.identityRequests = [])
+    (nodesExact : NodesExact occurrence)
+    (wiresExact : WiresExact occurrence)
+    (wire : attachment.diagram.WireId)
+    (endpoint : CEndpoint attachment.diagram.nodeCount) :
+    endpointEquiv occurrence removed attachment empty nodesExact endpoint ∈
+          (host.val.wires
+            (wireEquiv occurrence removed attachment wiresExact wire)).endpoints ↔
+      endpoint ∈ (attachment.diagram.wires wire).endpoints := by
+  constructor
+  · intro incident
+    let candidate :=
+      endpointEquiv occurrence removed attachment empty nodesExact endpoint
+    by_cases selected :
+        candidate.node ∈ occurrence.toSelection.allNodes
+    · rcases occurrenceEndpoint_backward_selected_positional occurrence
+          nodesExact
+          (wireEquiv occurrence removed attachment wiresExact wire)
+          candidate incident selected with
+        ⟨sourceWire, sourceEndpoint, sourceIncident, sourceWireMap,
+          sourceEndpointMap⟩
+      have mappedWire : attachment.fragmentWire sourceWire = wire := by
+        apply (wireEquiv occurrence removed attachment wiresExact).injective
+        rw [wireEquiv_fragmentWire occurrence removed attachment accepted
+          wiresExact sourceWire]
+        exact sourceWireMap
+      have generated := attachment.fragmentEndpoint_mem_generated empty
+        sourceWire sourceEndpoint (by simpa [] using sourceIncident)
+      rw [mappedWire] at generated
+      have fragmentIncident := generatedEndpoint_mem_diagram attachment wire
+        (attachment.fragmentEndpoint sourceEndpoint) generated
+      have endpointExact :
+          endpoint = attachment.fragmentEndpoint sourceEndpoint := by
+        apply
+          (endpointEquiv occurrence removed attachment empty nodesExact).injective
+        rw [endpointEquiv_fragmentEndpoint occurrence removed attachment empty
+          nodesExact]
+        exact sourceEndpointMap.symm
+      rwa [endpointExact]
+    · let mappedHostWire :=
+        wireEquiv occurrence removed attachment wiresExact wire
+      have notInternal :
+          mappedHostWire ∉ occurrence.toSelection.internalWires :=
+        unselected_incident_wire_not_internal occurrence nodesExact wiresExact
+          mappedHostWire candidate incident selected
+      have retainedWire : mappedHostWire ∈ Removal.wires occurrence :=
+        retainedWire_of_not_internal occurrence notInternal
+      let baseWire :=
+        Removal.wireIndex occurrence mappedHostWire retainedWire
+      have baseWireSource :
+          Removal.sourceWire occurrence baseWire = mappedHostWire :=
+        Removal.sourceWire_wireIndex occurrence mappedHostWire retainedWire
+      have allocatedWire : attachment.hostWire baseWire = wire := by
+        apply (wireEquiv occurrence removed attachment wiresExact).injective
+        rw [wireEquiv_hostWire occurrence removed attachment wiresExact]
+        exact baseWireSource
+      have retainedNode : candidate.node ∈ Removal.nodes occurrence :=
+        retainedNode_of_not_selected occurrence selected
+      let sourceEndpoint : CEndpoint removed.complement.val.nodeCount :=
+        ⟨Removal.nodeIndex occurrence candidate.node retainedNode,
+          candidate.port⟩
+      have sourceEndpointMap :
+          Removal.sourceEndpoint occurrence sourceEndpoint = candidate :=
+        Removal.sourceEndpoint_index occurrence candidate retainedNode
+      have sourceIncident :
+          sourceEndpoint ∈
+            (removed.complement.val.wires baseWire).endpoints := by
+        apply (Removal.diagramEndpoint_mem_iff occurrence baseWire
+          sourceEndpoint).mpr
+        rw [sourceEndpointMap, baseWireSource]
+        exact incident
+      have allocatedIncident :
+          attachment.hostEndpoint sourceEndpoint ∈
+            (attachment.diagram.wires
+              (attachment.hostWire baseWire)).endpoints := by
+        unfold ConcreteSpliceAttachment.diagram
+          ConcreteSpliceAttachment.wireTable
+        simp only [ConcreteSpliceAttachment.hostWire, Fin.addCases_left]
+        exact List.mem_append_left _
+          (List.mem_map.mpr ⟨sourceEndpoint, sourceIncident, rfl⟩)
+      rw [allocatedWire] at allocatedIncident
+      have endpointExact :
+          endpoint = attachment.hostEndpoint sourceEndpoint := by
+        apply
+          (endpointEquiv occurrence removed attachment empty nodesExact).injective
+        rw [endpointEquiv_hostEndpoint occurrence removed attachment empty
+          nodesExact]
+        exact sourceEndpointMap.symm
+      rwa [endpointExact]
+  · exact endpointEquiv_mem occurrence removed attachment accepted empty
+      nodesExact wiresExact wire endpoint
+
+private theorem endpointEquiv_corresponds
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (regionsExact : RegionsExact occurrence)
+    (nodesExact : NodesExact occurrence)
+    (wire : attachment.diagram.WireId)
+    (endpoint : CEndpoint attachment.diagram.nodeCount)
+    (member : endpoint ∈ (attachment.diagram.wires wire).endpoints) :
+    PortCorresponds attachment.diagram host.val
+      (nodeEquiv occurrence removed attachment empty nodesExact)
+      endpoint
+      (endpointEquiv occurrence removed attachment empty nodesExact endpoint) := by
+  have generatedCase :
+      ∀ candidateWire generatedEndpoint,
+        generatedEndpoint ∈ attachment.generatedEndpoints candidateWire →
+          PortCorresponds attachment.diagram host.val
+            (nodeEquiv occurrence removed attachment empty nodesExact)
+            generatedEndpoint
+            (endpointEquiv occurrence removed attachment empty nodesExact
+              generatedEndpoint) := by
+    intro candidateWire generatedEndpoint generatedMember
+    rcases attachment.generatedEndpoint_origin empty candidateWire
+        generatedEndpoint generatedMember with
+      ⟨sourceWire, sourceEndpoint, sourceIncident, mappedWire,
+        mappedEndpoint⟩
+    subst generatedEndpoint
+    rw [endpointEquiv_fragmentEndpoint occurrence removed attachment empty
+      nodesExact]
+    apply fragmentEndpoint_corresponds_of_key occurrence removed attachment
+      empty nodesExact sourceEndpoint
+      (occurrence.endpointMapForNode sourceEndpoint)
+    · exact
+        ConcreteDiagram.incident_port_required _ pattern.val.diagram
+          pattern.property.diagram sourceWire sourceEndpoint
+            (by simpa [] using sourceIncident)
+    · exact occurrenceEndpointMap_key occurrence sourceWire sourceEndpoint
+        (by simpa [] using sourceIncident)
+  revert endpoint
+  refine Fin.addCases ?_ ?_ wire
+  · intro retained endpoint member
+    unfold ConcreteSpliceAttachment.diagram
+      ConcreteSpliceAttachment.wireTable at member
+    simp only [ConcreteSpliceAttachment.hostWire,
+      Fin.addCases_left] at member
+    rcases List.mem_append.mp member with retainedMember | generatedMember
+    · rcases List.mem_map.mp retainedMember with
+        ⟨sourceEndpoint, sourceIncident, rfl⟩
+      rw [endpointEquiv_hostEndpoint occurrence removed attachment empty
+        nodesExact]
+      apply hostEndpoint_corresponds occurrence removed attachment empty
+        regionsExact nodesExact sourceEndpoint
+      exact
+        ConcreteDiagram.incident_port_required _ removed.complement.val
+          removed.complement.property retained sourceEndpoint sourceIncident
+    · exact generatedCase (attachment.hostWire retained) endpoint
+        generatedMember
+  · intro fresh endpoint member
+    unfold ConcreteSpliceAttachment.diagram
+      ConcreteSpliceAttachment.wireTable at member
+    simp only [ConcreteSpliceAttachment.freshWire,
+      Fin.addCases_right] at member
+    exact generatedCase (attachment.freshWire fresh) endpoint member
+
+/-- Total construction-owned endpoint equivalence for one reconstructed wire. -/
+private noncomputable def endpointFiberEquiv
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (accepted :
+      reconstructionAttachment? occurrence removed = some attachment)
+    (empty : attachment.identityRequests = [])
+    (regionsExact : RegionsExact occurrence)
+    (nodesExact : NodesExact occurrence)
+    (wiresExact : WiresExact occurrence)
+    (wire : attachment.diagram.WireId) :
+    ConcreteIso.EndpointFiberEquiv
+      (nodeEquiv occurrence removed attachment empty nodesExact)
+      (wireEquiv occurrence removed attachment wiresExact) wire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨endpointEquiv occurrence removed attachment empty nodesExact
+            endpoint.1,
+          endpointEquiv_mem occurrence removed attachment accepted empty
+            nodesExact wiresExact wire endpoint.1 endpoint.2⟩
+      invFun := fun candidate =>
+        let source :=
+          (endpointEquiv occurrence removed attachment empty nodesExact).symm
+            candidate.1
+        ⟨source, (endpointEquiv_mem_iff occurrence removed attachment
+          accepted empty nodesExact wiresExact wire source).mp (by
+            have mapped :
+                endpointEquiv occurrence removed attachment empty nodesExact
+                    source = candidate.1 :=
+              Data.Finite.FiniteEquiv.apply_symm_apply
+                (endpointEquiv occurrence removed attachment empty nodesExact)
+                candidate.1
+            rw [mapped]
+            exact candidate.2)⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact Data.Finite.FiniteEquiv.symm_apply_apply
+          (endpointEquiv occurrence removed attachment empty nodesExact)
+          endpoint.1
+      right_inv := by
+        intro candidate
+        apply Subtype.ext
+        exact Data.Finite.FiniteEquiv.apply_symm_apply
+          (endpointEquiv occurrence removed attachment empty nodesExact)
+          candidate.1 }
+  corresponds := by
+    intro endpoint
+    exact endpointEquiv_corresponds occurrence removed attachment empty
+      regionsExact nodesExact wire endpoint.1 endpoint.2
 
 /-- Every source endpoint has an exact reconstructed endpoint correspondence. -/
 theorem endpointBackward_exact
@@ -2125,7 +2713,7 @@ theorem endpointBackward_exact
 An exact occurrence, partial removal, and acceptance of the reconstruction
 attachment reconstruct the raw host diagram before any normalization.
 -/
-def extract_splice_iso?
+noncomputable def extract_splice_iso
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -2134,7 +2722,7 @@ def extract_splice_iso?
     (accepted :
       reconstructionAttachment? occurrence removed =
         some attachment) :
-    Option (ConcreteIso attachment.diagram host.val) := by
+    ConcreteIso attachment.diagram host.val := by
   have regionsExact : RegionsExact occurrence :=
     fun region =>
       occurrence.mem_toSelection_allRegions_iff_image region
@@ -2147,10 +2735,38 @@ def extract_splice_iso?
   have empty :
       attachment.identityRequests = [] :=
     identityRequests_eq_nil occurrence removed attachment accepted
-  exact ConcreteIso.checkEquivs? attachment.diagram host.val
+  apply ConcreteIso.ofEquivs
     (regionEquiv occurrence removed attachment regionsExact)
     (nodeEquiv occurrence removed attachment empty nodesExact)
     (wireEquiv occurrence removed attachment wiresExact)
+  · change
+      regionEquiv occurrence removed attachment regionsExact
+          (attachment.hostRegion removed.complement.val.root) =
+        host.val.root
+    rw [regionEquiv_hostRegion occurrence removed attachment regionsExact]
+    exact Removal.sourceRegion_regionIndex occurrence host.val.root
+      (Removal.host_root_mem occurrence)
+  · exact regionTable_exact occurrence removed attachment regionsExact
+  · exact nodeTable_exact occurrence removed attachment empty regionsExact
+      nodesExact
+  · exact wireSignature_exact occurrence removed attachment wiresExact
+  · exact wireScope_exact occurrence removed attachment regionsExact
+      wiresExact
+  · exact endpointFiberEquiv occurrence removed attachment accepted empty
+      regionsExact nodesExact wiresExact
+
+/-- Compatibility surface for consumers that still sequence optional checks. -/
+noncomputable def extract_splice_iso?
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (accepted :
+      reconstructionAttachment? occurrence removed =
+        some attachment) :
+    Option (ConcreteIso attachment.diagram host.val) :=
+  some (extract_splice_iso occurrence removed attachment accepted)
 
 end Reconstruction
 

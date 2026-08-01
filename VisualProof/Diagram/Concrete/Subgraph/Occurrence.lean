@@ -693,32 +693,199 @@ theorem identityPortEquiv_owner
   rw [targetPositioned] at targetOwner
   exact targetOwner
 
+/--
+The inverse positional identity renaming recovers an owning source wire.  The
+source wire is existential because distinct boundary wires may intentionally
+share one host wire; its mapped owner is nevertheless exact.
+-/
+theorem identityPortEquiv_symm_owner
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (sig : Sig) (arity : Nat)
+    (identity :
+      pattern.val.diagram.nodes node = .identity region sig arity)
+    (index : Fin arity)
+    (targetWire : host.val.WireId)
+    (targetOwner :
+      host.val.endpointOwner?
+          ⟨occurrence.nodeMap node, .identity index.val⟩ =
+        some targetWire) :
+    ∃ sourceWire : pattern.val.diagram.WireId,
+      pattern.val.diagram.endpointOwner?
+          ⟨node,
+            .identity
+              ((occurrence.identityPortEquiv node region sig arity identity).symm
+                index).val⟩ =
+          some sourceWire ∧
+        occurrence.wireMap sourceWire = targetWire := by
+  let sourceIndex :=
+    (occurrence.identityPortEquiv node region sig arity identity).symm index
+  have sourceRequired :
+      CPort.identity sourceIndex.val ∈
+        pattern.val.diagram.requiredPorts node := by
+    simp [ConcreteDiagram.requiredPorts, identity, sourceIndex.isLt]
+  obtain ⟨sourceWire, sourceOwner⟩ :=
+    ConcreteDiagram.endpointOwner?_complete _ pattern.val.diagram
+      pattern.property.diagram node (.identity sourceIndex.val) sourceRequired
+  refine ⟨sourceWire, sourceOwner, ?_⟩
+  have mappedOwner := occurrence.identityPortEquiv_owner node region sig arity
+    identity sourceIndex sourceWire sourceOwner
+  have indexExact :
+      (occurrence.identityPortEquiv node region sig arity identity)
+          sourceIndex = index :=
+    (occurrence.identityPortEquiv node region sig arity identity).right_inv index
+  rw [indexExact] at mappedOwner
+  exact Option.some.inj (mappedOwner.symm.trans targetOwner)
+
+/-- Extend the finite identity-position renaming to every concrete port. -/
+noncomputable def identityCPortEquiv
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (sig : Sig) (arity : Nat)
+    (identity :
+      pattern.val.diagram.nodes node = .identity region sig arity) :
+    Data.Finite.FiniteEquiv CPort CPort where
+  toFun := fun port =>
+    match port with
+    | .head => .head
+    | .arg index => .arg index
+    | .identity index =>
+        if bound : index < arity then
+          .identity
+            ((occurrence.identityPortEquiv node region sig arity identity)
+              ⟨index, bound⟩).val
+        else
+          .identity index
+  invFun := fun port =>
+    match port with
+    | .head => .head
+    | .arg index => .arg index
+    | .identity index =>
+        if bound : index < arity then
+          .identity
+            ((occurrence.identityPortEquiv node region sig arity identity).symm
+              ⟨index, bound⟩).val
+        else
+          .identity index
+  left_inv := by
+    intro port
+    cases port with
+    | head => rfl
+    | arg index => rfl
+    | identity index =>
+        by_cases bound : index < arity
+        · simp only [bound, dif_pos]
+          have mappedBound :
+              ((occurrence.identityPortEquiv node region sig arity identity)
+                ⟨index, bound⟩).val < arity :=
+            ((occurrence.identityPortEquiv node region sig arity identity)
+              ⟨index, bound⟩).isLt
+          rw [dif_pos mappedBound]
+          exact congrArg CPort.identity
+            (congrArg Fin.val
+              (Data.Finite.FiniteEquiv.symm_apply_apply
+                (occurrence.identityPortEquiv node region sig arity identity)
+                ⟨index, bound⟩))
+        · simp [bound]
+  right_inv := by
+    intro port
+    cases port with
+    | head => rfl
+    | arg index => rfl
+    | identity index =>
+        by_cases bound : index < arity
+        · simp only [bound, dif_pos]
+          have mappedBound :
+              ((occurrence.identityPortEquiv node region sig arity identity).symm
+                ⟨index, bound⟩).val < arity :=
+            ((occurrence.identityPortEquiv node region sig arity identity).symm
+              ⟨index, bound⟩).isLt
+          rw [dif_pos mappedBound]
+          exact congrArg CPort.identity
+            (congrArg Fin.val
+              (Data.Finite.FiniteEquiv.apply_symm_apply
+                (occurrence.identityPortEquiv node region sig arity identity)
+                ⟨index, bound⟩))
+        · simp [bound]
+
+/-- Total port renaming selected by the exposed source-node data. -/
+noncomputable def portEquivForNode
+    {definitions : List (List Sig)}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId) :
+    Data.Finite.FiniteEquiv CPort CPort :=
+  match nodeData : pattern.val.diagram.nodes node with
+  | .atom _ _ => Data.Finite.FiniteEquiv.refl _
+  | .ref _ _ _ => Data.Finite.FiniteEquiv.refl _
+  | .identity region sig arity =>
+      occurrence.identityCPortEquiv node region sig arity nodeData
+
+theorem portEquivForNode_atom
+    {definitions : List (List Sig)}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (args : List Sig)
+    (nodeData : pattern.val.diagram.nodes node = .atom region args) :
+    occurrence.portEquivForNode node =
+      Data.Finite.FiniteEquiv.refl CPort := by
+  unfold portEquivForNode
+  split <;> simp_all
+
+theorem portEquivForNode_ref
+    {definitions : List (List Sig)}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (definition : Fin definitions.length)
+    (args : List Sig)
+    (nodeData :
+      pattern.val.diagram.nodes node = .ref region definition args) :
+    occurrence.portEquivForNode node =
+      Data.Finite.FiniteEquiv.refl CPort := by
+  unfold portEquivForNode
+  split <;> simp_all
+
+theorem portEquivForNode_identity
+    {definitions : List (List Sig)}
+    {pattern : CheckedOpenDiagram definitions}
+    {host : CheckedDiagram definitions}
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (sig : Sig) (arity : Nat)
+    (nodeData :
+      pattern.val.diagram.nodes node = .identity region sig arity) :
+  occurrence.portEquivForNode node =
+      occurrence.identityCPortEquiv node region sig arity nodeData := by
+  unfold portEquivForNode
+  split
+  · simp_all
+  · simp_all
+  · rename_i positionalData
+    cases positionalData.symm.trans nodeData
+    have same : positionalData = nodeData := Subsingleton.elim _ _
+    cases same
+    rfl
+
 /-- Deterministic endpoint transport for an explicitly exposed source node. -/
 noncomputable def endpointMapForNode
     {definitions : List (List Sig)}
     {pattern : CheckedOpenDiagram definitions}
     {host : CheckedDiagram definitions}
     (occurrence : Occurrence pattern host)
-    (endpoint : CEndpoint pattern.val.diagram.nodeCount)
-    (data : CNode pattern.val.diagram.regionCount definitions.length)
-    (nodeData : pattern.val.diagram.nodes endpoint.node = data) :
-    CEndpoint host.val.nodeCount := by
-  cases data with
-  | atom => exact ⟨occurrence.nodeMap endpoint.node, endpoint.port⟩
-  | ref => exact ⟨occurrence.nodeMap endpoint.node, endpoint.port⟩
-  | identity region sig arity =>
-      cases portData : endpoint.port with
-      | head => exact ⟨occurrence.nodeMap endpoint.node, .head⟩
-      | arg index => exact ⟨occurrence.nodeMap endpoint.node, .arg index⟩
-      | identity index =>
-          if bound : index < arity then
-            exact
-              ⟨occurrence.nodeMap endpoint.node,
-                .identity
-                  ((occurrence.identityPortEquiv endpoint.node region sig
-                    arity nodeData) ⟨index, bound⟩).val⟩
-          else
-            exact ⟨occurrence.nodeMap endpoint.node, .identity index⟩
+    (endpoint : CEndpoint pattern.val.diagram.nodeCount) :
+    CEndpoint host.val.nodeCount :=
+  ⟨occurrence.nodeMap endpoint.node,
+    occurrence.portEquivForNode endpoint.node endpoint.port⟩
 
 theorem properChildren_exact
     (occurrence : Occurrence pattern host) :
