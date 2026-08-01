@@ -282,6 +282,42 @@ private def prependHole
       UniformIntrinsicRegion definitions arguments context
   | .mk ordinary holes => .mk ordinary ⟨values :: holes.values⟩
 
+/-- Concatenate the retained ordinary portions of two uniform shapes. -/
+def UniformIntrinsicItemSeq.append :
+    UniformIntrinsicItemSeq definitions arguments context →
+      UniformIntrinsicItemSeq definitions arguments context →
+        UniformIntrinsicItemSeq definitions arguments context
+  | .nil, right => right
+  | .cons head tail, right =>
+      .cons head (UniformIntrinsicItemSeq.append tail right)
+
+/-- Concatenate two uniform abstractions in source item order. -/
+def appendAbstracted
+    (left right : UniformIntrinsicRegion definitions arguments context) :
+    UniformIntrinsicRegion definitions arguments context :=
+  match left, right with
+  | .mk leftItems leftHoles, .mk rightItems rightHoles =>
+      .mk (UniformIntrinsicItemSeq.append leftItems rightItems)
+        ⟨leftHoles.values ++ rightHoles.values⟩
+
+private theorem prependOrdinary_appendAbstracted
+    (item : UniformIntrinsicItem definitions arguments context)
+    (left right : UniformIntrinsicRegion definitions arguments context) :
+    prependOrdinary item (appendAbstracted left right) =
+      appendAbstracted (prependOrdinary item left) right := by
+  cases left
+  cases right
+  rfl
+
+private theorem prependHole_appendAbstracted
+    (values : Vars context arguments)
+    (left right : UniformIntrinsicRegion definitions arguments context) :
+    prependHole values (appendAbstracted left right) =
+      appendAbstracted (prependHole values left) right := by
+  cases left
+  cases right
+  rfl
+
 private theorem matchedHeadArguments_denote
     (pre : PreModel.{u})
     (env : Env pre context)
@@ -342,6 +378,43 @@ def abstractAppliedItems
             (.bind signature (abstractApplied (.there head) body)) rest
 
 end
+
+/-- Applied abstraction preserves item-sequence concatenation exactly. -/
+theorem abstractAppliedItems_append
+    (head : Var context (.rel arguments)) :
+    ∀ (left right : ItemSeq definitions context),
+      abstractAppliedItems head (left.append right) =
+        appendAbstracted (abstractAppliedItems head left)
+          (abstractAppliedItems head right)
+  | .nil, right => by
+      rw [ItemSeq.nil_append]
+      cases abstractAppliedItems head right
+      rfl
+  | .cons item tail, right => by
+      have induction := abstractAppliedItems_append head tail right
+      cases item with
+      | atom atomHead values =>
+          simp only [ItemSeq.append, abstractAppliedItems]
+          rw [induction]
+          split
+          · exact prependHole_appendAbstracted _ _ _
+          · exact prependOrdinary_appendAbstracted _ _ _
+      | named definition values =>
+          simp only [ItemSeq.append, abstractAppliedItems]
+          rw [induction]
+          exact prependOrdinary_appendAbstracted _ _ _
+      | identity signature ports atLeastTwo =>
+          simp only [ItemSeq.append, abstractAppliedItems]
+          rw [induction]
+          exact prependOrdinary_appendAbstracted _ _ _
+      | cut body =>
+          simp only [ItemSeq.append, abstractAppliedItems]
+          rw [induction]
+          exact prependOrdinary_appendAbstracted _ _ _
+      | bind signature body =>
+          simp only [ItemSeq.append, abstractAppliedItems]
+          rw [induction]
+          exact prependOrdinary_appendAbstracted _ _ _
 
 mutual
 

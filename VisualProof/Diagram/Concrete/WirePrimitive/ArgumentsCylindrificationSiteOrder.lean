@@ -149,6 +149,28 @@ def aritySitesAt
   (Data.Finite.allFin sites.sites.length).filter fun site =>
     (sites.sites.get site).region == region
 
+/-- The operation-local fresh-wire order at a region is exactly the
+endpoint/site order used by `aritySitesAt`. -/
+theorem arityShift_freshSitesAt_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+        retainedRegion source (result.spec.localScope fresh) ==
+          retainedRegion source region).map
+        (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted)) =
+      aritySitesAt result.sites region := by
+  simpa [aritySitesAt] using
+    arityShift_freshSitesAt source wire sourceArguments sourceSignature
+      newArgument result accepted region
+
 /-- Source application nodes local to `region`, preserving concrete node
 order rather than endpoint order. -/
 def sourceSiteNodesAt
