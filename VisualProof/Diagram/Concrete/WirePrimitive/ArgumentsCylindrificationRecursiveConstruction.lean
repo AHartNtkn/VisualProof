@@ -256,7 +256,10 @@ private theorem recursive_origin_extend_local
   exact InsertionCompilation.NaturalityInternal.appendLeftIds_origin diagram
     (diagram.wiresAt region) context.ids value
 
-private theorem recursive_origin_extend_outer
+/-- Transporting an inherited outer variable through a region extension
+preserves its concrete origin.  Recursive shape construction uses this to
+recognize the acted relation head below arbitrary cuts. -/
+theorem recursive_origin_extend_outer
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
     (region : diagram.RegionId)

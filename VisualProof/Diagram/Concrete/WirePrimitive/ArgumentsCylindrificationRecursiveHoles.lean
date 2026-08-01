@@ -6,6 +6,78 @@ namespace ArgumentsSemantics
 
 open WirePrimitive
 
+/-- Canonical signature transport from the elaborator's dependent extended
+context to the explicit local-block/outer-block context required by a
+`CylindricalShape.block`. -/
+def recursiveRegionNormalization
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId) :
+    WireRenaming (context.extend region).sigs
+      ((diagram.wiresAt region).map
+          (fun wire => (diagram.wires wire).sig) ++ context.sigs) :=
+  fun {_} value =>
+    ConcreteElaboration.WireContext.sigs_extend context region ▸ value
+
+/-- Abstract the direct acted applications from an authoritative compiled
+node sequence after putting its context in canonical local/outer order. -/
+def recursiveNormalizedNodeShape
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (head : Var context.sigs (.rel arguments))
+    (items : ItemSeq definitions (context.extend region).sigs) :
+    UniformIntrinsicRegion definitions arguments
+      ((diagram.wiresAt region).map
+          (fun wire => (diagram.wires wire).sig) ++ context.sigs) :=
+  UniformIntrinsicRegion.abstractAppliedItems
+    (Var.appendRight
+      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+      head)
+    (items.renameWires (recursiveRegionNormalization context region))
+
+private theorem recursive_normalization_cast_cancel
+    (same : left = right)
+    (value : Var right signature) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+/-- Any compiled head with the inherited head's concrete owner normalizes
+to the canonical appended outer head. -/
+theorem recursiveRegionNormalization_head_of_origin
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (contextNodup : (context.extend region).ids.Nodup)
+    (head : Var (context.extend region).sigs (.rel arguments))
+    (outerHead : Var context.sigs (.rel arguments))
+    (headOrigin :
+      ConcreteElaboration.WireContext.origin diagram
+          (context.extend region).ids head = wire)
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin diagram context.ids outerHead =
+        wire) :
+    recursiveRegionNormalization context region head =
+      Var.appendRight
+        ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+        outerHead := by
+  let canonical : Var (context.extend region).sigs (.rel arguments) :=
+    (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+      Var.appendRight
+        ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+        outerHead
+  have canonicalOrigin :
+      ConcreteElaboration.WireContext.origin diagram
+          (context.extend region).ids canonical = wire := by
+    unfold canonical
+    rw [recursive_origin_extend_outer]
+    exact outerHeadOrigin
+  have headExact : head = canonical :=
+    InsertionCompilation.NaturalityInternal.origin_injective diagram
+      (context.extend region).ids contextNodup
+      (headOrigin.trans canonicalOrigin.symm)
+  subst head
+  unfold recursiveRegionNormalization canonical
+  exact recursive_normalization_cast_cancel _ _
+
 private theorem recursive_argumentOrigins_get
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
