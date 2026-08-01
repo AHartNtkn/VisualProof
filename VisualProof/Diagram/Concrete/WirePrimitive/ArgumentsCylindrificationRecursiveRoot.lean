@@ -2096,6 +2096,38 @@ theorem recursiveFinalTargetOrdinary_eq_retained
       (result.regionImage region) items compiled contextNodup rho head
       headForward headReflect node nodeAt
 
+theorem recursiveChecked_reaches_root
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (region : diagram.RegionId) :
+    ∃ steps : Fin (diagram.regionCount + 1),
+      diagram.climb steps region = some diagram.root := by
+  exact
+    (ConcreteElaboration.encloses_iff_exists diagram diagram.root region).mp
+      (of_decide_eq_true
+        ((List.all_eq_true.mp wellFormed.all_regions_reach_root)
+          region (Data.Finite.mem_allFin region)))
+
+theorem recursiveSiteVisibleAboveChild
+    {base : CheckedDiagram definitions}
+    {site child : base.val.RegionId}
+    (compiled : SiteCompilation base site)
+    (childData : base.val.regions child = .cut site) :
+    ConcreteElaboration.ContextAbove base.val compiled.frame.visible child := by
+  obtain ⟨scopeCompiled, outer, _fuel, _relative, _relativeVisible,
+      _inner, scopeVisible, _rootInner, above, _generated, _relativeBody,
+      _relativeContext, _scopeBody, _rootBody, _replacementBody,
+      _cutDepth⟩ :=
+    compiled.factorAt_relative_origin site
+      (ConcreteDiagram.encloses_refl base.val site)
+  have same : scopeCompiled = compiled :=
+    SiteCompilation.unique scopeCompiled compiled
+  subst scopeCompiled
+  rw [scopeVisible]
+  exact ConcreteElaboration.extend_above_child definitions base.val
+    base.property outer site child above childData
+
 /-- The root pruned source compiler context embeds and then normalizes into
 the exact inner context of the source root cylindrical block. -/
 def LocalCylindricalFrame.sourceRetainedNormalization
@@ -2789,6 +2821,152 @@ theorem recursiveNormalizedChildShape_complete
             rw [← ordinaryExact]
             simp [UniformIntrinsicRegion.holeValues,
               UniformIntrinsicRegion.appendAbstracted]
+
+/-- The ordered child compiler call at the acted scope is completely covered
+by normalized recursive child receipts. -/
+theorem LocalCylindricalFrame.rootChildrenCylindricalShapes
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (fuel : Nat)
+    (sourceChildren : ItemSeq definitions
+      frame.sourceScope.frame.visible.sigs)
+    (targetChildren : ItemSeq definitions
+      frame.targetScope.frame.visible.sigs)
+    (sourceCompiled :
+      ConcreteElaboration.compileChildrenWith? definitions source.val
+          (ConcreteElaboration.compileRegion? definitions source.val fuel)
+          frame.sourceScope.frame.visible
+          (source.val.childrenOf (source.val.wires wire).scope) =
+        some sourceChildren)
+    (targetCompiled :
+      ConcreteElaboration.compileChildrenWith? definitions result.checked.val
+          (ConcreteElaboration.compileRegion? definitions result.checked.val
+            fuel)
+          frame.targetScope.frame.visible
+          (result.checked.val.childrenOf
+            (result.checked.val.wires result.targetWire).scope) =
+        some targetChildren) :
+    ∃ shapes : List (CylindricalShape definitions
+        (arityShiftInsertion source wire sourceArguments sourceSignature
+          newArgument result accepted)
+        (frame.sourceReduced ++
+          ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+            frame.context.siteOuter))
+        (frame.targetReduced ++
+          ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+            frame.context.siteOuter))),
+      (∀ shape, shape ∈ shapes → shape.consistent ∧
+        ∀ {signature : Sig}
+          (value : Var
+            (frame.sourceReduced ++
+              ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+                frame.context.siteOuter)) signature),
+          shape.embedding value =
+            (frame.rootBounds sourceArguments sourceSignature newArgument
+              result accepted).embed (fun {_} selected => selected) value) ∧
+      UniformIntrinsicRegion.abstractAppliedItems
+          (Var.appendRight frame.sourceReduced localSourceHead)
+          (sourceChildren.renameWires frame.sourceFrameNormalization) =
+        .mk (recursiveChildSmallerItems
+          (arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted) shapes) ⟨[]⟩ ∧
+      UniformIntrinsicRegion.abstractAppliedItems
+          (Var.appendRight frame.targetReduced localTargetHead)
+          (targetChildren.renameWires frame.targetFrameNormalization) =
+        .mk (recursiveChildLargerItems
+          (arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted) shapes) ⟨[]⟩ := by
+  let commonFuel := max fuel (source.val.regionCount + 1)
+  have sourceLifted := recursiveCompileChildren_fuel_mono definitions
+    source.val fuel commonFuel (Nat.le_max_left _ _)
+    frame.sourceScope.frame.visible
+    (source.val.childrenOf (source.val.wires wire).scope) sourceChildren
+    sourceCompiled
+  have targetLifted := recursiveCompileChildren_fuel_mono definitions
+    result.checked.val fuel commonFuel (Nat.le_max_left _ _)
+    frame.targetScope.frame.visible
+    (result.checked.val.childrenOf
+      (result.checked.val.wires result.targetWire).scope) targetChildren
+    targetCompiled
+  have targetMapped :
+      ConcreteElaboration.compileChildrenWith? definitions
+          result.checked.val
+          (ConcreteElaboration.compileRegion? definitions result.checked.val
+            commonFuel)
+          frame.targetScope.frame.visible
+          ((source.val.childrenOf (source.val.wires wire).scope).map
+            result.regionEquiv) = some targetChildren := by
+    rw [← result.childrenOf_decomposition (source.val.wires wire).scope]
+    simpa only [result.targetWire_scope_regionImage] using targetLifted
+  obtain ⟨headDepth, headClimb⟩ := recursiveChecked_reaches_root
+    definitions source.val source.property (source.val.wires wire).scope
+  let correspondence := frame.rootNormalizationCorrespondence
+    sourceArguments sourceSignature newArgument result accepted pair
+  let headNormalization := frame.rootHeadNormalization sourceArguments result
+    pair
+  exact recursiveNormalizedChildrenReceipts result
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+      newArgument result accepted)
+    frame.sourceScope.frame.visible frame.targetScope.frame.visible
+    correspondence.sourceMap correspondence.targetMap correspondence.embedding
+    (Var.appendRight frame.sourceReduced localSourceHead)
+    (Var.appendRight frame.targetReduced localTargetHead)
+    (ConcreteElaboration.compileRegion? definitions source.val commonFuel)
+    (ConcreteElaboration.compileRegion? definitions result.checked.val
+      commonFuel)
+    (source.val.childrenOf (source.val.wires wire).scope) (by
+      intro child childSourceBody childTargetBody childMember
+        childSourceCompiled childTargetCompiled
+      have childData := ConcreteElaboration.mem_childrenOf source.val
+        (source.val.wires wire).scope child childMember
+      have childDepth := ConcreteElaboration.child_depth source.val child
+        (source.val.wires wire).scope headDepth childData headClimb
+      have childFuel : source.val.regionCount + 1 ≤
+          headDepth + 1 + commonFuel := by
+        have enough : source.val.regionCount + 1 ≤ commonFuel :=
+          Nat.le_max_right _ _
+        omega
+      have childSourceAbove := recursiveSiteVisibleAboveChild
+        frame.sourceScope childData
+      have targetChildData : result.checked.val.regions
+          (result.regionImage child) =
+        .cut (result.regionImage (source.val.wires wire).scope) := by
+        rw [result.regionImage_exact child,
+          result.regionImage_exact (source.val.wires wire).scope,
+          result.regionImage_data child, childData]
+        rfl
+      have childTargetAbove := recursiveSiteVisibleAboveChild
+        frame.targetScope (by
+          rw [result.targetWire_scope_regionImage]
+          exact targetChildData)
+      have headCoverage : frame.sourceScope.frame.visible.Covers
+          (source.val.wires wire).scope := by
+        intro sourceWire encloses
+        exact frame.sourceScope.visible_of_encloses sourceWire encloses
+      have childCoverage :=
+        ConcreteElaboration.WireContext.extend_covers_child source.val
+          frame.sourceScope.frame.visible (source.val.wires wire).scope child
+          headCoverage childData
+      rw [← result.regionImage_exact child] at childTargetCompiled
+      exact recursiveNormalizedChildShape_complete source wire sourceArguments
+        sourceSignature newArgument result accepted headDepth headClimb
+        commonFuel (headDepth + 1) child frame.sourceScope.frame.visible
+        frame.targetScope.frame.visible _ _ correspondence
+        (Var.appendRight frame.sourceReduced localSourceHead)
+        (Var.appendRight frame.targetReduced localTargetHead) headNormalization
+        childDepth childFuel (by omega) childSourceAbove childTargetAbove
+        childCoverage childSourceBody childTargetBody childSourceCompiled
+        childTargetCompiled)
+    sourceChildren targetChildren sourceLifted targetMapped
 
 /-- Once ordered child compilations have been lifted to normalized recursive
 cut receipts, the retained root leaves and exact root holes assemble the
