@@ -916,6 +916,71 @@ structure ParallelSplitResult
       Internal.checkedWire generated
         (parallelSplitCandidateWire signature plan (1 : Fin 2))
 
+namespace ParallelSplitResult
+
+/-- Parallel splitting preserves the region carrier. -/
+def regionOriginEquiv
+    (result : ParallelSplitResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId source.val.RegionId :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    simp [parallelSplitCandidate, parallelSplitBase,
+      Internal.batchRemovalCandidate, Internal.retainedRegions,
+      ConcreteDiagram.regionsList, Data.Finite.allFin_eq_finRange,
+      ContentConstruction.length_filter_true])
+
+/-- Split checking identifies its complete checked node carrier with retained
+nodes followed by the two ordered generated branches. -/
+def constructionNodeEquiv
+    (result : ParallelSplitResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId
+      (Fin ((parallelSplitBase result.plan).nodeCount +
+        (result.sites.sites.length + result.sites.sites.length))) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    rfl)
+
+/-- Split checking identifies its complete checked wire carrier with retained
+wires followed by the two ordered generated branches. -/
+def constructionWireEquiv
+    (result : ParallelSplitResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId
+      (Fin ((parallelSplitBase result.plan).wireCount + 2)) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    rfl)
+
+/-- Retained nodes followed by either generated branch reconstruct the
+source node carrier. -/
+def reconstructionNodeEquiv
+    (result : ParallelSplitResult source wire) :
+    Data.Finite.FiniteEquiv
+      (Fin ((parallelSplitBase result.plan).nodeCount +
+        result.sites.sites.length))
+      source.val.NodeId :=
+  (ContentConstruction.finEquivOfEq (by
+    simp [parallelSplitBase, Internal.batchRemovalCandidate,
+      ContentConstruction.partitionOrder, removedSiteNodes, siteNodes,
+      Internal.retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.allFin_eq_finRange])).trans
+    (ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
+      (ContentConstruction.siteNodes_nodup result.sites))
+
+/-- Retained wires followed by either generated branch reconstruct the
+source wire carrier. -/
+def reconstructionWireEquiv
+    (result : ParallelSplitResult source wire) :
+    Data.Finite.FiniteEquiv
+      (Fin ((parallelSplitBase result.plan).wireCount + 1))
+      source.val.WireId :=
+  (ContentConstruction.finEquivOfEq (by
+    simp [parallelSplitBase, Internal.batchRemovalCandidate,
+      ContentConstruction.partitionOrder, Internal.retainedWires,
+      ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange])).trans
+    (ContentConstruction.partitionEquiv [wire] (by simp))
+
+end ParallelSplitResult
+
 /-- The first generated parallel witness retains the acted signature. -/
 theorem ParallelSplitResult.firstWire_signature
     (result : ParallelSplitResult source wire) :
@@ -1064,6 +1129,55 @@ private def pairParallelSites?
   else
     none
 
+private theorem pairParallelSitesAux_length
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId} :
+    ∀ (leftSites : List (AppliedSite source left))
+      (rightSites : List (AppliedSite source right)) pairs leftover,
+      pairParallelSitesAux? leftSites rightSites = some (pairs, leftover) →
+        pairs.length = rightSites.length := by
+  intro leftSites rightSites
+  induction rightSites generalizing leftSites with
+  | nil =>
+      intro pairs leftover accepted
+      simp [pairParallelSitesAux?] at accepted
+      exact congrArg List.length accepted.1
+  | cons rightSite rightSites induction =>
+      intro pairs leftover accepted
+      simp only [pairParallelSitesAux?] at accepted
+      cases pulled : pullParallelSite? rightSite leftSites with
+      | none => simp [pulled] at accepted
+      | some result =>
+          obtain ⟨leftSite, remaining⟩ := result
+          cases paired : pairParallelSitesAux? remaining rightSites with
+          | none => simp [pulled, paired] at accepted
+          | some result =>
+              obtain ⟨tailPairs, tailLeftover⟩ := result
+              simp [pulled, paired] at accepted
+              rcases accepted with ⟨rfl, rfl⟩
+              have tailLength := induction remaining tailPairs tailLeftover paired
+              simp [tailLength]
+
+private theorem pairParallelSites_length
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (leftSites : List (AppliedSite source left))
+    (rightSites : List (AppliedSite source right))
+    (pairs : List (ParallelPair source left right))
+    (accepted : pairParallelSites? leftSites rightSites = some pairs) :
+    pairs.length = rightSites.length := by
+  unfold pairParallelSites? at accepted
+  cases paired : pairParallelSitesAux? leftSites rightSites with
+  | none => simp [paired] at accepted
+  | some result =>
+      obtain ⟨candidate, leftover⟩ := result
+      by_cases empty : leftover = []
+      · simp [paired, empty] at accepted
+        subst candidate
+        exact pairParallelSitesAux_length leftSites rightSites pairs leftover
+          paired
+      · simp [paired, empty] at accepted
+
 private def parallelPairNodes
     {source : CheckedDiagram definitions}
     {left right : source.val.WireId}
@@ -1188,6 +1302,7 @@ structure ParallelFuseResult
   leftSites : AllAppliedSites source left
   rightSites : AllAppliedSites source right
   private pairs : List (ParallelPair source left right)
+  private pairs_length : pairs.length = rightSites.sites.length
   checked : CheckedDiagram definitions
   private signature : List Sig
   private leftSignature : (source.val.wires left).sig = .rel signature
@@ -1201,6 +1316,61 @@ structure ParallelFuseResult
         (parallelFuseCandidateWire signature plan)
   inverse : ParallelSplitResult checked targetWire
   inverseIso : ConcreteIso inverse.checked.val source.val
+
+namespace ParallelFuseResult
+
+/-- The inverse split sees exactly one fused site for every paired right-hand
+site retained by the fuse receipt. -/
+theorem inverseSites_length
+    (result : ParallelFuseResult source left right) :
+    result.inverse.sites.sites.length = result.rightSites.sites.length := by
+  rw [result.inverse.sites.length]
+  rw [result.targetWire_exact,
+    Internal.checkedWire_endpoints_transport result.generated]
+  have targetExact :
+      parallelFuseCandidateWire result.signature result.plan =
+        Fin.natAdd (parallelFuseBase result.plan).wireCount (0 : Fin 1) := by
+    apply Fin.ext
+    rfl
+  rw [targetExact]
+  simp only [parallelFuseCandidate, Fin.addCases_right, List.length_map,
+    Data.Finite.allFin_eq_finRange, List.length_finRange]
+  exact result.pairs_length
+
+/-- Parallel fusion preserves the region carrier. -/
+def regionOriginEquiv
+    (result : ParallelFuseResult source left right) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId source.val.RegionId :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    simp [parallelFuseCandidate, parallelFuseBase,
+      Internal.batchRemovalCandidate, Internal.retainedRegions,
+      ConcreteDiagram.regionsList, Data.Finite.allFin_eq_finRange,
+      ContentConstruction.length_filter_true])
+
+/-- The checked fuse target is the retained-node carrier followed by one
+node for every exact right-hand site. -/
+def constructionNodeEquiv
+    (result : ParallelFuseResult source left right) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId
+      (Fin ((parallelFuseBase result.plan).nodeCount +
+        result.rightSites.sites.length)) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    change (parallelFuseBase result.plan).nodeCount + result.pairs.length = _
+    rw [result.pairs_length])
+
+/-- The checked fuse target is the retained-wire carrier followed by its
+single fused witness. -/
+def constructionWireEquiv
+    (result : ParallelFuseResult source left right) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId
+      (Fin ((parallelFuseBase result.plan).wireCount + 1)) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    rfl)
+
+end ParallelFuseResult
 
 /-- Fuse two co-scoped, equal-signature, pairwise co-located applied wires. -/
 def parallelFuse
@@ -1223,7 +1393,7 @@ def parallelFuse
                 match checkAllAppliedSites source left,
                     checkAllAppliedSites source right with
                 | some leftSites, some rightSites =>
-                    match
+                    match paired :
                         pairParallelSites? leftSites.sites
                           rightSites.sites with
                     | none => exact .error .parallelMismatch
@@ -1264,7 +1434,11 @@ def parallelFuse
                                     | some inverseIso =>
                                         exact .ok
                                           (ParallelFuseResult.mk leftSites
-                                            rightSites pairs checked arguments
+                                            rightSites pairs
+                                            (pairParallelSites_length
+                                              leftSites.sites rightSites.sites
+                                              pairs paired)
+                                            checked arguments
                                             leftSignature
                                             (by simpa [signatures] using
                                               rightSignature)

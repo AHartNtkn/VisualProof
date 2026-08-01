@@ -1329,17 +1329,17 @@ private def invertStep
       let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .parallelSplit _ applied => do
-      let inverseLeft := targetIso.wires.symm applied.inverseLeft
-      let inverseRight := targetIso.wires.symm applied.inverseRight
+      let inverseLeft := applied.transportedInverseLeft targetIso
+      let inverseRight := applied.transportedInverseRight targetIso
       let inverseApplied ←
         (applyParallelFuse real inverseLeft inverseRight).mapError
           .contentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .parallelFuse inverseLeft inverseRight inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let landing ←
+        (applied.inverseTransport targetIso inverseApplied).mapError
+          .contentRejected
+      let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .argDuplicate _ position applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire

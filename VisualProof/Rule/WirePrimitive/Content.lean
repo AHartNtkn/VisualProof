@@ -573,6 +573,142 @@ def inverseTransport
 
 end AppliedCutWrap
 
+namespace AppliedParallelSplit
+
+/-- Exact first generated wire transported backward through the supplied
+suffix iso. -/
+def transportedInverseLeft
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : AppliedParallelSplit planned wire)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    real.val.WireId :=
+  targetIso.wires.symm forward.inverseLeft
+
+/-- Exact second generated wire transported backward through the supplied
+suffix iso. -/
+def transportedInverseRight
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : AppliedParallelSplit planned wire)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    real.val.WireId :=
+  targetIso.wires.symm forward.inverseRight
+
+/-- Receipt-owned inverse cancellation for parallel splitting followed by the
+accepted transported fuse. -/
+def inverseTransport
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : AppliedParallelSplit planned wire)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (backward : AppliedParallelFuse real
+      (forward.transportedInverseLeft targetIso)
+      (forward.transportedInverseRight targetIso)) :
+    Except WireContentError (InverseLanding backward.target planned) := do
+  let inverseRight := forward.transportedInverseRight targetIso
+  let rightExact : targetIso.wires inverseRight = forward.inverseRight :=
+    targetIso.wires.right_inv forward.inverseRight
+  let targetSites : AllAppliedSites forward.target
+      (targetIso.wires inverseRight) :=
+    rightExact.symm ▸ forward.ledger.secondSites
+  let siteEquiv := AllAppliedSites.transportPositionEquiv targetIso
+    backward.checked.rightSites targetSites
+  let siteCountExact : backward.checked.rightSites.sites.length =
+      forward.checked.sites.sites.length := by
+    rw [ConcreteWirePrimitive.ContentConstruction.finCount_eq siteEquiv]
+    rw [show targetSites.sites.length =
+        forward.ledger.secondSites.sites.length by
+      exact castAllAppliedSites_length rightExact.symm
+        forward.ledger.secondSites]
+    exact forward.ledger.correspondence.2.1.symm
+  let inverseSiteCountExact :
+      backward.checked.inverse.sites.sites.length =
+        forward.checked.sites.sites.length :=
+    backward.checked.inverseSites_length.trans siteCountExact
+  let regions := backward.checked.regionOriginEquiv.trans <|
+    targetIso.regions.trans forward.checked.regionOriginEquiv
+  let nodeCountExact : backward.target.val.nodeCount =
+      planned.val.nodeCount := by
+    have inverseDelta :
+        backward.checked.inverse.checked.val.nodeCount =
+          backward.checked.checked.val.nodeCount +
+            backward.checked.inverse.sites.sites.length := by
+      have construction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          backward.checked.inverse.constructionNodeEquiv
+      have reconstruction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          backward.checked.inverse.reconstructionNodeEquiv
+      have combine : ∀ (base count checked original : Nat),
+          checked = base + (count + count) → base + count = original →
+            checked = original + count := by
+        omega
+      exact combine _ _ _ _ construction reconstruction
+    have forwardDelta : forward.target.val.nodeCount =
+        planned.val.nodeCount + forward.checked.sites.sites.length := by
+      have construction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          forward.checked.constructionNodeEquiv
+      have reconstruction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          forward.checked.reconstructionNodeEquiv
+      have combine : ∀ (base count checked original : Nat),
+          checked = base + (count + count) → base + count = original →
+            checked = original + count := by
+        omega
+      exact combine _ _ _ _ construction reconstruction
+    have inverseLanding :=
+      ConcreteIso.nodeCount_eq backward.checked.inverseIso
+    have suffixCount := ConcreteIso.nodeCount_eq targetIso
+    have siteCount := inverseSiteCountExact
+    change backward.checked.checked.val.nodeCount = planned.val.nodeCount
+    omega
+  let wireCountExact : backward.target.val.wireCount =
+      planned.val.wireCount := by
+    have inverseDelta :
+        backward.checked.inverse.checked.val.wireCount =
+          backward.checked.checked.val.wireCount + 1 := by
+      have construction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          backward.checked.inverse.constructionWireEquiv
+      have reconstruction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          backward.checked.inverse.reconstructionWireEquiv
+      have combine : ∀ (base checked original : Nat),
+          checked = base + 2 → base + 1 = original →
+            checked = original + 1 := by
+        omega
+      exact combine _ _ _ construction reconstruction
+    have forwardDelta : forward.target.val.wireCount =
+        planned.val.wireCount + 1 := by
+      have construction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          forward.checked.constructionWireEquiv
+      have reconstruction :=
+        ConcreteWirePrimitive.ContentConstruction.finCount_eq
+          forward.checked.reconstructionWireEquiv
+      have combine : ∀ (base checked original : Nat),
+          checked = base + 2 → base + 1 = original →
+            checked = original + 1 := by
+        omega
+      exact combine _ _ _ construction reconstruction
+    have inverseLanding :=
+      ConcreteIso.wireCount_eq backward.checked.inverseIso
+    have suffixCount := ConcreteIso.wireCount_eq targetIso
+    change backward.checked.checked.val.wireCount = planned.val.wireCount
+    omega
+  let nodes :=
+    ConcreteWirePrimitive.ContentConstruction.finEquivOfEq nodeCountExact
+  let wires :=
+    ConcreteWirePrimitive.ContentConstruction.finEquivOfEq wireCountExact
+  let iso ← optionToExcept .semanticLedgerRejected <|
+    ConcreteIso.checkEquivs? backward.target.val planned.val
+      regions nodes wires
+  pure ⟨iso⟩
+
+end AppliedParallelSplit
+
 /-- Cut wrapping is a checked whole-diagram equivalence. -/
 theorem cut_wrap_sound
     {source : CheckedDiagram definitions}
