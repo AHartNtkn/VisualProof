@@ -1027,6 +1027,35 @@ theorem LocalCylindricalFrame.targetReducedContext_ids
   exact frame.targetReducedIds_shape sourceArguments newArgument result
     accepted
 
+/-- Every concrete fresh identifier in the acted-scope suffix has the fixed
+signature recorded by the arity construction. -/
+theorem arityRootFresh_signatures
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    (((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+        retainedRegion source (result.spec.localScope fresh) ==
+          retainedRegion source (source.val.wires wire).scope).map
+            result.targetLocalWire).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      List.replicate
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source (source.val.wires wire).scope).length
+        newArgument := by
+  rw [List.map_map, ← List.map_const']
+  apply List.map_congr_left
+  intro fresh _member
+  simp only [Function.comp_apply]
+  rw [result.targetLocalWire_signature]
+  exact arityShift_localSignature_exact source wire sourceArguments
+    sourceSignature result.sites newArgument result accepted fresh
+
 /-- The reduced source-local context and its mapped target image form a
 genuine retained context; the acted relation head is the only removed source
 wire in an arity shift. -/
