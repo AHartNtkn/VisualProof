@@ -65,23 +65,38 @@ def identityFragmentRaw
           endpoints := [⟨⟨0, by omega⟩, .identity wire.val⟩] } }
   boundary := Data.Finite.allFin arity
 
+/-- A checked canonical identity fragment together with the exact construction
+facts needed to attach its ordered boundary without rediscovering its shape. -/
+structure CheckedIdentityFragment
+    (definitions : List (List Sig)) (signature : Sig) (arity : Nat) where
+  fragment : CheckedOpenDiagram definitions
+  generated :
+    fragment.val = identityFragmentRaw definitions.length signature arity
+  boundary_length : fragment.val.boundary.length = arity
+
 /-- Validate the canonical identity fragment through the ordinary concrete
 well-formedness authority.  This is deterministic construction, not graph or
 inverse search. -/
 def checkIdentityFragment
     (definitions : List (List Sig)) (signature : Sig) (arity : Nat) :
-    Except WFError (CheckedOpenDiagram definitions) := by
+    Except WFError (CheckedIdentityFragment definitions signature arity) := by
   let raw := identityFragmentRaw definitions.length signature arity
   match accepted : ConcreteDiagram.checkWellFormed definitions raw.diagram with
   | .error error => exact .error error
   | .ok checked =>
       have generated : checked.val = raw.diagram :=
         ConcreteDiagram.checkWellFormed_preserves_input accepted
-      exact .ok
+      let fragment : CheckedOpenDiagram definitions :=
         ⟨raw,
           { diagram := generated ▸ checked.property
             boundary_root_scoped := by
               simp [raw, identityFragmentRaw] }⟩
+      exact .ok
+        { fragment := fragment
+          generated := rfl
+          boundary_length := by
+            simp [fragment, raw, identityFragmentRaw,
+              Data.Finite.allFin_eq_finRange] }
 
 /--
 Concrete input for atom/ref/identity insertion.  Boundary targets are positional:
