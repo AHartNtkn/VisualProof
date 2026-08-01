@@ -3457,6 +3457,91 @@ theorem inverseTargetArguments_exact
       ConcreteWirePrimitive.insertAt_eraseAt_of_getElem?_eq_some
         forward.sourceArgumentList position newArgument argumentExact
 
+/-- Region carrier of a transported inverse drop/extension pair. -/
+def inverseTransportRegionEquiv
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    Data.Finite.FiniteEquiv backward.target.val.RegionId
+      planned.val.RegionId :=
+  forward.result.inverseTransportRegionEquiv backward.result targetIso
+
+/-- Node carrier of a transported inverse drop/extension pair. -/
+def inverseTransportNodeEquiv
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    Data.Finite.FiniteEquiv backward.target.val.NodeId planned.val.NodeId :=
+  forward.result.inverseTransportNodeEquiv backward.result
+    forward.targetSites backward.targetSites targetIso
+
+/-- Wire carrier of a transported inverse drop/extension pair. -/
+def inverseTransportWireEquiv
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    Data.Finite.FiniteEquiv backward.target.val.WireId planned.val.WireId :=
+  forward.result.inverseTransportWireEquivHeadOnly backward.result
+    forward.source_removed_exact forward.local_count_exact
+    backward.source_removed_exact backward.local_count_exact targetIso
+
+/-- The composed wire carrier sends the inverse extension's rebuilt head
+back to the original planned head. -/
+@[simp] theorem inverseTransportWireEquiv_head
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire) :
+    forward.inverseTransportWireEquiv backward targetIso
+        backward.targetWire = forwardWire := by
+  unfold inverseTransportWireEquiv
+  change forward.wireEquiv.symm
+    (targetIso.wires (backward.wireEquiv.symm backward.targetWire)) = _
+  calc
+    forward.wireEquiv.symm
+        (targetIso.wires (backward.wireEquiv.symm backward.targetWire)) =
+      forward.wireEquiv.symm (targetIso.wires backwardWire) := by
+        congr 2
+        rw [← backward.wireEquiv_head]
+        exact backward.wireEquiv.left_inv backwardWire
+    _ = forward.wireEquiv.symm forward.targetWire :=
+      congrArg forward.wireEquiv.symm wireExact
+    _ = forwardWire := by
+      rw [← forward.wireEquiv_head]
+      exact forward.wireEquiv.left_inv forwardWire
+
 end AppliedArgDrop
 
 def applyArityShift
