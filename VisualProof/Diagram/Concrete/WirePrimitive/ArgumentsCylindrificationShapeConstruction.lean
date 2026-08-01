@@ -805,6 +805,115 @@ private theorem compileNodes?_contextEmbedding
               · rw [targetTailExact]
                 rfl
 
+private theorem variableOrigins_length_local
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    {argumentSigs : List Sig}
+    (values : Vars context.sigs argumentSigs) :
+    (ConcreteElaboration.variableOrigins diagram context values).length =
+      argumentSigs.length := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [ConcreteElaboration.variableOrigins, induction]
+
+private theorem argumentOrigins_get_local
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (node : diagram.NodeId)
+    (start : Nat)
+    {argumentSigs : List Sig}
+    (values : Vars context.sigs argumentSigs)
+    (origins :
+      ConcreteElaboration.ArgumentOrigins diagram context node start values)
+    (index : Nat)
+    (bound : index < argumentSigs.length) :
+    diagram.endpointOwner? ⟨node, .arg (start + index)⟩ =
+      some ((ConcreteElaboration.variableOrigins diagram context values).get
+        ⟨index, by
+          simpa [variableOrigins_length_local] using bound⟩) := by
+  induction values generalizing start index with
+  | nil => simp at bound
+  | @cons signature rest head tail induction =>
+      cases index with
+      | zero =>
+          simpa [ConcreteElaboration.ArgumentOrigins,
+            ConcreteElaboration.variableOrigins] using origins.1
+      | succ index =>
+          have tailBound : index < rest.length := by simpa using bound
+          have tailExact := induction (start := start + 1) origins.2
+            index tailBound
+          simpa [ConcreteElaboration.variableOrigins, Nat.add_assoc,
+            Nat.add_comm, Nat.add_left_comm] using tailExact
+
+/-- Any checked application local to the acted scope compiles in the
+canonical source frame to an atom whose head and ordered arguments retain
+their exact concrete owners.  This is the source-hole observation needed by
+the cylindrical-shape receipt; it depends only on checked incidence and frame
+visibility. -/
+theorem LocalCylindricalFrame.compileSourceAppliedSite?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    {result : ArgumentResult source wire}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (site : AppliedSite source wire)
+    (siteRegion : site.region = (source.val.wires wire).scope) :
+    ∃ (head : Var frame.sourceScope.frame.visible.sigs
+          (.rel site.argumentSignatures))
+      (arguments : Vars frame.sourceScope.frame.visible.sigs
+          site.argumentSignatures),
+      ConcreteElaboration.Internal.compileNode? definitions source.val
+          frame.sourceScope.frame.visible site.node =
+        some (.atom head arguments) ∧
+      ConcreteElaboration.WireContext.origin source.val
+          frame.sourceScope.frame.visible.ids head = wire ∧
+      ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible arguments = site.arguments := by
+  obtain ⟨item, nodeCompiled⟩ :=
+    ConcreteElaboration.compileNode?_complete_of_required_visible
+      definitions source.val source.property frame.sourceScope.frame.visible
+      site.node (by
+        intro port _required owner ownerExact
+        apply frame.sourceScope.visible_of_encloses owner
+        have ownerScope := ConcreteElaboration.Internal.endpoint_scope
+          definitions source.val source.property ⟨site.node, port⟩ owner
+          ownerExact
+        simpa [site.node_data, siteRegion] using ownerScope)
+  have singletonCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          frame.sourceScope.frame.visible [site.node] =
+        some (.cons item .nil) := by
+    simp [ConcreteElaboration.compileNodes?, nodeCompiled]
+  obtain ⟨head, arguments, itemExact, headOrigin, argumentOrigins⟩ :=
+    ConcreteElaboration.compileNodes?_atom_shape source.val
+      frame.sourceScope.frame.visible site.node site.node_data
+      singletonCompiled
+  have itemSame : item = .atom head arguments :=
+    ItemSeq.cons.inj itemExact |>.1
+  subst item
+  have headExact :
+      ConcreteElaboration.WireContext.origin source.val
+          frame.sourceScope.frame.visible.ids head = wire :=
+    Option.some.inj (headOrigin.symm.trans site.endpoint_owner)
+  have argumentsExact :
+      ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible arguments = site.arguments := by
+    apply List.ext_get
+    · simpa [variableOrigins_length_local] using
+        site.arguments_length.symm
+    · intro index leftBound rightBound
+      have compiledOwner := argumentOrigins_get_local source.val
+        frame.sourceScope.frame.visible site.node 0 arguments argumentOrigins
+        index (by
+          rw [← variableOrigins_length_local source.val
+            frame.sourceScope.frame.visible arguments]
+          exact leftBound)
+      have siteOwner := site.argument_owner index rightBound
+      exact Option.some.inj (compiledOwner.symm.trans (by
+        simpa using siteOwner))
+  exact ⟨head, arguments, nodeCompiled, headExact, argumentsExact⟩
+
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
 exhaustiveness, while true outer owners remain in the paired outer spine. -/
