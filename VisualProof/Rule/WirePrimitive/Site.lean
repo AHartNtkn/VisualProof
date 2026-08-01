@@ -899,6 +899,50 @@ theorem transportPosition_endpoint
   rw [endpointExact] at selected
   simpa [endpoint, mapped] using selected
 
+/-- Argument ownership at a transported applied-site position is exactly
+the supplied concrete isomorphism's wire image of the source attachment. -/
+theorem transportPosition_argument_owner
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire))
+    (position : Fin sourceSites.sites.length)
+    (index : Nat)
+    (bound : index < (sourceSites.sites.get position).arguments.length) :
+    target.val.endpointOwner?
+        ⟨(targetSites.sites.get
+          (transportPosition iso sourceSites targetSites position)).node,
+          .arg index⟩ =
+      some (iso.wires
+        ((sourceSites.sites.get position).arguments[index]'bound)) := by
+  let sourceSite := sourceSites.sites.get position
+  let targetPosition :=
+    transportPosition iso sourceSites targetSites position
+  let targetSite := targetSites.sites.get targetPosition
+  have sourceMember : sourceSite.endpoint ∈
+      (source.val.wires wire).endpoints := by
+    rw [← sourceSites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨sourceSite, List.get_mem sourceSites.sites position, rfl⟩
+  have corresponds :=
+    iso.endpointMap_corresponds wire sourceSite.endpoint sourceMember
+  have transportedEndpoint :=
+    transportPosition_endpoint iso sourceSites targetSites position
+  have nodeExact : targetSite.node = iso.nodes sourceSite.node := by
+    change
+      (targetSites.sites.get targetPosition).endpoint.node =
+        iso.nodes sourceSite.endpoint.node
+    rw [transportedEndpoint]
+    exact corresponds.1
+  have owner := iso.atom_owner_forward source.property target.property
+    sourceSite.node_data (sourceSite.argument_owner index bound)
+  change target.val.endpointOwner?
+      ⟨targetSite.node, .arg index⟩ =
+    some (iso.wires (sourceSite.arguments[index]'bound))
+  rw [nodeExact]
+  exact owner
+
 /-- Pull one exhaustive target-site position back through the supplied
 isomorphism's endpoint inverse. -/
 def inverseTransportPosition

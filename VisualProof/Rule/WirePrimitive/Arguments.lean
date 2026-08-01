@@ -595,6 +595,103 @@ theorem siteArguments_exact
           permutation) :=
   applied.arguments_exact site
 
+/-- Every source site has the exact relation arity stored by the accepted
+permutation receipt. -/
+theorem sourceSiteArgumentLength
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.result.sites.sites.length) :
+    (applied.result.sites.sites.get site).arguments.length =
+      applied.sourceArguments.length := by
+  exact (applied.result.sites.sites.get site).arguments_length.trans
+    (congrArg List.length
+      (ConcreteWirePrimitive.appliedSite_arguments_eq_relationArguments
+        applied.sourceArguments applied.sourceSignature
+        (applied.result.sites.sites.get site)))
+
+/-- Exact ambient source wire selected at one generated permutation output
+position. -/
+def sourceArgumentWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.result.sites.sites.length)
+    (position : Fin applied.sourceArguments.length) : source.val.WireId :=
+  (applied.result.sites.sites.get site).arguments.get
+    (Fin.cast (applied.sourceSiteArgumentLength site).symm
+      (applied.permutation_receipt.forwardPosition position))
+
+/-- Generated permutation argument endpoints are owned by the canonical
+checked image of their exact proof-indexed source attachment. -/
+theorem generatedArgument_endpointOwner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.result.sites.sites.length)
+    (position : Fin applied.sourceArguments.length) :
+    applied.target.val.endpointOwner?
+        ⟨applied.result.targetNode site, .arg position.val⟩ =
+      some (applied.wireEquiv
+        (applied.sourceArgumentWire site position)) := by
+  let sourceSite := applied.result.sites.sites.get site
+  have siteLength : sourceSite.arguments.length =
+      applied.sourceArguments.length :=
+    applied.sourceSiteArgumentLength site
+  have targetBound : position.val <
+      applied.result.targetArguments.length := by
+    rw [applied.target_arguments_exact,
+      applied.permutation_receipt.permute_length applied.sourceArguments rfl]
+    exact position.isLt
+  have outputBound : position.val <
+      (permute sourceSite.arguments permutation).length := by
+    rw [applied.permutation_receipt.permute_length sourceSite.arguments
+      siteLength]
+    exact position.isLt
+  have selected :
+      (applied.result.spec.arguments site)[position.val]? =
+        some (.existing (applied.sourceArgumentWire site position)) := by
+    rw [applied.arguments_exact site]
+    unfold existingReferences
+    change
+      (List.map ArgumentReference.existing
+        (permute sourceSite.arguments permutation))[position.val]? = _
+    have mappedBound : position.val <
+        (List.map
+          (ArgumentReference.existing
+            (localCount := applied.result.spec.localCount))
+          (permute sourceSite.arguments permutation)).length := by
+      simpa using outputBound
+    rw [List.getElem?_eq_getElem mappedBound]
+    simp only [List.getElem_map, Option.some.injEq,
+      ArgumentReference.existing.injEq]
+    simpa [AppliedArgPermute.sourceArgumentWire,
+      List.get_eq_getElem] using
+        (applied.permutation_receipt.permute_get sourceSite.arguments
+          siteLength position)
+  have sourceBound :
+      (Fin.cast siteLength.symm
+        (applied.permutation_receipt.forwardPosition position)).val <
+          sourceSite.arguments.length :=
+    (Fin.cast siteLength.symm
+      (applied.permutation_receipt.forwardPosition position)).isLt
+  have different : applied.sourceArgumentWire site position ≠ wire := by
+    exact sourceSite.argument_ne_head _ sourceBound
+  have retained : applied.sourceArgumentWire site position ∉
+      applied.result.sourceRemovedWires := by
+    rw [applied.source_removed_exact]
+    simpa [different]
+  have owner := applied.result.generatedArgument_endpointOwner site
+    position.val targetBound (applied.sourceArgumentWire site position)
+    selected retained
+  simpa [AppliedArgPermute.wireEquiv,
+    ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly,
+    ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly, different]
+    using owner
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
