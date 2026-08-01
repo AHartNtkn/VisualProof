@@ -1084,9 +1084,11 @@ theorem recursiveChildrenReceipts
     (targetRecurse : (region : result.checked.val.RegionId) →
       (context : ConcreteElaboration.WireContext result.checked.val) →
       Option (Region definitions context.sigs))
+    (children : List source.val.RegionId)
     (buildChild : ∀ (child : source.val.RegionId)
       (sourceBody : Region definitions sourceContext.sigs)
       (targetBody : Region definitions targetContext.sigs),
+      child ∈ children →
       sourceRecurse child sourceContext = some sourceBody →
       targetRecurse (result.regionEquiv child) targetContext = some targetBody →
       ∃ shape : CylindricalShape definitions insertion
@@ -1095,8 +1097,7 @@ theorem recursiveChildrenReceipts
           (sourceExact.symm ▸ sourceHead) sourceBody ∧
         shape.larger = UniformIntrinsicRegion.abstractApplied
           (targetExact.symm ▸ targetHead) targetBody) :
-    ∀ (children : List source.val.RegionId)
-      (sourceItems : ItemSeq definitions sourceContext.sigs)
+    ∀ (sourceItems : ItemSeq definitions sourceContext.sigs)
       (targetItems : ItemSeq definitions targetContext.sigs),
       ConcreteElaboration.compileChildrenWith? definitions source.val
           sourceRecurse sourceContext children = some sourceItems →
@@ -1113,13 +1114,15 @@ theorem recursiveChildrenReceipts
             (targetItems.renameWires
               (fun {_} value => targetExact ▸ value)) =
           .mk (recursiveChildLargerItems insertion shapes) ⟨[]⟩
-  | [], sourceItems, targetItems, sourceCompiled, targetCompiled => by
+  := by
+    intro sourceItems targetItems sourceCompiled targetCompiled
+    induction children generalizing sourceItems targetItems with
+    | nil =>
       simp [ConcreteElaboration.compileChildrenWith?] at sourceCompiled targetCompiled
       subst sourceItems
       subst targetItems
       exact ⟨[], rfl, rfl⟩
-  | child :: tail, sourceItems, targetItems, sourceCompiled,
-      targetCompiled => by
+    | cons child tail induction =>
       obtain ⟨sourceBody, sourceRest, sourceBodyCompiled, sourceRestCompiled,
           sourceItemsExact⟩ :=
         recursiveCompileChildrenCons definitions source.val
@@ -1131,13 +1134,14 @@ theorem recursiveChildrenReceipts
           (tail.map result.regionEquiv) targetItems (by
             simpa using targetCompiled)
       obtain ⟨childShape, childSmaller, childLarger⟩ :=
-        buildChild child sourceBody targetBody sourceBodyCompiled
+        buildChild child sourceBody targetBody (by simp) sourceBodyCompiled
           targetBodyCompiled
       obtain ⟨tailShapes, tailSmaller, tailLarger⟩ :=
-        recursiveChildrenReceipts result insertion sourceContext targetContext
-          sourceExact targetExact sourceHead targetHead sourceRecurse
-          targetRecurse buildChild tail sourceRest targetRest
-          sourceRestCompiled targetRestCompiled
+        induction
+          (fun candidate candidateSource candidateTarget member =>
+            buildChild candidate candidateSource candidateTarget
+              (List.mem_cons_of_mem child member))
+          sourceRest targetRest sourceRestCompiled targetRestCompiled
       let transported := recursiveShapeTransport sourceExact targetExact
         childShape
       have transportedSmaller : transported.smaller =
@@ -1475,6 +1479,303 @@ noncomputable def recursiveBlockReceipt
   unfold recursiveBlockReceipt
   simp only [CylindricalShape.larger, recursiveReceiptAppend_larger,
     recursiveLeafReceipt_larger, recursiveCutReceipt_larger]
+
+/-- Total cylindrical-shape receipt for every successfully compiled proper
+descendant, by the elaborator's authoritative `(depth, fuel)` induction. -/
+theorem recursiveCylindricalShape_complete
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (headDepth : Nat)
+    (headClimb : source.val.climb headDepth
+      (source.val.wires wire).scope = some source.val.root) :
+    ∀ (fuel depth : Nat)
+      (region : source.val.RegionId)
+      (sourceOuter : ConcreteElaboration.WireContext source.val)
+      (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+      (outer : WireRenaming sourceOuter.sigs targetOuter.sigs),
+      source.val.climb depth region = some source.val.root →
+      depth + fuel = source.val.regionCount + 1 →
+      headDepth < depth →
+      ConcreteElaboration.ContextAbove source.val sourceOuter region →
+      ConcreteElaboration.ContextAbove result.checked.val targetOuter
+        (result.regionImage region) →
+      (∀ {signature : Sig} (value : Var sourceOuter.sigs signature),
+        ConcreteElaboration.WireContext.origin result.checked.val
+            targetOuter.ids (outer value) =
+          result.contextWireMap
+            (ConcreteElaboration.WireContext.origin source.val
+              sourceOuter.ids value)) →
+      ∀ (sourceHead : Var sourceOuter.sigs (.rel sourceArguments))
+        (targetHead : Var targetOuter.sigs (.rel result.targetArguments)),
+      ConcreteElaboration.WireContext.origin source.val sourceOuter.ids
+          sourceHead = wire →
+      ConcreteElaboration.WireContext.origin result.checked.val targetOuter.ids
+          targetHead = result.targetWire →
+      ∀ (sourceBody : Region definitions sourceOuter.sigs)
+        (targetBody : Region definitions targetOuter.sigs),
+      ConcreteElaboration.compileRegion? definitions source.val fuel region
+          sourceOuter = some sourceBody →
+      ConcreteElaboration.compileRegion? definitions result.checked.val fuel
+          (result.regionImage region) targetOuter = some targetBody →
+      ∃ shape : CylindricalShape definitions
+          (arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted)
+          sourceOuter.sigs targetOuter.sigs,
+        shape.smaller = UniformIntrinsicRegion.abstractApplied
+          sourceHead sourceBody ∧
+        shape.larger = UniformIntrinsicRegion.abstractApplied
+          targetHead targetBody := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro depth region sourceOuter targetOuter outer regionClimb fuelExact
+        below sourceAbove targetAbove outerOrigin sourceHead targetHead
+        sourceHeadOrigin targetHeadOrigin sourceBody targetBody sourceCompiled
+        targetCompiled
+      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+  | succ fuel induction =>
+      intro depth region sourceOuter targetOuter outer regionClimb fuelExact
+        below sourceAbove targetAbove outerOrigin sourceHead targetHead
+        sourceHeadOrigin targetHeadOrigin sourceBody targetBody sourceCompiled
+        targetCompiled
+      have notHead : region ≠ (source.val.wires wire).scope :=
+        recursiveBelow_ne_head definitions source.val source.property
+          (source.val.wires wire).scope region headDepth depth headClimb
+          regionClimb below
+      obtain ⟨sourceNodes, sourceChildren, sourceNodesCompiled,
+          sourceChildrenCompiled, sourceBodyExact⟩ :=
+        compileRegion?_recursive_decomposition definitions source.val fuel
+          region sourceOuter sourceBody sourceCompiled
+      obtain ⟨targetNodes, targetChildren, targetNodesCompiled,
+          targetChildrenCompiled, targetBodyExact⟩ :=
+        compileRegion?_recursive_decomposition definitions result.checked.val
+          fuel (result.regionImage region) targetOuter targetBody targetCompiled
+      have sourceNodup : (sourceOuter.extend region).ids.Nodup :=
+        ConcreteElaboration.extend_nodup definitions source.val source.property
+          sourceOuter region sourceAbove
+      have targetNodup :
+          (targetOuter.extend (result.regionImage region)).ids.Nodup :=
+        ConcreteElaboration.extend_nodup definitions result.checked.val
+          result.checked.property targetOuter (result.regionImage region)
+          targetAbove
+      obtain ⟨sourceRetained, targetRetained, sourceRetainedCompiled,
+          targetRetainedCompiled, retainedExact⟩ :=
+        recursiveRetainedNodePair source wire sourceArguments sourceSignature
+          newArgument result accepted region notHead sourceOuter targetOuter
+          outer outerOrigin targetNodup sourceNodes sourceNodesCompiled
+      let sourceExact :=
+        ConcreteElaboration.WireContext.sigs_extend sourceOuter region
+      let targetExact :=
+        ConcreteElaboration.WireContext.sigs_extend targetOuter
+          (result.regionImage region)
+      let normalizedSourceHead := Var.appendRight
+        ((source.val.wiresAt region).map fun localWire =>
+          (source.val.wires localWire).sig) sourceHead
+      let normalizedTargetHead := Var.appendRight
+        ((result.checked.val.wiresAt (result.regionImage region)).map fun
+          localWire => (result.checked.val.wires localWire).sig) targetHead
+      have targetChildrenMapped :
+          ConcreteElaboration.compileChildrenWith? definitions
+              result.checked.val
+              (ConcreteElaboration.compileRegion? definitions
+                result.checked.val fuel)
+              (targetOuter.extend (result.regionImage region))
+              ((source.val.childrenOf region).map result.regionEquiv) =
+            some targetChildren := by
+        rw [← result.childrenOf_decomposition region]
+        exact targetChildrenCompiled
+      obtain ⟨childShapes, sourceChildrenExact, targetChildrenExact⟩ :=
+        recursiveChildrenReceipts result
+          (arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted)
+          (sourceOuter.extend region)
+          (targetOuter.extend (result.regionImage region)) sourceExact
+          targetExact normalizedSourceHead normalizedTargetHead
+          (ConcreteElaboration.compileRegion? definitions source.val fuel)
+          (ConcreteElaboration.compileRegion? definitions result.checked.val
+            fuel)
+          (source.val.childrenOf region) (by
+            intro child childSourceBody childTargetBody childMember
+              childSourceCompiled childTargetCompiled
+            have childData := ConcreteElaboration.mem_childrenOf source.val
+              region child childMember
+            have childDepth := ConcreteElaboration.child_depth source.val child
+              region depth childData regionClimb
+            have childFuel : depth + 1 + fuel = source.val.regionCount + 1 := by
+              omega
+            have childBelow : headDepth < depth + 1 := by omega
+            have childSourceAbove := ConcreteElaboration.extend_above_child
+              definitions source.val source.property sourceOuter region child
+              sourceAbove childData
+            have targetChildData : result.checked.val.regions
+                (result.regionImage child) =
+              .cut (result.regionImage region) := by
+              rw [result.regionImage_exact child,
+                result.regionImage_exact region,
+                result.regionImage_data child, childData]
+              rfl
+            have childTargetAbove := ConcreteElaboration.extend_above_child
+              definitions result.checked.val result.checked.property targetOuter
+              (result.regionImage region) (result.regionImage child) targetAbove
+              targetChildData
+            let childOuter : WireRenaming (sourceOuter.extend region).sigs
+                (targetOuter.extend (result.regionImage region)).sigs :=
+              arityShift_regionEmbedding_below source wire sourceArguments
+                sourceSignature newArgument result accepted region notHead
+                sourceOuter targetOuter outer
+            have childOuterOrigin : ∀ {signature : Sig}
+                (value : Var (sourceOuter.extend region).sigs signature),
+                ConcreteElaboration.WireContext.origin result.checked.val
+                    (targetOuter.extend (result.regionImage region)).ids
+                    (childOuter value) =
+                  result.contextWireMap
+                    (ConcreteElaboration.WireContext.origin source.val
+                      (sourceOuter.extend region).ids value) := by
+              intro signature value
+              exact arityShift_regionEmbedding_below_origin source wire
+                sourceArguments sourceSignature newArgument result accepted
+                region notHead sourceOuter targetOuter outer outerOrigin value
+            let childSourceHead : Var (sourceOuter.extend region).sigs
+                (.rel sourceArguments) := sourceExact.symm ▸ normalizedSourceHead
+            let childTargetHead :
+                Var (targetOuter.extend (result.regionImage region)).sigs
+                  (.rel result.targetArguments) :=
+              targetExact.symm ▸ normalizedTargetHead
+            have childSourceHeadOrigin :
+                ConcreteElaboration.WireContext.origin source.val
+                    (sourceOuter.extend region).ids childSourceHead = wire := by
+              unfold childSourceHead normalizedSourceHead sourceExact
+              exact (recursive_origin_extend_outer source.val sourceOuter region
+                sourceHead).trans sourceHeadOrigin
+            have childTargetHeadOrigin :
+                ConcreteElaboration.WireContext.origin result.checked.val
+                    (targetOuter.extend (result.regionImage region)).ids
+                    childTargetHead = result.targetWire := by
+              unfold childTargetHead normalizedTargetHead targetExact
+              exact (recursive_origin_extend_outer result.checked.val targetOuter
+                (result.regionImage region) targetHead).trans targetHeadOrigin
+            rw [← result.regionImage_exact child] at childTargetCompiled
+            exact induction (depth + 1) child (sourceOuter.extend region)
+              (targetOuter.extend (result.regionImage region)) childOuter
+              childDepth childFuel childBelow childSourceAbove childTargetAbove
+              childOuterOrigin childSourceHead childTargetHead
+              childSourceHeadOrigin childTargetHeadOrigin childSourceBody
+              childTargetBody childSourceCompiled childTargetCompiled)
+          sourceChildren targetChildren sourceChildrenCompiled
+          targetChildrenMapped
+      rw [recursiveChildSmallerItems_eq] at sourceChildrenExact
+      rw [recursiveChildLargerItems_eq] at targetChildrenExact
+      let bounds := arityShift_regionBounds_below source wire sourceArguments
+        sourceSignature newArgument result accepted region notHead
+      let holes := recursiveRegionHoles source wire sourceArguments
+        sourceSignature newArgument result accepted region notHead sourceOuter
+        targetOuter outer outerOrigin sourceNodes targetNodes sourceNodesCompiled
+        targetNodesCompiled sourceNodup targetNodup sourceHead targetHead
+        sourceHeadOrigin targetHeadOrigin
+      let normalizedSourceRetained := sourceRetained.renameWires
+        (recursiveRegionNormalization sourceOuter region)
+      let shape := recursiveBlockReceipt
+        (arityShiftInsertion source wire sourceArguments sourceSignature
+          newArgument result accepted) bounds outer normalizedSourceRetained
+        childShapes holes
+      refine ⟨shape, ?_, ?_⟩
+      · unfold shape
+        rw [recursiveBlockReceipt_smaller]
+        rw [sourceBodyExact, ConcreteElaboration.finishRegion_eq_signatures]
+        rw [recursiveAbstract_finishRegionSignatures]
+        apply congrArg (wrapArgumentBinds
+          ((source.val.wiresAt region).map fun localWire =>
+            (source.val.wires localWire).sig))
+        rw [← recursiveRegionNormalization_region sourceOuter region]
+        simp only [Region.renameWires,
+          UniformIntrinsicRegion.ItemSeq.renameWires_append]
+        simp only [UniformIntrinsicRegion.abstractApplied]
+        rw [UniformIntrinsicRegion.abstractAppliedItems_append]
+        have sourceChildrenExact' := sourceChildrenExact
+        dsimp [normalizedSourceHead] at sourceChildrenExact'
+        have sourceChildrenNormalization :
+            sourceChildren.renameWires
+                (recursiveRegionNormalization sourceOuter region) =
+              sourceChildren.renameWires
+                (fun {_} value => sourceExact ▸ value) := by
+          have regionNormalization := recursiveRegionNormalization_region
+            sourceOuter region (.mk sourceChildren)
+          rw [recursiveCastRegion_eq_rename] at regionNormalization
+          injection regionNormalization
+        rw [sourceChildrenNormalization]
+        rw [sourceChildrenExact']
+        unfold normalizedSourceRetained
+        have ordinaryExact := recursiveSourceOrdinary_eq_retained
+          sourceArguments sourceSignature result.sites sourceOuter region
+          sourceNodes sourceRetained sourceNodesCompiled sourceRetainedCompiled
+          sourceNodup sourceHead sourceHeadOrigin
+        unfold recursiveNormalizedNodeShape at ordinaryExact
+        cases nodeShape :
+            UniformIntrinsicRegion.abstractAppliedItems normalizedSourceHead
+              (sourceNodes.renameWires
+                (recursiveRegionNormalization sourceOuter region)) with
+        | mk ordinary nodeHoles =>
+            rw [nodeShape] at ordinaryExact
+            change ordinary = _ at ordinaryExact
+            rw [← ordinaryExact]
+            unfold recursiveNormalizedNodeShape
+            dsimp [normalizedSourceHead] at nodeShape
+            rw [nodeShape]
+            simp [UniformIntrinsicRegion.holeValues,
+              UniformIntrinsicRegion.appendAbstracted]
+      · unfold shape
+        rw [recursiveBlockReceipt_larger]
+        rw [targetBodyExact, ConcreteElaboration.finishRegion_eq_signatures]
+        rw [recursiveAbstract_finishRegionSignatures]
+        apply congrArg (wrapArgumentBinds
+          ((result.checked.val.wiresAt (result.regionImage region)).map fun
+            localWire => (result.checked.val.wires localWire).sig))
+        rw [← recursiveRegionNormalization_region targetOuter
+          (result.regionImage region)]
+        simp only [Region.renameWires,
+          UniformIntrinsicRegion.ItemSeq.renameWires_append]
+        simp only [UniformIntrinsicRegion.abstractApplied]
+        rw [UniformIntrinsicRegion.abstractAppliedItems_append]
+        have targetChildrenExact' := targetChildrenExact
+        dsimp [normalizedTargetHead] at targetChildrenExact'
+        have targetChildrenNormalization :
+            targetChildren.renameWires
+                (recursiveRegionNormalization targetOuter
+                  (result.regionImage region)) =
+              targetChildren.renameWires
+                (fun {_} value => targetExact ▸ value) := by
+          have regionNormalization := recursiveRegionNormalization_region
+            targetOuter (result.regionImage region) (.mk targetChildren)
+          rw [recursiveCastRegion_eq_rename] at regionNormalization
+          injection regionNormalization
+        rw [targetChildrenNormalization]
+        rw [targetChildrenExact']
+        unfold normalizedSourceRetained bounds
+        rw [← retainedExact]
+        have ordinaryExact := recursiveTargetOrdinary_eq_retained result
+          targetOuter region targetNodes targetRetained targetNodesCompiled
+          targetRetainedCompiled targetNodup targetHead targetHeadOrigin
+        unfold recursiveNormalizedNodeShape at ordinaryExact
+        cases nodeShape :
+            UniformIntrinsicRegion.abstractAppliedItems normalizedTargetHead
+              (targetNodes.renameWires
+                (recursiveRegionNormalization targetOuter
+                  (result.regionImage region))) with
+        | mk ordinary nodeHoles =>
+            rw [nodeShape] at ordinaryExact
+            change ordinary = _ at ordinaryExact
+            rw [← ordinaryExact]
+            unfold recursiveNormalizedNodeShape
+            dsimp [normalizedTargetHead] at nodeShape
+            rw [nodeShape]
+            simp [UniformIntrinsicRegion.holeValues,
+              UniformIntrinsicRegion.appendAbstracted]
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
