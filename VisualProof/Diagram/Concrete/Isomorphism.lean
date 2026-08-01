@@ -1137,19 +1137,6 @@ def checkEquivs?
   else
     exact none
 
-/-- Validate the composite of two already supplied concrete isomorphisms.
-This composes their explicit carrier maps and performs no map discovery. -/
-def checkedTrans?
-    {definitions : List (List Sig)}
-    {first second third : ConcreteDiagram definitions.length}
-    (left : ConcreteIso first second)
-    (right : ConcreteIso second third) :
-    Option (ConcreteIso first third) :=
-  checkEquivs? first third
-    (left.regions.trans right.regions)
-    (left.nodes.trans right.nodes)
-    (left.wires.trans right.wires)
-
 end ConcreteIso
 
 end VisualProof
