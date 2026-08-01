@@ -177,6 +177,63 @@ theorem InsertionEvidence.splitVars_rename
       subst larger
       exact splitInsertedCore_rename smaller position fixedSignature rho values
 
+/-- Concrete origins of a typed insertion are inserted at the same checked
+tuple position. -/
+theorem InsertionEvidence.variableOrigins_forwardVars
+    (evidence :
+      InsertionEvidence larger smaller fixedSignature)
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (fixed : Var context.sigs fixedSignature)
+    (values : Vars context.sigs smaller) :
+    ConcreteElaboration.variableOrigins diagram context
+        (evidence.forwardVars fixed values) =
+      ConcreteWirePrimitive.insertAt
+        (ConcreteElaboration.variableOrigins diagram context values)
+        evidence.position
+        (ConcreteElaboration.WireContext.origin diagram context.ids fixed) := by
+  cases evidence with
+  | mk position largerExact =>
+      subst larger
+      induction values generalizing position with
+      | nil =>
+          cases position <;> rfl
+      | cons head tail induction =>
+          cases position with
+          | zero => rfl
+          | succ position =>
+              simp only [InsertionEvidence.forwardVars, insertVars,
+                ConcreteElaboration.variableOrigins,
+                ConcreteWirePrimitive.insertAt]
+              exact congrArg (List.cons
+                (ConcreteElaboration.WireContext.origin diagram
+                  context.ids head)) (induction position)
+
+/-- Splitting any checked tuple recovers a concrete-origin insertion receipt
+without inspecting raw variable ordinals. -/
+theorem InsertionEvidence.variableOrigins_splitVars
+    (evidence :
+      InsertionEvidence larger smaller fixedSignature)
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (values : Vars context.sigs larger) :
+    ConcreteElaboration.variableOrigins diagram context values =
+      ConcreteWirePrimitive.insertAt
+        (ConcreteElaboration.variableOrigins diagram context
+          (evidence.splitVars values).2)
+        evidence.position
+        (ConcreteElaboration.WireContext.origin diagram context.ids
+          (evidence.splitVars values).1) := by
+  let split := evidence.splitVars values
+  calc
+    ConcreteElaboration.variableOrigins diagram context values =
+        ConcreteElaboration.variableOrigins diagram context
+          (evidence.forwardVars split.1 split.2) :=
+      congrArg (ConcreteElaboration.variableOrigins diagram context)
+        (evidence.reconstruct values).symm
+    _ = _ := evidence.variableOrigins_forwardVars diagram context split.1
+      split.2
+
 private theorem splitInsertedValuesCore_reconstruct
     (smaller : List Sig)
     (position : Nat)
