@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.IsomorphismSearch
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrame
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 
 namespace VisualProof
@@ -715,6 +716,31 @@ theorem abstractApplied_holeValues
       | .mk items => directAppliedArguments head items := by
   cases body with
   | mk items => exact abstractAppliedItems_holeValues head items
+
+/-- The ordered holes exposed from a renamed canonical site body are exactly
+the successful normalized per-node classifiers in concrete node order. -/
+theorem abstractApplied_rename_siteBody_holeValues
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    (compiled : SiteCompilation base site)
+    (rho : WireRenaming compiled.frame.visible.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments)) :
+    (abstractApplied head (compiled.frame.siteBody.renameWires rho)).holeValues =
+      (base.val.nodesAt site).filterMap
+        (renamedCompiledAppliedArguments? definitions base.val
+          compiled.frame.visible rho head) := by
+  obtain ⟨fuel, nodes, children, nodesCompiled, childrenCompiled,
+      bodyExact⟩ := compiled.siteBody_decomposition
+  rw [bodyExact]
+  simp only [Region.renameWires, abstractApplied_holeValues,
+    ItemSeq.renameWires_append]
+  rw [directAppliedArguments_append]
+  rw [directAppliedArguments_rename_compileNodes definitions base.val
+    compiled.frame.visible rho head (base.val.nodesAt site) nodes
+      nodesCompiled]
+  rw [directAppliedArguments_rename_compileChildrenWith_eq_nil rho head
+    (base.val.childrenOf site) children childrenCompiled]
+  simp
 
 /-- Applied abstraction preserves item-sequence concatenation exactly. -/
 theorem abstractAppliedItems_append
