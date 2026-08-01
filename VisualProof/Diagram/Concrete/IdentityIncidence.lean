@@ -127,6 +127,33 @@ theorem identityOwners_get_eq_of_owner
   unfold identityOwners
   simpa [rangeIndex] using positioned.trans selectedGet
 
+/-- Reading an identity-owner position recovers the owner query at that port. -/
+theorem identityOwner_at_eq_some_get
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (node : diagram.NodeId)
+    (region : diagram.RegionId)
+    (signature : Sig)
+    (arity : Nat)
+    (nodeData : diagram.nodes node = .identity region signature arity)
+    (index : Fin arity) :
+    diagram.endpointOwner? ⟨node, .identity index.val⟩ =
+      some
+        ((diagram.identityOwners node arity).get
+          (Fin.cast
+            (identityOwners_length definitions diagram wellFormed node region
+              signature arity nodeData).symm index)) := by
+  obtain ⟨owner, ownerExact⟩ :=
+    endpointOwner?_complete definitions diagram wellFormed node
+      (.identity index.val) (by
+        simp [requiredPorts, nodeData, index.isLt])
+  have positioned :=
+    identityOwners_get_eq_of_owner definitions diagram wellFormed node region
+      signature arity nodeData index owner ownerExact
+  rw [positioned]
+  exact ownerExact
+
 /--
 The distinct wires physically incident to one node, in concrete wire order.
 Identity storage indices neither select nor order these wires.

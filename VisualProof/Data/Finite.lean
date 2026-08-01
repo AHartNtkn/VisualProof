@@ -150,6 +150,14 @@ def FiniteEquiv.finSwapHead (tail : Nat) :
     refine Fin.cases rfl (fun tailIndex => ?_) rest
     rfl
 
+/-- Exact equivalence between propositionally equal finite initial segments. -/
+def FiniteEquiv.finCast {left right : Nat} (same : left = right) :
+    FiniteEquiv (Fin left) (Fin right) where
+  toFun := Fin.cast same
+  invFun := Fin.cast same.symm
+  left_inv := by intro value; apply Fin.ext; rfl
+  right_inv := by intro value; apply Fin.ext; rfl
+
 /--
 A list permutation owns an exact equivalence of dense positions.  The
 equivalence maps each source position to a target position containing the

@@ -566,6 +566,133 @@ theorem identityIncidence_permuted
   rw [identity] at incidence
   exact incidence
 
+/--
+Construction-owned renaming of identity storage positions.  It is selected
+from the occurrence's exact owner-multiset permutation, so repeated ownership
+by one wire is retained positionally.
+-/
+noncomputable def identityPortEquiv
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (sig : Sig) (arity : Nat)
+    (identity :
+      pattern.val.diagram.nodes node = .identity region sig arity) :
+    Data.Finite.FiniteEquiv (Fin arity) (Fin arity) := by
+  let sourceOwners := pattern.val.diagram.identityOwners node arity
+  let targetOwners := host.val.identityOwners (occurrence.nodeMap node) arity
+  have sourceLength : sourceOwners.length = arity :=
+    ConcreteDiagram.identityOwners_length _ pattern.val.diagram
+      pattern.property.diagram node region sig arity identity
+  have nodeCorresponds := occurrence.node_correspondence node
+  have targetNode :
+      host.val.nodes (occurrence.nodeMap node) =
+        .identity (occurrence.regionMap region) sig arity := by
+    simpa [OccurrenceNodeCorresponds, identity] using nodeCorresponds
+  have targetLength : targetOwners.length = arity :=
+    ConcreteDiagram.identityOwners_length _ host.val host.property
+      (occurrence.nodeMap node) (occurrence.regionMap region) sig arity
+      targetNode
+  let permuted := occurrence.identityIncidence_permuted
+    node region sig arity identity
+  let positions := Data.Finite.FiniteEquiv.ofListPerm permuted
+  exact
+    (Data.Finite.FiniteEquiv.finCast
+        (by simp [sourceOwners, sourceLength])).trans
+      (positions.1.trans
+        (Data.Finite.FiniteEquiv.finCast targetLength))
+
+/-- The positional identity renaming transports the exact owning wire. -/
+theorem identityPortEquiv_owner
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId)
+    (region : pattern.val.diagram.RegionId)
+    (sig : Sig) (arity : Nat)
+    (identity :
+      pattern.val.diagram.nodes node = .identity region sig arity)
+    (index : Fin arity)
+    (sourceWire : pattern.val.diagram.WireId)
+    (sourceOwner :
+      pattern.val.diagram.endpointOwner? ⟨node, .identity index.val⟩ =
+        some sourceWire) :
+    host.val.endpointOwner?
+        ⟨occurrence.nodeMap node,
+          .identity
+            ((occurrence.identityPortEquiv node region sig arity identity)
+              index).val⟩ =
+      some (occurrence.wireMap sourceWire) := by
+  let sourceOwners := pattern.val.diagram.identityOwners node arity
+  let targetOwners := host.val.identityOwners (occurrence.nodeMap node) arity
+  have sourceLength : sourceOwners.length = arity :=
+    ConcreteDiagram.identityOwners_length _ pattern.val.diagram
+      pattern.property.diagram node region sig arity identity
+  have nodeCorresponds := occurrence.node_correspondence node
+  have targetNode :
+      host.val.nodes (occurrence.nodeMap node) =
+        .identity (occurrence.regionMap region) sig arity := by
+    simpa [OccurrenceNodeCorresponds, identity] using nodeCorresponds
+  have targetLength : targetOwners.length = arity :=
+    ConcreteDiagram.identityOwners_length _ host.val host.property
+      (occurrence.nodeMap node) (occurrence.regionMap region) sig arity
+      targetNode
+  let permuted := occurrence.identityIncidence_permuted
+    node region sig arity identity
+  let positions := Data.Finite.FiniteEquiv.ofListPerm permuted
+  let sourcePosition :
+      Fin (sourceOwners.map occurrence.wireMap).length :=
+    Data.Finite.FiniteEquiv.finCast
+      (by simp [sourceOwners, sourceLength]) index
+  let targetPosition : Fin targetOwners.length :=
+    positions.1 sourcePosition
+  have sourcePositioned :=
+    ConcreteDiagram.identityOwners_get_eq_of_owner _
+      pattern.val.diagram pattern.property.diagram node region sig arity
+      identity index sourceWire sourceOwner
+  have positionExact := positions.2 sourcePosition
+  have outputPosition :
+      Fin.cast targetLength.symm
+          ((occurrence.identityPortEquiv node region sig arity identity)
+            index) =
+        targetPosition := by
+    apply Fin.ext
+    rfl
+  have targetPositioned :
+      targetOwners.get
+          (Fin.cast targetLength.symm
+            ((occurrence.identityPortEquiv node region sig arity identity)
+              index)) =
+        occurrence.wireMap sourceWire := by
+    rw [outputPosition]
+    calc
+      targetOwners.get targetPosition =
+          (sourceOwners.map occurrence.wireMap).get sourcePosition :=
+        positionExact
+      _ = occurrence.wireMap
+          (sourceOwners.get
+            (Fin.cast (by simp [sourceOwners]) sourcePosition)) := by
+        simp
+      _ = occurrence.wireMap sourceWire := by
+        exact congrArg occurrence.wireMap
+          (by simpa [sourcePosition, sourceOwners] using sourcePositioned)
+  have targetOwner :=
+    ConcreteDiagram.identityOwner_at_eq_some_get _ host.val
+      host.property (occurrence.nodeMap node) (occurrence.regionMap region)
+      sig arity targetNode
+      ((occurrence.identityPortEquiv node region sig arity identity) index)
+  change
+    host.val.endpointOwner?
+        ⟨occurrence.nodeMap node,
+          .identity
+            ((occurrence.identityPortEquiv node region sig arity identity)
+              index).val⟩ =
+      some
+        (targetOwners.get
+          (Fin.cast targetLength.symm
+            ((occurrence.identityPortEquiv node region sig arity identity)
+              index))) at targetOwner
+  rw [targetPositioned] at targetOwner
+  exact targetOwner
+
 theorem properChildren_exact
     (occurrence : Occurrence pattern host) :
     ∀ region, region ≠ pattern.val.diagram.root →
