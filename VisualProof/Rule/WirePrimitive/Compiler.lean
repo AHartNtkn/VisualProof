@@ -1232,27 +1232,23 @@ private def invertStep
       let normalizedIso := applied.inverseTransportIso inverseApplied
         targetIso (targetIso.wires.right_inv applied.targetWire)
       pure { step := inverseStep, normalizedIso := normalizedIso }
-  | .argDrop wire position applied => do
-      let signature ←
-        match (planned.val.wires wire).sig with
-        | .iota => throw .malformedResidual
-        | .rel arguments =>
-            requireOption .malformedResidual arguments[position]?
-      let inverseWire := targetIso.wires.symm applied.targetWire
-      let inverseAttachments :=
-        applied.inverseAttachments targetIso
-          (targetIso.wires.right_inv applied.targetWire)
-      let inverseApplied ←
-        (applyArgExtend real inverseWire position signature
-          inverseAttachments orientation).mapError .argumentRejected
-      let inverseStep : CompiledPrimitiveStep orientation real :=
-        .argExtend inverseWire position signature inverseAttachments
-          inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .argDrop _ position applied => do
+      match argumentExact : applied.sourceArgumentList[position]? with
+      | none => throw .malformedResidual
+      | some signature =>
+          let inverseWire := targetIso.wires.symm applied.targetWire
+          let wireExact := targetIso.wires.right_inv applied.targetWire
+          let inverseAttachments :=
+            applied.inverseAttachments targetIso wireExact
+          let inverseApplied ←
+            (applyArgExtend real inverseWire position signature
+              inverseAttachments orientation).mapError .argumentRejected
+          let inverseStep : CompiledPrimitiveStep orientation real :=
+            .argExtend inverseWire position signature inverseAttachments
+              inverseApplied
+          let normalizedIso := applied.inverseTransportIso targetIso wireExact
+            inverseApplied argumentExact
+          pure { step := inverseStep, normalizedIso := normalizedIso }
   | .argExtend _ position _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let inverseApplied ←

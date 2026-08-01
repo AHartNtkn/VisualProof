@@ -125,14 +125,14 @@ directly in their restored argument coordinate; retained nodes compose the
 unchanged construction transports with the supplied suffix isomorphism. -/
 def inverseTransportEndpointMap
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     {attachments : List real.val.WireId}
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument attachments)
     (targetIso : ConcreteIso real.val forward.target.val)
     (targetWire : backward.target.val.WireId)
@@ -152,14 +152,14 @@ def inverseTransportEndpointMap
 /-- Inverse of the pair-specific endpoint transport. -/
 def inverseTransportEndpointInverse
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     {attachments : List real.val.WireId}
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument attachments)
     (targetIso : ConcreteIso real.val forward.target.val)
     (targetWire : backward.target.val.WireId)
@@ -181,14 +181,14 @@ def inverseTransportEndpointInverse
 therefore preserves incidence without any argument-coordinate case. -/
 theorem inverseTransportEndpointMap_mem_retained
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     {attachments : List real.val.WireId}
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument attachments)
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
@@ -263,15 +263,15 @@ theorem inverseTransportEndpointMap_mem_retained
 the construction-owned endpoint erased by the forward drop. -/
 theorem inverseTransportEndpointMap_inserted
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (argumentExact :
       forward.sourceArgumentList[position]? = some newArgument)
@@ -316,14 +316,14 @@ theorem inverseTransportEndpointMap_inserted
 /-- Rebuilt head endpoints map directly to the original planned heads. -/
 theorem inverseTransportEndpointMap_head
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     {attachments : List real.val.WireId}
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument attachments)
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
@@ -362,14 +362,14 @@ argument coordinate, and its construction-owned wire maps to the exact
 planned attachment at that coordinate. -/
 theorem inverseTransportEndpointMap_argument
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     {attachments : List real.val.WireId}
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument attachments)
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
@@ -540,15 +540,15 @@ theorem inverseTransportEndpointMap_argument
 extension target wire. -/
 theorem inverseTransportEndpointMap_mem
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (argumentExact :
       forward.sourceArgumentList[position]? = some newArgument)
@@ -695,15 +695,15 @@ theorem inverseTransportEndpointMap_mem
 planned wire. -/
 theorem inverseTransportEndpointInverse_mem
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (argumentExact :
       forward.sourceArgumentList[position]? = some newArgument)
@@ -914,15 +914,15 @@ theorem inverseTransportEndpointInverse_mem
 endpoints. -/
 theorem inverseTransportEndpointInverse_map
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (targetWire : backward.target.val.WireId)
     (endpoint : CEndpoint backward.target.val.nodeCount)
@@ -997,15 +997,15 @@ theorem inverseTransportEndpointInverse_map
 endpoints. -/
 theorem inverseTransportEndpointMap_inverse
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (targetWire : backward.target.val.WireId)
     (candidate : CEndpoint planned.val.nodeCount)
@@ -1105,15 +1105,15 @@ theorem inverseTransportEndpointMap_inverse
 /-- The endpoint map uses exactly the transported node carrier. -/
 theorem inverseTransportEndpointMap_node
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (targetWire : backward.target.val.WireId)
     (endpoint : CEndpoint backward.target.val.nodeCount)
@@ -1155,15 +1155,15 @@ theorem inverseTransportEndpointMap_node
 change storage indices between corresponding identity ports. -/
 theorem inverseTransportEndpointMap_port_shape
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (targetWire : backward.target.val.WireId)
     (endpoint : CEndpoint backward.target.val.nodeCount)
@@ -1253,15 +1253,15 @@ theorem inverseTransportEndpointMap_port_shape
 the transported node carrier. -/
 theorem inverseTransportEndpointMap_corresponds
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (argumentExact :
       forward.sourceArgumentList[position]? = some newArgument)
@@ -1337,15 +1337,15 @@ theorem inverseTransportEndpointMap_corresponds
 drop, its checked inverse extension, and the supplied suffix isomorphism. -/
 def inverseTransportIso
     {planned real : CheckedDiagram definitions}
-    {orientation : Orientation}
+    {forwardOrientation backwardOrientation : Orientation}
     {forwardWire : planned.val.WireId}
     {position : Nat}
-    (forward : AppliedArgDrop planned orientation forwardWire position)
+    (forward : AppliedArgDrop planned forwardOrientation forwardWire position)
     {backwardWire : real.val.WireId}
     {newArgument : Sig}
     (targetIso : ConcreteIso real.val forward.target.val)
     (wireExact : targetIso.wires backwardWire = forward.targetWire)
-    (backward : AppliedArgExtend real orientation backwardWire position
+    (backward : AppliedArgExtend real backwardOrientation backwardWire position
       newArgument (forward.inverseAttachments targetIso wireExact))
     (argumentExact :
       forward.sourceArgumentList[position]? = some newArgument) :
