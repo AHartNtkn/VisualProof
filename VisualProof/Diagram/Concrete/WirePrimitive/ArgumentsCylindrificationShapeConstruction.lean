@@ -1508,6 +1508,35 @@ theorem LocalCylindricalFrame.compileSourceAppliedSiteHole?_complete
   refine ⟨head, arguments, compiled, ?_, argumentOrigins⟩
   simp [UniformIntrinsicRegion.matchedHeadArguments?, normalizedHead]
 
+/-- The normalized per-node classifier selects every source applied site and
+returns precisely its normalized ordered argument tuple. -/
+theorem LocalCylindricalFrame.sourceClassifier_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (site : AppliedSite source wire)
+    (siteRegion : site.region = (source.val.wires wire).scope) :
+    ∃ (arguments : Vars frame.sourceScope.frame.visible.sigs sourceArguments),
+      UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+          source.val frame.sourceScope.frame.visible
+          frame.sourceFrameNormalization
+          (Var.appendRight frame.sourceReduced localSourceHead) site.node =
+        some (Vars.rename frame.sourceFrameNormalization arguments) ∧
+      ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible arguments = site.arguments := by
+  obtain ⟨head, arguments, compiled, matched, origins⟩ :=
+    frame.compileSourceAppliedSiteHole?_complete sourceArguments
+      sourceSignature pair site siteRegion
+  refine ⟨arguments, ?_, origins⟩
+  simp [UniformIntrinsicRegion.renamedCompiledAppliedArguments?, compiled,
+    matched]
+
 /-- A generated target application local to the acted scope compiles in the
 canonical target frame with the replacement head and its exact ordered
 construction-owned argument wires. -/
@@ -1771,6 +1800,39 @@ theorem LocalCylindricalFrame.compileTargetAppliedSiteHole?_complete
     simp only [castVarsArguments]
   · rename_i rejected
     exact False.elim (rejected signatures)
+
+/-- The normalized per-node classifier selects every generated target site
+and returns its checker-cast ordered target argument tuple. -/
+theorem LocalCylindricalFrame.targetClassifier_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (site : Fin result.sites.sites.length)
+    (siteRegion :
+      (result.sites.sites.get site).region =
+        (source.val.wires wire).scope) :
+    ∃ (arguments : Vars frame.targetScope.frame.visible.sigs
+        (targetAppliedSite result site).argumentSignatures),
+      UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+          result.checked.val frame.targetScope.frame.visible
+          frame.targetFrameNormalization
+          (Var.appendRight frame.targetReduced localTargetHead)
+          (result.targetNode site) =
+        some (castVarsArguments
+          (targetAppliedSite_argumentSignatures result site)
+          (Vars.rename frame.targetFrameNormalization arguments)) ∧
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible arguments =
+        (targetAppliedSite result site).arguments := by
+  obtain ⟨head, arguments, compiled, matched, origins⟩ :=
+    frame.compileTargetAppliedSiteHole?_complete result pair site siteRegion
+  refine ⟨arguments, ?_, origins⟩
+  simp [UniformIntrinsicRegion.renamedCompiledAppliedArguments?, compiled,
+    matched]
 
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
