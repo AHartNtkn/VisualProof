@@ -560,6 +560,70 @@ theorem targetNode_local_owner
       referenceBound targetBound
   simpa [targetNode, targetLocalWire] using owner
 
+/-- Every retained argument coordinate of a generated shift node is owned
+by the exact construction image of its source-site attachment. -/
+theorem targetNode_existing_owner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (site : Fin applied.sourceSites.sites.length)
+    (index : Nat)
+    (bound : index <
+      (applied.sourceSites.sites.get site).arguments.length) :
+    applied.target.val.endpointOwner?
+        ⟨applied.targetNode site, .arg index⟩ =
+      some (applied.argumentResult.retainedWireImage
+        ((applied.sourceSites.sites.get site).arguments[index]'bound) (by
+          rw [applied.sourceRemovedWires_exact]
+          simpa using
+            (applied.sourceSites.sites.get site).argument_ne_head
+              index bound)) := by
+  let sourceSite := applied.sourceSites.sites.get site
+  have sourceLength : sourceSite.arguments.length =
+      applied.sourceArgumentList.length :=
+    sourceSite.arguments_length.trans
+      (congrArg List.length
+        (ConcreteWirePrimitive.appliedSite_arguments_eq_relationArguments
+          applied.sourceArgumentList applied.sourceWire_signature sourceSite))
+  have rawLength :
+      (applied.argumentResult.sites.sites.get site).arguments.length =
+        applied.sourceArgumentList.length := by
+    simpa [sourceSite, sourceSites, argumentResult] using sourceLength
+  have referenceBound : index <
+      (applied.argumentResult.spec.arguments site).length := by
+    rw [ArgumentsSemantics.arityShift_spec_arguments_length source wire
+      applied.sourceArgumentList applied.sourceWire_signature
+      applied.sourceSites newArgument applied.argumentResult applied.accepted]
+    rw [rawLength]
+    rw [sourceLength] at bound
+    omega
+  have targetBound : index <
+      applied.argumentResult.targetArguments.length := by
+    change index < applied.result.targetArguments.length
+    rw [applied.targetArguments_exact, List.length_append]
+    simp only [List.length_singleton, Nat.add_comm]
+    rw [sourceLength] at bound
+    omega
+  have owner := ArgumentsSemantics.arityShift_targetNode_existing_owner
+    source wire applied.sourceArgumentList applied.sourceWire_signature
+    applied.sourceSites newArgument applied.argumentResult applied.accepted
+    site index bound referenceBound targetBound
+  have rawRetained :
+      (applied.argumentResult.sites.sites.get site).arguments[index]'
+          (by simpa [sourceSites, argumentResult] using bound) ∉
+      applied.argumentResult.sourceRemovedWires := by
+    rw [applied.sourceRemovedWires_exact]
+    simpa using
+      (applied.argumentResult.sites.sites.get site).argument_ne_head
+        index (by simpa [sourceSites, argumentResult] using bound)
+  have contextExact :=
+    applied.argumentResult.contextWireMap_retained
+      ((applied.argumentResult.sites.sites.get site).arguments[index]'
+        (by simpa [sourceSites, argumentResult] using bound)) rawRetained
+  have final := owner.trans (congrArg some contextExact)
+  simpa [sourceSite, sourceSites, argumentResult] using final
+
 /-- Exact relation signature of the fresh live wire. -/
 theorem targetWire_signature
     {source : CheckedDiagram definitions}
@@ -665,6 +729,33 @@ theorem sourceWire_signature
     (applied : AppliedArityUnshift source wire position) :
     (source.val.wires wire).sig = .rel applied.sourceArgumentList :=
   applied.sourceSignature
+
+/-- Exact target argument vector produced by the accepted unshift. -/
+theorem targetArguments_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    applied.argumentResult.targetArguments =
+      ConcreteWirePrimitive.eraseAt applied.sourceArgumentList position := by
+  exact ConcreteWirePrimitive.arityUnshift_targetArguments_exact source wire
+    applied.sourceArgumentList applied.sourceWire_signature position
+    applied.argumentResult applied.accepted
+
+/-- Exact ordered retained attachment tuple at each accepted unshift site. -/
+theorem siteArguments_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.argumentResult.spec.arguments site =
+      existingReferences
+        (ConcreteWirePrimitive.eraseAt
+          (applied.sourceSites.sites.get site).arguments position) := by
+  exact ConcreteWirePrimitive.arityUnshift_arguments_exact source wire
+    applied.sourceArgumentList applied.sourceWire_signature position
+    applied.argumentResult applied.accepted site
 
 
 def target
@@ -6168,6 +6259,135 @@ theorem arg_extend_sound
           rw [compiledExact] at legal
           exact
             (applied.ledger.directions model definitionEnv).2 legal
+
+/-- A retained endpoint is transported by an argument construction with
+its port unchanged and its node carried by the construction equivalence. -/
+theorem argumentResult_retainedEndpointImage_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ConcreteWirePrimitive.ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (sourceWire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (incident : endpoint ∈ (source.val.wires sourceWire).endpoints)
+    (retained : endpoint.node ∉
+      ConcreteWirePrimitive.argumentSiteNodes result.sites) :
+    (⟨result.nodeEquiv targetSites endpoint.node, endpoint.port⟩ :
+      CEndpoint result.checked.val.nodeCount) ∈
+      (result.checked.val.wires
+        (result.retainedWireImage sourceWire (by
+          intro removed
+          exact retained
+            (result.sourceRemovedExhausted sourceWire removed endpoint
+              incident)))).endpoints := by
+  let sourceRetained : sourceWire ∉ result.sourceRemovedWires := by
+    intro removed
+    exact retained
+      (result.sourceRemovedExhausted sourceWire removed endpoint incident)
+  have targetIncident := result.retainedNode_forwardIncident
+    endpoint.node retained endpoint.port sourceWire incident
+  have nodeExact : result.nodeEquiv targetSites endpoint.node =
+      result.retainedNodeImage endpoint.node retained := by
+    unfold ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+    change result.nodeImage endpoint.node = _
+    rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_neg retained]
+  have contextImage := result.contextWireMap_retained sourceWire
+    sourceRetained
+  rw [contextImage] at targetIncident
+  simpa [nodeExact] using targetIncident
+
+/-- Incidence on a retained rebuilt endpoint pulls back through the exact
+construction carrier with its port unchanged. -/
+theorem argumentResult_retainedEndpointInverse_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ConcreteWirePrimitive.ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (sourceWire : source.val.WireId)
+    (sourceRetained : sourceWire ∉ result.sourceRemovedWires)
+    (candidate : CEndpoint result.checked.val.nodeCount)
+    (incident : candidate ∈
+      (result.checked.val.wires
+        (result.retainedWireImage sourceWire sourceRetained)).endpoints)
+    (retained : (result.nodeEquiv targetSites).symm candidate.node ∉
+      ConcreteWirePrimitive.argumentSiteNodes result.sites) :
+    (⟨(result.nodeEquiv targetSites).symm candidate.node,
+        candidate.port⟩ : CEndpoint source.val.nodeCount) ∈
+      (source.val.wires sourceWire).endpoints := by
+  let sourceNode := (result.nodeEquiv targetSites).symm candidate.node
+  have nodeRecover : result.nodeEquiv targetSites sourceNode =
+      candidate.node := (result.nodeEquiv targetSites).right_inv candidate.node
+  have targetRequired : candidate.port ∈
+      result.checked.val.requiredPorts candidate.node :=
+    ConcreteDiagram.incident_port_required definitions result.checked.val
+      result.checked.property (result.retainedWireImage sourceWire
+        sourceRetained) candidate incident
+  have targetNodeImage : result.retainedNodeImage sourceNode retained =
+      candidate.node := by
+    have image : result.nodeEquiv targetSites sourceNode =
+        result.retainedNodeImage sourceNode retained := by
+      unfold ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+      change result.nodeImage sourceNode = _
+      rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_neg retained]
+    rw [← image]
+    exact nodeRecover
+  have sourceRequired : candidate.port ∈
+      source.val.requiredPorts sourceNode := by
+    have retainedData : result.checked.val.nodes
+        (result.retainedNodeImage sourceNode retained) =
+          (source.val.nodes sourceNode).rename result.regionEquiv :=
+      result.retainedNodeImage_data sourceNode retained
+    rw [ConcreteDiagram.requiredPorts] at targetRequired ⊢
+    rw [← targetNodeImage, retainedData] at targetRequired
+    cases sourceData : source.val.nodes sourceNode <;>
+      simp [sourceData, CNode.rename] at targetRequired ⊢
+    all_goals exact targetRequired
+  obtain ⟨actualWire, sourceOwner⟩ :=
+    ConcreteDiagram.endpointOwner?_complete definitions source.val
+      source.property sourceNode candidate.port sourceRequired
+  have actualRetained : actualWire ∉ result.sourceRemovedWires := by
+    intro removed
+    have actualIncident := ConcreteDiagram.endpointOwner?_incident source.val
+      ⟨sourceNode, candidate.port⟩ actualWire sourceOwner
+    exact retained (result.sourceRemovedExhausted actualWire removed
+      ⟨sourceNode, candidate.port⟩ actualIncident)
+  have forwardOwner := result.retainedNodeImage_endpointOwner
+    sourceNode retained candidate.port sourceRequired actualWire sourceOwner
+  change result.checked.val.endpointOwner?
+      ⟨result.retainedNodeImage sourceNode retained, candidate.port⟩ =
+        some (result.retainedWireImage actualWire actualRetained)
+    at forwardOwner
+  have targetOwner : result.checked.val.endpointOwner? candidate =
+      some (result.retainedWireImage sourceWire sourceRetained) :=
+    ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+      result.checked.val result.checked.property candidate.node candidate.port
+      targetRequired (result.retainedWireImage sourceWire sourceRetained)
+      incident
+  rw [targetNodeImage, targetOwner] at forwardOwner
+  have imageExact : result.retainedWireImage actualWire actualRetained =
+      result.retainedWireImage sourceWire sourceRetained :=
+    (Option.some.inj forwardOwner).symm
+  have actualTargetRetained :=
+    result.retainedWireImage_not_targetRemoved actualWire actualRetained
+  have sourceTargetRetained :=
+    result.retainedWireImage_not_targetRemoved sourceWire sourceRetained
+  have actualExact : actualWire = sourceWire := by
+    calc
+      actualWire = result.sourceWireOfRetainedTarget
+          (result.retainedWireImage actualWire actualRetained)
+          actualTargetRetained :=
+        (result.sourceWireOfRetainedTarget_retainedWireImage actualWire
+          actualRetained actualTargetRetained).symm
+      _ = result.sourceWireOfRetainedTarget
+          (result.retainedWireImage sourceWire sourceRetained)
+          sourceTargetRetained :=
+        result.sourceWireOfRetainedTarget_congr _ _ _ _ imageExact
+      _ = sourceWire :=
+        result.sourceWireOfRetainedTarget_retainedWireImage sourceWire
+          sourceRetained sourceTargetRetained
+  subst actualWire
+  exact ConcreteDiagram.endpointOwner?_incident source.val
+    ⟨sourceNode, candidate.port⟩ sourceWire sourceOwner
 
 end Arguments
 
