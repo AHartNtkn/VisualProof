@@ -838,6 +838,121 @@ theorem argPermute_valid_exact
   | false => simp [valid] at accepted
   | true => rfl
 
+/-- A successful argument permutation retains the exact permuted relation
+signature selected by the construction. -/
+theorem argPermute_targetArguments_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (permutation : List Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argPermute source wire permutation = .ok result) :
+    result.targetArguments = permute sourceArguments permutation := by
+  unfold argPermute checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  change
+    (if !validPermutation sourceArguments.length permutation then
+        .error .invalidPermutation
+      else do
+        let sites ← checkedArgumentSites source wire
+        let spec : ReplacementSpec source wire sites :=
+          { targetArguments := permute sourceArguments permutation
+            removedWires := []
+            localCount := 0
+            localSignature := Fin.elim0
+            localScope := Fin.elim0
+            arguments := fun site =>
+              existingReferences <|
+                permute (sites.sites.get site).arguments permutation }
+        replaceAppliedEnds source wire sites spec _) =
+      .ok result at accepted
+  cases valid : validPermutation sourceArguments.length permutation with
+  | false => simp [valid] at accepted
+  | true =>
+    simp [valid] at accepted
+    cases sitesAccepted : checkedArgumentSites source wire with
+    | error error => rw [sitesAccepted] at accepted; contradiction
+    | ok sites =>
+      rw [sitesAccepted] at accepted
+      exact replaceAppliedEnds_targetArguments_exact source wire sites
+        { targetArguments := permute sourceArguments permutation
+          removedWires := []
+          localCount := 0
+          localSignature := Fin.elim0
+          localScope := Fin.elim0
+          arguments := fun site =>
+            existingReferences <|
+              permute (sites.sites.get site).arguments permutation }
+        _ result accepted
+
+/-- A successful argument permutation retains the exact ordered attachment
+tuple for every construction-owned source-site position. -/
+theorem argPermute_arguments_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (permutation : List Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argPermute source wire permutation = .ok result)
+    (site : Fin result.sites.sites.length) :
+    result.spec.arguments site =
+      existingReferences
+        (permute (result.sites.sites.get site).arguments permutation) := by
+  unfold argPermute checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  change
+    (if !validPermutation sourceArguments.length permutation then
+        .error .invalidPermutation
+      else do
+        let sites ← checkedArgumentSites source wire
+        let spec : ReplacementSpec source wire sites :=
+          { targetArguments := permute sourceArguments permutation
+            removedWires := []
+            localCount := 0
+            localSignature := Fin.elim0
+            localScope := Fin.elim0
+            arguments := fun site =>
+              existingReferences <|
+                permute (sites.sites.get site).arguments permutation }
+        replaceAppliedEnds source wire sites spec _) =
+      .ok result at accepted
+  cases valid : validPermutation sourceArguments.length permutation with
+  | false => simp [valid] at accepted
+  | true =>
+    simp [valid] at accepted
+    cases sitesAccepted : checkedArgumentSites source wire with
+    | error error => rw [sitesAccepted] at accepted; contradiction
+    | ok sites =>
+      rw [sitesAccepted] at accepted
+      change
+        replaceAppliedEnds source wire sites
+          { targetArguments := permute sourceArguments permutation
+            removedWires := []
+            localCount := 0
+            localSignature := Fin.elim0
+            localScope := Fin.elim0
+            arguments := fun site =>
+              existingReferences <|
+                permute (sites.sites.get site).arguments permutation }
+          _ = .ok result at accepted
+      unfold replaceAppliedEnds at accepted
+      split at accepted <;> try contradiction
+      next removal _removalAccepted =>
+        simp only at accepted
+        split at accepted <;> try contradiction
+        next checked _checkedAccepted =>
+          split at accepted <;> try contradiction
+          next targetSites _targetSitesAccepted =>
+            have resultExact := Except.ok.inj accepted
+            subst result
+            rfl
+
 /-- Argument permutation allocates no operation-local wire. -/
 theorem argPermute_localCount_exact
     (source : CheckedDiagram definitions)

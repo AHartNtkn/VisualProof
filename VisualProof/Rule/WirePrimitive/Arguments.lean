@@ -251,6 +251,13 @@ structure AppliedArgPermute
   private local_count_exact : result.spec.localCount = 0
   private permutation_receipt :
     ValidPermutationReceipt sourceArguments.length permutation
+  private target_arguments_exact :
+    result.targetArguments = permute sourceArguments permutation
+  private arguments_exact :
+    ∀ site : Fin result.sites.sites.length,
+      result.spec.arguments site =
+        existingReferences
+          (permute (result.sites.sites.get site).arguments permutation)
   private ledger :
     ArgumentsSemantics.PermutationLedger result sourceArguments
 
@@ -563,6 +570,31 @@ theorem inversePermutation_valid
       applied.inversePermutation = true :=
   applied.permutation_receipt.inverse_valid
 
+/-- The checked target relation signature is exactly the receipt-owned
+forward permutation. -/
+theorem targetArguments_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    applied.result.targetArguments =
+      permute applied.sourceArguments permutation :=
+  applied.target_arguments_exact
+
+/-- Every generated application uses the receipt-owned permuted attachment
+tuple at its exact source-site position. -/
+theorem siteArguments_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.result.spec.arguments site =
+      existingReferences
+        (permute (applied.result.sites.sites.get site).arguments
+          permutation) :=
+  applied.arguments_exact site
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -867,6 +899,12 @@ def applyArgPermute
                     (ConcreteWirePrimitive.argPermute_valid_exact source wire
                       sourceArguments sourceSignature permutation result
                       accepted),
+                  ConcreteWirePrimitive.argPermute_targetArguments_exact
+                    source wire sourceArguments sourceSignature permutation
+                    result accepted,
+                  ConcreteWirePrimitive.argPermute_arguments_exact source
+                    wire sourceArguments sourceSignature permutation result
+                    accepted,
                   ledger⟩
 
 def applyArgDuplicate
