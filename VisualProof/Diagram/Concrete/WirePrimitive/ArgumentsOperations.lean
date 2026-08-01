@@ -1495,6 +1495,63 @@ theorem argExtend_targetArguments_exact
                       ((attachments[site.val]?).getD wire) }
               _ result accepted
 
+/-- A successful argument extension retains the exact inserted attachment
+tuple for every construction-owned source-site position. -/
+theorem argExtend_arguments_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (position : Nat)
+    (newArgument : Sig)
+    (attachments : List source.val.WireId)
+    (result : ArgumentResult source wire)
+    (accepted :
+      argExtend source wire position newArgument attachments = .ok result)
+    (site : Fin result.sites.sites.length) :
+    result.spec.arguments site =
+      existingReferences
+        (insertAt (result.sites.sites.get site).arguments position
+          ((attachments[site.val]?).getD wire)) := by
+  unfold argExtend checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  split at accepted <;> try contradiction
+  next valid =>
+    split at accepted <;> try contradiction
+    next sites _ =>
+      split at accepted <;> try contradiction
+      next coverage _ =>
+        split at accepted <;> try contradiction
+        next signatures _ =>
+          split at accepted <;> try contradiction
+          next visible _ =>
+            change
+              replaceAppliedEnds source wire sites
+                { targetArguments :=
+                    insertAt sourceArguments position newArgument
+                  removedWires := []
+                  localCount := 0
+                  localSignature := Fin.elim0
+                  localScope := Fin.elim0
+                  arguments := fun site =>
+                    existingReferences <|
+                      insertAt (sites.sites.get site).arguments position
+                        ((attachments[site.val]?).getD wire) }
+                _ = .ok result at accepted
+            unfold replaceAppliedEnds at accepted
+            split at accepted <;> try contradiction
+            next removal _removalAccepted =>
+              simp only at accepted
+              split at accepted <;> try contradiction
+              next checked _checkedAccepted =>
+                split at accepted <;> try contradiction
+                next targetSites _targetSitesAccepted =>
+                  have resultExact := Except.ok.inj accepted
+                  subst result
+                  rfl
+
 end ConcreteWirePrimitive
 
 end VisualProof

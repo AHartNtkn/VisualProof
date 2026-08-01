@@ -326,6 +326,13 @@ structure AppliedArgExtend
   private target_arguments_exact :
     result.targetArguments =
       ConcreteWirePrimitive.insertAt sourceArguments position newArgument
+  private arguments_exact :
+    ∀ site : Fin result.sites.sites.length,
+      result.spec.arguments site =
+        existingReferences
+          (ConcreteWirePrimitive.insertAt
+            (result.sites.sites.get site).arguments position
+            ((attachments[site.val]?).getD wire))
   private ledger :
     ArgumentsSemantics.ExtendLedger result sourceArguments
   private semantics :
@@ -5005,10 +5012,14 @@ def applyArgExtend
             ConcreteWirePrimitive.argExtend_targetArguments_exact source wire
               sourceArguments sourceSignature position newArgument attachments
               result accepted
+          let argumentsExact := fun site =>
+            ConcreteWirePrimitive.argExtend_arguments_exact source wire
+              sourceArguments sourceSignature position newArgument attachments
+              result accepted site
           pure
             ⟨gate, result, sourceArguments, sourceSignature,
               sourceRemovedExact, localCountExact, targetArgumentsExact,
-              ledger, semantics⟩
+              argumentsExact, ledger, semantics⟩
 
 /-- Checked arity shift is a full-model cylindrification equivalence. -/
 theorem arity_shift_sound
