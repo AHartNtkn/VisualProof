@@ -36,6 +36,7 @@ inductive StructuralError
   | ancestorTransportRejected
   | removalRejected (error : WFError)
   | reconstructionRejected
+  | reconstructionIsoRejected
   | anchorCopyCompilationMismatch
   | destinationCopyCompilationMismatch
   | copyTargetMismatch
@@ -1515,6 +1516,11 @@ structure CheckedOrdinaryDeiteration
     ConcreteSpliceAttachment removed.complement removed.site pattern
   private reconstructionAccepted :
     reconstructionAttachment? inner removed = some reconstruction
+  private reconstructionIso :
+    ConcreteIso reconstruction.diagram source.val
+  private reconstructionIsoAccepted :
+    Reconstruction.extract_splice_iso? inner removed reconstruction
+      reconstructionAccepted = some reconstructionIso
   private reconstructed : ConcreteSpliceResult reconstruction
   private reconstructedAccepted :
     splice reconstruction = .ok reconstructed
@@ -1585,11 +1591,17 @@ def checkOrdinaryDeiteration
                             reconstructionAttachment? inner removed with
                         | none => exact .error .reconstructionRejected
                         | some reconstruction =>
-                            match reconstructedAccepted :
-                                splice reconstruction with
-                            | .error error =>
-                                exact .error (.spliceRejected error)
-                            | .ok reconstructed =>
+                            match reconstructionIsoAccepted :
+                                Reconstruction.extract_splice_iso? inner
+                                  removed reconstruction
+                                  reconstructionAccepted with
+                            | none => exact .error .reconstructionIsoRejected
+                            | some reconstructionIso =>
+                              match reconstructedAccepted :
+                                  splice reconstruction with
+                              | .error error =>
+                                  exact .error (.spliceRejected error)
+                              | .ok reconstructed =>
                                 match reconstructionCompiledAccepted :
                                     compileInsertion?
                                       innerExtraction.compilation
@@ -1622,6 +1634,8 @@ def checkOrdinaryDeiteration
                                               transportedInput rfl transported
                                               transportedAccepted reconstruction
                                               reconstructionAccepted
+                                              reconstructionIso
+                                              reconstructionIsoAccepted
                                               reconstructed
                                               reconstructedAccepted
                                               reconstructionCompilation
@@ -1726,8 +1740,7 @@ theorem sound
       denoteChecked pre definitionEnv raw ↔
         denoteChecked pre definitionEnv sourceDiagram :=
     iso_denotation
-      (Reconstruction.extract_splice_iso inner checked.removed
-        checked.reconstruction checked.reconstructionAccepted)
+      checked.reconstructionIso
       pre definitionEnv
   have rawInserted :
       denoteChecked pre definitionEnv raw ↔

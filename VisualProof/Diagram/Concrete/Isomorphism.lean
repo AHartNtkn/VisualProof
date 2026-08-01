@@ -91,6 +91,34 @@ theorem target_node
     _ = (left.nodes (iso.nodes.symm node)).rename iso.regions :=
       iso.node_table _
 
+theorem endpoint_forward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (wire : left.WireId) (endpoint : CEndpoint left.nodeCount)
+    (member : endpoint ∈ (left.wires wire).endpoints) :
+    ∃ candidate,
+      candidate ∈ (right.wires (iso.wires wire)).endpoints ∧
+        PortCorresponds left right iso.nodes endpoint candidate :=
+  ⟨iso.endpointMap wire endpoint, iso.endpointMap_mem wire endpoint member,
+    iso.endpointMap_corresponds wire endpoint member⟩
+
+theorem endpoint_backward
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (wire : left.WireId) (candidate : CEndpoint right.nodeCount)
+    (member : candidate ∈ (right.wires (iso.wires wire)).endpoints) :
+    ∃ endpoint,
+      endpoint ∈ (left.wires wire).endpoints ∧
+        PortCorresponds left right iso.nodes endpoint candidate := by
+  let endpoint := iso.endpointInverse wire candidate
+  have endpointMember := iso.endpointInverse_mem wire candidate member
+  refine ⟨endpoint, endpointMember, ?_⟩
+  have corresponds := iso.endpointMap_corresponds wire endpoint endpointMember
+  rw [iso.endpointMap_right_inv wire candidate member] at corresponds
+  exact corresponds
+
 def symm
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
@@ -153,66 +181,93 @@ def symm
         congrArg (fun target =>
           iso.regions.symm (right.wires target).scope)
           (iso.wires.right_inv wire)
-  endpoint_forward := by
+  endpointMap := fun wire candidate =>
+    iso.endpointInverse (iso.wires.symm wire) candidate
+  endpointInverse := fun wire endpoint =>
+    iso.endpointMap (iso.wires.symm wire) endpoint
+  endpointMap_mem := by
     intro wire candidate member
     have mappedMember : candidate ∈
         (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
       exact Eq.mp (congrArg
         (fun target => candidate ∈ (right.wires target).endpoints)
         (iso.wires.right_inv wire).symm) member
-    obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-      iso.endpoint_backward (iso.wires.symm wire) candidate mappedMember
-    exact ⟨endpoint, endpointMember,
-      portCorresponds_symm iso corresponds⟩
-  endpoint_backward := by
+    exact iso.endpointInverse_mem (iso.wires.symm wire) candidate
+      mappedMember
+  endpointInverse_mem := by
     intro wire endpoint member
-    obtain ⟨candidate, candidateMember, corresponds⟩ :=
-      iso.endpoint_forward (iso.wires.symm wire) endpoint member
+    have candidateMember := iso.endpointMap_mem
+      (iso.wires.symm wire) endpoint member
     have wireEquality : iso.wires (iso.wires.symm wire) = wire :=
       iso.wires.right_inv wire
     rw [wireEquality] at candidateMember
-    exact ⟨candidate, candidateMember,
-      portCorresponds_symm iso corresponds⟩
+    exact candidateMember
+  endpointMap_left_inv := by
+    intro wire candidate member
+    have mappedMember : candidate ∈
+        (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
+      exact Eq.mp (congrArg
+        (fun target => candidate ∈ (right.wires target).endpoints)
+        (iso.wires.right_inv wire).symm) member
+    exact iso.endpointMap_right_inv (iso.wires.symm wire) candidate
+      mappedMember
+  endpointMap_right_inv := by
+    intro wire endpoint member
+    exact iso.endpointMap_left_inv (iso.wires.symm wire) endpoint member
+  endpointMap_corresponds := by
+    intro wire candidate member
+    have mappedMember : candidate ∈
+        (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
+      exact Eq.mp (congrArg
+        (fun target => candidate ∈ (right.wires target).endpoints)
+        (iso.wires.right_inv wire).symm) member
+    let endpoint := iso.endpointInverse (iso.wires.symm wire) candidate
+    have endpointMember := iso.endpointInverse_mem
+      (iso.wires.symm wire) candidate mappedMember
+    have corresponds := iso.endpointMap_corresponds
+      (iso.wires.symm wire) endpoint endpointMember
+    rw [iso.endpointMap_right_inv (iso.wires.symm wire) candidate
+      mappedMember] at corresponds
+    exact portCorresponds_symm iso corresponds
 
-private def endpointFiber
-    (endpoints : List (CEndpoint nodeCount))
-    (node : Fin nodeCount)
-    (port : CPort) : List (CEndpoint nodeCount) :=
-  endpoints.filter fun candidate =>
-    decide (candidate.node = node) &&
-      match port, candidate.port with
-      | .identity _, .identity _ => true
-      | _, _ => decide (candidate.port = port)
-
-/-- Transport one endpoint through an explicitly supplied isomorphism on a
-specific wire. Ordinary ports retain their constructor-derived name. Identity
-ports use their stable occurrence in the node-and-wire fiber, so repeated
-existential witnesses cannot collapse distinct endpoints. -/
-def transportEndpointOnWire?
+/-- Transport one endpoint occurrence through the constructive equivalence
+owned by an explicitly supplied isomorphism. -/
+def transportEndpointOnWire
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
     (iso : ConcreteIso left right)
     (wire : left.WireId)
-    (endpoint : CEndpoint left.nodeCount) :
-    Option (CEndpoint right.nodeCount) :=
-  let sourceFiber := endpointFiber (left.wires wire).endpoints
-    endpoint.node endpoint.port
-  let targetFiber := endpointFiber
-    (right.wires (iso.wires wire)).endpoints
-    (iso.nodes endpoint.node) endpoint.port
-  targetFiber[sourceFiber.idxOf endpoint]?
+    (endpoint : CEndpoint left.nodeCount)
+    (_member : endpoint ∈ (left.wires wire).endpoints) :
+    CEndpoint right.nodeCount :=
+  iso.endpointMap wire endpoint
 
-/-- Transport an ordered endpoint selection on one wire. List traversal
-preserves both order and multiplicity; any absent positional witness rejects
-the whole transport. -/
-def transportEndpointsOnWire?
+@[simp] theorem transportEndpointOnWire_mem
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
     (iso : ConcreteIso left right)
     (wire : left.WireId)
-    (endpoints : List (CEndpoint left.nodeCount)) :
-    Option (List (CEndpoint right.nodeCount)) :=
-  endpoints.mapM (iso.transportEndpointOnWire? wire)
+    (endpoint : CEndpoint left.nodeCount)
+    (member : endpoint ∈ (left.wires wire).endpoints) :
+    iso.transportEndpointOnWire wire endpoint member ∈
+      (right.wires (iso.wires wire)).endpoints :=
+  iso.endpointMap_mem wire endpoint member
+
+/-- Transport an ordered endpoint selection totally. The membership premise
+selects occurrences from the named source wire; list mapping preserves order
+and multiplicity. -/
+def transportEndpointsOnWire
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (wire : left.WireId)
+    (endpoints : List (CEndpoint left.nodeCount))
+    (members : ∀ endpoint, endpoint ∈ endpoints →
+      endpoint ∈ (left.wires wire).endpoints) :
+    List (CEndpoint right.nodeCount) :=
+  endpoints.attach.map fun endpoint =>
+    iso.transportEndpointOnWire wire endpoint.val
+      (members endpoint.val endpoint.property)
 
 theorem node_region
     {definitions : List (List Sig)}
@@ -765,6 +820,44 @@ private theorem explicitPortCorresponds_of_true
   rcases Bool.and_eq_true_iff.mp sigArity with ⟨sigExact, arityExact⟩
   cases endpointPort <;> cases candidatePort <;> simp_all
 
+private def explicitEndpointFiber
+    (endpoints : List (CEndpoint nodeCount))
+    (node : Fin nodeCount) (port : CPort) :
+    List (CEndpoint nodeCount) :=
+  endpoints.filter fun candidate =>
+    decide (candidate.node = node) &&
+      match port, candidate.port with
+      | .identity _, .identity _ => true
+      | _, _ => decide (candidate.port = port)
+
+private def explicitEndpointMap?
+    {definitions : List (List Sig)}
+    (left right : ConcreteDiagram definitions.length)
+    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
+    (wire : left.WireId)
+    (targetWire : right.WireId)
+    (endpoint : CEndpoint left.nodeCount) :
+    Option (CEndpoint right.nodeCount) :=
+  let sourceFiber := explicitEndpointFiber (left.wires wire).endpoints
+    endpoint.node endpoint.port
+  let targetFiber := explicitEndpointFiber
+    (right.wires targetWire).endpoints (nodes endpoint.node) endpoint.port
+  targetFiber[sourceFiber.idxOf endpoint]?
+
+private def explicitEndpointInverse?
+    {definitions : List (List Sig)}
+    (left right : ConcreteDiagram definitions.length)
+    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
+    (wire : left.WireId)
+    (targetWire : right.WireId)
+    (candidate : CEndpoint right.nodeCount) :
+    Option (CEndpoint left.nodeCount) :=
+  let targetFiber := explicitEndpointFiber
+    (right.wires targetWire).endpoints candidate.node candidate.port
+  let sourceFiber := explicitEndpointFiber (left.wires wire).endpoints
+    (nodes.symm candidate.node) candidate.port
+  sourceFiber[targetFiber.idxOf candidate]?
+
 /-- Validate an explicitly supplied finite identifier correspondence.  This
 checker proves table and incidence preservation but never enumerates or
 discovers a map. -/
@@ -794,13 +887,25 @@ def checkEquivs?
   let forwardValid :=
     (Data.Finite.allFin left.wireCount).all fun wire =>
       (left.wires wire).endpoints.all fun endpoint =>
-        (right.wires (wires wire)).endpoints.any fun candidate =>
-          explicitPortCorresponds left right nodes endpoint candidate
+        match explicitEndpointMap? left right nodes wire (wires wire)
+            endpoint with
+        | none => false
+        | some candidate =>
+            decide (candidate ∈
+              (right.wires (wires wire)).endpoints) &&
+            explicitPortCorresponds left right nodes endpoint candidate &&
+            decide (explicitEndpointInverse? left right nodes wire
+              (wires wire) candidate = some endpoint)
   let backwardValid :=
     (Data.Finite.allFin left.wireCount).all fun wire =>
       (right.wires (wires wire)).endpoints.all fun candidate =>
-        (left.wires wire).endpoints.any fun endpoint =>
-          explicitPortCorresponds left right nodes endpoint candidate
+        match explicitEndpointInverse? left right nodes wire (wires wire)
+            candidate with
+        | none => false
+        | some endpoint =>
+            decide (endpoint ∈ (left.wires wire).endpoints) &&
+            decide (explicitEndpointMap? left right nodes wire
+              (wires wire) endpoint = some candidate)
   if accepted : rootValid && regionsValid && nodesValid &&
       signaturesValid && scopesValid && forwardValid && backwardValid then
     have parts := Bool.and_eq_true_iff.mp accepted
@@ -841,30 +946,80 @@ def checkEquivs?
           exact of_decide_eq_true
             (List.all_eq_true.mp scopesAccepted wire
               (Data.Finite.mem_allFin wire))
-        endpoint_forward := by
+        endpointMap := fun wire endpoint =>
+          (explicitEndpointMap? left right nodes wire (wires wire)
+            endpoint).getD ⟨nodes endpoint.node, endpoint.port⟩
+        endpointInverse := fun wire candidate =>
+          (explicitEndpointInverse? left right nodes wire (wires wire)
+            candidate).getD ⟨nodes.symm candidate.node, candidate.port⟩
+        endpointMap_mem := by
           intro wire endpoint member
           have wireAccepted :=
             List.all_eq_true.mp forwardAccepted wire
               (Data.Finite.mem_allFin wire)
           have endpointAccepted :=
             List.all_eq_true.mp wireAccepted endpoint member
-          obtain ⟨candidate, candidateMember, corresponds⟩ :=
-            List.any_eq_true.mp endpointAccepted
-          exact ⟨candidate, candidateMember,
-            explicitPortCorresponds_of_true left right nodes endpoint
-              candidate corresponds⟩
-        endpoint_backward := by
+          cases mapped : explicitEndpointMap? left right nodes wire
+              (wires wire) endpoint with
+          | none => simp [mapped] at endpointAccepted
+          | some candidate =>
+              simp only [mapped, Bool.and_eq_true] at endpointAccepted
+              simpa [mapped] using
+                of_decide_eq_true endpointAccepted.1.1
+        endpointInverse_mem := by
           intro wire candidate member
           have wireAccepted :=
             List.all_eq_true.mp backwardAccepted wire
               (Data.Finite.mem_allFin wire)
           have endpointAccepted :=
             List.all_eq_true.mp wireAccepted candidate member
-          obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-            List.any_eq_true.mp endpointAccepted
-          exact ⟨endpoint, endpointMember,
-            explicitPortCorresponds_of_true left right nodes endpoint
-              candidate corresponds⟩ }
+          cases mapped : explicitEndpointInverse? left right nodes wire
+              (wires wire) candidate with
+          | none => simp [mapped] at endpointAccepted
+          | some endpoint =>
+              simp only [mapped, Bool.and_eq_true] at endpointAccepted
+              simpa [mapped] using
+                of_decide_eq_true endpointAccepted.1
+        endpointMap_left_inv := by
+          intro wire endpoint member
+          have wireAccepted := List.all_eq_true.mp forwardAccepted wire
+            (Data.Finite.mem_allFin wire)
+          have endpointAccepted :=
+            List.all_eq_true.mp wireAccepted endpoint member
+          cases mapped : explicitEndpointMap? left right nodes wire
+              (wires wire) endpoint with
+          | none => simp [mapped] at endpointAccepted
+          | some candidate =>
+              simp only [mapped, Bool.and_eq_true] at endpointAccepted
+              have inverseExact := of_decide_eq_true endpointAccepted.2
+              simpa [mapped, inverseExact]
+        endpointMap_right_inv := by
+          intro wire candidate member
+          have wireAccepted := List.all_eq_true.mp backwardAccepted wire
+            (Data.Finite.mem_allFin wire)
+          have endpointAccepted :=
+            List.all_eq_true.mp wireAccepted candidate member
+          cases mapped : explicitEndpointInverse? left right nodes wire
+              (wires wire) candidate with
+          | none => simp [mapped] at endpointAccepted
+          | some endpoint =>
+              simp only [mapped, Bool.and_eq_true] at endpointAccepted
+              have forwardExact := of_decide_eq_true endpointAccepted.2
+              simpa [mapped, forwardExact]
+        endpointMap_corresponds := by
+          intro wire endpoint member
+          have wireAccepted := List.all_eq_true.mp forwardAccepted wire
+            (Data.Finite.mem_allFin wire)
+          have endpointAccepted :=
+            List.all_eq_true.mp wireAccepted endpoint member
+          cases mapped : explicitEndpointMap? left right nodes wire
+              (wires wire) endpoint with
+          | none => simp [mapped] at endpointAccepted
+          | some candidate =>
+              simp only [mapped, Bool.and_eq_true] at endpointAccepted
+              simpa [mapped] using
+                explicitPortCorresponds_of_true left right nodes endpoint
+                  candidate endpointAccepted.1.2 }
   else
     exact none
 

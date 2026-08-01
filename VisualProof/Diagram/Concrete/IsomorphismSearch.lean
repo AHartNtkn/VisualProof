@@ -487,98 +487,23 @@ private def valid
     (candidate :
       ConcreteIsoCandidate left right regionsSame nodesSame wiresSame) :
     Bool :=
-  rootValid candidate &&
-    (regionsValid candidate &&
-      (nodesValid candidate &&
-        (signaturesValid candidate &&
-          (scopesValid candidate &&
-            (forwardValid candidate && backwardValid candidate)))))
+  (ConcreteIso.checkEquivs? left right candidate.regionEquiv
+    candidate.nodeEquiv candidate.wireEquiv).isSome
 
 private def toIso
     (candidate :
       ConcreteIsoCandidate left right regionsSame nodesSame wiresSame)
     (accepted : candidate.valid = true) :
-    ConcreteIso left right where
-  regions := candidate.regionEquiv
-  nodes := candidate.nodeEquiv
-  wires := candidate.wireEquiv
-  root := by
-    exact of_decide_eq_true (Bool.and_eq_true_iff.mp accepted).1
-  region_table := by
-    intro region
-    have regions :=
-      Bool.and_eq_true_iff.mp
-        (Bool.and_eq_true_iff.mp accepted).2 |>.1
-    exact of_decide_eq_true
-      (List.all_eq_true.mp regions region (mem_allFin region))
-  node_table := by
-    intro node
-    have parts := Bool.and_eq_true_iff.mp accepted |>.2
-    have nodes :=
-      Bool.and_eq_true_iff.mp
-        (Bool.and_eq_true_iff.mp parts).2 |>.1
-    exact of_decide_eq_true
-      (List.all_eq_true.mp nodes node (mem_allFin node))
-  wire_signature := by
-    intro wire
-    have parts := Bool.and_eq_true_iff.mp accepted |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have signatures :=
-      Bool.and_eq_true_iff.mp
-        (Bool.and_eq_true_iff.mp parts).2 |>.1
-    exact of_decide_eq_true
-      (List.all_eq_true.mp signatures wire (mem_allFin wire))
-  wire_scope := by
-    intro wire
-    have parts := Bool.and_eq_true_iff.mp accepted |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have scopes :=
-      Bool.and_eq_true_iff.mp
-        (Bool.and_eq_true_iff.mp parts).2 |>.1
-    exact of_decide_eq_true
-      (List.all_eq_true.mp scopes wire (mem_allFin wire))
-  endpoint_forward := by
-    intro wire endpoint member
-    have parts := Bool.and_eq_true_iff.mp accepted |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have endpoints :=
-      Bool.and_eq_true_iff.mp
-        (Bool.and_eq_true_iff.mp parts).2 |>.1
-    have wireAccepted :=
-      List.all_eq_true.mp endpoints wire (mem_allFin wire)
-    have endpointAccepted :=
-      List.all_eq_true.mp wireAccepted endpoint member
-    obtain ⟨targetEndpoint, targetMember, corresponds⟩ :=
-      List.any_eq_true.mp endpointAccepted
-    exact
-      ⟨targetEndpoint, targetMember,
-        portCorresponds_of_true candidate endpoint targetEndpoint
-          corresponds⟩
-  endpoint_backward := by
-    intro wire targetEndpoint member
-    have parts := Bool.and_eq_true_iff.mp accepted |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have parts := Bool.and_eq_true_iff.mp parts |>.2
-    have backwards :=
-      Bool.and_eq_true_iff.mp
-        (Bool.and_eq_true_iff.mp parts).2 |>.2
-    have wireAccepted :=
-      List.all_eq_true.mp backwards wire (mem_allFin wire)
-    have endpointAccepted :=
-      List.all_eq_true.mp wireAccepted targetEndpoint member
-    obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-      List.any_eq_true.mp endpointAccepted
-    exact
-      ⟨endpoint, endpointMember,
-        portCorresponds_of_true candidate endpoint targetEndpoint
-          corresponds⟩
+    ConcreteIso left right :=
+  (ConcreteIso.checkEquivs? left right candidate.regionEquiv
+    candidate.nodeEquiv candidate.wireEquiv).get
+      (by simpa [valid] using accepted)
 
 private theorem equivCandidate_valid
-    (iso : ConcreteIso left right) :
+    (iso : ConcreteIso left right)
+    (canonical :
+      (ConcreteIso.checkEquivs? left right iso.regions iso.nodes
+        iso.wires).isSome = true) :
     let candidate :
         ConcreteIsoCandidate left right iso.regionCount_eq iso.nodeCount_eq
           iso.wireCount_eq :=
@@ -603,59 +528,7 @@ private theorem equivCandidate_valid
     intro wire
     exact equivPermutation_apply iso.wires iso.wireCount_eq wire
   change candidate.valid = true
-  unfold valid rootValid regionsValid nodesValid signaturesValid scopesValid
-    forwardValid backwardValid
-  rw [Bool.and_eq_true_iff]
-  refine ⟨?_, ?_⟩
-  · exact decide_eq_true (by simpa [regionsExact] using iso.root)
-  rw [Bool.and_eq_true_iff]
-  refine ⟨?_, ?_⟩
-  · apply List.all_eq_true.mpr
-    intro region member
-    exact decide_eq_true (by
-      simpa [regionsExact] using iso.region_table region)
-  rw [Bool.and_eq_true_iff]
-  refine ⟨?_, ?_⟩
-  · apply List.all_eq_true.mpr
-    intro node member
-    exact decide_eq_true (by
-      simpa [regionsExact, nodesExact] using iso.node_table node)
-  rw [Bool.and_eq_true_iff]
-  refine ⟨?_, ?_⟩
-  · apply List.all_eq_true.mpr
-    intro wire member
-    exact decide_eq_true (by
-      simpa [wiresExact] using iso.wire_signature wire)
-  rw [Bool.and_eq_true_iff]
-  refine ⟨?_, ?_⟩
-  · apply List.all_eq_true.mpr
-    intro wire member
-    exact decide_eq_true (by
-      simpa [regionsExact, wiresExact] using iso.wire_scope wire)
-  rw [Bool.and_eq_true_iff]
-  refine ⟨?_, ?_⟩
-  · apply List.all_eq_true.mpr
-    intro wire wireMember
-    apply List.all_eq_true.mpr
-    intro endpoint endpointMember
-    obtain ⟨targetEndpoint, targetMember, corresponds⟩ :=
-      iso.endpoint_forward wire endpoint endpointMember
-    apply List.any_eq_true.mpr
-    refine ⟨targetEndpoint, ?_, ?_⟩
-    · simpa [wiresExact] using targetMember
-    · apply portCorresponds_true_of
-      simpa [nodesExact] using corresponds
-  · apply List.all_eq_true.mpr
-    intro wire wireMember
-    apply List.all_eq_true.mpr
-    intro targetEndpoint targetMember
-    obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-      iso.endpoint_backward wire targetEndpoint (by
-        simpa [wiresExact] using targetMember)
-    apply List.any_eq_true.mpr
-    refine ⟨endpoint, endpointMember, ?_⟩
-    apply portCorresponds_true_of
-    simpa [nodesExact] using corresponds
+  simpa [valid, regionsExact, nodesExact, wiresExact] using canonical
 
 end ConcreteIsoCandidate
 
@@ -689,11 +562,15 @@ def findConcreteIso?
   else
     exact none
 
-/-- Every existing concrete isomorphism is discoverable by the finite search. -/
-theorem findConcreteIso?_complete
+/-- Every deterministic canonical correspondence is discoverable by the
+finite identifier search. -/
+theorem findConcreteIso?_complete_of_canonical
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) :
+    (iso : ConcreteIso left right)
+    (canonical :
+      (ConcreteIso.checkEquivs? left right iso.regions iso.nodes
+        iso.wires).isSome = true) :
     ∃ found, findConcreteIso? left right = some found := by
   unfold findConcreteIso?
   rw [dif_pos iso.regionCount_eq, dif_pos iso.nodeCount_eq,
@@ -738,7 +615,7 @@ theorem findConcreteIso?_complete
     (finPermutations right.wireCount)
     (equivPermutation iso.wires)
     (equivPermutation_mem iso.wires)
-  rw [dif_pos (ConcreteIsoCandidate.equivCandidate_valid iso)]
+  rw [dif_pos (ConcreteIsoCandidate.equivCandidate_valid iso canonical)]
   rfl
 
 end ConcreteIsoSearch

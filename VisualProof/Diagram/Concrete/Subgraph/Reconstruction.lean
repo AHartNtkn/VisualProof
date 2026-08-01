@@ -318,7 +318,7 @@ private noncomputable def regionBackward
       (Removal.regionIndex occurrence region
         (retainedRegion_of_not_selected occurrence selected))
 
-private noncomputable def regionEquiv
+private noncomputable def regionClassicalEquiv
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -442,6 +442,34 @@ private noncomputable def regionEquiv
         ConcreteSpliceAttachment.hostRegion,
         Removal.sourceRegion_regionIndex]
 
+private theorem regionForward_bijective
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (exact : RegionsExact occurrence) :
+    Function.Injective (regionForward occurrence removed attachment) ∧
+      ∀ target, ∃ source,
+        regionForward occurrence removed attachment source = target := by
+  let equivalence :=
+    regionClassicalEquiv occurrence removed attachment exact
+  exact ⟨equivalence.injective,
+    fun target => ⟨equivalence.symm target, equivalence.right_inv target⟩⟩
+
+private def regionEquiv
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (exact : RegionsExact occurrence) :
+    Data.Finite.FiniteEquiv
+      attachment.diagram.RegionId host.val.RegionId :=
+  Data.Finite.FiniteEquiv.ofBijectiveFin
+    (regionForward occurrence removed attachment)
+    (regionForward_bijective occurrence removed attachment exact)
+
 private def eliminateIdentityRequest
     {occurrence : Occurrence pattern host}
     {removed : RemovalResult occurrence}
@@ -488,7 +516,7 @@ private noncomputable def nodeBackward
       (Removal.nodeIndex occurrence node
         (retainedNode_of_not_selected occurrence selected))
 
-private noncomputable def nodeEquiv
+private noncomputable def nodeClassicalEquiv
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -575,6 +603,37 @@ private noncomputable def nodeEquiv
         ConcreteSpliceAttachment.hostNode,
         Removal.sourceNode_nodeIndex]
 
+private theorem nodeForward_bijective
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (exact : NodesExact occurrence) :
+    Function.Injective
+        (nodeForward occurrence removed attachment empty) ∧
+      ∀ target, ∃ source,
+        nodeForward occurrence removed attachment empty source = target := by
+  let equivalence :=
+    nodeClassicalEquiv occurrence removed attachment empty exact
+  exact ⟨equivalence.injective,
+    fun target => ⟨equivalence.symm target, equivalence.right_inv target⟩⟩
+
+private def nodeEquiv
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (empty : attachment.identityRequests = [])
+    (exact : NodesExact occurrence) :
+    Data.Finite.FiniteEquiv
+      attachment.diagram.NodeId host.val.NodeId :=
+  Data.Finite.FiniteEquiv.ofBijectiveFin
+    (nodeForward occurrence removed attachment empty)
+    (nodeForward_bijective occurrence removed attachment empty exact)
+
 private def wireForward
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
@@ -615,7 +674,7 @@ private noncomputable def wireBackward
       (Removal.wireIndex occurrence wire
         (retainedWire_of_not_internal occurrence internal))
 
-private noncomputable def wireEquiv
+private noncomputable def wireClassicalEquiv
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -705,6 +764,34 @@ private noncomputable def wireEquiv
     · simp [wireBackward, internal, wireForward,
         ConcreteSpliceAttachment.hostWire,
         Removal.sourceWire_wireIndex]
+
+private theorem wireForward_bijective
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (exact : WiresExact occurrence) :
+    Function.Injective (wireForward occurrence removed attachment) ∧
+      ∀ target, ∃ source,
+        wireForward occurrence removed attachment source = target := by
+  let equivalence :=
+    wireClassicalEquiv occurrence removed attachment exact
+  exact ⟨equivalence.injective,
+    fun target => ⟨equivalence.symm target, equivalence.right_inv target⟩⟩
+
+private def wireEquiv
+    (occurrence : Occurrence pattern host)
+    (removed : RemovalResult occurrence)
+    (attachment :
+      ConcreteSpliceAttachment
+        removed.complement removed.site pattern)
+    (exact : WiresExact occurrence) :
+    Data.Finite.FiniteEquiv
+      attachment.diagram.WireId host.val.WireId :=
+  Data.Finite.FiniteEquiv.ofBijectiveFin
+    (wireForward occurrence removed attachment)
+    (wireForward_bijective occurrence removed attachment exact)
 
 private theorem regionEquiv_hostRegion
     (occurrence : Occurrence pattern host)
@@ -1945,7 +2032,7 @@ private theorem endpointBackward_exact
 An exact occurrence, partial removal, and acceptance of the reconstruction
 attachment reconstruct the raw host diagram before any normalization.
 -/
-noncomputable def extract_splice_iso
+def extract_splice_iso?
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1954,7 +2041,7 @@ noncomputable def extract_splice_iso
     (accepted :
       reconstructionAttachment? occurrence removed =
         some attachment) :
-    ConcreteIso attachment.diagram host.val := by
+    Option (ConcreteIso attachment.diagram host.val) := by
   have regionsExact : RegionsExact occurrence :=
     fun region =>
       occurrence.mem_toSelection_allRegions_iff_image region
@@ -1967,43 +2054,10 @@ noncomputable def extract_splice_iso
   have empty :
       attachment.identityRequests = [] :=
     identityRequests_eq_nil occurrence removed attachment accepted
-  exact
-    { regions :=
-        regionEquiv occurrence removed attachment regionsExact
-      nodes :=
-        nodeEquiv occurrence removed attachment empty nodesExact
-      wires :=
-        wireEquiv occurrence removed attachment wiresExact
-      root := by
-        change
-          regionEquiv occurrence removed attachment regionsExact
-              (attachment.hostRegion removed.complement.val.root) =
-            host.val.root
-        rw [regionEquiv_hostRegion occurrence removed attachment
-          regionsExact]
-        change
-          Removal.sourceRegion occurrence
-              (Removal.regionIndex occurrence host.val.root
-                (Removal.host_root_mem occurrence)) =
-            host.val.root
-        exact Removal.sourceRegion_regionIndex occurrence host.val.root
-          (Removal.host_root_mem occurrence)
-      region_table :=
-        regionTable_exact occurrence removed attachment regionsExact
-      node_table :=
-        nodeTable_exact occurrence removed attachment empty
-          regionsExact nodesExact
-      wire_signature :=
-        wireSignature_exact occurrence removed attachment wiresExact
-      wire_scope :=
-        wireScope_exact occurrence removed attachment regionsExact
-          wiresExact
-      endpoint_forward :=
-        endpointForward_exact occurrence removed attachment accepted
-          empty regionsExact nodesExact wiresExact
-      endpoint_backward :=
-        endpointBackward_exact occurrence removed attachment accepted
-          empty regionsExact nodesExact wiresExact }
+  exact ConcreteIso.checkEquivs? attachment.diagram host.val
+    (regionEquiv occurrence removed attachment regionsExact)
+    (nodeEquiv occurrence removed attachment empty nodesExact)
+    (wireEquiv occurrence removed attachment wiresExact)
 
 end Reconstruction
 

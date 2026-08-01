@@ -822,8 +822,17 @@ def commonCoreIso
       node_table := nodeTable
       wire_signature := ?_
       wire_scope := ?_
-      endpoint_forward := ?_
-      endpoint_backward := ?_ }
+      endpointMap := fun _ endpoint =>
+        ⟨targetCoreNodeEquiv result targetSites endpoint.node,
+          endpoint.port⟩
+      endpointInverse := fun _ candidate =>
+        ⟨(targetCoreNodeEquiv result targetSites).invFun candidate.node,
+          candidate.port⟩
+      endpointMap_mem := ?_
+      endpointInverse_mem := ?_
+      endpointMap_left_inv := ?_
+      endpointMap_right_inv := ?_
+      endpointMap_corresponds := ?_ }
   · change targetCoreRegionEquiv result
         (replacementBase result.plan).root =
       (Internal.batchRemovalCandidate targetPlan).root
@@ -854,13 +863,8 @@ def commonCoreIso
     rw [replacementSkeleton_retained_wire_scope]
     rfl
   · intro baseWire endpoint incident
-    let candidate :
-        CEndpoint (Internal.batchRemovalCandidate targetPlan).nodeCount :=
-      ⟨targetCoreNodeEquiv result targetSites endpoint.node, endpoint.port⟩
-    refine ⟨candidate, ?_, ?_⟩
-    · exact (result.targetCommonCore_endpoint_iff targetSites targetPlan
-        baseWire endpoint).mpr incident
-    · exact portCorresponds baseWire endpoint incident
+    exact (result.targetCommonCore_endpoint_iff targetSites targetPlan
+      baseWire endpoint).mpr incident
   · intro baseWire candidate incident
     let endpoint : CEndpoint base.nodeCount :=
       ⟨(targetCoreNodeEquiv result targetSites).invFun candidate.node,
@@ -882,9 +886,17 @@ def commonCoreIso
       apply (result.targetCommonCore_endpoint_iff targetSites targetPlan
         baseWire endpoint).mp
       rwa [candidateExact]
-    refine ⟨endpoint, baseIncident, ?_⟩
-    rw [← candidateExact]
-    exact portCorresponds baseWire endpoint baseIncident
+    exact baseIncident
+  · intro baseWire endpoint incident
+    cases endpoint
+    simp only
+    congr
+  · intro baseWire candidate incident
+    cases candidate
+    simp only
+    congr
+  · intro baseWire endpoint incident
+    exact portCorresponds baseWire endpoint incident
 
 /-- Exact target image of one source wire retained by an argument
 replacement.  Compiler ambient transport consumes this construction-owned

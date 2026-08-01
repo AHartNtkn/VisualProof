@@ -241,17 +241,31 @@ structure ConcreteIso {definitions : List (List Sig)}
     ∀ wire,
       (right.wires (wires wire)).scope =
         regions (left.wires wire).scope
-  endpoint_forward :
+  endpointMap :
+    ∀ wire, CEndpoint left.nodeCount → CEndpoint right.nodeCount
+  endpointInverse :
+    ∀ wire, CEndpoint right.nodeCount → CEndpoint left.nodeCount
+  endpointMap_mem :
     ∀ wire endpoint,
       endpoint ∈ (left.wires wire).endpoints →
-        ∃ candidate,
-          candidate ∈ (right.wires (wires wire)).endpoints ∧
-            PortCorresponds left right nodes endpoint candidate
-  endpoint_backward :
+        endpointMap wire endpoint ∈
+          (right.wires (wires wire)).endpoints
+  endpointInverse_mem :
     ∀ wire candidate,
       candidate ∈ (right.wires (wires wire)).endpoints →
-        ∃ endpoint,
-          endpoint ∈ (left.wires wire).endpoints ∧
-            PortCorresponds left right nodes endpoint candidate
+        endpointInverse wire candidate ∈ (left.wires wire).endpoints
+  endpointMap_left_inv :
+    ∀ wire endpoint,
+      endpoint ∈ (left.wires wire).endpoints →
+        endpointInverse wire (endpointMap wire endpoint) = endpoint
+  endpointMap_right_inv :
+    ∀ wire candidate,
+      candidate ∈ (right.wires (wires wire)).endpoints →
+        endpointMap wire (endpointInverse wire candidate) = candidate
+  endpointMap_corresponds :
+    ∀ wire endpoint,
+      endpoint ∈ (left.wires wire).endpoints →
+        PortCorresponds left right nodes endpoint
+          (endpointMap wire endpoint)
 
 end VisualProof

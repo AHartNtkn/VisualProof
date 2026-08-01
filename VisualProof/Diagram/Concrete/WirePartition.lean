@@ -471,6 +471,21 @@ theorem outer_ne_inner
   simpa [wireJoinCandidate] using
     congrArg ConcreteDiagram.wireCount result.generated
 
+@[simp] theorem wireCount_succ
+    (result : WireJoinResult source outer inner) :
+    result.checked.val.wireCount + 1 = source.val.wireCount := by
+  rw [result.wireCount]
+  unfold wireJoinWires
+  unfold ConcreteDiagram.wiresList
+  rw [filter_ne_length_of_nodup_mem
+    (Data.Finite.allFin_nodup source.val.wireCount)
+    (Data.Finite.mem_allFin inner)]
+  simp only [ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange,
+    List.length_finRange]
+  have bound := inner.isLt
+  have positive : 0 < source.val.wireCount := by omega
+  omega
+
 /-- The exact pre-join wire represented by one dense target identifier. -/
 def sourceWire
     (result : WireJoinResult source outer inner)
@@ -673,7 +688,7 @@ private def inverseNode
   apply Fin.ext
   rfl
 
-private theorem retained_ne_fresh
+theorem retained_ne_fresh
     (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     result.wireImage sourceWire ≠ result.freshWire := by
@@ -741,7 +756,7 @@ private theorem rejoinSourceWire_survives
       splitWire.val
   rw [DenseList.get_index]
 
-private def sourceWireOfRetained
+def sourceWireOfRetained
     (result : WireSeverResult source wire keep scope)
     (splitWire : result.checked.val.WireId)
     (survives : splitWire ≠ result.freshWire) :
@@ -760,7 +775,7 @@ private def sourceWireOfRetained
     have count := result.wireCount
     omega⟩
 
-@[simp] private theorem wireImage_sourceWireOfRetained
+@[simp] theorem wireImage_sourceWireOfRetained
     (result : WireSeverResult source wire keep scope)
     (splitWire : result.checked.val.WireId)
     (survives : splitWire ≠ result.freshWire) :
@@ -769,7 +784,7 @@ private def sourceWireOfRetained
   apply Fin.ext
   rfl
 
-@[simp] private theorem sourceWireOfRetained_wireImage
+@[simp] theorem sourceWireOfRetained_wireImage
     (result : WireSeverResult source wire keep scope)
     (sourceWire : source.val.WireId) :
     result.sourceWireOfRetained (result.wireImage sourceWire)
@@ -1024,16 +1039,13 @@ def inverseIso
     unfold inverseWire
     rw [result.inverseJoin.wireImage_scope,
       result.wireImage_scope, inverse_regionImage]
-  endpoint_forward := by
+  endpointMap := fun _ endpoint => result.inverseEndpoint endpoint
+  endpointInverse := fun _ candidate =>
+    ⟨Fin.cast result.inverseJoin_nodeCount candidate.node, candidate.port⟩
+  endpointMap_mem := by
     intro sourceWire endpoint incident
-    refine
-      ⟨result.inverseEndpoint endpoint,
-        (result.inverseEndpoint_mem sourceWire endpoint).mpr incident, ?_⟩
-    exact
-      result.inverseEndpoint_corresponds endpoint
-        (ConcreteDiagram.incident_port_required definitions source.val
-          source.property sourceWire endpoint incident)
-  endpoint_backward := by
+    exact (result.inverseEndpoint_mem sourceWire endpoint).mpr incident
+  endpointInverse_mem := by
     intro sourceWire candidate incident
     let endpoint : CEndpoint source.val.nodeCount :=
       ⟨Fin.cast result.inverseJoin_nodeCount candidate.node, candidate.port⟩
@@ -1048,12 +1060,25 @@ def inverseIso
     have sourceIncident :
         endpoint ∈ (source.val.wires sourceWire).endpoints :=
       (result.inverseEndpoint_mem sourceWire endpoint).mp mappedIncident
-    refine ⟨endpoint, sourceIncident, ?_⟩
-    have corresponds :=
-      result.inverseEndpoint_corresponds endpoint
-        (ConcreteDiagram.incident_port_required definitions source.val
-          source.property sourceWire endpoint sourceIncident)
-    exact endpointImage ▸ corresponds
+    exact sourceIncident
+  endpointMap_left_inv := by
+    rintro sourceWire ⟨node, port⟩ incident
+    change (⟨Fin.cast result.inverseJoin_nodeCount
+      (result.inverseNode node), port⟩ :
+        CEndpoint source.val.nodeCount) = ⟨node, port⟩
+    congr 1
+  endpointMap_right_inv := by
+    rintro sourceWire ⟨node, port⟩ incident
+    change result.inverseEndpoint
+      ⟨Fin.cast result.inverseJoin_nodeCount node, port⟩ =
+        (⟨node, port⟩ :
+          CEndpoint result.inverseJoin.checked.val.nodeCount)
+    congr 1
+  endpointMap_corresponds := by
+    intro sourceWire endpoint incident
+    exact result.inverseEndpoint_corresponds endpoint
+      (ConcreteDiagram.incident_port_required definitions source.val
+        source.property sourceWire endpoint incident)
 
 end WireSeverResult
 

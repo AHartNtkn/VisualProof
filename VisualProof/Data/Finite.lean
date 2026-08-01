@@ -115,6 +115,52 @@ theorem allFin_nodup (n : Nat) : (allFin n).Nodup := by
           apply Fin.ext
           exact Nat.succ.inj (congrArg Fin.val hs))
 
+/-- Executably invert an explicitly supplied bijection of finite initial
+segments. The inverse is the first source whose forward image is the target;
+the bijection proof establishes totality and the inverse laws. -/
+def FiniteEquiv.ofBijectiveFin
+    (forward : Fin sourceCount → Fin targetCount)
+    (bijective : Function.Injective forward ∧
+      ∀ target, ∃ source, forward source = target) :
+    FiniteEquiv (Fin sourceCount) (Fin targetCount) := by
+  let inverse (target : Fin targetCount) : Fin sourceCount :=
+    ((allFin sourceCount).find? fun source => decide (forward source = target)).get
+      (by
+        apply List.find?_isSome.mpr
+        obtain ⟨source, equality⟩ := bijective.2 target
+        exact ⟨source, mem_allFin source, by simpa [equality]⟩)
+  exact
+    { toFun := forward
+      invFun := inverse
+      left_inv := by
+        intro source
+        apply bijective.1
+        unfold inverse
+        let found := (allFin sourceCount).find? fun candidate =>
+          decide (forward candidate = forward source)
+        have foundSome : found.isSome = true := by
+          apply List.find?_isSome.mpr
+          exact ⟨source, mem_allFin source, by simp⟩
+        obtain ⟨candidate, candidateFound⟩ :=
+          Option.isSome_iff_exists.mp foundSome
+        rw [Option.get_of_eq_some foundSome candidateFound]
+        have selected := List.find?_some candidateFound
+        exact of_decide_eq_true (by simpa [found] using selected)
+      right_inv := by
+        intro target
+        unfold inverse
+        let found := (allFin sourceCount).find? fun candidate =>
+          decide (forward candidate = target)
+        have foundSome : found.isSome = true := by
+          apply List.find?_isSome.mpr
+          obtain ⟨source, equality⟩ := bijective.2 target
+          exact ⟨source, mem_allFin source, by simpa [equality]⟩
+        obtain ⟨candidate, candidateFound⟩ :=
+          Option.isSome_iff_exists.mp foundSome
+        rw [Option.get_of_eq_some foundSome candidateFound]
+        have selected := List.find?_some candidateFound
+        exact of_decide_eq_true (by simpa [found] using selected) }
+
 /-- An injection between finite initial segments witnesses the cardinal bound. -/
 theorem fin_card_le_of_injective {m n : Nat} (f : Fin m → Fin n)
     (hinjective : Function.Injective f) : m ≤ n := by

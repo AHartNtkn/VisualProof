@@ -137,11 +137,19 @@ theorem mainReconstruction_accepted :
       some mainReconstruction := by
   exact Option.some_get (by native_decide) |>.symm
 
-noncomputable def mainReconstructionIso :
+def mainReconstructionIso? :
+    Option (ConcreteIso mainReconstruction.diagram
+      OccurrenceFixtures.mainHost.val) :=
+  Reconstruction.extract_splice_iso? OccurrenceFixtures.mainOccurrence
+    mainRemoved mainReconstruction mainReconstruction_accepted
+
+example : mainReconstructionIso?.isSome = true := by
+  native_decide
+
+def mainReconstructionIso :
     ConcreteIso mainReconstruction.diagram
       OccurrenceFixtures.mainHost.val :=
-  Reconstruction.extract_splice_iso OccurrenceFixtures.mainOccurrence
-    mainRemoved mainReconstruction mainReconstruction_accepted
+  mainReconstructionIso?.get (by native_decide)
 
 end ConcreteSpliceExamples
 end VisualProof

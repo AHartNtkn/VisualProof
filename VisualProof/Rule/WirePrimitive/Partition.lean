@@ -466,6 +466,165 @@ def invertWireSeverTransported
                       applied := inverseApplied
                       targetIso := sourceIso }
 
+/-- Deterministic inverse of an accepted join after a suffix has renamed its
+checked target. The join receipt owns the exact outer endpoint partition and
+inner scope used by the inverse sever. -/
+structure TransportedWireJoinInverse
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (join : AppliedWireJoin source input)
+    (real : CheckedDiagram definitions)
+    (targetIso : ConcreteIso real.val join.target.val)
+    (orientation : Orientation) where
+  input : WireSeverInput real
+  orientationExact : input.orientation = orientation
+  applied : AppliedWireSever real input
+  targetIso : ConcreteIso applied.target.val source.val
+
+/-- Pull the canonical inverse partition through the supplied suffix
+isomorphism, invoke exactly one sever checker, and validate the explicitly
+constructed output-to-source carrier equivalences. -/
+def invertWireJoinTransported
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (join : AppliedWireJoin source input)
+    (real : CheckedDiagram definitions)
+    (targetIso : ConcreteIso real.val join.target.val)
+    (orientation : Orientation) :
+    Except WirePartitionError
+      (TransportedWireJoinInverse join real targetIso orientation) := by
+  let canonical := join.checked.result
+  have realToCanonical : ConcreteIso real.val canonical.checked.val := by
+    rw [join.checked.targetExact]
+    exact targetIso
+  let canonicalKeep :=
+    (source.val.wires join.checked.outer).endpoints.map
+      canonical.endpointImage
+  have canonicalKeepMembers :
+      ∀ endpoint, endpoint ∈ canonicalKeep →
+        endpoint ∈
+          (canonical.checked.val.wires canonical.outerWire).endpoints := by
+    intro endpoint member
+    obtain ⟨original, originalMember, rfl⟩ := List.mem_map.mp member
+    change canonical.endpointImage original ∈
+      (canonical.checked.val.wires
+        (canonical.wireImage join.checked.outer
+          canonical.outer_ne_inner)).endpoints
+    rw [canonical.wireImage_endpoints join.checked.outer
+      canonical.outer_ne_inner]
+    rw [if_pos rfl]
+    exact List.mem_map.mpr
+      ⟨original, List.mem_append_left _ originalMember, rfl⟩
+  let realWire := realToCanonical.wires.symm canonical.outerWire
+  let realKeep := realToCanonical.symm.transportEndpointsOnWire
+    canonical.outerWire canonicalKeep canonicalKeepMembers
+  let canonicalScope := canonical.regionImage
+    (source.val.wires join.checked.inner).scope
+  let realScope := realToCanonical.regions.symm canonicalScope
+  let inverseInput : WireSeverInput real :=
+    { orientation := orientation
+      wire := realWire
+      keep := realKeep
+      scope := realScope }
+  match appliedResult : applyWireSever real inverseInput with
+  | .error error => exact .error error
+  | .ok inverseApplied =>
+      let actual := inverseApplied.checked.result
+      have regionCountExact :
+          actual.checked.val.regionCount = source.val.regionCount :=
+        actual.regionCount.trans
+          (realToCanonical.regionCount_eq.trans canonical.regionCount)
+      have nodeCountExact :
+          actual.checked.val.nodeCount = source.val.nodeCount :=
+        actual.nodeCount.trans
+          (realToCanonical.nodeCount_eq.trans canonical.nodeCount)
+      have wireCountExact :
+          actual.checked.val.wireCount = source.val.wireCount := by
+        calc
+          actual.checked.val.wireCount = real.val.wireCount + 1 :=
+            actual.wireCount
+          _ = canonical.checked.val.wireCount + 1 :=
+            congrArg (fun count => count + 1)
+              realToCanonical.wireCount_eq
+          _ = source.val.wireCount := canonical.wireCount_succ
+      let regionEquiv : Data.Finite.FiniteEquiv
+          actual.checked.val.RegionId source.val.RegionId :=
+        { toFun := Fin.cast regionCountExact
+          invFun := Fin.cast regionCountExact.symm
+          left_inv := by intro region; apply Fin.ext; rfl
+          right_inv := by intro region; apply Fin.ext; rfl }
+      let nodeEquiv : Data.Finite.FiniteEquiv
+          actual.checked.val.NodeId source.val.NodeId :=
+        { toFun := Fin.cast nodeCountExact
+          invFun := Fin.cast nodeCountExact.symm
+          left_inv := by intro node; apply Fin.ext; rfl
+          right_inv := by intro node; apply Fin.ext; rfl }
+      let originalWire : actual.checked.val.WireId → source.val.WireId :=
+        fun output =>
+          if fresh : output = actual.freshWire then
+            join.checked.inner
+          else
+            canonical.sourceWire
+              (realToCanonical.wires
+                (actual.sourceWireOfRetained output fresh))
+      let inverseWire : source.val.WireId → actual.checked.val.WireId :=
+        fun original =>
+          if removed : original = join.checked.inner then
+            actual.freshWire
+          else
+            actual.wireImage
+              (realToCanonical.wires.symm
+                (canonical.wireImage original removed))
+      have inverseWire_left :
+          ∀ original, originalWire (inverseWire original) = original := by
+        intro original
+        by_cases removed : original = join.checked.inner
+        · subst original
+          simp [originalWire, inverseWire]
+        · have retained := actual.retained_ne_fresh
+              (realToCanonical.wires.symm
+                (canonical.wireImage original removed))
+          dsimp [inverseWire, originalWire]
+          rw [dif_neg removed]
+          split
+          · rename_i same
+            exact False.elim (retained same)
+          · rw [actual.sourceWireOfRetained_wireImage,
+              realToCanonical.wires.right_inv,
+              canonical.sourceWire_wireImage]
+      have inverseWire_right :
+          ∀ output, inverseWire (originalWire output) = output := by
+        intro output
+        by_cases fresh : output = actual.freshWire
+        · subst output
+          simp [originalWire, inverseWire]
+        · let retained := actual.sourceWireOfRetained output fresh
+          have sourceNotInner := canonical.sourceWire_ne_inner
+            (realToCanonical.wires retained)
+          dsimp [originalWire, inverseWire]
+          rw [dif_neg fresh]
+          rw [dif_neg sourceNotInner,
+            canonical.wireImage_sourceWire,
+            realToCanonical.wires.left_inv,
+            actual.wireImage_sourceWireOfRetained]
+      let wireEquiv : Data.Finite.FiniteEquiv
+          actual.checked.val.WireId source.val.WireId :=
+        { toFun := originalWire
+          invFun := inverseWire
+          left_inv := inverseWire_right
+          right_inv := inverseWire_left }
+      match checkedIso : ConcreteIso.checkEquivs? actual.checked.val
+          source.val regionEquiv nodeEquiv wireEquiv with
+      | none => exact .error .transportMismatch
+      | some sourceIso =>
+          exact .ok
+            { input := inverseInput
+              orientationExact := rfl
+              applied := inverseApplied
+              targetIso := by
+                rw [← inverseApplied.checked.targetExact]
+                exact sourceIso }
+
 /-- Generic signature-indexed wire partition is sound over every premodel. -/
 theorem wire_sever_sound
     {source : CheckedDiagram definitions}

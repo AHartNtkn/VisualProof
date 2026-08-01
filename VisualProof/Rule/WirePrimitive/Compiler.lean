@@ -1285,22 +1285,6 @@ private def refAbstractCandidates
       | .error _ => none
       | .ok applied => some (.refAbstract nodes scope applied)
 
-private def wireSeverCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    real.val.regionsList.flatMap fun scope =>
-      (subsets (real.val.wires wire).endpoints).filterMap fun keep =>
-        let input : WireSeverInput real :=
-          { orientation := orientation
-            wire := wire
-            keep := keep
-            scope := scope }
-        match applyWireSever real input with
-        | .error _ => none
-        | .ok applied => some (.wireSever input rfl applied)
-
 private def cutAbsorbCandidates
     (real : CheckedDiagram definitions)
     (orientation : Orientation) :
@@ -1429,7 +1413,7 @@ private def inverseCandidates
   | .identityInsert .. => throw .malformedResidual
   | .identityErase .. => throw .malformedResidual
   | .wireSever .. => throw .malformedResidual
-  | .wireJoin .. => pure (wireSeverCandidates real orientation)
+  | .wireJoin .. => throw .malformedResidual
   | .cutWrap .. => pure (cutAbsorbCandidates real orientation)
   | .cutAbsorb .. => pure (cutWrapCandidates real orientation)
   | .parallelSplit .. => pure (parallelFuseCandidates real orientation)
@@ -1487,6 +1471,14 @@ private def invertStep
           orientation).mapError .partitionRejected
       pure
         { step := .wireJoin inverse.input inverse.orientationExact
+            inverse.applied
+          normalizedIso := inverse.targetIso }
+  | .wireJoin _ _ applied => do
+      let inverse ←
+        (Partition.invertWireJoinTransported applied real targetIso
+          orientation).mapError .partitionRejected
+      pure
+        { step := .wireSever inverse.input inverse.orientationExact
             inverse.applied
           normalizedIso := inverse.targetIso }
   | _ => do
