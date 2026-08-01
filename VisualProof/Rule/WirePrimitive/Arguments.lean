@@ -1998,6 +1998,352 @@ theorem generatedArgument_endpointOwner
     ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly, different]
     using owner
 
+/-- Construction endpoint transport preserves incidence on every wire. -/
+theorem endpointImage_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (sourceWire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (incident : endpoint ∈ (source.val.wires sourceWire).endpoints) :
+    applied.endpointImage endpoint ∈
+      (applied.target.val.wires
+        (applied.wireEquiv sourceWire)).endpoints := by
+  rcases endpoint with ⟨node, port⟩
+  by_cases generated : node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites
+  · let sitePosition :=
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode
+        applied.result.sites node generated
+    let site := applied.result.sites.sites.get sitePosition
+    have siteNode : site.node = node :=
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_exact
+        applied.result.sites node generated
+    have sourceRequired : port ∈ source.val.requiredPorts node :=
+      ConcreteDiagram.incident_port_required definitions source.val
+        source.property sourceWire ⟨node, port⟩ incident
+    have siteRequired : port ∈ source.val.requiredPorts site.node := by
+      simpa [siteNode] using sourceRequired
+    have nodeImage : applied.nodeEquiv node =
+        applied.result.targetNode sitePosition := by
+      rw [← siteNode]
+      exact applied.nodeEquiv_generated sitePosition
+    cases port with
+    | head =>
+        have sourceOwner : source.val.endpointOwner? ⟨node, .head⟩ =
+            some sourceWire :=
+          ConcreteDiagram.endpointOwner?_eq_of_incident definitions source.val
+            source.property node .head sourceRequired sourceWire incident
+        have headOwner := site.endpoint_owner
+        change source.val.endpointOwner? ⟨site.node, .head⟩ =
+          some wire at headOwner
+        rw [siteNode, sourceOwner] at headOwner
+        have sourceWireExact : sourceWire = wire :=
+          Option.some.inj headOwner
+        subst sourceWire
+        have targetIncident :
+            (⟨applied.result.targetNode sitePosition, .head⟩ :
+              CEndpoint applied.target.val.nodeCount) ∈
+              (applied.target.val.wires applied.targetWire).endpoints := by
+          have generatedTarget :=
+            applied.result.generatedNode_targetSiteNode
+              applied.targetSites sitePosition
+          unfold ConcreteWirePrimitive.argumentSiteNodes at generatedTarget
+          rcases List.mem_map.mp generatedTarget with
+            ⟨targetSite, _targetMember, targetNodeExact⟩
+          have targetOwner := targetSite.endpoint_owner
+          change applied.target.val.endpointOwner?
+              ⟨targetSite.node, .head⟩ =
+            some applied.targetWire at targetOwner
+          rw [targetNodeExact] at targetOwner
+          exact ConcreteDiagram.endpointOwner?_incident applied.target.val
+            ⟨applied.result.targetNode sitePosition, .head⟩
+            applied.targetWire targetOwner
+        simpa [endpointImage, generated, generatedPortImage, nodeImage,
+          applied.wireEquiv_head] using targetIncident
+    | arg index =>
+        have indexBound : index < site.argumentSignatures.length := by
+          simpa [ConcreteDiagram.requiredPorts, site.node_data] using
+            siteRequired
+        have argumentBound : index < site.arguments.length := by
+          simpa [site.arguments_length] using indexBound
+        have sourceBound : index < applied.sourceArguments.length := by
+          rw [← applied.sourceSiteArgumentLength sitePosition]
+          exact argumentBound
+        let sourcePosition : Fin applied.sourceArguments.length :=
+          ⟨index, sourceBound⟩
+        let targetPosition :=
+          applied.permutation_receipt.inversePosition sourcePosition
+        have sourceOwner : source.val.endpointOwner? ⟨node, .arg index⟩ =
+            some sourceWire :=
+          ConcreteDiagram.endpointOwner?_eq_of_incident definitions source.val
+            source.property node (.arg index) sourceRequired sourceWire incident
+        have siteOwner := site.argument_owner index argumentBound
+        rw [siteNode, sourceOwner] at siteOwner
+        have attachmentExact : applied.sourceArgumentWire sitePosition
+              targetPosition = sourceWire := by
+          rw [applied.sourceArgumentWire_inversePosition sitePosition
+            sourcePosition]
+          have exactWire :
+              site.arguments.get
+                  (Fin.cast (applied.sourceSiteArgumentLength sitePosition).symm
+                    sourcePosition) = sourceWire := by
+            simpa [site, sourcePosition, List.get_eq_getElem] using
+              (Option.some.inj siteOwner).symm
+          exact exactWire
+        have targetOwner := applied.generatedArgument_endpointOwner
+          sitePosition targetPosition
+        rw [attachmentExact] at targetOwner
+        have targetIncident := ConcreteDiagram.endpointOwner?_incident
+          applied.target.val
+          ⟨applied.result.targetNode sitePosition, .arg targetPosition.val⟩
+          (applied.wireEquiv sourceWire) targetOwner
+        simpa [endpointImage, generated, generatedPortImage, sourceBound,
+          sourcePosition, targetPosition, nodeImage] using targetIncident
+    | identity index =>
+        simp [ConcreteDiagram.requiredPorts, site.node_data] at siteRequired
+  · have sourceWireDifferent : sourceWire ≠ wire := by
+      intro same
+      subst sourceWire
+      have removed : wire ∈ applied.result.sourceRemovedWires := by
+        rw [applied.source_removed_exact]
+        simp
+      exact generated (applied.result.sourceRemovedExhausted wire removed
+        ⟨node, port⟩ incident)
+    have sourceRetained : sourceWire ∉
+        applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simpa [sourceWireDifferent]
+    have targetIncident := applied.result.retainedNode_forwardIncident
+      node generated port sourceWire incident
+    have nodeImage := applied.nodeEquiv_retained node generated
+    have wireImage := applied.wireEquiv_retained sourceWire
+      sourceWireDifferent
+    have contextImage := applied.result.contextWireMap_retained sourceWire
+      sourceRetained
+    rw [contextImage, ← wireImage] at targetIncident
+    simpa [endpointImage, generated, nodeImage] using targetIncident
+
+/-- Construction endpoint transport reflects incidence on every wire. -/
+theorem endpointInverse_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (sourceWire : source.val.WireId)
+    (candidate : CEndpoint applied.target.val.nodeCount)
+    (incident : candidate ∈
+      (applied.target.val.wires
+        (applied.wireEquiv sourceWire)).endpoints) :
+    applied.endpointInverse candidate ∈
+      (source.val.wires sourceWire).endpoints := by
+  rcases candidate with ⟨targetNode, port⟩
+  let sourceNode := applied.nodeEquiv.symm targetNode
+  have nodeRecover : applied.nodeEquiv sourceNode = targetNode :=
+    applied.nodeEquiv.right_inv targetNode
+  have targetRequired : port ∈
+      applied.target.val.requiredPorts targetNode :=
+    ConcreteDiagram.incident_port_required definitions applied.target.val
+      applied.target.property (applied.wireEquiv sourceWire)
+      ⟨targetNode, port⟩ incident
+  by_cases generated : sourceNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites
+  · let sitePosition :=
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode
+        applied.result.sites sourceNode generated
+    let site := applied.result.sites.sites.get sitePosition
+    have siteNode : site.node = sourceNode :=
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_exact
+        applied.result.sites sourceNode generated
+    have targetNodeExact : applied.result.targetNode sitePosition =
+        targetNode := by
+      calc
+        applied.result.targetNode sitePosition =
+            applied.nodeEquiv site.node :=
+          (applied.nodeEquiv_generated sitePosition).symm
+        _ = applied.nodeEquiv sourceNode := congrArg applied.nodeEquiv siteNode
+        _ = targetNode := nodeRecover
+    have generatedTargetRequired : port ∈
+        applied.target.val.requiredPorts
+          (applied.result.targetNode sitePosition) := by
+      simpa [targetNodeExact] using targetRequired
+    cases port with
+    | head =>
+        have targetOwner : applied.target.val.endpointOwner?
+            ⟨targetNode, .head⟩ =
+              some (applied.wireEquiv sourceWire) :=
+          ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+            applied.target.val applied.target.property targetNode .head
+            targetRequired (applied.wireEquiv sourceWire) incident
+        have generatedTarget :=
+          applied.result.generatedNode_targetSiteNode
+            applied.targetSites sitePosition
+        unfold ConcreteWirePrimitive.argumentSiteNodes at generatedTarget
+        rcases List.mem_map.mp generatedTarget with
+          ⟨targetSite, _targetMember, targetSiteNode⟩
+        change targetSite.node = applied.result.targetNode sitePosition
+          at targetSiteNode
+        have targetHeadOwner := targetSite.endpoint_owner
+        change applied.target.val.endpointOwner?
+            ⟨targetSite.node, .head⟩ = some applied.targetWire
+          at targetHeadOwner
+        rw [targetSiteNode, targetNodeExact, targetOwner] at targetHeadOwner
+        have wireImageExact : applied.wireEquiv sourceWire =
+            applied.wireEquiv wire := by
+          rw [applied.wireEquiv_head]
+          exact Option.some.inj targetHeadOwner
+        have sourceWireExact : sourceWire = wire :=
+          applied.wireEquiv.injective wireImageExact
+        subst sourceWire
+        have sourceIncident := ConcreteDiagram.endpointOwner?_incident
+          source.val ⟨site.node, .head⟩ wire site.endpoint_owner
+        unfold endpointInverse
+        change
+          ⟨sourceNode,
+            if sourceNode ∈
+                ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+              applied.generatedPortInverse .head
+            else .head⟩ ∈ (source.val.wires wire).endpoints
+        rw [if_pos generated]
+        change ⟨sourceNode, .head⟩ ∈ (source.val.wires wire).endpoints
+        simpa [siteNode] using sourceIncident
+    | arg index =>
+        have targetBound : index < applied.sourceArguments.length := by
+          have resultBound : index <
+              applied.result.targetArguments.length := by
+            have targetNodeData : applied.target.val.nodes
+                (applied.result.targetNode sitePosition) =
+                  .atom
+                    (applied.result.regionImage site.region)
+                    applied.result.targetArguments := by
+              exact applied.result.targetNode_data sitePosition
+            rw [ConcreteDiagram.requiredPorts, targetNodeData]
+              at generatedTargetRequired
+            simpa using generatedTargetRequired
+          rw [applied.target_arguments_exact,
+            applied.permutation_receipt.permute_length
+              applied.sourceArguments rfl] at resultBound
+          exact resultBound
+        let targetPosition : Fin applied.sourceArguments.length :=
+          ⟨index, targetBound⟩
+        let sourcePosition :=
+          applied.permutation_receipt.forwardPosition targetPosition
+        have targetOwner : applied.target.val.endpointOwner?
+            ⟨targetNode, .arg index⟩ =
+              some (applied.wireEquiv sourceWire) :=
+          ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+            applied.target.val applied.target.property targetNode (.arg index)
+            targetRequired (applied.wireEquiv sourceWire) incident
+        have generatedOwner := applied.generatedArgument_endpointOwner
+          sitePosition targetPosition
+        rw [targetNodeExact, targetOwner] at generatedOwner
+        have wireImageExact : applied.wireEquiv sourceWire =
+            applied.wireEquiv
+              (applied.sourceArgumentWire sitePosition targetPosition) :=
+          Option.some.inj generatedOwner
+        have sourceWireExact : sourceWire =
+            applied.sourceArgumentWire sitePosition targetPosition :=
+          applied.wireEquiv.injective wireImageExact
+        have siteArgumentBound : sourcePosition.val < site.arguments.length := by
+          rw [applied.sourceSiteArgumentLength sitePosition]
+          exact sourcePosition.isLt
+        have sourceOwner := site.argument_owner sourcePosition.val
+          siteArgumentBound
+        have attachmentExact :
+            site.arguments[sourcePosition.val]'siteArgumentBound =
+              applied.sourceArgumentWire sitePosition targetPosition := by
+          unfold sourceArgumentWire sourcePosition targetPosition site
+          rfl
+        rw [siteNode, attachmentExact, ← sourceWireExact] at sourceOwner
+        have sourceIncident := ConcreteDiagram.endpointOwner?_incident
+          source.val ⟨sourceNode, .arg sourcePosition.val⟩ sourceWire
+          sourceOwner
+        unfold endpointInverse
+        change
+          ⟨sourceNode,
+            if sourceNode ∈
+                ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+              applied.generatedPortInverse (.arg index)
+            else .arg index⟩ ∈ (source.val.wires sourceWire).endpoints
+        rw [if_pos generated]
+        simpa [generatedPortInverse, targetBound, targetPosition,
+          sourcePosition] using sourceIncident
+    | identity index =>
+        have targetNodeData : applied.target.val.nodes
+            (applied.result.targetNode sitePosition) =
+              .atom
+                (applied.result.regionImage site.region)
+                applied.result.targetArguments := by
+          exact applied.result.targetNode_data sitePosition
+        rw [ConcreteDiagram.requiredPorts, targetNodeData]
+          at generatedTargetRequired
+        simp at generatedTargetRequired
+  · have targetNodeImage : applied.result.retainedNodeImage sourceNode
+        generated = targetNode := by
+      calc
+        applied.result.retainedNodeImage sourceNode generated =
+            applied.nodeEquiv sourceNode :=
+          (applied.nodeEquiv_retained sourceNode generated).symm
+        _ = targetNode := nodeRecover
+    have sourceRequired : port ∈ source.val.requiredPorts sourceNode := by
+      have retainedData : applied.target.val.nodes
+          (applied.result.retainedNodeImage sourceNode generated) =
+            (source.val.nodes sourceNode).rename
+              applied.result.regionEquiv := by
+        exact applied.result.retainedNodeImage_data sourceNode generated
+      rw [ConcreteDiagram.requiredPorts]
+      rw [ConcreteDiagram.requiredPorts] at targetRequired
+      rw [← targetNodeImage, retainedData] at targetRequired
+      cases sourceData : source.val.nodes sourceNode <;>
+        simp [sourceData, CNode.rename] at targetRequired ⊢
+      all_goals exact targetRequired
+    obtain ⟨actualWire, sourceOwner⟩ :=
+      ConcreteDiagram.endpointOwner?_complete definitions source.val
+        source.property sourceNode port sourceRequired
+    have actualDifferent : actualWire ≠ wire := by
+      intro same
+      subst actualWire
+      have actualIncident := ConcreteDiagram.endpointOwner?_incident
+        source.val ⟨sourceNode, port⟩ wire sourceOwner
+      have removed : wire ∈ applied.result.sourceRemovedWires := by
+        rw [applied.source_removed_exact]
+        simp
+      exact generated (applied.result.sourceRemovedExhausted wire removed
+        ⟨sourceNode, port⟩ actualIncident)
+    have actualRetained : actualWire ∉
+        applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simpa [actualDifferent]
+    have forwardOwner := applied.result.retainedNodeImage_endpointOwner
+      sourceNode generated port sourceRequired actualWire sourceOwner
+    change applied.target.val.endpointOwner?
+        ⟨applied.result.retainedNodeImage sourceNode generated, port⟩ =
+      some (applied.result.retainedWireImage actualWire actualRetained)
+      at forwardOwner
+    have targetOwner : applied.target.val.endpointOwner?
+        ⟨targetNode, port⟩ = some (applied.wireEquiv sourceWire) :=
+      ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+        applied.target.val applied.target.property targetNode port
+        targetRequired (applied.wireEquiv sourceWire) incident
+    rw [targetNodeImage, targetOwner,
+      ← applied.wireEquiv_retained actualWire actualDifferent]
+      at forwardOwner
+    have sourceWireExact : actualWire = sourceWire :=
+      applied.wireEquiv.injective (Option.some.inj forwardOwner).symm
+    subst actualWire
+    have sourceIncident := ConcreteDiagram.endpointOwner?_incident source.val
+      ⟨sourceNode, port⟩ sourceWire sourceOwner
+    unfold endpointInverse
+    change
+      ⟨sourceNode,
+        if sourceNode ∈
+            ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+          applied.generatedPortInverse port
+        else port⟩ ∈ (source.val.wires sourceWire).endpoints
+    rw [if_neg generated]
+    exact sourceIncident
+
 def tag
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
