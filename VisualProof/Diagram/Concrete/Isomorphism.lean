@@ -174,6 +174,46 @@ def symm
     exact ⟨candidate, candidateMember,
       portCorresponds_symm iso corresponds⟩
 
+private def endpointFiber
+    (endpoints : List (CEndpoint nodeCount))
+    (node : Fin nodeCount)
+    (port : CPort) : List (CEndpoint nodeCount) :=
+  endpoints.filter fun candidate =>
+    decide (candidate.node = node) &&
+      match port, candidate.port with
+      | .identity _, .identity _ => true
+      | _, _ => decide (candidate.port = port)
+
+/-- Transport one endpoint through an explicitly supplied isomorphism on a
+specific wire. Ordinary ports retain their constructor-derived name. Identity
+ports use their stable occurrence in the node-and-wire fiber, so repeated
+existential witnesses cannot collapse distinct endpoints. -/
+def transportEndpointOnWire?
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (wire : left.WireId)
+    (endpoint : CEndpoint left.nodeCount) :
+    Option (CEndpoint right.nodeCount) :=
+  let sourceFiber := endpointFiber (left.wires wire).endpoints
+    endpoint.node endpoint.port
+  let targetFiber := endpointFiber
+    (right.wires (iso.wires wire)).endpoints
+    (iso.nodes endpoint.node) endpoint.port
+  targetFiber[sourceFiber.idxOf endpoint]?
+
+/-- Transport an ordered endpoint selection on one wire. List traversal
+preserves both order and multiplicity; any absent positional witness rejects
+the whole transport. -/
+def transportEndpointsOnWire?
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right)
+    (wire : left.WireId)
+    (endpoints : List (CEndpoint left.nodeCount)) :
+    Option (List (CEndpoint right.nodeCount)) :=
+  endpoints.mapM (iso.transportEndpointOnWire? wire)
+
 theorem node_region
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
