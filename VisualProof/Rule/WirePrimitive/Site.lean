@@ -899,6 +899,29 @@ theorem transportPosition_endpoint
   rw [endpointExact] at selected
   simpa [endpoint, mapped] using selected
 
+/-- The node at a transported applied-site position is exactly the supplied
+isomorphism's node image of the source site. -/
+theorem transportPosition_node
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire))
+    (position : Fin sourceSites.sites.length) :
+    (targetSites.sites.get
+        (transportPosition iso sourceSites targetSites position)).node =
+      iso.nodes (sourceSites.sites.get position).node := by
+  have sourceMember : (sourceSites.sites.get position).endpoint ∈
+      (source.val.wires wire).endpoints := by
+    rw [← sourceSites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨sourceSites.sites.get position, List.get_mem _ _, rfl⟩
+  have corresponds := iso.endpointMap_corresponds wire
+    (sourceSites.sites.get position).endpoint sourceMember
+  have endpointExact :=
+    transportPosition_endpoint iso sourceSites targetSites position
+  exact (congrArg CEndpoint.node endpointExact).trans corresponds.1
+
 /-- Argument ownership at a transported applied-site position is exactly
 the supplied concrete isomorphism's wire image of the source attachment. -/
 theorem transportPosition_argument_owner
