@@ -157,6 +157,83 @@ theorem arityShift_wiresAt_shape
     arityShift_sourceRemovedWires_exact source wire newArgument result
       accepted]
 
+/-- Below the acted relation head, every source-local binder is retained in
+order and the construction appends exactly the fresh binders scoped at that
+region. -/
+theorem arityShift_localSignatures_below
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope) :
+    (result.checked.val.wiresAt (result.regionImage region)).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig) =
+      (source.val.wiresAt region).map
+          (fun sourceWire => (source.val.wires sourceWire).sig) ++
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source region).map (fun _ => newArgument) := by
+  have retainedAll :
+      (source.val.wiresAt region).filter
+          (fun sourceWire => decide (sourceWire ∉ [wire])) =
+        source.val.wiresAt region := by
+    apply List.filter_eq_self.mpr
+    intro sourceWire member
+    apply decide_eq_true
+    simp only [List.mem_singleton]
+    intro same
+    subst sourceWire
+    rw [ConcreteDiagram.wiresAt, List.mem_filter] at member
+    have scopeExact := eq_of_beq member.2
+    exact notHead scopeExact.symm
+  have headEmpty :
+      (Data.Finite.allFin 1).filter (fun _head =>
+        retainedRegion source (source.val.wires wire).scope ==
+          retainedRegion source region) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro head _member acceptedHead
+    have retainedExact := eq_of_beq acceptedHead
+    have scopeExact : (source.val.wires wire).scope = region := by
+      apply (ConcreteWireQuantifier.Internal.noRegionRemovalEquiv source).injective
+      rw [← retainedRegion_eq_noRegionRemovalEquiv,
+        ← retainedRegion_eq_noRegionRemovalEquiv]
+      exact retainedExact
+    exact notHead scopeExact.symm
+  rw [arityShift_localSignatures_shape source wire sourceArguments
+    sourceSignature result.sites newArgument result accepted region,
+    retainedAll, headEmpty]
+  simp
+
+/-- Canonical binder certificate for every region below the acted head. -/
+def arityShift_regionBounds_below
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope) :
+    BoundCylindrification newArgument
+      ((source.val.wiresAt region).map fun sourceWire =>
+        (source.val.wires sourceWire).sig)
+      ((result.checked.val.wiresAt (result.regionImage region)).map
+        fun targetWire => (result.checked.val.wires targetWire).sig)
+      ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+        retainedRegion source (result.spec.localScope fresh) ==
+          retainedRegion source region).length := by
+  rw [arityShift_localSignatures_below source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead]
+  rw [List.map_const']
+  exact BoundCylindrification.appendFresh newArgument _ _
+
 /-- The normalized source binder block is exactly the source scope's ordered
 local signatures with the selected relation head removed. -/
 theorem LocalCylindricalFrame.sourceReduced_shape
