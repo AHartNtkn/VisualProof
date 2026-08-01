@@ -549,6 +549,133 @@ theorem recursiveItemSeqRename_comp
 
 end
 
+/-- Typed tuples depend only on the pointwise wire action. -/
+theorem recursiveVarsRename_eq
+    (left right : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      left value = right value) :
+    ∀ values : Vars source arguments,
+      Vars.rename left values = Vars.rename right values
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [Vars.rename]
+      rw [pointwise head,
+        recursiveVarsRename_eq left right pointwise tail]
+
+mutual
+
+/-- Intrinsic regions depend only on the pointwise wire action. -/
+theorem recursiveRegionRename_eq
+    (left right : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      left value = right value) :
+    ∀ body : Region definitions source,
+      body.renameWires left = body.renameWires right
+  | .mk items => by
+      exact congrArg Region.mk
+        (recursiveItemSeqRename_eq left right pointwise items)
+
+/-- Intrinsic items depend only on the pointwise wire action. -/
+theorem recursiveItemRename_eq
+    (left right : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      left value = right value) :
+    ∀ item : Item definitions source,
+      item.renameWires left = item.renameWires right
+  | .atom head values => by
+      simp only [Item.renameWires]
+      rw [pointwise head,
+        recursiveVarsRename_eq left right pointwise values]
+  | .named definition values => by
+      simp only [Item.renameWires]
+      rw [recursiveVarsRename_eq left right pointwise values]
+  | .identity signature ports atLeastTwo => by
+      simp only [Item.renameWires]
+      congr 1
+      apply List.map_congr_left
+      intro value _member
+      exact pointwise value
+  | .cut body => by
+      exact congrArg Item.cut
+        (recursiveRegionRename_eq left right pointwise body)
+  | .bind signature body => by
+      apply congrArg (Item.bind signature)
+      apply recursiveRegionRename_eq
+      intro valueSignature value
+      cases value with
+      | here => rfl
+      | there outer => exact congrArg Var.there (pointwise outer)
+
+/-- Intrinsic item sequences depend only on the pointwise wire action. -/
+theorem recursiveItemSeqRename_eq
+    (left right : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      left value = right value) :
+    ∀ items : ItemSeq definitions source,
+      items.renameWires left = items.renameWires right
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [ItemSeq.renameWires]
+      rw [recursiveItemRename_eq left right pointwise head,
+        recursiveItemSeqRename_eq left right pointwise tail]
+
+end
+
+/-- Renaming a typed tuple by the identity action is inert. -/
+theorem recursiveVarsRename_id
+    (values : Vars context arguments) :
+    Vars.rename (fun {_} value => value) values = values := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.rename]
+      rw [induction]
+
+mutual
+
+/-- Renaming an intrinsic region by the identity action is inert. -/
+theorem recursiveRegionRename_id :
+    ∀ body : Region definitions context,
+      body.renameWires (fun {_} value => value) = body
+  | .mk items => by
+      exact congrArg Region.mk (recursiveItemSeqRename_id items)
+
+/-- Renaming an intrinsic item by the identity action is inert. -/
+theorem recursiveItemRename_id :
+    ∀ item : Item definitions context,
+      item.renameWires (fun {_} value => value) = item
+  | .atom head values => by
+      simp only [Item.renameWires]
+      rw [recursiveVarsRename_id values]
+  | .named definition values => by
+      simp only [Item.renameWires]
+      rw [recursiveVarsRename_id values]
+  | .identity signature ports atLeastTwo => by
+      simp only [Item.renameWires]
+      congr 1
+      simp
+  | .cut body => by
+      exact congrArg Item.cut (recursiveRegionRename_id body)
+  | .bind signature body => by
+      apply congrArg (Item.bind signature)
+      calc
+        _ = body.renameWires (fun {_} value => value) :=
+          recursiveRegionRename_eq _ _ (by
+            intro valueSignature value
+            cases value <;> rfl) body
+        _ = body := recursiveRegionRename_id body
+
+/-- Renaming an intrinsic item sequence by the identity action is inert. -/
+theorem recursiveItemSeqRename_id :
+    ∀ items : ItemSeq definitions context,
+      items.renameWires (fun {_} value => value) = items
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [ItemSeq.renameWires]
+      rw [recursiveItemRename_id head, recursiveItemSeqRename_id tail]
+
+end
+
 /-- Any decidable ordered subsequence of a successfully compiled node list
 also compiles, preserving the retained node order. -/
 theorem compileNodes?_filter_complete
@@ -690,6 +817,91 @@ theorem recursiveRetainedNodePair
         exact (recursiveRegionNormalizations_commute source wire
           sourceArguments sourceSignature newArgument result accepted region
           notHead sourceOuter targetOuter outer value).symm) sourceRetained).symm
+
+/-- Abstraction commutes with the intrinsic signature-only region finisher:
+local compiler wires become the same ordered block of uniform binders. -/
+theorem recursiveAbstract_finishRegionSignatures
+    (outerHead : Var outer (.rel arguments)) :
+    ∀ (localSigs : List Sig)
+      (body : Region definitions (localSigs ++ outer)),
+      UniformIntrinsicRegion.abstractApplied outerHead
+          (ConcreteElaboration.finishRegionSignatures outer localSigs body) =
+        wrapArgumentBinds localSigs
+          (UniformIntrinsicRegion.abstractApplied
+            (Var.appendRight localSigs outerHead) body)
+  | [], body => rfl
+  | signature :: tail, body => by
+      simp only [ConcreteElaboration.finishRegionSignatures,
+        wrapArgumentBinds]
+      rw [recursiveAbstract_finishRegionSignatures outerHead tail]
+      rfl
+
+/-- Transport a cylindrical shape across exact source and target context
+equalities. -/
+def recursiveShapeTransport
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (shape : CylindricalShape definitions insertion
+      sourceContext targetContext) :
+    CylindricalShape definitions insertion
+      normalizedSourceContext normalizedTargetContext := by
+  cases sourceExact
+  cases targetExact
+  exact shape
+
+@[simp] theorem recursiveShapeTransport_smaller
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (shape : CylindricalShape definitions insertion
+      sourceContext targetContext) :
+    (recursiveShapeTransport sourceExact targetExact shape).smaller =
+      sourceExact ▸ shape.smaller := by
+  cases sourceExact
+  cases targetExact
+  rfl
+
+@[simp] theorem recursiveShapeTransport_larger
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (shape : CylindricalShape definitions insertion
+      sourceContext targetContext) :
+    (recursiveShapeTransport sourceExact targetExact shape).larger =
+      targetExact ▸ shape.larger := by
+  cases sourceExact
+  cases targetExact
+  rfl
+
+/-- Casting an abstracted region casts its head and body together. -/
+theorem recursiveCast_abstractApplied
+    (same : sourceContext = targetContext)
+    (head : Var sourceContext (.rel arguments))
+    (body : Region definitions sourceContext) :
+    same ▸ UniformIntrinsicRegion.abstractApplied head body =
+      UniformIntrinsicRegion.abstractApplied (same ▸ head) (same ▸ body) := by
+  cases same
+  rfl
+
+/-- Casting a complete intrinsic region is the same as renaming every wire by
+that cast. -/
+theorem recursiveCastRegion_eq_rename
+    (same : sourceContext = targetContext)
+    (body : Region definitions sourceContext) :
+    same ▸ body = body.renameWires (fun {_} value => same ▸ value) := by
+  cases same
+  change body = body.renameWires (fun {_} value => value)
+  exact (recursiveRegionRename_id body).symm
+
+/-- The elaborator's dependent region normalization is the corresponding
+cast on a complete intrinsic region. -/
+theorem recursiveRegionNormalization_region
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (body : Region definitions (context.extend region).sigs) :
+    body.renameWires (recursiveRegionNormalization context region) =
+      ConcreteElaboration.WireContext.sigs_extend context region ▸ body := by
+  unfold recursiveRegionNormalization
+  exact (recursiveCastRegion_eq_rename
+    (ConcreteElaboration.WireContext.sigs_extend context region) body).symm
 
 /-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
 its exact renaming. -/
