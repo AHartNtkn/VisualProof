@@ -386,6 +386,31 @@ def embedLocal
   | .fresh rest =>
       weakenOuter rest.embedLocal fixedSignature
 
+/-- Transporting the larger binder index of a receipt and then transporting
+its local result back is observationally neutral. -/
+theorem embedLocal_transport
+    (same : target = larger)
+    (evidence :
+      BoundCylindrification fixedSignature smaller larger freshCount)
+    (value : Var smaller signature) :
+    same ▸ ((same.symm ▸ evidence).embedLocal value) =
+      evidence.embedLocal value := by
+  cases same
+  rfl
+
+/-- The local embedding of the canonical fresh-suffix receipt is ordinary
+left injection past that suffix. -/
+theorem appendFresh_embedLocal
+    (fixedSignature : Sig)
+    (smaller : List Sig)
+    (count : Nat)
+    (value : Var smaller signature) :
+    (appendFresh fixedSignature smaller count).embedLocal value =
+      Var.appendLeft value (List.replicate count fixedSignature) := by
+  induction value with
+  | here => rfl
+  | there tail induction => exact congrArg Var.there induction
+
 /-- Extending a bound cylindrification by an outer renaming preserves the
 local/outer decomposition on every retained local variable. -/
 theorem embed_appendLeft

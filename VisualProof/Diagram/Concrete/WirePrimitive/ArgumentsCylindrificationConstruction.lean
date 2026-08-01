@@ -1120,6 +1120,29 @@ theorem LocalCylindricalFrame.targetReduced_shape
         exact arityShift_localSignature_exact source wire sourceArguments
           sourceSignature result.sites newArgument result accepted fresh
 
+/-- The target root binder block is the source block followed by a canonical
+constant-signature suffix, stated in the representation consumed directly by
+`BoundCylindrification.appendFresh`. -/
+theorem LocalCylindricalFrame.rootReducedExact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.targetReduced =
+      frame.sourceReduced ++ List.replicate
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+        retainedRegion source (result.spec.localScope fresh) ==
+          retainedRegion source (source.val.wires wire).scope).length
+        newArgument := by
+  rw [frame.targetReduced_shape sourceArguments sourceSignature newArgument
+    result accepted]
+  rw [List.map_const']
+
 /-- Canonical root binder certificate: retain the normalized source block and
 append exactly the fresh wires whose scope is the acted scope. -/
 def LocalCylindricalFrame.rootBounds
@@ -1135,11 +1158,37 @@ def LocalCylindricalFrame.rootBounds
     BoundCylindrification newArgument frame.sourceReduced frame.targetReduced
       ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
         retainedRegion source (result.spec.localScope fresh) ==
-          retainedRegion source (source.val.wires wire).scope).length := by
-  rw [frame.targetReduced_shape sourceArguments sourceSignature newArgument
-    result accepted]
-  rw [List.map_const']
-  exact BoundCylindrification.appendFresh newArgument frame.sourceReduced _
+          retainedRegion source (source.val.wires wire).scope).length :=
+  (frame.rootReducedExact sourceArguments sourceSignature newArgument result
+    accepted).symm ▸
+    BoundCylindrification.appendFresh newArgument frame.sourceReduced _
+
+/-- The construction-owned root bound certificate retains every source
+local at the same ordinal before its canonical fresh suffix. -/
+theorem LocalCylindricalFrame.rootBounds_embedLocal
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.sourceReduced signature) :
+    (frame.rootReducedExact sourceArguments sourceSignature newArgument result
+        accepted) ▸
+        ((frame.rootBounds sourceArguments sourceSignature newArgument result
+          accepted).embedLocal value) =
+      Var.appendLeft value
+        (List.replicate
+          ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source (source.val.wires wire).scope).length
+          newArgument) := by
+  unfold LocalCylindricalFrame.rootBounds
+  rw [BoundCylindrification.embedLocal_transport]
+  exact BoundCylindrification.appendFresh_embedLocal _ _ _ value
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
