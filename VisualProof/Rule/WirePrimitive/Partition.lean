@@ -1,3 +1,4 @@
+import VisualProof.Diagram.Concrete.WirePartitionIsomorphism
 import VisualProof.Diagram.Concrete.WirePartitionSemantics
 import VisualProof.Rule.Structural
 
@@ -20,6 +21,7 @@ inductive WirePartitionError
   | joinRequiresNegative
   | joinBackwardRequiresPositive
   | scopeCompilationFailed
+  | transportMismatch
   | concreteRejected (error : ConcreteWireQuantifier.Error)
   deriving Repr, DecidableEq
 
@@ -320,6 +322,147 @@ def invertWireSever
                 change ConcreteIso inverseResult.checked.val source.val
                 rw [targetExact]
                 exact result.inverseIso.symm }
+
+/-- Deterministic inverse of an accepted sever after a suffix has renamed its
+checked target.  The supplied isomorphism transports the two canonical join
+parameters; no wire pair or target isomorphism is searched for. -/
+structure TransportedWireSeverInverse
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (sever : AppliedWireSever source input)
+    (real : CheckedDiagram definitions)
+    (targetIso : ConcreteIso real.val sever.target.val)
+    (orientation : Orientation) where
+  input : WireJoinInput real
+  applied : AppliedWireJoin real input
+  targetIso : ConcreteIso applied.target.val source.val
+
+/-- Construct the inverse join from the canonical sever receipt after pulling
+its parameters through the supplied suffix isomorphism. -/
+def invertWireSeverTransported
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (sever : AppliedWireSever source input)
+    (real : CheckedDiagram definitions)
+    (targetIso : ConcreteIso real.val sever.target.val)
+    (orientation : Orientation) :
+    Except WirePartitionError
+      (TransportedWireSeverInverse sever real targetIso orientation) := by
+  let canonical := sever.checked.result
+  have realToCanonical : ConcreteIso real.val canonical.checked.val := by
+    rw [sever.checked.targetExact]
+    exact targetIso
+  let left := realToCanonical.wires.symm
+    (canonical.wireImage input.wire)
+  let right := realToCanonical.wires.symm canonical.freshWire
+  let inverseInput : WireJoinInput real :=
+    { orientation := orientation
+      left := left
+      right := right }
+  match polarityAccepted :
+      requireJoinPolarity real orientation
+        (real.val.wires right).scope with
+  | .error error => exact .error error
+  | .ok polarity =>
+      have different : left ≠ right := by
+        intro same
+        have mapped := congrArg realToCanonical.wires same
+        have leftExact : realToCanonical.wires left =
+            canonical.wireImage input.wire := by
+          change realToCanonical.wires.toFun
+            (realToCanonical.wires.invFun
+              (canonical.wireImage input.wire)) = _
+          exact realToCanonical.wires.right_inv _
+        have rightExact : realToCanonical.wires right =
+            canonical.freshWire := by
+          change realToCanonical.wires.toFun
+            (realToCanonical.wires.invFun canonical.freshWire) = _
+          exact realToCanonical.wires.right_inv _
+        rw [leftExact, rightExact] at mapped
+        exact canonical.inverseJoin.outer_ne_inner mapped
+      have signaturesEqual :
+          (real.val.wires left).sig = (real.val.wires right).sig := by
+        have leftSig := realToCanonical.wire_signature left
+        have rightSig := realToCanonical.wire_signature right
+        have leftExact : realToCanonical.wires left =
+            canonical.wireImage input.wire := by
+          change realToCanonical.wires.toFun
+            (realToCanonical.wires.invFun
+              (canonical.wireImage input.wire)) = _
+          exact realToCanonical.wires.right_inv _
+        have rightExact : realToCanonical.wires right =
+            canonical.freshWire := by
+          change realToCanonical.wires.toFun
+            (realToCanonical.wires.invFun canonical.freshWire) = _
+          exact realToCanonical.wires.right_inv _
+        rw [leftExact] at leftSig
+        rw [rightExact] at rightSig
+        exact leftSig.symm.trans
+          (canonical.inverseJoin.source_signatures_equal.trans rightSig)
+      have comparable :
+          real.val.Encloses
+            (real.val.wires left).scope
+            (real.val.wires right).scope := by
+        have canonicalComparable :
+            canonical.checked.val.Encloses
+              (canonical.checked.val.wires
+                (canonical.wireImage input.wire)).scope
+              (canonical.checked.val.wires canonical.freshWire).scope := by
+          rw [canonical.wireImage_scope, canonical.freshWire_scope]
+          exact canonical.encloses_regionImage
+            canonical.sourceScope_encloses_scope
+        have pulled := realToCanonical.symm.encloses_transport
+          canonicalComparable
+        have leftScope :
+            (real.val.wires left).scope =
+              realToCanonical.regions.symm
+                (canonical.checked.val.wires
+                  (canonical.wireImage input.wire)).scope := by
+          simpa [left] using
+            realToCanonical.symm.wire_scope
+              (canonical.wireImage input.wire)
+        have rightScope :
+            (real.val.wires right).scope =
+              realToCanonical.regions.symm
+                (canonical.checked.val.wires canonical.freshWire).scope := by
+          simpa [right] using
+            realToCanonical.symm.wire_scope canonical.freshWire
+        rw [leftScope, rightScope]
+        exact pulled
+      match accepted : ConcreteWireQuantifier.joinWires real left right with
+      | .error error => exact .error (.concreteRejected error)
+      | .ok actual =>
+          let inverseApplied : AppliedWireJoin real inverseInput :=
+            AppliedWireJoin.mk actual.checked
+              { outer := left
+                inner := right
+                side := Or.inl ⟨rfl, rfl⟩
+                comparable := comparable
+                polarity := polarity
+                result := actual
+                accepted := accepted
+                targetExact := rfl }
+          match natural : actual.transportedIso? realToCanonical
+              canonical.inverseJoin
+              (by
+                change realToCanonical.wires.toFun
+                  (realToCanonical.wires.invFun
+                    (canonical.wireImage input.wire)) = _
+                exact realToCanonical.wires.right_inv _)
+              (by
+                change realToCanonical.wires.toFun
+                  (realToCanonical.wires.invFun canonical.freshWire) = _
+                exact realToCanonical.wires.right_inv _) with
+          | none => exact .error .transportMismatch
+          | some outputIso =>
+              match composed : outputIso.checkedTrans?
+                  canonical.inverseIso.symm with
+              | none => exact .error .transportMismatch
+              | some sourceIso =>
+                  exact .ok
+                    { input := inverseInput
+                      applied := inverseApplied
+                      targetIso := sourceIso }
 
 /-- Generic signature-indexed wire partition is sound over every premodel. -/
 theorem wire_sever_sound
