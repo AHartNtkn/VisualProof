@@ -653,6 +653,64 @@ theorem sourceSiteNodesAt_length_fresh
     (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
       newArgument result accepted region)
 
+/-- Target application nodes at an image region occur in the same order as
+the source applications that generated them.  Retained nodes precede the
+generated suffix and therefore contribute no target application hole. -/
+theorem ArgumentResult.targetSiteNodesAt_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    sourceSiteNodesAt result.targetSites (result.regionImage region) =
+      (aritySitesAt result.sites region).map result.targetNode := by
+  unfold sourceSiteNodesAt
+  rw [result.nodesAt_decomposition region, List.filter_append]
+  have retainedEmpty :
+      (((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+            ConcreteWireQuantifier.Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained))).filter
+        (fun node => decide
+          (node ∈ argumentSiteNodes result.targetSites)) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro node member accepted
+    obtain ⟨retained, _retainedMember, nodeExact⟩ := List.mem_map.mp member
+    have large := (result.targetSiteNode_iff_ge result.targetSites node).mp
+      (of_decide_eq_true accepted)
+    rw [← nodeExact] at large
+    simp [ConcreteWireQuantifier.Internal.checkedNode] at large
+    exact (Nat.not_le_of_lt retained.isLt) large
+  rw [retainedEmpty]
+  simp only [List.nil_append]
+  have generatedExact :
+      (((Data.Finite.allFin result.sites.sites.length).filter fun site =>
+          retainedRegion source (result.sites.sites.get site).region ==
+            retainedRegion source region).map result.targetNode).filter
+        (fun node => decide
+          (node ∈ argumentSiteNodes result.targetSites)) =
+      ((Data.Finite.allFin result.sites.sites.length).filter fun site =>
+          retainedRegion source (result.sites.sites.get site).region ==
+            retainedRegion source region).map result.targetNode := by
+    apply List.filter_eq_self.mpr
+    intro node member
+    obtain ⟨site, _siteMember, nodeExact⟩ := List.mem_map.mp member
+    apply decide_eq_true
+    rw [← nodeExact]
+    exact result.generatedNode_targetSiteNode result.targetSites site
+  rw [generatedExact]
+  apply congrArg (List.map result.targetNode)
+  apply List.filter_congr
+  intro site _member
+  rw [Bool.eq_iff_iff, beq_iff_eq, beq_iff_eq]
+  constructor
+  · intro retainedSame
+    apply (ConcreteWireQuantifier.Internal.noRegionRemovalEquiv
+      source).injective
+    rw [← retainedRegion_eq_noRegionRemovalEquiv,
+      ← retainedRegion_eq_noRegionRemovalEquiv]
+    exact retainedSame
+  · exact congrArg (retainedRegion source)
+
 /-- Canonical finite equivalence from endpoint/site order to source-node
 order for the application holes local to one region. -/
 noncomputable def aritySiteNodeOrder

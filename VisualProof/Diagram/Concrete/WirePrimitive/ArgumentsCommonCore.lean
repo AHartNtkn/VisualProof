@@ -141,7 +141,7 @@ theorem generatedNode_targetSiteNode
   refine ⟨targetSite, targetSiteMember, ?_⟩
   exact congrArg CEndpoint.node endpointExact
 
-private theorem targetSiteNode_iff_ge
+theorem targetSiteNode_iff_ge
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (result : ArgumentResult source wire)
