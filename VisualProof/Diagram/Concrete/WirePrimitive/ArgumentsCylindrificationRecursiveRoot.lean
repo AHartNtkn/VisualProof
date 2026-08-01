@@ -31,6 +31,16 @@ private theorem recursiveRoot_cast_through_middle
   cases direct
   rfl
 
+private theorem recursiveRoot_cast_appendLeft_local
+    (same : left = right)
+    (value : Var left signature)
+    (outer : List Sig) :
+    congrArg (fun localSigs => localSigs ++ outer) same ▸
+        Var.appendLeft value outer =
+      Var.appendLeft (same ▸ value) outer := by
+  cases same
+  rfl
+
 theorem recursiveVar_append_cases
     (left right : List Sig)
     (value : Var (left ++ right) signature) :
@@ -1362,6 +1372,96 @@ theorem recursiveFinalRegionHole_split_exact
   rw [← recursiveVarsRename_eq correspondence.embedding (bounds.embed outer)
     embeddingExact (Vars.rename correspondence.sourceMap sourceValues)]
   exact splitExact
+
+theorem recursiveExtendedNormalization_fresh_of_origin
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (targetMap : WireRenaming targetOuter.sigs normalizedTarget)
+    (outer : WireRenaming smallerOuter normalizedTarget)
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (freshIndex : Fin (arityFreshAt result region).length)
+    (targetValue : Var
+      (targetOuter.extend (result.regionImage region)).sigs newArgument)
+    (targetOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (targetOuter.extend (result.regionImage region)).ids targetValue =
+        result.targetLocalWire
+          ((arityFreshAt result region).get freshIndex)) :
+    recursiveExtendedNormalization targetOuter (result.regionImage region)
+        targetMap targetValue =
+      (arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).freshVar
+        outer freshIndex := by
+  let rootExact := arityShift_regionBounds_below_exact source wire
+    sourceArguments sourceSignature newArgument result accepted region notHead
+  let localFresh : Var
+      ((result.checked.val.wiresAt (result.regionImage region)).map
+        fun targetWire => (result.checked.val.wires targetWire).sig)
+      newArgument :=
+    rootExact.symm ▸
+      Var.appendRight
+        ((source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig)
+        (BoundCylindrification.repeatedVar newArgument
+          (arityFreshAt result region).length freshIndex)
+  let expected : Var
+      (targetOuter.extend (result.regionImage region)).sigs newArgument :=
+    (ConcreteElaboration.WireContext.sigs_extend targetOuter
+      (result.regionImage region)).symm ▸
+      Var.appendLeft localFresh targetOuter.sigs
+  have localOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (result.checked.val.wiresAt (result.regionImage region)) localFresh =
+        result.targetLocalWire
+          ((arityFreshAt result region).get freshIndex) := by
+    simpa [rootExact, localFresh] using
+      arityShift_regionBounds_below_freshLocal_origin source wire
+        sourceArguments sourceSignature newArgument result accepted region
+        notHead freshIndex
+  have expectedOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (targetOuter.extend (result.regionImage region)).ids expected =
+        result.targetLocalWire
+          ((arityFreshAt result region).get freshIndex) := by
+    unfold expected
+    exact (recursive_origin_extend_local result.checked.val targetOuter
+      (result.regionImage region) localFresh).trans localOrigin
+  have targetExact : targetValue = expected :=
+    InsertionCompilation.NaturalityInternal.origin_injective
+      result.checked.val
+      (targetOuter.extend (result.regionImage region)).ids targetNodup
+      (targetOrigin.trans expectedOrigin.symm)
+  subst targetValue
+  have expectedNormalized :
+      recursiveExtendedNormalization targetOuter (result.regionImage region)
+          targetMap expected = Var.appendLeft localFresh normalizedTarget := by
+    unfold expected
+    rw [recursiveExtendedNormalization_local]
+  rw [expectedNormalized]
+  rw [arityShift_regionBounds_below_freshVar source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead outer
+    freshIndex]
+  unfold localFresh rootExact
+  simpa only using
+    (recursiveRoot_cast_appendLeft_local
+      (arityShift_regionBounds_below_exact source wire sourceArguments
+        sourceSignature newArgument result accepted region notHead).symm
+      (Var.appendRight
+        ((source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig)
+        (BoundCylindrification.repeatedVar newArgument
+          (arityFreshAt result region).length freshIndex))
+      normalizedTarget).symm
 
 noncomputable def recursiveFinalRegionHoles
     {source : CheckedDiagram definitions}
