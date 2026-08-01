@@ -73,6 +73,62 @@ structure AppliedSite
 
 namespace AppliedSite
 
+/-- Ordered typed tuples in one duplicate-free concrete context are
+determined by their exact concrete wire origins. -/
+theorem variables_eq_of_origins
+    {argumentTypes : List Sig}
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (nodup : context.ids.Nodup)
+    (left right : Vars context.sigs argumentTypes)
+    (same :
+      ConcreteElaboration.variableOrigins diagram context left =
+        ConcreteElaboration.variableOrigins diagram context right) :
+    left = right := by
+  induction left with
+  | nil =>
+      cases right
+      rfl
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          simp only [ConcreteElaboration.variableOrigins, List.cons.injEq]
+            at same
+          have headExact :=
+            InsertionCompilation.NaturalityInternal.origin_injective
+              diagram context.ids nodup same.1
+          subst rightHead
+          exact congrArg (Vars.cons leftHead)
+            (induction rightTail same.2)
+
+/-- Renaming a typed tuple transports its concrete origin list pointwise
+whenever the variable renaming implements the stated concrete wire map. -/
+theorem variableOrigins_rename
+    {argumentTypes : List Sig}
+    (sourceDiagram : ConcreteDiagram sourceDefinitionCount)
+    (targetDiagram : ConcreteDiagram targetDefinitionCount)
+    (sourceContext : ConcreteElaboration.WireContext sourceDiagram)
+    (targetContext : ConcreteElaboration.WireContext targetDiagram)
+    (rho : WireRenaming sourceContext.sigs targetContext.sigs)
+    (wireMap : sourceDiagram.WireId → targetDiagram.WireId)
+    (originExact :
+      ∀ {signature} (value : Var sourceContext.sigs signature),
+        ConcreteElaboration.WireContext.origin targetDiagram
+            targetContext.ids (rho value) =
+          wireMap (ConcreteElaboration.WireContext.origin sourceDiagram
+            sourceContext.ids value))
+    (variables : Vars sourceContext.sigs argumentTypes) :
+    ConcreteElaboration.variableOrigins targetDiagram targetContext
+        (Vars.rename rho variables) =
+      (ConcreteElaboration.variableOrigins sourceDiagram sourceContext
+        variables).map wireMap := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.rename, ConcreteElaboration.variableOrigins,
+        List.map_cons]
+      rw [originExact head, induction]
+
 private theorem relation_signature_ne_argument
     (arguments : List Sig) (index : Fin arguments.length) :
     Sig.rel arguments ≠ arguments.get index := by
