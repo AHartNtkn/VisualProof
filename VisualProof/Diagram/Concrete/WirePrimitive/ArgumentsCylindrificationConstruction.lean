@@ -6,6 +6,74 @@ namespace ConcreteWirePrimitive
 open ConcreteWireQuantifier
 open WirePrimitive
 
+/-- Every checked replacement atom head is owned by the checker-selected
+replacement relation wire. -/
+theorem ArgumentResult.targetNode_head_owner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.endpointOwner?
+        ⟨result.targetNode site, .head⟩ = some result.targetWire := by
+  let endpoint : CEndpoint (replacementCandidate result.plan).nodeCount :=
+    ⟨replacementNode result.plan site, .head⟩
+  have required :
+      CPort.head ∈ (replacementCandidate result.plan).requiredPorts
+        (replacementNode result.plan site) := by
+    unfold replacementCandidate
+    rw [assigned_requiredPorts]
+    simp [ConcreteDiagram.requiredPorts,
+      replacementSkeleton_replacementNode]
+  have raw := assigned_endpointOwner_required
+    (replacementSkeleton result.plan) (replacementOwner result.plan)
+    (replacementNode result.plan site) .head required
+  have candidateOwner :
+      (replacementCandidate result.plan).endpointOwner? endpoint =
+        some (replacementCandidateWire result.plan) := by
+    simpa [replacementCandidate, endpoint, replacementOwner,
+      replacementCandidateWire, replacementNode] using raw
+  have transported := Internal.checkedEndpoint_owner_transport
+    result.generated endpoint
+  rw [candidateOwner] at transported
+  rw [result.targetWire_exact]
+  exact transported
+
+/-- Every required argument port of a checked replacement atom is owned by
+the checked image of its construction-selected replacement owner. -/
+theorem ArgumentResult.targetNode_argument_owner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length)
+    (index : Nat)
+    (bound : index < result.targetArguments.length) :
+    result.checked.val.endpointOwner?
+        ⟨result.targetNode site, .arg index⟩ =
+      some (Internal.checkedWire result.generated
+        (replacementOwner result.plan
+          ⟨replacementNode result.plan site, .arg index⟩)) := by
+  change index < result.spec.targetArguments.length at bound
+  let endpoint : CEndpoint (replacementCandidate result.plan).nodeCount :=
+    ⟨replacementNode result.plan site, .arg index⟩
+  have required :
+      CPort.arg index ∈ (replacementCandidate result.plan).requiredPorts
+        (replacementNode result.plan site) := by
+    unfold replacementCandidate
+    rw [assigned_requiredPorts]
+    simp [ConcreteDiagram.requiredPorts,
+      replacementSkeleton_replacementNode, bound]
+  have raw := assigned_endpointOwner_required
+    (replacementSkeleton result.plan) (replacementOwner result.plan)
+    (replacementNode result.plan site) (.arg index) required
+  have candidateOwner :
+      (replacementCandidate result.plan).endpointOwner? endpoint =
+        some (replacementOwner result.plan endpoint) := by
+    simpa [replacementCandidate, endpoint] using raw
+  have transported := Internal.checkedEndpoint_owner_transport
+    result.generated endpoint
+  rw [candidateOwner] at transported
+  exact transported
+
 namespace ArgumentsSemantics
 
 private theorem map_allFin_cast
@@ -14,6 +82,168 @@ private theorem map_allFin_cast
       Data.Finite.allFin right := by
   subst right
   simp
+
+/-- Before the appended arity position, the replacement atom retains each
+checked source attachment in its original order. -/
+theorem arityShift_argumentReference_existing
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length)
+    (index : Nat)
+    (existing : index < (result.sites.sites.get site).arguments.length)
+    (bound : index < (result.spec.arguments site).length) :
+    (result.spec.arguments site)[index]'bound =
+      .existing ((result.sites.sites.get site).arguments[index]'existing) := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  change replaceAppliedEnds source wire sites
+    (arityShiftSpec source wire sourceArguments sites newArgument) _ =
+      .ok result at accepted
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        cases accepted
+        change
+          (existingReferences (localCount := sites.sites.length)
+            (sites.sites.get site).arguments ++ [.local site])[index] = _
+        rw [List.getElem_append_left (by
+          simpa [existingReferences] using existing)]
+        exact List.getElem_map _
+
+/-- The appended arity position at each replacement atom references exactly
+that source occurrence's canonical operation-local wire. -/
+theorem arityShift_argumentReference_local
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length)
+    (bound : (result.sites.sites.get site).arguments.length <
+      (result.spec.arguments site).length) :
+    (result.spec.arguments site)[
+        (result.sites.sites.get site).arguments.length]'bound =
+      ArgumentReference.local
+        (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted).symm
+          site) := by
+  unfold arityShift checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  unfold checkedArgumentSites at accepted
+  rw [sites.checked] at accepted
+  simp only at accepted
+  change replaceAppliedEnds source wire sites
+    (arityShiftSpec source wire sourceArguments sites newArgument) _ =
+      .ok result at accepted
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        cases accepted
+        simp [arityShiftSpec, existingReferences]
+
+/-- Each retained argument port of an arity-shifted atom is owned by the
+canonical context image of the corresponding source attachment. -/
+theorem arityShift_targetNode_existing_owner
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length)
+    (index : Nat)
+    (existing : index < (result.sites.sites.get site).arguments.length)
+    (referenceBound : index < (result.spec.arguments site).length)
+    (targetBound : index < result.targetArguments.length) :
+    result.checked.val.endpointOwner?
+        ⟨result.targetNode site, .arg index⟩ =
+      some (result.contextWireMap
+        ((result.sites.sites.get site).arguments[index]'existing)) := by
+  rw [result.targetNode_argument_owner site index targetBound]
+  let sourceWire :=
+    (result.sites.sites.get site).arguments[index]'existing
+  have different : sourceWire ≠ wire := by
+    exact (result.sites.sites.get site).argument_ne_head index existing
+  have retained : sourceWire ∉ result.sourceRemovedWires := by
+    rw [arityShift_sourceRemovedWires_exact source wire newArgument result
+      accepted]
+    simpa [sourceWire] using different
+  rw [result.contextWireMap_retained sourceWire retained]
+  unfold replacementOwner replacementNode
+  simp only [Fin.addCases_right]
+  rw [List.getElem?_eq_getElem referenceBound,
+    arityShift_argumentReference_existing source wire sourceArguments
+      sourceSignature sites newArgument result accepted site index existing
+      referenceBound]
+  simp only
+  have retainedMember : sourceWire ∈
+      Internal.retainedWires source result.sourceRemovedWires := by
+    unfold Internal.retainedWires
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin sourceWire, decide_eq_true retained⟩
+  rw [retainedReplacementWire?_some result.plan sourceWire retainedMember]
+  rfl
+
+/-- The appended argument port of an arity-shifted atom is owned by that
+source occurrence's canonical fresh local wire. -/
+theorem arityShift_targetNode_local_owner
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (site : Fin result.sites.sites.length)
+    (referenceBound : (result.sites.sites.get site).arguments.length <
+      (result.spec.arguments site).length)
+    (targetBound : (result.sites.sites.get site).arguments.length <
+      result.targetArguments.length) :
+    result.checked.val.endpointOwner?
+        ⟨result.targetNode site,
+          .arg (result.sites.sites.get site).arguments.length⟩ =
+      some (result.targetLocalWire
+        (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted).symm
+          site)) := by
+  rw [result.targetNode_argument_owner site _ targetBound]
+  unfold replacementOwner replacementNode
+  simp only [Fin.addCases_right]
+  rw [List.getElem?_eq_getElem referenceBound,
+    arityShift_argumentReference_local source wire sourceArguments
+      sourceSignature sites newArgument result accepted site referenceBound]
+  rfl
 
 /-- Filtering one concrete id from a duplicate-free compiler context removes
 the exact typed position selected by that id's variable, even when other
