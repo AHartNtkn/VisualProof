@@ -852,6 +852,58 @@ theorem two_site_sever_accepts :
     (compileRelationSever twoSiteSource twoSiteSeverInput).isOk = true := by
   native_decide
 
+/-!
+The deterministic compiler and monolithic constructors allocate the same
+dense carriers in every acceptance-corpus case.  These checks pin the exact
+construction landing expected by the total redundancy proof: the final
+isomorphism transports each region, node, and wire at the same dense index.
+-/
+
+private def hasIdentityCarriers
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (iso : ConcreteIso left right) : Bool :=
+  ((Data.Finite.allFin left.regionCount).map
+      (fun region => (iso.regions region).val) ==
+        List.range left.regionCount) &&
+    ((Data.Finite.allFin left.nodeCount).map
+      (fun node => (iso.nodes node).val) ==
+        List.range left.nodeCount) &&
+    ((Data.Finite.allFin left.wireCount).map
+      (fun wire => (iso.wires wire).val) ==
+        List.range left.wireCount)
+
+private def joinHasIdentityLanding
+    {source : CheckedDiagram definitions}
+    (input : MonolithicRelationJoinInput source) : Bool :=
+  (compileRelationJoin source input).toOption.any fun compiled =>
+    hasIdentityCarriers compiled.normalizedIso
+
+private def severHasIdentityLanding
+    {source : CheckedDiagram definitions}
+    (input : MonolithicRelationSeverInput source) : Bool :=
+  (compileRelationSever source input).toOption.any fun compiled =>
+    hasIdentityCarriers compiled.normalizedIso
+
+theorem required_join_corpus_has_identity_landings :
+    [ joinHasIdentityLanding unaryJoinInput,
+      joinHasIdentityLanding backwardJoinInput,
+      joinHasIdentityLanding emptyJoinInput,
+      joinHasIdentityLanding backwardEmptyInput,
+      joinHasIdentityLanding repeatedFormalInput,
+      joinHasIdentityLanding droppedFormalInput,
+      joinHasIdentityLanding uniformParameterInput,
+      joinHasIdentityLanding permutedIdentityInput,
+      joinHasIdentityLanding formalApplicationInput,
+      joinHasIdentityLanding workedJoinInput,
+      joinHasIdentityLanding foldedRefInput ].all id = true := by
+  native_decide
+
+theorem required_sever_corpus_has_identity_landings :
+    [ severHasIdentityLanding unarySeverInput,
+      severHasIdentityLanding twoSiteSeverInput ].all id = true := by
+  native_decide
+
 end CompilerFixtures
 
 end WirePrimitive
