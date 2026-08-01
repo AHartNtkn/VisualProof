@@ -73,6 +73,124 @@ private theorem cast_through_middle
   cases direct
   rfl
 
+private theorem cast_appendLeft_outer
+    (same : leftOuter = rightOuter)
+    (value : Var localSigs signature) :
+    congrArg (fun outer => localSigs ++ outer) same ▸
+        Var.appendLeft value leftOuter =
+      Var.appendLeft value rightOuter := by
+  cases same
+  rfl
+
+private theorem cast_here_congrArg_cons
+    (same : left = right) :
+    congrArg (List.cons signature) same ▸
+        (Var.here : Var (signature :: left) signature) =
+      (Var.here : Var (signature :: right) signature) := by
+  cases same
+  rfl
+
+private theorem cast_there_congrArg_cons
+    (same : left = right)
+    (value : Var left signature) :
+    congrArg (List.cons headSignature) same ▸ Var.there value =
+      Var.there (same ▸ value) := by
+  cases same
+  rfl
+
+private theorem cast_here_congrArg_cons_symm
+    (same : left = right) :
+    (congrArg (List.cons signature) same).symm ▸
+        (Var.here : Var (signature :: right) signature) =
+      (Var.here : Var (signature :: left) signature) := by
+  cases same
+  rfl
+
+private theorem cast_there_congrArg_cons_symm
+    (same : left = right)
+    (value : Var right signature) :
+    (congrArg (List.cons headSignature) same).symm ▸ Var.there value =
+      Var.there (same.symm ▸ value) := by
+  cases same
+  rfl
+
+private theorem cast_appendLeft_eq_appendLeftIds
+    (diagram : ConcreteDiagram definitionCount)
+    (leftIds rightIds : List diagram.WireId)
+    {signature : Sig}
+    (value : Var (leftIds.map fun wire => (diagram.wires wire).sig)
+      signature) :
+    (List.map_append (f := fun wire => (diagram.wires wire).sig)
+          (l₁ := leftIds) (l₂ := rightIds)).symm ▸
+        Var.appendLeft value
+          (rightIds.map fun wire => (diagram.wires wire).sig) =
+      InsertionCompilation.NaturalityInternal.appendLeftIds diagram
+        rightIds value := by
+  induction leftIds with
+  | nil => exact nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here =>
+          have proofExact :
+              (List.map_append
+                  (f := fun wire => (diagram.wires wire).sig)
+                  (l₁ := head :: tail) (l₂ := rightIds)).symm =
+                (congrArg (List.cons (diagram.wires head).sig)
+                  (List.map_append
+                    (f := fun wire => (diagram.wires wire).sig)
+                    (l₁ := tail) (l₂ := rightIds))).symm :=
+            Subsingleton.elim _ _
+          rw [proofExact]
+          exact cast_here_congrArg_cons_symm
+            (List.map_append
+              (f := fun wire => (diagram.wires wire).sig)
+              (l₁ := tail) (l₂ := rightIds))
+      | there rest =>
+          have proofExact :
+              (List.map_append
+                  (f := fun wire => (diagram.wires wire).sig)
+                  (l₁ := head :: tail) (l₂ := rightIds)).symm =
+                (congrArg (List.cons (diagram.wires head).sig)
+                  (List.map_append
+                    (f := fun wire => (diagram.wires wire).sig)
+                    (l₁ := tail) (l₂ := rightIds))).symm :=
+            Subsingleton.elim _ _
+          rw [proofExact]
+          simp only [Var.appendLeft,
+            InsertionCompilation.NaturalityInternal.appendLeftIds]
+          exact
+            (cast_there_congrArg_cons_symm
+              (List.map_append
+                (f := fun wire => (diagram.wires wire).sig)
+                (l₁ := tail) (l₂ := rightIds))
+              (Var.appendLeft rest
+                (rightIds.map fun wire => (diagram.wires wire).sig))).trans
+              (congrArg Var.there (induction rest))
+
+private theorem origin_extend_appendLeft
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    {signature : Sig}
+    (value : Var (ContentAlignment.localSignatures diagram region)
+      signature) :
+    ConcreteElaboration.WireContext.origin diagram
+        (context.extend region).ids
+        ((ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendLeft value context.sigs) =
+      ConcreteElaboration.WireContext.origin diagram
+        (diagram.wiresAt region) value := by
+  unfold ConcreteElaboration.WireContext.extend
+    ConcreteElaboration.WireContext.sigs
+    ContentAlignment.localSignatures
+  rw [show ConcreteElaboration.WireContext.sigs_extend context region =
+      List.map_append (f := fun wire => (diagram.wires wire).sig)
+        (l₁ := diagram.wiresAt region) (l₂ := context.ids) from
+      Subsingleton.elim _ _]
+  rw [cast_appendLeft_eq_appendLeftIds]
+  exact InsertionCompilation.NaturalityInternal.appendLeftIds_origin
+    diagram (diagram.wiresAt region) context.ids value
+
 /-- Rename a source compiled-frame variable into the source-normalized
 arity-shape context, including the explicit source/target head slots. -/
 def LocalCylindricalFrame.sourceFrameNormalization
@@ -913,6 +1031,110 @@ theorem LocalCylindricalFrame.compileSourceAppliedSite?_complete
       exact Option.some.inj (compiledOwner.symm.trans (by
         simpa using siteOwner))
   exact ⟨head, arguments, nodeCompiled, headExact, argumentsExact⟩
+
+/-- A compiled source atom whose concrete head owner is the acted wire
+normalizes to the construction's distinguished source-head slot.  The proof
+uses the concrete context equality from `FrameContextPair`; equality of
+signature lists alone is intentionally insufficient to identify an owner. -/
+theorem LocalCylindricalFrame.sourceFrameNormalization_of_head_origin
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    {result : ArgumentResult source wire}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (head : Var frame.sourceScope.frame.visible.sigs
+      (.rel sourceArguments))
+    (headOrigin :
+      ConcreteElaboration.WireContext.origin source.val
+          frame.sourceScope.frame.visible.ids head = wire) :
+    frame.sourceFrameNormalization head =
+      Var.appendRight frame.sourceReduced localSourceHead := by
+  let extendedHead :
+      Var (pair.sourceSiteOuter.extend
+        (source.val.wires wire).scope).sigs (.rel sourceArguments) :=
+    (ConcreteElaboration.WireContext.sigs_extend pair.sourceSiteOuter
+        (source.val.wires wire).scope).symm ▸
+      Var.appendLeft frame.sourceHead pair.sourceSiteOuter.sigs
+  let canonical : Var frame.sourceScope.frame.visible.sigs
+      (.rel sourceArguments) :=
+    congrArg ConcreteElaboration.WireContext.sigs
+        pair.sourceVisibleContextExact.symm ▸ extendedHead
+  have canonicalOrigin :
+      ConcreteElaboration.WireContext.origin source.val
+          frame.sourceScope.frame.visible.ids canonical = wire := by
+    unfold canonical
+    rw [origin_cast_context source.val
+      pair.sourceVisibleContextExact.symm]
+    exact (origin_extend_appendLeft source.val pair.sourceSiteOuter
+      (source.val.wires wire).scope frame.sourceHead).trans
+        frame.sourceHead_origin
+  have headExact : head = canonical :=
+    InsertionCompilation.NaturalityInternal.origin_injective source.val
+      frame.sourceScope.frame.visible.ids
+      (siteVisibleNodup frame.sourceScope)
+      (headOrigin.trans canonicalOrigin.symm)
+  subst head
+  have outerExact :
+      frame.context.siteOuter = pair.sourceSiteOuter.sigs := by
+    have appended :
+        ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope ++ frame.context.siteOuter =
+          ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope ++ pair.siteOuter :=
+      frame.context.sourceVisibleExact.symm.trans pair.sourceVisibleExact
+    have siteOuterExact : frame.context.siteOuter = pair.siteOuter :=
+      List.append_cancel_left appended
+    exact siteOuterExact.trans pair.siteOuter_exact
+  have canonicalExact : canonical =
+      frame.context.sourceVisibleExact.symm ▸
+        Var.appendLeft frame.sourceRemoval.head frame.context.siteOuter := by
+    let raw : Var
+        (ContentAlignment.localSignatures source.val
+            (source.val.wires wire).scope ++ pair.sourceSiteOuter.sigs)
+        (.rel sourceArguments) :=
+      Var.appendLeft frame.sourceHead pair.sourceSiteOuter.sigs
+    let extendExact :
+        (pair.sourceSiteOuter.extend
+          (source.val.wires wire).scope).sigs =
+            ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope ++ pair.sourceSiteOuter.sigs :=
+      ConcreteElaboration.WireContext.sigs_extend pair.sourceSiteOuter
+        (source.val.wires wire).scope
+    let visibleExact := congrArg ConcreteElaboration.WireContext.sigs
+      pair.sourceVisibleContextExact
+    let outerTransport :
+        ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope ++ pair.sourceSiteOuter.sigs =
+          ContentAlignment.localSignatures source.val
+              (source.val.wires wire).scope ++ frame.context.siteOuter :=
+      congrArg (fun outer =>
+        ContentAlignment.localSignatures source.val
+          (source.val.wires wire).scope ++ outer) outerExact.symm
+    let canonicalPath := extendExact.symm.trans visibleExact.symm
+    let contextPath := outerTransport.trans
+      frame.context.sourceVisibleExact.symm
+    have pathExact : canonicalPath = contextPath := Subsingleton.elim _ _
+    have rawTransport : outerTransport ▸ raw =
+        Var.appendLeft frame.sourceHead frame.context.siteOuter := by
+      exact cast_appendLeft_outer outerExact.symm frame.sourceHead
+    calc
+      canonical = canonicalPath ▸ raw := by
+        unfold canonical extendedHead canonicalPath visibleExact extendExact raw
+        exact (cast_through_middle _ _ _ _).symm
+      _ = contextPath ▸ raw := by rw [pathExact]
+      _ = frame.context.sourceVisibleExact.symm ▸
+          (outerTransport ▸ raw) :=
+        cast_through_middle _ _ _ _
+      _ = frame.context.sourceVisibleExact.symm ▸
+          Var.appendLeft frame.sourceHead frame.context.siteOuter := by
+        rw [rawTransport]
+      _ = frame.context.sourceVisibleExact.symm ▸
+          Var.appendLeft frame.sourceRemoval.head frame.context.siteOuter := by
+        rw [frame.sourceRemoval_head]
+  rw [canonicalExact]
+  exact frame.sourceFrameNormalization_head
 
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
