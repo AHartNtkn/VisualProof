@@ -55,6 +55,27 @@ private theorem canonical_appendRight_eq
   cases rootExact
   rfl
 
+private theorem appendLeft_transport
+    (same : left = right)
+    (value : Var left signature) :
+    Var.appendLeft (same ▸ value) outer =
+      congrArg (fun localSigs => localSigs ++ outer) same ▸
+        Var.appendLeft value outer := by
+  cases same
+  rfl
+
+private theorem freshVar_transport
+    (same : target = larger)
+    (evidence :
+      BoundCylindrification fixedSignature smaller larger freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (index : Fin freshCount) :
+    (same.symm ▸ evidence).freshVar outer index =
+      (congrArg (fun localSigs => localSigs ++ largerOuter) same).symm ▸
+        evidence.freshVar outer index := by
+  cases same
+  rfl
+
 private theorem cast_through_middle
     (first : left = middle)
     (second : middle = right)
@@ -367,6 +388,94 @@ theorem LocalCylindricalFrame.rootBounds_freshLocal_origin
   simpa [freshIds, freshAtScope] using
     origin_repeatedVar_of_length result.checked.val freshIds newArgument
       freshAtScope.length freshLengthExact freshExact index
+
+/-- A target-frame variable owned by one construction-local fresh wire
+normalizes to the corresponding intrinsic fresh coordinate of the root
+cylindrification certificate. -/
+theorem LocalCylindricalFrame.targetFrameNormalization_of_fresh_origin
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair
+      (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (index : Fin (arityFreshAt result (source.val.wires wire).scope).length)
+    (targetValue :
+      Var frame.targetScope.frame.visible.sigs newArgument)
+    (targetOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids targetValue =
+        result.targetLocalWire
+          ((arityFreshAt result (source.val.wires wire).scope).get index)) :
+    frame.targetFrameNormalization targetValue =
+      (frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted).freshVar (fun {_} value => value) index := by
+  let rootExact := frame.rootReducedExact sourceArguments sourceSignature
+    newArgument result accepted
+  let localFresh : Var frame.targetReduced newArgument :=
+    rootExact.symm ▸
+      Var.appendRight frame.sourceReduced
+        (BoundCylindrification.repeatedVar newArgument
+          (arityFreshAt result (source.val.wires wire).scope).length index)
+  let expected : Var frame.targetScope.frame.visible.sigs newArgument :=
+    frame.context.targetVisibleExact.symm ▸
+      Var.appendLeft (frame.targetRemoval.retain localFresh)
+        frame.context.siteOuter
+  have expectedOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids expected =
+        result.targetLocalWire
+          ((arityFreshAt result (source.val.wires wire).scope).get index) := by
+    unfold expected
+    rw [frame.targetFrameVisible_origin_retained pair]
+    rw [← frame.targetReducedContext_origin_retain]
+    exact frame.rootBounds_freshLocal_origin sourceArguments sourceSignature
+      newArgument result accepted index
+  have targetExact : targetValue = expected :=
+    InsertionCompilation.NaturalityInternal.origin_injective
+      result.checked.val frame.targetScope.frame.visible.ids
+      (siteVisibleNodup frame.targetScope)
+      (targetOrigin.trans expectedOrigin.symm)
+  subst targetValue
+  unfold expected
+  rw [frame.targetFrameNormalization_retained]
+  unfold localFresh LocalCylindricalFrame.rootBounds
+  change
+    Var.appendLeft
+        (rootExact.symm ▸
+          Var.appendRight frame.sourceReduced
+            (BoundCylindrification.repeatedVar newArgument
+              (arityFreshAt result
+                (source.val.wires wire).scope).length index))
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter) =
+      (rootExact.symm ▸
+        BoundCylindrification.appendFresh newArgument frame.sourceReduced
+          (arityFreshAt result
+            (source.val.wires wire).scope).length).freshVar
+        (fun {_} value => value) index
+  rw [freshVar_transport rootExact
+    (BoundCylindrification.appendFresh newArgument frame.sourceReduced
+      (arityFreshAt result (source.val.wires wire).scope).length)
+    (fun {_} value => value) index]
+  rw [appendLeft_transport rootExact.symm]
+  exact congrArg
+    (transportVar
+      (congrArg
+        (fun localSigs =>
+          localSigs ++
+            ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+              frame.context.siteOuter)) rootExact).symm)
+    (BoundCylindrification.appendFresh_freshVar newArgument
+      frame.sourceReduced
+      (arityFreshAt result (source.val.wires wire).scope).length
+      (fun {_} value => value) index).symm
 
 /-- Once concrete source and target frame variables have corresponding
 construction-owned origins, normalization commutes with the root binder
