@@ -842,6 +842,60 @@ theorem LocalCylindricalFrame.targetSiteOuter_sigs_exact
   exact (List.append_cancel_left appended).trans
     (pair.siteOuter_exact.trans pair.siteOuterRetained.sigs_exact.symm)
 
+/-- Any source-local variable exposed through the normalized frame has the
+same concrete origin as its local ordinal. -/
+theorem LocalCylindricalFrame.sourceFrameVisible_origin_local
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (value : Var
+      (ContentAlignment.localSignatures source.val
+        (source.val.wires wire).scope) signature) :
+    ConcreteElaboration.WireContext.origin source.val
+        frame.sourceScope.frame.visible.ids
+        (frame.context.sourceVisibleExact.symm ▸
+          Var.appendLeft value frame.context.siteOuter) =
+      ConcreteElaboration.WireContext.origin source.val
+        (source.val.wiresAt (source.val.wires wire).scope)
+        value :=
+  origin_visible_local source.val (source.val.wires wire).scope
+    frame.sourceScope.frame.visible pair.sourceSiteOuter
+    pair.sourceVisibleContextExact frame.context.siteOuter
+    (frame.sourceSiteOuter_sigs_exact pair)
+    frame.context.sourceVisibleExact value
+
+/-- Any target-local variable exposed through the normalized frame has the
+same concrete origin as its local ordinal. -/
+theorem LocalCylindricalFrame.targetFrameVisible_origin_local
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (value : Var
+      (ContentAlignment.localSignatures result.checked.val
+        (result.checked.val.wires result.targetWire).scope) signature) :
+    ConcreteElaboration.WireContext.origin result.checked.val
+        frame.targetScope.frame.visible.ids
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendLeft value frame.context.siteOuter) =
+      ConcreteElaboration.WireContext.origin result.checked.val
+        (result.checked.val.wiresAt
+          (result.checked.val.wires result.targetWire).scope)
+        value :=
+  origin_visible_local result.checked.val
+    (result.checked.val.wires result.targetWire).scope
+    frame.targetScope.frame.visible pair.targetSiteOuter
+    pair.targetVisibleContextExact frame.context.siteOuter
+    (frame.targetSiteOuter_sigs_exact pair)
+    frame.context.targetVisibleExact value
+
 /-- A retained source-local variable exposed through the normalized frame
 has the same concrete origin as its local ordinal. -/
 theorem LocalCylindricalFrame.sourceFrameVisible_origin_retained
@@ -861,11 +915,8 @@ theorem LocalCylindricalFrame.sourceFrameVisible_origin_retained
       ConcreteElaboration.WireContext.origin source.val
         (source.val.wiresAt (source.val.wires wire).scope)
         (frame.sourceRemoval.retain value) :=
-  origin_visible_local source.val (source.val.wires wire).scope
-    frame.sourceScope.frame.visible pair.sourceSiteOuter
-    pair.sourceVisibleContextExact frame.context.siteOuter
-    (frame.sourceSiteOuter_sigs_exact pair)
-    frame.context.sourceVisibleExact (frame.sourceRemoval.retain value)
+  frame.sourceFrameVisible_origin_local pair
+    (frame.sourceRemoval.retain value)
 
 /-- A retained target-local variable exposed through the normalized frame
 has the same concrete origin as its local ordinal. -/
@@ -887,12 +938,8 @@ theorem LocalCylindricalFrame.targetFrameVisible_origin_retained
         (result.checked.val.wiresAt
           (result.checked.val.wires result.targetWire).scope)
         (frame.targetRemoval.retain value) :=
-  origin_visible_local result.checked.val
-    (result.checked.val.wires result.targetWire).scope
-    frame.targetScope.frame.visible pair.targetSiteOuter
-    pair.targetVisibleContextExact frame.context.siteOuter
-    (frame.targetSiteOuter_sigs_exact pair)
-    frame.context.targetVisibleExact (frame.targetRemoval.retain value)
+  frame.targetFrameVisible_origin_local pair
+    (frame.targetRemoval.retain value)
 
 /-- A normalized source outer variable preserves the concrete origin selected
 by the paired source site context. -/
