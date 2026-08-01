@@ -88,6 +88,14 @@ def eraseSelected : (selected : Var bound signature) → List Sig
   | @Var.there rest signature head tail =>
       head :: eraseSelected tail
 
+/-- Embed the ordered binder block left after deleting a selected typed
+position back into its original context. -/
+def retainSelected :
+    (selected : Var bound headSignature) →
+      WireRenaming (eraseSelected selected) bound
+  | .here => fun value => .there value
+  | .there selected => WireRenaming.lift (retainSelected selected) _
+
 /-- `ofVar` computes exactly the ordered signature deletion. -/
 theorem ofVar_reduced (selected : Var bound signature) :
     (ofVar selected).1 = eraseSelected selected := by

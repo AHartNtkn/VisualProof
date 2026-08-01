@@ -332,6 +332,219 @@ theorem filter_origin_signatures
               congrArg (List.cons (diagram.wires head).sig)
                 (induction nodup.2 selected)
 
+/-- Ordered concrete context identifiers after deleting one intrinsically
+selected typed position.  This is the identifier-level owner of the reduced
+signature list used by `LocalHeadRemoval`. -/
+def eraseSelectedIds
+    (diagram : ConcreteDiagram definitionCount) :
+    (ids : List diagram.WireId) →
+      Var (ids.map fun wire => (diagram.wires wire).sig) signature →
+        List diagram.WireId
+  | [], selected => nomatch selected
+  | _head :: tail, .here => tail
+  | head :: tail, .there selected =>
+      head :: eraseSelectedIds diagram tail selected
+
+/-- Deleting a typed position from concrete identifiers computes exactly the
+same reduced signature vector as `LocalHeadRemoval.eraseSelected`. -/
+theorem eraseSelectedIds_signatures
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (selected :
+      Var (ids.map fun wire => (diagram.wires wire).sig) signature) :
+    (eraseSelectedIds diagram ids selected).map
+        (fun wire => (diagram.wires wire).sig) =
+      LocalHeadRemoval.eraseSelected selected := by
+  induction ids with
+  | nil => exact nomatch selected
+  | cons head tail induction =>
+      cases selected with
+      | here => rfl
+      | there selected =>
+          exact congrArg (List.cons (diagram.wires head).sig)
+            (induction selected)
+
+/-- Place a variable from the intrinsically reduced signature block directly
+in the concrete identifier list with the selected origin deleted. -/
+def retainedSelectedVarInErasedIds
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (selected :
+      Var (ids.map fun wire => (diagram.wires wire).sig) headSignature)
+    (value : Var (LocalHeadRemoval.eraseSelected selected) signature) :
+    Var
+      ((eraseSelectedIds diagram ids selected).map
+        fun wire => (diagram.wires wire).sig)
+      signature :=
+  (eraseSelectedIds_signatures diagram ids selected).symm ▸ value
+
+private theorem castVar_cons_here_symm
+    (same : left = right) :
+    (congrArg (List.cons head) same).symm ▸
+        (Var.here : Var (head :: right) head) =
+      (Var.here : Var (head :: left) head) := by
+  cases same
+  rfl
+
+private theorem castVar_cons_there_symm
+    (same : left = right)
+    (value : Var right signature) :
+    (congrArg (List.cons head) same).symm ▸
+        (Var.there value : Var (head :: right) signature) =
+      (Var.there (same.symm ▸ value) :
+        Var (head :: left) signature) := by
+  cases same
+  rfl
+
+/-- Direct typed deletion preserves the concrete origin of every retained
+variable. -/
+theorem eraseSelectedIds_origin_retainSelected
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (selected :
+      Var (ids.map fun wire => (diagram.wires wire).sig) headSignature)
+    (value : Var (LocalHeadRemoval.eraseSelected selected) signature) :
+    ConcreteElaboration.WireContext.origin diagram
+        (eraseSelectedIds diagram ids selected)
+        (retainedSelectedVarInErasedIds diagram ids selected value) =
+      ConcreteElaboration.WireContext.origin diagram ids
+        (LocalHeadRemoval.retainSelected selected value) := by
+  induction ids with
+  | nil => exact nomatch selected
+  | cons head tail induction =>
+      cases selected with
+      | here =>
+          have proofExact :
+              eraseSelectedIds_signatures diagram (head :: tail)
+                  (Var.here : Var
+                    ((head :: tail).map fun wire =>
+                      (diagram.wires wire).sig)
+                    (diagram.wires head).sig) = rfl :=
+            Subsingleton.elim _ _
+          unfold retainedSelectedVarInErasedIds
+          change
+            ConcreteElaboration.WireContext.origin diagram tail
+                ((eraseSelectedIds_signatures diagram (head :: tail)
+                  (Var.here : Var
+                    ((head :: tail).map fun wire =>
+                      (diagram.wires wire).sig)
+                    (diagram.wires head).sig)).symm ▸ value) =
+              ConcreteElaboration.WireContext.origin diagram tail value
+          rw [proofExact]
+      | there selected =>
+          have proofExact :
+              eraseSelectedIds_signatures diagram (head :: tail)
+                  (Var.there selected) =
+                congrArg (List.cons (diagram.wires head).sig)
+                  (eraseSelectedIds_signatures diagram tail selected) :=
+            Subsingleton.elim _ _
+          unfold retainedSelectedVarInErasedIds
+          change
+            ConcreteElaboration.WireContext.origin diagram
+                (head :: eraseSelectedIds diagram tail selected)
+                ((eraseSelectedIds_signatures diagram (head :: tail)
+                  (Var.there selected)).symm ▸ value) =
+              ConcreteElaboration.WireContext.origin diagram (head :: tail)
+                (LocalHeadRemoval.retainSelected
+                  (Var.there selected) value)
+          rw [proofExact]
+          cases value with
+          | here =>
+              simp only [LocalHeadRemoval.eraseSelected,
+                LocalHeadRemoval.retainSelected, WireRenaming.lift]
+              let same :=
+                eraseSelectedIds_signatures diagram tail selected
+              have castExact := castVar_cons_here_symm
+                (head := (diagram.wires head).sig) same
+              calc
+                _ = ConcreteElaboration.WireContext.origin diagram
+                      (head :: eraseSelectedIds diagram tail selected)
+                      (Var.here : Var
+                        ((diagram.wires head).sig ::
+                          (eraseSelectedIds diagram tail selected).map
+                            fun wire => (diagram.wires wire).sig)
+                        (diagram.wires head).sig) :=
+                    congrArg
+                      (ConcreteElaboration.WireContext.origin diagram
+                        (head :: eraseSelectedIds diagram tail selected))
+                      castExact
+                _ = _ := rfl
+          | there value =>
+              simp only [LocalHeadRemoval.eraseSelected,
+                LocalHeadRemoval.retainSelected, WireRenaming.lift]
+              let same :=
+                eraseSelectedIds_signatures diagram tail selected
+              have castExact := castVar_cons_there_symm
+                (head := (diagram.wires head).sig) same value
+              calc
+                _ = ConcreteElaboration.WireContext.origin diagram
+                      (head :: eraseSelectedIds diagram tail selected)
+                      (Var.there (same.symm ▸ value)) :=
+                    congrArg
+                      (ConcreteElaboration.WireContext.origin diagram
+                        (head :: eraseSelectedIds diagram tail selected))
+                      castExact
+                _ = ConcreteElaboration.WireContext.origin diagram
+                      (eraseSelectedIds diagram tail selected)
+                      (same.symm ▸ value) := rfl
+                _ = ConcreteElaboration.WireContext.origin diagram tail
+                      (LocalHeadRemoval.retainSelected selected value) := by
+                    simpa [same, retainedSelectedVarInErasedIds] using
+                      induction selected value
+                _ = _ := rfl
+
+/-- The concrete identifier deletion for a stored removal has exactly that
+removal's reduced signature index. -/
+theorem eraseSelectedIds_removal_signatures
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (removal : LocalHeadRemoval headSignature
+      (ids.map fun wire => (diagram.wires wire).sig) reduced) :
+    (eraseSelectedIds diagram ids removal.head).map
+        (fun wire => (diagram.wires wire).sig) = reduced :=
+  (eraseSelectedIds_signatures diagram ids removal.head).trans
+    removal.reduced_eq_erase_head.symm
+
+/-- In a duplicate-free compiler context, filtering the selected concrete
+origin is exactly the intrinsic ordered identifier deletion. -/
+theorem filter_origin_ids
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (nodup : ids.Nodup)
+    (selected :
+      Var (ids.map fun wire => (diagram.wires wire).sig) signature) :
+    ids.filter (fun wire => decide (wire ≠
+        ConcreteElaboration.WireContext.origin diagram ids selected)) =
+      eraseSelectedIds diagram ids selected := by
+  induction ids with
+  | nil => exact nomatch selected
+  | cons head tail induction =>
+      rw [List.nodup_cons] at nodup
+      cases selected with
+      | here =>
+          have tailExact :
+              tail.filter (fun wire => !decide (wire = head)) = tail := by
+            apply List.filter_eq_self.mpr
+            intro candidate member
+            have different : candidate ≠ head := by
+              intro same
+              subst candidate
+              exact nodup.1 member
+            simp [different]
+          simp [ConcreteElaboration.WireContext.origin, eraseSelectedIds,
+            tailExact]
+      | there selected =>
+          have headDifferent :
+              head ≠ ConcreteElaboration.WireContext.origin
+                diagram tail selected := by
+            intro same
+            apply nodup.1
+            subst head
+            exact ConcreteElaboration.Internal.origin_member diagram selected
+          simpa [ConcreteElaboration.WireContext.origin, eraseSelectedIds,
+            headDifferent] using congrArg (List.cons head)
+              (induction nodup.2 selected)
+
 theorem ArgumentResult.targetWire_ne_targetLocalWire
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
