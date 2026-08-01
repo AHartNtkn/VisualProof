@@ -96,11 +96,11 @@ private def unaryJoinInput :
   content := unaryAmbient
   parameters := [idx 2]
 
-example :
+theorem unary_join_accepts :
     (compileRelationJoin unaryJoinSource unaryJoinInput).isOk = true := by
   native_decide
 
-example :
+theorem unary_join_emits_partition :
     (compileRelationJoin unaryJoinSource unaryJoinInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.wireJoin] := by
@@ -143,7 +143,7 @@ private def backwardJoinInput :
   content := unaryAmbient
   parameters := [idx 2]
 
-example :
+theorem backward_join_emits_partition :
     (compileRelationJoin backwardJoinSource backwardJoinInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.wireJoin] := by
@@ -187,7 +187,7 @@ private def unarySeverInput :
   pattern := unaryAmbient
   occurrences := [unaryContentOccurrence]
 
-example :
+theorem unary_sever_accepts :
     (compileRelationSever unarySeverSource unarySeverInput).isOk = true := by
   native_decide
 
@@ -221,11 +221,11 @@ private def emptyJoinInput :
   content := emptyUnary
   parameters := []
 
-example :
+theorem empty_join_accepts :
     (compileRelationJoin unaryJoinSource emptyJoinInput).isOk = true := by
   native_decide
 
-example :
+theorem empty_join_emits_delete_then_vacuous :
     (compileRelationJoin unaryJoinSource emptyJoinInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.endsDelete, .vacuousElim] := by
@@ -238,7 +238,7 @@ private def backwardEmptyInput :
   content := emptyUnary
   parameters := []
 
-example :
+theorem backward_empty_join_accepts :
     (compileRelationJoin backwardJoinSource backwardEmptyInput).isOk =
       true := by
   native_decide
@@ -311,7 +311,7 @@ private def repeatedFormalInput :
   content := repeatedFormal
   parameters := [idx 2]
 
-example :
+theorem repeated_formal_join_emits_duplicate :
     (compileRelationJoin repeatedJoinSource repeatedFormalInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.argDuplicate, .wireJoin] := by
@@ -385,7 +385,7 @@ private def droppedFormalInput :
   content := droppedFormal
   parameters := [idx 2]
 
-example :
+theorem dropped_formal_nullary_join_emits_drop :
     (compileRelationJoin nullaryJoinSource droppedFormalInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.argDrop, .wireJoin] := by
@@ -459,7 +459,7 @@ private def uniformParameterInput :
   content := uniformParameter
   parameters := [idx 1, idx 2]
 
-example :
+theorem uniform_parameter_join_emits_extend :
     (compileRelationJoin uniformParameterSource uniformParameterInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.argExtend, .wireJoin] := by
@@ -533,7 +533,7 @@ private def permutedIdentityInput :
   content := permutedIdentity
   parameters := []
 
-example :
+theorem permuted_identity_join_emits_permute_then_identity :
     (compileRelationJoin binaryJoinSource permutedIdentityInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.argPermute, .identityLeaf] := by
@@ -604,7 +604,7 @@ private def formalApplicationInput :
   content := formalApplication
   parameters := []
 
-example :
+theorem formal_application_join_emits_permute_then_apply :
     (compileRelationJoin higherOrderSource formalApplicationInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.argPermute, .applyFormal] := by
@@ -694,11 +694,11 @@ private def workedJoinInput :
   content := workedContent
   parameters := [idx 2, idx 3]
 
-example :
+theorem worked_existential_join_accepts :
     (compileRelationJoin workedSource workedJoinInput).isOk = true := by
   native_decide
 
-example :
+theorem worked_existential_join_emits_structural_cases :
     (compileRelationJoin workedSource workedJoinInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some
@@ -766,7 +766,7 @@ private def foldedRefInput :
   content := foldedRefContent
   parameters := []
 
-example :
+theorem folded_reference_join_emits_ref_leaf :
     (compileRelationJoin foldedRefSource foldedRefInput).toOption.map
         (fun compiled => compiled.program.tags) =
       some [.refLeaf] := by
@@ -847,7 +847,7 @@ private def twoSiteSeverInput :
   pattern := unaryAmbient
   occurrences := [firstContentSite, secondContentSite]
 
-example :
+theorem two_site_sever_accepts :
     (compileRelationSever twoSiteSource twoSiteSeverInput).isOk = true := by
   native_decide
 
