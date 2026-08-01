@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationFactorization
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationShapeConstruction
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 
