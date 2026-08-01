@@ -854,20 +854,17 @@ theorem recursiveFinalRegionClassifier_complete
     (sourceArguments : List Sig)
     (sourceSignature :
       (source.val.wires wire).sig = .rel sourceArguments)
-    (result : ArgumentResult source wire)
     (context : ConcreteElaboration.WireContext source.val)
-    (targetContext : ConcreteElaboration.WireContext result.checked.val)
     (region : source.val.RegionId)
     (items : ItemSeq definitions context.sigs)
     (compiled : ConcreteElaboration.compileNodes? definitions source.val
       context (source.val.nodesAt region) = some items)
     (contextNodup : context.ids.Nodup)
     (sourceMap : WireRenaming context.sigs normalizedSource)
-    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
     (sourceHead : Var normalizedSource (.rel sourceArguments))
-    (targetHead : Var normalizedTarget (.rel result.targetArguments))
-    (headNormalization : RecursiveHeadNormalization result sourceArguments
-      context targetContext sourceMap targetMap sourceHead targetHead)
+    (headForward : ∀ value : Var context.sigs (.rel sourceArguments),
+      ConcreteElaboration.WireContext.origin source.val context.ids value =
+        wire → sourceMap value = sourceHead)
     (site : AppliedSite source wire)
     (siteRegion : site.region = region) :
     ∃ arguments : Vars context.sigs sourceArguments,
@@ -881,7 +878,7 @@ theorem recursiveFinalRegionClassifier_complete
   cases argumentSignatures
   obtain ⟨head, arguments, nodeCompiled, headOrigin, argumentsOrigin⟩ :=
     compileAppliedSiteAt?_complete context region items compiled site siteRegion
-  have normalizedHead := headNormalization.source_forward head headOrigin
+  have normalizedHead := headForward head headOrigin
   refine ⟨arguments, ?_, argumentsOrigin⟩
   simp [recursiveFinalRegionClassifier,
     UniformIntrinsicRegion.renamedCompiledAppliedArguments?, nodeCompiled,
@@ -890,17 +887,15 @@ theorem recursiveFinalRegionClassifier_complete
 theorem recursiveFinalRegionClassifier_site
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
-    (result : ArgumentResult source wire)
     (sourceArguments : List Sig)
     (sites : AllAppliedSites source wire)
     (context : ConcreteElaboration.WireContext source.val)
-    (targetContext : ConcreteElaboration.WireContext result.checked.val)
     (sourceMap : WireRenaming context.sigs normalizedSource)
-    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
     (sourceHead : Var normalizedSource (.rel sourceArguments))
-    (targetHead : Var normalizedTarget (.rel result.targetArguments))
-    (headNormalization : RecursiveHeadNormalization result sourceArguments
-      context targetContext sourceMap targetMap sourceHead targetHead)
+    (headReflect : ∀ value : Var context.sigs (.rel sourceArguments),
+      sourceMap value = sourceHead →
+        ConcreteElaboration.WireContext.origin source.val context.ids value =
+          wire)
     (node : source.val.NodeId)
     (values : Vars normalizedSource sourceArguments)
     (accepted : recursiveFinalRegionClassifier definitions source.val context
@@ -926,7 +921,7 @@ theorem recursiveFinalRegionClassifier_site
               ConcreteElaboration.WireContext.origin source.val context.ids
                 atomHead = wire := by
             cases same
-            exact headNormalization.source_reflect atomHead normalized
+            exact headReflect atomHead normalized
           have nodeShape : ∃ nodeRegion atomArguments,
               source.val.nodes node = .atom nodeRegion atomArguments := by
             cases nodeData : source.val.nodes node with
@@ -992,21 +987,22 @@ theorem recursiveFinalRegionClassifier_isSome
     (sourceArguments : List Sig)
     (sourceSignature :
       (source.val.wires wire).sig = .rel sourceArguments)
-    (result : ArgumentResult source wire)
     (sites : AllAppliedSites source wire)
     (context : ConcreteElaboration.WireContext source.val)
-    (targetContext : ConcreteElaboration.WireContext result.checked.val)
     (region : source.val.RegionId)
     (items : ItemSeq definitions context.sigs)
     (compiled : ConcreteElaboration.compileNodes? definitions source.val
       context (source.val.nodesAt region) = some items)
     (contextNodup : context.ids.Nodup)
     (sourceMap : WireRenaming context.sigs normalizedSource)
-    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
     (sourceHead : Var normalizedSource (.rel sourceArguments))
-    (targetHead : Var normalizedTarget (.rel result.targetArguments))
-    (headNormalization : RecursiveHeadNormalization result sourceArguments
-      context targetContext sourceMap targetMap sourceHead targetHead)
+    (headForward : ∀ value : Var context.sigs (.rel sourceArguments),
+      ConcreteElaboration.WireContext.origin source.val context.ids value =
+        wire → sourceMap value = sourceHead)
+    (headReflect : ∀ value : Var context.sigs (.rel sourceArguments),
+      sourceMap value = sourceHead →
+        ConcreteElaboration.WireContext.origin source.val context.ids value =
+          wire)
     (node : source.val.NodeId)
     (nodeAt : node ∈ source.val.nodesAt region) :
     (recursiveFinalRegionClassifier definitions source.val context sourceMap
@@ -1028,9 +1024,8 @@ theorem recursiveFinalRegionClassifier_isSome
         eq_of_beq (List.mem_filter.mp siteIndexMember).2
       obtain ⟨arguments, selected, _origins⟩ :=
         recursiveFinalRegionClassifier_complete sourceArguments
-          sourceSignature result context targetContext region items compiled
-          contextNodup sourceMap targetMap sourceHead targetHead
-          headNormalization (sites.sites.get siteIndex) siteRegion
+          sourceSignature context region items compiled contextNodup sourceMap
+          sourceHead headForward (sites.sites.get siteIndex) siteRegion
       rw [nodeExact, classified] at selected
       contradiction
   | some values =>
@@ -1038,9 +1033,8 @@ theorem recursiveFinalRegionClassifier_isSome
       symm
       apply decide_eq_true
       obtain ⟨site, siteMember, nodeExact⟩ :=
-        recursiveFinalRegionClassifier_site result sourceArguments sites
-          context targetContext sourceMap targetMap sourceHead targetHead
-          headNormalization node values classified
+        recursiveFinalRegionClassifier_site sourceArguments sites context
+          sourceMap sourceHead headReflect node values classified
       unfold argumentSiteNodes
       exact List.mem_map.mpr ⟨site, siteMember, nodeExact⟩
 
