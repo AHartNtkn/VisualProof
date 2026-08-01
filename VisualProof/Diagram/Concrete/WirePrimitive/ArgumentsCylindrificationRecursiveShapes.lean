@@ -1447,6 +1447,32 @@ def recursiveShapeTransport
   cases targetExact
   exact shape
 
+/-- The outer action induced by transporting both contexts of a shape. -/
+def recursiveRenamingTransport
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (outer : WireRenaming sourceContext targetContext) :
+    WireRenaming normalizedSourceContext normalizedTargetContext :=
+  fun {_} value => targetExact ▸ outer (sourceExact.symm ▸ value)
+
+theorem recursiveShapeTransport_valid
+    (sourceExact : sourceContext = normalizedSourceContext)
+    (targetExact : targetContext = normalizedTargetContext)
+    (outer : WireRenaming sourceContext targetContext)
+    (shape : CylindricalShape definitions insertion sourceContext targetContext)
+    (consistent : shape.consistent)
+    (embedding : ∀ {signature : Sig} (value : Var sourceContext signature),
+      shape.embedding value = outer value) :
+    let transported := recursiveShapeTransport sourceExact targetExact shape
+    transported.consistent ∧
+      ∀ {signature : Sig}
+        (value : Var normalizedSourceContext signature),
+        transported.embedding value =
+          recursiveRenamingTransport sourceExact targetExact outer value := by
+  cases sourceExact
+  cases targetExact
+  exact ⟨consistent, embedding⟩
+
 @[simp] theorem recursiveShapeTransport_smaller
     (sourceExact : sourceContext = normalizedSourceContext)
     (targetExact : targetContext = normalizedTargetContext)
@@ -1674,6 +1700,7 @@ theorem recursiveChildrenReceipts
     (targetContext : ConcreteElaboration.WireContext result.checked.val)
     (sourceExact : sourceContext.sigs = normalizedSourceContext)
     (targetExact : targetContext.sigs = normalizedTargetContext)
+    (outer : WireRenaming sourceContext.sigs targetContext.sigs)
     (sourceHead : Var normalizedSourceContext (.rel smallerArguments))
     (targetHead : Var normalizedTargetContext (.rel largerArguments))
     (sourceRecurse : (region : source.val.RegionId) →
@@ -1691,6 +1718,9 @@ theorem recursiveChildrenReceipts
       targetRecurse (result.regionEquiv child) targetContext = some targetBody →
       ∃ shape : CylindricalShape definitions insertion
           sourceContext.sigs targetContext.sigs,
+        shape.consistent ∧
+        (∀ {signature : Sig} (value : Var sourceContext.sigs signature),
+          shape.embedding value = outer value) ∧
         shape.smaller = UniformIntrinsicRegion.abstractApplied
           (sourceExact.symm ▸ sourceHead) sourceBody ∧
         shape.larger = UniformIntrinsicRegion.abstractApplied
@@ -1704,6 +1734,11 @@ theorem recursiveChildrenReceipts
         some targetItems →
       ∃ shapes : List (CylindricalShape definitions insertion
           normalizedSourceContext normalizedTargetContext),
+        (∀ shape, shape ∈ shapes → shape.consistent ∧
+          ∀ {signature : Sig}
+            (value : Var normalizedSourceContext signature),
+            shape.embedding value = recursiveRenamingTransport sourceExact
+              targetExact outer value) ∧
         UniformIntrinsicRegion.abstractAppliedItems sourceHead
             (sourceItems.renameWires
               (fun {_} value => sourceExact ▸ value)) =
@@ -1719,7 +1754,7 @@ theorem recursiveChildrenReceipts
       simp [ConcreteElaboration.compileChildrenWith?] at sourceCompiled targetCompiled
       subst sourceItems
       subst targetItems
-      exact ⟨[], rfl, rfl⟩
+      exact ⟨[], by simp, rfl, rfl⟩
     | cons child tail induction =>
       obtain ⟨sourceBody, sourceRest, sourceBodyCompiled, sourceRestCompiled,
           sourceItemsExact⟩ :=
@@ -1731,10 +1766,11 @@ theorem recursiveChildrenReceipts
           targetRecurse targetContext (result.regionEquiv child)
           (tail.map result.regionEquiv) targetItems (by
             simpa using targetCompiled)
-      obtain ⟨childShape, childSmaller, childLarger⟩ :=
+      obtain ⟨childShape, childConsistent, childEmbedding, childSmaller,
+          childLarger⟩ :=
         buildChild child sourceBody targetBody (by simp) sourceBodyCompiled
           targetBodyCompiled
-      obtain ⟨tailShapes, tailSmaller, tailLarger⟩ :=
+      obtain ⟨tailShapes, tailValid, tailSmaller, tailLarger⟩ :=
         induction
           (fun candidate candidateSource candidateTarget member =>
             buildChild candidate candidateSource candidateTarget
@@ -1742,6 +1778,8 @@ theorem recursiveChildrenReceipts
           sourceRest targetRest sourceRestCompiled targetRestCompiled
       let transported := recursiveShapeTransport sourceExact targetExact
         childShape
+      have transportedValid := recursiveShapeTransport_valid sourceExact
+        targetExact outer childShape childConsistent childEmbedding
       have transportedSmaller : transported.smaller =
           UniformIntrinsicRegion.abstractApplied sourceHead
             (sourceBody.renameWires (fun {_} value => sourceExact ▸ value)) := by
@@ -1756,7 +1794,12 @@ theorem recursiveChildrenReceipts
           targetBody childShape childLarger]
         exact congrArg (UniformIntrinsicRegion.abstractApplied targetHead)
           (recursiveCastRegion_eq_rename targetExact targetBody)
-      refine ⟨transported :: tailShapes, ?_, ?_⟩
+      refine ⟨transported :: tailShapes, ?_, ?_, ?_⟩
+      · intro candidate member
+        simp only [List.mem_cons] at member
+        rcases member with rfl | tailMember
+        · exact transportedValid
+        · exact tailValid candidate tailMember
       · subst sourceItems
         simp only [ItemSeq.renameWires, Item.renameWires,
           UniformIntrinsicRegion.abstractAppliedItems,
@@ -1995,6 +2038,79 @@ def recursiveCutReceipt
       exact congrArg (UniformIntrinsicItemSeq.cons (.cut shape.larger))
         (recursiveCutReceipt_larger outer tail)
 
+/-- Canonical leaf receipts are consistent and expose precisely their given
+context embedding. -/
+theorem recursiveLeafReceipt_valid
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (embedding : WireRenaming smallerContext largerContext) :
+    ∀ items : ItemSeq definitions smallerContext,
+      (recursiveLeafReceipt insertion embedding items).consistent ∧
+        ∀ {signature : Sig} (value : Var smallerContext signature),
+          (recursiveLeafReceipt insertion embedding items).embedding value =
+            embedding value
+  | .nil => ⟨True.intro, fun _ => rfl⟩
+  | .cons head tail => by
+      have tailValid := recursiveLeafReceipt_valid insertion embedding tail
+      refine ⟨⟨True.intro, tailValid.1, ?_⟩, fun _ => rfl⟩
+      intro signature value
+      exact tailValid.2 value
+
+/-- Canonical cut receipts are consistent when every child shape is, and
+expose precisely their given context embedding. -/
+theorem recursiveCutReceipt_valid
+    (outer : WireRenaming smallerContext largerContext) :
+    ∀ (shapes : List (CylindricalShape definitions insertion
+        smallerContext largerContext)),
+      (∀ shape, shape ∈ shapes →
+        shape.consistent ∧ ∀ {signature : Sig}
+          (value : Var smallerContext signature),
+          shape.embedding value = outer value) →
+      (recursiveCutReceipt outer shapes).consistent ∧
+        ∀ {signature : Sig} (value : Var smallerContext signature),
+          (recursiveCutReceipt outer shapes).embedding value = outer value
+  | [], _ => ⟨True.intro, fun _ => rfl⟩
+  | shape :: tail, allConsistent => by
+      have shapeValid := allConsistent shape (by simp)
+      have tailValid := recursiveCutReceipt_valid outer tail (by
+        intro candidate member
+        exact allConsistent candidate (by simp [member]))
+      refine ⟨⟨shapeValid.1, tailValid.1, ?_⟩, fun value => ?_⟩
+      · intro signature value
+        exact (tailValid.2 value).trans (shapeValid.2 value).symm
+      · exact shapeValid.2 value
+
+/-- Appending two consistent receipt sequences with the same embedding
+preserves both consistency and that embedding. -/
+theorem recursiveReceiptAppend_valid
+    (outer : WireRenaming smallerContext largerContext)
+    (right : CylindricalShapeItemSeq definitions insertion
+      smallerContext largerContext)
+    (rightConsistent : right.consistent)
+    (rightEmbedding : ∀ {signature : Sig}
+      (value : Var smallerContext signature),
+      right.embedding value = outer value) :
+    ∀ (left : CylindricalShapeItemSeq definitions insertion
+        smallerContext largerContext),
+      left.consistent →
+      (∀ {signature : Sig} (value : Var smallerContext signature),
+        left.embedding value = outer value) →
+      (recursiveReceiptAppend left right).consistent ∧
+        ∀ {signature : Sig} (value : Var smallerContext signature),
+          (recursiveReceiptAppend left right).embedding value = outer value
+  | .nil embedding, _, _ => ⟨rightConsistent, rightEmbedding⟩
+  | .cons head tail, leftConsistent, leftEmbedding => by
+      have tailEmbedding : ∀ {signature : Sig}
+          (value : Var smallerContext signature),
+          tail.embedding value = outer value := by
+        intro signature value
+        exact (leftConsistent.2.2 value).trans (leftEmbedding value)
+      have tailValid := recursiveReceiptAppend_valid outer right
+        rightConsistent rightEmbedding tail leftConsistent.2.1 tailEmbedding
+      refine ⟨⟨leftConsistent.1, tailValid.1, ?_⟩, leftEmbedding⟩
+      intro signature value
+      exact (tailValid.2 value).trans (leftEmbedding value).symm
+
 theorem recursiveChildSmallerItems_eq
     (insertion : TypedArguments.InsertionEvidence largerArguments
       smallerArguments fixedSignature) :
@@ -2078,6 +2194,36 @@ noncomputable def recursiveBlockReceipt
   simp only [CylindricalShape.larger, recursiveReceiptAppend_larger,
     recursiveLeafReceipt_larger, recursiveCutReceipt_larger]
 
+/-- A canonical recursive block is consistent whenever all recursively
+nested child blocks are consistent. -/
+theorem recursiveBlockReceipt_valid
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (sourceRetained : ItemSeq definitions (smallerBound ++ smallerOuter))
+    (children : List (CylindricalShape definitions insertion
+      (smallerBound ++ smallerOuter) (largerBound ++ largerOuter)))
+    (allChildren : ∀ child, child ∈ children →
+      child.consistent ∧ ∀ {signature : Sig}
+        (value : Var (smallerBound ++ smallerOuter) signature),
+        child.embedding value = bounds.embed outer value)
+    (holes : CylindricalHoles insertion bounds outer smallerHoles largerHoles) :
+    let receipt := recursiveBlockReceipt insertion bounds outer sourceRetained
+      children holes
+    receipt.consistent ∧
+      ∀ {signature : Sig} (value : Var smallerOuter signature),
+        receipt.embedding value = outer value := by
+  let inner : WireRenaming (smallerBound ++ smallerOuter)
+      (largerBound ++ largerOuter) := bounds.embed outer
+  have leaves := recursiveLeafReceipt_valid insertion inner sourceRetained
+  have cuts := recursiveCutReceipt_valid inner children allChildren
+  have items := recursiveReceiptAppend_valid inner
+    (recursiveCutReceipt inner children) cuts.1 cuts.2
+    (recursiveLeafReceipt insertion inner sourceRetained) leaves.1 leaves.2
+  exact ⟨⟨items.1, items.2⟩, fun _ => rfl⟩
+
 /-- Total cylindrical-shape receipt for every successfully compiled proper
 descendant, by the elaborator's authoritative `(depth, fuel)` induction. -/
 theorem recursiveCylindricalShape_complete
@@ -2125,6 +2271,9 @@ theorem recursiveCylindricalShape_complete
           (arityShiftInsertion source wire sourceArguments sourceSignature
             newArgument result accepted)
           sourceOuter.sigs targetOuter.sigs,
+        shape.consistent ∧
+        (∀ {signature : Sig} (value : Var sourceOuter.sigs signature),
+          shape.embedding value = outer value) ∧
         shape.smaller = UniformIntrinsicRegion.abstractApplied
           sourceHead sourceBody ∧
         shape.larger = UniformIntrinsicRegion.abstractApplied
@@ -2188,13 +2337,18 @@ theorem recursiveCylindricalShape_complete
             some targetChildren := by
         rw [← result.childrenOf_decomposition region]
         exact targetChildrenCompiled
-      obtain ⟨childShapes, sourceChildrenExact, targetChildrenExact⟩ :=
+      obtain ⟨childShapes, childShapesValid, sourceChildrenExact,
+          targetChildrenExact⟩ :=
         recursiveChildrenReceipts result
           (arityShiftInsertion source wire sourceArguments sourceSignature
             newArgument result accepted)
           (sourceOuter.extend region)
           (targetOuter.extend (result.regionImage region)) sourceExact
-          targetExact normalizedSourceHead normalizedTargetHead
+          targetExact
+          (arityShift_regionEmbedding_below source wire sourceArguments
+            sourceSignature newArgument result accepted region notHead
+            sourceOuter targetOuter outer)
+          normalizedSourceHead normalizedTargetHead
           (ConcreteElaboration.compileRegion? definitions source.val fuel)
           (ConcreteElaboration.compileRegion? definitions result.checked.val
             fuel)
@@ -2282,7 +2436,31 @@ theorem recursiveCylindricalShape_complete
         (arityShiftInsertion source wire sourceArguments sourceSignature
           newArgument result accepted) bounds outer normalizedSourceRetained
         childShapes holes
-      refine ⟨shape, ?_, ?_⟩
+      have childShapesForBlock : ∀ child, child ∈ childShapes →
+          child.consistent ∧ ∀ {signature : Sig}
+            (value : Var (_ ++ _) signature),
+            child.embedding value = bounds.embed outer value := by
+        intro child member
+        obtain ⟨childConsistent, childEmbedding⟩ :=
+          childShapesValid child member
+        refine ⟨childConsistent, ?_⟩
+        intro signature value
+        rw [childEmbedding value]
+        unfold recursiveRenamingTransport sourceExact targetExact
+        unfold bounds
+        have commute := recursiveRegionNormalizations_commute source wire
+            sourceArguments sourceSignature newArgument result accepted region
+            notHead sourceOuter targetOuter outer (sourceExact.symm ▸ value)
+        unfold recursiveRegionNormalization at commute
+        have roundtrip : sourceExact ▸ (sourceExact.symm ▸ value) = value :=
+          recursiveCast_symm_cancel sourceExact value
+        rw [roundtrip] at commute
+        exact commute
+      have shapeValid := recursiveBlockReceipt_valid
+        (arityShiftInsertion source wire sourceArguments sourceSignature
+          newArgument result accepted) bounds outer normalizedSourceRetained
+        childShapes childShapesForBlock holes
+      refine ⟨shape, shapeValid.1, shapeValid.2, ?_, ?_⟩
       · unfold shape
         rw [recursiveBlockReceipt_smaller]
         rw [sourceBodyExact, ConcreteElaboration.finishRegion_eq_signatures]
