@@ -6,6 +6,73 @@ namespace ArgumentsSemantics
 
 open WirePrimitive
 
+private theorem canonical_appendLeft_eq
+    {sourceContextSigs sourceReduced mappedSigs actualFresh
+      targetContextSigs targetReduced fresh : List Sig}
+    (sourceExact : sourceContextSigs = sourceReduced)
+    (mappedExact : mappedSigs = sourceContextSigs)
+    (freshExact : actualFresh = fresh)
+    (targetAppendExact : targetContextSigs = mappedSigs ++ actualFresh)
+    (targetReducedExact : targetContextSigs = targetReduced)
+    (rootExact : targetReduced = sourceReduced ++ fresh)
+    {signature : Sig}
+    (value : Var sourceReduced signature) :
+    targetAppendExact.symm ▸
+        Var.appendLeft
+          (mappedExact.symm ▸ (sourceExact.symm ▸ value))
+          actualFresh =
+      targetReducedExact.symm ▸
+        (rootExact.symm ▸ Var.appendLeft value fresh) := by
+  cases sourceExact
+  cases mappedExact
+  cases freshExact
+  cases targetAppendExact
+  cases targetReducedExact
+  cases rootExact
+  rfl
+
+private theorem cast_eq_symm_cast
+    (same : left = right)
+    (leftValue : Var left signature)
+    (rightValue : Var right signature)
+    (exact : same ▸ leftValue = rightValue) :
+    leftValue = same.symm ▸ rightValue := by
+  cases same
+  exact exact
+
+private theorem wireContext_eq_of_ids_eq
+    (left right : ConcreteElaboration.WireContext diagram)
+    (same : left.ids = right.ids) : left = right := by
+  cases left with
+  | mk leftIds =>
+      cases right with
+      | mk rightIds =>
+          cases same
+          rfl
+
+private theorem origin_cast_context
+    (diagram : ConcreteDiagram definitionCount)
+    {left right : ConcreteElaboration.WireContext diagram}
+    (same : left = right)
+    {sig : Sig}
+    (value : Var left.sigs sig) :
+    ConcreteElaboration.WireContext.origin diagram right.ids
+        (congrArg ConcreteElaboration.WireContext.sigs same ▸ value) =
+      ConcreteElaboration.WireContext.origin diagram left.ids value := by
+  cases same
+  rfl
+
+private theorem cast_through_middle
+    (first : left = middle)
+    (second : middle = right)
+    (direct : left = right)
+    (value : Var left signature) :
+    direct ▸ value = second ▸ (first ▸ value) := by
+  cases first
+  cases second
+  cases direct
+  rfl
+
 /-- Rename a source compiled-frame variable into the source-normalized
 arity-shape context, including the explicit source/target head slots. -/
 def LocalCylindricalFrame.sourceFrameNormalization
@@ -262,6 +329,119 @@ theorem LocalCylindricalFrame.frameNormalization_retained_commutes
   rw [frame.sourceFrameNormalization_retained,
     frame.targetFrameNormalization_retained]
   exact BoundCylindrification.embed_appendLeft _ _ _
+
+/-- The root binder certificate's retained target ordinal names exactly the
+construction-owned image of the corresponding concrete source-local wire.
+This connects the intrinsic prefix embedding to the concrete wire map, rather
+than relying on positional coincidence alone. -/
+theorem LocalCylindricalFrame.rootBounds_embedLocal_origin
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.sourceReduced signature) :
+    ConcreteElaboration.WireContext.origin result.checked.val
+        frame.targetReducedContext.ids
+        (frame.targetReducedContext_sigs.symm ▸
+          (frame.rootBounds sourceArguments sourceSignature newArgument
+            result accepted).embedLocal value) =
+      result.contextWireMap
+        (ConcreteElaboration.WireContext.origin source.val
+          frame.sourceReducedContext.ids
+          (frame.sourceReducedContext_sigs.symm ▸ value)) := by
+  let freshAtScope :=
+    (Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+      retainedRegion source (result.spec.localScope fresh) ==
+        retainedRegion source (source.val.wires wire).scope
+  let freshIds := freshAtScope.map result.targetLocalWire
+  let appendedContext :
+      ConcreteElaboration.WireContext result.checked.val :=
+    ⟨frame.mappedSourceReducedContext.ids ++ freshIds⟩
+  have contextExact : frame.targetReducedContext = appendedContext := by
+    apply wireContext_eq_of_ids_eq
+    simpa [freshIds, freshAtScope] using
+      frame.targetReducedContext_ids sourceArguments newArgument result
+        accepted
+  let retained := frame.reducedRetainedContext newArgument result accepted
+  let sourceValue : Var frame.sourceReducedContext.sigs signature :=
+    frame.sourceReducedContext_sigs.symm ▸ value
+  let mappedValue :
+      Var frame.mappedSourceReducedContext.sigs signature :=
+    retained.wireRenaming sourceValue
+  let appendedValue : Var appendedContext.sigs signature :=
+    InsertionCompilation.NaturalityInternal.appendLeftIds
+      result.checked.val freshIds mappedValue
+  let targetValue : Var frame.targetReducedContext.sigs signature :=
+    (congrArg ConcreteElaboration.WireContext.sigs contextExact).symm ▸
+      appendedValue
+  have sourceExact := frame.sourceReducedContext_sigs
+  have mappedExact := retained.sigs_exact
+  have freshExact :
+      freshIds.map
+          (fun targetWire => (result.checked.val.wires targetWire).sig) =
+        List.replicate freshAtScope.length newArgument := by
+    simpa [freshIds, freshAtScope] using
+      arityRootFresh_signatures source wire sourceArguments sourceSignature
+        newArgument result accepted
+  have appendedExact :
+      appendedContext.sigs =
+        frame.mappedSourceReducedContext.sigs ++
+          freshIds.map
+            (fun targetWire => (result.checked.val.wires targetWire).sig) := by
+    simp [appendedContext, ConcreteElaboration.WireContext.sigs]
+  have targetAppendExact :
+      frame.targetReducedContext.sigs =
+        frame.mappedSourceReducedContext.sigs ++
+          freshIds.map
+            (fun targetWire => (result.checked.val.wires targetWire).sig) :=
+    (congrArg ConcreteElaboration.WireContext.sigs contextExact).trans
+      appendedExact
+  have rootExact := frame.rootReducedExact sourceArguments sourceSignature
+    newArgument result accepted
+  have targetReducedExact := frame.targetReducedContext_sigs
+  have appendedReindex :
+      appendedExact ▸ appendedValue =
+        Var.appendLeft mappedValue
+          (freshIds.map
+            (fun targetWire => (result.checked.val.wires targetWire).sig)) := by
+    simpa [appendedValue, appendedContext] using
+      InsertionCompilation.NaturalityInternal.appendLeftIds_reindex
+        result.checked.val frame.mappedSourceReducedContext.ids freshIds
+          mappedValue
+  have embedExact :
+      (frame.rootBounds sourceArguments sourceSignature newArgument result
+          accepted).embedLocal value =
+        rootExact.symm ▸
+          Var.appendLeft value
+            (List.replicate freshAtScope.length newArgument) := by
+    apply cast_eq_symm_cast rootExact
+    simpa [freshAtScope] using
+      frame.rootBounds_embedLocal sourceArguments sourceSignature newArgument
+        result accepted value
+  have targetValueExact :
+      targetValue =
+        frame.targetReducedContext_sigs.symm ▸
+          (frame.rootBounds sourceArguments sourceSignature newArgument
+            result accepted).embedLocal value := by
+    rw [embedExact]
+    unfold targetValue
+    rw [cast_through_middle appendedExact targetAppendExact.symm
+      (congrArg ConcreteElaboration.WireContext.sigs contextExact).symm
+      appendedValue]
+    rw [appendedReindex]
+    apply canonical_appendLeft_eq sourceExact mappedExact freshExact
+      targetAppendExact targetReducedExact rootExact value
+  rw [← targetValueExact]
+  unfold targetValue
+  rw [origin_cast_context result.checked.val contextExact.symm appendedValue]
+  unfold appendedValue
+  rw [InsertionCompilation.NaturalityInternal.appendLeftIds_origin]
+  exact retained.wireRenaming_origin sourceValue
 
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
