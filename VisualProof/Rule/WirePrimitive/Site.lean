@@ -721,6 +721,104 @@ private theorem get_of_list_eq
   subst right
   rfl
 
+private theorem eraseDups_length_le
+    [BEq α] [LawfulBEq α] (values : List α) :
+    values.eraseDups.length ≤ values.length := by
+  match values with
+  | [] => simp
+  | head :: tail =>
+      rw [List.eraseDups_cons]
+      simp only [List.length_cons, Nat.succ_le_succ_iff]
+      exact Nat.le_trans
+        (eraseDups_length_le
+          (tail.filter fun value => !value == head))
+        (List.length_filter_le _ tail)
+termination_by values.length
+decreasing_by
+  simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
+private theorem nodup_of_eraseDups_length_eq
+    [BEq α] [LawfulBEq α]
+    (values : List α)
+    (exact : values.eraseDups.length = values.length) :
+    values.Nodup := by
+  match values with
+  | [] => simp
+  | head :: tail =>
+      rw [List.eraseDups_cons] at exact
+      simp only [List.length_cons, Nat.succ.injEq] at exact
+      let retained := tail.filter fun value => !value == head
+      have retainedLength : retained.length = tail.length := by
+        apply Nat.le_antisymm
+        · exact List.length_filter_le _ tail
+        · rw [← exact]
+          exact eraseDups_length_le retained
+      have retainedEquality : retained = tail :=
+        List.Sublist.eq_of_length List.filter_sublist retainedLength
+      rw [List.nodup_cons]
+      constructor
+      · intro member
+        have accepted : (!head == head) = true := by
+          have : head ∈ retained := by
+            rw [retainedEquality]
+            exact member
+          exact (List.mem_filter.mp this).2
+        simp at accepted
+      · apply nodup_of_eraseDups_length_eq tail
+        simpa [retained, retainedEquality] using exact
+termination_by values.length
+decreasing_by simp_wf
+
+private theorem component_sublist_flatMap
+    (values : List α)
+    (value : α)
+    (member : value ∈ values)
+    (function : α → List β) :
+    (function value).Sublist (values.flatMap function) := by
+  induction values with
+  | nil => contradiction
+  | cons head tail induction =>
+      rw [List.mem_cons] at member
+      cases member with
+      | inl same =>
+          subst head
+          exact List.sublist_append_left _ _
+      | inr member =>
+          exact (induction member).trans
+            (List.sublist_append_right _ _)
+
+/-- Every exhaustive applied-site endpoint sequence is duplicate-free. -/
+theorem endpoints_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire) :
+    (sites.sites.map AppliedSite.endpoint).Nodup := by
+  have allNodup :
+      (source.val.endpointOccurrences.map Prod.snd).Nodup := by
+    apply nodup_of_eraseDups_length_eq
+    have exact := source.property.no_duplicate_endpoints
+    unfold ConcreteDiagram.NoDuplicateEndpoints at exact
+    simpa using exact
+  have component :
+      ((source.val.wires wire).endpoints.map fun endpoint =>
+          (wire, endpoint)).Sublist source.val.endpointOccurrences := by
+    unfold ConcreteDiagram.endpointOccurrences
+    exact component_sublist_flatMap source.val.wiresList wire
+      (Data.Finite.mem_allFin wire)
+      (fun candidate =>
+        (source.val.wires candidate).endpoints.map fun endpoint =>
+          (candidate, endpoint))
+  have endpointComponent := component.map Prod.snd
+  have simplified :
+      ((source.val.wires wire).endpoints.map fun endpoint =>
+          (wire, endpoint)).map Prod.snd =
+        (source.val.wires wire).endpoints := by
+    simp [List.map_map, Function.comp_def]
+  rw [simplified] at endpointComponent
+  have localNodup := endpointComponent.nodup allNodup
+  rw [sites.endpoints_exact]
+  exact localNodup
+
 /-- Every acted-on endpoint occurs at exactly one retained applied site. -/
 theorem exhaustive
     {source : CheckedDiagram definitions}
@@ -800,6 +898,148 @@ theorem transportPosition_endpoint
       (target.val.wires (iso.wires wire)).endpoints mapped targetMember
   rw [endpointExact] at selected
   simpa [endpoint, mapped] using selected
+
+/-- Pull one exhaustive target-site position back through the supplied
+isomorphism's endpoint inverse. -/
+def inverseTransportPosition
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire))
+    (position : Fin targetSites.sites.length) :
+    Fin sourceSites.sites.length :=
+  let candidate := (targetSites.sites.get position).endpoint
+  have targetMember :
+      candidate ∈ (target.val.wires (iso.wires wire)).endpoints := by
+    rw [← targetSites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨targetSites.sites.get position, List.get_mem _ _, rfl⟩
+  let endpoint := iso.endpointInverse wire candidate
+  have sourceMember : endpoint ∈ (source.val.wires wire).endpoints :=
+    iso.endpointInverse_mem wire candidate targetMember
+  Fin.cast sourceSites.length.symm <|
+    DenseList.index (source.val.wires wire).endpoints endpoint sourceMember
+
+/-- The source site selected by `inverseTransportPosition` is exactly the
+target head occurrence pulled back through the supplied isomorphism. -/
+theorem inverseTransportPosition_endpoint
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire))
+    (position : Fin targetSites.sites.length) :
+    (sourceSites.sites.get
+        (inverseTransportPosition iso sourceSites targetSites position)).endpoint =
+      iso.endpointInverse wire
+        (targetSites.sites.get position).endpoint := by
+  let candidate := (targetSites.sites.get position).endpoint
+  have targetMember :
+      candidate ∈ (target.val.wires (iso.wires wire)).endpoints := by
+    rw [← targetSites.exhaustive]
+    exact List.mem_map.mpr
+      ⟨targetSites.sites.get position, List.get_mem _ _, rfl⟩
+  let endpoint := iso.endpointInverse wire candidate
+  have sourceMember : endpoint ∈ (source.val.wires wire).endpoints :=
+    iso.endpointInverse_mem wire candidate targetMember
+  let endpointPosition :=
+    DenseList.index (source.val.wires wire).endpoints endpoint sourceMember
+  have selected := get_of_list_eq sourceSites.exhaustive endpointPosition
+  have selectedPosition :
+      Fin.cast (congrArg List.length sourceSites.exhaustive).symm
+          endpointPosition =
+        Fin.cast (by simp)
+          (inverseTransportPosition iso sourceSites targetSites position) := by
+    apply Fin.ext
+    rfl
+  rw [selectedPosition] at selected
+  have endpointExact :=
+    DenseList.get_index (source.val.wires wire).endpoints endpoint sourceMember
+  rw [endpointExact] at selected
+  simpa [candidate, endpoint] using selected
+
+private theorem get_injective_of_nodup
+    {values : List α}
+    (nodup : values.Nodup) :
+    Function.Injective values.get := by
+  intro left right same
+  calc
+    left = DenseList.index values (values.get left)
+        (List.get_mem values left) :=
+      (DenseList.index_get values nodup left).symm
+    _ = DenseList.index values (values.get right)
+        (List.get_mem values right) := by rw [same]
+    _ = right := DenseList.index_get values nodup right
+
+/-- Exhaustive applied-site positions are transported bijectively through a
+concrete isomorphism, using only its supplied endpoint correspondence. -/
+def transportPositionEquiv
+    {source target : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (iso : ConcreteIso source.val target.val)
+    (sourceSites : AllAppliedSites source wire)
+    (targetSites : AllAppliedSites target (iso.wires wire)) :
+    Data.Finite.FiniteEquiv
+      (Fin sourceSites.sites.length) (Fin targetSites.sites.length) where
+  toFun := transportPosition iso sourceSites targetSites
+  invFun := inverseTransportPosition iso sourceSites targetSites
+  left_inv := by
+    intro position
+    let mapped := transportPosition iso sourceSites targetSites position
+    let pulled :=
+      inverseTransportPosition iso sourceSites targetSites mapped
+    have pulledEndpoint :=
+      inverseTransportPosition_endpoint iso sourceSites targetSites mapped
+    rw [transportPosition_endpoint iso sourceSites targetSites position]
+      at pulledEndpoint
+    have sourceMember :
+        (sourceSites.sites.get position).endpoint ∈
+          (source.val.wires wire).endpoints := by
+      rw [← sourceSites.exhaustive]
+      exact List.mem_map.mpr
+        ⟨sourceSites.sites.get position, List.get_mem _ _, rfl⟩
+    rw [iso.endpointMap_left_inv wire
+      (sourceSites.sites.get position).endpoint sourceMember]
+      at pulledEndpoint
+    have mappedGet :
+        (sourceSites.sites.map AppliedSite.endpoint).get
+            (Fin.cast (by simp) pulled) =
+          (sourceSites.sites.map AppliedSite.endpoint).get
+            (Fin.cast (by simp) position) := by
+      simpa [pulled] using pulledEndpoint
+    have castExact :=
+      get_injective_of_nodup sourceSites.endpoints_nodup mappedGet
+    apply Fin.ext
+    simpa [pulled] using congrArg Fin.val castExact
+  right_inv := by
+    intro position
+    let pulled :=
+      inverseTransportPosition iso sourceSites targetSites position
+    let mapped := transportPosition iso sourceSites targetSites pulled
+    have mappedEndpoint :=
+      transportPosition_endpoint iso sourceSites targetSites pulled
+    rw [inverseTransportPosition_endpoint iso sourceSites targetSites position]
+      at mappedEndpoint
+    have targetMember :
+        (targetSites.sites.get position).endpoint ∈
+          (target.val.wires (iso.wires wire)).endpoints := by
+      rw [← targetSites.exhaustive]
+      exact List.mem_map.mpr
+        ⟨targetSites.sites.get position, List.get_mem _ _, rfl⟩
+    rw [iso.endpointMap_right_inv wire
+      (targetSites.sites.get position).endpoint targetMember]
+      at mappedEndpoint
+    have mappedGet :
+        (targetSites.sites.map AppliedSite.endpoint).get
+            (Fin.cast (by simp) mapped) =
+          (targetSites.sites.map AppliedSite.endpoint).get
+            (Fin.cast (by simp) position) := by
+      simpa [mapped] using mappedEndpoint
+    have castExact :=
+      get_injective_of_nodup targetSites.endpoints_nodup mappedGet
+    apply Fin.ext
+    simpa [mapped] using congrArg Fin.val castExact
 
 private theorem sites_mapM_checked
     {source : CheckedDiagram definitions}
