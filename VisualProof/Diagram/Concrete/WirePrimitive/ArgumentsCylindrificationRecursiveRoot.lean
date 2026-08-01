@@ -6,6 +6,80 @@ namespace ArgumentsSemantics
 
 open WirePrimitive
 
+/-- Ordered node compilation is natural under inclusion into a larger
+duplicate-free context of the same checked diagram. -/
+theorem recursiveCompileNodes?_contextEmbedding
+    (checked : CheckedDiagram definitions)
+    (sourceContext targetContext :
+      ConcreteElaboration.WireContext checked.val)
+    (targetNodup : targetContext.ids.Nodup)
+    (visible : ∀ wire, wire ∈ sourceContext.ids →
+      wire ∈ targetContext.ids)
+    (nodes : List checked.val.NodeId)
+    {sourceItems : ItemSeq definitions sourceContext.sigs}
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions checked.val sourceContext
+        nodes = some sourceItems) :
+    ∃ targetItems : ItemSeq definitions targetContext.sigs,
+      ConcreteElaboration.compileNodes? definitions checked.val targetContext
+          nodes = some targetItems ∧
+        targetItems = sourceItems.renameWires
+          (InsertionCompilation.NaturalityInternal.contextEmbedding
+            checked.val checked.val sourceContext.ids targetContext.ids
+            (fun wire => wire) (fun _ => rfl) visible) := by
+  let embedding : WireRenaming sourceContext.sigs targetContext.sigs :=
+    InsertionCompilation.NaturalityInternal.contextEmbedding
+      checked.val checked.val sourceContext.ids targetContext.ids
+      (fun wire => wire) (fun _ => rfl) visible
+  induction nodes generalizing sourceItems with
+  | nil =>
+      simp only [ConcreteElaboration.compileNodes?, Option.some.injEq]
+        at sourceCompiled ⊢
+      subst sourceItems
+      exact ⟨.nil, rfl, rfl⟩
+  | cons head tail induction =>
+      simp only [ConcreteElaboration.compileNodes?] at sourceCompiled ⊢
+      cases sourceHeadEquation :
+          ConcreteElaboration.Internal.compileNode? definitions checked.val
+            sourceContext head with
+      | none => simp [sourceHeadEquation] at sourceCompiled
+      | some sourceHead =>
+          cases sourceTailEquation :
+              ConcreteElaboration.compileNodes? definitions checked.val
+                sourceContext tail with
+          | none => simp [sourceHeadEquation, sourceTailEquation] at sourceCompiled
+          | some sourceTail =>
+              have sourceItemsExact :
+                  sourceItems = .cons sourceHead sourceTail := by
+                exact (Option.some.inj (by
+                  simpa [sourceHeadEquation, sourceTailEquation] using
+                    sourceCompiled)).symm
+              subst sourceItems
+              have embeddingOrigin : ∀ {signature : Sig}
+                  (value : Var sourceContext.sigs signature),
+                  ConcreteElaboration.WireContext.origin checked.val
+                      targetContext.ids (embedding value) =
+                    ConcreteElaboration.WireContext.origin checked.val
+                      sourceContext.ids value := by
+                intro signature value
+                exact InsertionCompilation.NaturalityInternal.contextEmbedding_origin
+                  checked.val checked.val sourceContext.ids targetContext.ids
+                  (fun wire => wire) (fun _ => rfl) visible value
+              have targetHeadEquation :=
+                ConcreteElaboration.compileNode?_natural checked.property
+                  targetNodup embedding (fun wire => wire) embeddingOrigin
+                  (fun region => region) (leftNode := head) (rightNode := head)
+                  (by cases checked.val.nodes head <;> rfl)
+                  (by intro _port _wire incident; exact incident)
+                  sourceHeadEquation
+              obtain ⟨targetTail, targetTailEquation, targetTailExact⟩ :=
+                induction sourceTailEquation
+              refine ⟨.cons (sourceHead.renameWires embedding) targetTail,
+                ?_, ?_⟩
+              · simp [targetHeadEquation, targetTailEquation]
+              · rw [targetTailExact]
+                rfl
+
 /-- The actual source variables available to retained ordinary nodes after
 removing the acted relation head from a recursive compiler context. -/
 def recursiveRetainedSourceContext
@@ -216,6 +290,199 @@ theorem recursiveRetainedNodePair_normalized
   let combined : WireRenaming
       (recursiveRetainedSourceContext source wire context).sigs
       normalizedTarget := fun {_} value => targetMap (retainedMap value)
+  calc
+    (sourceItems.renameWires retainedMap).renameWires targetMap =
+        sourceItems.renameWires combined :=
+      recursiveItemSeqRename_comp retainedMap targetMap combined
+        (fun _ => rfl) sourceItems
+    _ = sourceItems.renameWires
+        (fun {_} value => embedding (sourceMap value)) :=
+      recursiveItemSeqRename_eq _ _ (by
+        intro signature value
+        exact (commutes value).symm) sourceItems
+    _ = (sourceItems.renameWires sourceMap).renameWires embedding :=
+      (recursiveItemSeqRename_comp sourceMap embedding
+        (fun {_} value => embedding (sourceMap value))
+        (fun _ => rfl) sourceItems).symm
+
+/-- The root pruned source compiler context embeds and then normalizes into
+the exact inner context of the source root cylindrical block. -/
+def LocalCylindricalFrame.sourceRetainedNormalization
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    WireRenaming (frame.sourceRetainedVisibleContext pair).sigs
+      (frame.sourceReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+  fun {_} value => frame.sourceFrameNormalization
+    (frame.sourceRetainedFrameEmbedding pair value)
+
+/-- Target counterpart of `sourceRetainedNormalization`. -/
+def LocalCylindricalFrame.targetRetainedNormalization
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    WireRenaming (frame.targetRetainedVisibleContext pair).sigs
+      (frame.targetReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+  fun {_} value => frame.targetFrameNormalization
+    (frame.targetRetainedFrameEmbedding sourceArguments newArgument result
+      accepted pair value)
+
+/-- The retained root prefix is already an exact leaf receipt in the
+independently normalized source and target contexts. -/
+theorem LocalCylindricalFrame.rootRetainedItems_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ∃ (sourceItems : ItemSeq definitions
+          (frame.sourceRetainedVisibleContext pair).sigs)
+      (targetItems : ItemSeq definitions
+          (frame.targetRetainedVisibleContext pair).sigs),
+      ConcreteElaboration.compileNodes? definitions source.val
+          (frame.sourceRetainedVisibleContext pair)
+          ((source.val.nodesAt (source.val.wires wire).scope).filter
+            (fun node => decide (node ∉ argumentSiteNodes result.sites))) =
+        some sourceItems ∧
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (frame.targetRetainedVisibleContext pair)
+          (((replacementBase result.plan).nodesAt
+              (retainedRegion source (source.val.wires wire).scope)).map
+            (fun retained => ConcreteWireQuantifier.Internal.checkedNode
+              result.generated
+              (Fin.castAdd result.sites.sites.length retained))) =
+        some targetItems ∧
+      targetItems.renameWires
+          (frame.targetRetainedNormalization sourceArguments newArgument
+            result accepted pair) =
+        (sourceItems.renameWires
+          (frame.sourceRetainedNormalization pair)).renameWires
+            ((frame.rootBounds sourceArguments sourceSignature newArgument
+              result accepted).embed (fun {_} value => value)) := by
+  obtain ⟨sourceItems, targetItems, sourceCompiled, targetCompiled,
+      targetExact⟩ :=
+    frame.compileRetainedNodePrefixPair?_complete sourceArguments newArgument
+      result accepted pair
+  refine ⟨sourceItems, targetItems, sourceCompiled, targetCompiled, ?_⟩
+  subst targetItems
+  let retained := frame.retainedVisibleContext newArgument result accepted pair
+  let sourceMap : WireRenaming
+      (frame.sourceRetainedVisibleContext pair).sigs
+      (frame.sourceReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+    fun {_} value => frame.sourceRetainedNormalization pair value
+  let targetMap : WireRenaming
+      (frame.targetRetainedVisibleContext pair).sigs
+      (frame.targetReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+    fun {_} value => frame.targetRetainedNormalization sourceArguments
+      newArgument result accepted pair value
+  let embedding : WireRenaming
+      (frame.sourceReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter))
+      (frame.targetReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+    (frame.rootBounds sourceArguments sourceSignature newArgument result
+      accepted).embed (fun {_} value => value)
+  have commutes : ∀ {signature : Sig}
+      (value : Var (frame.sourceRetainedVisibleContext pair).sigs signature),
+      embedding (sourceMap value) =
+        targetMap (retained.wireRenaming value) := by
+    intro signature value
+    change
+      (frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted).embed (fun {_} selected => selected)
+          (frame.sourceFrameNormalization
+            (frame.sourceRetainedFrameEmbedding pair value)) =
+        frame.targetFrameNormalization
+          (frame.targetRetainedFrameEmbedding sourceArguments newArgument
+            result accepted pair (retained.wireRenaming value))
+    apply frame.frameNormalization_commutes_of_mapped_origin sourceArguments
+      sourceSignature newArgument result accepted pair
+    · have sourceRetained := retained.source_retained
+        (ConcreteElaboration.WireContext.origin source.val
+          (frame.sourceRetainedVisibleContext pair).ids value)
+        (ConcreteElaboration.Internal.origin_member source.val value)
+      have sourceOrigin :
+          ConcreteElaboration.WireContext.origin source.val
+              frame.sourceScope.frame.visible.ids
+              (frame.sourceRetainedFrameEmbedding pair value) =
+            ConcreteElaboration.WireContext.origin source.val
+              (frame.sourceRetainedVisibleContext pair).ids value := by
+        exact InsertionCompilation.NaturalityInternal.contextEmbedding_origin
+          source.val source.val
+          (frame.sourceRetainedVisibleContext pair).ids
+          frame.sourceScope.frame.visible.ids (fun sourceWire => sourceWire)
+          (fun _ => rfl)
+          (frame.sourceRetainedVisibleContext_member_frame pair) value
+      intro same
+      apply sourceRetained
+      rw [sourceOrigin] at same
+      rw [arityShift_sourceRemovedWires_exact source wire newArgument result
+        accepted]
+      exact List.mem_singleton.mpr same
+    · have sourceOrigin :
+          ConcreteElaboration.WireContext.origin source.val
+              frame.sourceScope.frame.visible.ids
+              (frame.sourceRetainedFrameEmbedding pair value) =
+            ConcreteElaboration.WireContext.origin source.val
+              (frame.sourceRetainedVisibleContext pair).ids value := by
+        exact InsertionCompilation.NaturalityInternal.contextEmbedding_origin
+          source.val source.val
+          (frame.sourceRetainedVisibleContext pair).ids
+          frame.sourceScope.frame.visible.ids (fun sourceWire => sourceWire)
+          (fun _ => rfl)
+          (frame.sourceRetainedVisibleContext_member_frame pair) value
+      have targetOrigin :
+          ConcreteElaboration.WireContext.origin result.checked.val
+              frame.targetScope.frame.visible.ids
+              (frame.targetRetainedFrameEmbedding sourceArguments newArgument
+                result accepted pair (retained.wireRenaming value)) =
+            ConcreteElaboration.WireContext.origin result.checked.val
+              (frame.targetRetainedVisibleContext pair).ids
+              (retained.wireRenaming value) := by
+        exact InsertionCompilation.NaturalityInternal.contextEmbedding_origin
+          result.checked.val result.checked.val
+          (frame.targetRetainedVisibleContext pair).ids
+          frame.targetScope.frame.visible.ids (fun targetWire => targetWire)
+          (fun _ => rfl)
+          (frame.targetRetainedVisibleContext_member_frame sourceArguments
+            newArgument result accepted pair) (retained.wireRenaming value)
+      rw [targetOrigin, retained.wireRenaming_origin, sourceOrigin]
+  let retainedMap : WireRenaming
+      (frame.sourceRetainedVisibleContext pair).sigs
+      (frame.targetRetainedVisibleContext pair).sigs :=
+    fun {_} value => retained.wireRenaming value
+  let combined : WireRenaming
+      (frame.sourceRetainedVisibleContext pair).sigs
+      (frame.targetReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) :=
+    fun {_} value => targetMap (retainedMap value)
   calc
     (sourceItems.renameWires retainedMap).renameWires targetMap =
         sourceItems.renameWires combined :=
