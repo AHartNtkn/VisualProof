@@ -254,7 +254,8 @@ private theorem UniformIntrinsicItemSeq.denote_site_congr
 
 end
 
-private def matchedHeadArguments?
+/-- Recognize an atom whose typed relation head is the selected uniform head. -/
+def matchedHeadArguments?
     {context : List Sig}
     {arguments atomArguments : List Sig}
     (head : Var context (.rel arguments))
@@ -314,7 +315,10 @@ def abstractApplied
       UniformIntrinsicRegion definitions arguments context
   | .mk items => abstractAppliedItems head items
 
-private def abstractAppliedItems
+/-- Recursive item-sequence implementation of `abstractApplied`, exposed so
+construction-owned receipts can characterize its exact ordinary items and
+ordered holes. -/
+def abstractAppliedItems
     (head : Var context (.rel arguments)) :
     ItemSeq definitions context →
       UniformIntrinsicRegion definitions arguments context
