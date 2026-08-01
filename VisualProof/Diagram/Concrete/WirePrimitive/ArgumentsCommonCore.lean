@@ -1350,6 +1350,142 @@ theorem retainedWireImage_sourceWireOfRetainedTarget
   apply Fin.ext
   simp [Internal.checkedWire]
 
+/-- With no operation-local wires, the generated target removal set consists
+only of the fresh relation head. -/
+theorem targetRemovedWires_headOnly
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localCount : result.spec.localCount = 0) :
+    result.targetRemovedWires = [result.targetWire] := by
+  unfold targetRemovedWires targetLocalWires
+  have none : Data.Finite.allFin result.spec.localCount = [] := by
+    apply List.eq_nil_iff_forall_not_mem.mpr
+    intro fresh _member
+    have bound := fresh.isLt
+    omega
+  rw [none]
+  rfl
+
+/-- A retained ambient-wire image is distinct from the generated relation
+head. -/
+theorem retainedWireImage_ne_targetWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.retainedWireImage sourceWire retained ≠ result.targetWire := by
+  exact result.retainedWire_ne_targetWire sourceWire (by
+    unfold Internal.retainedWires
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin sourceWire, decide_eq_true retained⟩)
+
+/-- Source-to-target wire map for a head-only argument replacement. -/
+def wireImageHeadOnly
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceRemoved : result.sourceRemovedWires = [wire])
+    (sourceWire : source.val.WireId) :
+    result.checked.val.WireId :=
+  if same : sourceWire = wire then
+    result.targetWire
+  else
+    result.retainedWireImage sourceWire (by
+      rw [sourceRemoved]
+      simpa [same])
+
+/-- Target-to-source wire map for a head-only argument replacement. -/
+def sourceWireHeadOnly
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (localCount : result.spec.localCount = 0)
+    (targetWire : result.checked.val.WireId) :
+    source.val.WireId :=
+  if same : targetWire = result.targetWire then
+    wire
+  else
+    result.sourceWireOfRetainedTarget targetWire (by
+      rw [result.targetRemovedWires_headOnly localCount]
+      simpa [same])
+
+/-- Head-only argument wire maps are inverse on every source wire. -/
+theorem sourceWireHeadOnly_wireImageHeadOnly
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceRemoved : result.sourceRemovedWires = [wire])
+    (localCount : result.spec.localCount = 0)
+    (sourceWire : source.val.WireId) :
+    result.sourceWireHeadOnly localCount
+        (result.wireImageHeadOnly sourceRemoved sourceWire) =
+      sourceWire := by
+  by_cases same : sourceWire = wire
+  · subst sourceWire
+    simp [wireImageHeadOnly, sourceWireHeadOnly]
+  · have sourceRetained : sourceWire ∉ result.sourceRemovedWires := by
+      rw [sourceRemoved]
+      simpa [same]
+    have targetDifferent :=
+      result.retainedWireImage_ne_targetWire sourceWire sourceRetained
+    have targetRetained :
+        result.retainedWireImage sourceWire sourceRetained ∉
+          result.targetRemovedWires := by
+      rw [result.targetRemovedWires_headOnly localCount]
+      simpa [targetDifferent]
+    rw [wireImageHeadOnly, dif_neg same, sourceWireHeadOnly,
+      dif_neg targetDifferent]
+    exact result.sourceWireOfRetainedTarget_retainedWireImage sourceWire
+      sourceRetained targetRetained
+
+/-- Head-only argument wire maps are inverse on every checked target wire. -/
+theorem wireImageHeadOnly_sourceWireHeadOnly
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceRemoved : result.sourceRemovedWires = [wire])
+    (localCount : result.spec.localCount = 0)
+    (targetWire : result.checked.val.WireId) :
+    result.wireImageHeadOnly sourceRemoved
+        (result.sourceWireHeadOnly localCount targetWire) =
+      targetWire := by
+  by_cases same : targetWire = result.targetWire
+  · subst targetWire
+    simp [sourceWireHeadOnly, wireImageHeadOnly]
+  · have targetRetained : targetWire ∉ result.targetRemovedWires := by
+      rw [result.targetRemovedWires_headOnly localCount]
+      simpa [same]
+    let sourceWire :=
+      result.sourceWireOfRetainedTarget targetWire targetRetained
+    have sourceRetained : sourceWire ∉ result.sourceRemovedWires :=
+      result.sourceRetainedWire_not_removed
+        (result.retainedBaseWireOfTarget targetWire targetRetained)
+    have sourceDifferent : sourceWire ≠ wire := by
+      intro sourceExact
+      exact sourceRetained (by rw [sourceRemoved, sourceExact]; simp)
+    rw [sourceWireHeadOnly, dif_neg same, wireImageHeadOnly,
+      dif_neg sourceDifferent]
+    exact result.retainedWireImage_sourceWireOfRetainedTarget targetWire
+      targetRetained
+
+/-- Canonical wire-carrier equivalence for any head-only accepted argument
+replacement. -/
+def wireEquivHeadOnly
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceRemoved : result.sourceRemovedWires = [wire])
+    (localCount : result.spec.localCount = 0) :
+    Data.Finite.FiniteEquiv source.val.WireId result.checked.val.WireId where
+  toFun := result.wireImageHeadOnly sourceRemoved
+  invFun := result.sourceWireHeadOnly localCount
+  left_inv := result.sourceWireHeadOnly_wireImageHeadOnly sourceRemoved
+    localCount
+  right_inv := result.wireImageHeadOnly_sourceWireHeadOnly sourceRemoved
+    localCount
+
 end ArgumentResult
 
 end ConcreteWirePrimitive
