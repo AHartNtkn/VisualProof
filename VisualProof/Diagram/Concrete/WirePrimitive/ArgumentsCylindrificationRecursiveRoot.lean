@@ -261,6 +261,70 @@ theorem RecursiveNormalizationCorrespondence.renameVars_commutes
                 sourceTail
             exact List.mem_cons_of_mem _ member))
 
+/-- Independent normalization and insertion splitting commute once the
+construction-owned fresh value and retained tuple have their exact origins. -/
+theorem recursiveCorrespondence_split_exact_of_origins
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (correspondence : RecursiveNormalizationCorrespondence result
+      sourceContext targetContext (smallerBound ++ smallerOuter)
+        (largerBound ++ largerOuter))
+    (bounds : BoundCylindrification newArgument smallerBound largerBound
+      freshCount)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (freshIndex : Fin freshCount)
+    (sourceValues : Vars sourceContext.sigs sourceArguments)
+    (targetValues : Vars targetContext.sigs result.targetArguments)
+    (freshWire : result.checked.val.WireId)
+    (originsExact :
+      ConcreteElaboration.variableOrigins result.checked.val targetContext
+          targetValues =
+        (ConcreteElaboration.variableOrigins source.val sourceContext
+          sourceValues).map result.contextWireMap ++ [freshWire])
+    (sourceNotHead : ∀ sourceWire,
+      sourceWire ∈ ConcreteElaboration.variableOrigins source.val
+        sourceContext sourceValues → sourceWire ≠ wire)
+    (freshExact : correspondence.targetMap
+        ((arityShiftInsertion source wire sourceArguments sourceSignature
+          newArgument result accepted).splitVars targetValues).1 =
+      bounds.freshVar outer freshIndex) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        (Vars.rename correspondence.targetMap targetValues) =
+      ⟨bounds.freshVar outer freshIndex,
+        Vars.rename correspondence.embedding
+          (Vars.rename correspondence.sourceMap sourceValues)⟩ := by
+  let insertion := arityShiftInsertion source wire sourceArguments
+    sourceSignature newArgument result accepted
+  have prefixLength :
+      ((ConcreteElaboration.variableOrigins source.val sourceContext
+        sourceValues).map result.contextWireMap).length =
+        sourceArguments.length := by
+    simpa using TypedArguments.variableOrigins_length source.val
+      sourceContext sourceValues
+  obtain ⟨mappedOrigins, _insertedOrigin⟩ :=
+    insertion.splitVars_origins_of_append
+      (arityShiftInsertion_position source wire sourceArguments
+        sourceSignature newArgument result accepted)
+      result.checked.val targetContext targetValues
+      ((ConcreteElaboration.variableOrigins source.val sourceContext
+        sourceValues).map result.contextWireMap)
+      prefixLength freshWire originsExact
+  rw [insertion.splitVars_rename]
+  apply Prod.ext
+  · exact freshExact
+  · exact (correspondence.renameVars_commutes sourceValues
+      (insertion.splitVars targetValues).2 mappedOrigins
+      sourceNotHead).symm
+
 /-- The checked root frame supplies the initial head-excluding context
 correspondence used by every proper descendant. -/
 def LocalCylindricalFrame.rootNormalizationCorrespondence
