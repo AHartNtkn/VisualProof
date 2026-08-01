@@ -177,6 +177,62 @@ theorem targetSiteNode_iff_ge
       omega
     simpa [nodeExact] using generated
 
+/-- Decode the ordered source-site position stored in one generated target
+application node.  Replacement nodes occupy the checked suffix in source
+site order. -/
+def sourcePositionOfTargetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId)
+    (generated : node ∈ argumentSiteNodes targetSites) :
+    Fin result.sites.sites.length :=
+  ⟨node.val - (replacementBase result.plan).nodeCount, by
+    have lower := (result.targetSiteNode_iff_ge targetSites node).mp generated
+    have countExact :
+        result.checked.val.nodeCount =
+          (replacementBase result.plan).nodeCount +
+            result.sites.sites.length := by
+      rw [result.generated]
+      rfl
+    have upper := node.isLt
+    omega⟩
+
+/-- Decoding a generated target node and re-encoding its site position
+returns that exact checked node. -/
+theorem targetNode_sourcePositionOfTargetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId)
+    (generated : node ∈ argumentSiteNodes targetSites) :
+    result.targetNode
+        (result.sourcePositionOfTargetNode targetSites node generated) =
+      node := by
+  apply Fin.ext
+  have lower := (result.targetSiteNode_iff_ge targetSites node).mp generated
+  simp [ArgumentResult.targetNode, sourcePositionOfTargetNode,
+    Internal.checkedNode, replacementNode]
+  omega
+
+/-- Encoding a source-site position and decoding its generated target node
+returns that exact position. -/
+@[simp] theorem sourcePositionOfTargetNode_targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (position : Fin result.sites.sites.length)
+    (generated :
+      result.targetNode position ∈ argumentSiteNodes targetSites) :
+    result.sourcePositionOfTargetNode targetSites
+        (result.targetNode position) generated = position := by
+  apply Fin.ext
+  simp [ArgumentResult.targetNode, sourcePositionOfTargetNode,
+    Internal.checkedNode, replacementNode]
+
 private theorem targetRetainedNodes_exact
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
