@@ -255,6 +255,72 @@ def applyWireJoin
   else
     exact .error .incomparableScopes
 
+/-- Deterministic checked inverse of one accepted sever, owned by the sever
+receipt rather than rediscovered from the target graph. -/
+structure WireSeverInverse
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (applied : AppliedWireSever source input)
+    (orientation : Orientation) where
+  input : WireJoinInput applied.checked.result.checked
+  applied : AppliedWireJoin applied.checked.result.checked input
+  targetIso : ConcreteIso applied.target.val source.val
+
+/-- Build the canonical inverse join named by the sever construction.  The
+only executable refusal left is the inverse orientation's polarity gate. -/
+def invertWireSever
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (applied : AppliedWireSever source input)
+    (orientation : Orientation) :
+    Except WirePartitionError (WireSeverInverse applied orientation) := by
+  let result := applied.checked.result
+  let left := result.wireImage input.wire
+  let right := result.freshWire
+  let inverseInput : WireJoinInput result.checked :=
+    { orientation := orientation
+      left := left
+      right := right }
+  match polarityAccepted :
+      requireJoinPolarity result.checked orientation
+        (result.checked.val.wires right).scope with
+  | .error error => exact .error error
+  | .ok polarity =>
+      have comparable :
+          result.checked.val.Encloses
+            (result.checked.val.wires left).scope
+            (result.checked.val.wires right).scope := by
+        dsimp [left, right, result]
+        rw [result.wireImage_scope, result.freshWire_scope]
+        exact result.encloses_regionImage result.sourceScope_encloses_scope
+      match accepted :
+          ConcreteWireQuantifier.joinWires result.checked left right with
+      | .error error => exact .error (.concreteRejected error)
+      | .ok inverseResult =>
+          have targetExact :
+              inverseResult.checked = result.inverseJoin.checked := by
+            apply Subtype.ext
+            exact inverseResult.checked_generated.trans
+              result.inverseJoin.checked_generated.symm
+          let inverseApplied :
+              AppliedWireJoin result.checked inverseInput :=
+            AppliedWireJoin.mk inverseResult.checked
+              { outer := left
+                inner := right
+                side := Or.inl ⟨rfl, rfl⟩
+                comparable := comparable
+                polarity := polarity
+                result := inverseResult
+                accepted := accepted
+                targetExact := rfl }
+          exact .ok
+            { input := inverseInput
+              applied := inverseApplied
+              targetIso := by
+                change ConcreteIso inverseResult.checked.val source.val
+                rw [targetExact]
+                exact result.inverseIso.symm }
+
 /-- Generic signature-indexed wire partition is sound over every premodel. -/
 theorem wire_sever_sound
     {source : CheckedDiagram definitions}
