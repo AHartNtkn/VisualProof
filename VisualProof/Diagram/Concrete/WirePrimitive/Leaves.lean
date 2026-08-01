@@ -7,6 +7,97 @@ namespace ConcreteWirePrimitive
 open ConcreteWireQuantifier
 open WirePrimitive
 
+namespace LeafConstruction
+
+/-- Dense survivor order followed by the checker-owned replacement order. -/
+def partitionOrder (selected : List (Fin count)) : List (Fin count) :=
+  (Data.Finite.allFin count).filter (fun value => decide (value ∉ selected)) ++
+    selected
+
+theorem partitionOrder_nodup
+    (selected : List (Fin count))
+    (selectedNodup : selected.Nodup) :
+    (partitionOrder selected).Nodup := by
+  rw [partitionOrder, List.nodup_append]
+  refine ⟨(Data.Finite.allFin_nodup count).filter _, selectedNodup, ?_⟩
+  intro value retained candidate selectedMember same
+  subst candidate
+  exact (of_decide_eq_true (List.mem_filter.mp retained).2) selectedMember
+
+theorem partitionOrder_complete
+    (selected : List (Fin count))
+    (value : Fin count) :
+    value ∈ partitionOrder selected := by
+  rw [partitionOrder, List.mem_append]
+  by_cases selectedMember : value ∈ selected
+  · exact Or.inr selectedMember
+  · exact Or.inl (List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin value, decide_eq_true selectedMember⟩)
+
+/-- A duplicate-free complete identifier order is an executable carrier
+equivalence.  Its inverse is the dense position in that supplied order; no
+identifier permutation is searched for. -/
+def enumerationEquiv
+    (values : List α)
+    [DecidableEq α]
+    (nodup : values.Nodup)
+    (complete : ∀ value : α, value ∈ values) :
+    Data.Finite.FiniteEquiv (Fin values.length) α where
+  toFun := values.get
+  invFun := fun value => DenseList.index values value (complete value)
+  left_inv := by
+    intro position
+    exact DenseList.index_get values nodup position
+  right_inv := by
+    intro value
+    exact DenseList.get_index values value (complete value)
+
+/-- Canonical partition/reappend equivalence selected by a checked node list. -/
+def partitionEquiv
+    (selected : List (Fin count))
+    (selectedNodup : selected.Nodup) :
+    Data.Finite.FiniteEquiv
+      (Fin (partitionOrder selected).length) (Fin count) :=
+  enumerationEquiv (partitionOrder selected)
+    (partitionOrder_nodup selected selectedNodup)
+    (partitionOrder_complete selected)
+
+/-- A supplied finite carrier equivalence determines the corresponding dense
+cardinality equality. -/
+theorem finCount_eq
+    (equiv : Data.Finite.FiniteEquiv (Fin left) (Fin right)) :
+    left = right := by
+  apply Nat.le_antisymm
+  · exact Data.Finite.fin_card_le_of_injective equiv equiv.injective
+  · exact Data.Finite.fin_card_le_of_injective equiv.invFun (by
+      intro first second equality
+      have := congrArg equiv.toFun equality
+      simpa only [equiv.right_inv] using this)
+
+/-- Extend an explicitly supplied carrier equivalence with one distinguished
+last identifier on each side. -/
+def addLastEquiv
+    (equiv : Data.Finite.FiniteEquiv (Fin left) (Fin right)) :
+    Data.Finite.FiniteEquiv (Fin (left + 1)) (Fin (right + 1)) where
+  toFun := Fin.lastCases (Fin.last right)
+    (fun value => Fin.castSucc (equiv value))
+  invFun := Fin.lastCases (Fin.last left)
+    (fun value => Fin.castSucc (equiv.symm value))
+  left_inv := by
+    intro value
+    refine Fin.lastCases ?_ (fun predecessor => ?_) value
+    · simp
+    · simp only [Fin.lastCases_castSucc]
+      rw [Data.Finite.FiniteEquiv.symm_apply_apply]
+  right_inv := by
+    intro value
+    refine Fin.lastCases ?_ (fun predecessor => ?_) value
+    · simp
+    · simp only [Fin.lastCases_castSucc]
+      rw [Data.Finite.FiniteEquiv.apply_symm_apply]
+
+end LeafConstruction
+
 /-- Stable refusal outcomes for formal, identity, and reference leaves. -/
 inductive LeafError
   | expectedRelation
@@ -230,6 +321,78 @@ theorem siteCount
       (source.val.wires wire).endpoints.length :=
   result.sites.length
 
+/-- Construction-owned target-to-source region carrier.  Leaf construction
+removes no regions, so dense positions are preserved exactly. -/
+def regionOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId source.val.RegionId :=
+  finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    change (Internal.retainedRegions source []).length = _
+    rw [Internal.retainedRegions_nil]
+    simp [ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange])
+
+private theorem sourceNodesNodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    (siteNodes result.sites).Nodup := by
+  have endpointsNodup := result.sites.endpoints_nodup
+  have general : ∀ values : List (AppliedSite source wire),
+      (values.map AppliedSite.endpoint).Nodup →
+        (values.map AppliedSite.node).Nodup := by
+    intro values
+    induction values with
+    | nil => simp
+    | cons head tail induction =>
+        simp only [List.map_cons, List.nodup_cons]
+        rintro ⟨headFresh, tailNodup⟩
+        constructor
+        · intro headMember
+          obtain ⟨candidate, candidateMember, nodeExact⟩ :=
+            List.mem_map.mp headMember
+          apply headFresh
+          apply List.mem_map.mpr
+          refine ⟨candidate, candidateMember, ?_⟩
+          unfold AppliedSite.endpoint
+          exact congrArg (fun node => CEndpoint.mk node .head) nodeExact
+        · exact induction tailNodup
+  exact general result.sites.sites endpointsNodup
+
+/-- Construction-owned target-to-source node carrier.  Retained nodes occur
+first and consumed applications are reintroduced in their checked endpoint
+order. -/
+def nodeOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId source.val.NodeId :=
+  (finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    simp [leafCandidate, leafBase, Internal.batchRemovalCandidate,
+      LeafConstruction.partitionOrder, Internal.retainedNodes, siteNodes,
+      ConcreteDiagram.nodesList])).trans
+    (LeafConstruction.partitionEquiv (siteNodes result.sites)
+      result.sourceNodesNodup)
+
+/-- The target wires followed by the consumed relation recover the complete
+source wire carrier in the checker-owned dense order. -/
+def extendedWireOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    Data.Finite.FiniteEquiv
+      (Fin (result.checked.val.wireCount + 1)) source.val.WireId :=
+  (finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    simp [leafCandidate, leafBase, Internal.batchRemovalCandidate,
+      LeafConstruction.partitionOrder, Internal.retainedWires,
+      ConcreteDiagram.wiresList])).trans
+    (LeafConstruction.partitionEquiv [wire] (by simp))
+
 end LeafResult
 
 private def checkedSites
@@ -333,6 +496,7 @@ def refLeaf
 private structure AbstractSpec
     (source : CheckedDiagram definitions) where
   nodes : List source.val.NodeId
+  nodesNodup : nodes.Nodup
   scope : source.val.RegionId
   targetArguments : List Sig
   arguments : Fin nodes.length → List source.val.WireId
@@ -480,6 +644,50 @@ theorem targetWire_signature
   simp only [abstractCandidate, Fin.addCases_right]
   rfl
 
+/-- Construction-owned target-to-source region carrier for abstraction. -/
+def regionOriginEquiv
+    {source : CheckedDiagram definitions}
+    (result : LeafAbstractResult source) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId source.val.RegionId :=
+  finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    change (Internal.retainedRegions source []).length = _
+    rw [Internal.retainedRegions_nil]
+    simp [ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange])
+
+/-- Construction-owned target-to-source node carrier for abstraction. -/
+def nodeOriginEquiv
+    {source : CheckedDiagram definitions}
+    (result : LeafAbstractResult source) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId source.val.NodeId :=
+  (finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    simp [abstractCandidate, abstractBase, Internal.batchRemovalCandidate,
+      LeafConstruction.partitionOrder, Internal.retainedNodes,
+      ConcreteDiagram.nodesList])).trans
+    (LeafConstruction.partitionEquiv result.spec.nodes
+      result.spec.nodesNodup)
+
+/-- Abstraction retains every source wire in dense order and appends exactly
+the fresh uniformly applied relation. -/
+def wireSplitEquiv
+    {source : CheckedDiagram definitions}
+    (result : LeafAbstractResult source) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId
+      (Fin (source.val.wireCount + 1)) :=
+  finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    change (Internal.retainedWires source []).length + 1 = _
+    have retained : Internal.retainedWires source [] =
+        source.val.wiresList := by
+      apply List.filter_eq_self.mpr
+      intro candidate member
+      simp
+    rw [retained]
+    simp [ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange])
+
 end LeafAbstractResult
 
 private def buildAbstract
@@ -503,19 +711,26 @@ private def buildAbstract
                 (abstractCandidateWire plan),
               rfl⟩
 
+private structure CheckedSelection
+    (source : CheckedDiagram definitions)
+    (nodes : List source.val.NodeId)
+    (scope : source.val.RegionId) : Type where
+  nodesNodup : nodes.Nodup
+
 private def checkedSelection
     (source : CheckedDiagram definitions)
     (nodes : List source.val.NodeId)
     (scope : source.val.RegionId) :
-    Except LeafError Unit := do
+    Except LeafError (CheckedSelection source nodes scope) := do
   if nodes.isEmpty then
     throw .emptySelection
-  if !nodes.Nodup then
+  if nodesNodup : nodes.Nodup then
+    if !(nodes.all fun node =>
+        source.val.Encloses scope (source.val.nodes node).region) then
+      throw .scopeDoesNotEnclose
+    pure ⟨nodesNodup⟩
+  else
     throw .duplicateSelection
-  if !(nodes.all fun node =>
-      source.val.Encloses scope (source.val.nodes node).region) then
-    throw .scopeDoesNotEnclose
-  pure ()
 
 private def portOwners?
     (source : CheckedDiagram definitions)
@@ -571,7 +786,7 @@ def abstractFormal
   | [] => throw .emptySelection
   | first :: rest =>
       let selected := first :: rest
-      checkedSelection source selected scope
+      let selection ← checkedSelection source selected scope
       match source.val.nodes first with
       | .atom _ arguments =>
           if !(selected.all fun node =>
@@ -586,6 +801,7 @@ def abstractFormal
           | some collected =>
               let spec : AbstractSpec source :=
                 { nodes := selected
+                  nodesNodup := selection.nodesNodup
                   scope := scope
                   targetArguments := .rel arguments :: arguments
                   arguments := collectedAt collected }
@@ -602,7 +818,7 @@ def identityAbstract
   | [] => throw .emptySelection
   | first :: rest =>
       let selected := first :: rest
-      checkedSelection source selected scope
+      let selection ← checkedSelection source selected scope
       match source.val.nodes first with
       | .identity _ signature arity =>
           if !(selected.all fun node =>
@@ -618,6 +834,7 @@ def identityAbstract
           | some collected =>
               let spec : AbstractSpec source :=
                 { nodes := selected
+                  nodesNodup := selection.nodesNodup
                   scope := scope
                   targetArguments :=
                     (List.range arity).map fun _ => signature
@@ -635,7 +852,7 @@ def refAbstract
   | [] => throw .emptySelection
   | first :: rest =>
       let selected := first :: rest
-      checkedSelection source selected scope
+      let selection ← checkedSelection source selected scope
       match source.val.nodes first with
       | .ref _ definition arguments =>
           if !(selected.all fun node =>
@@ -652,6 +869,7 @@ def refAbstract
           | some collected =>
               let spec : AbstractSpec source :=
                 { nodes := selected
+                  nodesNodup := selection.nodesNodup
                   scope := scope
                   targetArguments := arguments
                   arguments := collectedAt collected }

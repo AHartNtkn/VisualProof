@@ -89,6 +89,22 @@ example :
         .forward) = none := by
   native_decide
 
+private def formalAbstract :=
+  (applyAbstractFormal formalLeaf.target formalLeaf.inverseNodes
+      formalLeaf.inverseScope .forward).toOption.get (by native_decide)
+
+private def formalTargetIdentityIso :
+    ConcreteIso formalLeaf.target.val formalLeaf.target.val :=
+  (ConcreteIso.checkEquivs? formalLeaf.target.val formalLeaf.target.val
+      (Data.Finite.FiniteEquiv.refl _)
+      (Data.Finite.FiniteEquiv.refl _)
+      (Data.Finite.FiniteEquiv.refl _)).get (by native_decide)
+
+example :
+    (formalLeaf.inverseTransport formalAbstract
+      formalTargetIdentityIso).isOk = true := by
+  native_decide
+
 example :
     leafError?
       (applyAbstractFormal formalLeaf.target [] (idx 0) .forward) =
@@ -213,6 +229,22 @@ example :
         .forward) = none := by
   native_decide
 
+private def identityAbstract :=
+  (applyIdentityAbstract identityLeaf.target identityLeaf.inverseNodes
+      identityLeaf.inverseScope .forward).toOption.get (by native_decide)
+
+private def identityTargetIdentityIso :
+    ConcreteIso identityLeaf.target.val identityLeaf.target.val :=
+  (ConcreteIso.checkEquivs? identityLeaf.target.val identityLeaf.target.val
+      (Data.Finite.FiniteEquiv.refl _)
+      (Data.Finite.FiniteEquiv.refl _)
+      (Data.Finite.FiniteEquiv.refl _)).get (by native_decide)
+
+example :
+    (identityLeaf.inverseTransport identityAbstract
+      identityTargetIdentityIso).isOk = true := by
+  native_decide
+
 example :
     leafError?
       (applyIdentityAbstract identityLeaf.target [idx 0, idx 0] (idx 0)
@@ -276,6 +308,22 @@ example :
     leafError?
       (applyRefAbstract refLeaf.target [idx 0, idx 1] (idx 0)
         .forward) = none := by
+  native_decide
+
+private def refAbstract :=
+  (applyRefAbstract refLeaf.target refLeaf.inverseNodes
+      refLeaf.inverseScope .forward).toOption.get (by native_decide)
+
+private def refTargetIdentityIso :
+    ConcreteIso refLeaf.target.val refLeaf.target.val :=
+  (ConcreteIso.checkEquivs? refLeaf.target.val refLeaf.target.val
+      (Data.Finite.FiniteEquiv.refl _)
+      (Data.Finite.FiniteEquiv.refl _)
+      (Data.Finite.FiniteEquiv.refl _)).get (by native_decide)
+
+example :
+    (refLeaf.inverseTransport refAbstract
+      refTargetIdentityIso).isOk = true := by
   native_decide
 
 example :

@@ -112,6 +112,27 @@ private structure AbstractLedger
     factorization.sourceScope.frame.context.cutDepth =
       sourceScope.frame.context.cutDepth
 
+/-- Internal decidable acceptance for the fixed carriers supplied by an
+abstraction and its checked reconstruction.  Accepted public receipts retain
+the resulting isomorphism as total data. -/
+private def checkReverseIso?
+    {source : CheckedDiagram definitions}
+    (result : LeafAbstractResult source)
+    (reverse : ConcreteWirePrimitive.LeafResult result.checked
+      result.targetWire) :
+    Option (ConcreteIso reverse.checked.val source.val) :=
+  ConcreteIso.checkEquivs? reverse.checked.val source.val
+    (reverse.regionOriginEquiv.trans result.regionOriginEquiv)
+    (reverse.nodeOriginEquiv.trans result.nodeOriginEquiv)
+    (finEquivOfEq (by
+      have reverseCount : reverse.checked.val.wireCount + 1 =
+          result.checked.val.wireCount :=
+        LeafConstruction.finCount_eq reverse.extendedWireOriginEquiv
+      have abstractCount : result.checked.val.wireCount =
+          source.val.wireCount + 1 :=
+        LeafConstruction.finCount_eq result.wireSplitEquiv
+      omega))
+
 private def checkAbstractLedger
     (source : CheckedDiagram definitions)
     (scope : source.val.RegionId)
@@ -127,8 +148,7 @@ private def checkAbstractLedger
   let factorization ←
     LeavesSemantics.checkLeafFactorization reverse sourceArguments
       sourceSignature kind
-  let inverseIso ←
-    ConcreteIsoSearch.findConcreteIso? reverse.checked.val source.val
+  let inverseIso ← checkReverseIso? result reverse
   let sourceScope ← compileSite? source scope
   if cutDepthExact :
       factorization.sourceScope.frame.context.cutDepth =
@@ -215,6 +235,44 @@ structure AppliedRefAbstract
   private ledger : AbstractLedger source scope result
   private polarity : CheckedAbstractPolarity source orientation scope
 
+/-- Accepted pair-owned inverse landing.  Once this receipt exists, its
+landing isomorphism is total and no further matching or validation occurs. -/
+structure InverseLanding
+    (target planned : CheckedDiagram definitions) where
+  private mk ::
+  iso : ConcreteIso target.val planned.val
+
+/-- Pair-owned inverse carrier validation for a checked leaf construction and
+an abstraction applied after transporting its exact replacement nodes.  Every
+carrier is supplied by the two construction receipts and the intervening
+isomorphism; no carrier permutation is enumerated. -/
+private def checkInverseTransportIso?
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : ConcreteWirePrimitive.LeafResult planned wire)
+    (backward : LeafAbstractResult real)
+    (targetIso : ConcreteIso real.val forward.checked.val) :
+    Option (ConcreteIso backward.checked.val planned.val) :=
+  ConcreteIso.checkEquivs? backward.checked.val planned.val
+    (backward.regionOriginEquiv.trans <|
+      targetIso.regions.trans forward.regionOriginEquiv)
+    (backward.nodeOriginEquiv.trans <|
+      targetIso.nodes.trans forward.nodeOriginEquiv)
+    (backward.wireSplitEquiv.trans <|
+      (LeafConstruction.addLastEquiv targetIso.wires).trans
+        forward.extendedWireOriginEquiv)
+
+private def acceptInverseLanding
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : ConcreteWirePrimitive.LeafResult planned wire)
+    (backward : LeafAbstractResult real)
+    (targetIso : ConcreteIso real.val forward.checked.val) :
+    Except WireLeafError (InverseLanding backward.checked planned) := do
+  let iso ← optionToExcept .semanticLedgerRejected <|
+    checkInverseTransportIso? forward backward targetIso
+  pure ⟨iso⟩
+
 namespace AppliedApplyFormal
 
 def source
@@ -251,6 +309,21 @@ def inverseScope
     (applied : AppliedApplyFormal source orientation wire position) :
     applied.target.val.RegionId :=
   applied.result.targetScope
+
+/-- Construction-owned inverse landing for a transported formal leaf. -/
+def inverseTransport
+    {planned real : CheckedDiagram definitions}
+    {joinOrientation orientation : Orientation}
+    {wire : planned.val.WireId}
+    {position : Nat}
+    {nodes : List real.val.NodeId}
+    {scope : real.val.RegionId}
+    (applied : AppliedApplyFormal planned joinOrientation wire position)
+    (backward : AppliedAbstractFormal real orientation nodes scope)
+    (targetIso : ConcreteIso real.val applied.target.val) :
+    Except WireLeafError
+      (InverseLanding backward.result.checked planned) :=
+  acceptInverseLanding applied.result backward.result targetIso
 
 def tag
     {source : CheckedDiagram definitions}
@@ -294,6 +367,20 @@ def inverseScope
     (applied : AppliedIdentityLeaf source orientation wire) :
     applied.target.val.RegionId :=
   applied.result.targetScope
+
+/-- Construction-owned inverse landing for a transported identity leaf. -/
+def inverseTransport
+    {planned real : CheckedDiagram definitions}
+    {joinOrientation orientation : Orientation}
+    {wire : planned.val.WireId}
+    {nodes : List real.val.NodeId}
+    {scope : real.val.RegionId}
+    (applied : AppliedIdentityLeaf planned joinOrientation wire)
+    (backward : AppliedIdentityAbstract real orientation nodes scope)
+    (targetIso : ConcreteIso real.val applied.target.val) :
+    Except WireLeafError
+      (InverseLanding backward.result.checked planned) :=
+  acceptInverseLanding applied.result backward.result targetIso
 
 def tag
     {source : CheckedDiagram definitions}
@@ -341,6 +428,21 @@ def inverseScope
     applied.target.val.RegionId :=
   applied.result.targetScope
 
+/-- Construction-owned inverse landing for a transported reference leaf. -/
+def inverseTransport
+    {planned real : CheckedDiagram definitions}
+    {joinOrientation orientation : Orientation}
+    {wire : planned.val.WireId}
+    {definition : Fin definitions.length}
+    {nodes : List real.val.NodeId}
+    {scope : real.val.RegionId}
+    (applied : AppliedRefLeaf planned joinOrientation wire definition)
+    (backward : AppliedRefAbstract real orientation nodes scope)
+    (targetIso : ConcreteIso real.val applied.target.val) :
+    Except WireLeafError
+      (InverseLanding backward.result.checked planned) :=
+  acceptInverseLanding applied.result backward.result targetIso
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -367,6 +469,25 @@ def target
     {scope : source.val.RegionId}
     (applied : AppliedAbstractFormal source orientation nodes scope) :=
   applied.result.target
+
+/-- Checked reconstruction used to accept this abstraction receipt. -/
+def reconstructed
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {nodes : List source.val.NodeId}
+    {scope : source.val.RegionId}
+    (applied : AppliedAbstractFormal source orientation nodes scope) :=
+  applied.ledger.reverse.target
+
+/-- Total reconstruction-to-source isomorphism owned by the accepted receipt. -/
+def reverseIso
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {nodes : List source.val.NodeId}
+    {scope : source.val.RegionId}
+    (applied : AppliedAbstractFormal source orientation nodes scope) :
+    ConcreteIso applied.reconstructed.val source.val :=
+  applied.ledger.inverseIso
 
 def tag
     {source : CheckedDiagram definitions}
@@ -395,6 +516,25 @@ def target
     (applied : AppliedIdentityAbstract source orientation nodes scope) :=
   applied.result.target
 
+/-- Checked reconstruction used to accept this abstraction receipt. -/
+def reconstructed
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {nodes : List source.val.NodeId}
+    {scope : source.val.RegionId}
+    (applied : AppliedIdentityAbstract source orientation nodes scope) :=
+  applied.ledger.reverse.target
+
+/-- Total reconstruction-to-source isomorphism owned by the accepted receipt. -/
+def reverseIso
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {nodes : List source.val.NodeId}
+    {scope : source.val.RegionId}
+    (applied : AppliedIdentityAbstract source orientation nodes scope) :
+    ConcreteIso applied.reconstructed.val source.val :=
+  applied.ledger.inverseIso
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -421,6 +561,25 @@ def target
     {scope : source.val.RegionId}
     (applied : AppliedRefAbstract source orientation nodes scope) :=
   applied.result.target
+
+/-- Checked reconstruction used to accept this abstraction receipt. -/
+def reconstructed
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {nodes : List source.val.NodeId}
+    {scope : source.val.RegionId}
+    (applied : AppliedRefAbstract source orientation nodes scope) :=
+  applied.ledger.reverse.target
+
+/-- Total reconstruction-to-source isomorphism owned by the accepted receipt. -/
+def reverseIso
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {nodes : List source.val.NodeId}
+    {scope : source.val.RegionId}
+    (applied : AppliedRefAbstract source orientation nodes scope) :
+    ConcreteIso applied.reconstructed.val source.val :=
+  applied.ledger.inverseIso
 
 def tag
     {source : CheckedDiagram definitions}

@@ -1271,10 +1271,10 @@ private def invertStep
           |>.mapError .leafRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .abstractFormal inverseNodes inverseScope inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let landing ←
+        (applied.inverseTransport inverseApplied targetIso).mapError
+          .leafRejected
+      let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .identityLeaf _ applied => do
       let inverseNodes :=
@@ -1285,10 +1285,10 @@ private def invertStep
           orientation).mapError .leafRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .identityAbstract inverseNodes inverseScope inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let landing ←
+        (applied.inverseTransport inverseApplied targetIso).mapError
+          .leafRejected
+      let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .refLeaf _ _ applied => do
       let inverseNodes :=
@@ -1299,10 +1299,10 @@ private def invertStep
           |>.mapError .leafRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .refAbstract inverseNodes inverseScope inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let landing ←
+        (applied.inverseTransport inverseApplied targetIso).mapError
+          .leafRejected
+      let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .endsDelete _ applied => do
       let inverseWire := targetIso.wires.symm applied.inverseWire
