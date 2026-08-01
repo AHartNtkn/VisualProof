@@ -1435,6 +1435,194 @@ theorem inverseTransport_node_table
     exact forward.inverseTransport_retained_node_table backward
       targetIso wireExact realNode generated
 
+/-- The transported inverse wire carrier acts on every backward construction
+image by pulling through the supplied target isomorphism and the forward
+construction inverse. -/
+theorem inverseTransport_wireEquiv_image
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (realWire : real.val.WireId) :
+    forward.inverseTransportWireEquiv backward targetIso
+        (backward.wireEquiv realWire) =
+      forward.wireEquiv.symm (targetIso.wires realWire) := by
+  unfold inverseTransportWireEquiv
+  change forward.wireEquiv.symm
+    (targetIso.wires
+      (backward.wireEquiv.symm (backward.wireEquiv realWire))) = _
+  have backwardCancel := backward.wireEquiv.left_inv realWire
+  change backward.wireEquiv.invFun (backward.wireEquiv realWire) =
+    realWire at backwardCancel
+  exact congrArg (fun value => forward.wireEquiv.symm
+    (targetIso.wires value)) backwardCancel
+
+/-- Complete wire-signature law for the transported inverse carrier. -/
+theorem inverseTransport_wire_signature
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (targetWire : backward.target.val.WireId) :
+    (planned.val.wires
+      (forward.inverseTransportWireEquiv backward targetIso targetWire)).sig =
+      (backward.target.val.wires targetWire).sig := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have targetExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  rw [← targetExact, forward.inverseTransport_wireEquiv_image]
+  by_cases head : realWire = backwardWire
+  · rw [head]
+    have forwardInverseHead : forward.wireEquiv.symm forward.targetWire =
+        forwardWire := by
+      rw [← forward.wireEquiv_head]
+      exact forward.wireEquiv.left_inv forwardWire
+    rw [wireExact, forwardInverseHead, backward.wireEquiv_head,
+      forward.sourceWire_signature, backward.targetWire_signature]
+    have restored := forward.inverseTargetArguments_exact backward
+      targetIso wireExact
+    rw [backward.targetArguments_exact] at restored
+    exact congrArg Sig.rel restored.symm
+  · let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+    have plannedImage : forward.wireEquiv plannedWire =
+        targetIso.wires realWire :=
+      forward.wireEquiv.right_inv (targetIso.wires realWire)
+    have plannedDifferent : plannedWire ≠ forwardWire := by
+      intro same
+      have mapped := congrArg forward.wireEquiv same
+      rw [plannedImage, forward.wireEquiv_head] at mapped
+      have realExact := targetIso.wires.injective
+        (mapped.trans wireExact.symm)
+      exact head realExact
+    calc
+      (planned.val.wires plannedWire).sig =
+          (forward.target.val.wires (targetIso.wires realWire)).sig := by
+        rw [← plannedImage]
+        exact (forward.wireEquiv_retained_signature plannedWire
+          plannedDifferent).symm
+      _ = (real.val.wires realWire).sig :=
+        targetIso.wire_signature realWire
+      _ = (backward.target.val.wires
+          (backward.wireEquiv realWire)).sig :=
+        (backward.wireEquiv_retained_signature realWire head).symm
+
+/-- Complete wire-scope law for the transported inverse carrier. -/
+theorem inverseTransport_wire_scope
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (targetWire : backward.target.val.WireId) :
+    (planned.val.wires
+      (forward.inverseTransportWireEquiv backward targetIso targetWire)).scope =
+      forward.inverseTransportRegionEquiv backward targetIso
+        (backward.target.val.wires targetWire).scope := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have targetExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  rw [← targetExact, forward.inverseTransport_wireEquiv_image]
+  by_cases head : realWire = backwardWire
+  · rw [head]
+    have forwardInverseHead : forward.wireEquiv.symm forward.targetWire =
+        forwardWire := by
+      rw [← forward.wireEquiv_head]
+      exact forward.wireEquiv.left_inv forwardWire
+    rw [wireExact, forwardInverseHead, backward.wireEquiv_head]
+    have backwardScope :=
+      backward.result.targetWire_scope_regionImage
+    change (backward.target.val.wires backward.targetWire).scope =
+        backward.result.regionImage
+          (real.val.wires backwardWire).scope at backwardScope
+    have forwardScope := forward.result.targetWire_scope_regionImage
+    change (forward.target.val.wires forward.targetWire).scope =
+        forward.result.regionImage
+          (planned.val.wires forwardWire).scope at forwardScope
+    have middleScope := targetIso.wire_scope backwardWire
+    rw [wireExact] at middleScope
+    unfold inverseTransportRegionEquiv
+    rw [backwardScope, backward.result.regionImage_exact]
+    have backwardCancel := backward.result.regionEquiv.left_inv
+      (real.val.wires backwardWire).scope
+    change backward.result.regionEquiv.invFun
+        (backward.result.regionEquiv
+          (real.val.wires backwardWire).scope) =
+      (real.val.wires backwardWire).scope at backwardCancel
+    calc
+      (planned.val.wires forwardWire).scope =
+          forward.result.regionEquiv.symm
+            (forward.result.regionEquiv
+              (planned.val.wires forwardWire).scope) :=
+        (forward.result.regionEquiv.left_inv _).symm
+      _ = forward.result.regionEquiv.symm
+          (forward.target.val.wires forward.targetWire).scope := by
+        rw [forwardScope, forward.result.regionImage_exact]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions (real.val.wires backwardWire).scope) := by
+        rw [middleScope]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions
+            (backward.result.regionEquiv.symm
+              (backward.result.regionEquiv
+                (real.val.wires backwardWire).scope))) :=
+        congrArg (fun value => forward.result.regionEquiv.symm
+          (targetIso.regions value)) backwardCancel.symm
+  · let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+    have plannedImage : forward.wireEquiv plannedWire =
+        targetIso.wires realWire :=
+      forward.wireEquiv.right_inv (targetIso.wires realWire)
+    have plannedDifferent : plannedWire ≠ forwardWire := by
+      intro same
+      have mapped := congrArg forward.wireEquiv same
+      rw [plannedImage, forward.wireEquiv_head] at mapped
+      have realExact := targetIso.wires.injective
+        (mapped.trans wireExact.symm)
+      exact head realExact
+    have forwardScope := forward.wireEquiv_retained_scope plannedWire
+      plannedDifferent
+    rw [plannedImage] at forwardScope
+    have backwardScope := backward.wireEquiv_retained_scope realWire head
+    have middleScope := targetIso.wire_scope realWire
+    unfold inverseTransportRegionEquiv
+    rw [backwardScope]
+    have backwardCancel := backward.result.regionEquiv.left_inv
+      (real.val.wires realWire).scope
+    change backward.result.regionEquiv.invFun
+        (backward.result.regionEquiv (real.val.wires realWire).scope) =
+      (real.val.wires realWire).scope at backwardCancel
+    calc
+      (planned.val.wires plannedWire).scope =
+          forward.result.regionEquiv.symm
+            (forward.result.regionEquiv
+              (planned.val.wires plannedWire).scope) :=
+        (forward.result.regionEquiv.left_inv _).symm
+      _ = forward.result.regionEquiv.symm
+          (forward.target.val.wires (targetIso.wires realWire)).scope := by
+        rw [forwardScope]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions (real.val.wires realWire).scope) := by
+        rw [middleScope]
+      _ = forward.result.regionEquiv.symm
+          (targetIso.regions
+            (backward.result.regionEquiv.symm
+              (backward.result.regionEquiv
+                (real.val.wires realWire).scope))) :=
+        congrArg (fun value => forward.result.regionEquiv.symm
+          (targetIso.regions value)) backwardCancel.symm
+
 /-- Every generated application uses the receipt-owned permuted attachment
 tuple at its exact source-site position. -/
 theorem siteArguments_exact
