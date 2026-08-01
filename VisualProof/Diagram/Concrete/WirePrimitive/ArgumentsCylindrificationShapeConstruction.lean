@@ -618,6 +618,117 @@ theorem LocalCylindricalFrame.sourceReducedContext_ids_filter
     frame.sourceRemoval.head]
   rw [frame.sourceRemoval_head, frame.sourceHead_origin]
 
+/-- The target reduced identifier block is the replacement scope's concrete
+local order with exactly the replacement relation head removed. -/
+theorem LocalCylindricalFrame.targetReducedContext_ids_filter
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.targetReducedContext.ids =
+      (result.checked.val.wiresAt
+        (result.checked.val.wires result.targetWire).scope).filter
+          (fun candidate => decide (candidate ≠ result.targetWire)) := by
+  have targetNodup :
+      (result.checked.val.wiresAt
+        (result.checked.val.wires result.targetWire).scope).Nodup := by
+    unfold ConcreteDiagram.wiresAt ConcreteDiagram.wiresList
+    exact (Data.Finite.allFin_nodup result.checked.val.wireCount).filter _
+  unfold LocalCylindricalFrame.targetReducedContext
+  rw [← filter_origin_ids result.checked.val _ targetNodup
+    frame.targetRemoval.head]
+  rw [frame.targetRemoval_head, frame.targetHead_origin]
+
+/-- The pruned source context embeds into the exact source site compiler
+context without changing concrete wire identities. -/
+theorem LocalCylindricalFrame.sourceRetainedVisibleContext_member_frame
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (sourceWire : source.val.WireId)
+    (member : sourceWire ∈ (frame.sourceRetainedVisibleContext pair).ids) :
+    sourceWire ∈ frame.sourceScope.frame.visible.ids := by
+  rw [pair.sourceVisibleContextExact]
+  unfold ConcreteElaboration.WireContext.extend
+  simp only [LocalCylindricalFrame.sourceRetainedVisibleContext] at member
+  rcases List.mem_append.mp member with localMember | outerMember
+  · apply List.mem_append_left
+    rw [frame.sourceReducedContext_ids_filter] at localMember
+    exact (List.mem_filter.mp localMember).1
+  · exact List.mem_append_right _ outerMember
+
+/-- The pruned target context embeds into the exact target site compiler
+context; its local prefix excludes both the replacement head and fresh wires. -/
+theorem LocalCylindricalFrame.targetRetainedVisibleContext_member_frame
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (targetWire : result.checked.val.WireId)
+    (member : targetWire ∈ (frame.targetRetainedVisibleContext pair).ids) :
+    targetWire ∈ frame.targetScope.frame.visible.ids := by
+  rw [pair.targetVisibleContextExact]
+  unfold ConcreteElaboration.WireContext.extend
+  simp only [LocalCylindricalFrame.targetRetainedVisibleContext] at member
+  rcases List.mem_append.mp member with localMember | outerMember
+  · apply List.mem_append_left
+    have reducedMember : targetWire ∈ frame.targetReducedContext.ids := by
+      rw [frame.targetReducedContext_ids sourceArguments newArgument result
+        accepted]
+      exact List.mem_append_left _ localMember
+    rw [frame.targetReducedContext_ids_filter] at reducedMember
+    exact (List.mem_filter.mp reducedMember).1
+  · exact List.mem_append_right _ outerMember
+
+/-- Typed identity-on-wires embedding from the pruned source context into
+the source site compiler's full visible context. -/
+def LocalCylindricalFrame.sourceRetainedFrameEmbedding
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    WireRenaming (frame.sourceRetainedVisibleContext pair).sigs
+      frame.sourceScope.frame.visible.sigs :=
+  InsertionCompilation.NaturalityInternal.contextEmbedding source.val source.val
+    (frame.sourceRetainedVisibleContext pair).ids
+    frame.sourceScope.frame.visible.ids (fun sourceWire => sourceWire)
+    (fun _ => rfl) (frame.sourceRetainedVisibleContext_member_frame pair)
+
+/-- Typed identity-on-wires embedding from the pruned target context into
+the target site compiler's full visible context. -/
+def LocalCylindricalFrame.targetRetainedFrameEmbedding
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    WireRenaming (frame.targetRetainedVisibleContext pair).sigs
+      frame.targetScope.frame.visible.sigs :=
+  InsertionCompilation.NaturalityInternal.contextEmbedding
+    result.checked.val result.checked.val
+    (frame.targetRetainedVisibleContext pair).ids
+    frame.targetScope.frame.visible.ids (fun targetWire => targetWire)
+    (fun _ => rfl)
+    (frame.targetRetainedVisibleContext_member_frame sourceArguments
+      newArgument result accepted pair)
+
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
 exhaustiveness, while true outer owners remain in the paired outer spine. -/
