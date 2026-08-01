@@ -298,6 +298,7 @@ structure AppliedArgDrop
   private sourceSignature :
     (source.val.wires wire).sig = .rel sourceArguments
   private source_removed_exact : result.sourceRemovedWires = [wire]
+  private local_count_exact : result.spec.localCount = 0
   private ledger :
     ArgumentsSemantics.DropLedger result sourceArguments
   private semantics :
@@ -317,6 +318,8 @@ structure AppliedArgExtend
   private sourceArguments : List Sig
   private sourceSignature :
     (source.val.wires wire).sig = .rel sourceArguments
+  private source_removed_exact : result.sourceRemovedWires = [wire]
+  private local_count_exact : result.spec.localCount = 0
   private ledger :
     ArgumentsSemantics.ExtendLedger result sourceArguments
   private semantics :
@@ -3405,9 +3408,12 @@ def applyArgDrop
           let sourceRemovedExact :=
             ConcreteWirePrimitive.argDrop_sourceRemovedWires_exact
               source wire position result accepted
+          let localCountExact :=
+            ConcreteWirePrimitive.argDrop_localCount_exact
+              source wire position result accepted
           pure
             ⟨attachments, gate, result, sourceArguments, sourceSignature,
-              sourceRemovedExact, ledger, semantics⟩
+              sourceRemovedExact, localCountExact, ledger, semantics⟩
 
 def applyArgExtend
     (source : CheckedDiagram definitions)
@@ -3419,37 +3425,44 @@ def applyArgExtend
     Except WireArgumentError
       (AppliedArgExtend source orientation wire position newArgument
         attachments) := do
-  let result ←
-    (ConcreteWirePrimitive.argExtend source wire position newArgument
-      attachments).mapError .concreteRejected
-  let gate ← checkExtendGate source orientation wire attachments
-  match sourceSignature : (source.val.wires wire).sig with
-  | .iota => throw .semanticLedgerRejected
-  | .rel sourceArguments =>
-      let ledger ←
-        optionToExcept .semanticLedgerRejected <|
-          ArgumentsSemantics.checkExtendLedger result sourceArguments
-            sourceSignature position
-      let semanticCheck :
-          Except WireArgumentError
-            (ExtendSemanticReceipt (orientation := orientation)
-              (position := position) ledger) :=
-        match gate with
-        | .uniform _ =>
-            match attachments with
-            | [] => throw .semanticLedgerRejected
-            | attachment :: _ => do
-                let fixed ←
-                  optionToExcept .semanticLedgerRejected <|
-                    ArgumentsSemantics.checkFixedExtendLedger ledger
-                      attachment position
-                pure (ExtendSemanticReceipt.uniform fixed)
-        | .gated _ polarity =>
-            pure (ExtendSemanticReceipt.gated polarity)
-      let semantics ← semanticCheck
-      pure
-        ⟨gate, result, sourceArguments, sourceSignature, ledger,
-          semantics⟩
+  match accepted : ConcreteWirePrimitive.argExtend source wire position
+      newArgument attachments with
+  | .error error => throw (.concreteRejected error)
+  | .ok result =>
+      let gate ← checkExtendGate source orientation wire attachments
+      match sourceSignature : (source.val.wires wire).sig with
+      | .iota => throw .semanticLedgerRejected
+      | .rel sourceArguments =>
+          let ledger ←
+            optionToExcept .semanticLedgerRejected <|
+              ArgumentsSemantics.checkExtendLedger result sourceArguments
+                sourceSignature position
+          let semanticCheck :
+              Except WireArgumentError
+                (ExtendSemanticReceipt (orientation := orientation)
+                  (position := position) ledger) :=
+            match gate with
+            | .uniform _ =>
+                match attachments with
+                | [] => throw .semanticLedgerRejected
+                | attachment :: _ => do
+                    let fixed ←
+                      optionToExcept .semanticLedgerRejected <|
+                        ArgumentsSemantics.checkFixedExtendLedger ledger
+                          attachment position
+                    pure (ExtendSemanticReceipt.uniform fixed)
+            | .gated _ polarity =>
+                pure (ExtendSemanticReceipt.gated polarity)
+          let semantics ← semanticCheck
+          let sourceRemovedExact :=
+            ConcreteWirePrimitive.argExtend_sourceRemovedWires_exact
+              source wire position newArgument attachments result accepted
+          let localCountExact :=
+            ConcreteWirePrimitive.argExtend_localCount_exact
+              source wire position newArgument attachments result accepted
+          pure
+            ⟨gate, result, sourceArguments, sourceSignature,
+              sourceRemovedExact, localCountExact, ledger, semantics⟩
 
 /-- Checked arity shift is a full-model cylindrification equivalence. -/
 theorem arity_shift_sound
