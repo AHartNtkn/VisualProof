@@ -446,6 +446,17 @@ theorem directAppliedArguments_append
           simp only [ItemSeq.append, directAppliedArguments]
           exact tailExact
 
+/-- Intrinsic wire renaming distributes over ordered item append. -/
+theorem ItemSeq.renameWires_append
+    (rho : WireRenaming source target) :
+    ∀ (left right : ItemSeq definitions source),
+      (left.append right).renameWires rho =
+        (left.renameWires rho).append (right.renameWires rho)
+  | .nil, right => rfl
+  | .cons head tail, right => by
+      simp only [ItemSeq.append, ItemSeq.renameWires]
+      rw [ItemSeq.renameWires_append rho tail right]
+
 /-- A compiled child-region sequence consists only of cut items, so it
 contributes no application hole at its parent region. -/
 theorem directAppliedArguments_compileChildrenWith_eq_nil
@@ -476,6 +487,39 @@ theorem directAppliedArguments_compileChildrenWith_eq_nil
                   simpa [childCompiled, tailCompiled] using compiled)).symm
               subst items
               simpa [directAppliedArguments] using induction rest tailCompiled
+
+/-- Renaming a compiled child-region sequence still contributes no direct
+application hole at its parent region. -/
+theorem directAppliedArguments_rename_compileChildrenWith_eq_nil
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments))
+    (children : List diagram.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled :
+      ConcreteElaboration.compileChildrenWith? definitions diagram recurse
+          context children = some items) :
+    directAppliedArguments head (items.renameWires rho) = [] := by
+  induction children generalizing items with
+  | nil =>
+      simp [ConcreteElaboration.compileChildrenWith?] at compiled
+      subst items
+      rfl
+  | cons child tail induction =>
+      simp only [ConcreteElaboration.compileChildrenWith?] at compiled
+      cases childCompiled : recurse child context with
+      | none => simp [childCompiled] at compiled
+      | some body =>
+          cases tailCompiled :
+              ConcreteElaboration.compileChildrenWith? definitions diagram
+                recurse context tail with
+          | none => simp [childCompiled, tailCompiled] at compiled
+          | some rest =>
+              have itemsExact : items = .cons (.cut body) rest := by
+                exact (Option.some.inj (by
+                  simpa [childCompiled, tailCompiled] using compiled)).symm
+              subst items
+              simpa [ItemSeq.renameWires, Item.renameWires,
+                directAppliedArguments] using induction rest tailCompiled
 
 /-- Compile and classify one concrete node as a direct application of the
 selected intrinsic head. -/
