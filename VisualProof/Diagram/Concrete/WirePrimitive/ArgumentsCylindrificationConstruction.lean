@@ -1008,6 +1008,25 @@ theorem LocalCylindricalFrame.targetReducedContext_sigs
       (result.checked.val.wires result.targetWire).scope)
     frame.targetRemoval
 
+/-- Concrete target-reduced identifiers are the mapped retained source block
+followed by the exact construction-owned fresh block at the acted scope. -/
+theorem LocalCylindricalFrame.targetReducedContext_ids
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.targetReducedContext.ids =
+      frame.mappedSourceReducedContext.ids ++
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source (source.val.wires wire).scope).map
+              result.targetLocalWire := by
+  exact frame.targetReducedIds_shape sourceArguments newArgument result
+    accepted
+
 /-- The reduced source-local context and its mapped target image form a
 genuine retained context; the acted relation head is the only removed source
 wire in an arity shift. -/

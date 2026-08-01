@@ -200,6 +200,69 @@ theorem LocalCylindricalFrame.targetFrameNormalization_outer
   normalizeVisible_outer frame.targetRemoval
     frame.context.targetVisibleExact localOuterRenaming localTargetHead value
 
+/-- Root cylindrification preserves the common normalized outer spine
+exactly; all binder growth is confined to the local reduced block. -/
+theorem LocalCylindricalFrame.frameNormalization_outer_commutes
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.context.siteOuter signature) :
+    (frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted).embed (fun {_} outerValue => outerValue)
+        (frame.sourceFrameNormalization
+          (frame.context.sourceVisibleExact.symm ▸
+            Var.appendRight
+              (ContentAlignment.localSignatures source.val
+                (source.val.wires wire).scope)
+              value)) =
+      frame.targetFrameNormalization
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendRight
+            (ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope)
+            value) := by
+  rw [frame.sourceFrameNormalization_outer,
+    frame.targetFrameNormalization_outer]
+  exact BoundCylindrification.embed_appendRight _ _ _
+
+/-- Each retained local source ordinal is carried to the corresponding
+construction-owned target ordinal before both frames expose the same outer
+spine. -/
+theorem LocalCylindricalFrame.frameNormalization_retained_commutes
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (value : Var frame.sourceReduced signature) :
+    let bounds :=
+      frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted
+    bounds.embed (fun {_} outerValue => outerValue)
+        (frame.sourceFrameNormalization
+          (frame.context.sourceVisibleExact.symm ▸
+            Var.appendLeft (frame.sourceRemoval.retain value)
+              frame.context.siteOuter)) =
+      frame.targetFrameNormalization
+        (frame.context.targetVisibleExact.symm ▸
+          Var.appendLeft
+            (frame.targetRemoval.retain (bounds.embedLocal value))
+            frame.context.siteOuter) := by
+  dsimp only
+  rw [frame.sourceFrameNormalization_retained,
+    frame.targetFrameNormalization_retained]
+  exact BoundCylindrification.embed_appendLeft _ _ _
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled

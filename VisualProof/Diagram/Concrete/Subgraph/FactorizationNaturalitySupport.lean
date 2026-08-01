@@ -29,6 +29,68 @@ def appendLeftIds
   | _ :: tail, _, .there value =>
       .there (appendLeftIds diagram rightIds (leftIds := tail) value)
 
+private def mapAppendSigsExact
+    (diagram : ConcreteDiagram definitionCount) :
+    (leftIds rightIds : List diagram.WireId) →
+      (leftIds ++ rightIds).map (fun wire => (diagram.wires wire).sig) =
+        leftIds.map (fun wire => (diagram.wires wire).sig) ++
+          rightIds.map (fun wire => (diagram.wires wire).sig)
+  | [], _ => rfl
+  | head :: tail, rightIds =>
+      congrArg (List.cons (diagram.wires head).sig)
+        (mapAppendSigsExact diagram tail rightIds)
+
+private theorem castVar_cons_here
+    (same : left = right) :
+    congrArg (List.cons head) same ▸
+        (Var.here : Var (head :: left) head) =
+      (Var.here : Var (head :: right) head) := by
+  cases same
+  rfl
+
+private theorem castVar_cons_there
+    (same : left = right)
+    (value : Var left signature) :
+    congrArg (List.cons head) same ▸
+        (Var.there value : Var (head :: left) signature) =
+      (Var.there (same ▸ value) : Var (head :: right) signature) := by
+  cases same
+  rfl
+
+/-- Identifier-level left embedding is exactly ordinary typed left embedding
+after reindexing the mapped append equality. -/
+theorem appendLeftIds_reindex
+    (diagram : ConcreteDiagram definitionCount)
+    (leftIds rightIds : List diagram.WireId)
+    {sig : Sig}
+    (value :
+      Var (leftIds.map fun wire => (diagram.wires wire).sig) sig) :
+    mapAppendSigsExact diagram leftIds rightIds ▸
+        (appendLeftIds diagram rightIds value) =
+      Var.appendLeft value
+        (rightIds.map fun wire => (diagram.wires wire).sig) := by
+  induction leftIds with
+  | nil => nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here =>
+          exact castVar_cons_here
+            (mapAppendSigsExact diagram tail rightIds)
+      | there value =>
+          change
+            congrArg (List.cons (diagram.wires head).sig)
+                (mapAppendSigsExact diagram tail rightIds) ▸
+                Var.there (appendLeftIds diagram rightIds value) =
+              Var.there (Var.appendLeft value
+                (rightIds.map fun wire => (diagram.wires wire).sig))
+          calc
+            _ = Var.there
+                  (mapAppendSigsExact diagram tail rightIds ▸
+                    appendLeftIds diagram rightIds value) :=
+              castVar_cons_there
+                (mapAppendSigsExact diagram tail rightIds) _
+            _ = _ := congrArg Var.there (induction value)
+
 def castPacked
     (same : source = target) :
     PackedVar source → PackedVar target
