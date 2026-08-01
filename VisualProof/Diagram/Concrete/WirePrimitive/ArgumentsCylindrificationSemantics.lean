@@ -241,6 +241,27 @@ def appendFresh (fixedSignature : Sig) :
   | signature :: rest, count =>
       .retained signature (appendFresh fixedSignature rest count)
 
+/-- Typed ordinal in a homogeneous binder block. -/
+def repeatedVar (signature : Sig) :
+    (count : Nat) →
+      Fin count → Var (List.replicate count signature) signature
+  | 0 => Fin.elim0
+  | count + 1 => fun index =>
+      Fin.cases .here
+        (fun tail => .there (repeatedVar signature count tail)) index
+
+/-- Canonical target position of a retained binder when a fresh suffix is
+appended after the complete source binder block. -/
+def appendFreshRetained (fixedSignature : Sig) (count : Nat) :
+    {smaller : List Sig} →
+      Var smaller signature →
+        Var
+          ((smaller ++ List.replicate count fixedSignature) ++ outer)
+          signature
+  | _ :: _, .here => .here
+  | _ :: _, .there tail =>
+      .there (appendFreshRetained fixedSignature count tail)
+
 def count
     (_ :
       BoundCylindrification fixedSignature smaller larger freshCount) :
@@ -369,6 +390,53 @@ def freshVar
         Fin.cases .here
           (fun tail => .there (rest.freshVar outer tail))
           index
+
+/-- `appendFresh` retains every source-local variable at its exact typed
+ordinal, independently of signatures in the fresh suffix. -/
+theorem appendFresh_embed_local
+    (fixedSignature : Sig)
+    (smaller : List Sig)
+    (count : Nat)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (value : Var smaller signature) :
+    (appendFresh fixedSignature smaller count).embed outer
+        (Var.appendLeft value smallerOuter) =
+      appendFreshRetained (outer := largerOuter)
+        fixedSignature count value := by
+  induction value with
+  | here => rfl
+  | there tail induction =>
+      simp only [appendFresh, embed, WireRenaming.lift, Var.appendLeft,
+        appendFreshRetained]
+      exact congrArg Var.there induction
+
+/-- `appendFresh` enumerates fresh variables by their exact typed ordinal in
+the appended suffix. -/
+theorem appendFresh_freshVar
+    (fixedSignature : Sig)
+    (smaller : List Sig)
+    (count : Nat)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (index : Fin count) :
+    (appendFresh fixedSignature smaller count).freshVar outer index =
+      Var.appendLeft
+        (Var.appendRight smaller
+          (repeatedVar fixedSignature count index))
+        largerOuter := by
+  induction smaller with
+  | nil =>
+      simp only [appendFresh, Var.appendRight]
+      induction count with
+      | zero => exact Fin.elim0 index
+      | succ count induction =>
+          refine Fin.cases ?_ (fun tail => ?_) index
+          · rfl
+          · simp only [freshSuffix, freshVar, Fin.cases_succ, repeatedVar,
+              Var.appendLeft]
+            exact congrArg Var.there (induction tail)
+  | cons head tail induction =>
+      simp only [appendFresh, freshVar, Var.appendRight, Var.appendLeft]
+      exact congrArg Var.there induction
 
 /-- Forget the fresh values while retaining every shared binder value. -/
 def projectValues
