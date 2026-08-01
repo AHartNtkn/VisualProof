@@ -1262,6 +1262,116 @@ theorem LocalCylindricalFrame.compileTargetAppliedSite?_complete
     exact nodeCompiled
   exact ⟨head, arguments, nodeCompiledExact, headExact, argumentsExact⟩
 
+/-- A compiled target atom whose concrete head owner is the replacement wire
+normalizes to the construction's distinguished target-head slot. -/
+theorem LocalCylindricalFrame.targetFrameNormalization_of_head_origin
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    {result : ArgumentResult source wire}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (head : Var frame.targetScope.frame.visible.sigs
+      (.rel result.targetArguments))
+    (headOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids head = result.targetWire) :
+    frame.targetFrameNormalization head =
+      Var.appendRight frame.targetReduced localTargetHead := by
+  let extendedHead :
+      Var (pair.targetSiteOuter.extend
+        (result.checked.val.wires result.targetWire).scope).sigs
+        (.rel result.targetArguments) :=
+    (ConcreteElaboration.WireContext.sigs_extend pair.targetSiteOuter
+        (result.checked.val.wires result.targetWire).scope).symm ▸
+      Var.appendLeft frame.targetHead pair.targetSiteOuter.sigs
+  let canonical : Var frame.targetScope.frame.visible.sigs
+      (.rel result.targetArguments) :=
+    congrArg ConcreteElaboration.WireContext.sigs
+        pair.targetVisibleContextExact.symm ▸ extendedHead
+  have canonicalOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids canonical = result.targetWire := by
+    unfold canonical
+    rw [origin_cast_context result.checked.val
+      pair.targetVisibleContextExact.symm]
+    exact (origin_extend_appendLeft result.checked.val pair.targetSiteOuter
+      (result.checked.val.wires result.targetWire).scope
+      frame.targetHead).trans frame.targetHead_origin
+  have headExact : head = canonical :=
+    InsertionCompilation.NaturalityInternal.origin_injective
+      result.checked.val frame.targetScope.frame.visible.ids
+      (siteVisibleNodup frame.targetScope)
+      (headOrigin.trans canonicalOrigin.symm)
+  subst head
+  have outerExact :
+      frame.context.siteOuter = pair.targetSiteOuter.sigs := by
+    have appended :
+        ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope ++
+              frame.context.siteOuter =
+          ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope ++
+              pair.siteOuter :=
+      frame.context.targetVisibleExact.symm.trans pair.targetVisibleExact
+    have siteOuterExact : frame.context.siteOuter = pair.siteOuter :=
+      List.append_cancel_left appended
+    exact siteOuterExact.trans
+      (pair.siteOuter_exact.trans pair.siteOuterRetained.sigs_exact.symm)
+  have canonicalExact : canonical =
+      frame.context.targetVisibleExact.symm ▸
+        Var.appendLeft frame.targetRemoval.head frame.context.siteOuter := by
+    let raw : Var
+        (ContentAlignment.localSignatures result.checked.val
+            (result.checked.val.wires result.targetWire).scope ++
+          pair.targetSiteOuter.sigs) (.rel result.targetArguments) :=
+      Var.appendLeft frame.targetHead pair.targetSiteOuter.sigs
+    let extendExact :
+        (pair.targetSiteOuter.extend
+          (result.checked.val.wires result.targetWire).scope).sigs =
+            ContentAlignment.localSignatures result.checked.val
+                (result.checked.val.wires result.targetWire).scope ++
+              pair.targetSiteOuter.sigs :=
+      ConcreteElaboration.WireContext.sigs_extend pair.targetSiteOuter
+        (result.checked.val.wires result.targetWire).scope
+    let visibleExact := congrArg ConcreteElaboration.WireContext.sigs
+      pair.targetVisibleContextExact
+    let outerTransport :
+        ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope ++
+              pair.targetSiteOuter.sigs =
+          ContentAlignment.localSignatures result.checked.val
+              (result.checked.val.wires result.targetWire).scope ++
+              frame.context.siteOuter :=
+      congrArg (fun outer =>
+        ContentAlignment.localSignatures result.checked.val
+          (result.checked.val.wires result.targetWire).scope ++ outer)
+        outerExact.symm
+    let canonicalPath := extendExact.symm.trans visibleExact.symm
+    let contextPath := outerTransport.trans
+      frame.context.targetVisibleExact.symm
+    have pathExact : canonicalPath = contextPath := Subsingleton.elim _ _
+    have rawTransport : outerTransport ▸ raw =
+        Var.appendLeft frame.targetHead frame.context.siteOuter := by
+      exact cast_appendLeft_outer outerExact.symm frame.targetHead
+    calc
+      canonical = canonicalPath ▸ raw := by
+        unfold canonical extendedHead canonicalPath visibleExact extendExact raw
+        exact (cast_through_middle _ _ _ _).symm
+      _ = contextPath ▸ raw := by rw [pathExact]
+      _ = frame.context.targetVisibleExact.symm ▸
+          (outerTransport ▸ raw) :=
+        cast_through_middle _ _ _ _
+      _ = frame.context.targetVisibleExact.symm ▸
+          Var.appendLeft frame.targetHead frame.context.siteOuter := by
+        rw [rawTransport]
+      _ = frame.context.targetVisibleExact.symm ▸
+          Var.appendLeft frame.targetRemoval.head frame.context.siteOuter := by
+        rw [frame.targetRemoval_head]
+  rw [canonicalExact]
+  exact frame.targetFrameNormalization_head
+
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
 exhaustiveness, while true outer owners remain in the paired outer spine. -/
