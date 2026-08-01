@@ -97,6 +97,20 @@ theorem recursiveVariableOrigins_exclude_relation_head
   rw [sourceSignature] at signatureMember
   exact recursiveRelationSignature_not_mem sourceArguments signatureMember
 
+private theorem recursiveRoot_classifier_at_aligned_index
+    (values : List α)
+    (nodes : List β)
+    (classify : β → Option α)
+    (aligned : values.map some = nodes.map classify)
+    (valuesLength : values.length = count)
+    (nodesLength : nodes.length = count)
+    (index : Fin count) :
+    classify (nodes.get (Fin.cast nodesLength.symm index)) =
+      some (values.get (Fin.cast valuesLength.symm index)) := by
+  have selected := get_of_list_eq aligned
+    (Fin.cast (by simp [nodesLength]) index)
+  simpa using selected.symm
+
 theorem recursiveExtendedNormalization_cases
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
