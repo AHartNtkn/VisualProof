@@ -1173,17 +1173,6 @@ private def tuples (length : Nat) (values : List α) : List (List α) :=
       values.flatMap fun head =>
         (tuples length values).map (head :: ·)
 
-private def insertEverywhere (value : α) : List α → List (List α)
-  | [] => [[value]]
-  | head :: tail =>
-      (value :: head :: tail) ::
-        (insertEverywhere value tail).map (head :: ·)
-
-private def permutations : List α → List (List α)
-  | [] => [[]]
-  | head :: tail =>
-      (permutations tail).flatMap (insertEverywhere head)
-
 private structure InverseStepRun
     (orientation : Orientation)
     (real planned : CheckedDiagram definitions) where
@@ -1268,47 +1257,6 @@ private def refAbstractCandidates
       | .error _ => none
       | .ok applied => some (.refAbstract nodes scope applied)
 
-private def argDropCandidates
-    (real : CheckedDiagram definitions)
-    (position : Nat)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.filterMap fun wire =>
-    match applyArgDrop real wire position orientation with
-    | .error _ => none
-    | .ok applied => some (.argDrop wire position applied)
-
-private def argExtendCandidates
-    (real : CheckedDiagram definitions)
-    (position : Nat)
-    (newArgument : Sig)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    (tuples (real.val.wires wire).endpoints.length
-        real.val.wiresList).filterMap fun attachments =>
-      match
-          applyArgExtend real wire position newArgument attachments orientation
-      with
-      | .error _ => none
-      | .ok applied =>
-          some
-            (.argExtend wire position newArgument attachments applied)
-
-private def argPermuteCandidates
-    (real : CheckedDiagram definitions)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    match (real.val.wires wire).sig with
-    | .iota => []
-    | .rel arguments =>
-        (permutations (List.range arguments.length)).filterMap
-          fun permutation =>
-            match applyArgPermute real wire permutation with
-            | .error _ => none
-            | .ok applied => some (.argPermute wire permutation applied)
-
 private def inverseCandidates
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
@@ -1334,20 +1282,11 @@ private def inverseCandidates
   | .vacuousIntro .. => throw .malformedResidual
   | .arityShift .. => throw .malformedResidual
   | .arityUnshift .. => throw .malformedResidual
-  | .argPermute .. => pure (argPermuteCandidates real orientation)
+  | .argPermute .. => throw .malformedResidual
   | .argDuplicate .. => throw .malformedResidual
   | .argContract .. => throw .malformedResidual
-  | .argDrop wire position _ =>
-      match (planned.val.wires wire).sig with
-      | .iota => throw .malformedResidual
-      | .rel arguments =>
-          match arguments[position]? with
-          | none => throw .malformedResidual
-          | some signature =>
-              pure
-                (argExtendCandidates real position signature orientation)
-  | .argExtend _ position _ _ _ =>
-      pure (argDropCandidates real position orientation)
+  | .argDrop .. => throw .malformedResidual
+  | .argExtend .. => throw .malformedResidual
   | .applyFormal .. =>
       pure (abstractFormalCandidates real orientation)
   | .abstractFormal .. => throw .malformedResidual
@@ -1357,6 +1296,11 @@ private def inverseCandidates
   | .refLeaf .. =>
       pure (refAbstractCandidates real orientation)
   | .refAbstract .. => throw .malformedResidual
+
+/-- Positional inverse of a checker-accepted permutation.  Each original
+position is sent to its unique index in the forward permutation. -/
+private def inversePermutation (permutation : List Nat) : List Nat :=
+  (List.range permutation.length).map permutation.idxOf
 
 private def invertStep
     {planned : CheckedDiagram definitions}
@@ -1390,6 +1334,51 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .arityUnshift inverseWire inversePosition inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .argPermute _ permutation applied => do
+      let inverseWire := targetIso.wires.symm applied.targetWire
+      let inverse := inversePermutation permutation
+      let inverseApplied ←
+        (applyArgPermute real inverseWire inverse).mapError
+          .argumentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .argPermute inverseWire inverse inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .argDrop wire position applied => do
+      let signature ←
+        match (planned.val.wires wire).sig with
+        | .iota => throw .malformedResidual
+        | .rel arguments =>
+            requireOption .malformedResidual arguments[position]?
+      let inverseWire := targetIso.wires.symm applied.targetWire
+      let inverseAttachments :=
+        applied.targetAttachments.map targetIso.wires.symm
+      let inverseApplied ←
+        (applyArgExtend real inverseWire position signature
+          inverseAttachments orientation).mapError .argumentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .argExtend inverseWire position signature inverseAttachments
+          inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .argExtend _ position _ _ applied => do
+      let inverseWire := targetIso.wires.symm applied.targetWire
+      let inverseApplied ←
+        (applyArgDrop real inverseWire position orientation).mapError
+          .argumentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .argDrop inverseWire position inverseApplied
       let normalizedIso ←
         requireOption .redundancyMismatch <|
           ConcreteIsoSearch.findConcreteIso?
