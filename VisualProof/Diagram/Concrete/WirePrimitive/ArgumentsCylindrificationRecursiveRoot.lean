@@ -699,6 +699,110 @@ theorem LocalCylindricalFrame.rootTargetOrdinary_eq_retained
   · intro node nodeAt
     exact frame.targetClassifier_isSome result pair node nodeAt
 
+/-- Ordered child compilations can be paired after independent source and
+target normalization.  Unlike `recursiveChildrenReceipts`, this theorem does
+not require a concrete action across the changed relation head. -/
+theorem recursiveNormalizedChildrenReceipts
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceMap : WireRenaming sourceContext.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (embedding : WireRenaming normalizedSource normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel smallerArguments))
+    (targetHead : Var normalizedTarget (.rel largerArguments))
+    (sourceRecurse : (region : source.val.RegionId) →
+      (context : ConcreteElaboration.WireContext source.val) →
+      Option (Region definitions context.sigs))
+    (targetRecurse : (region : result.checked.val.RegionId) →
+      (context : ConcreteElaboration.WireContext result.checked.val) →
+      Option (Region definitions context.sigs))
+    (children : List source.val.RegionId)
+    (buildChild : ∀ (child : source.val.RegionId)
+      (sourceBody : Region definitions sourceContext.sigs)
+      (targetBody : Region definitions targetContext.sigs),
+      child ∈ children →
+      sourceRecurse child sourceContext = some sourceBody →
+      targetRecurse (result.regionEquiv child) targetContext =
+        some targetBody →
+      ∃ shape : CylindricalShape definitions insertion
+          normalizedSource normalizedTarget,
+        shape.consistent ∧
+        (∀ {signature : Sig} (value : Var normalizedSource signature),
+          shape.embedding value = embedding value) ∧
+        shape.smaller = UniformIntrinsicRegion.abstractApplied
+          sourceHead (sourceBody.renameWires sourceMap) ∧
+        shape.larger = UniformIntrinsicRegion.abstractApplied
+          targetHead (targetBody.renameWires targetMap)) :
+    ∀ (sourceItems : ItemSeq definitions sourceContext.sigs)
+      (targetItems : ItemSeq definitions targetContext.sigs),
+      ConcreteElaboration.compileChildrenWith? definitions source.val
+          sourceRecurse sourceContext children = some sourceItems →
+      ConcreteElaboration.compileChildrenWith? definitions result.checked.val
+          targetRecurse targetContext (children.map result.regionEquiv) =
+        some targetItems →
+      ∃ shapes : List (CylindricalShape definitions insertion
+          normalizedSource normalizedTarget),
+        (∀ shape, shape ∈ shapes → shape.consistent ∧
+          ∀ {signature : Sig} (value : Var normalizedSource signature),
+            shape.embedding value = embedding value) ∧
+        UniformIntrinsicRegion.abstractAppliedItems sourceHead
+            (sourceItems.renameWires sourceMap) =
+          .mk (recursiveChildSmallerItems insertion shapes) ⟨[]⟩ ∧
+        UniformIntrinsicRegion.abstractAppliedItems targetHead
+            (targetItems.renameWires targetMap) =
+          .mk (recursiveChildLargerItems insertion shapes) ⟨[]⟩ := by
+  intro sourceItems targetItems sourceCompiled targetCompiled
+  induction children generalizing sourceItems targetItems with
+  | nil =>
+      simp [ConcreteElaboration.compileChildrenWith?] at sourceCompiled targetCompiled
+      subst sourceItems
+      subst targetItems
+      exact ⟨[], by simp, rfl, rfl⟩
+  | cons child tail induction =>
+      obtain ⟨sourceBody, sourceRest, sourceBodyCompiled,
+          sourceRestCompiled, sourceItemsExact⟩ :=
+        recursiveCompileChildrenCons definitions source.val sourceRecurse
+          sourceContext child tail sourceItems sourceCompiled
+      obtain ⟨targetBody, targetRest, targetBodyCompiled,
+          targetRestCompiled, targetItemsExact⟩ :=
+        recursiveCompileChildrenCons definitions result.checked.val
+          targetRecurse targetContext (result.regionEquiv child)
+          (tail.map result.regionEquiv) targetItems (by
+            simpa using targetCompiled)
+      obtain ⟨childShape, childConsistent, childEmbedding, childSmaller,
+          childLarger⟩ :=
+        buildChild child sourceBody targetBody (by simp)
+          sourceBodyCompiled targetBodyCompiled
+      obtain ⟨tailShapes, tailValid, tailSmaller, tailLarger⟩ :=
+        induction
+          (fun candidate candidateSource candidateTarget member =>
+            buildChild candidate candidateSource candidateTarget
+              (List.mem_cons_of_mem child member))
+          sourceRest targetRest sourceRestCompiled targetRestCompiled
+      refine ⟨childShape :: tailShapes, ?_, ?_, ?_⟩
+      · intro candidate member
+        simp only [List.mem_cons] at member
+        rcases member with rfl | tailMember
+        · exact ⟨childConsistent, childEmbedding⟩
+        · exact tailValid candidate tailMember
+      · subst sourceItems
+        simp only [ItemSeq.renameWires, Item.renameWires,
+          UniformIntrinsicRegion.abstractAppliedItems,
+          recursiveChildSmallerItems]
+        rw [← childSmaller, tailSmaller]
+        rfl
+      · subst targetItems
+        simp only [ItemSeq.renameWires, Item.renameWires,
+          UniformIntrinsicRegion.abstractAppliedItems,
+          recursiveChildLargerItems]
+        rw [← childLarger, tailLarger]
+        rfl
+
 /-- Once ordered child compilations have been lifted to normalized recursive
 cut receipts, the retained root leaves and exact root holes assemble the
 complete identity-outer cylindrical shape. -/
