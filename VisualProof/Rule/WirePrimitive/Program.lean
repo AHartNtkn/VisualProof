@@ -28,6 +28,22 @@ compiler.  `orientation` is common to the entire compiled action.
 inductive CompiledPrimitiveStep
     (orientation : Orientation) :
     CheckedDiagram definitions → Type
+  | identityInsert
+      {base : CheckedDiagram definitions}
+      {fragment : CheckedOpenDiagram definitions}
+      (input : StructuralInsertionInput base fragment)
+      (orientationExact : input.orientation = orientation)
+      (checked : StructuralInsertionReceipt input)
+      (tagExact : checked.tag = .identityInsert) :
+      CompiledPrimitiveStep orientation base
+  | identityErase
+      {base : CheckedDiagram definitions}
+      {fragment : CheckedOpenDiagram definitions}
+      (input : StructuralErasureInput base fragment)
+      (orientationExact : input.orientation = orientation)
+      (checked : StructuralErasureReceipt input)
+      (tagExact : checked.insertedTag = .identityInsert) :
+      CompiledPrimitiveStep orientation checked.source
   | wireSever
       {source : CheckedDiagram definitions}
       (input : WireSeverInput source)
@@ -176,6 +192,8 @@ def target :
       CompiledPrimitiveStep orientation source →
         CheckedDiagram definitions
   | _, .wireSever _ _ applied => applied.target
+  | _, .identityInsert _ _ checked _ => checked.target
+  | _, .identityErase _ _ checked _ => checked.target
   | _, .wireJoin _ _ applied => applied.target
   | _, .cutWrap _ applied => applied.target
   | _, .cutAbsorb _ applied => applied.target
@@ -204,6 +222,8 @@ def tag :
     {source : CheckedDiagram definitions} →
       CompiledPrimitiveStep orientation source → StepTag
   | _, .wireSever .. => .wireSever
+  | _, .identityInsert .. => .identityInsert
+  | _, .identityErase .. => .erasure
   | _, .wireJoin .. => .wireJoin
   | _, .cutWrap .. => .cutWrap
   | _, .cutAbsorb .. => .cutAbsorb

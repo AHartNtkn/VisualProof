@@ -28,6 +28,12 @@ theorem sound
       (denoteChecked model.toPreModel definitionEnv source)
       (denoteChecked model.toPreModel definitionEnv step.target) := by
   cases step with
+  | identityInsert input orientationExact checked _ =>
+      cases orientationExact
+      exact checked.sound model.toPreModel definitionEnv
+  | identityErase input orientationExact checked _ =>
+      cases orientationExact
+      exact checked.sound model.toPreModel definitionEnv
   | wireSever input orientationExact applied =>
       subst orientationExact
       exact wire_sever_sound input applied model.toPreModel definitionEnv

@@ -1440,6 +1440,8 @@ private def inverseCandidates
     Except CompilerError
       (List (CompiledPrimitiveStep orientation real)) :=
   match step with
+  | .identityInsert .. => throw .malformedResidual
+  | .identityErase .. => throw .malformedResidual
   | .wireSever .. => pure (wireJoinCandidates real orientation)
   | .wireJoin .. => pure (wireSeverCandidates real orientation)
   | .cutWrap .. => pure (cutAbsorbCandidates real orientation)

@@ -46,6 +46,43 @@ inductive StructuralError
   | backwardErasureRequiresNegative
   deriving Repr, DecidableEq
 
+/-- Canonical one-identity open fragment with one boundary wire per storage
+port.  Repeated host attachments are represented by the insertion target,
+not by collapsing this fragment's ordered port boundary. -/
+def identityFragmentRaw
+    (definitionCount : Nat) (signature : Sig) (arity : Nat) :
+    OpenConcreteDiagram definitionCount where
+  diagram :=
+    { regionCount := 1
+      nodeCount := 1
+      wireCount := arity
+      root := ⟨0, by omega⟩
+      regions := fun _ => .sheet
+      nodes := fun _ => .identity ⟨0, by omega⟩ signature arity
+      wires := fun wire =>
+        { sig := signature
+          scope := ⟨0, by omega⟩
+          endpoints := [⟨⟨0, by omega⟩, .identity wire.val⟩] } }
+  boundary := Data.Finite.allFin arity
+
+/-- Validate the canonical identity fragment through the ordinary concrete
+well-formedness authority.  This is deterministic construction, not graph or
+inverse search. -/
+def checkIdentityFragment
+    (definitions : List (List Sig)) (signature : Sig) (arity : Nat) :
+    Except WFError (CheckedOpenDiagram definitions) := by
+  let raw := identityFragmentRaw definitions.length signature arity
+  match accepted : ConcreteDiagram.checkWellFormed definitions raw.diagram with
+  | .error error => exact .error error
+  | .ok checked =>
+      have generated : checked.val = raw.diagram :=
+        ConcreteDiagram.checkWellFormed_preserves_input accepted
+      exact .ok
+        ⟨raw,
+          { diagram := generated ▸ checked.property
+            boundary_root_scoped := by
+              simp [raw, identityFragmentRaw] }⟩
+
 /--
 Concrete input for atom/ref/identity insertion.  Boundary targets are positional:
 repeated positions remain repeated and ordered.
@@ -373,6 +410,14 @@ def checkStructuralErasure
       exact .error error
 
 namespace StructuralErasureReceipt
+
+/-- The structural constructor removed by this erasure. -/
+def insertedTag
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralErasureInput base fragment}
+    (checked : StructuralErasureReceipt input) : StepTag :=
+  checked.inserted.tag
 
 def tag
     {base : CheckedDiagram definitions}
