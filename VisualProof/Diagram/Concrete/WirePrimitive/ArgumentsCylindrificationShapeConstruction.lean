@@ -708,6 +708,47 @@ theorem LocalCylindricalFrame.rootBounds_retainedLocal_origin
     newArgument result accepted value]
   rw [frame.sourceReducedContext_origin_retain]
 
+/-- The normalized shared outer spine is exactly the concrete source outer
+context selected by the paired frame receipt. -/
+theorem LocalCylindricalFrame.sourceSiteOuter_sigs_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    frame.context.siteOuter = pair.sourceSiteOuter.sigs := by
+  have appended :
+      ContentAlignment.localSignatures source.val
+            (source.val.wires wire).scope ++ frame.context.siteOuter =
+        ContentAlignment.localSignatures source.val
+            (source.val.wires wire).scope ++ pair.siteOuter :=
+    frame.context.sourceVisibleExact.symm.trans pair.sourceVisibleExact
+  exact (List.append_cancel_left appended).trans pair.siteOuter_exact
+
+/-- The same normalized outer spine is exactly the concrete mapped target
+outer context, including ordered signature preservation. -/
+theorem LocalCylindricalFrame.targetSiteOuter_sigs_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    frame.context.siteOuter = pair.targetSiteOuter.sigs := by
+  have appended :
+      ContentAlignment.localSignatures result.checked.val
+            (result.checked.val.wires result.targetWire).scope ++
+            frame.context.siteOuter =
+        ContentAlignment.localSignatures result.checked.val
+            (result.checked.val.wires result.targetWire).scope ++
+            pair.siteOuter :=
+    frame.context.targetVisibleExact.symm.trans pair.targetVisibleExact
+  exact (List.append_cancel_left appended).trans
+    (pair.siteOuter_exact.trans pair.siteOuterRetained.sigs_exact.symm)
+
 /-- Concrete acted-scope context containing only retained source locals and
 the construction-owned outer spine. -/
 def LocalCylindricalFrame.sourceRetainedVisibleContext
