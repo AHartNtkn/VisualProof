@@ -3473,6 +3473,44 @@ theorem transportWire_eq_wireEquiv
     ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly
   rfl
 
+/-- Pushing an endpoint of a retained node through argument drop preserves
+its port and incidence on the exact transported wire. -/
+theorem retainedEndpointImage_mem
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (sourceWire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (incident : endpoint ∈ (source.val.wires sourceWire).endpoints)
+    (retained : endpoint.node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.sourceSites) :
+    (⟨applied.nodeEquiv endpoint.node, endpoint.port⟩ :
+      CEndpoint applied.target.val.nodeCount) ∈
+      (applied.target.val.wires
+        (applied.wireEquiv sourceWire)).endpoints := by
+  have sourceWireDifferent : sourceWire ≠ wire := by
+    intro same
+    subst sourceWire
+    have removed : wire ∈ applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simp
+    exact retained (applied.result.sourceRemovedExhausted wire removed
+      endpoint incident)
+  have sourceRetained : sourceWire ∉
+      applied.result.sourceRemovedWires := by
+    rw [applied.source_removed_exact]
+    simpa [sourceWireDifferent]
+  have targetIncident := applied.result.retainedNode_forwardIncident
+    endpoint.node retained endpoint.port sourceWire incident
+  have nodeImage := applied.nodeEquiv_retained endpoint.node retained
+  have wireImage := applied.wireEquiv_retained sourceWire sourceWireDifferent
+  have contextImage := applied.result.contextWireMap_retained sourceWire
+    sourceRetained
+  rw [contextImage, ← wireImage] at targetIncident
+  simpa [nodeImage] using targetIncident
+
 /-- Pulling an endpoint of a retained rebuilt node through argument drop
 preserves its port and recovers incidence on the exact source wire. -/
 theorem retainedEndpointInverse_mem
@@ -4080,6 +4118,47 @@ theorem generatedInserted_endpointOwner
     simp only [same]
     rw [ConcreteWirePrimitive.retainedReplacementWire?_head_none]
     exact applied.result.targetWire_exact.symm
+
+/-- Pushing an endpoint of a retained node through argument extension
+preserves its port and incidence on the exact transported wire. -/
+theorem retainedEndpointImage_mem
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (sourceWire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (incident : endpoint ∈ (source.val.wires sourceWire).endpoints)
+    (retained : endpoint.node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.sourceSites) :
+    (⟨applied.nodeEquiv endpoint.node, endpoint.port⟩ :
+      CEndpoint applied.target.val.nodeCount) ∈
+      (applied.target.val.wires
+        (applied.wireEquiv sourceWire)).endpoints := by
+  have sourceWireDifferent : sourceWire ≠ wire := by
+    intro same
+    subst sourceWire
+    have removed : wire ∈ applied.result.sourceRemovedWires := by
+      rw [applied.source_removed_exact]
+      simp
+    exact retained (applied.result.sourceRemovedExhausted wire removed
+      endpoint incident)
+  have sourceRetained : sourceWire ∉
+      applied.result.sourceRemovedWires := by
+    rw [applied.source_removed_exact]
+    simpa [sourceWireDifferent]
+  have targetIncident := applied.result.retainedNode_forwardIncident
+    endpoint.node retained endpoint.port sourceWire incident
+  have nodeImage := applied.nodeEquiv_retained endpoint.node retained
+  have wireImage := applied.wireEquiv_retained sourceWire sourceWireDifferent
+  have contextImage := applied.result.contextWireMap_retained sourceWire
+    sourceRetained
+  rw [contextImage, ← wireImage] at targetIncident
+  simpa [nodeImage] using targetIncident
 
 /-- Pulling an endpoint of a retained rebuilt node through argument extension
 preserves its port and recovers incidence on the exact source wire. -/
