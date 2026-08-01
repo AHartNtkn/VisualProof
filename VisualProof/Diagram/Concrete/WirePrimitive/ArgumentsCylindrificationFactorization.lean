@@ -14,22 +14,28 @@ universe u
 open WirePrimitive
 open ContentAlignment
 
-private def localOuterRenaming :
+/-- Embed the shared site-outer context beyond the two explicit normalized
+relation-head slots. -/
+def localOuterRenaming :
     WireRenaming outer
       ((.rel sourceArguments) :: (.rel targetArguments) :: outer) :=
   fun {_} value => .there (.there value)
 
-private def localSourceHead :
+/-- Explicit normalized slot for the source relation head. -/
+def localSourceHead :
     Var ((.rel sourceArguments) :: (.rel targetArguments) :: outer)
       (.rel sourceArguments) :=
   .here
 
-private def localTargetHead :
+/-- Explicit normalized slot for the target relation head. -/
+def localTargetHead :
     Var ((.rel sourceArguments) :: (.rel targetArguments) :: outer)
       (.rel targetArguments) :=
   .there .here
 
-private def normalizedArgumentShape
+/-- Normalize one concrete scope-local binder block around an explicit head
+slot before abstracting every uniformly applied occurrence. -/
+def normalizedArgumentShape
     (removal :
       LocalHeadRemoval (.rel arguments) bound reduced)
     (headSlot :
