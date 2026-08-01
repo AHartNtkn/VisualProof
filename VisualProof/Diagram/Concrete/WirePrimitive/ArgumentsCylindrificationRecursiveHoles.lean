@@ -6,6 +6,20 @@ namespace ArgumentsSemantics
 
 open WirePrimitive
 
+private theorem recursive_classifier_at_aligned_index
+    (values : List α)
+    (nodes : List β)
+    (classify : β → Option α)
+    (aligned : values.map some = nodes.map classify)
+    (valuesLength : values.length = count)
+    (nodesLength : nodes.length = count)
+    (index : Fin count) :
+    classify (nodes.get (Fin.cast nodesLength.symm index)) =
+      some (values.get (Fin.cast valuesLength.symm index)) := by
+  have selected := get_of_list_eq aligned
+    (Fin.cast (by simp [nodesLength]) index)
+  simpa using selected.symm
+
 /-- Canonical signature transport from the elaborator's dependent extended
 context to the explicit local-block/outer-block context required by a
 `CylindricalShape.block`. -/
@@ -554,6 +568,67 @@ theorem recursiveTargetRegionHoleValues_alignment
   rw [ArgumentResult.targetSiteNodesAt_exact result region] at aligned
   simpa [List.map_map, Function.comp_def] using aligned
 
+/-- Source and target normalized node bodies expose exactly one hole per
+construction-owned fresh wire at every below-head region. -/
+theorem recursiveRegionHole_lengths
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (region : source.val.RegionId)
+    (sourceItems : ItemSeq definitions (sourceOuter.extend region).sigs)
+    (targetItems : ItemSeq definitions
+      (targetOuter.extend (result.regionImage region)).sigs)
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceOuter.extend region) (source.val.nodesAt region) =
+        some sourceItems)
+    (targetCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (targetOuter.extend (result.regionImage region))
+          (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (sourceNodup : (sourceOuter.extend region).ids.Nodup)
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (sourceHead : Var sourceOuter.sigs (.rel sourceArguments))
+    (targetHead : Var targetOuter.sigs (.rel result.targetArguments))
+    (sourceHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val sourceOuter.ids
+          sourceHead = wire)
+    (targetHeadOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val targetOuter.ids
+          targetHead = result.targetWire) :
+    (recursiveNormalizedNodeShape sourceOuter region sourceHead
+        sourceItems).holeValues.length = (arityFreshAt result region).length ∧
+      (recursiveNormalizedNodeShape targetOuter (result.regionImage region)
+        targetHead targetItems).holeValues.length =
+          (arityFreshAt result region).length := by
+  have sourceAligned := recursiveRegionHoleValues_alignment sourceArguments
+    sourceSignature result.sites sourceOuter region sourceItems sourceCompiled
+    sourceNodup sourceHead sourceHeadOrigin
+  have sourceLength := congrArg List.length sourceAligned
+  simp only [List.length_map] at sourceLength
+  have targetAligned := recursiveTargetRegionHoleValues_alignment result
+    targetOuter region targetItems targetCompiled targetNodup targetHead
+    targetHeadOrigin
+  have targetLength := congrArg List.length targetAligned
+  simp only [List.length_map] at targetLength
+  constructor
+  · exact sourceLength.trans
+      (sourceSiteNodesAt_length_fresh source wire sourceArguments
+        sourceSignature newArgument result accepted region)
+  · exact targetLength.trans
+      (by simpa using
+        (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
+          newArgument result accepted region))
+
 /-- Extending the inherited context action through a below-head region and
 then normalizing is exactly the block embedding applied after source
 normalization. -/
@@ -901,6 +976,209 @@ theorem recursiveNormalizedHole_split_exact_of_origins
     targetOuter outer outerOrigin targetNodup freshIndex sourceValues
     targetValues mappedOrigins insertedOrigin
 
+/-- The ordered source/target hole alignments select the exact site tuples
+needed by the pointwise below-region split theorem. -/
+theorem recursiveRegionHole_split_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (sourceItems : ItemSeq definitions (sourceOuter.extend region).sigs)
+    (targetItems : ItemSeq definitions
+      (targetOuter.extend (result.regionImage region)).sigs)
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceOuter.extend region) (source.val.nodesAt region) =
+        some sourceItems)
+    (targetCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (targetOuter.extend (result.regionImage region))
+          (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (sourceNodup : (sourceOuter.extend region).ids.Nodup)
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (sourceHead : Var sourceOuter.sigs (.rel sourceArguments))
+    (targetHead : Var targetOuter.sigs (.rel result.targetArguments))
+    (sourceHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val sourceOuter.ids
+          sourceHead = wire)
+    (targetHeadOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val targetOuter.ids
+          targetHead = result.targetWire)
+    (index : Fin (arityFreshAt result region).length) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        ((recursiveNormalizedNodeShape targetOuter
+          (result.regionImage region) targetHead targetItems).holeValues.get
+            (Fin.cast
+              (recursiveRegionHole_lengths source wire sourceArguments
+                sourceSignature newArgument result accepted sourceOuter
+                targetOuter region sourceItems targetItems sourceCompiled
+                targetCompiled sourceNodup targetNodup sourceHead targetHead
+                sourceHeadOrigin targetHeadOrigin).2.symm index)) =
+      ⟨(arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).freshVar
+          outer
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted region index),
+        Vars.rename
+          ((arityShift_regionBounds_below source wire sourceArguments
+            sourceSignature newArgument result accepted region notHead).embed
+              outer)
+          ((recursiveNormalizedNodeShape sourceOuter region sourceHead
+            sourceItems).holeValues.get
+              (Fin.cast
+                (recursiveRegionHole_lengths source wire sourceArguments
+                  sourceSignature newArgument result accepted sourceOuter
+                  targetOuter region sourceItems targetItems sourceCompiled
+                  targetCompiled sourceNodup targetNodup sourceHead targetHead
+                  sourceHeadOrigin targetHeadOrigin).1.symm
+                (aritySourceIndex source wire sourceArguments sourceSignature
+                  newArgument result accepted region index)))⟩ := by
+  let freshCount := (arityFreshAt result region).length
+  let sitesAt := aritySitesAt result.sites region
+  have sitesLength := aritySitesAt_length_fresh source wire sourceArguments
+    sourceSignature newArgument result accepted region
+  let sitePosition : Fin sitesAt.length := Fin.cast sitesLength.symm index
+  let site := sitesAt.get sitePosition
+  have siteRegion : (result.sites.sites.get site).region = region :=
+    eq_of_beq (List.mem_filter.mp (List.get_mem sitesAt sitePosition)).2
+  let sourceNodes := sourceSiteNodesAt result.sites region
+  have sourceNodesLength := sourceSiteNodesAt_length_fresh source wire
+    sourceArguments sourceSignature newArgument result accepted region
+  let sourceOrder := aritySourceIndex source wire sourceArguments
+    sourceSignature newArgument result accepted region
+  have sourceNodeExact := aritySourceIndex_spec source wire sourceArguments
+    sourceSignature newArgument result accepted region index
+  have sourceAligned := recursiveRegionHoleValues_alignment sourceArguments
+    sourceSignature result.sites sourceOuter region sourceItems sourceCompiled
+    sourceNodup sourceHead sourceHeadOrigin
+  obtain ⟨sourceValues, sourceClassified, sourceOrigins⟩ :=
+    recursiveRegionClassifier_complete sourceArguments sourceSignature
+      sourceOuter region sourceItems sourceCompiled sourceNodup sourceHead
+      sourceHeadOrigin (result.sites.sites.get site) siteRegion
+  have sourceClassifiedAt := recursive_classifier_at_aligned_index
+    (recursiveNormalizedNodeShape sourceOuter region sourceHead
+      sourceItems).holeValues sourceNodes
+    (recursiveRegionClassifier source sourceOuter region sourceHead)
+    sourceAligned
+    (recursiveRegionHole_lengths source wire sourceArguments sourceSignature
+      newArgument result accepted sourceOuter targetOuter region sourceItems
+      targetItems sourceCompiled targetCompiled sourceNodup targetNodup
+      sourceHead targetHead sourceHeadOrigin targetHeadOrigin).1
+    sourceNodesLength (sourceOrder index)
+  have sourceHoleExact :
+      (recursiveNormalizedNodeShape sourceOuter region sourceHead
+        sourceItems).holeValues.get
+          (Fin.cast
+            (recursiveRegionHole_lengths source wire sourceArguments
+              sourceSignature newArgument result accepted sourceOuter
+              targetOuter region sourceItems targetItems sourceCompiled
+              targetCompiled sourceNodup targetNodup sourceHead targetHead
+              sourceHeadOrigin targetHeadOrigin).1.symm
+            (sourceOrder index)) =
+        Vars.rename (recursiveRegionNormalization sourceOuter region)
+          sourceValues := by
+    rw [sourceNodeExact, sourceClassified] at sourceClassifiedAt
+    exact Option.some.inj sourceClassifiedAt.symm
+  have targetAligned := recursiveTargetRegionHoleValues_alignment result
+    targetOuter region targetItems targetCompiled targetNodup targetHead
+    targetHeadOrigin
+  have targetSiteRegion :
+      (targetAppliedSite result site).region = result.regionImage region := by
+    rw [targetAppliedSite_region, siteRegion]
+  obtain ⟨targetValues, targetClassified, targetOrigins⟩ :=
+    recursiveRegionClassifier_complete result.targetArguments
+      result.targetWire_signature targetOuter (result.regionImage region)
+      targetItems targetCompiled targetNodup targetHead targetHeadOrigin
+      (targetAppliedSite result site) targetSiteRegion
+  have targetClassifiedAt := recursive_classifier_at_aligned_index
+    (recursiveNormalizedNodeShape targetOuter (result.regionImage region)
+      targetHead targetItems).holeValues sitesAt
+    (fun selected => recursiveRegionClassifier result.checked targetOuter
+      (result.regionImage region) targetHead (result.targetNode selected))
+    targetAligned
+    (recursiveRegionHole_lengths source wire sourceArguments sourceSignature
+      newArgument result accepted sourceOuter targetOuter region sourceItems
+      targetItems sourceCompiled targetCompiled sourceNodup targetNodup
+      sourceHead targetHead sourceHeadOrigin targetHeadOrigin).2
+    sitesLength index
+  have targetHoleExact :
+      (recursiveNormalizedNodeShape targetOuter (result.regionImage region)
+        targetHead targetItems).holeValues.get
+          (Fin.cast
+            (recursiveRegionHole_lengths source wire sourceArguments
+              sourceSignature newArgument result accepted sourceOuter
+              targetOuter region sourceItems targetItems sourceCompiled
+              targetCompiled sourceNodup targetNodup sourceHead targetHead
+              sourceHeadOrigin targetHeadOrigin).2.symm index) =
+        Vars.rename
+          (recursiveRegionNormalization targetOuter
+            (result.regionImage region)) targetValues := by
+    change recursiveRegionClassifier result.checked targetOuter
+      (result.regionImage region) targetHead (result.targetNode site) = _
+      at targetClassifiedAt
+    rw [← targetAppliedSite_node result site, targetClassified]
+      at targetClassifiedAt
+    exact Option.some.inj targetClassifiedAt.symm
+  have freshPositionExact := arityFreshIndex_spec source wire sourceArguments
+    sourceSignature newArgument result accepted region index
+  have freshLocalExact :
+      Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted).symm site =
+        (arityFreshAt result region).get
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted region index) := by
+    have transported := congrArg
+      (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+        sourceSignature result.sites newArgument result accepted).symm)
+      freshPositionExact
+    simpa [site, sitePosition, sitesAt] using transported.symm
+  have originsExact :
+      ConcreteElaboration.variableOrigins result.checked.val
+          (targetOuter.extend (result.regionImage region)) targetValues =
+        (ConcreteElaboration.variableOrigins source.val
+          (sourceOuter.extend region) sourceValues).map result.contextWireMap ++
+          [result.targetLocalWire
+            ((arityFreshAt result region).get
+              (arityFreshIndex source wire sourceArguments sourceSignature
+                newArgument result accepted region index))] := by
+    calc
+      _ = (targetAppliedSite result site).arguments := targetOrigins
+      _ = (result.sites.sites.get site).arguments.map
+              result.contextWireMap ++
+            [result.targetLocalWire
+              (Fin.cast (arityShift_localCount_exact source wire
+                sourceArguments sourceSignature result.sites newArgument
+                result accepted).symm site)] :=
+        targetAppliedSite_arguments source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted site
+      _ = _ := by rw [sourceOrigins, freshLocalExact]
+  have splitExact := recursiveNormalizedHole_split_exact_of_origins source wire
+    sourceArguments sourceSignature newArgument result accepted region notHead
+    sourceOuter targetOuter outer outerOrigin targetNodup
+    (arityFreshIndex source wire sourceArguments sourceSignature newArgument
+      result accepted region index) sourceValues targetValues originsExact
+  rw [targetHoleExact, sourceHoleExact]
+  exact splitExact
+
 /-- Assemble a cylindrical-hole receipt from exact ordered lengths, the two
 finite order equivalences, and one pointwise split equation.  Root and
 descendant arity blocks differ only in how they prove that equation. -/
@@ -940,6 +1218,87 @@ noncomputable def cylindricalHolesOfSplit
       ⟨freshOrder.invFun target, freshOrder.right_inv target⟩
     inserted_exact := fun index => congrArg Prod.fst (splitExact index)
     retained_exact := fun index => congrArg Prod.snd (splitExact index) }
+
+/-- Complete checker-owned cylindrical-hole receipt for any proper descendant
+of the acted head region. -/
+noncomputable def recursiveRegionHoles
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (sourceItems : ItemSeq definitions (sourceOuter.extend region).sigs)
+    (targetItems : ItemSeq definitions
+      (targetOuter.extend (result.regionImage region)).sigs)
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceOuter.extend region) (source.val.nodesAt region) =
+        some sourceItems)
+    (targetCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (targetOuter.extend (result.regionImage region))
+          (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (sourceNodup : (sourceOuter.extend region).ids.Nodup)
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (sourceHead : Var sourceOuter.sigs (.rel sourceArguments))
+    (targetHead : Var targetOuter.sigs (.rel result.targetArguments))
+    (sourceHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val sourceOuter.ids
+          sourceHead = wire)
+    (targetHeadOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val targetOuter.ids
+          targetHead = result.targetWire) :
+    CylindricalHoles
+      (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted)
+      (arityShift_regionBounds_below source wire sourceArguments
+        sourceSignature newArgument result accepted region notHead)
+      outer
+      (recursiveNormalizedNodeShape sourceOuter region sourceHead
+        sourceItems).holeValues
+      (recursiveNormalizedNodeShape targetOuter (result.regionImage region)
+        targetHead targetItems).holeValues := by
+  let lengths := recursiveRegionHole_lengths source wire sourceArguments
+    sourceSignature newArgument result accepted sourceOuter targetOuter region
+    sourceItems targetItems sourceCompiled targetCompiled sourceNodup
+    targetNodup sourceHead targetHead sourceHeadOrigin targetHeadOrigin
+  exact cylindricalHolesOfSplit
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+      newArgument result accepted)
+    (arityShift_regionBounds_below source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead)
+    outer
+    (recursiveNormalizedNodeShape sourceOuter region sourceHead
+      sourceItems).holeValues
+    (recursiveNormalizedNodeShape targetOuter (result.regionImage region)
+      targetHead targetItems).holeValues
+    lengths.1 lengths.2
+    (aritySourceIndex source wire sourceArguments sourceSignature newArgument
+      result accepted region)
+    (arityFreshIndex source wire sourceArguments sourceSignature newArgument
+      result accepted region)
+    (recursiveRegionHole_split_exact source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead sourceOuter
+      targetOuter outer outerOrigin sourceItems targetItems sourceCompiled
+      targetCompiled sourceNodup targetNodup sourceHead targetHead
+      sourceHeadOrigin targetHeadOrigin)
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
