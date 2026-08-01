@@ -1158,6 +1158,211 @@ theorem recursiveFinalRegionHole_lengths
       (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
         newArgument result accepted region))⟩
 
+theorem recursiveFinalRegionHole_split_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceItems : ItemSeq definitions sourceContext.sigs)
+    (targetItems : ItemSeq definitions targetContext.sigs)
+    (sourceCompiled : ConcreteElaboration.compileNodes? definitions source.val
+      sourceContext (source.val.nodesAt region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileNodes? definitions
+      result.checked.val targetContext
+      (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (targetNodup : targetContext.ids.Nodup)
+    (bounds : BoundCylindrification newArgument smallerBound largerBound
+      (arityFreshAt result region).length)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (correspondence : RecursiveNormalizationCorrespondence result
+      sourceContext targetContext (smallerBound ++ smallerOuter)
+        (largerBound ++ largerOuter))
+    (embeddingExact : ∀ {signature : Sig}
+      (value : Var (smallerBound ++ smallerOuter) signature),
+      correspondence.embedding value = bounds.embed outer value)
+    (sourceHead : Var (smallerBound ++ smallerOuter)
+      (.rel sourceArguments))
+    (targetHead : Var (largerBound ++ largerOuter)
+      (.rel result.targetArguments))
+    (headNormalization : RecursiveHeadNormalization result sourceArguments
+      sourceContext targetContext correspondence.sourceMap
+      correspondence.targetMap sourceHead targetHead)
+    (freshMapExact : ∀
+      (freshIndex : Fin (arityFreshAt result region).length)
+      (targetValue : Var targetContext.sigs newArgument),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetContext.ids targetValue =
+        result.targetLocalWire ((arityFreshAt result region).get freshIndex) →
+      correspondence.targetMap targetValue =
+        bounds.freshVar outer freshIndex)
+    (index : Fin (arityFreshAt result region).length) :
+    let lengths := recursiveFinalRegionHole_lengths sourceArguments
+      sourceSignature newArgument result accepted region sourceContext
+      targetContext sourceItems targetItems sourceCompiled targetCompiled
+      sourceNodup targetNodup correspondence.sourceMap
+      correspondence.targetMap sourceHead targetHead headNormalization
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        ((UniformIntrinsicRegion.abstractAppliedItems targetHead
+          (targetItems.renameWires correspondence.targetMap)).holeValues.get
+            (Fin.cast lengths.2.symm index)) =
+      ⟨bounds.freshVar outer
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted region index),
+        Vars.rename (bounds.embed outer)
+          ((UniformIntrinsicRegion.abstractAppliedItems sourceHead
+            (sourceItems.renameWires correspondence.sourceMap)).holeValues.get
+              (Fin.cast lengths.1.symm
+                (aritySourceIndex source wire sourceArguments sourceSignature
+                  newArgument result accepted region index)))⟩ := by
+  let lengths := recursiveFinalRegionHole_lengths sourceArguments
+    sourceSignature newArgument result accepted region sourceContext
+    targetContext sourceItems targetItems sourceCompiled targetCompiled
+    sourceNodup targetNodup correspondence.sourceMap
+    correspondence.targetMap sourceHead targetHead headNormalization
+  dsimp only
+  let sitesAt := aritySitesAt result.sites region
+  have sitesLength := aritySitesAt_length_fresh source wire sourceArguments
+    sourceSignature newArgument result accepted region
+  let sitePosition : Fin sitesAt.length := Fin.cast sitesLength.symm index
+  let site := sitesAt.get sitePosition
+  have siteRegion : (result.sites.sites.get site).region = region :=
+    eq_of_beq (List.mem_filter.mp (List.get_mem sitesAt sitePosition)).2
+  let sourceNodes := sourceSiteNodesAt result.sites region
+  have sourceNodesLength := sourceSiteNodesAt_length_fresh source wire
+    sourceArguments sourceSignature newArgument result accepted region
+  let sourceOrder := aritySourceIndex source wire sourceArguments
+    sourceSignature newArgument result accepted region
+  have sourceNodeExact := aritySourceIndex_spec source wire sourceArguments
+    sourceSignature newArgument result accepted region index
+  have sourceAligned := recursiveFinalAppliedHoleValues_alignment
+    sourceArguments sourceSignature result.sites sourceContext region
+    sourceItems sourceCompiled sourceNodup correspondence.sourceMap sourceHead
+    headNormalization.source_forward headNormalization.source_reflect
+  obtain ⟨sourceValues, sourceClassified, sourceOrigins⟩ :=
+    recursiveFinalRegionClassifier_complete sourceArguments sourceSignature
+      sourceContext region sourceItems sourceCompiled sourceNodup
+      correspondence.sourceMap sourceHead headNormalization.source_forward
+      (result.sites.sites.get site) siteRegion
+  have sourceClassifiedAt := recursiveRoot_classifier_at_aligned_index
+    (UniformIntrinsicRegion.abstractAppliedItems sourceHead
+      (sourceItems.renameWires correspondence.sourceMap)).holeValues sourceNodes
+    (recursiveFinalRegionClassifier definitions source.val sourceContext
+      correspondence.sourceMap sourceHead) sourceAligned lengths.1
+    sourceNodesLength (sourceOrder index)
+  have sourceHoleExact :
+      (UniformIntrinsicRegion.abstractAppliedItems sourceHead
+        (sourceItems.renameWires correspondence.sourceMap)).holeValues.get
+          (Fin.cast lengths.1.symm (sourceOrder index)) =
+        Vars.rename correspondence.sourceMap sourceValues := by
+    rw [sourceNodeExact, sourceClassified] at sourceClassifiedAt
+    exact Option.some.inj sourceClassifiedAt.symm
+  have targetAligned := recursiveFinalTargetHoleValues_alignment result region
+    targetContext targetItems targetCompiled targetNodup
+    correspondence.targetMap targetHead headNormalization.target_forward
+    headNormalization.target_reflect
+  have targetSiteRegion :
+      (targetAppliedSite result site).region = result.regionImage region := by
+    rw [targetAppliedSite_region, siteRegion]
+  obtain ⟨targetValues, targetClassified, targetOrigins⟩ :=
+    recursiveFinalRegionClassifier_complete result.targetArguments
+      result.targetWire_signature targetContext (result.regionImage region)
+      targetItems targetCompiled targetNodup correspondence.targetMap
+      targetHead headNormalization.target_forward
+      (targetAppliedSite result site) targetSiteRegion
+  have targetClassifiedAt := recursiveRoot_classifier_at_aligned_index
+    (UniformIntrinsicRegion.abstractAppliedItems targetHead
+      (targetItems.renameWires correspondence.targetMap)).holeValues sitesAt
+    (fun selected => recursiveFinalRegionClassifier definitions
+      result.checked.val targetContext correspondence.targetMap targetHead
+      (result.targetNode selected)) targetAligned lengths.2 sitesLength index
+  have targetHoleExact :
+      (UniformIntrinsicRegion.abstractAppliedItems targetHead
+        (targetItems.renameWires correspondence.targetMap)).holeValues.get
+          (Fin.cast lengths.2.symm index) =
+        Vars.rename correspondence.targetMap targetValues := by
+    change recursiveFinalRegionClassifier definitions result.checked.val
+      targetContext correspondence.targetMap targetHead
+      (result.targetNode site) = _ at targetClassifiedAt
+    rw [← targetAppliedSite_node result site, targetClassified]
+      at targetClassifiedAt
+    exact Option.some.inj targetClassifiedAt.symm
+  have freshPositionExact := arityFreshIndex_spec source wire sourceArguments
+    sourceSignature newArgument result accepted region index
+  have freshLocalExact :
+      Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted).symm site =
+        (arityFreshAt result region).get
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted region index) := by
+    have transported := congrArg
+      (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+        sourceSignature result.sites newArgument result accepted).symm)
+      freshPositionExact
+    simpa [site, sitePosition, sitesAt] using transported.symm
+  have originsExact :
+      ConcreteElaboration.variableOrigins result.checked.val targetContext
+          targetValues =
+        (ConcreteElaboration.variableOrigins source.val sourceContext
+          sourceValues).map result.contextWireMap ++
+          [result.targetLocalWire
+            ((arityFreshAt result region).get
+              (arityFreshIndex source wire sourceArguments sourceSignature
+                newArgument result accepted region index))] := by
+    calc
+      _ = (targetAppliedSite result site).arguments := targetOrigins
+      _ = (result.sites.sites.get site).arguments.map result.contextWireMap ++
+            [result.targetLocalWire
+              (Fin.cast (arityShift_localCount_exact source wire
+                sourceArguments sourceSignature result.sites newArgument
+                result accepted).symm site)] :=
+        targetAppliedSite_arguments source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted site
+      _ = _ := by rw [sourceOrigins, freshLocalExact]
+  have sourceNotHead := recursiveVariableOrigins_exclude_relation_head source
+    wire sourceArguments sourceSignature sourceContext sourceValues
+  have splitExact := recursiveCorrespondence_split_exact_of_origins
+    sourceArguments sourceSignature newArgument result accepted sourceContext
+    targetContext correspondence bounds outer
+    (arityFreshIndex source wire sourceArguments sourceSignature newArgument
+      result accepted region index) sourceValues targetValues
+    (result.targetLocalWire
+      ((arityFreshAt result region).get
+        (arityFreshIndex source wire sourceArguments sourceSignature
+          newArgument result accepted region index))) originsExact sourceNotHead
+    (freshMapExact _ _ (by
+      have prefixLength :
+          ((ConcreteElaboration.variableOrigins source.val sourceContext
+            sourceValues).map result.contextWireMap).length =
+            sourceArguments.length := by
+        simpa using TypedArguments.variableOrigins_length source.val
+          sourceContext sourceValues
+      exact ((arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars_origins_of_append
+        (arityShiftInsertion_position source wire sourceArguments
+          sourceSignature newArgument result accepted)
+        result.checked.val targetContext targetValues
+        ((ConcreteElaboration.variableOrigins source.val sourceContext
+          sourceValues).map result.contextWireMap) prefixLength
+        (result.targetLocalWire
+          ((arityFreshAt result region).get
+            (arityFreshIndex source wire sourceArguments sourceSignature
+              newArgument result accepted region index))) originsExact).2))
+  rw [targetHoleExact, sourceHoleExact]
+  rw [← recursiveVarsRename_eq correspondence.embedding (bounds.embed outer)
+    embeddingExact (Vars.rename correspondence.sourceMap sourceValues)]
+  exact splitExact
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
