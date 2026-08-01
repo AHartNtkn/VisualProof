@@ -748,6 +748,113 @@ def argPermute
     exact head_only_removed_exhausted sites sourceWire
       (by simpa [spec] using removed) endpoint incident)
 
+/-- Argument permutation deletes exactly its acted relation head and no
+ambient wire. -/
+theorem argPermute_sourceRemovedWires_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (permutation : List Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argPermute source wire permutation = .ok result) :
+    result.sourceRemovedWires = [wire] := by
+  unfold argPermute at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validPermutation relationArguments.length permutation then
+            .error .invalidPermutation
+          else do
+            let sites ← checkedArgumentSites source wire
+            let spec : ReplacementSpec source wire sites :=
+              { targetArguments := permute relationArguments permutation
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    permute (sites.sites.get site).arguments permutation }
+            replaceAppliedEnds source wire sites spec _) =
+          .ok result at accepted
+      cases valid : validPermutation relationArguments.length permutation with
+      | false => simp [valid] at accepted
+      | true =>
+        simp [valid] at accepted
+        cases sitesAccepted : checkedArgumentSites source wire with
+        | error error =>
+            rw [sitesAccepted] at accepted
+            contradiction
+        | ok sites =>
+            rw [sitesAccepted] at accepted
+            have exact :=
+              replaceAppliedEnds_sourceRemovedWires_exact source wire sites
+                { targetArguments := permute relationArguments permutation
+                  removedWires := []
+                  localCount := 0
+                  localSignature := Fin.elim0
+                  localScope := Fin.elim0
+                  arguments := fun site =>
+                    existingReferences <|
+                      permute (sites.sites.get site).arguments permutation }
+                _ result accepted
+            simpa using exact
+
+/-- Argument permutation allocates no operation-local wire. -/
+theorem argPermute_localCount_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (permutation : List Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argPermute source wire permutation = .ok result) :
+    result.spec.localCount = 0 := by
+  unfold argPermute at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validPermutation relationArguments.length permutation then
+            .error .invalidPermutation
+          else do
+            let sites ← checkedArgumentSites source wire
+            let spec : ReplacementSpec source wire sites :=
+              { targetArguments := permute relationArguments permutation
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    permute (sites.sites.get site).arguments permutation }
+            replaceAppliedEnds source wire sites spec _) =
+          .ok result at accepted
+      cases valid : validPermutation relationArguments.length permutation with
+      | false => simp [valid] at accepted
+      | true =>
+        simp [valid] at accepted
+        cases sitesAccepted : checkedArgumentSites source wire with
+        | error error =>
+            rw [sitesAccepted] at accepted
+            contradiction
+        | ok sites =>
+            rw [sitesAccepted] at accepted
+            exact replaceAppliedEnds_localCount_exact source wire sites
+              { targetArguments := permute relationArguments permutation
+                removedWires := []
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    permute (sites.sites.get site).arguments permutation }
+              _ result accepted
+
 /-- Duplicate one position directly after itself at every applied end. -/
 def argDuplicate
     (source : CheckedDiagram definitions)

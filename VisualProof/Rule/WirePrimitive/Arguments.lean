@@ -247,6 +247,8 @@ structure AppliedArgPermute
   private sourceArguments : List Sig
   private sourceSignature :
     (source.val.wires wire).sig = .rel sourceArguments
+  private source_removed_exact : result.sourceRemovedWires = [wire]
+  private local_count_exact : result.spec.localCount = 0
   private ledger :
     ArgumentsSemantics.PermutationLedger result sourceArguments
 
@@ -519,6 +521,26 @@ def targetSites
     (applied : AppliedArgPermute source wire permutation) :
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.factorization.targetSites
+
+/-- Construction-owned node carrier for the accepted permutation. -/
+def nodeEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    Data.Finite.FiniteEquiv source.val.NodeId applied.target.val.NodeId :=
+  applied.result.nodeEquiv applied.targetSites
+
+/-- Construction-owned wire carrier for the head-only accepted
+permutation. -/
+def wireEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    Data.Finite.FiniteEquiv source.val.WireId applied.target.val.WireId :=
+  applied.result.wireEquivHeadOnly applied.source_removed_exact
+    applied.local_count_exact
 
 def tag
     {source : CheckedDiagram definitions}
@@ -802,18 +824,25 @@ def applyArgPermute
     (wire : source.val.WireId)
     (permutation : List Nat) :
     Except WireArgumentError
-      (AppliedArgPermute source wire permutation) := do
-  let result ←
-    (ConcreteWirePrimitive.argPermute source wire permutation).mapError
-      .concreteRejected
-  match sourceSignature : (source.val.wires wire).sig with
-  | .iota => throw .semanticLedgerRejected
-  | .rel sourceArguments =>
-      let ledger ←
-        optionToExcept .semanticLedgerRejected <|
-          ArgumentsSemantics.checkPermutationLedger result sourceArguments
-            sourceSignature permutation
-      pure ⟨result, sourceArguments, sourceSignature, ledger⟩
+      (AppliedArgPermute source wire permutation) :=
+  match accepted :
+      ConcreteWirePrimitive.argPermute source wire permutation with
+  | .error error => exact .error (.concreteRejected error)
+  | .ok result =>
+      match sourceSignature : (source.val.wires wire).sig with
+      | .iota => exact .error .semanticLedgerRejected
+      | .rel sourceArguments =>
+          match ArgumentsSemantics.checkPermutationLedger result
+              sourceArguments sourceSignature permutation with
+          | none => exact .error .semanticLedgerRejected
+          | some ledger =>
+              exact .ok
+                ⟨result, sourceArguments, sourceSignature,
+                  ConcreteWirePrimitive.argPermute_sourceRemovedWires_exact
+                    source wire permutation result accepted,
+                  ConcreteWirePrimitive.argPermute_localCount_exact source
+                    wire permutation result accepted,
+                  ledger⟩
 
 def applyArgDuplicate
     (source : CheckedDiagram definitions)
