@@ -1038,6 +1038,41 @@ theorem recursiveFinalRegionClassifier_isSome
       unfold argumentSiteNodes
       exact List.mem_map.mpr ⟨site, siteMember, nodeExact⟩
 
+theorem recursiveFinalAppliedHoleValues_alignment
+    {checked : CheckedDiagram definitions}
+    {wire : checked.val.WireId}
+    (arguments : List Sig)
+    (wireSignature : (checked.val.wires wire).sig = .rel arguments)
+    (sites : AllAppliedSites checked wire)
+    (context : ConcreteElaboration.WireContext checked.val)
+    (region : checked.val.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions checked.val
+      context (checked.val.nodesAt region) = some items)
+    (contextNodup : context.ids.Nodup)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments))
+    (headForward : ∀ value : Var context.sigs (.rel arguments),
+      ConcreteElaboration.WireContext.origin checked.val context.ids value =
+        wire → rho value = head)
+    (headReflect : ∀ value : Var context.sigs (.rel arguments),
+      rho value = head →
+        ConcreteElaboration.WireContext.origin checked.val context.ids value =
+          wire) :
+    (UniformIntrinsicRegion.abstractAppliedItems head
+      (items.renameWires rho)).holeValues.map some =
+      (sourceSiteNodesAt sites region).map
+        (recursiveFinalRegionClassifier definitions checked.val context rho
+          head) := by
+  unfold sourceSiteNodesAt
+  apply recursiveFinalRegionHoleValues_alignment definitions checked.val
+    context rho head (checked.val.nodesAt region) items compiled
+    (fun node => decide (node ∈ argumentSiteNodes sites))
+  intro node nodeAt
+  exact recursiveFinalRegionClassifier_isSome arguments wireSignature sites
+    context region items compiled contextNodup rho head headForward headReflect
+    node nodeAt
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
