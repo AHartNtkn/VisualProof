@@ -903,6 +903,104 @@ theorem arityShift_targetLocals_withoutHead
   rw [retainedAll, freshAll]
   simp
 
+/-- The normalized target's concrete reduced local identifiers are exactly
+the canonical images of the normalized source locals followed by the fresh
+arity suffix owned by construction. -/
+theorem LocalCylindricalFrame.targetReducedIds_shape
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    eraseSelectedIds result.checked.val
+        (result.checked.val.wiresAt
+          (result.checked.val.wires result.targetWire).scope)
+        frame.targetRemoval.head =
+      (eraseSelectedIds source.val
+          (source.val.wiresAt (source.val.wires wire).scope)
+          frame.sourceRemoval.head).map result.contextWireMap ++
+        ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source (source.val.wires wire).scope).map
+              result.targetLocalWire := by
+  have sourceNodup :
+      (source.val.wiresAt (source.val.wires wire).scope).Nodup := by
+    unfold ConcreteDiagram.wiresAt ConcreteDiagram.wiresList
+    exact (Data.Finite.allFin_nodup source.val.wireCount).filter _
+  have targetNodup :
+      (result.checked.val.wiresAt
+        (result.checked.val.wires result.targetWire).scope).Nodup := by
+    unfold ConcreteDiagram.wiresAt ConcreteDiagram.wiresList
+    exact (Data.Finite.allFin_nodup result.checked.val.wireCount).filter _
+  rw [← filter_origin_ids result.checked.val _ targetNodup
+    frame.targetRemoval.head]
+  rw [← filter_origin_ids source.val _ sourceNodup
+    frame.sourceRemoval.head]
+  rw [frame.targetRemoval_head, frame.targetHead_origin,
+    frame.sourceRemoval_head, frame.sourceHead_origin]
+  simpa using arityShift_targetLocals_withoutHead source wire newArgument
+    result accepted
+
+/-- Concrete source context containing precisely the retained local binders
+after the selected relation head is deleted. -/
+def LocalCylindricalFrame.sourceReducedContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    ConcreteElaboration.WireContext source.val :=
+  ⟨eraseSelectedIds source.val
+    (source.val.wiresAt (source.val.wires wire).scope)
+    frame.sourceRemoval.head⟩
+
+/-- Canonical target image of the retained source-local context, before the
+fresh arity suffix is appended. -/
+def LocalCylindricalFrame.mappedSourceReducedContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    ConcreteElaboration.WireContext result.checked.val :=
+  ⟨frame.sourceReducedContext.ids.map result.contextWireMap⟩
+
+/-- The reduced source-local context and its mapped target image form a
+genuine retained context; the acted relation head is the only removed source
+wire in an arity shift. -/
+def LocalCylindricalFrame.reducedRetainedContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    result.RetainedContext frame.sourceReducedContext
+      frame.mappedSourceReducedContext := by
+  refine
+    { ids_exact := rfl
+      source_retained := ?_ }
+  intro sourceWire member
+  have sourceNodup :
+      (source.val.wiresAt (source.val.wires wire).scope).Nodup := by
+    unfold ConcreteDiagram.wiresAt ConcreteDiagram.wiresList
+    exact (Data.Finite.allFin_nodup source.val.wireCount).filter _
+  have erasedExact : frame.sourceReducedContext.ids =
+      (source.val.wiresAt (source.val.wires wire).scope).filter
+        (fun candidate => decide (candidate ≠ wire)) := by
+    unfold sourceReducedContext
+    rw [← filter_origin_ids source.val _ sourceNodup
+      frame.sourceRemoval.head]
+    rw [frame.sourceRemoval_head, frame.sourceHead_origin]
+  rw [arityShift_sourceRemovedWires_exact source wire newArgument result
+    accepted]
+  simp only [List.mem_singleton]
+  rw [erasedExact, List.mem_filter] at member
+  exact of_decide_eq_true member.2
+
 /-- After both relation heads are normalized into explicit outer slots, the
 target binder block is the source block followed by the exact local fresh
 suffix. -/

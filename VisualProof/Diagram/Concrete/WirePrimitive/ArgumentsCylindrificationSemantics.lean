@@ -410,6 +410,46 @@ theorem appendFresh_embed_local
         appendFreshRetained]
       exact congrArg Var.there induction
 
+/-- The retained target ordinal selected by `appendFresh` is the ordinary
+left embedding past the fresh suffix and outer context. -/
+theorem appendFreshRetained_eq_appendLeft
+    (fixedSignature : Sig)
+    (count : Nat)
+    (value : Var smaller signature) :
+    appendFreshRetained (outer := outer) fixedSignature count value =
+      Var.appendLeft
+        (Var.appendLeft value (List.replicate count fixedSignature))
+        outer := by
+  induction value with
+  | here => rfl
+  | there tail induction =>
+      exact congrArg Var.there induction
+
+/-- `appendFresh` sends every outer variable past the complete retained block
+and fresh suffix while applying the supplied outer renaming exactly once. -/
+theorem appendFresh_embed_outer
+    (fixedSignature : Sig)
+    (smaller : List Sig)
+    (count : Nat)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (value : Var smallerOuter signature) :
+    (appendFresh fixedSignature smaller count).embed outer
+        (Var.appendRight smaller value) =
+      Var.appendRight
+        (smaller ++ List.replicate count fixedSignature)
+        (outer value) := by
+  induction smaller with
+  | nil =>
+      induction count with
+      | zero => rfl
+      | succ count induction =>
+          simp only [appendFresh, freshSuffix, embed, weakenOuter,
+            List.replicate_succ, Var.appendRight]
+          exact congrArg Var.there induction
+  | cons head tail induction =>
+      simp only [appendFresh, embed, WireRenaming.lift, Var.appendRight]
+      exact congrArg Var.there induction
+
 /-- `appendFresh` enumerates fresh variables by their exact typed ordinal in
 the appended suffix. -/
 theorem appendFresh_freshVar
