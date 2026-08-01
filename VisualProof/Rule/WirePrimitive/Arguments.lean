@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationRecursiveConstruction
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationRecursiveHoles
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 
