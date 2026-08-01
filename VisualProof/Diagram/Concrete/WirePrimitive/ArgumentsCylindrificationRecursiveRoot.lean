@@ -3256,6 +3256,58 @@ noncomputable def scopedArityShiftLedgerOfAccepted
     frame := frame
     accepted := checked }
 
+/-- The executable scoped-ledger reifier is complete because the recursive
+construction above supplies its semantic receipt. -/
+theorem checkScopedArityShiftLedger_complete_of_accepted
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    (checkScopedArityShiftLedger result sourceArguments sourceSignature
+      newArgument).isSome = true := by
+  unfold checkScopedArityShiftLedger
+  split
+  next targetExact =>
+    let localized := arityShift_scopeLocalization source wire sourceArguments
+      sourceSignature result.sites newArgument result accepted
+    obtain ⟨frame, frameAccepted⟩ :=
+      checkLocalCylindricalFrameFromSites_complete result localized
+        sourceArguments sourceSignature result.targetSites
+    rw [frameAccepted]
+    let pair := frame.concretePair sourceArguments sourceSignature result.sites
+      newArgument result accepted
+    let checked := Classical.choice
+      (frame.rootCylindricalShape_complete sourceArguments sourceSignature
+        newArgument result accepted pair)
+    have shapeAccepted := checkCylindricalShape_complete checked
+    let executableInsertion : TypedArguments.InsertionEvidence
+        result.targetArguments sourceArguments newArgument :=
+      ⟨sourceArguments.length, targetExact⟩
+    have insertionSame : executableInsertion =
+        arityShiftInsertion source wire sourceArguments sourceSignature
+          newArgument result accepted := by
+      rfl
+    have executableAccepted :
+        (checkCylindricalShape executableInsertion
+          (fun {_} value => value) frame.sourceShape
+          frame.targetShape).isSome = true := by
+      rw [insertionSame]
+      exact shapeAccepted
+    cases shapeEquation : checkCylindricalShape executableInsertion
+        (fun {_} value => value) frame.sourceShape frame.targetShape with
+    | none => simp [shapeEquation] at executableAccepted
+    | some checkedShape =>
+        simp [executableInsertion, shapeEquation]
+  next targetDifferent =>
+    exfalso
+    apply targetDifferent
+    exact (arityShiftInsertion source wire sourceArguments sourceSignature
+      newArgument result accepted).largerExact
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof

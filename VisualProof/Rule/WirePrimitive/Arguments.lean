@@ -717,7 +717,7 @@ def tag
 
 end AppliedArgExtend
 
-noncomputable def applyArityShift
+def applyArityShift
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
     (newArgument : Sig) :
@@ -730,12 +730,19 @@ noncomputable def applyArityShift
       match sourceSignature : (source.val.wires wire).sig with
       | .iota => exact .error .semanticLedgerRejected
       | .rel sourceArguments =>
-          let ledger := ArgumentsSemantics.scopedArityShiftLedgerOfAccepted
-            sourceArguments sourceSignature newArgument result accepted
-          exact .ok
-            ⟨result, sourceArguments, sourceSignature, ledger,
-              ConcreteWirePrimitive.arityShift_sourceRemovedWires_exact
-                source wire newArgument result accepted⟩
+          match ledgerAccepted :
+              ArgumentsSemantics.checkScopedArityShiftLedger result
+                sourceArguments sourceSignature newArgument with
+          | none =>
+              have complete :=
+                ArgumentsSemantics.checkScopedArityShiftLedger_complete_of_accepted
+                  sourceArguments sourceSignature newArgument result accepted
+              simp [ledgerAccepted] at complete
+          | some ledger =>
+              exact .ok
+                ⟨result, sourceArguments, sourceSignature, ledger,
+                  ConcreteWirePrimitive.arityShift_sourceRemovedWires_exact
+                    source wire newArgument result accepted⟩
 
 def applyArityUnshift
     (source : CheckedDiagram definitions)
