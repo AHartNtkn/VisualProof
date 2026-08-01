@@ -1017,6 +1017,157 @@ theorem recursiveTransportedChild_larger
     recursiveCast_abstractApplied]
   rw [recursiveCast_symm_cancel]
 
+def recursiveChildSmallerItems
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature) :
+    List (CylindricalShape definitions insertion smallerContext largerContext) →
+      UniformIntrinsicItemSeq definitions smallerArguments smallerContext
+  | [] => .nil
+  | shape :: tail =>
+      .cons (.cut shape.smaller) (recursiveChildSmallerItems insertion tail)
+
+def recursiveChildLargerItems
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature) :
+    List (CylindricalShape definitions insertion smallerContext largerContext) →
+      UniformIntrinsicItemSeq definitions largerArguments largerContext
+  | [] => .nil
+  | shape :: tail =>
+      .cons (.cut shape.larger) (recursiveChildLargerItems insertion tail)
+
+theorem recursiveCompileChildrenCons
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (recurse : (region : diagram.RegionId) →
+      (context : ConcreteElaboration.WireContext diagram) →
+      Option (Region definitions context.sigs))
+    (context : ConcreteElaboration.WireContext diagram)
+    (child : diagram.RegionId)
+    (tail : List diagram.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileChildrenWith? definitions diagram
+      recurse context (child :: tail) = some items) :
+    ∃ body rest,
+      recurse child context = some body ∧
+      ConcreteElaboration.compileChildrenWith? definitions diagram recurse
+        context tail = some rest ∧
+      items = .cons (.cut body) rest := by
+  unfold ConcreteElaboration.compileChildrenWith? at compiled
+  cases bodyCompiled : recurse child context with
+  | none => simp [bodyCompiled] at compiled
+  | some body =>
+      cases restCompiled : ConcreteElaboration.compileChildrenWith?
+          definitions diagram recurse context tail with
+      | none => simp [bodyCompiled, restCompiled] at compiled
+      | some rest =>
+          refine ⟨body, rest, rfl, rfl, ?_⟩
+          exact (Option.some.inj (by
+            simpa [bodyCompiled, restCompiled] using compiled)).symm
+
+/-- Ordered successful child compilations become an ordered list of
+transported cylindrical shapes, represented only by `.cut` items. -/
+theorem recursiveChildrenReceipts
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (insertion : TypedArguments.InsertionEvidence largerArguments
+      smallerArguments fixedSignature)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceExact : sourceContext.sigs = normalizedSourceContext)
+    (targetExact : targetContext.sigs = normalizedTargetContext)
+    (sourceHead : Var normalizedSourceContext (.rel smallerArguments))
+    (targetHead : Var normalizedTargetContext (.rel largerArguments))
+    (sourceRecurse : (region : source.val.RegionId) →
+      (context : ConcreteElaboration.WireContext source.val) →
+      Option (Region definitions context.sigs))
+    (targetRecurse : (region : result.checked.val.RegionId) →
+      (context : ConcreteElaboration.WireContext result.checked.val) →
+      Option (Region definitions context.sigs))
+    (buildChild : ∀ (child : source.val.RegionId)
+      (sourceBody : Region definitions sourceContext.sigs)
+      (targetBody : Region definitions targetContext.sigs),
+      sourceRecurse child sourceContext = some sourceBody →
+      targetRecurse (result.regionEquiv child) targetContext = some targetBody →
+      ∃ shape : CylindricalShape definitions insertion
+          sourceContext.sigs targetContext.sigs,
+        shape.smaller = UniformIntrinsicRegion.abstractApplied
+          (sourceExact.symm ▸ sourceHead) sourceBody ∧
+        shape.larger = UniformIntrinsicRegion.abstractApplied
+          (targetExact.symm ▸ targetHead) targetBody) :
+    ∀ (children : List source.val.RegionId)
+      (sourceItems : ItemSeq definitions sourceContext.sigs)
+      (targetItems : ItemSeq definitions targetContext.sigs),
+      ConcreteElaboration.compileChildrenWith? definitions source.val
+          sourceRecurse sourceContext children = some sourceItems →
+      ConcreteElaboration.compileChildrenWith? definitions result.checked.val
+          targetRecurse targetContext (children.map result.regionEquiv) =
+        some targetItems →
+      ∃ shapes : List (CylindricalShape definitions insertion
+          normalizedSourceContext normalizedTargetContext),
+        UniformIntrinsicRegion.abstractAppliedItems sourceHead
+            (sourceItems.renameWires
+              (fun {_} value => sourceExact ▸ value)) =
+          .mk (recursiveChildSmallerItems insertion shapes) ⟨[]⟩ ∧
+        UniformIntrinsicRegion.abstractAppliedItems targetHead
+            (targetItems.renameWires
+              (fun {_} value => targetExact ▸ value)) =
+          .mk (recursiveChildLargerItems insertion shapes) ⟨[]⟩
+  | [], sourceItems, targetItems, sourceCompiled, targetCompiled => by
+      simp [ConcreteElaboration.compileChildrenWith?] at sourceCompiled targetCompiled
+      subst sourceItems
+      subst targetItems
+      exact ⟨[], rfl, rfl⟩
+  | child :: tail, sourceItems, targetItems, sourceCompiled,
+      targetCompiled => by
+      obtain ⟨sourceBody, sourceRest, sourceBodyCompiled, sourceRestCompiled,
+          sourceItemsExact⟩ :=
+        recursiveCompileChildrenCons definitions source.val
+          sourceRecurse sourceContext child tail sourceItems sourceCompiled
+      obtain ⟨targetBody, targetRest, targetBodyCompiled, targetRestCompiled,
+          targetItemsExact⟩ :=
+        recursiveCompileChildrenCons definitions result.checked.val
+          targetRecurse targetContext (result.regionEquiv child)
+          (tail.map result.regionEquiv) targetItems (by
+            simpa using targetCompiled)
+      obtain ⟨childShape, childSmaller, childLarger⟩ :=
+        buildChild child sourceBody targetBody sourceBodyCompiled
+          targetBodyCompiled
+      obtain ⟨tailShapes, tailSmaller, tailLarger⟩ :=
+        recursiveChildrenReceipts result insertion sourceContext targetContext
+          sourceExact targetExact sourceHead targetHead sourceRecurse
+          targetRecurse buildChild tail sourceRest targetRest
+          sourceRestCompiled targetRestCompiled
+      let transported := recursiveShapeTransport sourceExact targetExact
+        childShape
+      have transportedSmaller : transported.smaller =
+          UniformIntrinsicRegion.abstractApplied sourceHead
+            (sourceBody.renameWires (fun {_} value => sourceExact ▸ value)) := by
+        rw [recursiveTransportedChild_smaller sourceExact targetExact sourceHead
+          sourceBody childShape childSmaller]
+        exact congrArg (UniformIntrinsicRegion.abstractApplied sourceHead)
+          (recursiveCastRegion_eq_rename sourceExact sourceBody)
+      have transportedLarger : transported.larger =
+          UniformIntrinsicRegion.abstractApplied targetHead
+            (targetBody.renameWires (fun {_} value => targetExact ▸ value)) := by
+        rw [recursiveTransportedChild_larger sourceExact targetExact targetHead
+          targetBody childShape childLarger]
+        exact congrArg (UniformIntrinsicRegion.abstractApplied targetHead)
+          (recursiveCastRegion_eq_rename targetExact targetBody)
+      refine ⟨transported :: tailShapes, ?_, ?_⟩
+      · subst sourceItems
+        simp only [ItemSeq.renameWires, Item.renameWires,
+          UniformIntrinsicRegion.abstractAppliedItems,
+          recursiveChildSmallerItems]
+        rw [← transportedSmaller, tailSmaller]
+        rfl
+      · subst targetItems
+        simp only [ItemSeq.renameWires, Item.renameWires,
+          UniformIntrinsicRegion.abstractAppliedItems,
+          recursiveChildLargerItems]
+        rw [← transportedLarger, tailLarger]
+        rfl
+
 /-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
 its exact renaming. -/
 def recursiveLeafReceipt
