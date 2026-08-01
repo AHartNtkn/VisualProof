@@ -366,6 +366,129 @@ theorem retainedNodeImage_sourceNodeOfRetainedTarget
   apply Fin.ext
   simp [Internal.checkedNode]
 
+/-- A retained source node cannot map into the generated target-site suffix. -/
+theorem retainedNodeImage_not_targetSite
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : source.val.NodeId)
+    (retained : node ∉ argumentSiteNodes result.sites) :
+    result.retainedNodeImage node retained ∉
+      argumentSiteNodes targetSites := by
+  intro generated
+  have large :=
+    (result.targetSiteNode_iff_ge targetSites
+      (result.retainedNodeImage node retained)).mp generated
+  have retainedMember :
+      node ∈ Internal.retainedNodes source
+        (argumentSiteNodes result.sites) := by
+    unfold Internal.retainedNodes
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩
+  unfold ArgumentResult.retainedNodeImage at large
+  have bound :=
+    (Internal.retainedNodeIndex source (argumentSiteNodes result.sites)
+      node retainedMember).isLt
+  simp [Internal.checkedNode] at large
+  omega
+
+/-- Construction-owned source-to-target node map for an argument
+replacement.  Source application nodes follow their ordered generated sites;
+all other nodes follow the retained-node image. -/
+def nodeImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (node : source.val.NodeId) :
+    result.checked.val.NodeId :=
+  if member : node ∈ argumentSiteNodes result.sites then
+    result.targetNode
+      (sourcePositionOfNode result.sites node member)
+  else
+    result.retainedNodeImage node member
+
+/-- Construction-owned target-to-source node map for an argument
+replacement. -/
+def sourceNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId) :
+    source.val.NodeId :=
+  if generated : node ∈ argumentSiteNodes targetSites then
+    (result.sites.sites.get
+      (result.sourcePositionOfTargetNode targetSites node generated)).node
+  else
+    result.sourceNodeOfRetainedTarget targetSites node generated
+
+/-- The construction-owned node maps are inverse on every source node. -/
+theorem sourceNode_nodeImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : source.val.NodeId) :
+    result.sourceNode targetSites (result.nodeImage node) = node := by
+  by_cases member : node ∈ argumentSiteNodes result.sites
+  · let position := sourcePositionOfNode result.sites node member
+    have generated :
+        result.targetNode position ∈ argumentSiteNodes targetSites := by
+      exact result.generatedNode_targetSiteNode targetSites position
+    rw [nodeImage, dif_pos member, sourceNode, dif_pos generated]
+    rw [result.sourcePositionOfTargetNode_targetNode targetSites position]
+    exact sourcePositionOfNode_exact result.sites node member
+  · have targetRetained :=
+      result.retainedNodeImage_not_targetSite targetSites node member
+    rw [nodeImage, dif_neg member, sourceNode, dif_neg targetRetained]
+    exact result.sourceNodeOfRetainedTarget_retainedNodeImage targetSites
+      node member targetRetained
+
+/-- The construction-owned node maps are inverse on every checked target
+node. -/
+theorem nodeImage_sourceNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire)
+    (node : result.checked.val.NodeId) :
+    result.nodeImage (result.sourceNode targetSites node) = node := by
+  by_cases generated : node ∈ argumentSiteNodes targetSites
+  · let position :=
+      result.sourcePositionOfTargetNode targetSites node generated
+    have sourceMember :
+        (result.sites.sites.get position).node ∈
+          argumentSiteNodes result.sites := by
+      unfold argumentSiteNodes
+      exact List.mem_map.mpr
+        ⟨result.sites.sites.get position, List.get_mem _ _, rfl⟩
+    rw [sourceNode, dif_pos generated, nodeImage, dif_pos sourceMember]
+    rw [sourcePositionOfNode_get result.sites position sourceMember]
+    exact result.targetNode_sourcePositionOfTargetNode targetSites node
+      generated
+  · have sourceRetained :
+        result.sourceNodeOfRetainedTarget targetSites node generated ∉
+          argumentSiteNodes result.sites :=
+      sourceRetainedNode_not_removed result.sites
+        (result.retainedBaseNodeOfTarget targetSites node generated)
+    rw [sourceNode, dif_neg generated, nodeImage, dif_neg sourceRetained]
+    exact result.retainedNodeImage_sourceNodeOfRetainedTarget targetSites
+      node generated
+
+/-- Canonical node-carrier equivalence owned by every accepted argument
+replacement. -/
+def nodeEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (targetSites : AllAppliedSites result.checked result.targetWire) :
+    Data.Finite.FiniteEquiv source.val.NodeId result.checked.val.NodeId where
+  toFun := result.nodeImage
+  invFun := result.sourceNode targetSites
+  left_inv := result.sourceNode_nodeImage targetSites
+  right_inv := result.nodeImage_sourceNode targetSites
+
 private theorem targetRetainedNodes_exact
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
