@@ -274,6 +274,109 @@ theorem compiled_atom
   exact
     ⟨outer, visibleExact, head, arguments, singletonCompiled, exactHead⟩
 
+private theorem variableOrigins_length
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    {argumentSigs : List Sig}
+    (values : Vars context.sigs argumentSigs) :
+    (ConcreteElaboration.variableOrigins diagram context values).length =
+      argumentSigs.length := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction =>
+      simp [ConcreteElaboration.variableOrigins, induction]
+
+private theorem argumentOrigins_get
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (node : diagram.NodeId)
+    (start : Nat)
+    {argumentSigs : List Sig}
+    (values : Vars context.sigs argumentSigs)
+    (origins :
+      ConcreteElaboration.ArgumentOrigins diagram context node start values)
+    (index : Nat)
+    (bound : index < argumentSigs.length) :
+    diagram.endpointOwner? ⟨node, .arg (start + index)⟩ =
+      some ((ConcreteElaboration.variableOrigins diagram context values).get
+        ⟨index, by simpa [variableOrigins_length] using bound⟩) := by
+  induction values generalizing start index with
+  | nil => simp at bound
+  | @cons signature rest head tail induction =>
+      cases index with
+      | zero =>
+          simpa [ConcreteElaboration.ArgumentOrigins,
+            ConcreteElaboration.variableOrigins] using origins.1
+      | succ index =>
+          have tailBound : index < rest.length := by simpa using bound
+          have tailExact := induction (start := start + 1) origins.2
+            index tailBound
+          simpa [ConcreteElaboration.variableOrigins, Nat.add_assoc,
+            Nat.add_comm, Nat.add_left_comm] using tailExact
+
+/-- The checked site frame also exposes the exact ordered concrete origins
+of the compiled argument tuple. -/
+theorem compiled_atom_arguments
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (site : AppliedSite source wire) :
+    ∃ (outer : ConcreteElaboration.WireContext source.val)
+      (_visibleExact :
+        site.frame.frame.visible = outer.extend site.region)
+      (head :
+        Var (outer.extend site.region).sigs
+          (.rel site.argumentSignatures))
+      (arguments :
+        Vars (outer.extend site.region).sigs
+          site.argumentSignatures),
+      ConcreteElaboration.compileNodes? definitions source.val
+          (outer.extend site.region) [site.node] =
+        some (.cons (.atom head arguments) .nil) ∧
+      ConcreteElaboration.WireContext.origin source.val
+          (outer.extend site.region).ids head = wire ∧
+      ConcreteElaboration.variableOrigins source.val
+          (outer.extend site.region) arguments = site.arguments := by
+  obtain ⟨outer, _fuel, nodes, _children, visibleExact,
+      nodesCompiled, _childrenCompiled, _bodyExact⟩ :=
+    site.frame.site_origin
+  have member : site.node ∈ source.val.nodesAt site.region := by
+    unfold ConcreteDiagram.nodesAt ConcreteDiagram.nodesList
+    apply List.mem_filter.mpr
+    exact
+      ⟨Data.Finite.mem_allFin site.node,
+        by rw [site.node_data]; exact beq_iff_eq.mpr rfl⟩
+  obtain ⟨item, singletonCompiled⟩ :=
+    ConcreteWireQuantifier.SingletonRemovalSemantics.compileNodes_singleton_of_member
+      definitions source.val (outer.extend site.region)
+      (source.val.nodesAt site.region) nodes nodesCompiled site.node member
+  obtain ⟨head, arguments, itemExact, headOrigin, argumentOrigins⟩ :=
+    ConcreteElaboration.compileNodes?_atom_shape source.val
+      (outer.extend site.region) site.node site.node_data singletonCompiled
+  have itemSame : item = .atom head arguments :=
+    ItemSeq.cons.inj itemExact |>.1
+  subst item
+  have exactHead :
+      ConcreteElaboration.WireContext.origin source.val
+          (outer.extend site.region).ids head = wire :=
+    Option.some.inj (headOrigin.symm.trans site.endpoint_owner)
+  have argumentsExact :
+      ConcreteElaboration.variableOrigins source.val
+          (outer.extend site.region) arguments = site.arguments := by
+    apply List.ext_get
+    · simpa [variableOrigins_length] using site.arguments_length.symm
+    · intro index leftBound rightBound
+      have compiledOwner := argumentOrigins_get source.val
+        (outer.extend site.region) site.node 0 arguments argumentOrigins
+        index (by
+          rw [← variableOrigins_length source.val
+            (outer.extend site.region) arguments]
+          exact leftBound)
+      have siteOwner := site.argument_owner index rightBound
+      exact Option.some.inj (compiledOwner.symm.trans (by
+        simpa using siteOwner))
+  exact ⟨outer, visibleExact, head, arguments, singletonCompiled,
+    exactHead, argumentsExact⟩
+
 end AppliedSite
 
 /-- Check one exact endpoint as an applied atom head of `wire`. -/
