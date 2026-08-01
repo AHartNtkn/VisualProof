@@ -729,6 +729,82 @@ def LocalCylindricalFrame.targetRetainedFrameEmbedding
     (frame.targetRetainedVisibleContext_member_frame sourceArguments
       newArgument result accepted pair)
 
+/-- Compilation is monotone under an identity-on-wire embedding into a
+larger duplicate-free context.  The emitted items are exactly renamed by
+the construction-owned embedding. -/
+private theorem compileNodes?_contextEmbedding
+    (checked : CheckedDiagram definitions)
+    (sourceContext targetContext :
+      ConcreteElaboration.WireContext checked.val)
+    (targetNodup : targetContext.ids.Nodup)
+    (visible : ∀ wire, wire ∈ sourceContext.ids →
+      wire ∈ targetContext.ids)
+    (nodes : List checked.val.NodeId)
+    {sourceItems : ItemSeq definitions sourceContext.sigs}
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions checked.val sourceContext
+        nodes = some sourceItems) :
+    ∃ targetItems : ItemSeq definitions targetContext.sigs,
+      ConcreteElaboration.compileNodes? definitions checked.val targetContext
+          nodes = some targetItems ∧
+        targetItems = sourceItems.renameWires
+          (InsertionCompilation.NaturalityInternal.contextEmbedding
+            checked.val checked.val sourceContext.ids targetContext.ids
+            (fun wire => wire) (fun _ => rfl) visible) := by
+  let embedding : WireRenaming sourceContext.sigs targetContext.sigs :=
+    InsertionCompilation.NaturalityInternal.contextEmbedding
+      checked.val checked.val sourceContext.ids targetContext.ids
+      (fun wire => wire) (fun _ => rfl) visible
+  induction nodes generalizing sourceItems with
+  | nil =>
+      simp only [ConcreteElaboration.compileNodes?, Option.some.injEq]
+        at sourceCompiled ⊢
+      subst sourceItems
+      exact ⟨.nil, rfl, rfl⟩
+  | cons head tail induction =>
+      simp only [ConcreteElaboration.compileNodes?] at sourceCompiled ⊢
+      cases sourceHeadEquation :
+          ConcreteElaboration.Internal.compileNode? definitions checked.val
+            sourceContext head with
+      | none => simp [sourceHeadEquation] at sourceCompiled
+      | some sourceHead =>
+          cases sourceTailEquation :
+              ConcreteElaboration.compileNodes? definitions checked.val
+                sourceContext tail with
+          | none =>
+              simp [sourceHeadEquation, sourceTailEquation] at sourceCompiled
+          | some sourceTail =>
+              have sourceItemsExact :
+                  sourceItems = .cons sourceHead sourceTail := by
+                exact (Option.some.inj (by
+                  simpa [sourceHeadEquation, sourceTailEquation] using
+                    sourceCompiled)).symm
+              subst sourceItems
+              have embeddingOrigin : ∀ {signature : Sig}
+                  (value : Var sourceContext.sigs signature),
+                  ConcreteElaboration.WireContext.origin checked.val
+                      targetContext.ids (embedding value) =
+                    ConcreteElaboration.WireContext.origin checked.val
+                      sourceContext.ids value := by
+                intro signature value
+                exact InsertionCompilation.NaturalityInternal.contextEmbedding_origin
+                  checked.val checked.val sourceContext.ids targetContext.ids
+                  (fun wire => wire) (fun _ => rfl) visible value
+              have targetHeadEquation :=
+                ConcreteElaboration.compileNode?_natural checked.property
+                  targetNodup embedding (fun wire => wire) embeddingOrigin
+                  (fun region => region) (leftNode := head) (rightNode := head)
+                  (by cases checked.val.nodes head <;> rfl)
+                  (by intro _port _wire incident; exact incident)
+                  sourceHeadEquation
+              obtain ⟨targetTail, targetTailEquation, targetTailExact⟩ :=
+                induction sourceTailEquation
+              refine ⟨.cons (sourceHead.renameWires embedding) targetTail,
+                ?_, ?_⟩
+              · simp [targetHeadEquation, targetTailEquation]
+              · rw [targetTailExact]
+                rfl
+
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
 exhaustiveness, while true outer owners remain in the paired outer spine. -/
@@ -959,6 +1035,76 @@ theorem LocalCylindricalFrame.compileRetainedNodePrefixPair?_complete
         (source.val.wires wire).scope)
       sourceCompiled
   exact ⟨sourceItems, targetItems, sourceCompiled, targetCompiled, targetExact⟩
+
+/-- The paired retained prefix equations lift into the actual source and
+target site compiler contexts.  These are the exact node-item fragments
+later read from each `SiteCompilation.site_origin` receipt. -/
+theorem LocalCylindricalFrame.compileRetainedNodePrefixFramePair?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ∃ sourcePruned targetPruned sourceFrameItems targetFrameItems,
+      ConcreteElaboration.compileNodes? definitions source.val
+          (frame.sourceRetainedVisibleContext pair)
+          ((source.val.nodesAt (source.val.wires wire).scope).filter
+            (fun node => decide (node ∉ argumentSiteNodes result.sites))) =
+          some sourcePruned ∧
+        ConcreteElaboration.compileNodes? definitions result.checked.val
+            (frame.targetRetainedVisibleContext pair)
+            (((replacementBase result.plan).nodesAt
+                (retainedRegion source (source.val.wires wire).scope)).map
+              (fun retained => ConcreteWireQuantifier.Internal.checkedNode
+                result.generated
+                (Fin.castAdd result.sites.sites.length retained))) =
+          some targetPruned ∧
+        ConcreteElaboration.compileNodes? definitions source.val
+            frame.sourceScope.frame.visible
+            ((source.val.nodesAt (source.val.wires wire).scope).filter
+              (fun node => decide (node ∉ argumentSiteNodes result.sites))) =
+          some sourceFrameItems ∧
+        ConcreteElaboration.compileNodes? definitions result.checked.val
+            frame.targetScope.frame.visible
+            (((replacementBase result.plan).nodesAt
+                (retainedRegion source (source.val.wires wire).scope)).map
+              (fun retained => ConcreteWireQuantifier.Internal.checkedNode
+                result.generated
+                (Fin.castAdd result.sites.sites.length retained))) =
+          some targetFrameItems ∧
+        sourceFrameItems = sourcePruned.renameWires
+          (frame.sourceRetainedFrameEmbedding pair) ∧
+        targetFrameItems = targetPruned.renameWires
+          (frame.targetRetainedFrameEmbedding sourceArguments newArgument
+            result accepted pair) ∧
+        targetPruned = sourcePruned.renameWires
+          (frame.retainedVisibleContext newArgument result accepted pair).wireRenaming := by
+  obtain ⟨sourcePruned, targetPruned, sourceCompiled, targetCompiled,
+      targetPrunedExact⟩ :=
+    frame.compileRetainedNodePrefixPair?_complete sourceArguments newArgument
+      result accepted pair
+  obtain ⟨sourceFrameItems, sourceFrameCompiled, sourceFrameExact⟩ :=
+    compileNodes?_contextEmbedding source
+      (frame.sourceRetainedVisibleContext pair)
+      frame.sourceScope.frame.visible (siteVisibleNodup frame.sourceScope)
+      (frame.sourceRetainedVisibleContext_member_frame pair) _ sourceCompiled
+  obtain ⟨targetFrameItems, targetFrameCompiled, targetFrameExact⟩ :=
+    compileNodes?_contextEmbedding result.checked
+      (frame.targetRetainedVisibleContext pair)
+      frame.targetScope.frame.visible (siteVisibleNodup frame.targetScope)
+      (frame.targetRetainedVisibleContext_member_frame sourceArguments
+        newArgument result accepted pair) _ targetCompiled
+  refine ⟨sourcePruned, targetPruned, sourceFrameItems, targetFrameItems,
+    sourceCompiled, targetCompiled, sourceFrameCompiled, targetFrameCompiled,
+    ?_, ?_, targetPrunedExact⟩
+  · simpa [LocalCylindricalFrame.sourceRetainedFrameEmbedding] using
+      sourceFrameExact
+  · simpa [LocalCylindricalFrame.targetRetainedFrameEmbedding] using
+      targetFrameExact
 
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
