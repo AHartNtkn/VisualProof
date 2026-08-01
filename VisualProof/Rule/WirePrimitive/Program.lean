@@ -1,4 +1,5 @@
 import VisualProof.Rule.Structural
+import VisualProof.Rule.WirePrimitive.VacuityTransport
 import VisualProof.Rule.WirePrimitive.Partition
 import VisualProof.Rule.WirePrimitive.Content
 import VisualProof.Rule.WirePrimitive.Arguments
@@ -90,12 +91,14 @@ inductive CompiledPrimitiveStep
   | vacuousElim
       {plain bound : CheckedDiagram definitions}
       (input : VacuousInput plain bound)
-      (checked : CheckedVacuous input) :
+      (checked : CheckedVacuous input)
+      (deletion : Vacuity.EliminationReceipt input checked) :
       CompiledPrimitiveStep orientation bound
   | vacuousIntro
       {plain bound : CheckedDiagram definitions}
       (input : VacuousInput plain bound)
-      (checked : CheckedVacuous input) :
+      (checked : CheckedVacuous input)
+      (deletion : Vacuity.EliminationReceipt input checked) :
       CompiledPrimitiveStep orientation plain
   | arityShift
       {source : CheckedDiagram definitions}
@@ -201,8 +204,8 @@ def target :
   | _, .parallelFuse _ _ applied => applied.target
   | _, .endsDelete _ applied => applied.target
   | _, .endsSpawn _ _ applied => applied.target
-  | _, .vacuousElim _ checked => checked.plain
-  | _, .vacuousIntro _ checked => checked.bound
+  | _, .vacuousElim _ checked _ => checked.plain
+  | _, .vacuousIntro _ checked _ => checked.bound
   | _, .arityShift _ _ applied => applied.target
   | _, .arityUnshift _ _ applied => applied.target
   | _, .argPermute _ _ applied => applied.target

@@ -7,6 +7,7 @@ import VisualProof.Rule.WirePrimitive.ArgumentsExtendTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsDuplicateTransport
 import VisualProof.Rule.WirePrimitive.Leaves
+import VisualProof.Rule.WirePrimitive.VacuityTransport
 import VisualProof.Rule.WirePrimitive.Program
 
 /-!

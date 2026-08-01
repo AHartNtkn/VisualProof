@@ -57,10 +57,10 @@ theorem sound
   | endsSpawn wire sites applied =>
       exact
         ends_spawn_sound orientation wire sites applied model definitionEnv
-  | vacuousElim input checked =>
+  | vacuousElim input checked _ =>
       exact equivalenceDirected orientation <|
         checked.equivalence model.toPreModel definitionEnv
-  | vacuousIntro input checked =>
+  | vacuousIntro input checked _ =>
       exact equivalenceDirected orientation <|
         (checked.equivalence model.toPreModel definitionEnv).symm
   | arityShift wire newArgument applied =>

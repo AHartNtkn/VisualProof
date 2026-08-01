@@ -36,6 +36,24 @@ def targetRegion
     simp [retainedRegions, ConcreteDiagram.regionsList,
       Data.Finite.mem_allFin])
 
+/-- Singleton-wire deletion retains regions in their exact dense order. -/
+@[simp] theorem targetRegion_val
+    (source : CheckedDiagram definitions)
+    (removed : source.val.WireId)
+    (region : source.val.RegionId) :
+    (targetRegion source removed region).val = region.val := by
+  have keepAll :
+      ∀ values : List (Fin source.val.regionCount),
+        values.filter (fun _ => true) = values := by
+    intro values
+    induction values <;> simp_all
+  have selected := congrArg Fin.val
+    (DenseList.get_index (retainedRegions source) region (by
+      simp [retainedRegions, ConcreteDiagram.regionsList,
+        Data.Finite.mem_allFin]))
+  simpa [targetRegion, retainedRegions, ConcreteDiagram.regionsList,
+    Data.Finite.allFin_eq_finRange, keepAll] using selected
+
 @[simp] theorem target_regionCount
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId) :

@@ -483,9 +483,21 @@ private def runEmptyResidual
           let vacuous ←
             (StructuralCore.checkVacuous vacuousInput).mapError
               .vacuousRejected
+          let deletion :
+              Vacuity.EliminationReceipt vacuousInput vacuous :=
+            Vacuity.recordElimination vacuous live
+              (Vacuity.isoOfEq plain.property generated) (by
+                apply Fin.ext
+                rw [Vacuity.isoOfEq_region_val,
+                  ConcreteWireQuantifier.ExhaustedWireRemovalSemantics.targetRegion_val])
+              (by rfl) (by
+                apply ConcreteWireQuantifier.eraseWireCandidate_wellFormed_implies_endpoints_empty
+                change candidate.WellFormed definitions
+                rw [← generated]
+                exact plain.property)
           let vacuousStep :
               CompiledPrimitiveStep orientation deleteStep.target :=
-            .vacuousElim vacuousInput vacuous
+            .vacuousElim vacuousInput vacuous deletion
           let finalTracked ←
             requireOption .trackedWireConsumed <|
               transportTrackedAfterErase deleteStep.target live
@@ -1170,23 +1182,6 @@ private structure InverseStepRun
   step : CompiledPrimitiveStep orientation real
   normalizedIso : ConcreteIso step.target.val planned.val
 
-private def vacuousBoundCandidate
-    (plain : CheckedDiagram definitions)
-    (site : plain.val.RegionId)
-    (signature : Sig) :
-    ConcreteDiagram definitions.length where
-  regionCount := plain.val.regionCount
-  nodeCount := plain.val.nodeCount
-  wireCount := plain.val.wireCount + 1
-  root := plain.val.root
-  regions := plain.val.regions
-  nodes := plain.val.nodes
-  wires :=
-    Fin.addCases plain.val.wires fun _ =>
-      { sig := signature
-        scope := site
-        endpoints := [] }
-
 private def invertStep
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
@@ -1352,25 +1347,21 @@ private def invertStep
       let normalizedIso := applied.inverseTransportIso inverseApplied targetIso
         wireExact
       pure { step := inverseStep, normalizedIso := normalizedIso }
-  | .vacuousElim input _ => do
+  | .vacuousElim input _ deletion => do
       let inverseSite := targetIso.regions.symm input.site
-      let candidate := vacuousBoundCandidate real inverseSite input.sig
-      match accepted :
-          ConcreteDiagram.checkWellFormed definitions candidate with
-      | .error _ => throw .allocationMismatch
-      | .ok bound =>
-          let inverseInput : StructuralCore.VacuousInput real bound :=
-            { site := inverseSite, sig := input.sig }
-          let inverseChecked ←
-            (StructuralCore.checkVacuous inverseInput).mapError
-              .vacuousRejected
-          let inverseStep : CompiledPrimitiveStep orientation real :=
-            .vacuousIntro inverseInput inverseChecked
-          let normalizedIso ←
-            requireOption .redundancyMismatch <|
-              ConcreteIsoSearch.findConcreteIso?
-                inverseStep.target.val planned.val
-          pure { step := inverseStep, normalizedIso := normalizedIso }
+      let inverseInput : StructuralCore.VacuousInput real planned :=
+        { site := inverseSite, sig := input.sig }
+      let inverseChecked ←
+        (StructuralCore.checkVacuous inverseInput).mapError
+          .vacuousRejected
+      let inverseDeletion :
+          Vacuity.EliminationReceipt inverseInput inverseChecked :=
+        Vacuity.transportElimination deletion real targetIso inverseInput
+          inverseChecked rfl rfl
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .vacuousIntro inverseInput inverseChecked inverseDeletion
+      let normalizedIso := Vacuity.identityIso planned.val planned.property
+      pure { step := inverseStep, normalizedIso := normalizedIso }
   | _ => throw .malformedResidual
 
 private structure ReversedProgram
