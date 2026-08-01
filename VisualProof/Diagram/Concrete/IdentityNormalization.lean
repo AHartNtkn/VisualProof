@@ -9,10 +9,27 @@ namespace ConcreteDiagram
 
 open IdentityNormalizationCore
 
+/-- The construction-owned primitive and complete eligibility receipt for one
+eager identity rewrite.  Consumers never need to rediscover which rule made a
+target or re-run eligibility search. -/
+inductive IdentityRewriteKind
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions) : Type
+  | drop
+      (node : source.val.NodeId)
+      (eligible : DropEligibility source node)
+  | collapse
+      (node : source.val.NodeId)
+      (eligible : CollapseEligibility source node)
+  | fusion
+      (left right : source.val.NodeId)
+      (eligible : FusionEligibility source left right)
+
 /-- One checked eager rewrite with total signature-preserving wire transport. -/
 structure IdentityRewrite
     {definitions : List (List Sig)}
     (source : CheckedDiagram definitions) : Type where
+  kind : IdentityRewriteKind source
   target : CheckedDiagram definitions
   wireImage : source.val.WireId → target.val.WireId
   wire_signature :
@@ -30,7 +47,8 @@ private def dropRewrite
   let target : CheckedDiagram definitions :=
     ⟨candidate, dropCandidate_wellFormed source node eligible⟩
   let transport := dropWireTransport source node eligible
-  { target := target
+  { kind := .drop node eligible
+    target := target
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
     nodeCount_lt := dropCandidate_nodeCount_lt source node eligible }
@@ -51,7 +69,8 @@ private def collapseRewrite
   let target : CheckedDiagram definitions :=
     ⟨candidate, collapseCandidate_wellFormed source node eligible⟩
   let transport := collapseWireTransport source node eligible
-  { target := target
+  { kind := .collapse node eligible
+    target := target
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
     nodeCount_lt := collapseCandidate_nodeCount_lt source node eligible }
@@ -76,7 +95,8 @@ private def fusionRewrite
   let target : CheckedDiagram definitions :=
     ⟨candidate, fusionCandidate_wellFormed source left right eligible⟩
   let transport := fusionWireTransport source left right eligible
-  { target := target
+  { kind := .fusion left right eligible
+    target := target
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
     nodeCount_lt :=
