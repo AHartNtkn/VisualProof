@@ -1105,6 +1105,59 @@ theorem recursiveFinalTargetHoleValues_alignment
   rw [ArgumentResult.targetSiteNodesAt_exact result region] at aligned
   simpa [List.map_map, Function.comp_def] using aligned
 
+theorem recursiveFinalRegionHole_lengths
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceItems : ItemSeq definitions sourceContext.sigs)
+    (targetItems : ItemSeq definitions targetContext.sigs)
+    (sourceCompiled : ConcreteElaboration.compileNodes? definitions source.val
+      sourceContext (source.val.nodesAt region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileNodes? definitions
+      result.checked.val targetContext
+      (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (targetNodup : targetContext.ids.Nodup)
+    (sourceMap : WireRenaming sourceContext.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel sourceArguments))
+    (targetHead : Var normalizedTarget (.rel result.targetArguments))
+    (headNormalization : RecursiveHeadNormalization result sourceArguments
+      sourceContext targetContext sourceMap targetMap sourceHead targetHead) :
+    (UniformIntrinsicRegion.abstractAppliedItems sourceHead
+        (sourceItems.renameWires sourceMap)).holeValues.length =
+        (arityFreshAt result region).length ∧
+      (UniformIntrinsicRegion.abstractAppliedItems targetHead
+        (targetItems.renameWires targetMap)).holeValues.length =
+        (arityFreshAt result region).length := by
+  have sourceAligned := recursiveFinalAppliedHoleValues_alignment
+    sourceArguments sourceSignature result.sites sourceContext region
+    sourceItems sourceCompiled sourceNodup sourceMap sourceHead
+    headNormalization.source_forward headNormalization.source_reflect
+  have sourceLength := congrArg List.length sourceAligned
+  simp only [List.length_map] at sourceLength
+  have targetAligned := recursiveFinalTargetHoleValues_alignment result region
+    targetContext targetItems targetCompiled targetNodup targetMap targetHead
+    headNormalization.target_forward headNormalization.target_reflect
+  have targetLength := congrArg List.length targetAligned
+  simp only [List.length_map] at targetLength
+  exact
+    ⟨sourceLength.trans
+      (sourceSiteNodesAt_length_fresh source wire sourceArguments
+        sourceSignature newArgument result accepted region),
+    targetLength.trans (by simpa using
+      (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
+        newArgument result accepted region))⟩
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
