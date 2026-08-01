@@ -848,6 +848,45 @@ theorem recursiveFinalRegionHoleValues_alignment
   intro node nodeAt
   exact classifierExact node nodeAt
 
+theorem recursiveFinalRegionClassifier_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (region : source.val.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions source.val
+      context (source.val.nodesAt region) = some items)
+    (contextNodup : context.ids.Nodup)
+    (sourceMap : WireRenaming context.sigs normalizedSource)
+    (targetMap : WireRenaming targetContext.sigs normalizedTarget)
+    (sourceHead : Var normalizedSource (.rel sourceArguments))
+    (targetHead : Var normalizedTarget (.rel result.targetArguments))
+    (headNormalization : RecursiveHeadNormalization result sourceArguments
+      context targetContext sourceMap targetMap sourceHead targetHead)
+    (site : AppliedSite source wire)
+    (siteRegion : site.region = region) :
+    ∃ arguments : Vars context.sigs sourceArguments,
+      recursiveFinalRegionClassifier definitions source.val context sourceMap
+          sourceHead site.node = some (Vars.rename sourceMap arguments) ∧
+      ConcreteElaboration.variableOrigins source.val context arguments =
+        site.arguments := by
+  have argumentSignatures :=
+    appliedSite_arguments_eq_relationArguments sourceArguments
+      sourceSignature site
+  cases argumentSignatures
+  obtain ⟨head, arguments, nodeCompiled, headOrigin, argumentsOrigin⟩ :=
+    compileAppliedSiteAt?_complete context region items compiled site siteRegion
+  have normalizedHead := headNormalization.source_forward head headOrigin
+  refine ⟨arguments, ?_, argumentsOrigin⟩
+  simp [recursiveFinalRegionClassifier,
+    UniformIntrinsicRegion.renamedCompiledAppliedArguments?, nodeCompiled,
+    UniformIntrinsicRegion.matchedHeadArguments?, normalizedHead]
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
