@@ -505,6 +505,29 @@ theorem eraseSelectedIds_removal_signatures
   (eraseSelectedIds_signatures diagram ids removal.head).trans
     removal.reduced_eq_erase_head.symm
 
+/-- The concrete reduced context owned by a stored removal preserves the
+origin of every variable retained by that receipt. -/
+theorem eraseSelectedIds_origin_retain
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (removal : LocalHeadRemoval headSignature
+      (ids.map fun wire => (diagram.wires wire).sig) reduced)
+    (value : Var reduced signature) :
+    ConcreteElaboration.WireContext.origin diagram
+        (eraseSelectedIds diagram ids removal.head)
+        (retainedSelectedVarInErasedIds diagram ids removal.head
+          (removal.reduced_eq_erase_head ▸ value)) =
+      ConcreteElaboration.WireContext.origin diagram ids
+        (removal.retain value) := by
+  calc
+    _ = ConcreteElaboration.WireContext.origin diagram ids
+          (LocalHeadRemoval.retainSelected removal.head
+            (removal.reduced_eq_erase_head ▸ value)) :=
+        eraseSelectedIds_origin_retainSelected diagram ids removal.head _
+    _ = _ := congrArg
+      (ConcreteElaboration.WireContext.origin diagram ids)
+      (removal.retainSelected_head value)
+
 /-- In a duplicate-free compiler context, filtering the selected concrete
 origin is exactly the intrinsic ordered identifier deletion. -/
 theorem filter_origin_ids

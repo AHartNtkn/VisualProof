@@ -185,6 +185,69 @@ def retain
       | .here => .here
       | .there tail => .there (rest.retain tail)
 
+private theorem castVar_cons_here
+    (boundSig : Sig) (same : left = right) :
+    congrArg (List.cons boundSig) same ▸
+        (Var.here : Var (boundSig :: left) boundSig) =
+      (Var.here : Var (boundSig :: right) boundSig) := by
+  cases same
+  rfl
+
+private theorem castVar_cons_there
+    (boundSig : Sig) (same : left = right)
+    (value : Var left signature) :
+    congrArg (List.cons boundSig) same ▸
+        (Var.there value : Var (boundSig :: left) signature) =
+      (Var.there (same ▸ value) : Var (boundSig :: right) signature) := by
+  cases same
+  rfl
+
+/-- The canonical selected-position embedding agrees with the embedding
+stored by every extensionally equal removal receipt. -/
+theorem retainSelected_head
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (value : Var reduced signature) :
+    retainSelected removal.head
+        (removal.reduced_eq_erase_head ▸ value) =
+      removal.retain value := by
+  induction removal with
+  | here => rfl
+  | there localSignature rest induction =>
+      have proofExact :
+          (LocalHeadRemoval.there localSignature rest).reduced_eq_erase_head =
+            congrArg (List.cons localSignature)
+              rest.reduced_eq_erase_head :=
+        Subsingleton.elim _ _
+      rw [proofExact]
+      cases value with
+      | here =>
+          let same := rest.reduced_eq_erase_head
+          have castExact := castVar_cons_here signature same
+          calc
+            _ = WireRenaming.lift (retainSelected rest.head) signature
+                  (Var.here : Var
+                    (signature :: eraseSelected rest.head)
+                    signature) :=
+                congrArg
+                  (WireRenaming.lift (retainSelected rest.head) signature)
+                  castExact
+            _ = _ := rfl
+      | there value =>
+          let same := rest.reduced_eq_erase_head
+          have castExact := castVar_cons_there localSignature same value
+          calc
+            _ = WireRenaming.lift (retainSelected rest.head) localSignature
+                  (Var.there (same ▸ value)) :=
+                congrArg
+                  (WireRenaming.lift (retainSelected rest.head)
+                    localSignature)
+                  castExact
+            _ = Var.there
+                  (retainSelected rest.head (same ▸ value)) := rfl
+            _ = Var.there (rest.retain value) :=
+                congrArg Var.there (induction value)
+            _ = _ := rfl
+
 /-- Intrinsically typed classification of every local variable as either the
 selected head or one exact retained position. -/
 inductive VariableClass
