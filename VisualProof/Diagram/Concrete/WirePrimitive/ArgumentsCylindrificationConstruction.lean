@@ -8,6 +8,13 @@ open WirePrimitive
 
 namespace ArgumentsSemantics
 
+private theorem map_allFin_cast
+    {left right : Nat} (same : left = right) :
+    (Data.Finite.allFin left).map (Fin.cast same) =
+      Data.Finite.allFin right := by
+  subst right
+  simp
+
 /-- Filtering one concrete id from a duplicate-free compiler context removes
 the exact typed position selected by that id's variable, even when other
 binders carry the same signature. -/
@@ -233,6 +240,58 @@ def arityShift_regionBounds_below
     sourceSignature newArgument result accepted region notHead]
   rw [List.map_const']
   exact BoundCylindrification.appendFresh newArgument _ _
+
+/-- Fresh arity wires scoped at one region have exactly the same order as
+the corresponding checked source occurrences at that region. -/
+theorem arityShift_freshSitesAt
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+        retainedRegion source (result.spec.localScope fresh) ==
+          retainedRegion source region).map
+        (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted)) =
+      (Data.Finite.allFin result.sites.sites.length).filter fun site =>
+        (result.sites.sites.get site).region == region := by
+  let countExact := arityShift_localCount_exact source wire sourceArguments
+    sourceSignature result.sites newArgument result accepted
+  have predicates :
+      (Data.Finite.allFin result.spec.localCount).filter (fun fresh =>
+          retainedRegion source (result.spec.localScope fresh) ==
+            retainedRegion source region) =
+        (Data.Finite.allFin result.spec.localCount).filter
+          ((fun site : Fin result.sites.sites.length =>
+            (result.sites.sites.get site).region == region) ∘
+            Fin.cast countExact) := by
+    apply List.filter_congr
+    intro fresh _member
+    simp only [Function.comp_apply]
+    apply decide_eq_decide.mpr
+    let site := Fin.cast countExact fresh
+    have scopeExact := arityShift_localScope_exact source wire sourceArguments
+      sourceSignature result.sites newArgument result accepted site
+    have freshExact : Fin.cast countExact.symm site = fresh := by
+      apply Fin.ext
+      rfl
+    rw [freshExact] at scopeExact
+    rw [scopeExact]
+    constructor
+    · intro retainedExact
+      apply
+        (ConcreteWireQuantifier.Internal.noRegionRemovalEquiv source).injective
+      rw [← retainedRegion_eq_noRegionRemovalEquiv,
+        ← retainedRegion_eq_noRegionRemovalEquiv]
+      exact retainedExact
+    · intro same
+      rw [same]
+  rw [predicates, ← List.filter_map, map_allFin_cast countExact]
 
 /-- The normalized source binder block is exactly the source scope's ordered
 local signatures with the selected relation head removed. -/
