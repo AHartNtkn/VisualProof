@@ -298,7 +298,10 @@ private theorem climb_to_root_le_count
   rw [equal]
   exact Nat.le_of_lt_succ bounded.isLt
 
-private theorem child_depth
+/-- A direct child is exactly one compiler-depth step below its parent.
+Exposed for construction-owned recursive receipts that must follow the same
+region-tree descent as elaboration. -/
+theorem child_depth
     (diagram : ConcreteDiagram definitionCount)
     (child parent : diagram.RegionId) (depth : Nat)
     (childData : diagram.regions child = .cut parent)
