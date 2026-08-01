@@ -106,6 +106,36 @@ theorem InsertionEvidence.reconstruct
       exact
         splitInsertedCore_reconstruct smaller position fixedSignature values
 
+/-- Splitting a tuple produced by the checked insertion recovers exactly the
+inserted coordinate and the original ordered tuple. -/
+theorem InsertionEvidence.split_forwardVars
+    (evidence :
+      InsertionEvidence larger smaller fixedSignature)
+    (fixed : Var context fixedSignature)
+    (values : Vars context smaller) :
+    evidence.splitVars (evidence.forwardVars fixed values) =
+      ⟨fixed, values⟩ := by
+  cases evidence with
+  | mk position largerExact =>
+      subst larger
+      induction values generalizing position with
+      | nil =>
+          cases position <;> rfl
+      | cons head tail induction =>
+          cases position with
+          | zero => rfl
+          | succ position =>
+              have tailExact :
+                  splitInsertedCore _ position fixedSignature
+                      (insertVars position fixed tail) =
+                    ⟨fixed, tail⟩ := by
+                simpa [InsertionEvidence.forwardVars,
+                  InsertionEvidence.splitVars] using induction position
+              simp only [InsertionEvidence.forwardVars,
+                InsertionEvidence.splitVars, insertVars,
+                splitInsertedCore]
+              rw [tailExact]
+
 private theorem splitInsertedValuesCore_reconstruct
     (smaller : List Sig)
     (position : Nat)
