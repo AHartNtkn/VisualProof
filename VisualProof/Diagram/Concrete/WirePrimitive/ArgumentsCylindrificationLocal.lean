@@ -123,6 +123,19 @@ private theorem keepPrefix_appendLeft
         Var.there (Var.appendLeft tail target)
       exact congrArg Var.there induction
 
+private theorem keepPrefix_appendRight
+    (retainedPrefix : List Sig)
+    (outer : WireRenaming source target)
+    (value : Var source signature) :
+    keepPrefix retainedPrefix outer
+        (Var.appendRight retainedPrefix value) =
+      Var.appendRight retainedPrefix (outer value) := by
+  induction retainedPrefix with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [keepPrefix, WireRenaming.lift, Var.appendRight]
+      exact congrArg Var.there induction
+
 /-- Embed every retained local binder back into the original block. -/
 def retain
     (removal : LocalHeadRemoval headSignature bound reduced) :
@@ -190,6 +203,23 @@ theorem rename_retain
                 (Var.appendLeft (rest.retain tail) sourceOuter)) =
             Var.there (Var.appendLeft tail targetOuter)
           exact congrArg Var.there (induction tail)
+
+/-- Every variable from the surrounding concrete compiler context is sent
+through the selected outer renaming beyond the complete reduced local block. -/
+theorem rename_outer
+    (removal : LocalHeadRemoval headSignature bound reduced)
+    (outer : WireRenaming sourceOuter targetOuter)
+    (headSlot : Var targetOuter headSignature)
+    (value : Var sourceOuter signature) :
+    removal.rename outer headSlot (Var.appendRight bound value) =
+      Var.appendRight reduced (outer value) := by
+  induction removal with
+  | @here rest =>
+      simp only [rename, Var.appendRight]
+      exact keepPrefix_appendRight rest outer value
+  | there localSignature rest induction =>
+      simp only [rename, Var.appendRight]
+      exact congrArg Var.there induction
 
 /-- Split the selected semantic head from the retained local values. -/
 def splitValues
