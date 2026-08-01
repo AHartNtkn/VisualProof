@@ -1514,6 +1514,24 @@ theorem recursiveCompileNodes?_contextEmbedding
               · rw [targetTailExact]
                 rfl
 
+theorem recursiveVar_exists_of_mem
+    (diagram : ConcreteDiagram definitionCount)
+    (ids : List diagram.WireId)
+    (wire : diagram.WireId)
+    (member : wire ∈ ids) :
+    ∃ (signature : Sig)
+      (value : Var (ids.map fun selected => (diagram.wires selected).sig)
+        signature),
+      ConcreteElaboration.WireContext.origin diagram ids value = wire := by
+  induction ids with
+  | nil => simp at member
+  | cons head tail induction =>
+      simp only [List.mem_cons] at member
+      rcases member with rfl | tailMember
+      · exact ⟨(diagram.wires wire).sig, .here, rfl⟩
+      · obtain ⟨signature, value, exact⟩ := induction tailMember
+        exact ⟨signature, .there value, exact⟩
+
 /-- The actual source variables available to retained ordinary nodes after
 removing the acted relation head from a recursive compiler context. -/
 def recursiveRetainedSourceContext
@@ -1738,6 +1756,119 @@ theorem recursiveRetainedNodePair_normalized
       (recursiveItemSeqRename_comp sourceMap embedding
         (fun {_} value => embedding (sourceMap value))
         (fun _ => rfl) sourceItems).symm
+
+/-- Retained ordinary nodes compiled in the actual recursive contexts agree
+after the construction's independent final normalizations. -/
+theorem recursiveRetainedNodePair_final
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (covers : sourceContext.Covers region)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (targetNodup : targetContext.ids.Nodup)
+    (correspondence : RecursiveNormalizationCorrespondence result
+      sourceContext targetContext normalizedSource normalizedTarget) :
+    ∃ (sourceItems : ItemSeq definitions sourceContext.sigs)
+      (targetItems : ItemSeq definitions targetContext.sigs),
+      ConcreteElaboration.compileNodes? definitions source.val sourceContext
+          ((source.val.nodesAt region).filter fun node =>
+            decide (node ∉ argumentSiteNodes result.sites)) =
+        some sourceItems ∧
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          targetContext
+          (((replacementBase result.plan).nodesAt
+              (retainedRegion source region)).map fun retained =>
+            ConcreteWireQuantifier.Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained)) =
+        some targetItems ∧
+      targetItems.renameWires correspondence.targetMap =
+        (sourceItems.renameWires correspondence.sourceMap).renameWires
+          correspondence.embedding := by
+  let sourcePruned := recursiveRetainedSourceContext source wire sourceContext
+  let targetPruned := recursiveRetainedTargetContext result sourceContext
+  have sourceVisible : ∀ sourceWire, sourceWire ∈ sourcePruned.ids →
+      sourceWire ∈ sourceContext.ids := by
+    intro sourceWire member
+    exact (List.mem_filter.mp member).1
+  have targetVisible : ∀ targetWire, targetWire ∈ targetPruned.ids →
+      targetWire ∈ targetContext.ids := by
+    intro targetWire member
+    obtain ⟨sourceWire, sourceMember, rfl⟩ := List.mem_map.mp member
+    have sourceMemberFull : sourceWire ∈ sourceContext.ids :=
+      (List.mem_filter.mp sourceMember).1
+    have sourceNotHead : sourceWire ≠ wire :=
+      of_decide_eq_true (List.mem_filter.mp sourceMember).2
+    obtain ⟨signature, sourceValue, sourceOrigin⟩ :=
+      recursiveVar_exists_of_mem source.val sourceContext.ids sourceWire
+        sourceMemberFull
+    obtain ⟨targetValue, targetOrigin⟩ :=
+      correspondence.targetExists sourceValue (by
+        rwa [sourceOrigin])
+    have targetMember :=
+      ConcreteElaboration.Internal.origin_member result.checked.val targetValue
+    rwa [targetOrigin, sourceOrigin] at targetMember
+  let sourceEmbedding : WireRenaming sourcePruned.sigs sourceContext.sigs :=
+    InsertionCompilation.NaturalityInternal.contextEmbedding source.val
+      source.val sourcePruned.ids sourceContext.ids (fun selected => selected)
+      (fun _ => rfl) sourceVisible
+  let targetEmbedding : WireRenaming targetPruned.sigs targetContext.sigs :=
+    InsertionCompilation.NaturalityInternal.contextEmbedding result.checked.val
+      result.checked.val targetPruned.ids targetContext.ids
+      (fun selected => selected) (fun _ => rfl) targetVisible
+  let sourceMap : WireRenaming sourcePruned.sigs normalizedSource :=
+    fun {_} value => correspondence.sourceMap (sourceEmbedding value)
+  let targetMap : WireRenaming targetPruned.sigs normalizedTarget :=
+    fun {_} value => correspondence.targetMap (targetEmbedding value)
+  have commutes : ∀ {signature : Sig}
+      (value : Var sourcePruned.sigs signature),
+      correspondence.embedding (sourceMap value) =
+        targetMap
+          ((recursiveRetainedContext source wire newArgument result accepted
+            sourceContext).wireRenaming value) := by
+    intro signature value
+    apply correspondence.commutes
+    · rw [InsertionCompilation.NaturalityInternal.contextEmbedding_origin]
+      have member := ConcreteElaboration.Internal.origin_member source.val value
+      exact of_decide_eq_true (List.mem_filter.mp member).2
+    · rw [InsertionCompilation.NaturalityInternal.contextEmbedding_origin,
+        (recursiveRetainedContext source wire newArgument result accepted
+          sourceContext).wireRenaming_origin,
+        InsertionCompilation.NaturalityInternal.contextEmbedding_origin]
+  obtain ⟨sourcePrunedItems, targetPrunedItems, sourcePrunedCompiled,
+      targetPrunedCompiled, prunedExact⟩ :=
+    recursiveRetainedNodePair_normalized source wire newArgument result
+      accepted region sourceContext covers sourceNodup sourceMap targetMap
+      correspondence.embedding commutes
+  obtain ⟨sourceItems, sourceCompiled, sourceExact⟩ :=
+    recursiveCompileNodes?_contextEmbedding source sourcePruned sourceContext
+      sourceNodup sourceVisible _ sourcePrunedCompiled
+  obtain ⟨targetItems, targetCompiled, targetExact⟩ :=
+    recursiveCompileNodes?_contextEmbedding result.checked targetPruned
+      targetContext targetNodup targetVisible _ targetPrunedCompiled
+  refine ⟨sourceItems, targetItems, sourceCompiled, targetCompiled, ?_⟩
+  subst sourceItems
+  subst targetItems
+  change
+    (targetPrunedItems.renameWires targetEmbedding).renameWires
+        correspondence.targetMap =
+      ((sourcePrunedItems.renameWires sourceEmbedding).renameWires
+        correspondence.sourceMap).renameWires correspondence.embedding
+  calc
+    _ = targetPrunedItems.renameWires targetMap :=
+      recursiveItemSeqRename_comp targetEmbedding correspondence.targetMap
+        targetMap (fun _ => rfl) targetPrunedItems
+    _ = (sourcePrunedItems.renameWires sourceMap).renameWires
+        correspondence.embedding := prunedExact
+    _ = ((sourcePrunedItems.renameWires sourceEmbedding).renameWires
+          correspondence.sourceMap).renameWires correspondence.embedding :=
+      congrArg (ItemSeq.renameWires correspondence.embedding)
+        (recursiveItemSeqRename_comp sourceEmbedding correspondence.sourceMap
+          sourceMap (fun _ => rfl) sourcePrunedItems).symm
 
 /-- The root pruned source compiler context embeds and then normalizes into
 the exact inner context of the source root cylindrical block. -/
