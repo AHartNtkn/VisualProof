@@ -836,6 +836,92 @@ theorem recursiveAbstract_finishRegionSignatures
       rw [recursiveAbstract_finishRegionSignatures outerHead tail]
       rfl
 
+/-- Keep an explicit binder prefix fixed while changing only the true outer
+context. -/
+def recursiveLiftOuterRenaming (bound : List Sig)
+    (outer : WireRenaming source target) :
+    WireRenaming (bound ++ source) (bound ++ target) :=
+  match bound with
+  | [] => outer
+  | signature :: rest =>
+      WireRenaming.lift (recursiveLiftOuterRenaming rest outer) signature
+
+@[simp] theorem recursiveLiftOuterRenaming_appendLeft
+    (bound : List Sig) (outer : WireRenaming source target)
+    (value : Var bound signature) :
+    recursiveLiftOuterRenaming bound outer
+        (Var.appendLeft value source) =
+      Var.appendLeft value target := by
+  induction value with
+  | here => rfl
+  | there tail induction =>
+      exact congrArg Var.there induction
+
+@[simp] theorem recursiveLiftOuterRenaming_appendRight
+    (bound : List Sig) (outer : WireRenaming source target)
+    (value : Var source signature) :
+    recursiveLiftOuterRenaming bound outer
+        (Var.appendRight bound value) =
+      Var.appendRight bound (outer value) := by
+  induction bound with
+  | nil => rfl
+  | cons head tail induction =>
+      exact congrArg Var.there induction
+
+/-- A bound cylindrification is natural in its true outer context. -/
+theorem recursiveBoundEmbed_natural
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (oldOuter : WireRenaming smallerOuter largerOuter)
+    (sourceRenaming : WireRenaming smallerOuter normalizedSmallerOuter)
+    (targetRenaming : WireRenaming largerOuter normalizedLargerOuter)
+    (newOuter : WireRenaming normalizedSmallerOuter normalizedLargerOuter)
+    (commutes : ∀ {signature : Sig}
+      (value : Var smallerOuter signature),
+      newOuter (sourceRenaming value) = targetRenaming (oldOuter value)) :
+    ∀ {signature : Sig}
+      (value : Var (smallerBound ++ smallerOuter) signature),
+      recursiveLiftOuterRenaming largerBound targetRenaming
+          (bounds.embed oldOuter value) =
+        bounds.embed newOuter
+          (recursiveLiftOuterRenaming smallerBound sourceRenaming value) := by
+  intro signature value
+  induction bounds with
+  | nil =>
+      simpa [recursiveLiftOuterRenaming, BoundCylindrification.embed] using
+        (commutes value).symm
+  | retained bound rest induction =>
+      cases value with
+      | here => rfl
+      | there outer => exact congrArg Var.there (induction outer)
+  | fresh rest induction =>
+      exact congrArg Var.there (induction value)
+
+/-- Fresh binder coordinates are unaffected by a change of true outer
+context. -/
+theorem recursiveBoundFresh_natural
+    (bounds : BoundCylindrification fixedSignature smallerBound largerBound
+      freshCount)
+    (oldOuter : WireRenaming smallerOuter largerOuter)
+    (targetRenaming : WireRenaming largerOuter normalizedLargerOuter)
+    (newOuter : WireRenaming normalizedSmallerOuter normalizedLargerOuter) :
+    ∀ index : Fin freshCount,
+      recursiveLiftOuterRenaming largerBound targetRenaming
+          (bounds.freshVar oldOuter index) =
+        bounds.freshVar newOuter index := by
+  induction bounds with
+  | nil =>
+      intro index
+      exact Fin.elim0 index
+  | retained bound rest induction =>
+      intro index
+      exact congrArg Var.there (induction index)
+  | fresh rest induction =>
+      intro index
+      cases index using Fin.cases with
+      | zero => rfl
+      | succ tail => exact congrArg Var.there (induction tail)
+
 /-- Transport a cylindrical shape across exact source and target context
 equalities. -/
 def recursiveShapeTransport
