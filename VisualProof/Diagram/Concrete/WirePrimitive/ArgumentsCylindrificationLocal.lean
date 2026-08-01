@@ -71,6 +71,17 @@ theorem ofVar_head (selected : Var bound headSignature) :
       simp only [ofVar, head]
       rw [induction]
 
+/-- Reconstructing a removal from its recorded head returns that exact
+dependent removal receipt, including its reduced binder index. -/
+theorem ofVar_head_exact
+    (removal : LocalHeadRemoval headSignature bound reduced) :
+    ofVar removal.head = ⟨reduced, removal⟩ := by
+  induction removal with
+  | here => rfl
+  | there signature rest induction =>
+      simp only [head, ofVar]
+      rw [induction]
+
 /-- Ordered binder signatures after deleting the selected typed position. -/
 def eraseSelected : (selected : Var bound signature) → List Sig
   | @Var.here signature rest => rest
