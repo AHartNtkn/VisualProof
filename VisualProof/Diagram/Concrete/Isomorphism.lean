@@ -6,6 +6,102 @@ open Data.Finite
 
 namespace ConcreteIso
 
+/--
+Construction-owned correspondence between the incident endpoints of one
+already-corresponding wire.  The subtype carriers make incidence and both
+inverse laws structural, leaving only semantic port correspondence to prove.
+-/
+structure EndpointFiberEquiv
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
+    (wires : Data.Finite.FiniteEquiv left.WireId right.WireId)
+    (wire : left.WireId) where
+  equivalence :
+    Data.Finite.FiniteEquiv
+      { endpoint // endpoint ∈ (left.wires wire).endpoints }
+      { candidate //
+        candidate ∈ (right.wires (wires wire)).endpoints }
+  corresponds :
+    ∀ endpoint,
+      PortCorresponds left right nodes endpoint.1
+        (equivalence endpoint).1
+
+/--
+Assemble a raw concrete isomorphism from exact identifier tables and total
+per-wire endpoint fibers.  This is the non-searching construction boundary;
+callers provide the correspondences their construction receipts already own.
+-/
+def ofEquivs
+    {definitions : List (List Sig)}
+    {left right : ConcreteDiagram definitions.length}
+    (regions : Data.Finite.FiniteEquiv left.RegionId right.RegionId)
+    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
+    (wires : Data.Finite.FiniteEquiv left.WireId right.WireId)
+    (root : regions left.root = right.root)
+    (regionTable :
+      ∀ region,
+        right.regions (regions region) =
+          (left.regions region).rename regions)
+    (nodeTable :
+      ∀ node,
+        right.nodes (nodes node) =
+          (left.nodes node).rename regions)
+    (wireSignature :
+      ∀ wire, (right.wires (wires wire)).sig = (left.wires wire).sig)
+    (wireScope :
+      ∀ wire,
+        (right.wires (wires wire)).scope =
+          regions (left.wires wire).scope)
+    (endpointFibers :
+      ∀ wire, EndpointFiberEquiv nodes wires wire) :
+    ConcreteIso left right where
+  regions := regions
+  nodes := nodes
+  wires := wires
+  root := root
+  region_table := regionTable
+  node_table := nodeTable
+  wire_signature := wireSignature
+  wire_scope := wireScope
+  endpointMap := fun wire endpoint =>
+    if member : endpoint ∈ (left.wires wire).endpoints then
+      (endpointFibers wire).equivalence ⟨endpoint, member⟩
+    else
+      ⟨nodes endpoint.node, endpoint.port⟩
+  endpointInverse := fun wire candidate =>
+    if member : candidate ∈ (right.wires (wires wire)).endpoints then
+      (endpointFibers wire).equivalence.symm ⟨candidate, member⟩
+    else
+      ⟨nodes.symm candidate.node, candidate.port⟩
+  endpointMap_mem := by
+    intro wire endpoint member
+    simp only [dif_pos member]
+    exact ((endpointFibers wire).equivalence ⟨endpoint, member⟩).2
+  endpointInverse_mem := by
+    intro wire candidate member
+    simp only [dif_pos member]
+    exact
+      ((endpointFibers wire).equivalence.symm ⟨candidate, member⟩).2
+  endpointMap_left_inv := by
+    intro wire endpoint member
+    simp only [dif_pos member]
+    rw [dif_pos
+      ((endpointFibers wire).equivalence ⟨endpoint, member⟩).2]
+    exact congrArg Subtype.val
+      ((endpointFibers wire).equivalence.left_inv ⟨endpoint, member⟩)
+  endpointMap_right_inv := by
+    intro wire candidate member
+    simp only [dif_pos member]
+    rw [dif_pos
+      ((endpointFibers wire).equivalence.symm ⟨candidate, member⟩).2]
+    exact congrArg Subtype.val
+      ((endpointFibers wire).equivalence.right_inv ⟨candidate, member⟩)
+  endpointMap_corresponds := by
+    intro wire endpoint member
+    simp only [dif_pos member]
+    exact (endpointFibers wire).corresponds ⟨endpoint, member⟩
+
 private theorem portCorresponds_symm
     {definitions : List (List Sig)}
     {left right : ConcreteDiagram definitions.length}
