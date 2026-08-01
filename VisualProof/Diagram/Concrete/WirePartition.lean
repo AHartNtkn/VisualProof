@@ -471,6 +471,53 @@ theorem outer_ne_inner
   simpa [wireJoinCandidate] using
     congrArg ConcreteDiagram.wireCount result.generated
 
+/-- The exact pre-join wire represented by one dense target identifier. -/
+def sourceWire
+    (result : WireJoinResult source outer inner)
+    (target : result.checked.val.WireId) : source.val.WireId :=
+  (wireJoinWires source inner).get
+    (Fin.cast result.wireCount target)
+
+theorem sourceWire_ne_inner
+    (result : WireJoinResult source outer inner)
+    (target : result.checked.val.WireId) :
+    result.sourceWire target ≠ inner := by
+  have member : result.sourceWire target ∈ wireJoinWires source inner :=
+    List.get_mem _ _
+  exact of_decide_eq_true (List.mem_filter.mp member).2
+
+@[simp] theorem sourceWire_wireImage
+    (result : WireJoinResult source outer inner)
+    (source : source.val.WireId)
+    (survives : source ≠ inner) :
+    result.sourceWire (result.wireImage source survives) = source := by
+  unfold sourceWire wireImage
+  have member : source ∈ wireJoinWires _ inner := by
+    simp [wireJoinWires, ConcreteDiagram.wiresList,
+      Data.Finite.mem_allFin, survives]
+  apply Fin.ext
+  change
+    ((wireJoinWires _ inner).get
+      (DenseList.index (wireJoinWires _ inner) source member)).val =
+      source.val
+  rw [DenseList.get_index]
+
+@[simp] theorem wireImage_sourceWire
+    (result : WireJoinResult source outer inner)
+    (target : result.checked.val.WireId) :
+    result.wireImage (result.sourceWire target)
+        (result.sourceWire_ne_inner target) = target := by
+  unfold sourceWire wireImage
+  apply Fin.ext
+  change
+    (DenseList.index (wireJoinWires source inner)
+      ((wireJoinWires source inner).get
+        (Fin.cast result.wireCount target)) _).val = target.val
+  rw [DenseList.index_get (wireJoinWires source inner)
+    ((Data.Finite.allFin_nodup source.val.wireCount).filter _)
+    (Fin.cast result.wireCount target)]
+  rfl
+
 @[simp] theorem root_generated
     (result : WireJoinResult source outer inner) :
     result.checked.val.root = result.regionImage source.val.root := by
