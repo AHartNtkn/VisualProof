@@ -225,7 +225,9 @@ private theorem recursive_var_extend_cases
     exact (recursive_cast_appendRight_eq_appendRightVar diagram
       (diagram.wiresAt region) context.ids outerValue).symm
 
-private theorem recursive_origin_extend_local
+/-- Transporting a region-local variable through the dependent extended
+context preserves its concrete local owner. -/
+theorem recursive_origin_extend_local
     (diagram : ConcreteDiagram definitionCount)
     (context : ConcreteElaboration.WireContext diagram)
     (region : diagram.RegionId)

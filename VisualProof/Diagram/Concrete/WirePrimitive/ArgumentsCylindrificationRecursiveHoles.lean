@@ -48,6 +48,16 @@ private theorem recursive_normalization_cast_cancel_reverse
   cases same
   rfl
 
+private theorem recursive_cast_appendLeft_local
+    (same : left = right)
+    (value : Var left signature)
+    (outer : List Sig) :
+    congrArg (fun localSigs => localSigs ++ outer) same ▸
+        Var.appendLeft value outer =
+      Var.appendLeft (same ▸ value) outer := by
+  cases same
+  rfl
+
 /-- Any compiled head with the inherited head's concrete owner normalizes
 to the canonical appended outer head. -/
 theorem recursiveRegionNormalization_head_of_origin
@@ -543,6 +553,353 @@ theorem recursiveTargetRegionHoleValues_alignment
     targetNodup targetHead targetHeadOrigin
   rw [ArgumentResult.targetSiteNodesAt_exact result region] at aligned
   simpa [List.map_map, Function.comp_def] using aligned
+
+/-- Extending the inherited context action through a below-head region and
+then normalizing is exactly the block embedding applied after source
+normalization. -/
+theorem recursiveRegionNormalizations_commute
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    {signature : Sig}
+    (value : Var (sourceOuter.extend region).sigs signature) :
+    recursiveRegionNormalization targetOuter (result.regionImage region)
+        (arityShift_regionEmbedding_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead
+          sourceOuter targetOuter outer value) =
+      (arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).embed
+        outer (recursiveRegionNormalization sourceOuter region value) := by
+  unfold arityShift_regionEmbedding_below recursiveRegionNormalization
+  rw [recursive_normalization_cast_cancel]
+
+/-- Pointwise origin naturality upgrades to equality of complete normalized
+argument tuples in any below-head region. -/
+theorem recursiveRegionNormalizations_commute_of_mapped_origins
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    {argumentSignatures : List Sig}
+    (sourceValues :
+      Vars (sourceOuter.extend region).sigs argumentSignatures)
+    (targetValues : Vars
+      (targetOuter.extend (result.regionImage region)).sigs
+      argumentSignatures)
+    (mappedOrigins :
+      ConcreteElaboration.variableOrigins result.checked.val
+          (targetOuter.extend (result.regionImage region)) targetValues =
+        (ConcreteElaboration.variableOrigins source.val
+          (sourceOuter.extend region) sourceValues).map
+            result.contextWireMap) :
+    Vars.rename
+        ((arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).embed
+            outer)
+        (Vars.rename (recursiveRegionNormalization sourceOuter region)
+          sourceValues) =
+      Vars.rename
+        (recursiveRegionNormalization targetOuter (result.regionImage region))
+        targetValues := by
+  induction sourceValues with
+  | nil =>
+      cases targetValues
+      rfl
+  | cons sourceHead sourceTail induction =>
+      cases targetValues with
+      | cons targetHead targetTail =>
+          simp only [ConcreteElaboration.variableOrigins, List.map_cons,
+            List.cons.injEq] at mappedOrigins
+          have expectedOrigin := arityShift_regionEmbedding_below_origin
+            source wire sourceArguments sourceSignature newArgument result
+            accepted region notHead sourceOuter targetOuter outer outerOrigin
+            sourceHead
+          have targetHeadExact : targetHead =
+              arityShift_regionEmbedding_below source wire sourceArguments
+                sourceSignature newArgument result accepted region notHead
+                sourceOuter targetOuter outer sourceHead :=
+            InsertionCompilation.NaturalityInternal.origin_injective
+              result.checked.val
+              (targetOuter.extend (result.regionImage region)).ids targetNodup
+              (mappedOrigins.1.trans expectedOrigin.symm)
+          subst targetHead
+          simp only [Vars.rename]
+          rw [recursiveRegionNormalizations_commute source wire sourceArguments
+            sourceSignature newArgument result accepted region notHead
+            sourceOuter targetOuter outer sourceHead]
+          exact congrArg (Vars.cons
+            ((arityShift_regionBounds_below source wire sourceArguments
+              sourceSignature newArgument result accepted region notHead).embed
+                outer
+                (recursiveRegionNormalization sourceOuter region sourceHead)))
+            (induction targetTail mappedOrigins.2)
+
+/-- A checked target variable owned by the construction's regional fresh wire
+normalizes to the corresponding `BoundCylindrification.freshVar`. -/
+theorem recursiveRegionNormalization_fresh_of_origin
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming smallerOuter targetOuter.sigs)
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (freshIndex : Fin (arityFreshAt result region).length)
+    (targetValue : Var
+      (targetOuter.extend (result.regionImage region)).sigs newArgument)
+    (targetOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (targetOuter.extend (result.regionImage region)).ids targetValue =
+        result.targetLocalWire ((arityFreshAt result region).get freshIndex)) :
+    recursiveRegionNormalization targetOuter (result.regionImage region)
+        targetValue =
+      (arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).freshVar
+        outer freshIndex := by
+  let rootExact := arityShift_regionBounds_below_exact source wire
+    sourceArguments sourceSignature newArgument result accepted region notHead
+  let localFresh : Var
+      ((result.checked.val.wiresAt (result.regionImage region)).map
+        fun targetWire => (result.checked.val.wires targetWire).sig)
+      newArgument :=
+    rootExact.symm ▸
+      Var.appendRight
+        ((source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig)
+        (BoundCylindrification.repeatedVar newArgument
+          (arityFreshAt result region).length freshIndex)
+  let expected : Var
+      (targetOuter.extend (result.regionImage region)).sigs newArgument :=
+    (ConcreteElaboration.WireContext.sigs_extend targetOuter
+      (result.regionImage region)).symm ▸
+      Var.appendLeft localFresh targetOuter.sigs
+  have localOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (result.checked.val.wiresAt (result.regionImage region)) localFresh =
+        result.targetLocalWire
+          ((arityFreshAt result region).get freshIndex) := by
+    simpa [rootExact, localFresh] using
+      arityShift_regionBounds_below_freshLocal_origin source wire
+        sourceArguments sourceSignature newArgument result accepted region
+        notHead freshIndex
+  have expectedOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (targetOuter.extend (result.regionImage region)).ids expected =
+        result.targetLocalWire
+          ((arityFreshAt result region).get freshIndex) := by
+    unfold expected
+    exact (recursive_origin_extend_local result.checked.val targetOuter
+      (result.regionImage region) localFresh).trans localOrigin
+  have targetExact : targetValue = expected :=
+    InsertionCompilation.NaturalityInternal.origin_injective
+      result.checked.val
+      (targetOuter.extend (result.regionImage region)).ids targetNodup
+      (targetOrigin.trans expectedOrigin.symm)
+  subst targetValue
+  have expectedNormalized :
+      recursiveRegionNormalization targetOuter (result.regionImage region)
+          expected = Var.appendLeft localFresh targetOuter.sigs := by
+    unfold expected recursiveRegionNormalization
+    exact recursive_normalization_cast_cancel _ _
+  rw [expectedNormalized]
+  rw [arityShift_regionBounds_below_freshVar source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead outer
+    freshIndex]
+  unfold localFresh rootExact
+  simpa only using
+    (recursive_cast_appendLeft_local
+      (arityShift_regionBounds_below_exact source wire sourceArguments
+        sourceSignature newArgument result accepted region notHead).symm
+      (Var.appendRight
+        ((source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig)
+        (BoundCylindrification.repeatedVar newArgument
+          (arityFreshAt result region).length freshIndex))
+      targetOuter.sigs).symm
+
+/-- Normalization and typed tuple splitting agree with the canonical below-
+region bound certificate once the split components have their exact concrete
+origins. -/
+theorem recursiveNormalizedHole_split_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (freshIndex : Fin (arityFreshAt result region).length)
+    (sourceValues : Vars
+      (sourceOuter.extend region).sigs sourceArguments)
+    (targetValues : Vars
+      (targetOuter.extend (result.regionImage region)).sigs
+      result.targetArguments)
+    (mappedOrigins :
+      ConcreteElaboration.variableOrigins result.checked.val
+          (targetOuter.extend (result.regionImage region))
+          ((arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted).splitVars targetValues).2 =
+        (ConcreteElaboration.variableOrigins source.val
+          (sourceOuter.extend region) sourceValues).map result.contextWireMap)
+    (insertedOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          (targetOuter.extend (result.regionImage region)).ids
+          ((arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted).splitVars targetValues).1 =
+        result.targetLocalWire
+          ((arityFreshAt result region).get freshIndex)) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        (Vars.rename
+          (recursiveRegionNormalization targetOuter
+            (result.regionImage region)) targetValues) =
+      ⟨(arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).freshVar
+          outer freshIndex,
+        Vars.rename
+          ((arityShift_regionBounds_below source wire sourceArguments
+            sourceSignature newArgument result accepted region notHead).embed
+              outer)
+          (Vars.rename (recursiveRegionNormalization sourceOuter region)
+            sourceValues)⟩ := by
+  rw [(arityShiftInsertion source wire sourceArguments sourceSignature
+    newArgument result accepted).splitVars_rename]
+  apply Prod.ext
+  · simp only [Prod.fst]
+    exact recursiveRegionNormalization_fresh_of_origin source wire
+      sourceArguments sourceSignature newArgument result accepted region
+      notHead targetOuter outer targetNodup freshIndex _ insertedOrigin
+  · simp only [Prod.snd]
+    exact (recursiveRegionNormalizations_commute_of_mapped_origins source wire
+      sourceArguments sourceSignature newArgument result accepted region
+      notHead sourceOuter targetOuter outer outerOrigin targetNodup sourceValues
+      _ mappedOrigins).symm
+
+/-- The construction-owned target-site origin suffix discharges both origin
+premises of `recursiveNormalizedHole_split_exact`. -/
+theorem recursiveNormalizedHole_split_exact_of_origins
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (freshIndex : Fin (arityFreshAt result region).length)
+    (sourceValues : Vars
+      (sourceOuter.extend region).sigs sourceArguments)
+    (targetValues : Vars
+      (targetOuter.extend (result.regionImage region)).sigs
+      result.targetArguments)
+    (originsExact :
+      ConcreteElaboration.variableOrigins result.checked.val
+          (targetOuter.extend (result.regionImage region)) targetValues =
+        (ConcreteElaboration.variableOrigins source.val
+          (sourceOuter.extend region) sourceValues).map result.contextWireMap ++
+          [result.targetLocalWire
+            ((arityFreshAt result region).get freshIndex)]) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        (Vars.rename
+          (recursiveRegionNormalization targetOuter
+            (result.regionImage region)) targetValues) =
+      ⟨(arityShift_regionBounds_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead).freshVar
+          outer freshIndex,
+        Vars.rename
+          ((arityShift_regionBounds_below source wire sourceArguments
+            sourceSignature newArgument result accepted region notHead).embed
+              outer)
+          (Vars.rename (recursiveRegionNormalization sourceOuter region)
+            sourceValues)⟩ := by
+  let insertion := arityShiftInsertion source wire sourceArguments
+    sourceSignature newArgument result accepted
+  have prefixLength :
+      ((ConcreteElaboration.variableOrigins source.val
+          (sourceOuter.extend region) sourceValues).map
+            result.contextWireMap).length = sourceArguments.length := by
+    simpa using TypedArguments.variableOrigins_length source.val
+      (sourceOuter.extend region) sourceValues
+  obtain ⟨mappedOrigins, insertedOrigin⟩ :=
+    insertion.splitVars_origins_of_append
+      (arityShiftInsertion_position source wire sourceArguments
+        sourceSignature newArgument result accepted)
+      result.checked.val
+      (targetOuter.extend (result.regionImage region)) targetValues
+      ((ConcreteElaboration.variableOrigins source.val
+        (sourceOuter.extend region) sourceValues).map result.contextWireMap)
+      prefixLength
+      (result.targetLocalWire
+        ((arityFreshAt result region).get freshIndex)) originsExact
+  exact recursiveNormalizedHole_split_exact source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead sourceOuter
+    targetOuter outer outerOrigin targetNodup freshIndex sourceValues
+    targetValues mappedOrigins insertedOrigin
 
 /-- Assemble a cylindrical-hole receipt from exact ordered lengths, the two
 finite order equivalences, and one pointwise split equation.  Root and
