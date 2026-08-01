@@ -464,6 +464,233 @@ theorem recursiveTargetOrdinary_eq_retained
       (result.regionImage region) items compiled contextNodup outerHead
       outerHeadOrigin node nodeAt
 
+/-- Typed tuples respect pointwise composition of wire actions. -/
+theorem recursiveVarsRename_comp
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target)
+    (combined : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      second (first value) = combined value) :
+    ∀ values : Vars source arguments,
+      Vars.rename second (Vars.rename first values) =
+        Vars.rename combined values
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [Vars.rename]
+      rw [pointwise head,
+        recursiveVarsRename_comp first second combined pointwise tail]
+
+mutual
+
+/-- Intrinsic regions respect pointwise composition of wire actions. -/
+theorem recursiveRegionRename_comp
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target)
+    (combined : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      second (first value) = combined value) :
+    ∀ body : Region definitions source,
+      (body.renameWires first).renameWires second =
+        body.renameWires combined
+  | .mk items => by
+      exact congrArg Region.mk
+        (recursiveItemSeqRename_comp first second combined pointwise items)
+
+/-- Intrinsic items respect pointwise composition of wire actions. -/
+theorem recursiveItemRename_comp
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target)
+    (combined : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      second (first value) = combined value) :
+    ∀ item : Item definitions source,
+      (item.renameWires first).renameWires second =
+        item.renameWires combined
+  | .atom head values => by
+      simp only [Item.renameWires]
+      rw [pointwise head,
+        recursiveVarsRename_comp first second combined pointwise values]
+  | .named definition values => by
+      simp only [Item.renameWires]
+      rw [recursiveVarsRename_comp first second combined pointwise values]
+  | .identity signature ports atLeastTwo => by
+      simp only [Item.renameWires]
+      congr 1
+      rw [List.map_map]
+      apply List.map_congr_left
+      intro value _member
+      exact pointwise value
+  | .cut body => by
+      exact congrArg Item.cut
+        (recursiveRegionRename_comp first second combined pointwise body)
+  | .bind signature body => by
+      apply congrArg (Item.bind signature)
+      apply recursiveRegionRename_comp
+      intro valueSignature value
+      cases value with
+      | here => rfl
+      | there outer => exact congrArg Var.there (pointwise outer)
+
+/-- Intrinsic item sequences respect pointwise composition of wire actions. -/
+theorem recursiveItemSeqRename_comp
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target)
+    (combined : WireRenaming source target)
+    (pointwise : ∀ {signature : Sig} (value : Var source signature),
+      second (first value) = combined value) :
+    ∀ items : ItemSeq definitions source,
+      (items.renameWires first).renameWires second =
+        items.renameWires combined
+  | .nil => rfl
+  | .cons head tail => by
+      simp only [ItemSeq.renameWires]
+      rw [recursiveItemRename_comp first second combined pointwise head,
+        recursiveItemSeqRename_comp first second combined pointwise tail]
+
+end
+
+/-- Any decidable ordered subsequence of a successfully compiled node list
+also compiles, preserving the retained node order. -/
+theorem compileNodes?_filter_complete
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (keep : diagram.NodeId → Bool) :
+    ∀ (nodes : List diagram.NodeId)
+      (items : ItemSeq definitions context.sigs),
+      ConcreteElaboration.compileNodes? definitions diagram context nodes =
+          some items →
+      ∃ retained,
+        ConcreteElaboration.compileNodes? definitions diagram context
+          (nodes.filter keep) = some retained
+  | [], items, compiled => by
+      simp [ConcreteElaboration.compileNodes?] at compiled
+      subst items
+      exact ⟨.nil, rfl⟩
+  | node :: tail, items, compiled => by
+      simp only [ConcreteElaboration.compileNodes?] at compiled
+      cases headCompiled :
+          ConcreteElaboration.Internal.compileNode? definitions diagram
+            context node with
+      | none => simp [headCompiled] at compiled
+      | some head =>
+          cases tailCompiled :
+              ConcreteElaboration.compileNodes? definitions diagram context
+                tail with
+          | none => simp [headCompiled, tailCompiled] at compiled
+          | some rest =>
+              obtain ⟨retained, retainedCompiled⟩ :=
+                compileNodes?_filter_complete definitions diagram context keep
+                  tail rest tailCompiled
+              cases kept : keep node with
+              | false =>
+                  exact ⟨retained, by
+                    simpa [List.filter_cons, kept] using retainedCompiled⟩
+              | true =>
+                  exact ⟨.cons head retained, by
+                    simp [List.filter_cons, kept,
+                      ConcreteElaboration.compileNodes?, headCompiled,
+                      retainedCompiled]⟩
+
+/-- Retained source and target node compilations below the acted head are
+paired by the exact normalized block embedding. -/
+theorem recursiveRetainedNodePair
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter : ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    (targetNodup :
+      (targetOuter.extend (result.regionImage region)).ids.Nodup)
+    (sourceItems : ItemSeq definitions (sourceOuter.extend region).sigs)
+    (sourceCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceOuter.extend region) (source.val.nodesAt region) =
+        some sourceItems) :
+    ∃ (sourceRetained : ItemSeq definitions
+          (sourceOuter.extend region).sigs)
+      (targetRetained : ItemSeq definitions
+          (targetOuter.extend (result.regionImage region)).sigs),
+      ConcreteElaboration.compileNodes? definitions source.val
+          (sourceOuter.extend region)
+          ((source.val.nodesAt region).filter fun node =>
+            decide (node ∉ argumentSiteNodes result.sites)) =
+        some sourceRetained ∧
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (targetOuter.extend (result.regionImage region))
+          (((replacementBase result.plan).nodesAt
+              (retainedRegion source region)).map fun retained =>
+            ConcreteWireQuantifier.Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained)) =
+        some targetRetained ∧
+      targetRetained.renameWires
+          (recursiveRegionNormalization targetOuter
+            (result.regionImage region)) =
+        (sourceRetained.renameWires
+            (recursiveRegionNormalization sourceOuter region)).renameWires
+          ((arityShift_regionBounds_below source wire sourceArguments
+            sourceSignature newArgument result accepted region notHead).embed
+              outer) := by
+  obtain ⟨sourceRetained, sourceRetainedCompiled⟩ :=
+    compileNodes?_filter_complete definitions source.val
+      (sourceOuter.extend region)
+      (fun node => decide (node ∉ argumentSiteNodes result.sites))
+      (source.val.nodesAt region) sourceItems sourceCompiled
+  obtain ⟨targetRetained, targetRetainedCompiled, targetRawExact⟩ :=
+    arityShift_compileNodes_below_natural source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead sourceOuter
+      targetOuter outer outerOrigin targetNodup
+      (ArgumentResult.RetainedContext.nodesAt_retainedPrefix result region)
+      sourceRetainedCompiled
+  refine ⟨sourceRetained, targetRetained, sourceRetainedCompiled,
+    targetRetainedCompiled, ?_⟩
+  subst targetRetained
+  let raw : WireRenaming (sourceOuter.extend region).sigs
+      (targetOuter.extend (result.regionImage region)).sigs :=
+    arityShift_regionEmbedding_below source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead sourceOuter
+      targetOuter outer
+  let block : WireRenaming
+      (((source.val.wiresAt region).map fun localWire =>
+          (source.val.wires localWire).sig) ++ sourceOuter.sigs)
+      (((result.checked.val.wiresAt (result.regionImage region)).map fun
+          localWire => (result.checked.val.wires localWire).sig) ++
+        targetOuter.sigs) :=
+    (arityShift_regionBounds_below source wire sourceArguments
+      sourceSignature newArgument result accepted region notHead).embed outer
+  let combined : WireRenaming (sourceOuter.extend region).sigs
+      (((result.checked.val.wiresAt (result.regionImage region)).map fun
+        localWire => (result.checked.val.wires localWire).sig) ++
+          targetOuter.sigs) :=
+    fun {_} value => recursiveRegionNormalization targetOuter
+      (result.regionImage region) (raw value)
+  calc
+    _ = sourceRetained.renameWires combined :=
+      recursiveItemSeqRename_comp raw
+        (recursiveRegionNormalization targetOuter (result.regionImage region))
+        combined (fun _ => rfl) sourceRetained
+    _ = _ := (recursiveItemSeqRename_comp
+      (recursiveRegionNormalization sourceOuter region) block combined (by
+        intro signature value
+        exact (recursiveRegionNormalizations_commute source wire
+          sourceArguments sourceSignature newArgument result accepted region
+          notHead sourceOuter targetOuter outer value).symm) sourceRetained).symm
+
 /-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
 its exact renaming. -/
 def recursiveLeafReceipt
