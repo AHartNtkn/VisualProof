@@ -305,6 +305,24 @@ theorem arityFreshSiteOrder_spec
   simpa only [List.get_eq_getElem, List.getElem_map,
     arityFreshSiteOrder, finEquivOfEq] using selected
 
+/-- Endpoint/site holes and fresh local binders have the same cardinality. -/
+theorem aritySitesAt_length_fresh
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    (aritySitesAt result.sites region).length =
+      (arityFreshAt result region).length := by
+  have exact := congrArg List.length
+    (arityShift_freshSitesAt_exact source wire sourceArguments
+      sourceSignature newArgument result accepted region)
+  simpa using exact.symm
+
 /-- Source application nodes local to `region`, preserving concrete node
 order rather than endpoint order. -/
 def sourceSiteNodesAt
@@ -416,6 +434,24 @@ theorem sourceSiteNodesAt_length
     (fun node => aritySiteNodesAt_mem_iff sites region node)
   simpa using permutation.length_eq.symm
 
+/-- Concrete source-node holes and fresh local binders have the same
+cardinality. -/
+theorem sourceSiteNodesAt_length_fresh
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    (sourceSiteNodesAt result.sites region).length =
+      (arityFreshAt result region).length :=
+  (sourceSiteNodesAt_length result.sites region).trans
+    (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
+      newArgument result accepted region)
+
 /-- Canonical finite equivalence from endpoint/site order to source-node
 order for the application holes local to one region. -/
 noncomputable def aritySiteNodeOrder
@@ -457,6 +493,50 @@ theorem aritySiteNodeOrder_spec
     (sourceSiteNodesAt_nodup sites region)
     (fun node => (aritySiteNodesAt_mem_iff sites region node).symm)
     (finEquivOfEq (by simp) index)
+
+/-- Normalize the endpoint/site-to-source-node permutation to the fresh
+binder cardinality expected by `CylindricalHoles`. -/
+noncomputable def aritySourceIndex
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    Data.Finite.FiniteEquiv
+      (Fin (arityFreshAt result region).length)
+      (Fin (arityFreshAt result region).length) :=
+  (finEquivOfEq
+      (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
+        newArgument result accepted region).symm).trans
+    ((aritySiteNodeOrder result.sites region).trans
+      (finEquivOfEq
+        (sourceSiteNodesAt_length_fresh source wire sourceArguments
+          sourceSignature newArgument result accepted region)))
+
+/-- Normalize the endpoint/site-to-fresh positional equivalence to the
+fresh binder cardinality expected by `CylindricalHoles`. -/
+noncomputable def arityFreshIndex
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    Data.Finite.FiniteEquiv
+      (Fin (arityFreshAt result region).length)
+      (Fin (arityFreshAt result region).length) :=
+  (finEquivOfEq
+      (aritySitesAt_length_fresh source wire sourceArguments sourceSignature
+        newArgument result accepted region).symm).trans
+    (arityFreshSiteOrder source wire sourceArguments sourceSignature
+      newArgument result accepted region)
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
