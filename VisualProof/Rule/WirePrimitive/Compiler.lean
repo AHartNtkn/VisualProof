@@ -1305,21 +1305,17 @@ private def invertStep
       let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .endsDelete _ applied => do
-      let inverseWire := targetIso.wires.symm applied.inverseWire
-      let inverseSites :
-          List (ConcreteWirePrimitive.EndSite real inverseWire) :=
-        applied.inverseSites.map fun site =>
-          { region := targetIso.regions.symm site.region
-            arguments := site.arguments.map targetIso.wires.symm }
+      let inverseWire := applied.transportedInverseWire targetIso
+      let inverseSites := applied.transportedInverseSites targetIso
       let inverseApplied ←
         (applyEndsSpawn real inverseWire inverseSites orientation).mapError
           .contentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .endsSpawn inverseWire inverseSites inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let landing ←
+        (applied.inverseTransport targetIso inverseApplied).mapError
+          .contentRejected
+      let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .cutWrap _ applied => do
       let inverseWire := targetIso.wires.symm applied.inverseWire

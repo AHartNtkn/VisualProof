@@ -316,6 +316,13 @@ structure AppliedEndsSpawn
     polarity.compiled.frame.context.cutDepth =
       inverseLedger.sourceScope.frame.context.cutDepth
 
+/-- Accepted content-pair inverse landing.  Its isomorphism is total once the
+three receipt-owned carrier equivalences pass exact structural validation. -/
+structure InverseLanding
+    (target planned : CheckedDiagram definitions) where
+  private mk ::
+  iso : ConcreteIso target.val planned.val
+
 namespace AppliedEndsSpawn
 
 def source
@@ -426,6 +433,70 @@ def applyEndsSpawn
     pure ⟨polarity, checked, inverseLedger, exact⟩
   else
     throw .semanticLedgerRejected
+
+namespace AppliedEndsDelete
+
+/-- Exact acted wire transported backward through the supplied suffix iso. -/
+def transportedInverseWire
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : planned.val.WireId}
+    (forward : AppliedEndsDelete planned orientation wire)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    real.val.WireId :=
+  targetIso.wires.symm forward.inverseWire
+
+/-- Exact ordered deleted sites transported backward through the supplied
+suffix iso. -/
+def transportedInverseSites
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : planned.val.WireId}
+    (forward : AppliedEndsDelete planned orientation wire)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    List (EndSite real (forward.transportedInverseWire targetIso)) :=
+  forward.inverseSites.map fun site =>
+    { region := targetIso.regions.symm site.region
+      arguments := site.arguments.map targetIso.wires.symm }
+
+/-- Receipt-owned inverse cancellation for all-end deletion followed by the
+accepted transported spawn.  The exact region/wire carriers compose the two
+constructions with the suffix iso; nodes additionally preserve the ordered
+generated-site suffix before reconstructing the deleted source nodes. -/
+def inverseTransport
+    {planned real : CheckedDiagram definitions}
+    {joinOrientation orientation : Orientation}
+    {wire : planned.val.WireId}
+    (forward : AppliedEndsDelete planned joinOrientation wire)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (backward : AppliedEndsSpawn real orientation
+      (forward.transportedInverseWire targetIso)
+      (forward.transportedInverseSites targetIso)) :
+    Except WireContentError (InverseLanding backward.target planned) := do
+  let siteCountExact :
+      (forward.transportedInverseSites targetIso).length =
+        forward.checked.sites.sites.length := by
+    rw [show (forward.transportedInverseSites targetIso).length =
+        forward.inverseSites.length by
+      exact List.length_map _]
+    change forward.checked.targetSites.length = _
+    exact List.length_map _
+  let regions := backward.checked.regionOriginEquiv.trans <|
+    targetIso.regions.trans forward.checked.regionOriginEquiv
+  let nodes := backward.checked.constructionNodeEquiv |>.trans <|
+    (ConcreteWirePrimitive.ContentConstruction.addRightEquiv targetIso.nodes
+      (forward.transportedInverseSites targetIso).length).trans <|
+      (ConcreteWirePrimitive.ContentConstruction.finEquivOfEq
+        (congrArg (fun count => forward.target.val.nodeCount + count)
+          siteCountExact)).trans forward.checked.reconstructionNodeEquiv
+  let wires := backward.checked.wireOriginEquiv.trans <|
+    targetIso.wires.trans forward.checked.wireOriginEquiv
+  let iso ← optionToExcept .semanticLedgerRejected <|
+    ConcreteIso.checkEquivs? backward.target.val planned.val
+      regions nodes wires
+  pure ⟨iso⟩
+
+end AppliedEndsDelete
 
 /-- Cut wrapping is a checked whole-diagram equivalence. -/
 theorem cut_wrap_sound

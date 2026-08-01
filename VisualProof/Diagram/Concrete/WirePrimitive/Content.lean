@@ -51,6 +51,98 @@ private def removedSiteNodes
     List source.val.NodeId :=
   siteNodes sites.sites
 
+namespace ContentConstruction
+
+theorem length_filter_true (values : List α) :
+    (values.filter fun _ => true).length = values.length := by
+  induction values with
+  | nil => rfl
+  | cons head tail induction => simp [induction]
+
+def finEquivOfEq (exact : left = right) :
+    Data.Finite.FiniteEquiv (Fin left) (Fin right) where
+  toFun := Fin.cast exact
+  invFun := Fin.cast exact.symm
+  left_inv := by
+    intro value
+    apply Fin.ext
+    rfl
+  right_inv := by
+    intro value
+    apply Fin.ext
+    rfl
+
+/-- Dense survivor order followed by the checker-owned selected order. -/
+def partitionOrder (selected : List (Fin count)) : List (Fin count) :=
+  (Data.Finite.allFin count).filter (fun value => decide (value ∉ selected)) ++
+    selected
+
+private theorem partitionOrder_nodup
+    (selected : List (Fin count))
+    (selectedNodup : selected.Nodup) :
+    (partitionOrder selected).Nodup := by
+  rw [partitionOrder, List.nodup_append]
+  refine ⟨(Data.Finite.allFin_nodup count).filter _, selectedNodup, ?_⟩
+  intro value retained candidate selectedMember same
+  subst candidate
+  exact (of_decide_eq_true (List.mem_filter.mp retained).2) selectedMember
+
+private theorem partitionOrder_complete
+    (selected : List (Fin count))
+    (value : Fin count) :
+    value ∈ partitionOrder selected := by
+  rw [partitionOrder, List.mem_append]
+  by_cases selectedMember : value ∈ selected
+  · exact Or.inr selectedMember
+  · exact Or.inl (List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin value, decide_eq_true selectedMember⟩)
+
+/-- A checked selected list determines the survivor/replacement carrier. -/
+def partitionEquiv
+    (selected : List (Fin count))
+    (selectedNodup : selected.Nodup) :
+    Data.Finite.FiniteEquiv
+      (Fin (partitionOrder selected).length) (Fin count) where
+  toFun := (partitionOrder selected).get
+  invFun := fun value =>
+    DenseList.index (partitionOrder selected) value
+      (partitionOrder_complete selected value)
+  left_inv := by
+    intro position
+    exact DenseList.index_get _
+      (partitionOrder_nodup selected selectedNodup) position
+  right_inv := by
+    intro value
+    exact DenseList.get_index _ value (partitionOrder_complete selected value)
+
+/-- Extend a supplied equivalence by the same ordered generated suffix. -/
+def addRightEquiv
+    (equiv : Data.Finite.FiniteEquiv (Fin left) (Fin right))
+    (suffix : Nat) :
+    Data.Finite.FiniteEquiv (Fin (left + suffix)) (Fin (right + suffix)) where
+  toFun := Fin.addCases (fun value => Fin.castAdd suffix (equiv value))
+    (fun value => Fin.natAdd right value)
+  invFun := Fin.addCases (fun value => Fin.castAdd suffix (equiv.symm value))
+    (fun value => Fin.natAdd left value)
+  left_inv := by
+    intro value
+    apply Fin.ext
+    refine Fin.addCases (m := left) (n := suffix)
+      (fun item => ?_) (fun generated => ?_) value
+    · simpa only [Fin.addCases_left] using
+        congrArg Fin.val (equiv.left_inv item)
+    · simp only [Fin.addCases_right]
+  right_inv := by
+    intro value
+    apply Fin.ext
+    refine Fin.addCases (m := right) (n := suffix)
+      (fun item => ?_) (fun generated => ?_) value
+    · simpa only [Fin.addCases_left] using
+        congrArg Fin.val (equiv.right_inv item)
+    · simp only [Fin.addCases_right]
+
+end ContentConstruction
+
 private def sourceRegionAfterRemoval
     {source : CheckedDiagram definitions}
     (removed : List source.val.RegionId)
@@ -1053,6 +1145,77 @@ def deleteEnds
 
 namespace EndsDeleteResult
 
+private theorem removedSiteNodes_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    (removedSiteNodes result.sites).Nodup := by
+  have endpointsNodup := result.sites.endpoints_nodup
+  have general : ∀ values : List (AppliedSite source wire),
+      (values.map AppliedSite.endpoint).Nodup →
+        (values.map AppliedSite.node).Nodup := by
+    intro values
+    induction values with
+    | nil => simp
+    | cons head tail induction =>
+        simp only [List.map_cons, List.nodup_cons]
+        rintro ⟨headFresh, tailNodup⟩
+        constructor
+        · intro headMember
+          obtain ⟨candidate, candidateMember, nodeExact⟩ :=
+            List.mem_map.mp headMember
+          apply headFresh
+          apply List.mem_map.mpr
+          refine ⟨candidate, candidateMember, ?_⟩
+          unfold AppliedSite.endpoint
+          exact congrArg (fun node => CEndpoint.mk node .head) nodeExact
+        · exact induction tailNodup
+  exact general result.sites.sites endpointsNodup
+
+/-- Target-to-source region carrier of dense all-end deletion. -/
+def regionOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId source.val.RegionId :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    change (Internal.retainedRegions source []).length = _
+    rw [Internal.retainedRegions_nil]
+    simp [ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange])
+
+/-- Target-to-source wire carrier of dense all-end deletion. -/
+def wireOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId source.val.WireId :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    change (Internal.retainedWires source []).length = _
+    simp [Internal.retainedWires, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange,
+      ContentConstruction.length_filter_true])
+
+/-- Reappend the exact deleted nodes after the checked dense target and recover
+the complete source node carrier in checker-owned site order. -/
+def reconstructionNodeEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire) :
+    Data.Finite.FiniteEquiv
+      (Fin (result.checked.val.nodeCount + result.sites.sites.length))
+      source.val.NodeId :=
+  (ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    simp [endsDeleteCandidate, Internal.batchRemovalCandidate,
+      ContentConstruction.partitionOrder, removedSiteNodes, siteNodes,
+      Internal.retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.allFin_eq_finRange])).trans
+    (ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
+      result.removedSiteNodes_nodup)
+
 /-- Image of any retained source region in the exact dense deletion target. -/
 def targetRegion
     {source : CheckedDiagram definitions}
@@ -1203,6 +1366,44 @@ structure EndsSpawnResult
     inverseWire = Internal.checkedWire generated wire
   inverse : EndsDeleteResult checked inverseWire
   inverseIso : ConcreteIso inverse.checked.val source.val
+
+namespace EndsSpawnResult
+
+/-- Spawn checking transports the raw prefix/suffix node carrier exactly. -/
+def constructionNodeEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : List (EndSite source wire)}
+    (result : EndsSpawnResult source wire sites) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId
+      (Fin (source.val.nodeCount + sites.length)) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    rfl)
+
+/-- Spawn checking preserves the source region carrier exactly. -/
+def regionOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : List (EndSite source wire)}
+    (result : EndsSpawnResult source wire sites) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId source.val.RegionId :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    rfl)
+
+/-- Spawn checking preserves the source wire carrier exactly. -/
+def wireOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sites : List (EndSite source wire)}
+    (result : EndsSpawnResult source wire sites) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId source.val.WireId :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    rfl)
+
+end EndsSpawnResult
 
 /-- Spawn applied heads on an endpoint-free relation wire at checked sites. -/
 def spawnEnds
