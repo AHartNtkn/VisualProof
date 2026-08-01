@@ -646,6 +646,68 @@ theorem LocalCylindricalFrame.frameNormalizations_commute_of_mapped_origins
                   List.mem_cons]
                 exact Or.inr member)) mappedOrigins.2)
 
+/-- Once the concrete source/target application tuples have been identified,
+normalization and typed splitting produce the exact fresh and retained halves
+required by one root cylindrical hole. -/
+theorem LocalCylindricalFrame.normalizedHole_split_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair
+      (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (freshIndex :
+      Fin (arityFreshAt result (source.val.wires wire).scope).length)
+    (sourceValues :
+      Vars frame.sourceScope.frame.visible.sigs sourceArguments)
+    (targetValues :
+      Vars frame.targetScope.frame.visible.sigs result.targetArguments)
+    (sourceNotHead : ∀ sourceWire,
+      sourceWire ∈ ConcreteElaboration.variableOrigins source.val
+        frame.sourceScope.frame.visible sourceValues → sourceWire ≠ wire)
+    (mappedOrigins :
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible
+          ((arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted).splitVars targetValues).2 =
+        (ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible sourceValues).map
+            result.contextWireMap)
+    (insertedOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids
+          ((arityShiftInsertion source wire sourceArguments sourceSignature
+            newArgument result accepted).splitVars targetValues).1 =
+        result.targetLocalWire
+          ((arityFreshAt result (source.val.wires wire).scope).get
+            freshIndex)) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        (Vars.rename frame.targetFrameNormalization targetValues) =
+      ⟨(frame.rootBounds sourceArguments sourceSignature newArgument result
+          accepted).freshVar (fun {_} value => value) freshIndex,
+        Vars.rename
+          ((frame.rootBounds sourceArguments sourceSignature newArgument result
+            accepted).embed (fun {_} value => value))
+          (Vars.rename frame.sourceFrameNormalization sourceValues)⟩ := by
+  rw [(arityShiftInsertion source wire sourceArguments sourceSignature
+    newArgument result accepted).splitVars_rename]
+  apply Prod.ext
+  · simp only [Prod.fst]
+    exact frame.targetFrameNormalization_of_fresh_origin sourceArguments
+      sourceSignature newArgument result accepted pair freshIndex _
+        insertedOrigin
+  · simp only [Prod.snd]
+    exact (frame.frameNormalizations_commute_of_mapped_origins
+      sourceArguments sourceSignature newArgument result accepted pair
+        sourceValues _ sourceNotHead mappedOrigins).symm
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof

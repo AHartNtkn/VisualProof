@@ -136,6 +136,47 @@ theorem InsertionEvidence.split_forwardVars
                 splitInsertedCore]
               rw [tailExact]
 
+private theorem splitInsertedCore_rename
+    (smaller : List Sig)
+    (position : Nat)
+    (fixedSignature : Sig)
+    (rho : WireRenaming sourceContext targetContext)
+    (values : Vars sourceContext
+      (ConcreteWirePrimitive.insertAt smaller position fixedSignature)) :
+    splitInsertedCore smaller position fixedSignature
+        (Vars.rename rho values) =
+      ⟨rho (splitInsertedCore smaller position fixedSignature values).1,
+        Vars.rename rho
+          (splitInsertedCore smaller position fixedSignature values).2⟩ := by
+  induction smaller generalizing position with
+  | nil =>
+      cases position <;> cases values with
+      | cons head tail => cases tail; rfl
+  | cons signature rest induction =>
+      cases position with
+      | zero =>
+          cases values
+          rfl
+      | succ position =>
+          cases values with
+          | cons head tail =>
+              simp only [splitInsertedCore, Vars.rename]
+              rw [induction position tail]
+
+/-- Splitting a checked inserted tuple commutes with any wire renaming. -/
+theorem InsertionEvidence.splitVars_rename
+    (evidence :
+      InsertionEvidence larger smaller fixedSignature)
+    (rho : WireRenaming sourceContext targetContext)
+    (values : Vars sourceContext larger) :
+    evidence.splitVars (Vars.rename rho values) =
+      ⟨rho (evidence.splitVars values).1,
+        Vars.rename rho (evidence.splitVars values).2⟩ := by
+  cases evidence with
+  | mk position largerExact =>
+      subst larger
+      exact splitInsertedCore_rename smaller position fixedSignature rho values
+
 private theorem splitInsertedValuesCore_reconstruct
     (smaller : List Sig)
     (position : Nat)
