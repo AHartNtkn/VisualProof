@@ -20,6 +20,17 @@ private theorem recursiveRoot_cast_cancel_reverse
   cases same
   rfl
 
+private theorem recursiveRoot_cast_through_middle
+    (first : left = middle)
+    (second : middle = right)
+    (direct : left = right)
+    (value : Var left signature) :
+    direct ▸ value = second ▸ (first ▸ value) := by
+  cases first
+  cases second
+  cases direct
+  rfl
+
 theorem recursiveVar_append_cases
     (left right : List Sig)
     (value : Var (left ++ right) signature) :
@@ -202,6 +213,16 @@ structure RecursiveNormalizationCorrespondence
   sourceMap : WireRenaming sourceContext.sigs normalizedSource
   targetMap : WireRenaming targetContext.sigs normalizedTarget
   embedding : WireRenaming normalizedSource normalizedTarget
+  targetExists : ∀ {signature : Sig}
+      (sourceValue : Var sourceContext.sigs signature),
+    ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+        sourceValue ≠ wire →
+    ∃ targetValue : Var targetContext.sigs signature,
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetContext.ids targetValue =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+            sourceValue)
   commutes : ∀ {signature : Sig}
       (sourceValue : Var sourceContext.sigs signature)
       (targetValue : Var targetContext.sigs signature),
@@ -352,6 +373,52 @@ def LocalCylindricalFrame.rootNormalizationCorrespondence
     embedding :=
       (frame.rootBounds sourceArguments sourceSignature newArgument result
         accepted).embed (fun {_} value => value)
+    targetExists := fun sourceValue sourceNotHead => by
+      cases frame.sourceRemoval.classifyVisible
+          frame.context.sourceVisibleExact sourceValue with
+      | head =>
+          exfalso
+          apply sourceNotHead
+          rw [frame.sourceFrameVisible_origin_local pair,
+            frame.sourceRemoval_head]
+          exact frame.sourceHead_origin
+      | retained sourceRetained =>
+          let bounds := frame.rootBounds sourceArguments sourceSignature
+            newArgument result accepted
+          let expected : Var frame.targetScope.frame.visible.sigs _ :=
+            frame.context.targetVisibleExact.symm ▸
+              Var.appendLeft
+                (frame.targetRemoval.retain
+                  (bounds.embedLocal sourceRetained)) frame.context.siteOuter
+          refine ⟨expected, ?_⟩
+          unfold expected bounds
+          rw [frame.targetFrameVisible_origin_retained pair,
+            frame.rootBounds_retainedLocal_origin sourceArguments
+              sourceSignature newArgument result accepted,
+            frame.sourceFrameVisible_origin_retained pair]
+      | outer sourceOuter =>
+          let sourceExact := frame.sourceSiteOuter_sigs_exact pair
+          let targetExact := frame.targetSiteOuter_sigs_exact pair
+          let expected : Var frame.targetScope.frame.visible.sigs _ :=
+            frame.context.targetVisibleExact.symm ▸
+              Var.appendRight
+                (ContentAlignment.localSignatures result.checked.val
+                  (result.checked.val.wires result.targetWire).scope)
+                sourceOuter
+          have targetCast :
+              targetExact ▸ sourceOuter =
+                pair.siteOuterRetained.wireRenaming
+                  (sourceExact ▸ sourceOuter) := by
+            unfold sourceExact targetExact
+            exact recursiveRoot_cast_through_middle
+              (frame.sourceSiteOuter_sigs_exact pair)
+              pair.siteOuterRetained.sigs_exact.symm
+              (frame.targetSiteOuter_sigs_exact pair) sourceOuter
+          refine ⟨expected, ?_⟩
+          unfold expected
+          rw [frame.targetFrameVisible_origin_outer pair, targetCast,
+            pair.siteOuterRetained.wireRenaming_origin,
+            frame.sourceFrameVisible_origin_outer pair]
     commutes := fun sourceValue targetValue sourceNotHead mappedOrigin =>
       frame.frameNormalization_commutes_of_mapped_origin sourceArguments
         sourceSignature newArgument result accepted pair sourceValue
