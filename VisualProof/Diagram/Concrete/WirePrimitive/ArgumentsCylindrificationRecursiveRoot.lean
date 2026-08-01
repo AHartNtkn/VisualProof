@@ -3195,6 +3195,67 @@ theorem LocalCylindricalFrame.rootCylindricalShape_of_children
           simp [UniformIntrinsicRegion.holeValues,
             UniformIntrinsicRegion.appendAbstracted]
 
+/-- Construction-owned checked cylindrical receipt for the complete acted
+scope, including all proper descendants. -/
+theorem LocalCylindricalFrame.rootCylindricalShape_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    Nonempty (CheckedCylindricalShape
+      (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted)
+      (fun {_} value => value) frame.sourceShape frame.targetShape) := by
+  obtain ⟨shape, consistent, embeddingExact, smallerExact, largerExact⟩ :=
+    frame.rootCylindricalShape_of_children sourceArguments sourceSignature
+      newArgument result accepted pair (by
+        intro fuel sourceChildren targetChildren sourceCompiled targetCompiled
+        exact frame.rootChildrenCylindricalShapes sourceArguments
+          sourceSignature newArgument result accepted pair fuel sourceChildren
+          targetChildren sourceCompiled targetCompiled)
+  exact ⟨{
+    receipt := shape
+    embedding_exact := embeddingExact
+    smaller_exact := smallerExact
+    larger_exact := largerExact
+    consistent := consistent }⟩
+
+/-- Total scope-normalized ledger selected from the construction receipts of
+an accepted arity shift. -/
+noncomputable def scopedArityShiftLedgerOfAccepted
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result) :
+    ScopedArityShiftLedger result sourceArguments newArgument := by
+  let localized := arityShift_scopeLocalization source wire sourceArguments
+    sourceSignature result.sites newArgument result accepted
+  let frame := Classical.choose
+    (checkLocalCylindricalFrameFromSites_complete result localized
+      sourceArguments sourceSignature result.targetSites)
+  let pair := frame.concretePair sourceArguments sourceSignature result.sites
+    newArgument result accepted
+  let checked := Classical.choice
+    (frame.rootCylindricalShape_complete sourceArguments sourceSignature
+      newArgument result accepted pair)
+  exact {
+    insertion := arityShiftInsertion source wire sourceArguments
+      sourceSignature newArgument result accepted
+    position_exact := rfl
+    frame := frame
+    accepted := checked }
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
