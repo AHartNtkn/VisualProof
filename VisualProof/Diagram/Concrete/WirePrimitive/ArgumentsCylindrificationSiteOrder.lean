@@ -149,6 +149,18 @@ def aritySitesAt
   (Data.Finite.allFin sites.sites.length).filter fun site =>
     (sites.sites.get site).region == region
 
+/-- Operation-local fresh wires whose concrete scope is `region`, in their
+construction order. -/
+def arityFreshAt
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    List (Fin result.spec.localCount) :=
+  (Data.Finite.allFin result.spec.localCount).filter fun fresh =>
+    retainedRegion source (result.spec.localScope fresh) ==
+      retainedRegion source region
+
 /-- The operation-local fresh-wire order at a region is exactly the
 endpoint/site order used by `aritySitesAt`. -/
 theorem arityShift_freshSitesAt_exact
@@ -161,15 +173,59 @@ theorem arityShift_freshSitesAt_exact
     (result : ArgumentResult source wire)
     (accepted : arityShift source wire newArgument = .ok result)
     (region : source.val.RegionId) :
-    ((Data.Finite.allFin result.spec.localCount).filter fun fresh =>
-        retainedRegion source (result.spec.localScope fresh) ==
-          retainedRegion source region).map
+    (arityFreshAt result region).map
         (Fin.cast (arityShift_localCount_exact source wire sourceArguments
           sourceSignature result.sites newArgument result accepted)) =
       aritySitesAt result.sites region := by
   simpa [aritySitesAt] using
     arityShift_freshSitesAt source wire sourceArguments sourceSignature
       newArgument result accepted region
+
+/-- Canonical positional equivalence from endpoint/site order to the fresh
+local-wire suffix at a region. -/
+noncomputable def arityFreshSiteOrder
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId) :
+    Data.Finite.FiniteEquiv
+      (Fin (aritySitesAt result.sites region).length)
+      (Fin (arityFreshAt result region).length) := by
+  apply finEquivOfEq
+  have exact := congrArg List.length
+    (arityShift_freshSitesAt_exact source wire sourceArguments
+      sourceSignature newArgument result accepted region)
+  simpa using exact.symm
+
+/-- The fresh local selected by `arityFreshSiteOrder` is exactly the local
+wire allocated for the corresponding endpoint-ordered application site. -/
+theorem arityFreshSiteOrder_spec
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (index : Fin (aritySitesAt result.sites region).length) :
+    Fin.cast (arityShift_localCount_exact source wire sourceArguments
+        sourceSignature result.sites newArgument result accepted)
+        ((arityFreshAt result region).get
+          (arityFreshSiteOrder source wire sourceArguments sourceSignature
+            newArgument result accepted region index)) =
+      (aritySitesAt result.sites region).get index := by
+  let same := arityShift_freshSitesAt_exact source wire sourceArguments
+    sourceSignature newArgument result accepted region
+  have selected := get_of_list_eq same index
+  simpa only [List.get_eq_getElem, List.getElem_map,
+    arityFreshSiteOrder, finEquivOfEq] using selected
 
 /-- Source application nodes local to `region`, preserving concrete node
 order rather than endpoint order. -/
