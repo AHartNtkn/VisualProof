@@ -74,6 +74,38 @@ theorem ArgumentResult.targetNode_argument_owner
   rw [candidateOwner] at transported
   exact transported
 
+/-- A generated argument endpoint whose construction reference selects an
+ambient source wire is owned by that wire's canonical checked image. -/
+theorem ArgumentResult.generatedArgument_endpointOwner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length)
+    (index : Nat)
+    (bound : index < result.targetArguments.length)
+    (sourceWire : source.val.WireId)
+    (selected :
+      (result.spec.arguments site)[index]? =
+        some (.existing sourceWire))
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.checked.val.endpointOwner?
+        ⟨result.targetNode site, .arg index⟩ =
+      some (result.retainedWireImage sourceWire retained) := by
+  rw [result.targetNode_argument_owner site index bound]
+  congr 1
+  let retainedMember : sourceWire ∈
+      Internal.retainedWires source result.sourceRemovedWires := by
+    unfold Internal.retainedWires
+    exact List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin sourceWire, decide_eq_true retained⟩
+  unfold replacementOwner replacementNode
+  simp only [Fin.addCases_right]
+  rw [selected]
+  simp only
+  rw [retainedReplacementWire?_some result.plan sourceWire retainedMember]
+  unfold ArgumentResult.retainedWireImage
+  congr
+
 namespace ArgumentsSemantics
 
 /-- Concrete source/target outer contexts retained by the recursive frame

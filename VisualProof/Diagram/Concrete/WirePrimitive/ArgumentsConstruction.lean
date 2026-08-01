@@ -905,6 +905,68 @@ def insertAt : List α → Nat → α → List α
 def permute (values : List α) (permutation : List Nat) : List α :=
   permutation.filterMap fun position => values[position]?
 
+/-- When every selected position is in bounds, executable permutation is
+exactly the dependent map over the permutation's membership attachment. -/
+theorem permute_eq_attachMap_of_bounded
+    (values : List α)
+    (permutation : List Nat)
+    (bounded :
+      ∀ position, position ∈ permutation → position < values.length) :
+    permute values permutation =
+      permutation.attach.map fun position =>
+        values[position.val]'(bounded position.val position.property) := by
+  induction permutation with
+  | nil => simp [permute]
+  | cons head tail induction =>
+      have headBound : head < values.length := bounded head (by simp)
+      have tailBound :
+          ∀ position, position ∈ tail → position < values.length := by
+        intro position member
+        exact bounded position (by simp [member])
+      change
+        List.filterMap (fun position => values[position]?) (head :: tail) = _
+      rw [List.filterMap_cons, List.getElem?_eq_getElem headBound]
+      simp only [List.attach_cons, List.map_cons, Option.toList_some]
+      congr 1
+      simpa [permute] using induction tailBound
+
+/-- A proof-accepted permutation preserves the exact selected list length. -/
+@[simp] theorem ValidPermutationReceipt.permute_length
+    (valid : ValidPermutationReceipt length permutation)
+    (values : List α)
+    (valuesLength : values.length = length) :
+    (permute values permutation).length = length := by
+  have bounded :
+      ∀ position, position ∈ permutation → position < values.length := by
+    intro position member
+    rw [valuesLength]
+    exact valid.bounded position member
+  rw [permute_eq_attachMap_of_bounded values permutation bounded]
+  simp [valid.length_exact]
+
+/-- Looking up a permuted output position selects exactly the
+construction-owned forward source position. -/
+theorem ValidPermutationReceipt.permute_get
+    (valid : ValidPermutationReceipt length permutation)
+    (values : List α)
+    (valuesLength : values.length = length)
+    (position : Fin length) :
+    (permute values permutation).get
+        (Fin.cast (valid.permute_length values valuesLength).symm position) =
+      values.get
+        (Fin.cast valuesLength.symm (valid.forwardPosition position)) := by
+  have bounded :
+      ∀ candidate, candidate ∈ permutation →
+        candidate < values.length := by
+    intro candidate member
+    rw [valuesLength]
+    exact valid.bounded candidate member
+  have selected := List.get_of_eq
+    (permute_eq_attachMap_of_bounded values permutation bounded)
+    (Fin.cast (valid.permute_length values valuesLength).symm position)
+  simpa [ValidPermutationReceipt.forwardPosition, List.get_eq_getElem]
+    using selected
+
 /-- One argument in a rebuilt applied end. -/
 inductive ArgumentReference
     (source : CheckedDiagram definitions) (localCount : Nat)
