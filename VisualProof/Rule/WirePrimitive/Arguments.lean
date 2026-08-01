@@ -299,6 +299,9 @@ structure AppliedArgDrop
     (source.val.wires wire).sig = .rel sourceArguments
   private source_removed_exact : result.sourceRemovedWires = [wire]
   private local_count_exact : result.spec.localCount = 0
+  private target_arguments_exact :
+    result.targetArguments =
+      ConcreteWirePrimitive.eraseAt sourceArguments position
   private ledger :
     ArgumentsSemantics.DropLedger result sourceArguments
   private semantics :
@@ -320,6 +323,9 @@ structure AppliedArgExtend
     (source.val.wires wire).sig = .rel sourceArguments
   private source_removed_exact : result.sourceRemovedWires = [wire]
   private local_count_exact : result.spec.localCount = 0
+  private target_arguments_exact :
+    result.targetArguments =
+      ConcreteWirePrimitive.insertAt sourceArguments position newArgument
   private ledger :
     ArgumentsSemantics.ExtendLedger result sourceArguments
   private semantics :
@@ -3118,6 +3124,23 @@ def source
     {position : Nat}
     (_ : AppliedArgDrop source orientation wire position) := source
 
+def sourceArgumentList
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) : List Sig :=
+  applied.sourceArguments
+
+theorem sourceWire_signature
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    (source.val.wires wire).sig = .rel applied.sourceArgumentList :=
+  applied.sourceSignature
+
 def target
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3143,6 +3166,47 @@ def targetSites
     (applied : AppliedArgDrop source orientation wire position) :
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.factorization.targetSites
+
+def nodeEquiv
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    Data.Finite.FiniteEquiv source.val.NodeId applied.target.val.NodeId :=
+  applied.result.nodeEquiv applied.targetSites
+
+def wireEquiv
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    Data.Finite.FiniteEquiv source.val.WireId applied.target.val.WireId :=
+  applied.result.wireEquivHeadOnly applied.source_removed_exact
+    applied.local_count_exact
+
+@[simp] theorem wireEquiv_head
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    applied.wireEquiv wire = applied.targetWire := by
+  unfold wireEquiv ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly
+    ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly
+  simp
+  rfl
+
+theorem targetArguments_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position) :
+    applied.result.targetArguments =
+      ConcreteWirePrimitive.eraseAt applied.sourceArgumentList position :=
+  applied.target_arguments_exact
 
 /-- Exact target image of any source wire through argument drop.  The acted
 head is replaced by the checked target head; every other wire is transported
@@ -3196,6 +3260,31 @@ def source
       AppliedArgExtend source orientation wire position newArgument
         attachments) := source
 
+def sourceArgumentList
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) : List Sig :=
+  applied.sourceArguments
+
+theorem sourceWire_signature
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    (source.val.wires wire).sig = .rel applied.sourceArgumentList :=
+  applied.sourceSignature
+
 def target
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3233,6 +3322,64 @@ def targetSites
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.factorization.targetSites
 
+def nodeEquiv
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    Data.Finite.FiniteEquiv source.val.NodeId applied.target.val.NodeId :=
+  applied.result.nodeEquiv applied.targetSites
+
+def wireEquiv
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    Data.Finite.FiniteEquiv source.val.WireId applied.target.val.WireId :=
+  applied.result.wireEquivHeadOnly applied.source_removed_exact
+    applied.local_count_exact
+
+@[simp] theorem wireEquiv_head
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    applied.wireEquiv wire = applied.targetWire := by
+  unfold wireEquiv ConcreteWirePrimitive.ArgumentResult.wireEquivHeadOnly
+    ConcreteWirePrimitive.ArgumentResult.wireImageHeadOnly
+  simp
+  rfl
+
+theorem targetArguments_exact
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied :
+      AppliedArgExtend source orientation wire position newArgument
+        attachments) :
+    applied.result.targetArguments =
+      ConcreteWirePrimitive.insertAt applied.sourceArgumentList position
+        newArgument :=
+  applied.target_arguments_exact
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3246,6 +3393,71 @@ def tag
   .argExtend
 
 end AppliedArgExtend
+
+namespace AppliedArgDrop
+
+/-- The supplied suffix isomorphism identifies the inverse extension's
+source argument vector with the checked drop target vector. -/
+theorem inverseSourceArguments_exact
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire) :
+    backward.sourceArgumentList = forward.result.targetArguments := by
+  have signatureExact := targetIso.wire_signature backwardWire
+  have forwardSignature :
+      (forward.target.val.wires forward.targetWire).sig =
+        .rel forward.result.targetArguments :=
+    forward.result.targetWire_signature
+  have backwardSignature :
+      (real.val.wires backwardWire).sig =
+        .rel backward.sourceArgumentList :=
+    backward.sourceWire_signature
+  rw [wireExact, forwardSignature, backwardSignature] at signatureExact
+  exact Sig.rel.inj signatureExact.symm
+
+/-- Drop followed by the checked inverse extension restores the complete
+planned argument vector. -/
+theorem inverseTargetArguments_exact
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    {attachments : List real.val.WireId}
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument attachments)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (argumentExact :
+      forward.sourceArgumentList[position]? = some newArgument) :
+    backward.result.targetArguments = forward.sourceArgumentList := by
+  calc
+    backward.result.targetArguments =
+        ConcreteWirePrimitive.insertAt backward.sourceArgumentList position
+          newArgument := backward.targetArguments_exact
+    _ = ConcreteWirePrimitive.insertAt forward.result.targetArguments
+          position newArgument := by
+      rw [forward.inverseSourceArguments_exact backward targetIso wireExact]
+    _ = ConcreteWirePrimitive.insertAt
+          (ConcreteWirePrimitive.eraseAt forward.sourceArgumentList position)
+          position newArgument := by
+      rw [forward.targetArguments_exact]
+    _ = forward.sourceArgumentList :=
+      ConcreteWirePrimitive.insertAt_eraseAt_of_getElem?_eq_some
+        forward.sourceArgumentList position newArgument argumentExact
+
+end AppliedArgDrop
 
 def applyArityShift
     (source : CheckedDiagram definitions)
@@ -3411,9 +3623,13 @@ def applyArgDrop
           let localCountExact :=
             ConcreteWirePrimitive.argDrop_localCount_exact
               source wire position result accepted
+          let targetArgumentsExact :=
+            ConcreteWirePrimitive.argDrop_targetArguments_exact source wire
+              sourceArguments sourceSignature position result accepted
           pure
             ⟨attachments, gate, result, sourceArguments, sourceSignature,
-              sourceRemovedExact, localCountExact, ledger, semantics⟩
+              sourceRemovedExact, localCountExact, targetArgumentsExact,
+              ledger, semantics⟩
 
 def applyArgExtend
     (source : CheckedDiagram definitions)
@@ -3460,9 +3676,14 @@ def applyArgExtend
           let localCountExact :=
             ConcreteWirePrimitive.argExtend_localCount_exact
               source wire position newArgument attachments result accepted
+          let targetArgumentsExact :=
+            ConcreteWirePrimitive.argExtend_targetArguments_exact source wire
+              sourceArguments sourceSignature position newArgument attachments
+              result accepted
           pure
             ⟨gate, result, sourceArguments, sourceSignature,
-              sourceRemovedExact, localCountExact, ledger, semantics⟩
+              sourceRemovedExact, localCountExact, targetArgumentsExact,
+              ledger, semantics⟩
 
 /-- Checked arity shift is a full-model cylindrification equivalence. -/
 theorem arity_shift_sound
