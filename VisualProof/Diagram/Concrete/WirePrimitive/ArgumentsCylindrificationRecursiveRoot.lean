@@ -13,6 +13,71 @@ private theorem recursiveRoot_cast_cancel
   cases same
   rfl
 
+private theorem recursiveRoot_cast_cancel_reverse
+    (same : left = right)
+    (value : Var left signature) :
+    same.symm ▸ (same ▸ value) = value := by
+  cases same
+  rfl
+
+theorem recursiveVar_append_cases
+    (left right : List Sig)
+    (value : Var (left ++ right) signature) :
+    (∃ localValue : Var left signature,
+      value = Var.appendLeft localValue right) ∨
+    (∃ outerValue : Var right signature,
+      value = Var.appendRight left outerValue) := by
+  induction left with
+  | nil => exact Or.inr ⟨value, rfl⟩
+  | cons head tail induction =>
+      cases value with
+      | here => exact Or.inl ⟨.here, rfl⟩
+      | there value =>
+          rcases induction value with
+            ⟨localValue, localExact⟩ | ⟨outerValue, outerExact⟩
+          · exact Or.inl ⟨.there localValue,
+              congrArg Var.there localExact⟩
+          · exact Or.inr ⟨outerValue, congrArg Var.there outerExact⟩
+
+theorem recursiveExtendedNormalization_cases
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (value : Var (context.extend region).sigs signature) :
+    (∃ localValue : Var
+        ((diagram.wiresAt region).map fun wire =>
+          (diagram.wires wire).sig) signature,
+      value =
+        (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendLeft localValue context.sigs) ∨
+    (∃ outerValue : Var context.sigs signature,
+      value =
+        (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendRight
+            ((diagram.wiresAt region).map fun wire =>
+              (diagram.wires wire).sig) outerValue) := by
+  let contextExact := ConcreteElaboration.WireContext.sigs_extend context region
+  rcases recursiveVar_append_cases
+      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+      context.sigs (contextExact ▸ value) with
+    ⟨localValue, localExact⟩ | ⟨outerValue, outerExact⟩
+  · apply Or.inl
+    refine ⟨localValue, ?_⟩
+    calc
+      value = contextExact.symm ▸ (contextExact ▸ value) :=
+        (recursiveRoot_cast_cancel_reverse contextExact value).symm
+      _ = contextExact.symm ▸ Var.appendLeft localValue context.sigs :=
+        congrArg (fun selected => contextExact.symm ▸ selected) localExact
+  · apply Or.inr
+    refine ⟨outerValue, ?_⟩
+    calc
+      value = contextExact.symm ▸ (contextExact ▸ value) :=
+        (recursiveRoot_cast_cancel_reverse contextExact value).symm
+      _ = contextExact.symm ▸ Var.appendRight
+          ((diagram.wiresAt region).map fun wire =>
+            (diagram.wires wire).sig) outerValue :=
+        congrArg (fun selected => contextExact.symm ▸ selected) outerExact
+
 /-- Keep a canonical local prefix fixed while independently normalizing the
 inherited outer context.  This is the context action used below the changed
 relation head, where no total concrete source-to-target head map exists. -/
