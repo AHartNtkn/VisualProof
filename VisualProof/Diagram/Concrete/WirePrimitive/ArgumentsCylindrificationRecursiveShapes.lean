@@ -206,6 +206,77 @@ def recursiveReceiptAppend
       exact congrArg (UniformIntrinsicItemSeq.cons head.larger)
         (recursiveReceiptAppend_larger right tail)
 
+/-- Exact node/child decomposition of one successful positive-fuel region
+compilation.  This is the executable equation consumed by recursive receipts. -/
+theorem compileRegion?_recursive_decomposition
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat)
+    (region : diagram.RegionId)
+    (context : ConcreteElaboration.WireContext diagram)
+    (body : Region definitions context.sigs)
+    (compiled :
+      ConcreteElaboration.compileRegion? definitions diagram (fuel + 1)
+          region context = some body) :
+    ∃ (nodes children : ItemSeq definitions (context.extend region).sigs),
+      ConcreteElaboration.compileNodes? definitions diagram
+          (context.extend region) (diagram.nodesAt region) = some nodes ∧
+      ConcreteElaboration.compileChildrenWith? definitions diagram
+          (ConcreteElaboration.compileRegion? definitions diagram fuel)
+          (context.extend region) (diagram.childrenOf region) = some children ∧
+      body = ConcreteElaboration.finishRegion diagram context region
+        (.mk (nodes.append children)) := by
+  unfold ConcreteElaboration.compileRegion? at compiled
+  cases nodesCompiled : ConcreteElaboration.compileNodes? definitions diagram
+      (context.extend region) (diagram.nodesAt region) with
+  | none => simp [nodesCompiled] at compiled
+  | some nodes =>
+      cases childrenCompiled :
+          ConcreteElaboration.compileChildrenWith? definitions diagram
+            (ConcreteElaboration.compileRegion? definitions diagram fuel)
+            (context.extend region) (diagram.childrenOf region) with
+      | none => simp [nodesCompiled, childrenCompiled] at compiled
+      | some children =>
+          refine ⟨nodes, children, rfl, rfl, ?_⟩
+          have bodyExact : some (ConcreteElaboration.finishRegion diagram
+              context region (.mk (nodes.append children))) = some body := by
+            simpa [nodesCompiled, childrenCompiled] using compiled
+          exact (Option.some.inj bodyExact).symm
+
+/-- One successful ordered child compilation exposes its head cut and the
+remaining child sequence without changing order. -/
+theorem compileChildrenWith?_cons_decomposition
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (recurse : (region : diagram.RegionId) →
+      (context : ConcreteElaboration.WireContext diagram) →
+      Option (Region definitions context.sigs))
+    (context : ConcreteElaboration.WireContext diagram)
+    (child : diagram.RegionId)
+    (tail : List diagram.RegionId)
+    (items : ItemSeq definitions context.sigs)
+    (compiled :
+      ConcreteElaboration.compileChildrenWith? definitions diagram recurse
+          context (child :: tail) = some items) :
+    ∃ body rest,
+      recurse child context = some body ∧
+      ConcreteElaboration.compileChildrenWith? definitions diagram recurse
+          context tail = some rest ∧
+      items = .cons (.cut body) rest := by
+  unfold ConcreteElaboration.compileChildrenWith? at compiled
+  cases bodyCompiled : recurse child context with
+  | none => simp [bodyCompiled] at compiled
+  | some body =>
+      cases restCompiled :
+          ConcreteElaboration.compileChildrenWith? definitions diagram recurse
+            context tail with
+      | none => simp [bodyCompiled, restCompiled] at compiled
+      | some rest =>
+          refine ⟨body, rest, rfl, rfl, ?_⟩
+          have itemsExact : some (.cons (.cut body) rest) = some items := by
+            simpa [bodyCompiled, restCompiled] using compiled
+          exact (Option.some.inj itemsExact).symm
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
