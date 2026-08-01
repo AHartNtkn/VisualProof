@@ -992,6 +992,26 @@ def plainFinal
     CheckedDiagram definitions :=
   result.finalRemoval.checked
 
+/-- Ordered occurrence-removal/splice steps retained by the accepted join. -/
+def steps
+    (result : RelationJoinResult source wire content parameters) :
+    List (RelationJoinStep source wire content) :=
+  result.finalState.steps
+
+/-- Exact dense region landing before eager identity normalization. -/
+def plainRegionImage
+    (result : RelationJoinResult source wire content parameters) :
+    source.val.RegionId → result.plainFinal.val.RegionId :=
+  result.finalRemoval.regionImage
+
+/-- Exact dense surviving-wire landing after deleting the exhausted relation. -/
+def plainWireImage
+    (result : RelationJoinResult source wire content parameters)
+    (sourceWire : source.val.WireId)
+    (survives : sourceWire ≠ wire) :
+    result.plainFinal.val.WireId :=
+  result.finalRemoval.wireImage sourceWire survives
+
 theorem final_deletion_exact
     (result : RelationJoinResult source wire content parameters) :
     result.plainFinal.val =
@@ -1023,7 +1043,7 @@ theorem final_deletion_exact
 theorem semantic_trace
     (result : RelationJoinResult source wire content parameters) :
     RelationJoinSemanticTrace source wire content parameters result.args
-      result.finalState.steps result.boundFinal result.boundRegionImage
+      result.steps result.boundFinal result.boundRegionImage
         result.boundWireImage result.boundDying
         (result.boundRegionImage (source.val.wires wire).scope) :=
   result.finalState.semanticTrace
