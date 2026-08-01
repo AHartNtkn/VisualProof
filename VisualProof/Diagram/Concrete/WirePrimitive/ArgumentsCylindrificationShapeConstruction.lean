@@ -1176,6 +1176,92 @@ theorem LocalCylindricalFrame.compileSourceAppliedSiteHole?_complete
   refine ⟨head, arguments, compiled, ?_, argumentOrigins⟩
   simp [UniformIntrinsicRegion.matchedHeadArguments?, normalizedHead]
 
+/-- A generated target application local to the acted scope compiles in the
+canonical target frame with the replacement head and its exact ordered
+construction-owned argument wires. -/
+theorem LocalCylindricalFrame.compileTargetAppliedSite?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (site : Fin result.sites.sites.length)
+    (siteRegion :
+      (result.sites.sites.get site).region =
+        (source.val.wires wire).scope) :
+    ∃ (head : Var frame.targetScope.frame.visible.sigs
+          (.rel (targetAppliedSite result site).argumentSignatures))
+      (arguments : Vars frame.targetScope.frame.visible.sigs
+          (targetAppliedSite result site).argumentSignatures),
+      ConcreteElaboration.Internal.compileNode? definitions
+          result.checked.val frame.targetScope.frame.visible
+          (result.targetNode site) = some (.atom head arguments) ∧
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids head = result.targetWire ∧
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible arguments =
+        (targetAppliedSite result site).arguments := by
+  let targetSite := targetAppliedSite result site
+  have targetRegion : targetSite.region =
+      (result.checked.val.wires result.targetWire).scope := by
+    calc
+      targetSite.region =
+          result.regionImage (result.sites.sites.get site).region :=
+        targetAppliedSite_region result site
+      _ = result.regionImage (source.val.wires wire).scope := by
+        rw [siteRegion]
+      _ = (result.checked.val.wires result.targetWire).scope :=
+        result.targetWire_scope_regionImage.symm
+  obtain ⟨item, nodeCompiled⟩ :=
+    ConcreteElaboration.compileNode?_complete_of_required_visible
+      definitions result.checked.val result.checked.property
+      frame.targetScope.frame.visible targetSite.node (by
+        intro port _required owner ownerExact
+        apply frame.targetScope.visible_of_encloses owner
+        have ownerScope := ConcreteElaboration.Internal.endpoint_scope
+          definitions result.checked.val result.checked.property
+          ⟨targetSite.node, port⟩ owner ownerExact
+        simpa [targetSite.node_data, targetRegion] using ownerScope)
+  have singletonCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          frame.targetScope.frame.visible [targetSite.node] =
+        some (.cons item .nil) := by
+    simp [ConcreteElaboration.compileNodes?, nodeCompiled]
+  obtain ⟨head, arguments, itemExact, headOrigin, argumentOrigins⟩ :=
+    ConcreteElaboration.compileNodes?_atom_shape result.checked.val
+      frame.targetScope.frame.visible targetSite.node targetSite.node_data
+      singletonCompiled
+  have itemSame : item = .atom head arguments :=
+    ItemSeq.cons.inj itemExact |>.1
+  subst item
+  have headExact :
+      ConcreteElaboration.WireContext.origin result.checked.val
+          frame.targetScope.frame.visible.ids head = result.targetWire :=
+    Option.some.inj (headOrigin.symm.trans targetSite.endpoint_owner)
+  have argumentsExact :
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible arguments = targetSite.arguments := by
+    apply List.ext_get
+    · simpa [variableOrigins_length_local] using
+        targetSite.arguments_length.symm
+    · intro index leftBound rightBound
+      have compiledOwner := argumentOrigins_get_local result.checked.val
+        frame.targetScope.frame.visible targetSite.node 0 arguments
+        argumentOrigins index (by
+          rw [← variableOrigins_length_local result.checked.val
+            frame.targetScope.frame.visible arguments]
+          exact leftBound)
+      have siteOwner := targetSite.argument_owner index rightBound
+      exact Option.some.inj (compiledOwner.symm.trans (by
+        simpa using siteOwner))
+  have nodeCompiledExact :
+      ConcreteElaboration.Internal.compileNode? definitions
+          result.checked.val frame.targetScope.frame.visible
+          (result.targetNode site) = some (.atom head arguments) := by
+    rw [← targetAppliedSite_node result site]
+    exact nodeCompiled
+  exact ⟨head, arguments, nodeCompiledExact, headExact, argumentsExact⟩
+
 /-- Every required port owner of an acted-scope retained source node occurs
 in the pruned source context; the removed relation head is excluded by site
 exhaustiveness, while true outer owners remain in the paired outer spine. -/
