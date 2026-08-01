@@ -68,6 +68,13 @@ private theorem recursive_cast_eq_symm_cast
   cases same
   exact exact
 
+private theorem recursive_cast_symm_cancel
+    (same : left = right)
+    (value : Var right signature) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
 private theorem recursive_canonical_appendLeft_eq
     {sourceContextSigs sourceReduced mappedSigs actualFresh
       targetContextSigs targetReduced fresh : List Sig}
@@ -176,6 +183,100 @@ private theorem recursive_cast_appendRight_eq_appendRightVar
           (Var.appendRight
             (tail.map fun wire => (diagram.wires wire).sig) value)).trans
           (congrArg Var.there induction)
+
+private theorem recursive_var_extend_cases
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    {signature : Sig}
+    (value : Var (context.extend region).sigs signature) :
+    (∃ localValue : Var
+        ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+        signature,
+      value =
+        (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendLeft localValue context.sigs) ∨
+    (∃ outerValue : Var context.sigs signature,
+      value =
+        (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendRight
+            ((diagram.wiresAt region).map fun wire =>
+              (diagram.wires wire).sig) outerValue) := by
+  rcases InsertionCompilation.NaturalityInternal.var_append_cases diagram
+      (diagram.wiresAt region) context.ids value with
+    ⟨localValue, localExact⟩ | ⟨outerValue, outerExact⟩
+  · apply Or.inl
+    refine ⟨localValue, localExact.trans ?_⟩
+    apply recursive_cast_eq_symm_cast
+      (ConcreteElaboration.WireContext.sigs_extend context region)
+    have canonical :=
+      InsertionCompilation.NaturalityInternal.appendLeftIds_reindex diagram
+        (diagram.wiresAt region) context.ids localValue
+    simpa only [ConcreteElaboration.WireContext.sigs] using canonical
+  · apply Or.inr
+    refine ⟨outerValue, outerExact.trans ?_⟩
+    have proofExact :
+        ConcreteElaboration.WireContext.sigs_extend context region =
+          List.map_append
+            (f := fun wire => (diagram.wires wire).sig)
+            (l₁ := diagram.wiresAt region) (l₂ := context.ids) :=
+      Subsingleton.elim _ _
+    rw [proofExact]
+    exact (recursive_cast_appendRight_eq_appendRightVar diagram
+      (diagram.wiresAt region) context.ids outerValue).symm
+
+private theorem recursive_origin_extend_local
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    {signature : Sig}
+    (value : Var
+      ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+      signature) :
+    ConcreteElaboration.WireContext.origin diagram (context.extend region).ids
+        ((ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendLeft value context.sigs) =
+      ConcreteElaboration.WireContext.origin diagram
+        (diagram.wiresAt region) value := by
+  have canonical :=
+    InsertionCompilation.NaturalityInternal.appendLeftIds_reindex diagram
+      (diagram.wiresAt region) context.ids value
+  have canonical' :
+      ConcreteElaboration.WireContext.sigs_extend context region ▸
+          InsertionCompilation.NaturalityInternal.appendLeftIds diagram
+            context.ids value =
+        Var.appendLeft value context.sigs := by
+    simpa only [ConcreteElaboration.WireContext.sigs] using canonical
+  have castExact := recursive_cast_eq_symm_cast _ _ _ canonical'
+  rw [← castExact]
+  change ConcreteElaboration.WireContext.origin diagram
+      (diagram.wiresAt region ++ context.ids)
+      (InsertionCompilation.NaturalityInternal.appendLeftIds diagram
+        context.ids value) = _
+  exact InsertionCompilation.NaturalityInternal.appendLeftIds_origin diagram
+    (diagram.wiresAt region) context.ids value
+
+private theorem recursive_origin_extend_outer
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    {signature : Sig}
+    (value : Var context.sigs signature) :
+    ConcreteElaboration.WireContext.origin diagram (context.extend region).ids
+        ((ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendRight
+            ((diagram.wiresAt region).map fun wire =>
+              (diagram.wires wire).sig) value) =
+      ConcreteElaboration.WireContext.origin diagram context.ids value := by
+  unfold ConcreteElaboration.WireContext.extend
+    ConcreteElaboration.WireContext.sigs
+  rw [show ConcreteElaboration.WireContext.sigs_extend context region =
+      List.map_append (f := fun wire => (diagram.wires wire).sig)
+        (l₁ := diagram.wiresAt region) (l₂ := context.ids) from
+      Subsingleton.elim _ _]
+  rw [recursive_cast_appendRight_eq_appendRightVar]
+  exact ConcreteElaboration.origin_appendRightVar diagram
+    (diagram.wiresAt region) value
 
 /-- The target local signature block below the acted head is the source
 block followed by the construction-owned fresh suffix.  This is the exact
@@ -613,6 +714,89 @@ theorem arityShift_regionBounds_below_freshLocal_origin
   simpa [freshIds, freshAtRegion] using
     origin_repeatedVar_of_length result.checked.val freshIds newArgument
       freshAtRegion.length freshLengthExact freshExact index
+
+/-- Canonical context action obtained by extending a previously established
+outer action through one below-head region. -/
+def arityShift_regionEmbedding_below
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter :
+      ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs) :
+    WireRenaming (sourceOuter.extend region).sigs
+      (targetOuter.extend (result.regionImage region)).sigs :=
+  fun {_} value =>
+    (ConcreteElaboration.WireContext.sigs_extend targetOuter
+      (result.regionImage region)).symm ▸
+      (arityShift_regionBounds_below source wire sourceArguments
+        sourceSignature newArgument result accepted region notHead).embed
+          outer
+          (ConcreteElaboration.WireContext.sigs_extend sourceOuter region ▸
+            value)
+
+/-- The extended below-region action commutes with concrete origins.  The
+proof is exhaustive over the local/outer split of the source context; target
+fresh coordinates are intentionally handled by
+`arityShift_regionBounds_below_freshLocal_origin` instead. -/
+theorem arityShift_regionEmbedding_below_origin
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceOuter : ConcreteElaboration.WireContext source.val)
+    (targetOuter :
+      ConcreteElaboration.WireContext result.checked.val)
+    (outer : WireRenaming sourceOuter.sigs targetOuter.sigs)
+    (outerOrigin : ∀ {signature : Sig}
+      (value : Var sourceOuter.sigs signature),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetOuter.ids (outer value) =
+        result.contextWireMap
+          (ConcreteElaboration.WireContext.origin source.val
+            sourceOuter.ids value))
+    {signature : Sig}
+    (value : Var (sourceOuter.extend region).sigs signature) :
+    ConcreteElaboration.WireContext.origin result.checked.val
+        (targetOuter.extend (result.regionImage region)).ids
+        (arityShift_regionEmbedding_below source wire sourceArguments
+          sourceSignature newArgument result accepted region notHead
+          sourceOuter targetOuter outer value) =
+      result.contextWireMap
+        (ConcreteElaboration.WireContext.origin source.val
+          (sourceOuter.extend region).ids value) := by
+  rcases recursive_var_extend_cases source.val sourceOuter region value with
+    ⟨localValue, exact⟩ | ⟨outerValue, exact⟩
+  · subst value
+    unfold arityShift_regionEmbedding_below
+    rw [recursive_cast_symm_cancel]
+    rw [BoundCylindrification.embed_appendLeft]
+    rw [recursive_origin_extend_local]
+    rw [arityShift_regionBounds_below_embedLocal_origin source wire
+      sourceArguments sourceSignature newArgument result accepted region
+      notHead localValue]
+    rw [recursive_origin_extend_local]
+  · subst value
+    unfold arityShift_regionEmbedding_below
+    rw [recursive_cast_symm_cancel]
+    rw [BoundCylindrification.embed_appendRight]
+    rw [recursive_origin_extend_outer]
+    rw [outerOrigin]
+    rw [recursive_origin_extend_outer]
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
