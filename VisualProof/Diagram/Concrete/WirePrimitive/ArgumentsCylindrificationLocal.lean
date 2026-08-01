@@ -26,6 +26,25 @@ inductive LocalHeadRemoval (headSignature : Sig) :
 
 namespace LocalHeadRemoval
 
+/-- Intrinsically typed classification of a variable in an appended context. -/
+inductive AppendVariableClass (left right : List Sig) :
+    {signature : Sig} → Var (left ++ right) signature → Type
+  | left (value : Var left signature) :
+      AppendVariableClass left right (Var.appendLeft value right)
+  | right (value : Var right signature) :
+      AppendVariableClass left right (Var.appendRight left value)
+
+/-- Every variable in an appended context comes from exactly one typed side. -/
+def classifyAppend :
+    (left : List Sig) → (value : Var (left ++ right) signature) →
+      AppendVariableClass left right value
+  | [], value => .right value
+  | _ :: _, .here => .left .here
+  | head :: tail, .there rest =>
+      match classifyAppend tail rest with
+      | .left innerValue => .left (.there innerValue)
+      | .right outer => .right outer
+
 /-- Construct the unique removal selected by an intrinsically typed variable. -/
 def ofVar :
     (head : Var bound headSignature) →
@@ -158,21 +177,16 @@ inductive VariableClass
 
 /-- The head/retained classification is exhaustive without comparing
 signatures or untyped de Bruijn indices. -/
-def classify
-    (removal : LocalHeadRemoval headSignature bound reduced)
-    (value : Var bound signature) : VariableClass removal value := by
-  induction removal with
-  | @here rest =>
-      cases value with
-      | here => exact .head
-      | there tail => exact .retained tail
-  | @there localSignature tailBound tailReduced rest induction =>
-      cases value with
-      | here => exact .retained .here
-      | there tail =>
-          cases induction tail with
-          | head => exact .head
-          | retained retained => exact .retained (.there retained)
+def classify :
+    (removal : LocalHeadRemoval headSignature bound reduced) →
+      (value : Var bound signature) → VariableClass removal value
+  | .here, .here => .head
+  | .here, .there tail => .retained tail
+  | .there _ _, .here => .retained .here
+  | .there localSignature rest, .there tail =>
+      match rest.classify tail with
+      | .head => .head
+      | .retained retained => .retained (.there retained)
 
 /--
 Rename a complete local-plus-outer context after moving the selected head to
