@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationRecursiveHoles
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationRecursiveRoot
 import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 
@@ -717,7 +717,7 @@ def tag
 
 end AppliedArgExtend
 
-def applyArityShift
+noncomputable def applyArityShift
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
     (newArgument : Sig) :
@@ -730,15 +730,12 @@ def applyArityShift
       match sourceSignature : (source.val.wires wire).sig with
       | .iota => exact .error .semanticLedgerRejected
       | .rel sourceArguments =>
-          match ledgerAccepted :
-              ArgumentsSemantics.checkScopedArityShiftLedger result
-                sourceArguments sourceSignature newArgument with
-          | none => exact .error .semanticLedgerRejected
-          | some ledger =>
-              exact .ok
-                ⟨result, sourceArguments, sourceSignature, ledger,
-                  ConcreteWirePrimitive.arityShift_sourceRemovedWires_exact
-                    source wire newArgument result accepted⟩
+          let ledger := ArgumentsSemantics.scopedArityShiftLedgerOfAccepted
+            sourceArguments sourceSignature newArgument result accepted
+          exact .ok
+            ⟨result, sourceArguments, sourceSignature, ledger,
+              ConcreteWirePrimitive.arityShift_sourceRemovedWires_exact
+                source wire newArgument result accepted⟩
 
 def applyArityUnshift
     (source : CheckedDiagram definitions)
