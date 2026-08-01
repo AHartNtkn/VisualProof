@@ -1363,6 +1363,83 @@ theorem recursiveFinalRegionHole_split_exact
     embeddingExact (Vars.rename correspondence.sourceMap sourceValues)]
   exact splitExact
 
+noncomputable def recursiveFinalRegionHoles
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (sourceItems : ItemSeq definitions sourceContext.sigs)
+    (targetItems : ItemSeq definitions targetContext.sigs)
+    (sourceCompiled : ConcreteElaboration.compileNodes? definitions source.val
+      sourceContext (source.val.nodesAt region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileNodes? definitions
+      result.checked.val targetContext
+      (result.checked.val.nodesAt (result.regionImage region)) =
+        some targetItems)
+    (sourceNodup : sourceContext.ids.Nodup)
+    (targetNodup : targetContext.ids.Nodup)
+    (bounds : BoundCylindrification newArgument smallerBound largerBound
+      (arityFreshAt result region).length)
+    (outer : WireRenaming smallerOuter largerOuter)
+    (correspondence : RecursiveNormalizationCorrespondence result
+      sourceContext targetContext (smallerBound ++ smallerOuter)
+        (largerBound ++ largerOuter))
+    (embeddingExact : ∀ {signature : Sig}
+      (value : Var (smallerBound ++ smallerOuter) signature),
+      correspondence.embedding value = bounds.embed outer value)
+    (sourceHead : Var (smallerBound ++ smallerOuter)
+      (.rel sourceArguments))
+    (targetHead : Var (largerBound ++ largerOuter)
+      (.rel result.targetArguments))
+    (headNormalization : RecursiveHeadNormalization result sourceArguments
+      sourceContext targetContext correspondence.sourceMap
+      correspondence.targetMap sourceHead targetHead)
+    (freshMapExact : ∀
+      (freshIndex : Fin (arityFreshAt result region).length)
+      (targetValue : Var targetContext.sigs newArgument),
+      ConcreteElaboration.WireContext.origin result.checked.val
+          targetContext.ids targetValue =
+        result.targetLocalWire ((arityFreshAt result region).get freshIndex) →
+      correspondence.targetMap targetValue =
+        bounds.freshVar outer freshIndex) :
+    CylindricalHoles
+      (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted) bounds outer
+      (UniformIntrinsicRegion.abstractAppliedItems sourceHead
+        (sourceItems.renameWires correspondence.sourceMap)).holeValues
+      (UniformIntrinsicRegion.abstractAppliedItems targetHead
+        (targetItems.renameWires correspondence.targetMap)).holeValues := by
+  let lengths := recursiveFinalRegionHole_lengths sourceArguments
+    sourceSignature newArgument result accepted region sourceContext
+    targetContext sourceItems targetItems sourceCompiled targetCompiled
+    sourceNodup targetNodup correspondence.sourceMap
+    correspondence.targetMap sourceHead targetHead headNormalization
+  exact cylindricalHolesOfSplit
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+      newArgument result accepted) bounds outer
+    (UniformIntrinsicRegion.abstractAppliedItems sourceHead
+      (sourceItems.renameWires correspondence.sourceMap)).holeValues
+    (UniformIntrinsicRegion.abstractAppliedItems targetHead
+      (targetItems.renameWires correspondence.targetMap)).holeValues
+    lengths.1 lengths.2
+    (aritySourceIndex source wire sourceArguments sourceSignature newArgument
+      result accepted region)
+    (arityFreshIndex source wire sourceArguments sourceSignature newArgument
+      result accepted region)
+    (recursiveFinalRegionHole_split_exact sourceArguments sourceSignature
+      newArgument result accepted region notHead sourceContext targetContext
+      sourceItems targetItems sourceCompiled targetCompiled sourceNodup
+      targetNodup bounds outer correspondence embeddingExact sourceHead
+      targetHead headNormalization freshMapExact)
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
