@@ -569,6 +569,251 @@ def wireEquiv
   applied.result.wireEquivHeadOnly applied.source_removed_exact
     applied.local_count_exact
 
+/-- Port image on a generated application node.  Source argument positions
+are sent to the unique output positions selected by the accepted permutation
+receipt; non-argument ports are fixed. -/
+def generatedPortImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) : CPort → CPort
+  | .arg index =>
+      if bound : index < applied.sourceArguments.length then
+        .arg (applied.permutation_receipt.inversePosition
+          ⟨index, bound⟩).val
+      else
+        .arg index
+  | .head => .head
+  | .identity index => .identity index
+
+/-- Inverse port image on a generated application node. -/
+def generatedPortInverse
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) : CPort → CPort
+  | .arg index =>
+      if bound : index < applied.sourceArguments.length then
+        .arg (applied.permutation_receipt.forwardPosition
+          ⟨index, bound⟩).val
+      else
+        .arg index
+  | .head => .head
+  | .identity index => .identity index
+
+/-- The generated port maps cancel on every source argument position. -/
+theorem generatedPortInverse_image
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (position : Fin applied.sourceArguments.length) :
+    applied.generatedPortInverse
+        (applied.generatedPortImage (.arg position.val)) =
+      .arg position.val := by
+  unfold generatedPortImage generatedPortInverse
+  simp only [position.isLt, dite_true]
+  split
+  · congr 1
+    exact congrArg Fin.val
+      (applied.permutation_receipt.forward_inversePosition position)
+  · rename_i impossible
+    exact (impossible
+      (applied.permutation_receipt.inversePosition position).isLt).elim
+
+/-- The generated port maps cancel on every target argument position. -/
+theorem generatedPortImage_inverse
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (position : Fin applied.sourceArguments.length) :
+    applied.generatedPortImage
+        (applied.generatedPortInverse (.arg position.val)) =
+      .arg position.val := by
+  unfold generatedPortImage generatedPortInverse
+  simp only [position.isLt, dite_true]
+  split
+  · congr 1
+    exact congrArg Fin.val
+      (applied.permutation_receipt.inverse_forwardPosition position)
+  · rename_i impossible
+    exact (impossible
+      (applied.permutation_receipt.forwardPosition position).isLt).elim
+
+/-- Generated port transport is a total left inverse, including irrelevant
+out-of-arity ports on which both maps are the identity. -/
+theorem generatedPortInverse_image_all
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (port : CPort) :
+    applied.generatedPortInverse (applied.generatedPortImage port) =
+      port := by
+  cases port with
+  | head => rfl
+  | identity index => rfl
+  | arg index =>
+      by_cases bound : index < applied.sourceArguments.length
+      · exact applied.generatedPortInverse_image ⟨index, bound⟩
+      · simp [generatedPortImage, generatedPortInverse, bound]
+
+/-- Generated port transport is a total right inverse. -/
+theorem generatedPortImage_inverse_all
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (port : CPort) :
+    applied.generatedPortImage (applied.generatedPortInverse port) =
+      port := by
+  cases port with
+  | head => rfl
+  | identity index => rfl
+  | arg index =>
+      by_cases bound : index < applied.sourceArguments.length
+      · exact applied.generatedPortImage_inverse ⟨index, bound⟩
+      · simp [generatedPortImage, generatedPortInverse, bound]
+
+/-- Total endpoint image of an accepted argument permutation.  Generated
+application nodes use the receipt-indexed port permutation; retained nodes
+preserve their constructor-derived port. -/
+def endpointImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (endpoint : CEndpoint source.val.nodeCount) :
+    CEndpoint applied.target.val.nodeCount :=
+  ⟨applied.nodeEquiv endpoint.node,
+    if endpoint.node ∈
+        ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+      applied.generatedPortImage endpoint.port
+    else
+      endpoint.port⟩
+
+/-- Total inverse endpoint image of an accepted argument permutation. -/
+def endpointInverse
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (endpoint : CEndpoint applied.target.val.nodeCount) :
+    CEndpoint source.val.nodeCount :=
+  let sourceNode := applied.nodeEquiv.symm endpoint.node
+  ⟨sourceNode,
+    if sourceNode ∈
+        ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+      applied.generatedPortInverse endpoint.port
+    else
+      endpoint.port⟩
+
+/-- Construction endpoint transport is left-invertible on every endpoint. -/
+theorem endpointInverse_image
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (endpoint : CEndpoint source.val.nodeCount) :
+    applied.endpointInverse (applied.endpointImage endpoint) = endpoint := by
+  unfold endpointInverse endpointImage
+  have nodeCancel := applied.nodeEquiv.left_inv endpoint.node
+  change applied.nodeEquiv.symm (applied.nodeEquiv endpoint.node) =
+    endpoint.node at nodeCancel
+  change
+    ⟨applied.nodeEquiv.symm (applied.nodeEquiv endpoint.node),
+      (if applied.nodeEquiv.symm (applied.nodeEquiv endpoint.node) ∈
+          ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+        applied.generatedPortInverse
+          (if endpoint.node ∈
+              ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+            applied.generatedPortImage endpoint.port
+          else endpoint.port)
+      else
+        if endpoint.node ∈
+            ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+          applied.generatedPortImage endpoint.port
+        else endpoint.port)⟩ = endpoint
+  rw [nodeCancel]
+  by_cases generated : endpoint.node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites
+  · simp only [generated, if_pos]
+    rw [applied.generatedPortInverse_image_all]
+  · simp only [generated, if_neg]
+    rfl
+
+/-- Construction endpoint transport is right-invertible on every endpoint. -/
+theorem endpointImage_inverse
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (endpoint : CEndpoint applied.target.val.nodeCount) :
+    applied.endpointImage (applied.endpointInverse endpoint) = endpoint := by
+  unfold endpointInverse endpointImage
+  let sourceNode := applied.nodeEquiv.symm endpoint.node
+  have nodeCancel : applied.nodeEquiv sourceNode = endpoint.node :=
+    applied.nodeEquiv.right_inv endpoint.node
+  change
+    ⟨applied.nodeEquiv sourceNode,
+      (if sourceNode ∈
+          ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+        applied.generatedPortImage
+          (if sourceNode ∈
+              ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+            applied.generatedPortInverse endpoint.port
+          else endpoint.port)
+      else
+        if sourceNode ∈
+            ConcreteWirePrimitive.argumentSiteNodes applied.result.sites then
+          applied.generatedPortInverse endpoint.port
+        else endpoint.port)⟩ = endpoint
+  rw [nodeCancel]
+  by_cases generated : sourceNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites
+  · simp only [generated, if_pos]
+    rw [applied.generatedPortImage_inverse_all]
+  · simp only [generated, if_neg]
+    rfl
+
+/-- Generated source application nodes land at their exact ordered target
+nodes under the construction carrier. -/
+theorem nodeEquiv_generated
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.result.sites.sites.length) :
+    applied.nodeEquiv (applied.result.sites.sites.get site).node =
+      applied.result.targetNode site := by
+  have generated : (applied.result.sites.sites.get site).node ∈
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨applied.result.sites.sites.get site, List.get_mem _ _, rfl⟩
+  unfold nodeEquiv ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+  change applied.result.nodeImage
+      (applied.result.sites.sites.get site).node = _
+  rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_pos generated]
+  rw [ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_get
+    applied.result.sites site generated]
+
+/-- Retained source nodes land at their exact retained construction images. -/
+theorem nodeEquiv_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (node : source.val.NodeId)
+    (retained : node ∉
+      ConcreteWirePrimitive.argumentSiteNodes applied.result.sites) :
+    applied.nodeEquiv node =
+      applied.result.retainedNodeImage node retained := by
+  unfold nodeEquiv ConcreteWirePrimitive.ArgumentResult.nodeEquiv
+  change applied.result.nodeImage node = _
+  rw [ConcreteWirePrimitive.ArgumentResult.nodeImage, dif_neg retained]
+
 /-- The head-only construction carrier sends the acted wire to the fresh
 target head exactly. -/
 @[simp] theorem wireEquiv_head
@@ -1665,6 +1910,25 @@ def sourceArgumentWire
   (applied.result.sites.sites.get site).arguments.get
     (Fin.cast (applied.sourceSiteArgumentLength site).symm
       (applied.permutation_receipt.forwardPosition position))
+
+/-- Pulling a source position through the inverse output position selects
+that exact source attachment. -/
+theorem sourceArgumentWire_inversePosition
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.result.sites.sites.length)
+    (position : Fin applied.sourceArguments.length) :
+    applied.sourceArgumentWire site
+        (applied.permutation_receipt.inversePosition position) =
+      (applied.result.sites.sites.get site).arguments.get
+        (Fin.cast (applied.sourceSiteArgumentLength site).symm position) := by
+  unfold sourceArgumentWire
+  apply congrArg (applied.result.sites.sites.get site).arguments.get
+  exact congrArg
+    (Fin.cast (applied.sourceSiteArgumentLength site).symm)
+    (applied.permutation_receipt.forward_inversePosition position)
 
 /-- Generated permutation argument endpoints are owned by the canonical
 checked image of their exact proof-indexed source attachment. -/
