@@ -803,6 +803,41 @@ theorem argPermute_sourceRemovedWires_exact
                 _ result accepted
             simpa using exact
 
+/-- A successful argument permutation retains the complete finite
+permutation receipt checked against the acted relation arity. -/
+theorem argPermute_valid_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (permutation : List Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argPermute source wire permutation = .ok result) :
+    validPermutation sourceArguments.length permutation = true := by
+  unfold argPermute checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  change
+    (if !validPermutation sourceArguments.length permutation then
+        .error .invalidPermutation
+      else do
+        let sites ← checkedArgumentSites source wire
+        let spec : ReplacementSpec source wire sites :=
+          { targetArguments := permute sourceArguments permutation
+            removedWires := []
+            localCount := 0
+            localSignature := Fin.elim0
+            localScope := Fin.elim0
+            arguments := fun site =>
+              existingReferences <|
+                permute (sites.sites.get site).arguments permutation }
+        replaceAppliedEnds source wire sites spec _) =
+      .ok result at accepted
+  cases valid : validPermutation sourceArguments.length permutation with
+  | false => simp [valid] at accepted
+  | true => rfl
+
 /-- Argument permutation allocates no operation-local wire. -/
 theorem argPermute_localCount_exact
     (source : CheckedDiagram definitions)

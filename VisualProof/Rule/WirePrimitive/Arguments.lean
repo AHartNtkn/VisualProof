@@ -249,6 +249,8 @@ structure AppliedArgPermute
     (source.val.wires wire).sig = .rel sourceArguments
   private source_removed_exact : result.sourceRemovedWires = [wire]
   private local_count_exact : result.spec.localCount = 0
+  private permutation_receipt :
+    ValidPermutationReceipt sourceArguments.length permutation
   private ledger :
     ArgumentsSemantics.PermutationLedger result sourceArguments
 
@@ -541,6 +543,25 @@ def wireEquiv
     Data.Finite.FiniteEquiv source.val.WireId applied.target.val.WireId :=
   applied.result.wireEquivHeadOnly applied.source_removed_exact
     applied.local_count_exact
+
+/-- Construction-owned inverse permutation with no missing-index
+fallback. -/
+def inversePermutation
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) : List Nat :=
+  applied.permutation_receipt.inverse
+
+/-- The executable checker accepts the construction-owned inverse. -/
+theorem inversePermutation_valid
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    validPermutation applied.sourceArguments.length
+      applied.inversePermutation = true :=
+  applied.permutation_receipt.inverse_valid
 
 def tag
     {source : CheckedDiagram definitions}
@@ -842,6 +863,10 @@ def applyArgPermute
                     source wire permutation result accepted,
                   ConcreteWirePrimitive.argPermute_localCount_exact source
                     wire permutation result accepted,
+                  validPermutation_receipt sourceArguments.length permutation
+                    (ConcreteWirePrimitive.argPermute_valid_exact source wire
+                      sourceArguments sourceSignature permutation result
+                      accepted),
                   ledger⟩
 
 def applyArgDuplicate

@@ -743,7 +743,149 @@ def validPermutation
     (length : Nat) (permutation : List Nat) : Bool :=
   permutation.length = length &&
     permutation.Nodup &&
-    permutation.all fun position => position < length
+    permutation.all (fun position => position < length) &&
+    (List.range length).all fun position => position ∈ permutation
+
+/-- Proof-relevant content of the executable permutation validator.  In
+particular, coverage is explicit: inverse positions never rely on `idxOf`'s
+out-of-range fallback. -/
+structure ValidPermutationReceipt
+    (length : Nat) (permutation : List Nat) : Prop where
+  length_exact : permutation.length = length
+  nodup : permutation.Nodup
+  bounded : ∀ position, position ∈ permutation → position < length
+  covered : ∀ position : Fin length, position.val ∈ permutation
+
+/-- Reify every checker-accepted permutation into its exact finite
+bijection receipt. -/
+theorem validPermutation_receipt
+    (length : Nat) (permutation : List Nat)
+    (accepted : validPermutation length permutation = true) :
+    ValidPermutationReceipt length permutation := by
+  unfold validPermutation at accepted
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq,
+    List.all_eq_true, List.mem_range] at accepted
+  exact
+    { length_exact := accepted.1.1.1
+      nodup := accepted.1.1.2
+      bounded := accepted.1.2
+      covered := fun position => accepted.2 position.val position.isLt }
+
+/-- Forward finite position selected by an accepted permutation. -/
+def ValidPermutationReceipt.forwardPosition
+    (valid : ValidPermutationReceipt length permutation)
+    (position : Fin length) : Fin length :=
+  ⟨permutation.get (Fin.cast valid.length_exact.symm position),
+    valid.bounded _ (List.get_mem permutation _)⟩
+
+/-- Unique inverse finite position of one accepted permutation output. -/
+def ValidPermutationReceipt.inversePosition
+    (valid : ValidPermutationReceipt length permutation)
+    (position : Fin length) : Fin length :=
+  Fin.cast valid.length_exact <|
+    DenseList.index permutation position.val (valid.covered position)
+
+/-- Looking up an inverse position recovers the selected original
+position. -/
+@[simp] theorem ValidPermutationReceipt.forward_inversePosition
+    (valid : ValidPermutationReceipt length permutation)
+    (position : Fin length) :
+    valid.forwardPosition (valid.inversePosition position) = position := by
+  apply Fin.ext
+  unfold forwardPosition inversePosition
+  simpa [List.get_eq_getElem] using
+    DenseList.get_index permutation position.val (valid.covered position)
+
+/-- Inverse lookup at a selected position returns its exact source index. -/
+@[simp] theorem ValidPermutationReceipt.inverse_forwardPosition
+    (valid : ValidPermutationReceipt length permutation)
+    (position : Fin length) :
+    valid.inversePosition (valid.forwardPosition position) = position := by
+  unfold inversePosition forwardPosition
+  have exact := DenseList.index_get permutation valid.nodup
+    (Fin.cast valid.length_exact.symm position)
+  apply Fin.ext
+  simpa using congrArg Fin.val exact
+
+/-- Accepted permutation positions form a constructive finite
+equivalence. -/
+def ValidPermutationReceipt.positionEquiv
+    (valid : ValidPermutationReceipt length permutation) :
+    Data.Finite.FiniteEquiv (Fin length) (Fin length) where
+  toFun := valid.forwardPosition
+  invFun := valid.inversePosition
+  left_inv := valid.inverse_forwardPosition
+  right_inv := valid.forward_inversePosition
+
+/-- Executable inverse list obtained only from proved dense positions. -/
+def ValidPermutationReceipt.inverse
+    (valid : ValidPermutationReceipt length permutation) : List Nat :=
+  (Data.Finite.allFin length).map fun position =>
+    (valid.inversePosition position).val
+
+@[simp] theorem ValidPermutationReceipt.inverse_length
+    (valid : ValidPermutationReceipt length permutation) :
+    valid.inverse.length = length := by
+  simp [ValidPermutationReceipt.inverse,
+    Data.Finite.allFin_eq_finRange]
+
+/-- The inverse list stores exactly the proof-indexed inverse at every
+finite output position. -/
+@[simp] theorem ValidPermutationReceipt.inverse_get
+    (valid : ValidPermutationReceipt length permutation)
+    (position : Fin length) :
+    valid.inverse.get (Fin.cast valid.inverse_length.symm position) =
+      (valid.inversePosition position).val := by
+  simp [ValidPermutationReceipt.inverse, List.get_eq_getElem,
+    Data.Finite.allFin_eq_finRange]
+
+/-- The inverse list is itself a complete accepted permutation. -/
+def ValidPermutationReceipt.inverseReceipt
+    (valid : ValidPermutationReceipt length permutation) :
+    ValidPermutationReceipt length valid.inverse where
+  length_exact := valid.inverse_length
+  nodup := by
+    unfold ValidPermutationReceipt.inverse
+    change List.Pairwise (fun left right : Nat => left ≠ right)
+      ((Data.Finite.allFin length).map fun position =>
+        (valid.inversePosition position).val)
+    rw [List.pairwise_map]
+    apply (Data.Finite.allFin_nodup length).imp
+    intro left right different
+    intro same
+    have inverseExact :
+        valid.inversePosition left = valid.inversePosition right := by
+      apply Fin.ext
+      exact same
+    have sourceExact := congrArg valid.forwardPosition inverseExact
+    simp only [valid.forward_inversePosition] at sourceExact
+    exact different sourceExact
+  bounded := by
+    intro position member
+    rcases List.mem_map.mp member with ⟨source, _sourceMember, exact⟩
+    rw [← exact]
+    exact (valid.inversePosition source).isLt
+  covered := by
+    intro position
+    unfold ValidPermutationReceipt.inverse
+    apply List.mem_map.mpr
+    refine ⟨valid.forwardPosition position,
+      Data.Finite.mem_allFin _, ?_⟩
+    exact congrArg Fin.val (valid.inverse_forwardPosition position)
+
+/-- The executable checker accepts the construction-owned inverse without
+any rediscovery or fallback. -/
+theorem ValidPermutationReceipt.inverse_valid
+    (valid : ValidPermutationReceipt length permutation) :
+    validPermutation length valid.inverse = true := by
+  let inverseValid := valid.inverseReceipt
+  unfold validPermutation
+  simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq,
+    List.all_eq_true, List.mem_range]
+  exact
+    ⟨⟨⟨inverseValid.length_exact, inverseValid.nodup⟩,
+      inverseValid.bounded⟩,
+      fun position bound => inverseValid.covered ⟨position, bound⟩⟩
 
 /-- Remove one position, leaving an out-of-range list unchanged. -/
 def eraseAt : List α → Nat → List α
