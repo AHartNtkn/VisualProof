@@ -76,6 +76,49 @@ theorem ArgumentResult.targetNode_argument_owner
 
 namespace ArgumentsSemantics
 
+/-- Concrete source/target outer contexts retained by the recursive frame
+construction for an accepted arity shift. -/
+noncomputable def LocalCylindricalFrame.concretePair
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame :=
+  result.actedScopeFramePair
+    (arityShift_scopeLocalization source wire sourceArguments
+      sourceSignature sites newArgument result accepted)
+    frame.sourceScope frame.targetScope
+
+/-- The executable factorization's shared outer signature block is exactly
+the concrete source site-outer context preserved by construction. -/
+theorem LocalCylindricalFrame.siteOuter_eq_concrete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments) :
+    frame.context.siteOuter =
+      (frame.concretePair sourceArguments sourceSignature sites newArgument
+        result accepted).sourceSiteOuter.sigs := by
+  let pair := frame.concretePair sourceArguments sourceSignature sites
+    newArgument result accepted
+  have suffixExact : frame.context.siteOuter = pair.siteOuter := by
+    exact List.append_cancel_left
+      (frame.context.sourceVisibleExact.symm.trans pair.sourceVisibleExact)
+  exact suffixExact.trans pair.siteOuter_exact
+
 private theorem map_allFin_cast
     {left right : Nat} (same : left = right) :
     (Data.Finite.allFin left).map (Fin.cast same) =
