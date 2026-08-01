@@ -538,6 +538,63 @@ noncomputable def arityFreshIndex
     (arityFreshSiteOrder source wire sourceArguments sourceSignature
       newArgument result accepted region)
 
+theorem aritySourceIndex_spec
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (index : Fin (arityFreshAt result region).length) :
+    (sourceSiteNodesAt result.sites region).get
+        (Fin.cast
+          (sourceSiteNodesAt_length_fresh source wire sourceArguments
+            sourceSignature newArgument result accepted region).symm
+          (aritySourceIndex source wire sourceArguments sourceSignature
+            newArgument result accepted region index)) =
+      (result.sites.sites.get
+        ((aritySitesAt result.sites region).get
+          (Fin.cast
+            (aritySitesAt_length_fresh source wire sourceArguments
+              sourceSignature newArgument result accepted region).symm
+            index))).node := by
+  simpa [aritySourceIndex, finEquivOfEq] using
+    aritySiteNodeOrder_spec result.sites region
+      (Fin.cast
+        (aritySitesAt_length_fresh source wire sourceArguments
+          sourceSignature newArgument result accepted region).symm index)
+
+theorem arityFreshIndex_spec
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (index : Fin (arityFreshAt result region).length) :
+    Fin.cast (arityShift_localCount_exact source wire sourceArguments
+        sourceSignature result.sites newArgument result accepted)
+        ((arityFreshAt result region).get
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted region index)) =
+      (aritySitesAt result.sites region).get
+        (Fin.cast
+          (aritySitesAt_length_fresh source wire sourceArguments
+            sourceSignature newArgument result accepted region).symm
+          index) := by
+  simpa [arityFreshIndex, finEquivOfEq] using
+    arityFreshSiteOrder_spec source wire sourceArguments sourceSignature
+      newArgument result accepted region
+      (Fin.cast
+        (aritySitesAt_length_fresh source wire sourceArguments
+          sourceSignature newArgument result accepted region).symm index)
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
