@@ -109,6 +109,213 @@ theorem recursiveOrdinary_abstractAppliedItems
                   (UniformIntrinsicRegion.abstractApplied head.there body)))
                 induction
 
+/-- Concrete node compilation emits only atom, named, or identity items;
+cuts and binds are owned by region/child compilation. -/
+theorem compileNode?_ordinary_kind
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (node : diagram.NodeId)
+    (item : Item definitions context.sigs)
+    (compiled : ConcreteElaboration.Internal.compileNode? definitions diagram
+      context node = some item) :
+    match item with
+    | .atom .. => True
+    | .named .. => True
+    | .identity .. => True
+    | .cut .. => False
+    | .bind .. => False := by
+  cases nodeData : diagram.nodes node with
+  | atom region arguments =>
+      simp only [ConcreteElaboration.Internal.compileNode?, nodeData] at compiled
+      cases headResolved : ConcreteElaboration.Internal.resolvePort? diagram
+          context node .head (.rel arguments) with
+      | none => simp [headResolved] at compiled
+      | some atomHead =>
+          cases argumentsResolved :
+              ConcreteElaboration.Internal.resolveArgs? diagram context node
+                arguments 0 with
+          | none => simp [headResolved, argumentsResolved] at compiled
+          | some values =>
+              have exact : item = .atom atomHead values := by
+                exact (Option.some.inj (by
+                  simpa [headResolved, argumentsResolved] using compiled)).symm
+              subst item
+              trivial
+  | ref region definition arguments =>
+      simp only [ConcreteElaboration.Internal.compileNode?, nodeData] at compiled
+      split at compiled
+      next signature =>
+        cases argumentsResolved :
+            ConcreteElaboration.Internal.resolveArgs? diagram context node
+              arguments 0 with
+        | none => simp [argumentsResolved] at compiled
+        | some values =>
+            have exact : item = .named
+                (signature ▸ ConcreteElaboration.Internal.definitionVarAt
+                  definitions definition) values := by
+              exact (Option.some.inj (by
+                simpa [argumentsResolved] using compiled)).symm
+            subst item
+            trivial
+      next signature => simp at compiled
+  | identity region signature arity =>
+      simp only [ConcreteElaboration.Internal.compileNode?, nodeData] at compiled
+      split at compiled
+      next arityWitness =>
+        cases portsResolved :
+            ConcreteElaboration.Internal.resolveIdentityPorts? diagram context
+              node signature arity 0 with
+        | none => simp [portsResolved] at compiled
+        | some ports =>
+            have itemExact :
+                (.identity signature ports.val (by
+                  simpa only [ports.property] using arityWitness) :
+                    Item definitions context.sigs) = item := by
+              exact Option.some.inj (by
+                simpa [portsResolved] using compiled)
+            cases itemExact
+            trivial
+      next arityWitness => simp at compiled
+
+/-- Filtering the concrete nodes selected by the normalized application
+classifier gives exactly the ordinary leaves left by abstraction. -/
+theorem recursiveAbstractOrdinaryItems_compileFilter
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments))
+    (selectedNodes : List diagram.NodeId) :
+    ∀ (nodes : List diagram.NodeId)
+      (items : ItemSeq definitions context.sigs)
+      (retained : ItemSeq definitions context.sigs),
+      ConcreteElaboration.compileNodes? definitions diagram context nodes =
+          some items →
+      ConcreteElaboration.compileNodes? definitions diagram context
+          (nodes.filter fun node => !decide (node ∈ selectedNodes)) =
+          some retained →
+      (∀ node, node ∈ nodes →
+        (UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+          diagram context rho head node).isSome =
+            decide (node ∈ selectedNodes)) →
+      recursiveAbstractOrdinaryItems head (items.renameWires rho) =
+        recursiveLeafItems (retained.renameWires rho)
+  | [], items, retained, compiled, retainedCompiled, _ => by
+      simp [ConcreteElaboration.compileNodes?] at compiled retainedCompiled
+      subst items
+      subst retained
+      rfl
+  | node :: tail, items, retained, compiled, retainedCompiled, classified => by
+      simp only [ConcreteElaboration.compileNodes?] at compiled
+      cases headCompiled :
+          ConcreteElaboration.Internal.compileNode? definitions diagram
+            context node with
+      | none => simp [headCompiled] at compiled
+      | some compiledHead =>
+          cases tailCompiled :
+              ConcreteElaboration.compileNodes? definitions diagram context
+                tail with
+          | none => simp [headCompiled, tailCompiled] at compiled
+          | some compiledTail =>
+              have itemsExact :
+                  items = .cons compiledHead compiledTail := by
+                exact (Option.some.inj (by
+                  simpa [headCompiled, tailCompiled] using compiled)).symm
+              subst items
+              have headClassified := classified node (by simp)
+              have tailClassified : ∀ candidate, candidate ∈ tail →
+                  (UniformIntrinsicRegion.renamedCompiledAppliedArguments?
+                    definitions diagram context rho head candidate).isSome =
+                      decide (candidate ∈ selectedNodes) := by
+                intro candidate member
+                exact classified candidate (by simp [member])
+              by_cases selected : node ∈ selectedNodes
+              · have retainedTailCompiled :
+                    ConcreteElaboration.compileNodes? definitions diagram
+                        context
+                        (tail.filter fun candidate =>
+                          !decide (candidate ∈ selectedNodes)) =
+                      some retained := by
+                    simpa [selected] using retainedCompiled
+                have induction :=
+                  recursiveAbstractOrdinaryItems_compileFilter definitions
+                    diagram context rho head selectedNodes tail compiledTail
+                    retained tailCompiled retainedTailCompiled tailClassified
+                simp [UniformIntrinsicRegion.renamedCompiledAppliedArguments?,
+                  headCompiled, selected] at headClassified
+                cases compiledHead with
+                | atom atomHead values =>
+                    cases matched :
+                        UniformIntrinsicRegion.matchedHeadArguments? head
+                          (rho atomHead) (Vars.rename rho values) with
+                    | none => simp [matched] at headClassified
+                    | some applied =>
+                        simpa [ItemSeq.renameWires, Item.renameWires,
+                          recursiveAbstractOrdinaryItems, matched] using induction
+                | named definition values => simp at headClassified
+                | identity signature ports atLeastTwo => simp at headClassified
+                | cut body => simp at headClassified
+                | bind signature body => simp at headClassified
+              · simp [selected] at retainedCompiled
+                simp only [ConcreteElaboration.compileNodes?] at retainedCompiled
+                cases retainedTailCompiled :
+                    ConcreteElaboration.compileNodes? definitions diagram
+                      context
+                      (tail.filter fun candidate =>
+                        !decide (candidate ∈ selectedNodes)) with
+                | none =>
+                    simp [headCompiled, retainedTailCompiled] at retainedCompiled
+                | some retainedTail =>
+                    have retainedExact :
+                        retained = .cons compiledHead retainedTail := by
+                      exact (Option.some.inj (by
+                        simpa [headCompiled, retainedTailCompiled] using
+                          retainedCompiled)).symm
+                    subst retained
+                    have induction :=
+                      recursiveAbstractOrdinaryItems_compileFilter definitions
+                        diagram context rho head selectedNodes tail compiledTail
+                        retainedTail tailCompiled retainedTailCompiled
+                        tailClassified
+                    simp [UniformIntrinsicRegion.renamedCompiledAppliedArguments?,
+                      headCompiled, selected] at headClassified
+                    cases compiledHead with
+                    | atom atomHead values =>
+                        cases matched :
+                            UniformIntrinsicRegion.matchedHeadArguments? head
+                              (rho atomHead) (Vars.rename rho values) with
+                        | none =>
+                            simpa [ItemSeq.renameWires, Item.renameWires,
+                              recursiveAbstractOrdinaryItems,
+                              recursiveLeafItems, matched] using congrArg
+                                (UniformIntrinsicItemSeq.cons
+                                  (.leaf (.atom (rho atomHead)
+                                    (Vars.rename rho values)))) induction
+                        | some applied => simp [matched] at headClassified
+                    | named definition values =>
+                        simpa [ItemSeq.renameWires, Item.renameWires,
+                          recursiveAbstractOrdinaryItems,
+                          recursiveLeafItems] using congrArg
+                            (UniformIntrinsicItemSeq.cons
+                              (.leaf (.named definition
+                                (Vars.rename rho values)))) induction
+                    | identity signature ports atLeastTwo =>
+                        simpa [ItemSeq.renameWires, Item.renameWires,
+                          recursiveAbstractOrdinaryItems,
+                          recursiveLeafItems] using congrArg
+                            (UniformIntrinsicItemSeq.cons
+                              (.leaf (.identity signature
+                                (ports.map (rho (sig := signature))) (by
+                                  simpa using atLeastTwo)))) induction
+                    | cut body =>
+                        exact (compileNode?_ordinary_kind definitions diagram
+                          context node (.cut body) headCompiled).elim
+                    | bind signature body =>
+                        exact (compileNode?_ordinary_kind definitions diagram
+                          context node (.bind signature body)
+                          headCompiled).elim
+
 /-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
 its exact renaming. -/
 def recursiveLeafReceipt
