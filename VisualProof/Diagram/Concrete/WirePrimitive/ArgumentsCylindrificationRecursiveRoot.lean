@@ -1073,6 +1073,38 @@ theorem recursiveFinalAppliedHoleValues_alignment
     context region items compiled contextNodup rho head headForward headReflect
     node nodeAt
 
+theorem recursiveFinalTargetHoleValues_alignment
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId)
+    (context : ConcreteElaboration.WireContext result.checked.val)
+    (items : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions
+      result.checked.val context
+      (result.checked.val.nodesAt (result.regionImage region)) = some items)
+    (contextNodup : context.ids.Nodup)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel result.targetArguments))
+    (headForward : ∀ value : Var context.sigs (.rel result.targetArguments),
+      ConcreteElaboration.WireContext.origin result.checked.val context.ids
+          value = result.targetWire → rho value = head)
+    (headReflect : ∀ value : Var context.sigs (.rel result.targetArguments),
+      rho value = head →
+        ConcreteElaboration.WireContext.origin result.checked.val context.ids
+          value = result.targetWire) :
+    (UniformIntrinsicRegion.abstractAppliedItems head
+      (items.renameWires rho)).holeValues.map some =
+      (aritySitesAt result.sites region).map fun site =>
+        recursiveFinalRegionClassifier definitions result.checked.val context
+          rho head (result.targetNode site) := by
+  have aligned := recursiveFinalAppliedHoleValues_alignment
+    result.targetArguments result.targetWire_signature result.targetSites
+    context (result.regionImage region) items compiled contextNodup rho head
+    headForward headReflect
+  rw [ArgumentResult.targetSiteNodesAt_exact result region] at aligned
+  simpa [List.map_map, Function.comp_def] using aligned
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
