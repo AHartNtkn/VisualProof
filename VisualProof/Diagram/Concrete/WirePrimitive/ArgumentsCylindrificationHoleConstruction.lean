@@ -130,6 +130,62 @@ theorem LocalCylindricalFrame.frameNormalization_commutes_of_mapped_origin
       exact frame.frameNormalization_outer_commutes sourceArguments
         sourceSignature newArgument result accepted sourceOuter
 
+/-- Pointwise mapped origins lift to an exact equality of complete ordered
+argument tuples.  This is the retained-coordinate half of every cylindrical
+hole receipt. -/
+theorem LocalCylindricalFrame.frameNormalizations_commute_of_mapped_origins
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    {argumentSignatures : List Sig}
+    (sourceValues : Vars frame.sourceScope.frame.visible.sigs
+      argumentSignatures)
+    (targetValues : Vars frame.targetScope.frame.visible.sigs
+      argumentSignatures)
+    (sourceNotHead : ∀ sourceWire,
+      sourceWire ∈ ConcreteElaboration.variableOrigins source.val
+        frame.sourceScope.frame.visible sourceValues → sourceWire ≠ wire)
+    (mappedOrigins :
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible targetValues =
+        (ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible sourceValues).map
+            result.contextWireMap) :
+    Vars.rename
+        ((frame.rootBounds sourceArguments sourceSignature newArgument result
+          accepted).embed (fun {_} value => value))
+        (Vars.rename frame.sourceFrameNormalization sourceValues) =
+      Vars.rename frame.targetFrameNormalization targetValues := by
+  induction sourceValues with
+  | nil =>
+      cases targetValues
+      rfl
+  | cons sourceHead sourceTail induction =>
+      cases targetValues with
+      | cons targetHead targetTail =>
+          simp only [ConcreteElaboration.variableOrigins, List.map_cons,
+            List.cons.injEq] at mappedOrigins
+          simp only [Vars.rename]
+          rw [frame.frameNormalization_commutes_of_mapped_origin
+            sourceArguments sourceSignature newArgument result accepted pair
+            sourceHead targetHead
+            (sourceNotHead _ (by
+              simp [ConcreteElaboration.variableOrigins])) mappedOrigins.1]
+          exact congrArg (Vars.cons (frame.targetFrameNormalization targetHead))
+            (induction targetTail
+              (fun sourceWire member => sourceNotHead sourceWire (by
+                simp only [ConcreteElaboration.variableOrigins,
+                  List.mem_cons]
+                exact Or.inr member)) mappedOrigins.2)
+
 end ArgumentsSemantics
 end ConcreteWirePrimitive
 end VisualProof
