@@ -27,6 +27,30 @@ private theorem length_filterMap_of_isSome
       | some value =>
           simp [selected, induction tailTotal]
 
+private theorem get_filterMap_of_isSome
+    (values : List α) (select : α → Option β)
+    (total : ∀ value, value ∈ values → (select value).isSome = true)
+    (position : Fin values.length) :
+    (values.filterMap select).get
+        (Fin.cast
+          (length_filterMap_of_isSome values select total).symm position) =
+      (select (values.get position)).get
+        (total (values.get position) (List.get_mem values position)) := by
+  induction values with
+  | nil => exact Fin.elim0 position
+  | cons head tail induction =>
+      have headSome := total head (by simp)
+      have tailTotal :
+          ∀ value, value ∈ tail → (select value).isSome = true := by
+        intro value member
+        exact total value (List.mem_cons_of_mem head member)
+      cases selected : select head with
+      | none => simp [selected] at headSome
+      | some selectedHead =>
+          refine Fin.cases ?_ (fun tailPosition => ?_) position
+          · simp [selected]
+          · simpa [selected] using induction tailTotal tailPosition
+
 /-- A checked identity retains one ordered owner for every storage port. -/
 theorem identityOwners_length
     (definitions : List (List Sig))
@@ -47,6 +71,61 @@ theorem identityOwners_length
       (.identity index) (by
         simp [requiredPorts, nodeData] at member ⊢
         exact member)
+
+/--
+The owner stored at dense identity position `index` is exactly the unique
+wire owning that concrete storage port.  This retains multiplicity and order,
+which membership-only incidence statements intentionally omit.
+-/
+theorem identityOwners_get_eq_of_owner
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (wellFormed : diagram.WellFormed definitions)
+    (node : diagram.NodeId)
+    (region : diagram.RegionId)
+    (signature : Sig)
+    (arity : Nat)
+    (nodeData : diagram.nodes node = .identity region signature arity)
+    (index : Fin arity)
+    (owner : diagram.WireId)
+    (ownerExact :
+      diagram.endpointOwner? ⟨node, .identity index.val⟩ = some owner) :
+    (diagram.identityOwners node arity).get
+        (Fin.cast
+          (identityOwners_length definitions diagram wellFormed node region
+            signature arity nodeData).symm index) =
+      owner := by
+  let total :
+      ∀ value, value ∈ List.range arity →
+        (diagram.endpointOwner? ⟨node, .identity value⟩).isSome = true := by
+    intro value member
+    apply Option.isSome_iff_exists.mpr
+    exact endpointOwner?_complete definitions diagram wellFormed node
+      (.identity value) (by
+        simp [requiredPorts, nodeData] at member ⊢
+        exact member)
+  let rangeIndex : Fin (List.range arity).length :=
+    Fin.cast (by simp) index
+  have positioned :=
+    get_filterMap_of_isSome (List.range arity)
+      (fun value => diagram.endpointOwner? ⟨node, .identity value⟩)
+      total rangeIndex
+  have rangeGet : (List.range arity).get rangeIndex = index.val := by
+    simp [rangeIndex]
+  have selectedAt :
+      diagram.endpointOwner?
+          ⟨node, .identity ((List.range arity).get rangeIndex)⟩ =
+        some owner := by
+    simpa [rangeGet] using ownerExact
+  have selectedGet :
+      (diagram.endpointOwner?
+          ⟨node, .identity ((List.range arity).get rangeIndex)⟩).get
+            (total ((List.range arity).get rangeIndex)
+              (List.get_mem (List.range arity) rangeIndex)) =
+        owner :=
+    Option.get_of_eq_some _ selectedAt
+  unfold identityOwners
+  simpa [rangeIndex] using positioned.trans selectedGet
 
 /--
 The distinct wires physically incident to one node, in concrete wire order.
