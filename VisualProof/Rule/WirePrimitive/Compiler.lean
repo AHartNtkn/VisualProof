@@ -1220,7 +1220,7 @@ private def invertStep
           ConcreteIsoSearch.findConcreteIso?
             inverseStep.target.val planned.val
       pure { step := inverseStep, normalizedIso := normalizedIso }
-  | .argPermute _ permutation applied => do
+  | .argPermute _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let inverse := applied.inversePermutation
       let inverseApplied ←
@@ -1228,10 +1228,8 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .argPermute inverseWire inverse inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let normalizedIso := applied.inverseTransportIso inverseApplied
+        targetIso (targetIso.wires.right_inv applied.targetWire)
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .argDrop wire position applied => do
       let signature ←
