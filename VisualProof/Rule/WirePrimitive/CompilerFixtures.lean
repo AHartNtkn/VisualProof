@@ -22,6 +22,7 @@ make the initial target RED.
 #check runPrimitiveProgram_sound
 #check compiled_join_redundant
 #check compiled_sever_redundant
+#check Arguments.AppliedArgDuplicate.inverseTransportIso
 #check CompiledRelationJoin.transportBoundary
 #check CompiledRelationJoin.transportBoundary_get
 #check CompiledRelationSever.transportBoundary

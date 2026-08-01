@@ -1432,6 +1432,157 @@ def argContract
     intro sourceWire removed endpoint incident
     exact head_only_removed_exhausted sites sourceWire
       (by simpa [spec] using removed) endpoint incident)
+/-- Exact construction receipt retained by a successful argument duplication. -/
+theorem argDuplicate_construction_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature : (source.val.wires wire).sig = .rel sourceArguments)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argDuplicate source wire position = .ok result) :
+    result.sourceRemovedWires = [wire] ∧
+    result.spec.localCount = 0 ∧
+    result.targetArguments =
+      insertAt sourceArguments (position + 1)
+        (sourceArguments[position]?.getD .iota) ∧
+    (∀ site : Fin result.sites.sites.length,
+      result.spec.arguments site = existingReferences
+        (insertAt (result.sites.sites.get site).arguments (position + 1)
+          ((result.sites.sites.get site).arguments[position]?.getD wire))) ∧
+    position < sourceArguments.length := by
+  unfold argDuplicate checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  change
+    (if !validPosition sourceArguments position then .error .invalidPosition
+      else do
+        let sites ← checkedArgumentSites source wire
+        let spec : ReplacementSpec source wire sites :=
+          { targetArguments := insertAt sourceArguments (position + 1)
+              (sourceArguments[position]?.getD .iota)
+            removedWires := []
+            localCount := 0
+            localSignature := Fin.elim0
+            localScope := Fin.elim0
+            arguments := fun site => existingReferences <|
+              insertAt (sites.sites.get site).arguments (position + 1)
+                ((sites.sites.get site).arguments[position]?.getD wire) }
+        replaceAppliedEnds source wire sites spec _) = .ok result at accepted
+  cases valid : validPosition sourceArguments position with
+  | false => simp [valid] at accepted
+  | true =>
+    simp [valid] at accepted
+    cases sitesAccepted : checkedArgumentSites source wire with
+    | error error => rw [sitesAccepted] at accepted; contradiction
+    | ok sites =>
+      rw [sitesAccepted] at accepted
+      change replaceAppliedEnds source wire sites
+        { targetArguments := insertAt sourceArguments (position + 1)
+            (sourceArguments[position]?.getD .iota)
+          removedWires := []
+          localCount := 0
+          localSignature := Fin.elim0
+          localScope := Fin.elim0
+          arguments := fun site => existingReferences <|
+            insertAt (sites.sites.get site).arguments (position + 1)
+              ((sites.sites.get site).arguments[position]?.getD wire) }
+        _ = .ok result at accepted
+      unfold replaceAppliedEnds at accepted
+      split at accepted <;> try contradiction
+      next removal removalAccepted =>
+        simp only at accepted
+        split at accepted <;> try contradiction
+        next checked checkedAccepted =>
+          split at accepted <;> try contradiction
+          next targetSites targetSitesAccepted =>
+            have resultExact := Except.ok.inj accepted
+            subst result
+            exact ⟨rfl, rfl, rfl, ⟨fun site => rfl, by
+              simpa [validPosition] using valid⟩⟩
+/-- Exact construction receipt retained by a successful argument contraction. -/
+theorem argContract_construction_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature : (source.val.wires wire).sig = .rel sourceArguments)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : argContract source wire position = .ok result) :
+    result.sourceRemovedWires = [wire] ∧
+    result.spec.localCount = 0 ∧
+    result.targetArguments = eraseAt sourceArguments (position + 1) ∧
+    ∀ site : Fin result.sites.sites.length,
+      result.spec.arguments site = existingReferences
+        (eraseAt (result.sites.sites.get site).arguments (position + 1)) := by
+  unfold argContract checkedRelationArguments relationArguments? at accepted
+  rw [sourceSignature] at accepted
+  simp only at accepted
+  change
+    (if !validPosition sourceArguments position ||
+          !validPosition sourceArguments (position + 1) then
+        .error .invalidPosition
+      else if sourceArguments[position]? != sourceArguments[position + 1]?
+        then .error .unequalAdjacentSignatures
+      else do
+        let sites ← checkedArgumentSites source wire
+        if !(sites.sites.all fun site =>
+            site.arguments[position]? = site.arguments[position + 1]?) then
+          .error .unequalAdjacentAttachments
+        else
+          let spec : ReplacementSpec source wire sites :=
+            { targetArguments := eraseAt sourceArguments (position + 1)
+              removedWires := []
+              localCount := 0
+              localSignature := Fin.elim0
+              localScope := Fin.elim0
+              arguments := fun site => existingReferences <|
+                eraseAt (sites.sites.get site).arguments (position + 1) }
+          replaceAppliedEnds source wire sites spec _) = .ok result at accepted
+  split at accepted <;> try contradiction
+  next positionsValid =>
+    split at accepted <;> try contradiction
+    next signaturesEqual =>
+      cases sitesAccepted : checkedArgumentSites source wire with
+      | error error => rw [sitesAccepted] at accepted; contradiction
+      | ok sites =>
+        rw [sitesAccepted] at accepted
+        change
+          (if !(sites.sites.all fun site =>
+              site.arguments[position]? = site.arguments[position + 1]?) then
+            .error .unequalAdjacentAttachments
+          else replaceAppliedEnds source wire sites
+            { targetArguments := eraseAt sourceArguments (position + 1)
+              removedWires := []
+              localCount := 0
+              localSignature := Fin.elim0
+              localScope := Fin.elim0
+              arguments := fun site => existingReferences <|
+                eraseAt (sites.sites.get site).arguments (position + 1) }
+            _) = .ok result at accepted
+        split at accepted <;> try contradiction
+        next attachmentsEqual =>
+          change replaceAppliedEnds source wire sites
+            { targetArguments := eraseAt sourceArguments (position + 1)
+              removedWires := []
+              localCount := 0
+              localSignature := Fin.elim0
+              localScope := Fin.elim0
+              arguments := fun site => existingReferences <|
+                eraseAt (sites.sites.get site).arguments (position + 1) }
+            _ = .ok result at accepted
+          unfold replaceAppliedEnds at accepted
+          split at accepted <;> try contradiction
+          next removal removalAccepted =>
+            simp only at accepted
+            split at accepted <;> try contradiction
+            next checked checkedAccepted =>
+              split at accepted <;> try contradiction
+              next targetSites targetSitesAccepted =>
+                have resultExact := Except.ok.inj accepted
+                subst result
+                exact ⟨rfl, rfl, rfl, fun site => rfl⟩
+
 
 /-- Drop one argument position at every applied end. -/
 def argDrop

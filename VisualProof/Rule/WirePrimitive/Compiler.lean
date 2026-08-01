@@ -2,6 +2,7 @@ import VisualProof.Rule.WirePrimitive.CompilerTermination
 import VisualProof.Rule.WirePrimitive.ArgumentsDropTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsExtendTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
+import VisualProof.Rule.WirePrimitive.ArgumentsDuplicateTransport
 import VisualProof.Rule.MonolithicWireQuantifier
 import VisualProof.Diagram.Concrete.IsomorphismSearch
 
@@ -1346,15 +1347,14 @@ private def invertStep
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .argDuplicate _ position applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
+      let wireExact := targetIso.wires.right_inv applied.targetWire
       let inverseApplied ←
         (applyArgContract real inverseWire position).mapError
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .argContract inverseWire position inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let normalizedIso := applied.inverseTransportIso inverseApplied targetIso
+        wireExact
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .vacuousElim input _ => do
       let inverseSite := targetIso.regions.symm input.site
