@@ -549,6 +549,88 @@ theorem directAppliedArguments_compileNodes
                   simp [directAppliedArguments, compiledAppliedArguments?,
                     headCompiled, tailExact]
 
+/-- Compile one node, rename its intrinsic variables, and classify the
+renamed atom against a selected normalized head. -/
+def renamedCompiledAppliedArguments?
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments))
+    (node : diagram.NodeId) : Option (Vars normalizedContext arguments) := do
+  let item ← ConcreteElaboration.Internal.compileNode? definitions diagram
+    context node
+  match item with
+  | .atom atomHead values =>
+      matchedHeadArguments? head (rho atomHead) (Vars.rename rho values)
+  | .named .. => none
+  | .identity .. => none
+  | .cut .. => none
+  | .bind .. => none
+
+/-- Renaming a compiled node sequence before abstraction preserves its exact
+concrete node order in the corresponding renamed per-node classifier. -/
+theorem directAppliedArguments_rename_compileNodes
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : ConcreteElaboration.WireContext diagram)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel arguments)) :
+    ∀ (nodes : List diagram.NodeId)
+      (items : ItemSeq definitions context.sigs),
+      ConcreteElaboration.compileNodes? definitions diagram context nodes =
+          some items →
+        directAppliedArguments head (items.renameWires rho) =
+          nodes.filterMap
+            (renamedCompiledAppliedArguments? definitions diagram context rho
+              head)
+  | [], items, compiled => by
+      simp [ConcreteElaboration.compileNodes?] at compiled
+      subst items
+      rfl
+  | node :: tail, items, compiled => by
+      simp only [ConcreteElaboration.compileNodes?] at compiled
+      cases headCompiled :
+          ConcreteElaboration.Internal.compileNode? definitions diagram
+            context node with
+      | none => simp [headCompiled] at compiled
+      | some compiledHead =>
+          cases tailCompiled :
+              ConcreteElaboration.compileNodes? definitions diagram context
+                tail with
+          | none => simp [headCompiled, tailCompiled] at compiled
+          | some compiledTail =>
+              have itemsExact :
+                  items = .cons compiledHead compiledTail := by
+                exact (Option.some.inj (by
+                  simpa [headCompiled, tailCompiled] using compiled)).symm
+              subst items
+              have tailExact := directAppliedArguments_rename_compileNodes
+                definitions diagram context rho head tail compiledTail
+                  tailCompiled
+              cases compiledHead with
+              | atom atomHead values =>
+                  simp only [ItemSeq.renameWires, Item.renameWires,
+                    directAppliedArguments, List.filterMap_cons,
+                    renamedCompiledAppliedArguments?, headCompiled]
+                  split <;> simp [tailExact, *]
+              | named definition values =>
+                  simp [ItemSeq.renameWires, Item.renameWires,
+                    directAppliedArguments, renamedCompiledAppliedArguments?,
+                    headCompiled, tailExact]
+              | identity signature ports atLeastTwo =>
+                  simp [ItemSeq.renameWires, Item.renameWires,
+                    directAppliedArguments, renamedCompiledAppliedArguments?,
+                    headCompiled, tailExact]
+              | cut body =>
+                  simp [ItemSeq.renameWires, Item.renameWires,
+                    directAppliedArguments, renamedCompiledAppliedArguments?,
+                    headCompiled, tailExact]
+              | bind signature body =>
+                  simp [ItemSeq.renameWires, Item.renameWires,
+                    directAppliedArguments, renamedCompiledAppliedArguments?,
+                    headCompiled, tailExact]
+
 /-- `abstractAppliedItems` exposes exactly the direct matching applications
 and preserves their item-sequence order. -/
 theorem abstractAppliedItems_holeValues
