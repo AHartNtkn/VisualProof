@@ -45,6 +45,39 @@ private theorem variableOrigins_length_local
   | cons head tail induction =>
       simp [ConcreteElaboration.variableOrigins, induction]
 
+private theorem classifier_at_aligned_index
+    (values : List α)
+    (nodes : List β)
+    (classify : β → Option α)
+    (aligned : values.map some = nodes.map classify)
+    (valuesLength : values.length = count)
+    (nodesLength : nodes.length = count)
+    (index : Fin count) :
+    classify (nodes.get (Fin.cast nodesLength.symm index)) =
+      some (values.get (Fin.cast valuesLength.symm index)) := by
+  have selected := get_of_list_eq aligned
+    (Fin.cast (by simp [nodesLength]) index)
+  simpa using selected.symm
+
+private theorem cast_vars_rename
+    (same : left = right)
+    (wireMap : WireRenaming sourceContext targetContext)
+    (values : Vars sourceContext left) :
+    same ▸ Vars.rename wireMap values =
+      Vars.rename wireMap (same ▸ values) := by
+  cases same
+  rfl
+
+private theorem variableOrigins_cast_vars
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (same : left = right)
+    (values : Vars context.sigs left) :
+    ConcreteElaboration.variableOrigins diagram context (same ▸ values) =
+      ConcreteElaboration.variableOrigins diagram context values := by
+  cases same
+  rfl
+
 private theorem canonical_appendRight_eq
     {sourceContextSigs sourceReduced mappedSigs actualFresh
       targetContextSigs targetReduced fresh : List Sig}
@@ -786,6 +819,320 @@ theorem LocalCylindricalFrame.normalizedHole_split_exact_of_origins
   exact frame.normalizedHole_split_exact sourceArguments sourceSignature
     newArgument result accepted pair freshIndex sourceValues targetValues
     sourceNotHead mappedOrigins insertedOrigin
+
+private abbrev LocalCylindricalFrame.sourceNormalizedHoles
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :=
+  (UniformIntrinsicRegion.abstractApplied
+    (Var.appendRight frame.sourceReduced localSourceHead)
+    (frame.sourceScope.frame.siteBody.renameWires
+      frame.sourceFrameNormalization)).holeValues
+
+private abbrev LocalCylindricalFrame.targetNormalizedHoles
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments) :=
+  (UniformIntrinsicRegion.abstractApplied
+    (Var.appendRight frame.targetReduced localTargetHead)
+    (frame.targetScope.frame.siteBody.renameWires
+      frame.targetFrameNormalization)).holeValues
+
+private theorem LocalCylindricalFrame.rootHole_lengths
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair
+      (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    frame.sourceNormalizedHoles.length =
+        (arityFreshAt result (source.val.wires wire).scope).length ∧
+      frame.targetNormalizedHoles.length =
+        (arityFreshAt result (source.val.wires wire).scope).length := by
+  have sourceAligned := frame.sourceHoleValues_alignment sourceArguments
+    sourceSignature result pair
+  have sourceLength := congrArg List.length sourceAligned
+  simp only [List.length_map] at sourceLength
+  have targetAligned := frame.targetHoleValues_alignment result pair
+  have targetLength := congrArg List.length targetAligned
+  simp only [List.length_map] at targetLength
+  have targetNodesExact :
+      sourceSiteNodesAt result.targetSites
+          (result.checked.val.wires result.targetWire).scope =
+        (aritySitesAt result.sites
+          (source.val.wires wire).scope).map result.targetNode := by
+    rw [result.targetWire_scope_regionImage]
+    exact ArgumentResult.targetSiteNodesAt_exact result
+      (source.val.wires wire).scope
+  constructor
+  · exact sourceLength.trans
+      (sourceSiteNodesAt_length_fresh source wire sourceArguments
+        sourceSignature newArgument result accepted
+        (source.val.wires wire).scope)
+  · calc
+      _ = (sourceSiteNodesAt result.targetSites
+            (result.checked.val.wires result.targetWire).scope).length :=
+        targetLength
+      _ = ((aritySitesAt result.sites
+            (source.val.wires wire).scope).map result.targetNode).length :=
+        congrArg List.length targetNodesExact
+      _ = _ := by
+        simpa using (aritySitesAt_length_fresh source wire sourceArguments
+          sourceSignature newArgument result accepted
+          (source.val.wires wire).scope)
+
+private theorem LocalCylindricalFrame.rootHole_split_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair
+      (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (index : Fin
+      (arityFreshAt result (source.val.wires wire).scope).length) :
+    (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted).splitVars
+        (frame.targetNormalizedHoles.get
+          (Fin.cast
+            (frame.rootHole_lengths sourceArguments sourceSignature
+              newArgument result accepted pair).2.symm index)) =
+      ⟨(frame.rootBounds sourceArguments sourceSignature newArgument result
+          accepted).freshVar (fun {_} value => value)
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted
+            (source.val.wires wire).scope index),
+        Vars.rename
+          ((frame.rootBounds sourceArguments sourceSignature newArgument result
+            accepted).embed (fun {_} value => value))
+          (frame.sourceNormalizedHoles.get
+            (Fin.cast
+              (frame.rootHole_lengths sourceArguments sourceSignature
+                newArgument result accepted pair).1.symm
+              (aritySourceIndex source wire sourceArguments sourceSignature
+                newArgument result accepted
+                (source.val.wires wire).scope index)))⟩ := by
+  let actedScope := (source.val.wires wire).scope
+  let freshCount := (arityFreshAt result actedScope).length
+  let sitesAt := aritySitesAt result.sites actedScope
+  have sitesLength := aritySitesAt_length_fresh source wire sourceArguments
+    sourceSignature newArgument result accepted actedScope
+  let sitePosition : Fin sitesAt.length := Fin.cast sitesLength.symm index
+  let site := sitesAt.get sitePosition
+  have siteMember : site ∈ Data.Finite.allFin result.sites.sites.length :=
+    (List.mem_filter.mp (List.get_mem sitesAt sitePosition)).1
+  have siteRegion : (result.sites.sites.get site).region = actedScope :=
+    eq_of_beq (List.mem_filter.mp (List.get_mem sitesAt sitePosition)).2
+  let sourceNodes := sourceSiteNodesAt result.sites actedScope
+  have sourceNodesLength := sourceSiteNodesAt_length_fresh source wire
+    sourceArguments sourceSignature newArgument result accepted actedScope
+  let sourceOrder := aritySourceIndex source wire sourceArguments
+    sourceSignature newArgument result accepted actedScope
+  have sourceNodeExact := aritySourceIndex_spec source wire sourceArguments
+    sourceSignature newArgument result accepted actedScope index
+  have sourceAligned := frame.sourceHoleValues_alignment sourceArguments
+    sourceSignature result pair
+  obtain ⟨sourceValues, sourceClassified, sourceOrigins⟩ :=
+    frame.sourceClassifier_complete sourceArguments sourceSignature result pair
+      (result.sites.sites.get site) siteRegion
+  have sourceClassifiedAt := classifier_at_aligned_index
+    frame.sourceNormalizedHoles sourceNodes
+    (UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+      source.val frame.sourceScope.frame.visible
+      frame.sourceFrameNormalization
+      (Var.appendRight frame.sourceReduced localSourceHead))
+    sourceAligned
+    (frame.rootHole_lengths sourceArguments sourceSignature newArgument result
+      accepted pair).1
+    sourceNodesLength (sourceOrder index)
+  have sourceHoleExact :
+      frame.sourceNormalizedHoles.get
+          (Fin.cast
+            (frame.rootHole_lengths sourceArguments sourceSignature
+              newArgument result accepted pair).1.symm (sourceOrder index)) =
+        Vars.rename frame.sourceFrameNormalization sourceValues := by
+    rw [sourceNodeExact, sourceClassified] at sourceClassifiedAt
+    exact Option.some.inj sourceClassifiedAt.symm
+  have targetNodesExact :
+      sourceSiteNodesAt result.targetSites (result.regionImage actedScope) =
+        sitesAt.map result.targetNode :=
+    ArgumentResult.targetSiteNodesAt_exact result actedScope
+  have targetNodesLength :
+      (sourceSiteNodesAt result.targetSites
+          (result.regionImage actedScope)).length =
+        freshCount := by
+    exact (congrArg List.length targetNodesExact).trans (by
+      simpa [freshCount] using sitesLength)
+  have targetNodeExact :
+      (sourceSiteNodesAt result.targetSites
+        (result.regionImage actedScope)).get
+          (Fin.cast targetNodesLength.symm index) = result.targetNode site := by
+    have selected := get_of_list_eq targetNodesExact
+      (Fin.cast (by simp) sitePosition)
+    simpa [site, sitePosition, sitesAt, freshCount] using selected
+  have targetAligned :
+      frame.targetNormalizedHoles.map some =
+        (sourceSiteNodesAt result.targetSites
+          (result.regionImage actedScope)).map
+            (UniformIntrinsicRegion.renamedCompiledAppliedArguments?
+              definitions result.checked.val
+              frame.targetScope.frame.visible
+              frame.targetFrameNormalization
+              (Var.appendRight frame.targetReduced localTargetHead)) := by
+    simpa [actedScope, result.targetWire_scope_regionImage] using
+      frame.targetHoleValues_alignment result pair
+  have targetClassifiedAt := classifier_at_aligned_index
+    frame.targetNormalizedHoles
+    (sourceSiteNodesAt result.targetSites
+      (result.regionImage actedScope))
+    (UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+      result.checked.val frame.targetScope.frame.visible
+      frame.targetFrameNormalization
+      (Var.appendRight frame.targetReduced localTargetHead))
+    targetAligned
+    (frame.rootHole_lengths sourceArguments sourceSignature newArgument result
+      accepted pair).2
+    targetNodesLength index
+  have targetSignatures := targetAppliedSite_argumentSignatures result site
+  obtain ⟨targetValues, targetClassified, targetOrigins⟩ :=
+    frame.targetClassifier_complete result pair site siteRegion
+  let targetValues' : Vars frame.targetScope.frame.visible.sigs
+      result.targetArguments := targetSignatures ▸ targetValues
+  change _ = some
+    (targetSignatures ▸ Vars.rename frame.targetFrameNormalization
+      targetValues) at targetClassified
+  rw [cast_vars_rename] at targetClassified
+  have targetHoleExact :
+      frame.targetNormalizedHoles.get
+          (Fin.cast
+            (frame.rootHole_lengths sourceArguments sourceSignature
+              newArgument result accepted pair).2.symm index) =
+        Vars.rename frame.targetFrameNormalization targetValues' := by
+    rw [targetNodeExact, targetClassified] at targetClassifiedAt
+    exact Option.some.inj targetClassifiedAt.symm
+  have freshPositionExact := arityFreshIndex_spec source wire sourceArguments
+    sourceSignature newArgument result accepted actedScope index
+  have freshLocalExact :
+      Fin.cast (arityShift_localCount_exact source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted).symm site =
+        (arityFreshAt result actedScope).get
+          (arityFreshIndex source wire sourceArguments sourceSignature
+            newArgument result accepted actedScope index) := by
+    have transported := congrArg
+      (Fin.cast (arityShift_localCount_exact source wire sourceArguments
+        sourceSignature result.sites newArgument result accepted).symm)
+      freshPositionExact
+    simpa [site, sitePosition, sitesAt] using transported.symm
+  have sourceNotHead : ∀ sourceWire,
+      sourceWire ∈ ConcreteElaboration.variableOrigins source.val
+        frame.sourceScope.frame.visible sourceValues → sourceWire ≠ wire := by
+    intro sourceWire member
+    rw [sourceOrigins] at member
+    obtain ⟨position, wireExact⟩ := List.get_of_mem member
+    rw [← wireExact]
+    exact (result.sites.sites.get site).argument_ne_head
+      position position.isLt
+  have originsExact :
+      ConcreteElaboration.variableOrigins result.checked.val
+          frame.targetScope.frame.visible targetValues' =
+        (ConcreteElaboration.variableOrigins source.val
+          frame.sourceScope.frame.visible sourceValues).map
+            result.contextWireMap ++
+          [result.targetLocalWire
+            ((arityFreshAt result actedScope).get
+              (arityFreshIndex source wire sourceArguments sourceSignature
+                newArgument result accepted actedScope index))] := by
+    calc
+      _ = ConcreteElaboration.variableOrigins result.checked.val
+            frame.targetScope.frame.visible targetValues :=
+        variableOrigins_cast_vars result.checked.val
+          frame.targetScope.frame.visible targetSignatures targetValues
+      _ = (targetAppliedSite result site).arguments := targetOrigins
+      _ = (result.sites.sites.get site).arguments.map
+              result.contextWireMap ++
+            [result.targetLocalWire
+              (Fin.cast (arityShift_localCount_exact source wire
+                sourceArguments sourceSignature result.sites newArgument
+                result accepted).symm site)] :=
+        targetAppliedSite_arguments source wire sourceArguments
+          sourceSignature result.sites newArgument result accepted site
+      _ = _ := by rw [sourceOrigins, freshLocalExact]
+  have splitExact := frame.normalizedHole_split_exact_of_origins
+    sourceArguments sourceSignature newArgument result accepted pair
+    (arityFreshIndex source wire sourceArguments sourceSignature newArgument
+      result accepted actedScope index)
+    sourceValues targetValues' sourceNotHead originsExact
+  rw [targetHoleExact, sourceHoleExact]
+  simpa [actedScope] using splitExact
+
+/-- The root normalized arity block carries the complete checker-owned hole
+receipt: source-node order, target site order, and fresh construction order
+are related by explicit finite equivalences. -/
+noncomputable def LocalCylindricalFrame.rootHoles
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair
+      (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    CylindricalHoles
+      (arityShiftInsertion source wire sourceArguments sourceSignature
+        newArgument result accepted)
+      (frame.rootBounds sourceArguments sourceSignature newArgument result
+        accepted)
+      (fun {_} value => value)
+      frame.sourceNormalizedHoles frame.targetNormalizedHoles := by
+  let sourceOrder := aritySourceIndex source wire sourceArguments
+    sourceSignature newArgument result accepted
+    (source.val.wires wire).scope
+  let freshOrder := arityFreshIndex source wire sourceArguments
+    sourceSignature newArgument result accepted
+    (source.val.wires wire).scope
+  have lengths := frame.rootHole_lengths sourceArguments sourceSignature
+    newArgument result accepted pair
+  refine {
+    smaller_length := lengths.1
+    larger_length := lengths.2
+    sourceIndex := sourceOrder
+    sourceIndex_injective := sourceOrder.injective
+    sourceIndex_surjective := fun target =>
+      ⟨sourceOrder.invFun target, sourceOrder.right_inv target⟩
+    freshIndex := freshOrder
+    freshIndex_injective := freshOrder.injective
+    freshIndex_surjective := fun target =>
+      ⟨freshOrder.invFun target, freshOrder.right_inv target⟩
+    inserted_exact := ?_
+    retained_exact := ?_
+  }
+  · intro index
+    have splitExact := frame.rootHole_split_exact sourceArguments
+      sourceSignature newArgument result accepted pair index
+    exact congrArg Prod.fst splitExact
+  · intro index
+    have splitExact := frame.rootHole_split_exact sourceArguments
+      sourceSignature newArgument result accepted pair index
+    exact congrArg Prod.snd splitExact
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
