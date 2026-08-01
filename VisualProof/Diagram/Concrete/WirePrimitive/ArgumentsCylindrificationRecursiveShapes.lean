@@ -316,6 +316,154 @@ theorem recursiveAbstractOrdinaryItems_compileFilter
                           context node (.bind signature body)
                           headCompiled).elim
 
+/-- Removing target application nodes leaves exactly the retained-node prefix
+at every image region. -/
+theorem ArgumentResult.targetRetainedNodesAt_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (region : source.val.RegionId) :
+    (result.checked.val.nodesAt (result.regionImage region)).filter
+        (fun node => !decide
+          (node ∈ argumentSiteNodes result.targetSites)) =
+      ((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+        ConcreteWireQuantifier.Internal.checkedNode result.generated
+          (Fin.castAdd result.sites.sites.length retained)) := by
+  rw [result.nodesAt_decomposition region, List.filter_append]
+  have retainedExact :
+      (((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+            ConcreteWireQuantifier.Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained))).filter
+        (fun node => !decide
+          (node ∈ argumentSiteNodes result.targetSites)) =
+      ((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map (fun retained =>
+            ConcreteWireQuantifier.Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained)) := by
+    apply List.filter_eq_self.mpr
+    intro node member
+    obtain ⟨retained, _retainedMember, nodeExact⟩ := List.mem_map.mp member
+    have below : ¬(replacementBase result.plan).nodeCount ≤ node.val := by
+      rw [← nodeExact]
+      simp [ConcreteWireQuantifier.Internal.checkedNode]
+    have notSite : node ∉ argumentSiteNodes result.targetSites := by
+      intro site
+      exact below ((result.targetSiteNode_iff_ge result.targetSites node).mp site)
+    simp [notSite]
+  rw [retainedExact]
+  have generatedEmpty :
+      (((Data.Finite.allFin result.sites.sites.length).filter fun site =>
+          retainedRegion source (result.sites.sites.get site).region ==
+            retainedRegion source region).map result.targetNode).filter
+        (fun node => !decide
+          (node ∈ argumentSiteNodes result.targetSites)) = [] := by
+    apply List.filter_eq_nil_iff.mpr
+    intro node member kept
+    obtain ⟨site, _siteMember, nodeExact⟩ := List.mem_map.mp member
+    have generatedSite : node ∈ argumentSiteNodes result.targetSites := by
+      rw [← nodeExact]
+      exact result.generatedNode_targetSiteNode result.targetSites site
+    simpa [generatedSite] using kept
+  rw [generatedEmpty, List.append_nil]
+
+/-- The ordinary part of an arbitrary normalized source node body is the
+normalized compilation of precisely its retained source nodes. -/
+theorem recursiveSourceOrdinary_eq_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (sites : AllAppliedSites source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (items retained : ItemSeq definitions (context.extend region).sigs)
+    (compiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (context.extend region) (source.val.nodesAt region) = some items)
+    (retainedCompiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (context.extend region)
+          ((source.val.nodesAt region).filter fun node =>
+            decide (node ∉ argumentSiteNodes sites)) = some retained)
+    (contextNodup : (context.extend region).ids.Nodup)
+    (outerHead : Var context.sigs (.rel sourceArguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val context.ids outerHead =
+        wire) :
+    recursiveOrdinary
+        (recursiveNormalizedNodeShape context region outerHead items) =
+      recursiveLeafItems
+        (retained.renameWires (recursiveRegionNormalization context region)) := by
+  unfold recursiveNormalizedNodeShape
+  rw [recursiveOrdinary_abstractAppliedItems]
+  apply recursiveAbstractOrdinaryItems_compileFilter definitions source.val
+    (context.extend region) (recursiveRegionNormalization context region)
+    (Var.appendRight
+      ((source.val.wiresAt region).map fun localWire =>
+        (source.val.wires localWire).sig) outerHead)
+    (argumentSiteNodes sites) (source.val.nodesAt region) items retained compiled
+  · simpa using retainedCompiled
+  · intro node nodeAt
+    exact recursiveRegionClassifier_isSome sourceArguments sourceSignature sites
+      context region items compiled contextNodup outerHead outerHeadOrigin node
+      nodeAt
+
+/-- The ordinary part of an arbitrary normalized target node body is the
+normalized compilation of its retained prefix; generated site nodes are
+removed by abstraction. -/
+theorem recursiveTargetOrdinary_eq_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (context : ConcreteElaboration.WireContext result.checked.val)
+    (region : source.val.RegionId)
+    (items retained : ItemSeq definitions
+      (context.extend (result.regionImage region)).sigs)
+    (compiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (context.extend (result.regionImage region))
+          (result.checked.val.nodesAt (result.regionImage region)) = some items)
+    (retainedCompiled :
+      ConcreteElaboration.compileNodes? definitions result.checked.val
+          (context.extend (result.regionImage region))
+          (((replacementBase result.plan).nodesAt
+              (retainedRegion source region)).map (fun retained =>
+            ConcreteWireQuantifier.Internal.checkedNode result.generated
+              (Fin.castAdd result.sites.sites.length retained))) =
+        some retained)
+    (contextNodup :
+      (context.extend (result.regionImage region)).ids.Nodup)
+    (outerHead : Var context.sigs (.rel result.targetArguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin result.checked.val context.ids
+          outerHead = result.targetWire) :
+    recursiveOrdinary
+        (recursiveNormalizedNodeShape context (result.regionImage region)
+          outerHead items) =
+      recursiveLeafItems (retained.renameWires
+        (recursiveRegionNormalization context (result.regionImage region))) := by
+  unfold recursiveNormalizedNodeShape
+  rw [recursiveOrdinary_abstractAppliedItems]
+  apply recursiveAbstractOrdinaryItems_compileFilter definitions
+    result.checked.val (context.extend (result.regionImage region))
+    (recursiveRegionNormalization context (result.regionImage region))
+    (Var.appendRight
+      ((result.checked.val.wiresAt (result.regionImage region)).map fun localWire =>
+        (result.checked.val.wires localWire).sig) outerHead)
+    (argumentSiteNodes result.targetSites)
+    (result.checked.val.nodesAt (result.regionImage region)) items retained
+    compiled
+  · rw [ArgumentResult.targetRetainedNodesAt_exact result region]
+    exact retainedCompiled
+  · intro node nodeAt
+    exact recursiveRegionClassifier_isSome result.targetArguments
+      result.targetWire_signature result.targetSites context
+      (result.regionImage region) items compiled contextNodup outerHead
+      outerHeadOrigin node nodeAt
+
 /-- Canonical cylindrical receipt for an ordinary compiled leaf sequence and
 its exact renaming. -/
 def recursiveLeafReceipt
