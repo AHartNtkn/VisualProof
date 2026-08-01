@@ -424,6 +424,134 @@ def LocalCylindricalFrame.rootNormalizationCorrespondence
         sourceSignature newArgument result accepted pair sourceValue
         targetValue sourceNotHead mappedOrigin }
 
+/-- Descending through one proper region preserves the head-excluding
+correspondence.  Local wires use the construction's bound embedding; inherited
+outer wires use the parent correspondence. -/
+noncomputable def RecursiveNormalizationCorrespondence.extend
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (sourceContext : ConcreteElaboration.WireContext source.val)
+    (targetContext : ConcreteElaboration.WireContext result.checked.val)
+    (correspondence : RecursiveNormalizationCorrespondence result
+      sourceContext targetContext normalizedSource normalizedTarget)
+    (targetNodup :
+      (targetContext.extend (result.regionImage region)).ids.Nodup) :
+    RecursiveNormalizationCorrespondence result
+      (sourceContext.extend region)
+      (targetContext.extend (result.regionImage region))
+      (((source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig) ++ normalizedSource)
+      (((result.checked.val.wiresAt (result.regionImage region)).map
+          fun targetWire => (result.checked.val.wires targetWire).sig) ++
+        normalizedTarget) := by
+  let bounds := arityShift_regionBounds_below source wire sourceArguments
+    sourceSignature newArgument result accepted region notHead
+  let sourceMap : WireRenaming (sourceContext.extend region).sigs
+      (((source.val.wiresAt region).map fun sourceWire =>
+        (source.val.wires sourceWire).sig) ++ normalizedSource) :=
+    fun {_} value => recursiveExtendedNormalization sourceContext region
+      correspondence.sourceMap value
+  let targetMap : WireRenaming
+      (targetContext.extend (result.regionImage region)).sigs
+      (((result.checked.val.wiresAt (result.regionImage region)).map
+        fun targetWire => (result.checked.val.wires targetWire).sig) ++
+          normalizedTarget) :=
+    fun {_} value => recursiveExtendedNormalization targetContext
+      (result.regionImage region) correspondence.targetMap value
+  let embedding : WireRenaming
+      (((source.val.wiresAt region).map fun sourceWire =>
+        (source.val.wires sourceWire).sig) ++ normalizedSource)
+      (((result.checked.val.wiresAt (result.regionImage region)).map
+        fun targetWire => (result.checked.val.wires targetWire).sig) ++
+          normalizedTarget) :=
+    fun {_} value => bounds.embed correspondence.embedding value
+  have canonicalTarget : ∀ {signature : Sig}
+      (sourceValue : Var (sourceContext.extend region).sigs signature),
+      ConcreteElaboration.WireContext.origin source.val
+          (sourceContext.extend region).ids sourceValue ≠ wire →
+      ∃ targetValue : Var
+          (targetContext.extend (result.regionImage region)).sigs signature,
+        ConcreteElaboration.WireContext.origin result.checked.val
+            (targetContext.extend (result.regionImage region)).ids targetValue =
+          result.contextWireMap
+            (ConcreteElaboration.WireContext.origin source.val
+              (sourceContext.extend region).ids sourceValue) ∧
+        embedding (sourceMap sourceValue) = targetMap targetValue := by
+    intro signature sourceValue sourceNotHead
+    rcases recursiveExtendedNormalization_cases source.val sourceContext
+        region sourceValue with
+      ⟨localValue, rfl⟩ | ⟨outerValue, rfl⟩
+    · let targetValue : Var
+          (targetContext.extend (result.regionImage region)).sigs signature :=
+        (ConcreteElaboration.WireContext.sigs_extend targetContext
+          (result.regionImage region)).symm ▸
+          Var.appendLeft (bounds.embedLocal localValue) targetContext.sigs
+      refine ⟨targetValue, ?_, ?_⟩
+      · unfold targetValue
+        rw [recursive_origin_extend_local, recursive_origin_extend_local]
+        exact arityShift_regionBounds_below_embedLocal_origin source wire
+          sourceArguments sourceSignature newArgument result accepted region
+          notHead localValue
+      · unfold embedding sourceMap targetMap targetValue
+        rw [recursiveExtendedNormalization_local,
+          recursiveExtendedNormalization_local]
+        exact BoundCylindrification.embed_appendLeft _ _ _
+    · have outerNotHead :
+          ConcreteElaboration.WireContext.origin source.val sourceContext.ids
+            outerValue ≠ wire := by
+        intro same
+        apply sourceNotHead
+        rw [recursive_origin_extend_outer]
+        exact same
+      obtain ⟨targetOuter, targetOuterOrigin⟩ :=
+        correspondence.targetExists outerValue outerNotHead
+      let targetValue : Var
+          (targetContext.extend (result.regionImage region)).sigs signature :=
+        (ConcreteElaboration.WireContext.sigs_extend targetContext
+          (result.regionImage region)).symm ▸
+          Var.appendRight
+            ((result.checked.val.wiresAt
+              (result.regionImage region)).map fun targetWire =>
+                (result.checked.val.wires targetWire).sig) targetOuter
+      refine ⟨targetValue, ?_, ?_⟩
+      · unfold targetValue
+        rw [recursive_origin_extend_outer, recursive_origin_extend_outer,
+          targetOuterOrigin]
+      · unfold embedding sourceMap targetMap targetValue
+        rw [recursiveExtendedNormalization_outer,
+          recursiveExtendedNormalization_outer]
+        rw [BoundCylindrification.embed_appendRight]
+        rw [correspondence.commutes outerValue targetOuter outerNotHead
+          targetOuterOrigin]
+  refine
+    { sourceMap := sourceMap
+      targetMap := targetMap
+      embedding := embedding
+      targetExists := ?_
+      commutes := ?_ }
+  · intro signature sourceValue sourceNotHead
+    obtain ⟨targetValue, targetOrigin, _⟩ :=
+      canonicalTarget sourceValue sourceNotHead
+    exact ⟨targetValue, targetOrigin⟩
+  · intro signature sourceValue targetValue sourceNotHead mappedOrigin
+    obtain ⟨expected, expectedOrigin, exact⟩ :=
+      canonicalTarget sourceValue sourceNotHead
+    have targetExact : targetValue = expected :=
+      InsertionCompilation.NaturalityInternal.origin_injective
+        result.checked.val
+        (targetContext.extend (result.regionImage region)).ids targetNodup
+        (mappedOrigin.trans expectedOrigin.symm)
+    subst targetValue
+    exact exact
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
