@@ -41,6 +41,13 @@ private theorem recursive_normalization_cast_cancel
   cases same
   rfl
 
+private theorem recursive_normalization_cast_cancel_reverse
+    (same : left = right)
+    (value : Var left signature) :
+    same.symm ▸ (same ▸ value) = value := by
+  cases same
+  rfl
+
 /-- Any compiled head with the inherited head's concrete owner normalizes
 to the canonical appended outer head. -/
 theorem recursiveRegionNormalization_head_of_origin
@@ -178,6 +185,331 @@ theorem compileAppliedSiteAt?_complete
       exact Option.some.inj (compiledOwner.symm.trans (by
         simpa using siteOwner))
   exact ⟨head, arguments, nodeCompiled, headExact, argumentsExact⟩
+
+private theorem recursiveRegionNormalization_injective
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    {signature : Sig} :
+    Function.Injective
+      (@recursiveRegionNormalization _ diagram context region signature) := by
+  intro left right same
+  unfold recursiveRegionNormalization at same
+  have recovered := congrArg
+    (fun value =>
+      (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+        value) same
+  simpa only [recursive_normalization_cast_cancel_reverse] using recovered
+
+/-- Recognition by the canonical normalized outer-head slot implies that the
+compiled head is owned by that concrete outer wire. -/
+theorem recursiveRegionNormalization_origin_of_head
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (head : Var (context.extend region).sigs (.rel arguments))
+    (outerHead : Var context.sigs (.rel arguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin diagram context.ids outerHead =
+        wire)
+    (normalized :
+      recursiveRegionNormalization context region head =
+        Var.appendRight
+          ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+          outerHead) :
+    ConcreteElaboration.WireContext.origin diagram
+        (context.extend region).ids head = wire := by
+  let canonical : Var (context.extend region).sigs (.rel arguments) :=
+    (ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+      Var.appendRight
+        ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+        outerHead
+  have canonicalNormalized :
+      recursiveRegionNormalization context region canonical =
+        Var.appendRight
+          ((diagram.wiresAt region).map fun wire => (diagram.wires wire).sig)
+          outerHead := by
+    unfold canonical recursiveRegionNormalization
+    exact recursive_normalization_cast_cancel _ _
+  have headExact : head = canonical :=
+    recursiveRegionNormalization_injective context region
+      (normalized.trans canonicalNormalized.symm)
+  subst head
+  unfold canonical
+  exact (recursive_origin_extend_outer diagram context region outerHead).trans
+    outerHeadOrigin
+
+/-- The normalized per-node classifier for an arbitrary recursively compiled
+region. -/
+def recursiveRegionClassifier
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (outerHead : Var context.sigs (.rel arguments))
+    (node : source.val.NodeId) :
+    Option (Vars
+      ((source.val.wiresAt region).map
+          (fun wire => (source.val.wires wire).sig) ++ context.sigs)
+      arguments) :=
+  UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions source.val
+    (context.extend region) (recursiveRegionNormalization context region)
+    (Var.appendRight
+      ((source.val.wiresAt region).map fun wire => (source.val.wires wire).sig)
+      outerHead) node
+
+/-- Every local application of an inherited relation head is selected by the
+arbitrary-region normalized classifier with its exact ordered arguments. -/
+theorem recursiveRegionClassifier_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (items : ItemSeq definitions (context.extend region).sigs)
+    (compiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (context.extend region) (source.val.nodesAt region) = some items)
+    (contextNodup : (context.extend region).ids.Nodup)
+    (outerHead : Var context.sigs (.rel sourceArguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val context.ids outerHead =
+        wire)
+    (site : AppliedSite source wire)
+    (siteRegion : site.region = region) :
+    ∃ arguments : Vars (context.extend region).sigs sourceArguments,
+      recursiveRegionClassifier source context region outerHead site.node =
+          some (Vars.rename (recursiveRegionNormalization context region)
+            arguments) ∧
+      ConcreteElaboration.variableOrigins source.val (context.extend region)
+          arguments = site.arguments := by
+  have argumentSignatures :=
+    appliedSite_arguments_eq_relationArguments sourceArguments
+      sourceSignature site
+  cases argumentSignatures
+  obtain ⟨head, arguments, nodeCompiled, headOrigin, argumentsOrigin⟩ :=
+    compileAppliedSiteAt?_complete (context.extend region) region items compiled
+      site siteRegion
+  have normalizedHead := recursiveRegionNormalization_head_of_origin context
+    region contextNodup head outerHead headOrigin outerHeadOrigin
+  refine ⟨arguments, ?_, argumentsOrigin⟩
+  simp [recursiveRegionClassifier,
+    UniformIntrinsicRegion.renamedCompiledAppliedArguments?, nodeCompiled,
+    UniformIntrinsicRegion.matchedHeadArguments?, normalizedHead]
+
+/-- Conversely, classifier success is concrete evidence that the node belongs
+to the exhaustive applied-site list for the inherited wire. -/
+theorem recursiveRegionClassifier_site
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    (sites : AllAppliedSites source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (outerHead : Var context.sigs (.rel sourceArguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val context.ids outerHead =
+        wire)
+    (node : source.val.NodeId)
+    (values : Vars
+      ((source.val.wiresAt region).map
+          (fun localWire => (source.val.wires localWire).sig) ++ context.sigs)
+      sourceArguments)
+    (accepted :
+      recursiveRegionClassifier source context region outerHead node =
+        some values) :
+    ∃ site, site ∈ sites.sites ∧ site.node = node := by
+  unfold recursiveRegionClassifier at accepted
+  unfold UniformIntrinsicRegion.renamedCompiledAppliedArguments? at accepted
+  cases compiled : ConcreteElaboration.Internal.compileNode? definitions
+      source.val (context.extend region) node with
+  | none => simp [compiled] at accepted
+  | some item =>
+      cases item with
+      | atom atomHead arguments =>
+          have matched :
+              UniformIntrinsicRegion.matchedHeadArguments?
+                  (Var.appendRight
+                    ((source.val.wiresAt region).map fun localWire =>
+                      (source.val.wires localWire).sig)
+                    outerHead)
+                  (recursiveRegionNormalization context region atomHead)
+                  (Vars.rename (recursiveRegionNormalization context region)
+                    arguments) = some values := by
+            simpa [compiled] using accepted
+          obtain ⟨same, normalized⟩ :=
+            UniformIntrinsicRegion.matchedHeadArguments_head_exact _ _ _
+              matched
+          have headOrigin :
+              ConcreteElaboration.WireContext.origin source.val
+                  (context.extend region).ids atomHead = wire := by
+            cases same
+            exact recursiveRegionNormalization_origin_of_head context region
+              atomHead outerHead outerHeadOrigin normalized
+          have nodeShape : ∃ nodeRegion atomArguments,
+              source.val.nodes node = .atom nodeRegion atomArguments := by
+            cases nodeData : source.val.nodes node with
+            | atom nodeRegion atomArguments =>
+                exact ⟨nodeRegion, atomArguments, rfl⟩
+            | ref nodeRegion definition refArguments =>
+                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                  at compiled
+                cases resolved :
+                    ConcreteElaboration.Internal.resolveArgs? source.val
+                      (context.extend region) node refArguments 0 <;>
+                  simp [resolved] at compiled
+            | identity nodeRegion signature arity =>
+                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                  at compiled
+                cases resolved :
+                    ConcreteElaboration.Internal.resolveIdentityPorts?
+                      source.val (context.extend region) node signature arity 0 <;>
+                  simp [resolved] at compiled
+          obtain ⟨nodeRegion, atomArguments, nodeData⟩ := nodeShape
+          have singletonCompiled :
+              ConcreteElaboration.compileNodes? definitions source.val
+                  (context.extend region) [node] =
+                some (.cons (.atom atomHead arguments) .nil) := by
+            simp [ConcreteElaboration.compileNodes?, compiled]
+          obtain ⟨shapeHead, shapeArguments, itemExact, ownerExact,
+              _argumentOrigins⟩ :=
+            ConcreteElaboration.compileNodes?_atom_shape source.val
+              (context.extend region) node nodeData singletonCompiled
+          have atomExact :
+              (.atom atomHead arguments :
+                  Item definitions (context.extend region).sigs) =
+                .atom shapeHead shapeArguments :=
+            ItemSeq.cons.inj itemExact |>.1
+          cases atomExact
+          have owner : source.val.endpointOwner? ⟨node, .head⟩ =
+              some wire := by simpa [headOrigin] using ownerExact
+          have endpointMember :
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+                (source.val.wires wire).endpoints := by
+            have occurrence := ConcreteDiagram.endpointOwner?_occurs
+              source.val ⟨node, .head⟩ wire owner
+            simp only [ConcreteDiagram.endpointOccurrences,
+              List.mem_flatMap] at occurrence
+            obtain ⟨candidate, _candidateMember, endpointOccurrence⟩ :=
+              occurrence
+            obtain ⟨candidateEndpoint, incident, exact⟩ :=
+              List.mem_map.mp endpointOccurrence
+            cases exact
+            exact incident
+          have siteEndpointMember :
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+                sites.sites.map AppliedSite.endpoint := by
+            rw [sites.exhaustive]
+            exact endpointMember
+          obtain ⟨site, siteMember, endpointExact⟩ :=
+            List.mem_map.mp siteEndpointMember
+          exact ⟨site, siteMember,
+            congrArg CEndpoint.node endpointExact⟩
+      | named definition arguments => simp [compiled] at accepted
+      | identity signature ports atLeastTwo => simp [compiled] at accepted
+      | cut body => simp [compiled] at accepted
+      | bind signature body => simp [compiled] at accepted
+
+/-- On the authoritative node order of a recursive region, classifier
+success is exactly membership in that region's acted application nodes. -/
+theorem recursiveRegionClassifier_isSome
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (items : ItemSeq definitions (context.extend region).sigs)
+    (compiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (context.extend region) (source.val.nodesAt region) = some items)
+    (contextNodup : (context.extend region).ids.Nodup)
+    (outerHead : Var context.sigs (.rel sourceArguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val context.ids outerHead =
+        wire)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt region) :
+    (recursiveRegionClassifier source context region outerHead node).isSome =
+      decide (node ∈ argumentSiteNodes result.sites) := by
+  cases classified :
+      recursiveRegionClassifier source context region outerHead node with
+  | none =>
+      simp only [Option.isSome_none]
+      symm
+      apply decide_eq_false_iff_not.mpr
+      intro member
+      have sourceNodeMember :
+          node ∈ sourceSiteNodesAt result.sites region := by
+        apply List.mem_filter.mpr
+        exact ⟨nodeAt, decide_eq_true member⟩
+      have orderedMember :=
+        (aritySiteNodesAt_mem_iff result.sites region node).mpr
+          sourceNodeMember
+      obtain ⟨siteIndex, siteIndexMember, nodeExact⟩ :=
+        List.mem_map.mp orderedMember
+      have siteRegion :
+          (result.sites.sites.get siteIndex).region = region := by
+        exact eq_of_beq (List.mem_filter.mp siteIndexMember).2
+      obtain ⟨arguments, selected, _origins⟩ :=
+        recursiveRegionClassifier_complete sourceArguments sourceSignature
+          context region items compiled contextNodup outerHead outerHeadOrigin
+          (result.sites.sites.get siteIndex) siteRegion
+      rw [nodeExact, classified] at selected
+      contradiction
+  | some values =>
+      simp only [Option.isSome_some]
+      symm
+      apply decide_eq_true
+      obtain ⟨site, siteMember, nodeExact⟩ :=
+        recursiveRegionClassifier_site result.sites context region outerHead
+          outerHeadOrigin node values classified
+      unfold argumentSiteNodes
+      apply List.mem_map.mpr
+      exact ⟨site, siteMember, nodeExact⟩
+
+/-- The holes abstracted from an arbitrary recursively compiled node sequence
+are aligned position-for-position with the source applications in concrete
+node order. -/
+theorem recursiveRegionHoleValues_alignment
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (items : ItemSeq definitions (context.extend region).sigs)
+    (compiled :
+      ConcreteElaboration.compileNodes? definitions source.val
+          (context.extend region) (source.val.nodesAt region) = some items)
+    (contextNodup : (context.extend region).ids.Nodup)
+    (outerHead : Var context.sigs (.rel sourceArguments))
+    (outerHeadOrigin :
+      ConcreteElaboration.WireContext.origin source.val context.ids outerHead =
+        wire) :
+    (recursiveNormalizedNodeShape context region outerHead items).holeValues.map
+        some =
+      (sourceSiteNodesAt result.sites region).map
+        (recursiveRegionClassifier source context region outerHead) := by
+  unfold recursiveNormalizedNodeShape
+  rw [UniformIntrinsicRegion.abstractAppliedItems_holeValues]
+  rw [UniformIntrinsicRegion.directAppliedArguments_rename_compileNodes
+    definitions source.val (context.extend region)
+    (recursiveRegionNormalization context region)
+    (Var.appendRight
+      ((source.val.wiresAt region).map fun localWire =>
+        (source.val.wires localWire).sig)
+      outerHead) (source.val.nodesAt region) items compiled]
+  unfold sourceSiteNodesAt
+  apply UniformIntrinsicRegion.map_some_filterMap_eq_map_filter
+  intro node nodeAt
+  exact recursiveRegionClassifier_isSome sourceArguments sourceSignature result
+    context region items compiled contextNodup outerHead outerHeadOrigin node
+    nodeAt
 
 /-- Assemble a cylindrical-hole receipt from exact ordered lengths, the two
 finite order equivalences, and one pointwise split equation.  Root and
