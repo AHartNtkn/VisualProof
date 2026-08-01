@@ -418,6 +418,49 @@ private theorem normalizeVisible_outer
   rw [cast_var_roundtrip]
   exact removal.rename_outer outerRenaming headSlot value
 
+private theorem appendLeft_ne_appendRight
+    (value : Var left signature)
+    (outerValue : Var right signature) :
+    Var.appendLeft value right ≠ Var.appendRight left outerValue := by
+  induction left with
+  | nil => exact nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here => simp [Var.appendLeft, Var.appendRight]
+      | there rest =>
+          intro same
+          exact induction rest (Var.there.inj same)
+
+private theorem appendRight_injective
+    (left : List Sig) : Function.Injective
+      (Var.appendRight left :
+        Var right signature → Var (left ++ right) signature) := by
+  intro first second same
+  induction left with
+  | nil => exact same
+  | cons head tail induction =>
+      exact induction (Var.there.inj same)
+
+private theorem resolvePort_origin
+    (diagram : ConcreteDiagram definitionCount)
+    (context : ConcreteElaboration.WireContext diagram)
+    (node : diagram.NodeId)
+    (port : CPort)
+    (expected : Sig)
+    (value : Var context.sigs expected)
+    (resolved :
+      ConcreteElaboration.Internal.resolvePort? diagram context node port
+          expected = some value) :
+    diagram.endpointOwner? ⟨node, port⟩ =
+      some (ConcreteElaboration.WireContext.origin diagram context.ids value) := by
+  unfold ConcreteElaboration.Internal.resolvePort? at resolved
+  cases owner : diagram.endpointOwner? ⟨node, port⟩ with
+  | none => simp [owner] at resolved
+  | some wire =>
+      simp only [owner, Option.bind_some] at resolved
+      rw [ConcreteElaboration.Internal.origin_of_resolvedExpected diagram
+        context wire expected resolved]
+
 /-- Source-frame normalization sends the selected relation head to the
 explicit normalized source-head slot. -/
 theorem LocalCylindricalFrame.sourceFrameNormalization_head
@@ -1468,6 +1511,38 @@ theorem LocalCylindricalFrame.sourceFrameNormalization_of_head_origin
   rw [canonicalExact]
   exact frame.sourceFrameNormalization_head
 
+/-- Only the concrete acted head can normalize to the explicit source-head
+slot. -/
+theorem LocalCylindricalFrame.sourceHead_origin_of_normalized
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    {result : ArgumentResult source wire}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (head : Var frame.sourceScope.frame.visible.sigs
+      (.rel sourceArguments))
+    (normalized :
+      frame.sourceFrameNormalization head =
+        Var.appendRight frame.sourceReduced localSourceHead) :
+    ConcreteElaboration.WireContext.origin source.val
+        frame.sourceScope.frame.visible.ids head = wire := by
+  cases frame.sourceRemoval.classifyVisible
+      frame.context.sourceVisibleExact head with
+  | head =>
+      rw [frame.sourceFrameVisible_origin_local pair]
+      rw [frame.sourceRemoval_head]
+      exact frame.sourceHead_origin
+  | retained retained =>
+      rw [frame.sourceFrameNormalization_retained retained] at normalized
+      exact False.elim
+        (appendLeft_ne_appendRight retained localSourceHead normalized)
+  | outer outer =>
+      rw [frame.sourceFrameNormalization_outer outer] at normalized
+      have impossible := appendRight_injective frame.sourceReduced normalized
+      cases impossible
+
 /-- Every local source application is recognized as a hole after frame
 normalization, and the hole stores precisely the compiled ordered argument
 tuple.  This is the pointwise source half of the cylindrical-hole receipt. -/
@@ -1532,10 +1607,181 @@ theorem LocalCylindricalFrame.sourceClassifier_complete
           frame.sourceScope.frame.visible arguments = site.arguments := by
   obtain ⟨head, arguments, compiled, matched, origins⟩ :=
     frame.compileSourceAppliedSiteHole?_complete sourceArguments
-      sourceSignature pair site siteRegion
+      sourceSignature result pair site siteRegion
   refine ⟨arguments, ?_, origins⟩
   simp [UniformIntrinsicRegion.renamedCompiledAppliedArguments?, compiled,
     matched]
+
+/-- Conversely, every successful normalized source classifier result belongs
+to the exhaustive acted-site list. -/
+theorem LocalCylindricalFrame.sourceClassifier_site
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {sourceArguments : List Sig}
+    {result : ArgumentResult source wire}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (node : source.val.NodeId)
+    (values : Vars
+      (frame.sourceReduced ++
+        ((.rel sourceArguments) :: (.rel result.targetArguments) ::
+          frame.context.siteOuter)) sourceArguments)
+    (accepted :
+      UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+          source.val frame.sourceScope.frame.visible
+          frame.sourceFrameNormalization
+          (Var.appendRight frame.sourceReduced localSourceHead) node =
+        some values) :
+    ∃ site, site ∈ result.sites.sites ∧ site.node = node := by
+  unfold UniformIntrinsicRegion.renamedCompiledAppliedArguments? at accepted
+  cases compiled : ConcreteElaboration.Internal.compileNode? definitions
+      source.val frame.sourceScope.frame.visible node with
+  | none => simp [compiled] at accepted
+  | some item =>
+      cases item with
+      | atom atomHead arguments =>
+          have matched :
+              UniformIntrinsicRegion.matchedHeadArguments?
+                  (Var.appendRight frame.sourceReduced localSourceHead)
+                  (frame.sourceFrameNormalization atomHead)
+                  (Vars.rename frame.sourceFrameNormalization arguments) =
+                some values := by
+            simpa [compiled] using accepted
+          obtain ⟨same, normalized⟩ :=
+            UniformIntrinsicRegion.matchedHeadArguments_head_exact _ _ _
+              matched
+          have headOrigin :
+              ConcreteElaboration.WireContext.origin source.val
+                  frame.sourceScope.frame.visible.ids atomHead = wire := by
+            cases same
+            exact frame.sourceHead_origin_of_normalized pair atomHead normalized
+          have nodeShape : ∃ region atomArguments,
+              source.val.nodes node = .atom region atomArguments := by
+            cases nodeData : source.val.nodes node with
+            | atom region atomArguments => exact ⟨region, atomArguments, rfl⟩
+            | ref region definition refArguments =>
+                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                  at compiled
+                cases resolved :
+                    ConcreteElaboration.Internal.resolveArgs? source.val
+                      frame.sourceScope.frame.visible node refArguments 0 <;>
+                  simp [resolved] at compiled
+            | identity region signature arity =>
+                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                  at compiled
+                cases resolved :
+                    ConcreteElaboration.Internal.resolveIdentityPorts?
+                      source.val frame.sourceScope.frame.visible node signature
+                        arity 0 <;>
+                  simp [resolved] at compiled
+          obtain ⟨region, atomArguments, nodeData⟩ := nodeShape
+          have singletonCompiled :
+              ConcreteElaboration.compileNodes? definitions source.val
+                  frame.sourceScope.frame.visible [node] =
+                some (.cons (.atom atomHead arguments) .nil) := by
+            simp [ConcreteElaboration.compileNodes?, compiled]
+          obtain ⟨shapeHead, shapeArguments, itemExact, ownerExact,
+              _argumentOrigins⟩ :=
+            ConcreteElaboration.compileNodes?_atom_shape source.val
+              frame.sourceScope.frame.visible node nodeData singletonCompiled
+          have atomExact :
+              (.atom atomHead arguments :
+                  Item definitions frame.sourceScope.frame.visible.sigs) =
+                .atom shapeHead shapeArguments :=
+            ItemSeq.cons.inj itemExact |>.1
+          cases atomExact
+          have owner : source.val.endpointOwner? ⟨node, .head⟩ =
+              some wire := by simpa [headOrigin] using ownerExact
+          have endpointMember :
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+                (source.val.wires wire).endpoints := by
+            have occurrence := ConcreteDiagram.endpointOwner?_occurs
+              source.val ⟨node, .head⟩ wire owner
+            simp only [ConcreteDiagram.endpointOccurrences,
+              List.mem_flatMap] at occurrence
+            obtain ⟨candidate, _candidateMember, endpointOccurrence⟩ :=
+              occurrence
+            obtain ⟨candidateEndpoint, incident, exact⟩ :=
+              List.mem_map.mp endpointOccurrence
+            cases exact
+            exact incident
+          have siteEndpointMember :
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+                result.sites.sites.map AppliedSite.endpoint := by
+            rw [result.sites.exhaustive]
+            exact endpointMember
+          obtain ⟨site, siteMember, endpointExact⟩ :=
+            List.mem_map.mp siteEndpointMember
+          exact ⟨site, siteMember, congrArg CEndpoint.node endpointExact⟩
+      | named definition arguments => simp [compiled] at accepted
+      | identity signature ports atLeastTwo => simp [compiled] at accepted
+      | cut body => simp [compiled] at accepted
+      | bind signature body => simp [compiled] at accepted
+
+/-- On acted-scope nodes, classifier success is exactly membership in the
+construction's source application-node set. -/
+theorem LocalCylindricalFrame.sourceClassifier_isSome
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt (source.val.wires wire).scope) :
+    (UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+        source.val frame.sourceScope.frame.visible
+        frame.sourceFrameNormalization
+        (Var.appendRight frame.sourceReduced localSourceHead) node).isSome =
+      decide (node ∈ argumentSiteNodes result.sites) := by
+  let classify :=
+    UniformIntrinsicRegion.renamedCompiledAppliedArguments? definitions
+      source.val frame.sourceScope.frame.visible
+      frame.sourceFrameNormalization
+      (Var.appendRight frame.sourceReduced localSourceHead)
+  cases classified : classify node with
+  | none =>
+      change (classify node).isSome = _
+      rw [classified]
+      simp only [Option.isSome_none]
+      symm
+      apply decide_eq_false_iff_not.mpr
+      intro member
+      have sourceNodeMember :
+          node ∈ sourceSiteNodesAt result.sites
+            (source.val.wires wire).scope := by
+        apply List.mem_filter.mpr
+        exact ⟨nodeAt, decide_eq_true member⟩
+      have orderedMember :=
+        (aritySiteNodesAt_mem_iff result.sites
+          (source.val.wires wire).scope node).mpr sourceNodeMember
+      obtain ⟨siteIndex, siteIndexMember, nodeExact⟩ :=
+        List.mem_map.mp orderedMember
+      have siteRegion :
+          (result.sites.sites.get siteIndex).region =
+            (source.val.wires wire).scope := by
+        exact eq_of_beq (List.mem_filter.mp siteIndexMember).2
+      obtain ⟨arguments, selected, _origins⟩ :=
+        frame.sourceClassifier_complete sourceArguments sourceSignature result
+          pair (result.sites.sites.get siteIndex) siteRegion
+      change classify (result.sites.sites.get siteIndex).node = _ at selected
+      rw [nodeExact, classified] at selected
+      contradiction
+  | some values =>
+      change (classify node).isSome = _
+      rw [classified]
+      simp only [Option.isSome_some]
+      symm
+      apply decide_eq_true
+      obtain ⟨site, siteMember, nodeExact⟩ :=
+        frame.sourceClassifier_site pair node values classified
+      unfold argumentSiteNodes
+      apply List.mem_map.mpr
+      exact ⟨site, siteMember, nodeExact⟩
 
 /-- A generated target application local to the acted scope compiles in the
 canonical target frame with the replacement head and its exact ordered

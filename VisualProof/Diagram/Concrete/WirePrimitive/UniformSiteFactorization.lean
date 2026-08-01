@@ -278,6 +278,22 @@ def matchedHeadArguments?
   else
     none
 
+/-- A successful application match retains the exact dependent signature cast
+and normalized head equality that selected the atom. -/
+theorem matchedHeadArguments_head_exact
+    (head : Var context (.rel arguments))
+    (atomHead : Var context (.rel atomArguments))
+    (values : Vars context atomArguments)
+    (accepted : matchedHeadArguments? head atomHead values = some result) :
+    ∃ same : atomArguments = arguments, same ▸ atomHead = head := by
+  unfold matchedHeadArguments? at accepted
+  split at accepted
+  next same =>
+    split at accepted
+    next equal => exact ⟨same, equal⟩
+    next rejected => contradiction
+  next rejected => contradiction
+
 private def prependOrdinary
     (item : UniformIntrinsicItem definitions arguments context) :
     UniformIntrinsicRegion definitions arguments context →
