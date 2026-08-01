@@ -232,6 +232,26 @@ def target
     (applied : AppliedApplyFormal source orientation wire position) :=
   applied.result.target
 
+/-- Exact ordered leaf nodes introduced by formal application. -/
+def inverseNodes
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedApplyFormal source orientation wire position) :
+    List applied.target.val.NodeId :=
+  applied.result.targetRemovedNodes
+
+/-- Exact target scope at which the introduced formal leaves abstract. -/
+def inverseScope
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedApplyFormal source orientation wire position) :
+    applied.target.val.RegionId :=
+  applied.result.targetScope
+
 def tag
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -256,6 +276,24 @@ def target
     {wire : source.val.WireId}
     (applied : AppliedIdentityLeaf source orientation wire) :=
   applied.result.target
+
+/-- Exact ordered identity nodes introduced by identity leaf expansion. -/
+def inverseNodes
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedIdentityLeaf source orientation wire) :
+    List applied.target.val.NodeId :=
+  applied.result.targetRemovedNodes
+
+/-- Exact target scope at which the introduced identity leaves abstract. -/
+def inverseScope
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedIdentityLeaf source orientation wire) :
+    applied.target.val.RegionId :=
+  applied.result.targetScope
 
 def tag
     {source : CheckedDiagram definitions}
@@ -282,6 +320,26 @@ def target
     {definition : Fin definitions.length}
     (applied : AppliedRefLeaf source orientation wire definition) :=
   applied.result.target
+
+/-- Exact ordered reference nodes introduced by reference leaf expansion. -/
+def inverseNodes
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {definition : Fin definitions.length}
+    (applied : AppliedRefLeaf source orientation wire definition) :
+    List applied.target.val.NodeId :=
+  applied.result.targetRemovedNodes
+
+/-- Exact target scope at which the introduced reference leaves abstract. -/
+def inverseScope
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {definition : Fin definitions.length}
+    (applied : AppliedRefLeaf source orientation wire definition) :
+    applied.target.val.RegionId :=
+  applied.result.targetScope
 
 def tag
     {source : CheckedDiagram definitions}
