@@ -33,6 +33,21 @@ private theorem recursive_origin_cast_context
   cases same
   rfl
 
+private theorem recursive_origin_cast_ids
+    (diagram : ConcreteDiagram definitionCount)
+    {leftIds rightIds : List diagram.WireId}
+    (same : leftIds = rightIds)
+    {signature : Sig}
+    (value : Var
+      (rightIds.map fun wire => (diagram.wires wire).sig) signature) :
+    ConcreteElaboration.WireContext.origin diagram leftIds
+        ((congrArg
+          (List.map fun wire => (diagram.wires wire).sig) same).symm ▸
+          value) =
+      ConcreteElaboration.WireContext.origin diagram rightIds value := by
+  cases same
+  rfl
+
 private theorem recursive_cast_through_middle
     (first : left = middle)
     (second : middle = right)
@@ -89,6 +104,78 @@ private theorem recursive_freshVar_transport
         evidence.freshVar outer index := by
   cases same
   rfl
+
+private theorem recursive_canonical_appendRight_eq
+    {sourceContextSigs sourceReduced mappedSigs actualFresh
+      targetContextSigs targetReduced fresh : List Sig}
+    (sourceExact : sourceContextSigs = sourceReduced)
+    (mappedExact : mappedSigs = sourceContextSigs)
+    (freshExact : actualFresh = fresh)
+    (targetAppendExact : targetContextSigs = mappedSigs ++ actualFresh)
+    (targetReducedExact : targetContextSigs = targetReduced)
+    (rootExact : targetReduced = sourceReduced ++ fresh)
+    (value : Var fresh signature) :
+    targetAppendExact.symm ▸
+        Var.appendRight mappedSigs (freshExact.symm ▸ value) =
+      targetReducedExact.symm ▸
+        (rootExact.symm ▸ Var.appendRight sourceReduced value) := by
+  cases sourceExact
+  cases mappedExact
+  cases freshExact
+  cases targetAppendExact
+  cases targetReducedExact
+  cases rootExact
+  rfl
+
+private theorem recursive_cast_here_congrArg_cons_symm
+    (same : left = right) :
+    (congrArg (List.cons signature) same).symm ▸
+        (Var.here : Var (signature :: right) signature) =
+      (Var.here : Var (signature :: left) signature) := by
+  cases same
+  rfl
+
+private theorem recursive_cast_there_congrArg_cons_symm
+    (same : left = right)
+    (value : Var right signature) :
+    (congrArg (List.cons headSignature) same).symm ▸ Var.there value =
+      Var.there (same.symm ▸ value) := by
+  cases same
+  rfl
+
+private theorem recursive_cast_appendRight_eq_appendRightVar
+    (diagram : ConcreteDiagram definitionCount)
+    (leftIds rightIds : List diagram.WireId)
+    {signature : Sig}
+    (value : Var (rightIds.map fun wire => (diagram.wires wire).sig)
+      signature) :
+    (List.map_append (f := fun wire => (diagram.wires wire).sig)
+          (l₁ := leftIds) (l₂ := rightIds)).symm ▸
+        Var.appendRight
+          (leftIds.map fun wire => (diagram.wires wire).sig) value =
+      ConcreteElaboration.appendRightVar diagram leftIds value := by
+  induction leftIds with
+  | nil => rfl
+  | cons head tail induction =>
+      have proofExact :
+          (List.map_append
+              (f := fun wire => (diagram.wires wire).sig)
+              (l₁ := head :: tail) (l₂ := rightIds)).symm =
+            (congrArg (List.cons (diagram.wires head).sig)
+              (List.map_append
+                (f := fun wire => (diagram.wires wire).sig)
+                (l₁ := tail) (l₂ := rightIds))).symm :=
+        Subsingleton.elim _ _
+      rw [proofExact]
+      simp only [ConcreteElaboration.appendRightVar]
+      exact
+        (recursive_cast_there_congrArg_cons_symm
+          (List.map_append
+            (f := fun wire => (diagram.wires wire).sig)
+            (l₁ := tail) (l₂ := rightIds))
+          (Var.appendRight
+            (tail.map fun wire => (diagram.wires wire).sig) value)).trans
+          (congrArg Var.there induction)
 
 /-- The target local signature block below the acted head is the source
 block followed by the construction-owned fresh suffix.  This is the exact
@@ -365,6 +452,167 @@ theorem arityShift_regionBounds_below_embedLocal_origin
   unfold appendedValue
   rw [InsertionCompilation.NaturalityInternal.appendLeftIds_origin]
   exact retained.wireRenaming_origin sourceValue
+
+/-- Every construction-owned fresh ordinal below the acted head names the
+fresh target wire at the same concrete suffix position. -/
+theorem arityShift_regionBounds_below_freshLocal_origin
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (region : source.val.RegionId)
+    (notHead : region ≠ (source.val.wires wire).scope)
+    (index : Fin (arityFreshAt result region).length) :
+    let rootExact := arityShift_regionBounds_below_exact source wire
+      sourceArguments sourceSignature newArgument result accepted region
+      notHead
+    let localFresh : Var
+        ((result.checked.val.wiresAt (result.regionImage region)).map
+          fun targetWire => (result.checked.val.wires targetWire).sig)
+        newArgument :=
+      rootExact.symm ▸
+        Var.appendRight
+          ((source.val.wiresAt region).map fun sourceWire =>
+            (source.val.wires sourceWire).sig)
+          (BoundCylindrification.repeatedVar newArgument
+            (arityFreshAt result region).length index)
+    ConcreteElaboration.WireContext.origin result.checked.val
+        (result.checked.val.wiresAt (result.regionImage region)) localFresh =
+      result.targetLocalWire ((arityFreshAt result region).get index) := by
+  dsimp only
+  let sourceIds := source.val.wiresAt region
+  let mappedIds := sourceIds.map result.contextWireMap
+  let freshAtRegion := arityFreshAt result region
+  let freshIds := freshAtRegion.map result.targetLocalWire
+  let targetIds :=
+    result.checked.val.wiresAt (result.regionImage region)
+  have idsExact : targetIds = mappedIds ++ freshIds := by
+    exact arityShift_wiresAt_below source wire newArgument result accepted
+      region notHead
+  have sourceExact :
+      sourceIds.map (fun sourceWire => (source.val.wires sourceWire).sig) =
+        (source.val.wiresAt region).map fun sourceWire =>
+          (source.val.wires sourceWire).sig := rfl
+  have mappedExact :
+      mappedIds.map
+          (fun targetWire => (result.checked.val.wires targetWire).sig) =
+        sourceIds.map fun sourceWire => (source.val.wires sourceWire).sig := by
+    rw [List.map_map]
+    apply List.map_congr_left
+    intro sourceWire member
+    simp only [Function.comp_apply]
+    apply result.contextWireMap_signature
+    rw [arityShift_sourceRemovedWires_exact source wire newArgument result
+      accepted]
+    simp only [List.mem_singleton]
+    intro same
+    subst sourceWire
+    unfold sourceIds at member
+    rw [ConcreteDiagram.wiresAt, List.mem_filter] at member
+    exact notHead (eq_of_beq member.2).symm
+  have freshExact :
+      freshIds.map
+          (fun targetWire => (result.checked.val.wires targetWire).sig) =
+        List.replicate freshAtRegion.length newArgument := by
+    rw [List.map_map, ← List.map_const']
+    apply List.map_congr_left
+    intro fresh _member
+    simp only [Function.comp_apply]
+    rw [result.targetLocalWire_signature]
+    exact arityShift_localSignature_exact source wire sourceArguments
+      sourceSignature result.sites newArgument result accepted fresh
+  have targetAppendExact :
+      targetIds.map
+          (fun targetWire => (result.checked.val.wires targetWire).sig) =
+        mappedIds.map
+            (fun targetWire => (result.checked.val.wires targetWire).sig) ++
+          freshIds.map
+            (fun targetWire => (result.checked.val.wires targetWire).sig) := by
+    rw [idsExact, List.map_append]
+  have targetReducedExact :
+      targetIds.map
+          (fun targetWire => (result.checked.val.wires targetWire).sig) =
+        (result.checked.val.wiresAt (result.regionImage region)).map
+          fun targetWire => (result.checked.val.wires targetWire).sig := rfl
+  have rootExact := arityShift_regionBounds_below_exact source wire
+    sourceArguments sourceSignature newArgument result accepted region notHead
+  let freshValue :
+      Var (freshIds.map
+        (fun targetWire => (result.checked.val.wires targetWire).sig))
+        newArgument :=
+    freshExact.symm ▸
+      BoundCylindrification.repeatedVar newArgument freshAtRegion.length index
+  let appendedValue :
+      Var ((mappedIds ++ freshIds).map
+        (fun targetWire => (result.checked.val.wires targetWire).sig))
+        newArgument :=
+    ConcreteElaboration.appendRightVar result.checked.val mappedIds freshValue
+  let targetValue :
+      Var (targetIds.map
+        (fun targetWire => (result.checked.val.wires targetWire).sig))
+        newArgument :=
+    (congrArg
+      (List.map fun targetWire => (result.checked.val.wires targetWire).sig)
+      idsExact).symm ▸ appendedValue
+  have appendedReindex :
+      (List.map_append
+        (f := fun targetWire => (result.checked.val.wires targetWire).sig)
+        (l₁ := mappedIds) (l₂ := freshIds)) ▸ appendedValue =
+        Var.appendRight
+          (mappedIds.map fun targetWire =>
+            (result.checked.val.wires targetWire).sig) freshValue := by
+    unfold appendedValue
+    exact (recursive_cast_eq_symm_cast
+      (List.map_append
+        (f := fun targetWire => (result.checked.val.wires targetWire).sig)
+        (l₁ := mappedIds) (l₂ := freshIds)).symm
+      (Var.appendRight
+        (mappedIds.map fun targetWire =>
+          (result.checked.val.wires targetWire).sig) freshValue)
+      (ConcreteElaboration.appendRightVar result.checked.val mappedIds
+        freshValue)
+      (recursive_cast_appendRight_eq_appendRightVar result.checked.val
+        mappedIds freshIds freshValue)).symm
+  have targetValueExact :
+      targetValue =
+        targetReducedExact.symm ▸
+          (rootExact.symm ▸
+            Var.appendRight
+              ((source.val.wiresAt region).map fun sourceWire =>
+                (source.val.wires sourceWire).sig)
+              (BoundCylindrification.repeatedVar newArgument
+                freshAtRegion.length index)) := by
+    unfold targetValue
+    rw [recursive_cast_through_middle
+      (List.map_append
+        (f := fun targetWire => (result.checked.val.wires targetWire).sig)
+        (l₁ := mappedIds) (l₂ := freshIds))
+      targetAppendExact.symm
+      (congrArg
+        (List.map fun targetWire =>
+          (result.checked.val.wires targetWire).sig) idsExact).symm
+      appendedValue]
+    rw [appendedReindex]
+    unfold freshValue
+    exact recursive_canonical_appendRight_eq sourceExact mappedExact freshExact
+      targetAppendExact targetReducedExact rootExact _
+  change ConcreteElaboration.WireContext.origin result.checked.val targetIds
+      _ = _
+  rw [← targetValueExact]
+  unfold targetValue
+  rw [recursive_origin_cast_ids result.checked.val idsExact appendedValue]
+  unfold appendedValue
+  rw [ConcreteElaboration.origin_appendRightVar]
+  unfold freshValue
+  have freshLengthExact : freshIds.length = freshAtRegion.length := by
+    simp [freshIds]
+  simpa [freshIds, freshAtRegion] using
+    origin_repeatedVar_of_length result.checked.val freshIds newArgument
+      freshAtRegion.length freshLengthExact freshExact index
 
 end ArgumentsSemantics
 end ConcreteWirePrimitive
