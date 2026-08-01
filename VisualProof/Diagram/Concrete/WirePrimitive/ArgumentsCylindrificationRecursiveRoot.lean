@@ -1870,6 +1870,91 @@ theorem recursiveRetainedNodePair_final
         (recursiveItemSeqRename_comp sourceEmbedding correspondence.sourceMap
           sourceMap (fun _ => rfl) sourcePrunedItems).symm
 
+theorem recursiveFinalSourceOrdinary_eq_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (sourceSignature :
+      (source.val.wires wire).sig = .rel sourceArguments)
+    (result : ArgumentResult source wire)
+    (context : ConcreteElaboration.WireContext source.val)
+    (region : source.val.RegionId)
+    (items retained : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions source.val
+      context (source.val.nodesAt region) = some items)
+    (retainedCompiled : ConcreteElaboration.compileNodes? definitions source.val
+      context ((source.val.nodesAt region).filter fun node =>
+        decide (node ∉ argumentSiteNodes result.sites)) = some retained)
+    (contextNodup : context.ids.Nodup)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel sourceArguments))
+    (headForward : ∀ value : Var context.sigs (.rel sourceArguments),
+      ConcreteElaboration.WireContext.origin source.val context.ids value =
+        wire → rho value = head)
+    (headReflect : ∀ value : Var context.sigs (.rel sourceArguments),
+      rho value = head →
+        ConcreteElaboration.WireContext.origin source.val context.ids value =
+          wire) :
+    recursiveOrdinary
+        (UniformIntrinsicRegion.abstractAppliedItems head
+          (items.renameWires rho)) =
+      recursiveLeafItems (retained.renameWires rho) := by
+  rw [recursiveOrdinary_abstractAppliedItems]
+  apply recursiveAbstractOrdinaryItems_compileFilter definitions source.val
+    context rho head (argumentSiteNodes result.sites)
+      (source.val.nodesAt region) items retained compiled
+  · simpa using retainedCompiled
+  · intro node nodeAt
+    exact recursiveFinalRegionClassifier_isSome sourceArguments
+      sourceSignature result.sites context region items compiled contextNodup
+      rho head headForward headReflect node nodeAt
+
+theorem recursiveFinalTargetOrdinary_eq_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (context : ConcreteElaboration.WireContext result.checked.val)
+    (region : source.val.RegionId)
+    (items retained : ItemSeq definitions context.sigs)
+    (compiled : ConcreteElaboration.compileNodes? definitions
+      result.checked.val context
+      (result.checked.val.nodesAt (result.regionImage region)) = some items)
+    (retainedCompiled : ConcreteElaboration.compileNodes? definitions
+      result.checked.val context
+      (((replacementBase result.plan).nodesAt
+          (retainedRegion source region)).map fun retained =>
+        ConcreteWireQuantifier.Internal.checkedNode result.generated
+          (Fin.castAdd result.sites.sites.length retained)) = some retained)
+    (contextNodup : context.ids.Nodup)
+    (rho : WireRenaming context.sigs normalizedContext)
+    (head : Var normalizedContext (.rel result.targetArguments))
+    (headForward :
+      ∀ value : Var context.sigs (.rel result.targetArguments),
+      ConcreteElaboration.WireContext.origin result.checked.val context.ids
+          value = result.targetWire → rho value = head)
+    (headReflect :
+      ∀ value : Var context.sigs (.rel result.targetArguments),
+      rho value = head →
+        ConcreteElaboration.WireContext.origin result.checked.val context.ids
+          value = result.targetWire) :
+    recursiveOrdinary
+        (UniformIntrinsicRegion.abstractAppliedItems head
+          (items.renameWires rho)) =
+      recursiveLeafItems (retained.renameWires rho) := by
+  rw [recursiveOrdinary_abstractAppliedItems]
+  apply recursiveAbstractOrdinaryItems_compileFilter definitions
+    result.checked.val context rho head
+      (argumentSiteNodes result.targetSites)
+      (result.checked.val.nodesAt (result.regionImage region)) items retained
+      compiled
+  · rw [ArgumentResult.targetRetainedNodesAt_exact result region]
+    exact retainedCompiled
+  · intro node nodeAt
+    exact recursiveFinalRegionClassifier_isSome result.targetArguments
+      result.targetWire_signature result.targetSites context
+      (result.regionImage region) items compiled contextNodup rho head
+      headForward headReflect node nodeAt
+
 /-- The root pruned source compiler context embeds and then normalizes into
 the exact inner context of the source root cylindrical block. -/
 def LocalCylindricalFrame.sourceRetainedNormalization
