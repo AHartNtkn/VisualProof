@@ -6,6 +6,99 @@ namespace ArgumentsSemantics
 
 open WirePrimitive
 
+private theorem recursiveRoot_cast_cancel
+    (same : left = right)
+    (value : Var right signature) :
+    same ▸ (same.symm ▸ value) = value := by
+  cases same
+  rfl
+
+/-- Keep a canonical local prefix fixed while independently normalizing the
+inherited outer context.  This is the context action used below the changed
+relation head, where no total concrete source-to-target head map exists. -/
+def recursivePrefixRenaming (localPrefix : List Sig)
+    (outer : WireRenaming sourceOuter targetOuter) :
+    WireRenaming (localPrefix ++ sourceOuter)
+      (localPrefix ++ targetOuter) :=
+  match localPrefix with
+  | [] => outer
+  | signature :: tail =>
+      WireRenaming.lift (recursivePrefixRenaming tail outer) signature
+
+theorem recursivePrefixRenaming_appendLeft
+    (localPrefix : List Sig)
+    (outer : WireRenaming sourceOuter targetOuter)
+    (value : Var localPrefix signature) :
+    recursivePrefixRenaming localPrefix outer
+        (Var.appendLeft value sourceOuter) =
+      Var.appendLeft value targetOuter := by
+  induction localPrefix with
+  | nil => nomatch value
+  | cons head tail induction =>
+      cases value with
+      | here => rfl
+      | there value =>
+          exact congrArg Var.there (induction value)
+
+theorem recursivePrefixRenaming_appendRight
+    (localPrefix : List Sig)
+    (outer : WireRenaming sourceOuter targetOuter)
+    (value : Var sourceOuter signature) :
+    recursivePrefixRenaming localPrefix outer
+        (Var.appendRight localPrefix value) =
+      Var.appendRight localPrefix (outer value) := by
+  induction localPrefix with
+  | nil => rfl
+  | cons head tail induction =>
+      exact congrArg Var.there induction
+
+/-- Normalize one dependent elaborator extension and then apply the selected
+independent normalization to its inherited outer spine. -/
+def recursiveExtendedNormalization
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (outer : WireRenaming context.sigs normalizedOuter) :
+    WireRenaming (context.extend region).sigs
+      (((diagram.wiresAt region).map fun wire =>
+          (diagram.wires wire).sig) ++ normalizedOuter) :=
+  fun {_} value =>
+    recursivePrefixRenaming
+      ((diagram.wiresAt region).map fun wire =>
+        (diagram.wires wire).sig) outer
+      (recursiveRegionNormalization context region value)
+
+theorem recursiveExtendedNormalization_local
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (outer : WireRenaming context.sigs normalizedOuter)
+    (value : Var
+      ((diagram.wiresAt region).map fun wire =>
+        (diagram.wires wire).sig) signature) :
+    recursiveExtendedNormalization context region outer
+        ((ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendLeft value context.sigs) =
+      Var.appendLeft value normalizedOuter := by
+  unfold recursiveExtendedNormalization recursiveRegionNormalization
+  rw [recursiveRoot_cast_cancel]
+  exact recursivePrefixRenaming_appendLeft _ _ _
+
+theorem recursiveExtendedNormalization_outer
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : diagram.RegionId)
+    (outer : WireRenaming context.sigs normalizedOuter)
+    (value : Var context.sigs signature) :
+    recursiveExtendedNormalization context region outer
+        ((ConcreteElaboration.WireContext.sigs_extend context region).symm ▸
+          Var.appendRight
+            ((diagram.wiresAt region).map fun wire =>
+              (diagram.wires wire).sig) value) =
+      Var.appendRight
+        ((diagram.wiresAt region).map fun wire =>
+          (diagram.wires wire).sig) (outer value) := by
+  unfold recursiveExtendedNormalization recursiveRegionNormalization
+  rw [recursiveRoot_cast_cancel]
+  exact recursivePrefixRenaming_appendRight _ _ _
+
 /-- Ordered node compilation is natural under inclusion into a larger
 duplicate-free context of the same checked diagram. -/
 theorem recursiveCompileNodes?_contextEmbedding
