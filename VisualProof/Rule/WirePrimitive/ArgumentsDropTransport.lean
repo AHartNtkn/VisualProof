@@ -146,6 +146,60 @@ theorem inverseTransportEndpointMap_mem_retained
   rw [endpointExact, wireCarrierExact]
   exact plannedMember
 
+/-- The endpoint introduced only by the inverse extension maps directly to
+the construction-owned endpoint erased by the forward drop. -/
+theorem inverseTransportEndpointMap_inserted
+    {planned real : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {forwardWire : planned.val.WireId}
+    {position : Nat}
+    (forward : AppliedArgDrop planned orientation forwardWire position)
+    {backwardWire : real.val.WireId}
+    {newArgument : Sig}
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (backward : AppliedArgExtend real orientation backwardWire position
+      newArgument (forward.inverseAttachments targetIso wireExact))
+    (argumentExact :
+      forward.sourceArgumentList[position]? = some newArgument)
+    (site : Fin backward.sourceSites.sites.length) :
+    let attachment :=
+      ((forward.inverseAttachments targetIso wireExact)[site.val]?).getD
+        backwardWire
+    let targetWire := backward.wireEquiv attachment
+    let endpoint : CEndpoint backward.target.val.nodeCount :=
+      ⟨backward.targetNode site, .arg position⟩
+    forward.inverseTransportEndpointMap backward targetIso targetWire endpoint =
+      ⟨(forward.sourceSites.sites.get
+        (forward.inverseTransportSitePosition backward targetIso
+          wireExact site)).node, .arg position⟩ ∧
+    forward.inverseTransportWireEquiv backward targetIso targetWire =
+      ((forward.sourceSites.sites.get
+        (forward.inverseTransportSitePosition backward targetIso
+          wireExact site)).arguments[position]?).getD forwardWire := by
+  dsimp only
+  let realNode := (backward.sourceSites.sites.get site).node
+  have generated : realNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes backward.sourceSites := by
+    unfold ConcreteWirePrimitive.argumentSiteNodes
+    exact List.mem_map.mpr
+      ⟨backward.sourceSites.sites.get site, List.get_mem _ _, rfl⟩
+  have backwardNode : backward.nodeEquiv realNode =
+      backward.targetNode site := backward.nodeEquiv_generated site
+  have backwardInverse : backward.nodeEquiv.symm
+      (backward.targetNode site) = realNode := by
+    rw [← backwardNode]
+    exact backward.nodeEquiv.left_inv realNode
+  constructor
+  · unfold inverseTransportEndpointMap
+    rw [show backward.nodeEquiv.symm (backward.targetNode site) =
+      realNode from backwardInverse, dif_pos generated]
+    congr 1
+    exact forward.inverseTransport_targetNode backward targetIso
+      wireExact site
+  · exact forward.inverseTransport_insertedWire targetIso wireExact
+      backward site
+
 end AppliedArgDrop
 
 end Arguments

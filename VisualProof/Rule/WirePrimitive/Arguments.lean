@@ -3155,6 +3155,16 @@ def sourceSites
     AllAppliedSites source wire :=
   applied.result.sites
 
+def targetNode
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArgDrop source orientation wire position)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.result.target.val.NodeId :=
+  applied.result.targetNode site
+
 theorem sourceWire_signature
     {source : CheckedDiagram definitions}
     {orientation : Orientation}
@@ -3503,6 +3513,19 @@ def sourceSites
       AppliedArgExtend source orientation wire position newArgument
         attachments) : AllAppliedSites source wire :=
   applied.result.sites
+
+def targetNode
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    {newArgument : Sig}
+    {attachments : List source.val.WireId}
+    (applied : AppliedArgExtend source orientation wire position newArgument
+      attachments)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.result.target.val.NodeId :=
+  applied.result.targetNode site
 
 theorem sourceWire_signature
     {source : CheckedDiagram definitions}
