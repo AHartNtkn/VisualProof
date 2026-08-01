@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationRecursiveHoles
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalityGenerated
 
 namespace VisualProof
 namespace ConcreteWirePrimitive
@@ -1688,6 +1689,40 @@ theorem recursiveCompileChildrenCons
           exact (Option.some.inj (by
             simpa [bodyCompiled, restCompiled] using compiled)).symm
 
+/-- Successful ordered child compilation is stable when the recursive region
+fuel is increased. -/
+theorem recursiveCompileChildren_fuel_mono
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (sourceFuel targetFuel : Nat)
+    (fuelLe : sourceFuel ≤ targetFuel)
+    (context : ConcreteElaboration.WireContext diagram) :
+    ∀ (children : List diagram.RegionId)
+      (items : ItemSeq definitions context.sigs),
+      ConcreteElaboration.compileChildrenWith? definitions diagram
+          (ConcreteElaboration.compileRegion? definitions diagram sourceFuel)
+          context children = some items →
+      ConcreteElaboration.compileChildrenWith? definitions diagram
+          (ConcreteElaboration.compileRegion? definitions diagram targetFuel)
+          context children = some items
+  | [], items, compiled => by
+      simpa [ConcreteElaboration.compileChildrenWith?] using compiled
+  | child :: tail, items, compiled => by
+      obtain ⟨body, rest, bodyCompiled, restCompiled, itemsExact⟩ :=
+        recursiveCompileChildrenCons definitions diagram
+          (ConcreteElaboration.compileRegion? definitions diagram sourceFuel)
+          context child tail items compiled
+      subst items
+      have bodyTarget :=
+        InsertionCompilation.NaturalityInternal.compileRegion_fuel_mono
+          definitions diagram sourceFuel targetFuel fuelLe child context
+          bodyCompiled
+      have restTarget := recursiveCompileChildren_fuel_mono definitions diagram
+        sourceFuel targetFuel fuelLe context tail rest restCompiled
+      simp only [ConcreteElaboration.compileChildrenWith?]
+      rw [bodyTarget, restTarget]
+      rfl
+
 /-- Ordered successful child compilations become an ordered list of
 transported cylindrical shapes, represented only by `.cut` items. -/
 theorem recursiveChildrenReceipts
@@ -2244,7 +2279,7 @@ theorem recursiveCylindricalShape_complete
       (targetOuter : ConcreteElaboration.WireContext result.checked.val)
       (outer : WireRenaming sourceOuter.sigs targetOuter.sigs),
       source.val.climb depth region = some source.val.root →
-      depth + fuel = source.val.regionCount + 1 →
+      source.val.regionCount + 1 ≤ depth + fuel →
       headDepth < depth →
       ConcreteElaboration.ContextAbove source.val sourceOuter region →
       ConcreteElaboration.ContextAbove result.checked.val targetOuter
@@ -2359,7 +2394,8 @@ theorem recursiveCylindricalShape_complete
               region child childMember
             have childDepth := ConcreteElaboration.child_depth source.val child
               region depth childData regionClimb
-            have childFuel : depth + 1 + fuel = source.val.regionCount + 1 := by
+            have childFuel : source.val.regionCount + 1 ≤
+                depth + 1 + fuel := by
               omega
             have childBelow : headDepth < depth + 1 := by omega
             have childSourceAbove := ConcreteElaboration.extend_above_child
