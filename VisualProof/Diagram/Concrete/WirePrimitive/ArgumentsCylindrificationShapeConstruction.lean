@@ -544,6 +544,60 @@ theorem LocalCylindricalFrame.rootBounds_retainedLocal_origin
     newArgument result accepted value]
   rw [frame.sourceReducedContext_origin_retain]
 
+/-- Concrete acted-scope context containing only retained source locals and
+the construction-owned outer spine. -/
+def LocalCylindricalFrame.sourceRetainedVisibleContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ConcreteElaboration.WireContext source.val :=
+  ⟨frame.sourceReducedContext.ids ++ pair.sourceSiteOuter.ids⟩
+
+/-- Target counterpart of `sourceRetainedVisibleContext`; replacement heads
+and fresh arity wires are deliberately absent. -/
+def LocalCylindricalFrame.targetRetainedVisibleContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    ConcreteElaboration.WireContext result.checked.val :=
+  ⟨frame.mappedSourceReducedContext.ids ++ pair.targetSiteOuter.ids⟩
+
+/-- The pruned acted-scope contexts are related by the canonical construction
+wire map, with no compatibility wrapper for either displaced relation head. -/
+def LocalCylindricalFrame.retainedVisibleContext
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    result.RetainedContext (frame.sourceRetainedVisibleContext pair)
+      (frame.targetRetainedVisibleContext pair) := by
+  let localContext :=
+    frame.reducedRetainedContext newArgument result accepted
+  refine
+    { ids_exact := ?_
+      source_retained := ?_ }
+  · intro sourceWire member
+    simp only [LocalCylindricalFrame.sourceRetainedVisibleContext] at member
+    rcases List.mem_append.mp member with localMember | outerMember
+    · exact localContext.source_retained sourceWire localMember
+    · exact pair.siteOuterRetained.source_retained sourceWire outerMember
+  · simp only [LocalCylindricalFrame.targetRetainedVisibleContext,
+      LocalCylindricalFrame.sourceRetainedVisibleContext, List.map_append]
+    rw [localContext.ids_exact, pair.siteOuterRetained.ids_exact]
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled
