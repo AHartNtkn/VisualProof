@@ -222,7 +222,11 @@ structure AppliedArityShift
   private ledger :
     ArgumentsSemantics.ScopedArityShiftLedger result sourceArguments
       newArgument
+  private accepted :
+    ConcreteWirePrimitive.arityShift source wire newArgument = .ok result
   private source_removed_exact : result.sourceRemovedWires = [wire]
+  private local_count_exact :
+    result.spec.localCount = result.sites.sites.length
 
 structure AppliedArityUnshift
     (source : CheckedDiagram definitions)
@@ -237,6 +241,14 @@ structure AppliedArityUnshift
   private ledger :
     ArgumentsSemantics.ScopedArityUnshiftLedger result sourceArguments
       fixedSignature
+  private accepted :
+    ConcreteWirePrimitive.arityUnshift source wire position = .ok result
+  private local_count_exact : result.spec.localCount = 0
+  private removed_local_exact :
+    ∀ sourceWire, sourceWire ∈ result.spec.removedWires →
+      ∃ site, site ∈ result.sites.sites ∧
+        (source.val.wires sourceWire).endpoints =
+          [⟨site.node, .arg position⟩]
 
 structure AppliedArgPermute
     (source : CheckedDiagram definitions)
@@ -353,6 +365,32 @@ def source
     {newArgument : Sig}
     (_ : AppliedArityShift source wire newArgument) := source
 
+/-- Checker-owned concrete construction receipt for transport proofs. -/
+def argumentResult
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :=
+  applied.result
+
+/-- Exhaustive source application sites of the shifted head. -/
+def sourceSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    AllAppliedSites source wire :=
+  applied.result.sites
+
+/-- Arity shift removes only its acted source head. -/
+theorem sourceRemovedWires_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument) :
+    applied.argumentResult.sourceRemovedWires = [wire] :=
+  applied.source_removed_exact
+
 /-- The exact source relation argument vector selected by the checker. -/
 def sourceArgumentList
     {source : CheckedDiagram definitions}
@@ -395,6 +433,68 @@ def targetSites
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.frame.targetSites
 
+/-- Canonical generated target node for one ordered source site. -/
+def targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.target.val.NodeId :=
+  applied.result.targetNode site
+
+/-- Canonical fresh local argument wire corresponding to one ordered source
+site. -/
+def targetLocalWire
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.target.val.WireId :=
+  applied.result.targetLocalWire
+    (Fin.cast applied.local_count_exact.symm site)
+
+/-- Every indexed shift-local wire belongs to the construction's exact
+fresh-local block. -/
+theorem targetLocalWire_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.targetLocalWire site ∈
+      applied.argumentResult.targetLocalWires := by
+  unfold targetLocalWire ConcreteWirePrimitive.ArgumentResult.targetLocalWires
+  apply List.mem_map.mpr
+  exact ⟨Fin.cast applied.local_count_exact.symm site,
+    Data.Finite.mem_allFin _, rfl⟩
+
+/-- The shift construction's removed target block consists exactly of its
+fresh head and one indexed local wire per source site. -/
+theorem targetRemovedWire_cases
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (targetWire : applied.target.val.WireId)
+    (removed : targetWire ∈
+      applied.argumentResult.targetRemovedWires) :
+    targetWire = applied.targetWire ∨
+      ∃ site : Fin applied.sourceSites.sites.length,
+        targetWire = applied.targetLocalWire site := by
+  unfold ConcreteWirePrimitive.ArgumentResult.targetRemovedWires at removed
+  rcases List.mem_cons.mp removed with head | removedLocal
+  · exact Or.inl head
+  · unfold ConcreteWirePrimitive.ArgumentResult.targetLocalWires at removedLocal
+    rcases List.mem_map.mp removedLocal with ⟨fresh, _member, exact⟩
+    right
+    let site : Fin applied.sourceSites.sites.length :=
+      Fin.cast applied.local_count_exact fresh
+    refine ⟨site, exact.symm.trans ?_⟩
+    unfold targetLocalWire
+    congr 2
+
 /-- Arity shift appends exactly one argument signature. -/
 theorem targetArguments_exact
     {source : CheckedDiagram definitions}
@@ -417,6 +517,48 @@ theorem targetArguments_exact
       | nil => rfl
       | cons head tail induction =>
           simp [ConcreteWirePrimitive.insertAt, induction]
+
+/-- The appended argument port of each generated shift node is owned by its
+exact construction-local wire. -/
+theorem targetNode_local_owner
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {newArgument : Sig}
+    (applied : AppliedArityShift source wire newArgument)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.target.val.endpointOwner?
+        ⟨applied.targetNode site,
+          .arg (applied.sourceSites.sites.get site).arguments.length⟩ =
+      some (applied.targetLocalWire site) := by
+  have sourceLength :
+      (applied.sourceSites.sites.get site).arguments.length =
+      applied.sourceArgumentList.length := by
+    exact (applied.sourceSites.sites.get site).arguments_length.trans
+      (congrArg List.length
+        (ConcreteWirePrimitive.appliedSite_arguments_eq_relationArguments
+          applied.sourceArgumentList applied.sourceWire_signature
+          (applied.sourceSites.sites.get site)))
+  have referenceBound :
+      (applied.sourceSites.sites.get site).arguments.length <
+      (applied.result.spec.arguments site).length := by
+    change
+      (applied.result.sites.sites.get site).arguments.length <
+        (applied.result.spec.arguments site).length
+    rw [ArgumentsSemantics.arityShift_spec_arguments_length source wire
+      applied.sourceArgumentList applied.sourceWire_signature
+      applied.sourceSites newArgument applied.result applied.accepted]
+    simp
+  have targetBound :
+      (applied.sourceSites.sites.get site).arguments.length <
+      applied.result.targetArguments.length := by
+    rw [applied.targetArguments_exact, sourceLength]
+    simp
+  have owner :=
+    ArgumentsSemantics.arityShift_targetNode_local_owner source wire
+      applied.sourceArgumentList applied.sourceWire_signature
+      applied.sourceSites newArgument applied.result applied.accepted site
+      referenceBound targetBound
+  simpa [targetNode, targetLocalWire] using owner
 
 /-- Exact relation signature of the fresh live wire. -/
 theorem targetWire_signature
@@ -490,6 +632,41 @@ def source
     {position : Nat}
     (_ : AppliedArityUnshift source wire position) := source
 
+/-- Checker-owned concrete construction receipt for transport proofs. -/
+def argumentResult
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :=
+  applied.result
+
+/-- Exhaustive source application sites of the unshifted head. -/
+def sourceSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    AllAppliedSites source wire :=
+  applied.result.sites
+
+/-- Exact source argument vector selected by arity unshift. -/
+def sourceArgumentList
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) : List Sig :=
+  applied.sourceArguments
+
+/-- Exact relation signature of the unshift source head. -/
+theorem sourceWire_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    (source.val.wires wire).sig = .rel applied.sourceArgumentList :=
+  applied.sourceSignature
+
+
 def target
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -512,6 +689,53 @@ def targetSites
     (applied : AppliedArityUnshift source wire position) :
     AllAppliedSites applied.target applied.targetWire :=
   applied.ledger.frame.targetSites
+
+/-- Arity unshift creates no local target wires, so its generated removal
+block consists only of the replacement head. -/
+theorem targetRemovedWires_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    applied.argumentResult.targetRemovedWires = [applied.targetWire] := by
+  exact applied.result.targetRemovedWires_headOnly applied.local_count_exact
+
+/-- Full source removal set: the acted head followed by every selected local
+argument wire. -/
+def sourceRemovedWires
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position) :
+    List source.val.WireId :=
+  applied.result.sourceRemovedWires
+
+/-- Every removed non-head wire is one checked singleton local argument. -/
+theorem removedLocal_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position)
+    (sourceWire : source.val.WireId)
+    (removed : sourceWire ∈ applied.result.spec.removedWires) :
+    ∃ site, site ∈ applied.sourceSites.sites ∧
+      (source.val.wires sourceWire).endpoints =
+        [⟨site.node, .arg position⟩] :=
+  applied.removed_local_exact sourceWire removed
+
+/-- Every source site owns one checked singleton local wire selected for
+unshift removal. -/
+theorem siteLocal_removed
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position)
+    (site : Fin applied.sourceSites.sites.length) :
+    ∃ sourceWire, sourceWire ∈ applied.result.spec.removedWires ∧
+      (source.val.wires sourceWire).endpoints =
+        [⟨(applied.sourceSites.sites.get site).node, .arg position⟩] := by
+  exact ConcreteWirePrimitive.arityUnshift_site_local_removed source wire
+    position applied.result applied.accepted site
 
 def tag
     {source : CheckedDiagram definitions}
@@ -5564,8 +5788,12 @@ def applyArityShift
           | some ledger =>
               exact .ok
                 ⟨result, sourceArguments, sourceSignature, ledger,
+                  accepted,
                   ConcreteWirePrimitive.arityShift_sourceRemovedWires_exact
-                    source wire newArgument result accepted⟩
+                    source wire newArgument result accepted,
+                  ConcreteWirePrimitive.arityShift_localCount_exact source
+                    wire sourceArguments sourceSignature result.sites
+                    newArgument result accepted⟩
 
 def applyArityUnshift
     (source : CheckedDiagram definitions)
@@ -5573,22 +5801,27 @@ def applyArityUnshift
     (position : Nat) :
     Except WireArgumentError
       (AppliedArityUnshift source wire position) := do
-  let result ←
-    (ConcreteWirePrimitive.arityUnshift source wire position).mapError
-      .concreteRejected
+  match accepted :
+      ConcreteWirePrimitive.arityUnshift source wire position with
+  | .error error => throw (.concreteRejected error)
+  | .ok result =>
   match sourceSignature : (source.val.wires wire).sig with
   | .iota => throw .semanticLedgerRejected
   | .rel sourceArguments =>
       match _fixedExact : sourceArguments[position]? with
       | none => throw .semanticLedgerRejected
-      | some fixedSignature =>
+      | some fixedSignature => do
           let ledger ←
             optionToExcept .semanticLedgerRejected <|
               ArgumentsSemantics.checkScopedArityUnshiftLedger result
                 sourceArguments sourceSignature position fixedSignature
           pure
             ⟨result, sourceArguments, sourceSignature, fixedSignature,
-              ledger⟩
+              ledger, accepted,
+              ConcreteWirePrimitive.arityUnshift_localCount_exact source wire
+                position result accepted,
+              ConcreteWirePrimitive.arityUnshift_removedWire_local_exact
+                source wire position result accepted⟩
 
 def applyArgPermute
     (source : CheckedDiagram definitions)

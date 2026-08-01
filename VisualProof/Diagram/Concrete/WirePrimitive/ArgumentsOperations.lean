@@ -36,6 +36,34 @@ theorem replaceAppliedEnds_localCount_exact
         subst result
         rfl
 
+/-- A successful replacement retains the exact source-wire removal list
+requested by its construction specification. -/
+theorem replaceAppliedEnds_removedWires_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (sites : AllAppliedSites source wire)
+    (spec : ReplacementSpec source wire sites)
+    (sourceRemovedExhausted :
+      ∀ sourceWire, sourceWire ∈ wire :: spec.removedWires →
+        ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
+          endpoint.node ∈ argumentSiteNodes sites)
+    (result : ArgumentResult source wire)
+    (accepted :
+      replaceAppliedEnds source wire sites spec sourceRemovedExhausted =
+        .ok result) :
+    result.spec.removedWires = spec.removedWires := by
+  unfold replaceAppliedEnds at accepted
+  split at accepted <;> try contradiction
+  next removal _ =>
+    simp only at accepted
+    split at accepted <;> try contradiction
+    next checked _ =>
+      split at accepted <;> try contradiction
+      next targetSites _ =>
+        have resultExact := Except.ok.inj accepted
+        subst result
+        rfl
+
 /-- A successful replacement retains the operation-local signature function
 requested by its construction specification. -/
 theorem replaceAppliedEnds_localSignature_exact
@@ -620,22 +648,33 @@ theorem arityShift_scopeLocalization
       (sites.sites.get fresh).head_visible
   · simpa [spec] using accepted
 
-private structure LocalUnshiftWiresReceipt
+structure LocalUnshiftWiresReceipt
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
-    (sites : AllAppliedSites source wire) where
+    (sites : AllAppliedSites source wire)
+    (position : Nat) where
   wires : List source.val.WireId
+  local_exact :
+    ∀ sourceWire, sourceWire ∈ wires →
+      ∃ site, site ∈ sites.sites ∧
+        (source.val.wires sourceWire).endpoints =
+          [⟨site.node, .arg position⟩]
+  local_complete :
+    ∀ site : Fin sites.sites.length,
+      ∃ sourceWire, sourceWire ∈ wires ∧
+        (source.val.wires sourceWire).endpoints =
+          [⟨(sites.sites.get site).node, .arg position⟩]
   exhausted :
     ∀ sourceWire, sourceWire ∈ wires →
       ∀ endpoint, endpoint ∈ (source.val.wires sourceWire).endpoints →
         endpoint.node ∈ argumentSiteNodes sites
 
-private def localUnshiftWires?
+def localUnshiftWires?
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
     (sites : AllAppliedSites source wire)
     (position : Nat) :
-    Except ArgumentError (LocalUnshiftWiresReceipt sites) := by
+    Except ArgumentError (LocalUnshiftWiresReceipt sites position) := by
   let selected := sites.sites.map fun site => site.arguments[position]?
   if missing : selected.any Option.isNone then
     exact .error .invalidPosition
@@ -648,6 +687,75 @@ private def localUnshiftWires?
             [⟨pair.1.node, .arg position⟩]) then
         exact .ok
           { wires := locals
+            local_exact := by
+              intro sourceWire removed
+              have missingFalse : selected.any Option.isNone = false := by
+                cases exactValue : selected.any Option.isNone with
+                | false => rfl
+                | true => simp [exactValue] at missing
+              have allSome :
+                  ∀ value, value ∈ selected → value.isSome := by
+                intro value member
+                have notNone :=
+                  (List.any_eq_false.mp missingFalse) value member
+                cases value <;> simp_all
+              have localsLength : locals.length = selected.length := by
+                apply List.filterMap_length_eq_length.mpr
+                intro value member
+                exact allSome value member
+              have selectedLength : selected.length = sites.sites.length := by
+                simp [selected]
+              have lengthExact : locals.length = sites.sites.length :=
+                localsLength.trans selectedLength
+              have mappedMember :
+                  sourceWire ∈ (sites.sites.zip locals).map Prod.snd := by
+                rw [List.map_snd_zip (by omega)]
+                exact removed
+              rcases List.mem_map.mp mappedMember with
+                ⟨pair, pairMember, pairExact⟩
+              rcases pair with ⟨site, localWire⟩
+              simp only at pairExact
+              subst localWire
+              have endpointsCheck :=
+                (List.all_eq_true.mp endpointsAccepted)
+                  (site, sourceWire) pairMember
+              exact ⟨site, (List.of_mem_zip pairMember).1,
+                eq_of_beq endpointsCheck⟩
+            local_complete := by
+              intro site
+              have missingFalse : selected.any Option.isNone = false := by
+                cases exactValue : selected.any Option.isNone with
+                | false => rfl
+                | true => simp [exactValue] at missing
+              have allSome :
+                  ∀ value, value ∈ selected → value.isSome := by
+                intro value member
+                have notNone :=
+                  (List.any_eq_false.mp missingFalse) value member
+                cases value <;> simp_all
+              have localsLength : locals.length = selected.length := by
+                apply List.filterMap_length_eq_length.mpr
+                intro value member
+                exact allSome value member
+              have selectedLength : selected.length = sites.sites.length := by
+                simp [selected]
+              have lengthExact : locals.length = sites.sites.length :=
+                localsLength.trans selectedLength
+              let localIndex : Fin locals.length :=
+                Fin.cast lengthExact.symm site
+              let pairIndex : Fin (sites.sites.zip locals).length :=
+                ⟨site.val, by simp [lengthExact]⟩
+              have pairMember := List.get_mem (sites.sites.zip locals) pairIndex
+              have pairExact :
+                  (sites.sites.zip locals).get pairIndex =
+                    (sites.sites.get site, locals.get localIndex) := by
+                apply Prod.ext <;> simp [pairIndex, localIndex]
+              rw [pairExact] at pairMember
+              have endpointsCheck :=
+                (List.all_eq_true.mp endpointsAccepted)
+                  (sites.sites.get site, locals.get localIndex) pairMember
+              exact ⟨locals.get localIndex, List.get_mem _ _,
+                eq_of_beq endpointsCheck⟩
             exhausted := by
               intro sourceWire removed endpoint incident
               have missingFalse : selected.any Option.isNone = false :=
@@ -723,6 +831,131 @@ def arityUnshift
     · subst sourceWire
       exact allAppliedSites_removed_exhausted sites endpoint incident
     · exact localReceipt.exhausted sourceWire removedLocal endpoint incident)
+
+/-- A successful arity unshift retains the exact checked local-wire
+selection used by its replacement plan. -/
+theorem arityUnshift_localReceipt_exists
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : arityUnshift source wire position = .ok result) :
+    ∃ sites : AllAppliedSites source wire,
+      ∃ receipt : LocalUnshiftWiresReceipt sites position,
+        result.sites = sites ∧
+          localUnshiftWires? sites position = .ok receipt ∧
+          result.spec.removedWires = receipt.wires ∧
+          result.spec.localCount = 0 := by
+  unfold arityUnshift at accepted
+  cases relationAccepted : checkedRelationArguments source wire with
+  | error error =>
+      rw [relationAccepted] at accepted
+      contradiction
+  | ok relationArguments =>
+      rw [relationAccepted] at accepted
+      change
+        (if !validPosition relationArguments position then
+            Except.error ArgumentError.invalidPosition
+          else do
+            let sites ← checkedArgumentSites source wire
+            let localReceipt ← localUnshiftWires? sites position
+            let spec : ReplacementSpec source wire sites :=
+              { targetArguments := eraseAt relationArguments position
+                removedWires := localReceipt.wires
+                localCount := 0
+                localSignature := Fin.elim0
+                localScope := Fin.elim0
+                arguments := fun site =>
+                  existingReferences <|
+                    eraseAt (sites.sites.get site).arguments position }
+            replaceAppliedEnds source wire sites spec _) =
+          .ok result at accepted
+      cases valid : validPosition relationArguments position with
+      | false => simp [valid] at accepted
+      | true =>
+          simp [valid] at accepted
+          cases sitesAccepted : checkedArgumentSites source wire with
+          | error error =>
+              rw [sitesAccepted] at accepted
+              contradiction
+          | ok sites =>
+              rw [sitesAccepted] at accepted
+              dsimp [bind, Except.bind] at accepted
+              cases localAccepted : localUnshiftWires? sites position with
+              | error error =>
+                  rw [localAccepted] at accepted
+                  contradiction
+              | ok receipt =>
+                  rw [localAccepted] at accepted
+                  dsimp [bind, Except.bind] at accepted
+                  let spec : ReplacementSpec source wire sites :=
+                    { targetArguments := eraseAt relationArguments position
+                      removedWires := receipt.wires
+                      localCount := 0
+                      localSignature := Fin.elim0
+                      localScope := Fin.elim0
+                      arguments := fun site =>
+                        existingReferences <|
+                          eraseAt (sites.sites.get site).arguments position }
+                  refine ⟨sites, receipt, ?_, localAccepted, ?_, ?_⟩
+                  · exact replaceAppliedEnds_sites_exact source wire sites spec
+                      _ result accepted
+                  · exact replaceAppliedEnds_removedWires_exact source wire
+                      sites spec _ result accepted
+                  · exact replaceAppliedEnds_localCount_exact source wire sites
+                      spec _ result accepted
+
+/-- Every non-head source wire removed by arity unshift is exactly one
+site-local selected argument wire, with its singleton incidence retained. -/
+theorem arityUnshift_removedWire_local_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : arityUnshift source wire position = .ok result)
+    (sourceWire : source.val.WireId)
+    (removed : sourceWire ∈ result.spec.removedWires) :
+    ∃ site, site ∈ result.sites.sites ∧
+      (source.val.wires sourceWire).endpoints =
+        [⟨site.node, .arg position⟩] := by
+  obtain ⟨sites, receipt, sitesExact, _localAccepted, removedExact,
+      _localCountExact⟩ :=
+    arityUnshift_localReceipt_exists source wire position result accepted
+  subst sites
+  rw [removedExact] at removed
+  exact receipt.local_exact sourceWire removed
+
+/-- Every checked source site contributes exactly one local argument wire to
+the arity-unshift removal set. -/
+theorem arityUnshift_site_local_removed
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : arityUnshift source wire position = .ok result)
+    (site : Fin result.sites.sites.length) :
+    ∃ sourceWire, sourceWire ∈ result.spec.removedWires ∧
+      (source.val.wires sourceWire).endpoints =
+        [⟨(result.sites.sites.get site).node, .arg position⟩] := by
+  obtain ⟨sites, receipt, sitesExact, _localAccepted, removedExact,
+      _localCountExact⟩ :=
+    arityUnshift_localReceipt_exists source wire position result accepted
+  subst sites
+  obtain ⟨sourceWire, removed, endpoints⟩ := receipt.local_complete site
+  exact ⟨sourceWire, by simpa [removedExact] using removed, endpoints⟩
+
+/-- Arity unshift allocates no operation-local target wire. -/
+theorem arityUnshift_localCount_exact
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId)
+    (position : Nat)
+    (result : ArgumentResult source wire)
+    (accepted : arityUnshift source wire position = .ok result) :
+    result.spec.localCount = 0 := by
+  obtain ⟨_sites, _receipt, _sitesExact, _localAccepted,
+      _removedExact, localCountExact⟩ :=
+    arityUnshift_localReceipt_exists source wire position result accepted
+  exact localCountExact
 
 /-- Reorder every applied argument tuple by one checked permutation. -/
 def argPermute

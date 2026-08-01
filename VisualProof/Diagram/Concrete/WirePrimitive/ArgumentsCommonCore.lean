@@ -1315,6 +1315,50 @@ def sourceWireOfRetainedTarget
   Internal.sourceRetainedWire source result.sourceRemovedWires
     (result.retainedBaseWireOfTarget targetWire retained)
 
+/-- Canonical images of retained source wires lie outside the generated
+head/local suffix. -/
+theorem retainedWireImage_not_targetRemoved
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.retainedWireImage sourceWire retained ∉
+      result.targetRemovedWires := by
+  rw [result.targetRemovedWire_iff_ge]
+  unfold ArgumentResult.retainedWireImage
+  simp [Internal.checkedWire]
+
+/-- Retained embeddings are proof-irrelevant and respect equality of their
+source wire. -/
+theorem retainedWireImage_congr
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (left right : source.val.WireId)
+    (leftRetained : left ∉ result.sourceRemovedWires)
+    (rightRetained : right ∉ result.sourceRemovedWires)
+    (exact : left = right) :
+    result.retainedWireImage left leftRetained =
+      result.retainedWireImage right rightRetained := by
+  subst right
+  rfl
+
+/-- Retained source recovery is proof-irrelevant and respects equality of
+its checked target wire. -/
+theorem sourceWireOfRetainedTarget_congr
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (left right : result.checked.val.WireId)
+    (leftRetained : left ∉ result.targetRemovedWires)
+    (rightRetained : right ∉ result.targetRemovedWires)
+    (exact : left = right) :
+    result.sourceWireOfRetainedTarget left leftRetained =
+      result.sourceWireOfRetainedTarget right rightRetained := by
+  subst right
+  rfl
+
 /-- Re-embedding the recovered retained source wire returns the exact checked
 target wire. -/
 theorem retainedWireImage_sourceWireOfRetainedTarget
