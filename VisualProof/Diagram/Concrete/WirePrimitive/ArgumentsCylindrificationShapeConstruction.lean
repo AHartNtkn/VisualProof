@@ -668,6 +668,99 @@ theorem LocalCylindricalFrame.retainedSourceNode_port_visible
     simp
   · exact List.mem_append_right _ outerMember
 
+/-- Every retained source node local to the acted scope compiles in the
+construction-owned pruned context.  No unrelated local, replacement head,
+or fresh arity wire is needed by this compilation. -/
+theorem LocalCylindricalFrame.compileRetainedSourceNode?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt (source.val.wires wire).scope)
+    (nodeRetained : node ∉ argumentSiteNodes result.sites) :
+    ∃ item,
+      ConcreteElaboration.Internal.compileNode? definitions source.val
+          (frame.sourceRetainedVisibleContext pair) node = some item := by
+  apply ConcreteElaboration.compileNode?_complete_of_required_visible
+    definitions source.val source.property
+  intro port _portRequired sourceWire sourceOwner
+  exact frame.retainedSourceNode_port_visible sourceArguments newArgument
+    result accepted pair node nodeAt nodeRetained port sourceWire sourceOwner
+
+/-- Removing the rewritten local head from a canonical site context preserves
+duplicate-freedom of the complete retained source context. -/
+theorem LocalCylindricalFrame.sourceRetainedVisibleContext_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    (frame.sourceRetainedVisibleContext pair).ids.Nodup := by
+  have visibleNodup := siteVisibleNodup frame.sourceScope
+  rw [pair.sourceVisibleContextExact] at visibleNodup
+  unfold ConcreteElaboration.WireContext.extend at visibleNodup
+  rw [List.nodup_append] at visibleNodup
+  simp only [LocalCylindricalFrame.sourceRetainedVisibleContext]
+  rw [frame.sourceReducedContext_ids_filter, List.nodup_append]
+  refine ⟨visibleNodup.1.filter _, visibleNodup.2.1, ?_⟩
+  intro localWire localMember outerWire outerMember same
+  exact visibleNodup.2.2 localWire (List.mem_filter.mp localMember).1
+    outerWire outerMember same
+
+/-- The paired pruned context has a duplicate-free target identifier order. -/
+theorem LocalCylindricalFrame.targetRetainedVisibleContext_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    {sourceArguments : List Sig}
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame) :
+    (frame.targetRetainedVisibleContext pair).ids.Nodup := by
+  exact (frame.retainedVisibleContext newArgument result accepted pair).target_nodup
+    (frame.sourceRetainedVisibleContext_nodup pair)
+
+/-- A retained acted-scope node compiles on both sides to the canonical
+wire-renamed intrinsic item in construction-owned pruned contexts. -/
+theorem LocalCylindricalFrame.compileRetainedNodePair?_complete
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sourceArguments : List Sig)
+    (newArgument : Sig)
+    (result : ArgumentResult source wire)
+    (accepted : arityShift source wire newArgument = .ok result)
+    (frame : LocalCylindricalFrame result sourceArguments)
+    (pair : result.FrameContextPair (ArgumentResult.RetainedContext.empty result)
+      frame.sourceScope.frame frame.targetScope.frame)
+    (node : source.val.NodeId)
+    (nodeAt : node ∈ source.val.nodesAt (source.val.wires wire).scope)
+    (nodeRetained : node ∉ argumentSiteNodes result.sites) :
+    ∃ sourceItem,
+      ConcreteElaboration.Internal.compileNode? definitions source.val
+          (frame.sourceRetainedVisibleContext pair) node = some sourceItem ∧
+        ConcreteElaboration.Internal.compileNode? definitions result.checked.val
+            (frame.targetRetainedVisibleContext pair)
+            (result.retainedNodeImage node nodeRetained) =
+          some (sourceItem.renameWires
+            (frame.retainedVisibleContext newArgument result accepted pair).wireRenaming) := by
+  obtain ⟨sourceItem, sourceCompiled⟩ :=
+    frame.compileRetainedSourceNode?_complete sourceArguments newArgument
+      result accepted pair node nodeAt nodeRetained
+  refine ⟨sourceItem, sourceCompiled, ?_⟩
+  exact (frame.retainedVisibleContext newArgument result accepted pair).compileNode_natural
+    (frame.targetRetainedVisibleContext_nodup newArgument result accepted pair)
+    node nodeRetained sourceItem sourceCompiled
+
 /-- The source normalized shape is exactly the actual compiled site body
 renamed by the construction-owned source frame normalization. -/
 theorem LocalCylindricalFrame.sourceShape_compiled

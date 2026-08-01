@@ -43,6 +43,37 @@ theorem ArgumentResult.contextWireMap_signature
   rw [result.contextWireMap_retained sourceWire retained]
   exact result.retainedWireImage_signature sourceWire retained
 
+/-- The total compiler wire map is injective on the retained source carrier.
+Its arbitrary removed-wire branch is deliberately excluded from this claim. -/
+theorem ArgumentResult.contextWireMap_injective_of_retained
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (left right : source.val.WireId)
+    (leftRetained : left ∉ result.sourceRemovedWires)
+    (rightRetained : right ∉ result.sourceRemovedWires)
+    (same : result.contextWireMap left = result.contextWireMap right) :
+    left = right := by
+  rw [result.contextWireMap_retained left leftRetained,
+    result.contextWireMap_retained right rightRetained] at same
+  unfold ArgumentResult.retainedWireImage at same
+  have indices := congrArg Fin.val same
+  simp [Internal.checkedWire] at indices
+  have indexExact :
+      Internal.retainedWireIndex source result.sourceRemovedWires left (by
+        unfold Internal.retainedWires
+        exact List.mem_filter.mpr
+          ⟨Data.Finite.mem_allFin left, decide_eq_true leftRetained⟩) =
+      Internal.retainedWireIndex source result.sourceRemovedWires right (by
+        unfold Internal.retainedWires
+        exact List.mem_filter.mpr
+          ⟨Data.Finite.mem_allFin right, decide_eq_true rightRetained⟩) := by
+    apply Fin.ext
+    exact indices
+  have sourceExact := congrArg
+    (Internal.sourceRetainedWire source result.sourceRemovedWires) indexExact
+  simpa using sourceExact
+
 /-- A wire local to a region not enclosed by the acted scope cannot be among
 the localized replacement's removed wires. -/
 theorem ArgumentResult.wireAt_not_below_not_removed
@@ -525,6 +556,28 @@ theorem signature_exact
       (source.val.wires sourceWire).sig :=
   result.contextWireMap_signature sourceWire
     (context.source_retained sourceWire member)
+
+/-- Mapping a duplicate-free retained source context produces a
+duplicate-free target context. -/
+theorem target_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {result : ArgumentResult source wire}
+    {sourceContext : WireContext source.val}
+    {targetContext : WireContext result.checked.val}
+    (context : result.RetainedContext sourceContext targetContext)
+    (sourceNodup : sourceContext.ids.Nodup) :
+    targetContext.ids.Nodup := by
+  rw [context.ids_exact]
+  rw [List.nodup_iff_pairwise_ne, List.pairwise_map]
+  rw [List.nodup_iff_pairwise_ne] at sourceNodup
+  apply sourceNodup.imp_of_mem
+  intro left right leftMember rightMember different mappedExact
+  apply different
+  apply result.contextWireMap_injective_of_retained left right
+    (context.source_retained left leftMember)
+    (context.source_retained right rightMember)
+  exact mappedExact
 
 /-- Descending through any region not enclosed by the acted scope extends
 both compiler contexts by corresponding ordered local-wire blocks. -/
