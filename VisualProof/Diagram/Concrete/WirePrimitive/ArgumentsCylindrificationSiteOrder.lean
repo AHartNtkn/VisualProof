@@ -1,10 +1,66 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationConstruction
+import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCommonCore
 
 namespace VisualProof
 namespace ConcreteWirePrimitive
 namespace ArgumentsSemantics
 
 open WirePrimitive
+
+private theorem targetAppliedSite_exists
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    ∃ targetSite : AppliedSite result.checked result.targetWire,
+      targetSite ∈ result.targetSites.sites ∧
+        targetSite.node = result.targetNode site := by
+  have generated :=
+    result.generatedNode_targetSiteNode result.targetSites site
+  unfold argumentSiteNodes at generated
+  obtain ⟨targetSite, member, exact⟩ := List.mem_map.mp generated
+  exact ⟨targetSite, member, exact⟩
+
+/-- Construction-owned target application corresponding to one ordered
+source application.  The selection comes from the exhaustive checked target
+site receipt rather than from an assumed target-list position. -/
+noncomputable def targetAppliedSite
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    AppliedSite result.checked result.targetWire :=
+  Classical.choose (targetAppliedSite_exists result site)
+
+theorem targetAppliedSite_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    targetAppliedSite result site ∈ result.targetSites.sites :=
+  (Classical.choose_spec (targetAppliedSite_exists result site)).1
+
+@[simp]
+theorem targetAppliedSite_node
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    (targetAppliedSite result site).node = result.targetNode site :=
+  (Classical.choose_spec (targetAppliedSite_exists result site)).2
+
+@[simp]
+theorem targetAppliedSite_region
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ArgumentResult source wire)
+    (site : Fin result.sites.sites.length) :
+    (targetAppliedSite result site).region =
+      result.regionImage (result.sites.sites.get site).region := by
+  have exact := congrArg CNode.region
+    (targetAppliedSite result site).node_data
+  rw [targetAppliedSite_node, result.targetNode_data] at exact
+  simpa using exact.symm
 
 private theorem eraseDups_length_le
     [BEq α] [LawfulBEq α] (values : List α) :
