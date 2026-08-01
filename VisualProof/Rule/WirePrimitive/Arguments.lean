@@ -943,6 +943,80 @@ theorem inverseTargetArguments_exact
   exact forward.permutation_receipt.permute_inverse
     forward.sourceArgumentList rfl
 
+/-- The two construction inverse-port maps cancel at every restored argument
+position.  Receipt subsingleton equality identifies the checked backward
+receipt with the forward receipt's constructive inverse; no index search is
+reintroduced. -/
+theorem inverseGeneratedArgumentPort_cancel
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (position : Fin forward.sourceArguments.length) :
+    forward.generatedPortInverse
+        (backward.generatedPortInverse (.arg position.val)) =
+      .arg position.val := by
+  have restored := forward.inverseTargetArguments_exact backward targetIso
+    wireExact
+  have lengthExact : backward.sourceArguments.length =
+      forward.sourceArguments.length := by
+    calc
+      backward.sourceArguments.length =
+          backward.result.targetArguments.length := by
+        rw [backward.target_arguments_exact,
+          backward.permutation_receipt.permute_length
+            backward.sourceArguments rfl]
+      _ = forward.sourceArguments.length := congrArg List.length restored
+  let backwardPosition : Fin backward.sourceArguments.length :=
+    Fin.cast lengthExact.symm position
+  have backwardBound : position.val < backward.sourceArguments.length := by
+    exact backwardPosition.isLt
+  have backwardPort : backward.generatedPortInverse (.arg position.val) =
+      .arg (backward.permutation_receipt.forwardPosition
+        backwardPosition).val := by
+    simp only [generatedPortInverse]
+    rw [dif_pos backwardBound]
+    congr 2
+  have selectedValue :
+      (backward.permutation_receipt.forwardPosition backwardPosition).val =
+        (forward.permutation_receipt.inversePosition position).val := by
+    unfold ConcreteWirePrimitive.ValidPermutationReceipt.forwardPosition
+    calc
+      forward.inversePermutation.get
+          (Fin.cast backward.permutation_receipt.length_exact.symm
+            backwardPosition) =
+        forward.inversePermutation.get
+          (Fin.cast forward.permutation_receipt.inverse_length.symm
+            position) := by
+          apply congrArg forward.inversePermutation.get
+          apply Fin.ext
+          rfl
+      _ = (forward.permutation_receipt.inversePosition position).val :=
+        forward.permutation_receipt.inverse_get position
+  rw [backwardPort]
+  simp only [generatedPortInverse]
+  have selectedBound :
+      (backward.permutation_receipt.forwardPosition backwardPosition).val <
+        forward.sourceArguments.length := by
+    rw [selectedValue]
+    exact (forward.permutation_receipt.inversePosition position).isLt
+  rw [dif_pos selectedBound]
+  congr 1
+  have selectedFin :
+      (⟨(backward.permutation_receipt.forwardPosition
+          backwardPosition).val, selectedBound⟩ :
+        Fin forward.sourceArguments.length) =
+        forward.permutation_receipt.inversePosition position := by
+    apply Fin.ext
+    exact selectedValue
+  rw [selectedFin,
+    forward.permutation_receipt.forward_inversePosition]
+
 /-- Region carrier of the transported inverse permutation run. -/
 def inverseTransportRegionEquiv
     {planned real : CheckedDiagram definitions}
@@ -2343,6 +2417,605 @@ theorem endpointInverse_mem
         else port⟩ ∈ (source.val.wires sourceWire).endpoints
     rw [if_neg generated]
     exact sourceIncident
+
+/-- Endpoint map of the transported inverse run: pull through the backward
+construction, transport through the supplied target isomorphism, then pull
+through the forward construction. -/
+def inverseTransportEndpointMap
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint backward.target.val.nodeCount) :
+    CEndpoint planned.val.nodeCount :=
+  let realWire := backward.wireEquiv.symm targetWire
+  forward.endpointInverse
+    (targetIso.endpointMap realWire (backward.endpointInverse endpoint))
+
+/-- Inverse endpoint map of the transported inverse run. -/
+def inverseTransportEndpointInverse
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint planned.val.nodeCount) :
+    CEndpoint backward.target.val.nodeCount :=
+  let realWire := backward.wireEquiv.symm targetWire
+  backward.endpointImage
+    (targetIso.endpointInverse realWire (forward.endpointImage endpoint))
+
+/-- The composed endpoint map lands on the transported wire carrier. -/
+theorem inverseTransportEndpointMap_mem
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint backward.target.val.nodeCount)
+    (member : endpoint ∈
+      (backward.target.val.wires targetWire).endpoints) :
+    forward.inverseTransportEndpointMap backward targetIso
+        targetWire endpoint ∈
+      (planned.val.wires
+        (forward.inverseTransportWireEquiv backward targetIso
+          targetWire)).endpoints := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have backwardWireExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  have realMember : backward.endpointInverse endpoint ∈
+      (real.val.wires realWire).endpoints := by
+    apply backward.endpointInverse_mem realWire endpoint
+    simpa [backwardWireExact] using member
+  have middleMember := targetIso.endpointMap_mem realWire
+    (backward.endpointInverse endpoint) realMember
+  let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+  have plannedMember := forward.endpointInverse_mem plannedWire
+    (targetIso.endpointMap realWire (backward.endpointInverse endpoint))
+    (by
+      have plannedWireExact : forward.wireEquiv plannedWire =
+          targetIso.wires realWire :=
+        forward.wireEquiv.right_inv (targetIso.wires realWire)
+      simpa [plannedWireExact] using middleMember)
+  simpa [inverseTransportEndpointMap, inverseTransportWireEquiv,
+    ConcreteWirePrimitive.ArgumentResult.inverseTransportWireEquivHeadOnly,
+    realWire, plannedWire] using plannedMember
+
+/-- The composed endpoint inverse lands back on the supplied target wire. -/
+theorem inverseTransportEndpointInverse_mem
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (candidate : CEndpoint planned.val.nodeCount)
+    (member : candidate ∈
+      (planned.val.wires
+        (forward.inverseTransportWireEquiv backward targetIso
+          targetWire)).endpoints) :
+    forward.inverseTransportEndpointInverse backward targetIso
+        targetWire candidate ∈
+      (backward.target.val.wires targetWire).endpoints := by
+  let realWire := backward.wireEquiv.symm targetWire
+  let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+  have plannedWireExact : plannedWire =
+      forward.inverseTransportWireEquiv backward targetIso targetWire := rfl
+  have plannedMember : candidate ∈
+      (planned.val.wires plannedWire).endpoints := by
+    simpa [plannedWireExact] using member
+  have middleMember := forward.endpointImage_mem plannedWire candidate
+    plannedMember
+  have forwardWireExact : forward.wireEquiv plannedWire =
+      targetIso.wires realWire :=
+    forward.wireEquiv.right_inv (targetIso.wires realWire)
+  have realMember := targetIso.endpointInverse_mem realWire
+    (forward.endpointImage candidate) (by
+      simpa [forwardWireExact] using middleMember)
+  have targetMember := backward.endpointImage_mem realWire
+    (targetIso.endpointInverse realWire (forward.endpointImage candidate))
+    realMember
+  have backwardWireExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  rw [backwardWireExact] at targetMember
+  exact targetMember
+
+/-- The composed endpoint inverse cancels the transported endpoint map. -/
+theorem inverseTransportEndpointInverse_map
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint backward.target.val.nodeCount)
+    (member : endpoint ∈
+      (backward.target.val.wires targetWire).endpoints) :
+    forward.inverseTransportEndpointInverse backward targetIso targetWire
+        (forward.inverseTransportEndpointMap backward targetIso
+          targetWire endpoint) = endpoint := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have backwardWireExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  have realMember : backward.endpointInverse endpoint ∈
+      (real.val.wires realWire).endpoints := by
+    apply backward.endpointInverse_mem realWire endpoint
+    simpa [backwardWireExact] using member
+  unfold inverseTransportEndpointInverse inverseTransportEndpointMap
+  change backward.endpointImage
+      (targetIso.endpointInverse realWire
+        (forward.endpointImage
+          (forward.endpointInverse
+            (targetIso.endpointMap realWire
+              (backward.endpointInverse endpoint))))) = endpoint
+  rw [forward.endpointImage_inverse]
+  rw [targetIso.endpointMap_left_inv realWire
+    (backward.endpointInverse endpoint) realMember]
+  exact backward.endpointImage_inverse endpoint
+
+/-- The composed endpoint map cancels its inverse on the transported wire. -/
+theorem inverseTransportEndpointMap_inverse
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (candidate : CEndpoint planned.val.nodeCount)
+    (member : candidate ∈
+      (planned.val.wires
+        (forward.inverseTransportWireEquiv backward targetIso
+          targetWire)).endpoints) :
+    forward.inverseTransportEndpointMap backward targetIso targetWire
+        (forward.inverseTransportEndpointInverse backward targetIso
+          targetWire candidate) = candidate := by
+  let realWire := backward.wireEquiv.symm targetWire
+  let plannedWire := forward.wireEquiv.symm (targetIso.wires realWire)
+  have plannedWireExact : plannedWire =
+      forward.inverseTransportWireEquiv backward targetIso targetWire := rfl
+  have plannedMember : candidate ∈
+      (planned.val.wires plannedWire).endpoints := by
+    simpa [plannedWireExact] using member
+  have middleMember := forward.endpointImage_mem plannedWire candidate
+    plannedMember
+  have forwardWireExact : forward.wireEquiv plannedWire =
+      targetIso.wires realWire :=
+    forward.wireEquiv.right_inv (targetIso.wires realWire)
+  have targetMember : forward.endpointImage candidate ∈
+      (forward.target.val.wires (targetIso.wires realWire)).endpoints := by
+    simpa [forwardWireExact] using middleMember
+  unfold inverseTransportEndpointMap inverseTransportEndpointInverse
+  change forward.endpointInverse
+      (targetIso.endpointMap realWire
+        (backward.endpointInverse
+          (backward.endpointImage
+            (targetIso.endpointInverse realWire
+              (forward.endpointImage candidate))))) = candidate
+  rw [backward.endpointInverse_image]
+  rw [targetIso.endpointMap_right_inv realWire
+    (forward.endpointImage candidate) targetMember]
+  exact forward.endpointInverse_image candidate
+
+/-- The composed endpoint map uses exactly the transported node carrier. -/
+theorem inverseTransportEndpointMap_node
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint backward.target.val.nodeCount)
+    (member : endpoint ∈
+      (backward.target.val.wires targetWire).endpoints) :
+    (forward.inverseTransportEndpointMap backward targetIso
+      targetWire endpoint).node =
+      forward.inverseTransportNodeEquiv backward targetIso endpoint.node := by
+  let realWire := backward.wireEquiv.symm targetWire
+  have backwardWireExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  have realMember : backward.endpointInverse endpoint ∈
+      (real.val.wires realWire).endpoints := by
+    apply backward.endpointInverse_mem realWire endpoint
+    simpa [backwardWireExact] using member
+  have middleCorresponds := targetIso.endpointMap_corresponds realWire
+    (backward.endpointInverse endpoint) realMember
+  unfold inverseTransportEndpointMap endpointInverse
+  unfold inverseTransportNodeEquiv
+  change forward.nodeEquiv.symm
+      (targetIso.endpointMap realWire
+        (backward.endpointInverse endpoint)).node =
+    forward.nodeEquiv.symm
+      (targetIso.nodes (backward.nodeEquiv.symm endpoint.node))
+  apply congrArg forward.nodeEquiv.symm
+  exact middleCorresponds.1
+
+/-- The composed endpoint map either preserves a non-identity port exactly,
+or relates two constructor-derived identity indices. -/
+theorem inverseTransportEndpointMap_port_shape
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint backward.target.val.nodeCount)
+    (member : endpoint ∈
+      (backward.target.val.wires targetWire).endpoints) :
+    (forward.inverseTransportEndpointMap backward targetIso
+        targetWire endpoint).port = endpoint.port ∨
+      ∃ sourceIndex targetIndex,
+        endpoint.port = .identity sourceIndex ∧
+          (forward.inverseTransportEndpointMap backward targetIso
+            targetWire endpoint).port = .identity targetIndex := by
+  let realWire := backward.wireEquiv.symm targetWire
+  let realNode := backward.nodeEquiv.symm endpoint.node
+  let realEndpoint := backward.endpointInverse endpoint
+  have backwardWireExact : backward.wireEquiv realWire = targetWire :=
+    backward.wireEquiv.right_inv targetWire
+  have realMember : realEndpoint ∈
+      (real.val.wires realWire).endpoints := by
+    apply backward.endpointInverse_mem realWire endpoint
+    simpa [backwardWireExact] using member
+  let middleEndpoint := targetIso.endpointMap realWire realEndpoint
+  have middleCorresponds := targetIso.endpointMap_corresponds realWire
+    realEndpoint realMember
+  have middleNode : middleEndpoint.node = targetIso.nodes realNode := by
+    exact middleCorresponds.1
+  by_cases generated : realNode ∈
+      ConcreteWirePrimitive.argumentSiteNodes backward.result.sites
+  · let sitePosition :=
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode
+        backward.result.sites realNode generated
+    let site := backward.result.sites.sites.get sitePosition
+    have siteNode : site.node = realNode :=
+      ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_exact
+        backward.result.sites realNode generated
+    have backwardTargetNode : backward.result.targetNode sitePosition =
+        endpoint.node := by
+      calc
+        backward.result.targetNode sitePosition =
+            backward.nodeEquiv site.node :=
+          (backward.nodeEquiv_generated sitePosition).symm
+        _ = backward.nodeEquiv realNode := congrArg backward.nodeEquiv siteNode
+        _ = endpoint.node := backward.nodeEquiv.right_inv endpoint.node
+    let plannedPosition := forward.inverseTransportSitePosition backward
+      targetIso wireExact sitePosition
+    let plannedNode :=
+      (forward.result.sites.sites.get plannedPosition).node
+    have plannedGenerated : plannedNode ∈
+        ConcreteWirePrimitive.argumentSiteNodes forward.result.sites := by
+      unfold ConcreteWirePrimitive.argumentSiteNodes
+      exact List.mem_map.mpr
+        ⟨forward.result.sites.sites.get plannedPosition,
+          List.get_mem _ _, rfl⟩
+    have plannedNodeExact : forward.nodeEquiv.symm middleEndpoint.node =
+        plannedNode := by
+      have middleExact := forward.inverseTransport_middleNode backward
+        targetIso wireExact sitePosition
+      rw [middleNode, ← siteNode, middleExact]
+      rw [← forward.nodeEquiv_generated plannedPosition]
+      exact forward.nodeEquiv.left_inv plannedNode
+    have realEndpointPort : realEndpoint.port =
+        backward.generatedPortInverse endpoint.port := by
+      unfold realEndpoint endpointInverse
+      change (if realNode ∈
+          ConcreteWirePrimitive.argumentSiteNodes backward.result.sites then
+        backward.generatedPortInverse endpoint.port else endpoint.port) = _
+      rw [if_pos generated]
+    have realData : real.val.nodes realEndpoint.node =
+        .atom site.region site.argumentSignatures := by
+      change real.val.nodes realNode = _
+      rw [← siteNode]
+      exact site.node_data
+    have middlePort : middleEndpoint.port = realEndpoint.port := by
+      unfold PortCorresponds at middleCorresponds
+      rw [realData] at middleCorresponds
+      cases middleData : forward.target.val.nodes middleEndpoint.node <;>
+        simp [middleData] at middleCorresponds
+      all_goals exact middleCorresponds.2
+    have mappedPort :
+        (forward.inverseTransportEndpointMap backward targetIso
+          targetWire endpoint).port =
+          forward.generatedPortInverse middleEndpoint.port := by
+      unfold inverseTransportEndpointMap endpointInverse
+      change (if forward.nodeEquiv.symm middleEndpoint.node ∈
+          ConcreteWirePrimitive.argumentSiteNodes forward.result.sites then
+        forward.generatedPortInverse middleEndpoint.port
+      else middleEndpoint.port) = _
+      rw [plannedNodeExact, if_pos plannedGenerated]
+    left
+    rw [mappedPort, middlePort, realEndpointPort]
+    cases portExact : endpoint.port with
+    | head => rfl
+    | identity index =>
+        have targetRequired := ConcreteDiagram.incident_port_required
+          definitions backward.target.val backward.target.property targetWire
+          endpoint member
+        have backwardData : backward.target.val.nodes endpoint.node =
+            .atom (backward.result.regionImage site.region)
+              backward.result.targetArguments := by
+          rw [← backwardTargetNode]
+          exact backward.result.targetNode_data sitePosition
+        rw [ConcreteDiagram.requiredPorts, backwardData, portExact]
+          at targetRequired
+        simp at targetRequired
+    | arg index =>
+        have targetRequired := ConcreteDiagram.incident_port_required
+          definitions backward.target.val backward.target.property targetWire
+          endpoint member
+        have backwardData : backward.target.val.nodes endpoint.node =
+            .atom (backward.result.regionImage site.region)
+              backward.result.targetArguments := by
+          rw [← backwardTargetNode]
+          exact backward.result.targetNode_data sitePosition
+        have restored := forward.inverseTargetArguments_exact backward
+          targetIso wireExact
+        have indexBound : index < forward.sourceArguments.length := by
+          have targetBound : index <
+              backward.result.targetArguments.length := by
+            simpa [ConcreteDiagram.requiredPorts, backwardData, portExact]
+              using targetRequired
+          rw [restored] at targetBound
+          exact targetBound
+        exact forward.inverseGeneratedArgumentPort_cancel backward targetIso
+          wireExact ⟨index, indexBound⟩
+  · have middleRetained := forward.inverseTransport_middleNode_retained
+      backward targetIso wireExact realNode generated
+    let plannedNode := forward.nodeEquiv.symm middleEndpoint.node
+    have plannedRetained : plannedNode ∉
+        ConcreteWirePrimitive.argumentSiteNodes forward.result.sites := by
+      intro plannedGenerated
+      have imageGenerated : forward.nodeEquiv plannedNode ∈
+          ConcreteWirePrimitive.argumentSiteNodes forward.targetSites := by
+        let plannedPosition :=
+          ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode
+            forward.result.sites plannedNode plannedGenerated
+        have nodeImage := forward.nodeEquiv_generated plannedPosition
+        have sourceNodeExact :=
+          ConcreteWirePrimitive.ArgumentResult.sourcePositionOfNode_exact
+            forward.result.sites plannedNode plannedGenerated
+        rw [sourceNodeExact] at nodeImage
+        rw [nodeImage]
+        exact forward.result.generatedNode_targetSiteNode
+          forward.targetSites plannedPosition
+      have imageExact : forward.nodeEquiv plannedNode =
+          targetIso.nodes realNode := by
+        unfold plannedNode
+        rw [middleNode]
+        exact forward.nodeEquiv.right_inv (targetIso.nodes realNode)
+      rw [imageExact] at imageGenerated
+      exact middleRetained imageGenerated
+    have realEndpointPort : realEndpoint.port = endpoint.port := by
+      unfold realEndpoint endpointInverse
+      change (if realNode ∈
+          ConcreteWirePrimitive.argumentSiteNodes backward.result.sites then
+        backward.generatedPortInverse endpoint.port else endpoint.port) = _
+      rw [if_neg generated]
+    have mappedPort :
+        (forward.inverseTransportEndpointMap backward targetIso
+          targetWire endpoint).port = middleEndpoint.port := by
+      unfold inverseTransportEndpointMap endpointInverse
+      change (if plannedNode ∈
+          ConcreteWirePrimitive.argumentSiteNodes forward.result.sites then
+        forward.generatedPortInverse middleEndpoint.port
+      else middleEndpoint.port) = _
+      rw [if_neg plannedRetained]
+    unfold PortCorresponds at middleCorresponds
+    cases realData : real.val.nodes realEndpoint.node with
+    | atom region arguments =>
+        rw [realData] at middleCorresponds
+        cases middleData : forward.target.val.nodes middleEndpoint.node <;>
+          simp [middleData] at middleCorresponds
+        all_goals exact Or.inl (mappedPort.trans
+          (middleCorresponds.2.trans realEndpointPort))
+    | ref region definition arguments =>
+        rw [realData] at middleCorresponds
+        cases middleData : forward.target.val.nodes middleEndpoint.node <;>
+          simp [middleData] at middleCorresponds
+        all_goals exact Or.inl (mappedPort.trans
+          (middleCorresponds.2.trans realEndpointPort))
+    | identity region signature arity =>
+        rw [realData] at middleCorresponds
+        cases middleData : forward.target.val.nodes middleEndpoint.node with
+        | atom targetRegion targetArguments =>
+            change forward.target.val.nodes
+                (targetIso.endpointMap realWire realEndpoint).node =
+              .atom targetRegion targetArguments at middleData
+            simp [realData, middleData] at middleCorresponds
+            exact Or.inl (mappedPort.trans
+              (middleCorresponds.2.trans realEndpointPort))
+        | ref targetRegion definition targetArguments =>
+            change forward.target.val.nodes
+                (targetIso.endpointMap realWire realEndpoint).node =
+              .ref targetRegion definition targetArguments at middleData
+            simp [realData, middleData] at middleCorresponds
+            exact Or.inl (mappedPort.trans
+              (middleCorresponds.2.trans realEndpointPort))
+        | identity targetRegion targetSignature targetArity =>
+            change forward.target.val.nodes
+                (targetIso.endpointMap realWire realEndpoint).node =
+              .identity targetRegion targetSignature targetArity at middleData
+            simp [realData, middleData] at middleCorresponds
+            have realRequired := ConcreteDiagram.incident_port_required
+              definitions real.val real.property realWire realEndpoint
+              realMember
+            rw [ConcreteDiagram.requiredPorts, realData] at realRequired
+            rcases List.mem_map.mp realRequired with
+              ⟨sourceIndex, _sourceBound, sourcePort⟩
+            have middleMember := targetIso.endpointMap_mem realWire
+              realEndpoint realMember
+            have middleRequired := ConcreteDiagram.incident_port_required
+              definitions forward.target.val forward.target.property
+              (targetIso.wires realWire) middleEndpoint middleMember
+            rw [ConcreteDiagram.requiredPorts, middleData] at middleRequired
+            rcases List.mem_map.mp middleRequired with
+              ⟨targetIndex, _targetBound, targetPort⟩
+            exact Or.inr ⟨sourceIndex, targetIndex,
+              realEndpointPort.symm.trans sourcePort.symm,
+              mappedPort.trans targetPort.symm⟩
+
+/-- The composed endpoint map satisfies the exact concrete port
+correspondence required by the transported node carrier. -/
+theorem inverseTransportEndpointMap_corresponds
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire)
+    (targetWire : backward.target.val.WireId)
+    (endpoint : CEndpoint backward.target.val.nodeCount)
+    (member : endpoint ∈
+      (backward.target.val.wires targetWire).endpoints) :
+    PortCorresponds backward.target.val planned.val
+      (forward.inverseTransportNodeEquiv backward targetIso) endpoint
+      (forward.inverseTransportEndpointMap backward targetIso
+        targetWire endpoint) := by
+  let mapped := forward.inverseTransportEndpointMap backward targetIso
+    targetWire endpoint
+  have mappedNode : mapped.node =
+      forward.inverseTransportNodeEquiv backward targetIso endpoint.node :=
+    forward.inverseTransportEndpointMap_node backward targetIso
+      targetWire endpoint member
+  have mappedData : planned.val.nodes mapped.node =
+      (backward.target.val.nodes endpoint.node).rename
+        (forward.inverseTransportRegionEquiv backward targetIso) := by
+    rw [mappedNode]
+    exact forward.inverseTransport_node_table backward targetIso
+      wireExact endpoint.node
+  have portShape := forward.inverseTransportEndpointMap_port_shape
+    backward targetIso wireExact targetWire endpoint member
+  have sourceRequired := ConcreteDiagram.incident_port_required definitions
+    backward.target.val backward.target.property targetWire endpoint member
+  unfold PortCorresponds
+  refine ⟨mappedNode, ?_⟩
+  cases sourceData : backward.target.val.nodes endpoint.node with
+  | atom region arguments =>
+      rw [sourceData] at mappedData
+      rw [ConcreteDiagram.requiredPorts, sourceData] at sourceRequired
+      simp only [CNode.rename] at mappedData
+      change planned.val.nodes
+          (forward.inverseTransportEndpointMap backward targetIso
+            targetWire endpoint).node = _ at mappedData
+      rw [mappedData]
+      cases portShape with
+      | inl exactPort => exact exactPort
+      | inr identityPorts =>
+          rcases identityPorts with
+            ⟨sourceIndex, _targetIndex, sourcePort, _targetPort⟩
+          rw [sourcePort] at sourceRequired
+          simp at sourceRequired
+  | ref region definition arguments =>
+      rw [sourceData] at mappedData
+      rw [ConcreteDiagram.requiredPorts, sourceData] at sourceRequired
+      simp only [CNode.rename] at mappedData
+      change planned.val.nodes
+          (forward.inverseTransportEndpointMap backward targetIso
+            targetWire endpoint).node = _ at mappedData
+      rw [mappedData]
+      cases portShape with
+      | inl exactPort => exact exactPort
+      | inr identityPorts =>
+          rcases identityPorts with
+            ⟨sourceIndex, _targetIndex, sourcePort, _targetPort⟩
+          rw [sourcePort] at sourceRequired
+          simp at sourceRequired
+  | identity region signature arity =>
+      rw [sourceData] at mappedData
+      rw [ConcreteDiagram.requiredPorts, sourceData] at sourceRequired
+      simp only [CNode.rename] at mappedData
+      change planned.val.nodes
+          (forward.inverseTransportEndpointMap backward targetIso
+            targetWire endpoint).node = _ at mappedData
+      rw [mappedData]
+      refine ⟨rfl, rfl, ?_⟩
+      cases portShape with
+      | inl exactPort =>
+          rcases List.mem_map.mp sourceRequired with
+            ⟨sourceIndex, _sourceBound, sourcePort⟩
+          exact ⟨sourceIndex, sourceIndex, sourcePort.symm,
+            exactPort.trans sourcePort.symm⟩
+      | inr identityPorts => exact identityPorts
+
+/-- Total concrete isomorphism reconstructed from the two accepted
+permutation runs and the supplied source-to-forward-target isomorphism. -/
+def inverseTransportIso
+    {planned real : CheckedDiagram definitions}
+    {forwardWire : planned.val.WireId}
+    {permutation : List Nat}
+    (forward : AppliedArgPermute planned forwardWire permutation)
+    {backwardWire : real.val.WireId}
+    (backward : AppliedArgPermute real backwardWire
+      forward.inversePermutation)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (wireExact : targetIso.wires backwardWire = forward.targetWire) :
+    ConcreteIso backward.target.val planned.val where
+  regions := forward.inverseTransportRegionEquiv backward targetIso
+  nodes := forward.inverseTransportNodeEquiv backward targetIso
+  wires := forward.inverseTransportWireEquiv backward targetIso
+  root := forward.inverseTransport_root backward targetIso
+  region_table := forward.inverseTransport_region_table backward targetIso
+  node_table := forward.inverseTransport_node_table backward targetIso
+    wireExact
+  wire_signature := forward.inverseTransport_wire_signature backward
+    targetIso wireExact
+  wire_scope := forward.inverseTransport_wire_scope backward targetIso
+    wireExact
+  endpointMap := forward.inverseTransportEndpointMap backward targetIso
+  endpointInverse :=
+    forward.inverseTransportEndpointInverse backward targetIso
+  endpointMap_mem := by
+    intro targetWire endpoint member
+    exact forward.inverseTransportEndpointMap_mem backward targetIso
+      targetWire endpoint member
+  endpointInverse_mem := by
+    intro targetWire candidate member
+    exact forward.inverseTransportEndpointInverse_mem backward targetIso
+      targetWire candidate member
+  endpointMap_left_inv := by
+    intro targetWire endpoint member
+    exact forward.inverseTransportEndpointInverse_map backward targetIso
+      targetWire endpoint member
+  endpointMap_right_inv := by
+    intro targetWire candidate member
+    exact forward.inverseTransportEndpointMap_inverse backward targetIso
+      targetWire candidate member
+  endpointMap_corresponds := by
+    intro targetWire endpoint member
+    exact forward.inverseTransportEndpointMap_corresponds backward targetIso
+      wireExact targetWire endpoint member
 
 def tag
     {source : CheckedDiagram definitions}
