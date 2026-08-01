@@ -230,6 +230,120 @@ def symm
       mappedMember] at corresponds
     exact portCorresponds_symm iso corresponds
 
+private theorem portCorresponds_trans
+    {definitions : List (List Sig)}
+    {first second third : ConcreteDiagram definitions.length}
+    (left : ConcreteIso first second)
+    (right : ConcreteIso second third)
+    {source : CEndpoint first.nodeCount}
+    {middle : CEndpoint second.nodeCount}
+    {target : CEndpoint third.nodeCount}
+    (sourceMiddle :
+      PortCorresponds first second left.nodes source middle)
+    (middleTarget :
+      PortCorresponds second third right.nodes middle target) :
+    PortCorresponds first third (left.nodes.trans right.nodes)
+      source target := by
+  rcases source with ⟨sourceNode, sourcePort⟩
+  rcases middle with ⟨middleNode, middlePort⟩
+  rcases target with ⟨targetNode, targetPort⟩
+  have sourceNodeExact := sourceMiddle.1
+  change middleNode = left.nodes sourceNode at sourceNodeExact
+  subst middleNode
+  have middleNodeExact := middleTarget.1
+  change targetNode = right.nodes (left.nodes sourceNode) at middleNodeExact
+  subst targetNode
+  refine ⟨rfl, ?_⟩
+  have secondData := left.node_table sourceNode
+  have thirdData := right.node_table (left.nodes sourceNode)
+  unfold PortCorresponds at sourceMiddle middleTarget
+  cases firstNode : first.nodes sourceNode with
+  | atom region arguments =>
+      rw [firstNode] at secondData
+      rw [secondData] at thirdData
+      simp [firstNode, secondData, thirdData] at sourceMiddle middleTarget ⊢
+      exact middleTarget.trans sourceMiddle
+  | ref region definition arguments =>
+      rw [firstNode] at secondData
+      rw [secondData] at thirdData
+      simp [firstNode, secondData, thirdData] at sourceMiddle middleTarget ⊢
+      exact middleTarget.trans sourceMiddle
+  | identity region signature arity =>
+      rw [firstNode] at secondData
+      rw [secondData] at thirdData
+      simp [firstNode, secondData, thirdData] at sourceMiddle middleTarget ⊢
+      exact ⟨sourceMiddle.1, sourceMiddle.2.1,
+        sourceMiddle.2.2.1, middleTarget.2.2.2⟩
+
+/-- Compose two proved concrete isomorphisms directly.  The carrier maps and
+endpoint bijections compose definitionally; no checker or map discovery is
+involved. -/
+def trans
+    {definitions : List (List Sig)}
+    {first second third : ConcreteDiagram definitions.length}
+    (left : ConcreteIso first second)
+    (right : ConcreteIso second third) :
+    ConcreteIso first third where
+  regions := left.regions.trans right.regions
+  nodes := left.nodes.trans right.nodes
+  wires := left.wires.trans right.wires
+  root := by
+    change right.regions (left.regions first.root) = third.root
+    rw [left.root, right.root]
+  region_table := by
+    intro region
+    change third.regions (right.regions (left.regions region)) = _
+    rw [right.region_table, left.region_table]
+    cases first.regions region <;> rfl
+  node_table := by
+    intro node
+    change third.nodes (right.nodes (left.nodes node)) = _
+    rw [right.node_table, left.node_table]
+    cases first.nodes node <;> rfl
+  wire_signature := by
+    intro wire
+    change (third.wires (right.wires (left.wires wire))).sig = _
+    rw [right.wire_signature, left.wire_signature]
+  wire_scope := by
+    intro wire
+    change (third.wires (right.wires (left.wires wire))).scope = _
+    rw [right.wire_scope, left.wire_scope]
+    rfl
+  endpointMap := fun wire endpoint =>
+    right.endpointMap (left.wires wire) (left.endpointMap wire endpoint)
+  endpointInverse := fun wire endpoint =>
+    left.endpointInverse wire
+      (right.endpointInverse (left.wires wire) endpoint)
+  endpointMap_mem := by
+    intro wire endpoint member
+    exact right.endpointMap_mem (left.wires wire)
+      (left.endpointMap wire endpoint)
+      (left.endpointMap_mem wire endpoint member)
+  endpointInverse_mem := by
+    intro wire endpoint member
+    exact left.endpointInverse_mem wire
+      (right.endpointInverse (left.wires wire) endpoint)
+      (right.endpointInverse_mem (left.wires wire) endpoint member)
+  endpointMap_left_inv := by
+    intro wire endpoint member
+    rw [right.endpointMap_left_inv (left.wires wire)
+      (left.endpointMap wire endpoint)
+      (left.endpointMap_mem wire endpoint member)]
+    exact left.endpointMap_left_inv wire endpoint member
+  endpointMap_right_inv := by
+    intro wire endpoint member
+    rw [left.endpointMap_right_inv wire
+      (right.endpointInverse (left.wires wire) endpoint)
+      (right.endpointInverse_mem (left.wires wire) endpoint member)]
+    exact right.endpointMap_right_inv (left.wires wire) endpoint member
+  endpointMap_corresponds := by
+    intro wire endpoint member
+    apply portCorresponds_trans left right
+    · exact left.endpointMap_corresponds wire endpoint member
+    · exact right.endpointMap_corresponds (left.wires wire)
+        (left.endpointMap wire endpoint)
+        (left.endpointMap_mem wire endpoint member)
+
 /-- Transport one endpoint occurrence through the constructive equivalence
 owned by an explicitly supplied isomorphism. -/
 def transportEndpointOnWire

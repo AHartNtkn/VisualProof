@@ -456,15 +456,11 @@ def invertWireSeverTransported
                 exact realToCanonical.wires.right_inv _) with
           | none => exact .error .transportMismatch
           | some outputIso =>
-              match composed : outputIso.checkedTrans?
-                  canonical.inverseIso.symm with
-              | none => exact .error .transportMismatch
-              | some sourceIso =>
-                  exact .ok
-                    { input := inverseInput
-                      orientationExact := rfl
-                      applied := inverseApplied
-                      targetIso := sourceIso }
+              exact .ok
+                { input := inverseInput
+                  orientationExact := rfl
+                  applied := inverseApplied
+                  targetIso := outputIso.trans canonical.inverseIso.symm }
 
 /-- Deterministic inverse of an accepted join after a suffix has renamed its
 checked target. The join receipt owns the exact outer endpoint partition and
