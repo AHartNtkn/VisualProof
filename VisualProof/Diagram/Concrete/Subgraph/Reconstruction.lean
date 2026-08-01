@@ -457,7 +457,8 @@ private theorem regionForward_bijective
   exact ⟨equivalence.injective,
     fun target => ⟨equivalence.symm target, equivalence.right_inv target⟩⟩
 
-private def regionEquiv
+/-- Construction-owned finite region correspondence for exact reconstruction. -/
+def regionEquiv
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -620,7 +621,8 @@ private theorem nodeForward_bijective
   exact ⟨equivalence.injective,
     fun target => ⟨equivalence.symm target, equivalence.right_inv target⟩⟩
 
-private def nodeEquiv
+/-- Construction-owned finite node correspondence for exact reconstruction. -/
+def nodeEquiv
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -780,7 +782,8 @@ private theorem wireForward_bijective
   exact ⟨equivalence.injective,
     fun target => ⟨equivalence.symm target, equivalence.right_inv target⟩⟩
 
-private def wireEquiv
+/-- Construction-owned finite wire correspondence for exact reconstruction. -/
+def wireEquiv
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1233,7 +1236,8 @@ private theorem occurrenceEndpoint_forward
       ⟨candidate, candidateIncident, equality⟩
     exact ⟨candidate, candidateIncident, equality.symm⟩
 
-private theorem regionTable_exact
+/-- Exact reconstructed region table under the construction-owned correspondence. -/
+theorem regionTable_exact
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1321,7 +1325,8 @@ private theorem regionTable_exact
           regionsExact]
         exact relation
 
-private theorem nodeTable_exact
+/-- Exact reconstructed node table under the construction-owned correspondence. -/
+theorem nodeTable_exact
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1475,7 +1480,8 @@ private theorem nodeTable_exact
     · intro identity
       exact eliminateIdentityRequest attachment empty identity
 
-private theorem wireSignature_exact
+/-- Exact reconstructed wire signatures under the construction-owned correspondence. -/
+theorem wireSignature_exact
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1522,7 +1528,8 @@ private theorem wireSignature_exact
         (pattern.val.diagram.wires source).sig
     rfl
 
-private theorem wireScope_exact
+/-- Exact reconstructed wire scopes under the construction-owned correspondence. -/
+theorem wireScope_exact
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1578,7 +1585,8 @@ private theorem wireScope_exact
     rw [regionEquiv_fragmentRegion occurrence removed attachment
       regionsExact]
 
-private theorem endpointForward_exact
+/-- Every reconstructed endpoint has an exact source endpoint correspondence. -/
+theorem endpointForward_exact
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
@@ -1920,7 +1928,8 @@ private theorem unselected_incident_wire_not_internal
   refine ⟨sourceEndpoint.node, ?_⟩
   exact congrArg Prod.fst sameKey
 
-private theorem endpointBackward_exact
+/-- Every source endpoint has an exact reconstructed endpoint correspondence. -/
+theorem endpointBackward_exact
     (occurrence : Occurrence pattern host)
     (removed : RemovalResult occurrence)
     (attachment :
