@@ -41,6 +41,15 @@ private def optionToExcept
   | none => .error error
   | some value => .ok value
 
+private theorem castAllAppliedSites_length
+    {source : CheckedDiagram definitions}
+    {left right : source.val.WireId}
+    (exact : left = right)
+    (sites : AllAppliedSites source left) :
+    (exact ▸ sites).sites.length = sites.sites.length := by
+  subst right
+  rfl
+
 private structure CheckedDeletePolarity
     (source : CheckedDiagram definitions)
     (orientation : Orientation)
@@ -497,6 +506,72 @@ def inverseTransport
   pure ⟨iso⟩
 
 end AppliedEndsDelete
+
+namespace AppliedCutWrap
+
+/-- Exact acted wire transported backward through the supplied suffix iso. -/
+def transportedInverseWire
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : AppliedCutWrap planned wire)
+    (targetIso : ConcreteIso real.val forward.target.val) :
+    real.val.WireId :=
+  targetIso.wires.symm forward.inverseWire
+
+/-- Receipt-owned inverse cancellation for cut wrapping followed by the
+accepted transported absorb. -/
+def inverseTransport
+    {planned real : CheckedDiagram definitions}
+    {wire : planned.val.WireId}
+    (forward : AppliedCutWrap planned wire)
+    (targetIso : ConcreteIso real.val forward.target.val)
+    (backward : AppliedCutAbsorb real
+      (forward.transportedInverseWire targetIso)) :
+    Except WireContentError (InverseLanding backward.target planned) := do
+  let inverseWire := forward.transportedInverseWire targetIso
+  let wireExact : targetIso.wires inverseWire = forward.inverseWire :=
+    targetIso.wires.right_inv forward.inverseWire
+  let targetSites : AllAppliedSites forward.target
+      (targetIso.wires inverseWire) :=
+    wireExact.symm ▸ forward.ledger.targetSites
+  let siteEquiv := AllAppliedSites.transportPositionEquiv targetIso
+    backward.checked.sites targetSites
+  let siteCountExact : backward.checked.sites.sites.length =
+      forward.checked.sites.sites.length := by
+    rw [ConcreteWirePrimitive.ContentConstruction.finCount_eq siteEquiv]
+    rw [show targetSites.sites.length =
+        forward.ledger.targetSites.sites.length by
+      exact castAllAppliedSites_length wireExact.symm
+        forward.ledger.targetSites]
+    exact forward.ledger.correspondence.1.symm
+  let extendedRegions :=
+    backward.checked.reconstructionRegionEquiv.trans <|
+      targetIso.regions.trans forward.checked.extendedRegionOriginEquiv
+  let regionCountExact : backward.target.val.regionCount =
+      planned.val.regionCount := by
+    have extendedCount :=
+      ConcreteWirePrimitive.ContentConstruction.finCount_eq extendedRegions
+    have siteCount := siteCountExact
+    change backward.checked.checked.val.regionCount +
+        backward.checked.sites.sites.length =
+      planned.val.regionCount + forward.checked.sites.sites.length
+      at extendedCount
+    change backward.checked.sites.sites.length =
+      forward.checked.sites.sites.length at siteCount
+    change backward.checked.checked.val.regionCount = planned.val.regionCount
+    omega
+  let regions :=
+    ConcreteWirePrimitive.ContentConstruction.finEquivOfEq regionCountExact
+  let nodes := backward.checked.nodeOriginEquiv.trans <|
+    targetIso.nodes.trans forward.checked.nodeOriginEquiv
+  let wires := backward.checked.wireOriginEquiv.trans <|
+    targetIso.wires.trans forward.checked.wireOriginEquiv
+  let iso ← optionToExcept .semanticLedgerRejected <|
+    ConcreteIso.checkEquivs? backward.target.val planned.val
+      regions nodes wires
+  pure ⟨iso⟩
+
+end AppliedCutWrap
 
 /-- Cut wrapping is a checked whole-diagram equivalence. -/
 theorem cut_wrap_sound

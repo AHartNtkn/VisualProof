@@ -1318,15 +1318,15 @@ private def invertStep
       let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .cutWrap _ applied => do
-      let inverseWire := targetIso.wires.symm applied.inverseWire
+      let inverseWire := applied.transportedInverseWire targetIso
       let inverseApplied ←
         (applyCutAbsorb real inverseWire).mapError .contentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .cutAbsorb inverseWire inverseApplied
-      let normalizedIso ←
-        requireOption .redundancyMismatch <|
-          ConcreteIsoSearch.findConcreteIso?
-            inverseStep.target.val planned.val
+      let landing ←
+        (applied.inverseTransport targetIso inverseApplied).mapError
+          .contentRejected
+      let normalizedIso := landing.iso
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | .parallelSplit _ applied => do
       let inverseLeft := targetIso.wires.symm applied.inverseLeft

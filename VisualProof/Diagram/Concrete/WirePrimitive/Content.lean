@@ -72,6 +72,43 @@ def finEquivOfEq (exact : left = right) :
     apply Fin.ext
     rfl
 
+theorem finCount_eq
+    (equiv : Data.Finite.FiniteEquiv (Fin left) (Fin right)) :
+    left = right := by
+  apply Nat.le_antisymm
+  · exact Data.Finite.fin_card_le_of_injective equiv equiv.injective
+  · exact Data.Finite.fin_card_le_of_injective equiv.invFun (by
+      intro first second equality
+      have lifted := congrArg equiv.toFun equality
+      simpa only [equiv.right_inv] using lifted)
+
+theorem siteNodes_nodup
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (sites : AllAppliedSites source wire) :
+    (siteNodes sites.sites).Nodup := by
+  have endpointsNodup := sites.endpoints_nodup
+  have general : ∀ values : List (AppliedSite source wire),
+      (values.map AppliedSite.endpoint).Nodup →
+        (values.map AppliedSite.node).Nodup := by
+    intro values
+    induction values with
+    | nil => simp
+    | cons head tail induction =>
+        simp only [List.map_cons, List.nodup_cons]
+        rintro ⟨headFresh, tailNodup⟩
+        constructor
+        · intro headMember
+          obtain ⟨candidate, candidateMember, nodeExact⟩ :=
+            List.mem_map.mp headMember
+          apply headFresh
+          apply List.mem_map.mpr
+          refine ⟨candidate, candidateMember, ?_⟩
+          unfold AppliedSite.endpoint
+          exact congrArg (fun node => CEndpoint.mk node .head) nodeExact
+        · exact induction tailNodup
+  exact general sites.sites endpointsNodup
+
 /-- Dense survivor order followed by the checker-owned selected order. -/
 def partitionOrder (selected : List (Fin count)) : List (Fin count) :=
   (Data.Finite.allFin count).filter (fun value => decide (value ∉ selected)) ++
@@ -333,6 +370,53 @@ structure CutWrapResult
     targetWire =
       Internal.checkedWire generated (cutWrapCandidateWire signature plan)
 
+namespace CutWrapResult
+
+/-- Wrap checking identifies its checked region carrier with the original
+regions followed by the exact generated-cut positions. -/
+def extendedRegionOriginEquiv
+    (result : CutWrapResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.RegionId
+      (Fin (source.val.regionCount + result.sites.sites.length)) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    change (cutWrapBase result.plan).regionCount +
+      result.sites.sites.length = _
+    simp [cutWrapBase, Internal.batchRemovalCandidate,
+      Internal.retainedRegions, ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange,
+      ContentConstruction.length_filter_true])
+
+/-- Wrap checking reorders source nodes as retained nodes followed by the
+exact acted-site nodes. -/
+def nodeOriginEquiv
+    (result : CutWrapResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId source.val.NodeId :=
+  (ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    simp [cutWrapCandidate, cutWrapBase,
+      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+      removedSiteNodes, siteNodes, Internal.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.allFin_eq_finRange])).trans
+    (ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
+      (ContentConstruction.siteNodes_nodup result.sites))
+
+/-- Wrap checking reorders wires as retained wires followed by the acted
+relation wire. -/
+def wireOriginEquiv
+    (result : CutWrapResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId source.val.WireId :=
+  (ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    simp [cutWrapCandidate, cutWrapBase,
+      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+      Internal.retainedWires, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange,
+      ContentConstruction.length_filter_true])).trans
+    (ContentConstruction.partitionEquiv [wire] (by simp))
+
+end CutWrapResult
+
 /-- The generated cut witness retains the acted relation signature. -/
 theorem CutWrapResult.targetWire_signature
     (result : CutWrapResult source wire) :
@@ -545,6 +629,104 @@ structure CutAbsorbResult
         (cutAbsorbCandidateWire signature plan)
   inverse : CutWrapResult checked targetWire
   inverseIso : ConcreteIso inverse.checked.val source.val
+
+namespace CutAbsorbResult
+
+private theorem absorbRegions_nodup
+    (result : CutAbsorbResult source wire) :
+    (absorbRegions result.sites).Nodup := by
+  have nodeNodup := ContentConstruction.siteNodes_nodup result.sites
+  have nodesAtExact : ∀ site ∈ result.sites.sites,
+      source.val.nodesAt site.region = [site.node] := by
+    intro site member
+    have accepted :=
+      (List.all_eq_true.mp result.plan.exactCuts) site member
+    unfold absorbSiteExact at accepted
+    cases regionData : source.val.regions site.region with
+    | sheet => simp [regionData] at accepted
+    | cut parent =>
+        have facts :
+            source.val.nodesAt site.region = [site.node] ∧
+            source.val.childrenOf site.region = [] ∧
+            source.val.wiresAt site.region = [] ∧
+            parent ∉ absorbRegions result.sites := by
+          exact of_decide_eq_true (by
+            simpa [regionData] using accepted)
+        exact facts.1
+  unfold absorbRegions
+  have general : ∀ values : List (AppliedSite source wire),
+      values ⊆ result.sites.sites →
+      (values.map AppliedSite.node).Nodup →
+      (values.map AppliedSite.region).Nodup := by
+    intro values subset nodesDistinct
+    induction values with
+    | nil => simp
+    | cons head tail induction =>
+        simp only [List.map_cons, List.nodup_cons] at nodesDistinct ⊢
+        constructor
+        · intro regionMember
+          obtain ⟨candidate, candidateMember, sameRegion⟩ :=
+            List.mem_map.mp regionMember
+          have headMember : head ∈ result.sites.sites :=
+            subset (by simp)
+          have candidateFull : candidate ∈ result.sites.sites :=
+            subset (by simp [candidateMember])
+          have headNodes := nodesAtExact head headMember
+          have candidateNodes := nodesAtExact candidate candidateFull
+          rw [sameRegion] at candidateNodes
+          have sameNode : head.node = candidate.node := by
+            simpa using congrArg List.head? (headNodes.symm.trans candidateNodes)
+          exact nodesDistinct.1
+            (List.mem_map.mpr ⟨candidate, candidateMember, sameNode.symm⟩)
+        · exact induction (fun value member => subset (by simp [member]))
+            nodesDistinct.2
+  exact general result.sites.sites (fun _ member => member) nodeNodup
+
+/-- Reappend the removed exact cuts after the checked absorb target and
+recover the complete source region carrier. -/
+def reconstructionRegionEquiv
+    (result : CutAbsorbResult source wire) :
+    Data.Finite.FiniteEquiv
+      (Fin (result.checked.val.regionCount + result.sites.sites.length))
+      source.val.RegionId :=
+  (ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.regionCount result.generated]
+    simp [cutAbsorbCandidate, cutAbsorbBase,
+      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+      absorbRegions, Internal.retainedRegions, ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange])).trans
+    (ContentConstruction.partitionEquiv (absorbRegions result.sites)
+      result.absorbRegions_nodup)
+
+/-- Absorb checking reorders source nodes as retained nodes followed by the
+exact absorbed-site nodes. -/
+def nodeOriginEquiv
+    (result : CutAbsorbResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.NodeId source.val.NodeId :=
+  (ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    simp [cutAbsorbCandidate, cutAbsorbBase,
+      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+      removedSiteNodes, siteNodes, Internal.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.allFin_eq_finRange])).trans
+    (ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
+      (ContentConstruction.siteNodes_nodup result.sites))
+
+/-- Absorb checking reorders wires as retained wires followed by the acted
+relation wire. -/
+def wireOriginEquiv
+    (result : CutAbsorbResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId source.val.WireId :=
+  (ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.wireCount result.generated]
+    simp [cutAbsorbCandidate, cutAbsorbBase,
+      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+      Internal.retainedWires, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange,
+      ContentConstruction.length_filter_true])).trans
+    (ContentConstruction.partitionEquiv [wire] (by simp))
+
+end CutAbsorbResult
 
 /-- Dissolve every exact single-atom cut occupied by the acted wire. -/
 def cutAbsorb
