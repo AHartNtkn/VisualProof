@@ -299,6 +299,24 @@ theorem normalizeOne_provenance
           exact fusionSearch?_provenance source
             (identityNodeIds source.val) result found
 
+/-- Every nonempty valid trace exposes the exact public rewrite constructor
+that produced its first checked target. -/
+theorem IdentityNormalizationTrace.Valid.first_provenance
+    {source : CheckedDiagram definitions}
+    {first : IdentityRewrite source}
+    {rest : IdentityNormalizationTrace definitions first.target}
+    (valid : IdentityNormalizationTrace.Valid (.step first rest)) :
+    (∃ node, node ∈ identityNodeIds source.val ∧
+      dropDegenerate source node = some first) ∨
+    (∃ node, node ∈ identityNodeIds source.val ∧
+      collapseOnePoint source node = some first) ∨
+    (∃ left, left ∈ identityNodeIds source.val ∧
+      ∃ right, right ∈ identityNodeIds source.val ∧
+        fuseSameRegion source left right = some first) := by
+  cases valid with
+  | step selected _ =>
+      exact normalizeOne_provenance source first selected
+
 private def identityNormalizationRefl
     (source : CheckedDiagram definitions) :
     IdentityNormalization source :=
