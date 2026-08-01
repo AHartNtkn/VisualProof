@@ -1160,13 +1160,6 @@ private def compileResidual
       (ResidualCompilation orientation source context tracked.length) :=
   compileIntrinsicResidual source residual.execution tracked orientation
 
-private def tuples (length : Nat) (values : List α) : List (List α) :=
-  match length with
-  | 0 => [[]]
-  | length + 1 =>
-      values.flatMap fun head =>
-        (tuples length values).map (head :: ·)
-
 private structure InverseStepRun
     (orientation : Orientation)
     (real planned : CheckedDiagram definitions) where
@@ -1198,29 +1191,6 @@ private def vacuousBoundCandidate
         scope := site
         endpoints := [] }
 
-private def endSiteCandidates
-    (real : CheckedDiagram definitions)
-    (wire : real.val.WireId) :
-    List (ConcreteWirePrimitive.EndSite real wire) :=
-  match (real.val.wires wire).sig with
-  | .iota => []
-  | .rel arguments =>
-      real.val.regionsList.flatMap fun region =>
-        (tuples arguments.length real.val.wiresList).map fun attachments =>
-          { region := region
-            arguments := attachments }
-
-private def endsSpawnCandidates
-    (real : CheckedDiagram definitions)
-    (siteCount : Nat)
-    (orientation : Orientation) :
-    List (CompiledPrimitiveStep orientation real) :=
-  real.val.wiresList.flatMap fun wire =>
-    (tuples siteCount (endSiteCandidates real wire)).filterMap fun sites =>
-      match applyEndsSpawn real wire sites orientation with
-      | .error _ => none
-      | .ok applied => some (.endsSpawn wire sites applied)
-
 private def inverseCandidates
     {planned : CheckedDiagram definitions}
     (step : CompiledPrimitiveStep joinOrientation planned)
@@ -1237,10 +1207,7 @@ private def inverseCandidates
   | .cutAbsorb .. => throw .malformedResidual
   | .parallelSplit .. => throw .malformedResidual
   | .parallelFuse .. => throw .malformedResidual
-  | .endsDelete wire _ =>
-      pure
-        (endsSpawnCandidates real
-          (planned.val.wires wire).endpoints.length orientation)
+  | .endsDelete .. => throw .malformedResidual
   | .endsSpawn .. => throw .malformedResidual
   | .vacuousElim .. => throw .malformedResidual
   | .vacuousIntro .. => throw .malformedResidual
@@ -1382,6 +1349,23 @@ private def invertStep
           |>.mapError .leafRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .refAbstract inverseNodes inverseScope inverseApplied
+      let normalizedIso ←
+        requireOption .redundancyMismatch <|
+          ConcreteIsoSearch.findConcreteIso?
+            inverseStep.target.val planned.val
+      pure { step := inverseStep, normalizedIso := normalizedIso }
+  | .endsDelete _ applied => do
+      let inverseWire := targetIso.wires.symm applied.inverseWire
+      let inverseSites :
+          List (ConcreteWirePrimitive.EndSite real inverseWire) :=
+        applied.inverseSites.map fun site =>
+          { region := targetIso.regions.symm site.region
+            arguments := site.arguments.map targetIso.wires.symm }
+      let inverseApplied ←
+        (applyEndsSpawn real inverseWire inverseSites orientation).mapError
+          .contentRejected
+      let inverseStep : CompiledPrimitiveStep orientation real :=
+        .endsSpawn inverseWire inverseSites inverseApplied
       let normalizedIso ←
         requireOption .redundancyMismatch <|
           ConcreteIsoSearch.findConcreteIso?
