@@ -838,6 +838,39 @@ theorem identityRequestSourceWire_baseImage
     (step.identityRequestAttachment_mem_baseWireImages request port)
   simpa only [List.get_eq_getElem, List.getElem_map] using indexed
 
+/-- A copied boundary wire lands on the checked image of the source
+attachment selected by the boundary class's canonical representative. -/
+theorem checkedFragmentWire_eq_checkedWireImage_of_boundary
+    (step : RelationJoinStep source dying content)
+    (wire : content.val.diagram.WireId)
+    (boundary : wire ∈ content.val.boundary) :
+    step.checkedFragmentWire wire =
+      step.checkedWireImage
+        (step.sourceAttachments.get
+          (Fin.cast step.sourceAttachmentArity.symm
+            (step.attachment.representativePosition wire boundary))) := by
+  rw [step.checkedWireImageExact]
+  unfold checkedFragmentWire ConcreteSpliceAttachment.fragmentWire
+    ConcreteSpliceAttachment.representativeTarget
+  simp only [boundary, dite_true]
+  rw [step.targetExact]
+
+/-- Every generated request incidence lands on the checked image of its
+construction-derived source wire representative. -/
+theorem checkedIdentityAttachmentWire_eq_checkedWireImage
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    Internal.checkedWire step.generated
+        (step.attachment.hostWire
+          ((step.attachment.identityRequests.get request).attachments.get port)) =
+      step.checkedWireImage
+        (step.identityRequestSourceWire request port) := by
+  rw [step.checkedWireImageExact,
+    step.identityRequestSourceWire_baseImage]
+  rfl
+
 /-- A prior wire preserves its signature through application deletion and
 splice. -/
 theorem checkedPriorWire_signature
