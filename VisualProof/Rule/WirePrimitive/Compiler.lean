@@ -1534,7 +1534,7 @@ private def compileAppliedRelationJoin
     requireOption .redundancyMismatch <|
       ConcreteIsoSearch.findConcreteIso?
         compiled.construction.1.val monolithic.target.val
-  let normalizedIso := compiled.construction.2.trans constructionLanding
+  let compiled := compiled.retarget monolithic.target constructionLanding
   pure
     { monolithic := monolithic
       arguments := arguments
@@ -1543,7 +1543,7 @@ private def compileAppliedRelationJoin
       program := compiled.program
       remainingTracked := compiled.tracked
       trackedEmpty := trackedEmpty
-      normalizedIso := normalizedIso }
+      normalizedIso := compiled.construction.2 }
 
 /--
 Compile one accepted strongest-form relation join into the checked primitive
