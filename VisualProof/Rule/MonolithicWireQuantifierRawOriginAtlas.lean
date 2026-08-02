@@ -834,6 +834,77 @@ def expectedRoot
     RelationJoinRawRegionOrigin result :=
   .inl source.val.root
 
+/-- The executable enumeration classifier sends every retained source region
+to its source origin. -/
+theorem ofResult_source_region_exact
+    (result : RelationJoinResult source dying content parameters)
+    (region : source.val.RegionId) :
+    (ofResult result).regionEquiv
+        (result.plainBoundRegionImage
+          (result.boundRegionImage region)) = .inl region := by
+  unfold ofResult finiteEquivOfEnumeration
+  change (relationJoinRawRegionOrigins result).get
+      (Fin.cast (relationJoinRawRegionOrigins_length result)
+        (result.plainBoundRegionImage
+          (result.boundRegionImage region))) = .inl region
+  let fresh : List (RelationJoinRawRegionOrigin result) :=
+    (((Data.Finite.allFin result.steps.length).flatMap fun occurrence =>
+      (result.steps.get occurrence).attachment.fragmentRegions.attach.map
+        fun copiedRegion =>
+          ⟨occurrence,
+            ⟨copiedRegion.1, by
+              have member := List.mem_filter.mp copiedRegion.2
+              exact of_decide_eq_true member.2⟩⟩).map Sum.inr)
+  have positionExact :
+      Fin.cast (relationJoinRawRegionOrigins_length result)
+          (result.plainBoundRegionImage
+            (result.boundRegionImage region)) =
+        Fin.cast (by
+          simp [relationJoinRawRegionOrigins, fresh,
+            ConcreteDiagram.regionsList,
+            Data.Finite.allFin_eq_finRange])
+          (Fin.castAdd fresh.length region) := by
+    apply Fin.ext
+    simp
+  rw [positionExact]
+  simp [relationJoinRawRegionOrigins, fresh,
+    ConcreteDiagram.regionsList, Data.Finite.allFin_eq_finRange]
+
+theorem ofResult_root_exact
+    (result : RelationJoinResult source dying content parameters) :
+    (ofResult result).regionEquiv result.plainFinal.val.root =
+      expectedRoot result := by
+  rw [result.plainFinal_root_eq_source_image]
+  have landing := ofResult_source_region_exact result source.val.root
+  simpa [expectedRoot] using landing
+
+theorem ofResult_source_region_data_exact
+    (result : RelationJoinResult source dying content parameters)
+    (region : source.val.RegionId) :
+    (match result.plainFinal.val.regions
+        ((ofResult result).regionEquiv.symm (.inl region)) with
+      | .sheet => RelationJoinRawRegionData.sheet
+      | .cut parent =>
+          RelationJoinRawRegionData.cut
+            ((ofResult result).regionEquiv parent)) =
+      expectedRegionData result (.inl region) := by
+  let actual := result.plainBoundRegionImage
+    (result.boundRegionImage region)
+  have landing : (ofResult result).regionEquiv actual = .inl region :=
+    ofResult_source_region_exact result region
+  have inverseExact :
+      (ofResult result).regionEquiv.symm (.inl region) = actual := by
+    apply (ofResult result).regionEquiv.injective
+    rw [(ofResult result).regionEquiv.apply_symm_apply, landing]
+  rw [inverseExact]
+  rw [result.plainSourceRegionImage_data]
+  cases data : source.val.regions region with
+  | sheet => simp [expectedRegionData, data]
+  | cut parent =>
+      simp only [expectedRegionData, data]
+      exact congrArg RelationJoinRawRegionData.cut
+        (ofResult_source_region_exact result parent)
+
 /-- Exact table obligations connecting the allocation-neutral expected model
 to the checked raw construction.  The right-hand sides are the independent
 source/content/request fold above; no final-table readback participates in
