@@ -4561,6 +4561,38 @@ def concreteResult
       input.parameters :=
   applied.checked.result
 
+/-- The accepted join landing before the concrete result's single eager
+identity-normalization pass.  The primitive compiler targets this raw carrier;
+normalization remains derived state rather than a durable primitive step. -/
+def plainFinal
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    CheckedDiagram definitions :=
+  applied.concreteResult.plainFinal
+
+/-- The canonical checked carrier obtained by normalizing the raw accepted
+join landing. -/
+def normalizedPlainFinal
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    CheckedDiagram definitions :=
+  (ConcreteDiagram.normalizeIdentities applied.plainFinal).target
+
+/-- The monolithic public target is exactly the canonical normalization of its
+raw `plainFinal` carrier. -/
+theorem normalizedPlainFinal_eq_target
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    applied.normalizedPlainFinal = applied.target := by
+  obtain ⟨_steps, normalization, _semantic, _applications,
+      normalizationExact, checkedExact⟩ :=
+    applied.concreteResult.trace_complete
+  rw [normalizationExact] at checkedExact
+  exact checkedExact.trans applied.checked.targetExact.symm
+
 /-- The public target is exactly the concrete strongest-form result. -/
 theorem target_eq_concreteResult
     {source : CheckedDiagram definitions}
