@@ -485,6 +485,14 @@ theorem removedWires_nodup
     (sites.flatMap RelationSeverSite.removedWires).Nodup :=
   result.plan.removedWiresNodup
 
+/-- Every accepted sever site keeps its attachment region in the complement. -/
+theorem siteRegion_survives
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    (sites.get site).region ∈
+      Internal.retainedRegions source (relationRemovedRegions sites) :=
+  result.plan.siteRegionRetained site
+
 /-- The parent of a retained source region is retained by the same batch. -/
 theorem regionParent_survives
     (result : RelationSeverResult source scope sites)

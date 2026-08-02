@@ -217,6 +217,18 @@ private theorem checkedOccurrence_allRegions
     CheckedSelection.IsSelectedRegion, CheckedSelection.subtreeRoots]
   rw [rootsExact]
 
+private theorem checkedOccurrence_region
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content) :
+    content.occurrence.region = content.selection.region := by
+  have inputExact := checked.extraction.selection_input_eq
+  have regionExact := congrArg SelectionInput.region inputExact
+  rw [← Occurrence.toSelection_region]
+  exact regionExact
+
 private theorem checkedOccurrence_allNodes
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -402,6 +414,49 @@ private theorem CheckedOccurrenceList.semanticEvidence_sites
       simp [CheckedOccurrenceList.semanticEvidence,
         WireQuantifierSemantics.RelationSeverOccurrence.site,
         ContentOccurrence.toConcreteSite, induction]
+
+/-- Every proper pattern region belongs to the exact removal segment of its
+checked occurrence. -/
+private theorem CheckedOccurrenceList.properRegion_mem_removedRegions
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (content : ContentOccurrence source pattern)
+    (member : content ∈ contents)
+    (region : pattern.val.diagram.RegionId)
+    (nonroot : region ≠ pattern.val.diagram.root) :
+    content.occurrence.regionMap region ∈
+      content.toConcreteSite.removedRegions := by
+  induction entries generalizing content with
+  | nil => simp at member
+  | @cons head rest checked tail induction =>
+      rcases List.mem_cons.mp member with rfl | member
+      · change content.occurrence.regionMap region ∈
+          content.selection.allRegions
+        rw [← checkedOccurrence_allRegions checked]
+        rw [content.occurrence.mem_toSelection_allRegions_iff_image]
+        exact ⟨region, nonroot, rfl⟩
+      · exact induction content member
+
+private theorem CheckedOccurrenceList.occurrenceRegion_eq_selectionRegion
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (content : ContentOccurrence source pattern)
+    (member : content ∈ contents) :
+    content.occurrence.region = content.selection.region := by
+  induction entries generalizing content with
+  | nil => simp at member
+  | @cons head rest checked tail induction =>
+      rcases List.mem_cons.mp member with rfl | member
+      · exact checkedOccurrence_region checked
+      · exact induction content member
 
 private theorem CheckedOccurrenceList.removedRegions_length
     {source : CheckedDiagram definitions}
@@ -639,6 +694,77 @@ private theorem CheckedOccurrenceList.wireCoverage
           exact Or.inr
             ⟨candidate, by simp [member], patternWire, internal, mapped⟩
 
+/-- In a nodup sever partition, a proper region of the next occurrence is
+neither retained nor represented by any earlier occurrence. -/
+private theorem properRegion_not_covered_before
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    {first : ContentOccurrence source pattern}
+    {contents restored : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (sitesExact : sites = contents.map ContentOccurrence.toConcreteSite)
+    (content : ContentOccurrence source pattern)
+    (suffix : List (ContentOccurrence source pattern))
+    (decomposition : contents = restored ++ content :: suffix)
+    (region : pattern.val.diagram.RegionId)
+    (nonroot : region ≠ pattern.val.diagram.root) :
+    ¬ BatchCoveredRegion sites restored
+      (content.occurrence.regionMap region) := by
+  intro covered
+  have contentMember : content ∈ contents := by
+    rw [decomposition]
+    simp
+  have currentMember :=
+    entries.properRegion_mem_removedRegions content contentMember region
+      nonroot
+  let prefixRemoved :=
+    (restored.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedRegions
+  let suffixRemoved :=
+    (suffix.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedRegions
+  have removedExact :
+      sites.flatMap
+          ConcreteWireQuantifier.RelationSeverSite.removedRegions =
+        prefixRemoved ++ content.toConcreteSite.removedRegions ++
+          suffixRemoved := by
+    rw [sitesExact, decomposition]
+    simp [prefixRemoved, suffixRemoved]
+  rcases covered with retained | represented
+  · exact retained (removedExact.symm ▸ (by
+      simp [currentMember]))
+  · rcases represented with
+      ⟨candidate, candidateMember, candidateRegion, candidateNonroot,
+        mapped⟩
+    have candidateInContents : candidate ∈ contents := by
+      rw [decomposition]
+      exact List.mem_append.mpr (Or.inl candidateMember)
+    have candidateRemoved :=
+      entries.properRegion_mem_removedRegions candidate candidateInContents
+        candidateRegion candidateNonroot
+    have prefixMember :
+        content.occurrence.regionMap region ∈ prefixRemoved := by
+      rw [← mapped]
+      exact List.mem_flatMap.mpr
+        ⟨candidate.toConcreteSite,
+          List.mem_map.mpr ⟨candidate, candidateMember, rfl⟩,
+          candidateRemoved⟩
+    have currentInSuffix :
+        content.occurrence.regionMap region ∈
+          content.toConcreteSite.removedRegions ++ suffixRemoved := by
+      exact List.mem_append.mpr (Or.inl currentMember)
+    have nodup :
+        (prefixRemoved ++
+          (content.toConcreteSite.removedRegions ++ suffixRemoved)).Nodup := by
+      have fullNodup := result.removedRegions_nodup
+      rw [removedExact] at fullNodup
+      simpa [List.append_assoc] using fullNodup
+    exact (List.nodup_append.mp nodup).2.2 _ prefixMember _
+      currentInSuffix rfl
+
 /-- Construction state for the snoc induction restoring a severed family. -/
 private theorem denseIndex_injective
     [DecidableEq α]
@@ -665,6 +791,35 @@ private structure BatchReconstructionState
         BatchCoveredRegion sites restored region } →
       current.val.RegionId
   regionImage_injective : Function.Injective regionImage
+  retainedRegionImage_val :
+    ∀ region (retained : retainedBySitesRegion sites region),
+      (regionImage ⟨region, Or.inl retained⟩).val =
+        (ConcreteWireQuantifier.Internal.retainedRegionIndex source
+          (sites.flatMap
+            ConcreteWireQuantifier.RelationSeverSite.removedRegions)
+          region (by
+            apply List.mem_filter.mpr
+            exact ⟨by
+              simp [ConcreteDiagram.regionsList,
+                Data.Finite.mem_allFin], decide_eq_true retained⟩)).val
+  regionParentCovered :
+    ∀ region : { region : source.val.RegionId //
+        BatchCoveredRegion sites restored region },
+      ∀ parent,
+        source.val.regions region.1 = .cut parent →
+          BatchCoveredRegion sites restored parent
+  regionSheetExact :
+    ∀ region : { region : source.val.RegionId //
+        BatchCoveredRegion sites restored region },
+      source.val.regions region.1 = .sheet →
+        current.val.regions (regionImage region) = .sheet
+  regionCutExact :
+    ∀ region : { region : source.val.RegionId //
+        BatchCoveredRegion sites restored region },
+      ∀ parent (data : source.val.regions region.1 = .cut parent),
+        current.val.regions (regionImage region) =
+          .cut (regionImage
+            ⟨parent, regionParentCovered region parent data⟩)
   nodeImage :
     { node : source.val.NodeId //
         BatchCoveredNode sites restored node } →
@@ -979,6 +1134,31 @@ private def batchReconstructionNil
             using right.2))
     apply Fin.ext
     simpa using congrArg Fin.val same
+  retainedRegionImage_val := by
+    intro region retained
+    rfl
+  regionParentCovered := by
+    intro region parent data
+    apply Or.inl
+    have regionRetained := (result.retainedRegion_iff region.1).mpr (by
+      simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
+        using region.2)
+    exact (result.retainedRegion_iff parent).mp
+      (result.regionParent_survives region.1 regionRetained parent data)
+  regionSheetExact := by
+    intro region data
+    apply result.regionImage_sheet region.1
+      ((result.retainedRegion_iff region.1).mpr (by
+        simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
+          using region.2))
+    exact data
+  regionCutExact := by
+    intro region parent data
+    apply result.regionImage_cut region.1
+      ((result.retainedRegion_iff region.1).mpr (by
+        simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
+          using region.2))
+      parent data
   nodeImage := fun node =>
     result.nodeImage node.1 (by
       have retained :
@@ -1689,7 +1869,24 @@ private noncomputable def batchReconstructionSnoc
       HEq step.priorNodeImage state.joinNodeImage)
     (tail : List joinSource.val.NodeId)
     (pendingOriginsExact :
-      state.pendingOrigins = step.application :: tail) :
+      state.pendingOrigins = step.application :: tail)
+    (freshRegionsNew :
+      ∀ region, region ≠ pattern.val.diagram.root →
+        ¬ BatchCoveredRegion sites restored
+          (content.occurrence.regionMap region))
+    (rootCovered :
+      BatchCoveredRegion sites restored
+        (content.occurrence.regionMap pattern.val.diagram.root))
+    (rootExact :
+      step.checkedFragmentRegion pattern.val.diagram.root =
+        step.checkedPriorRegion
+          (Fin.cast
+            (congrArg
+              (fun checked : CheckedDiagram definitions =>
+                checked.val.regionCount) priorExact).symm
+            (state.regionImage
+              ⟨content.occurrence.regionMap pattern.val.diagram.root,
+                rootCovered⟩))) :
     BatchReconstructionState sites (restored ++ [content]) step.checked
       joinSource := by
   classical
@@ -1703,6 +1900,17 @@ private noncomputable def batchReconstructionSnoc
       ← priorNodeImageExact']
     simp only [List.filterMap_cons, step.priorApplicationImage,
       List.mem_cons, true_or]
+  have coveredRegion_mono :
+      ∀ {region}, BatchCoveredRegion sites restored region →
+        BatchCoveredRegion sites (restored ++ [content]) region := by
+    intro region covered
+    rcases covered with retained | represented
+    · exact Or.inl retained
+    · rcases represented with
+        ⟨candidate, member, patternRegion, nonroot, mapped⟩
+      exact Or.inr
+        ⟨candidate, List.mem_append.mpr (Or.inl member), patternRegion,
+          nonroot, mapped⟩
   exact
     { regionImage := fun region =>
         if old : BatchCoveredRegion sites restored region.1 then
@@ -1750,6 +1958,108 @@ private noncomputable def batchReconstructionSnoc
             apply Subtype.ext
             exact leftFresh.choose_spec.2.symm.trans
               (patternSame ▸ rightFresh.choose_spec.2)
+      retainedRegionImage_val := by
+        intro region retained
+        split
+        next old =>
+          rw [step.checkedPriorRegion_val]
+          exact state.retainedRegionImage_val region retained
+        next old => exact False.elim (old (Or.inl retained))
+      regionParentCovered := by
+        intro region parent data
+        by_cases old : BatchCoveredRegion sites restored region.1
+        · exact coveredRegion_mono
+            (state.regionParentCovered ⟨region.1, old⟩ parent data)
+        · let fresh := newlyCoveredRegion content region.1 region.2 old
+          cases patternData : pattern.val.diagram.regions fresh.choose with
+          | sheet =>
+              have onlyRoot := of_decide_eq_true
+                (List.all_eq_true.mp
+                  pattern.property.diagram.only_root_is_sheet fresh.choose
+                  (Data.Finite.mem_allFin fresh.choose))
+              exact False.elim
+                (fresh.choose_spec.1 (onlyRoot patternData))
+          | cut patternParent =>
+              have mappedData := content.occurrence.maps_parentage
+                fresh.choose patternParent patternData
+              rw [fresh.choose_spec.2] at mappedData
+              have parentExact :
+                  content.occurrence.regionMap patternParent = parent :=
+                CRegion.cut.inj (mappedData.symm.trans data)
+              subst parent
+              by_cases parentRoot :
+                  patternParent = pattern.val.diagram.root
+              · subst patternParent
+                exact coveredRegion_mono rootCovered
+              · exact Or.inr
+                  ⟨content, by simp, patternParent, parentRoot, rfl⟩
+      regionSheetExact := by
+        intro region data
+        by_cases old : BatchCoveredRegion sites restored region.1
+        · rw [dif_pos old]
+          apply step.checkedPriorRegion_sheet
+          exact state.regionSheetExact ⟨region.1, old⟩ data
+        · let fresh := newlyCoveredRegion content region.1 region.2 old
+          cases patternData : pattern.val.diagram.regions fresh.choose with
+          | sheet =>
+              have onlyRoot := of_decide_eq_true
+                (List.all_eq_true.mp
+                  pattern.property.diagram.only_root_is_sheet fresh.choose
+                  (Data.Finite.mem_allFin fresh.choose))
+              exact False.elim
+                (fresh.choose_spec.1 (onlyRoot patternData))
+          | cut patternParent =>
+              have mappedData := content.occurrence.maps_parentage
+                fresh.choose patternParent patternData
+              rw [fresh.choose_spec.2, data] at mappedData
+              contradiction
+      regionCutExact := by
+        intro region parent data
+        by_cases old : BatchCoveredRegion sites restored region.1
+        · have parentOld := state.regionParentCovered
+            ⟨region.1, old⟩ parent data
+          rw [dif_pos old, dif_pos parentOld]
+          apply step.checkedPriorRegion_cut
+          exact state.regionCutExact ⟨region.1, old⟩ parent data
+        · let fresh := newlyCoveredRegion content region.1 region.2 old
+          cases patternData : pattern.val.diagram.regions fresh.choose with
+          | sheet =>
+              have onlyRoot := of_decide_eq_true
+                (List.all_eq_true.mp
+                  pattern.property.diagram.only_root_is_sheet fresh.choose
+                  (Data.Finite.mem_allFin fresh.choose))
+              exact False.elim
+                (fresh.choose_spec.1 (onlyRoot patternData))
+          | cut patternParent =>
+              have mappedData := content.occurrence.maps_parentage
+                fresh.choose patternParent patternData
+              rw [fresh.choose_spec.2] at mappedData
+              have parentExact :
+                  content.occurrence.regionMap patternParent = parent :=
+                CRegion.cut.inj (mappedData.symm.trans data)
+              subst parent
+              rw [dif_neg old]
+              rw [step.checkedFragmentRegion_cut fresh.choose patternParent
+                fresh.choose_spec.1 patternData]
+              by_cases parentRoot :
+                  patternParent = pattern.val.diagram.root
+              · subst patternParent
+                rw [dif_pos rootCovered]
+                exact congrArg CRegion.cut rootExact
+              · have parentNew := freshRegionsNew patternParent parentRoot
+                rw [dif_neg parentNew]
+                let parentFresh := newlyCoveredRegion content
+                  (content.occurrence.regionMap patternParent)
+                  (Or.inr ⟨content, by simp, patternParent, parentRoot, rfl⟩)
+                  parentNew
+                have parentPatternExact :
+                    parentFresh.choose = patternParent :=
+                  content.occurrence.regionMap_injective
+                    parentFresh.choose_spec.2
+                exact congrArg
+                  (fun candidate =>
+                    CRegion.cut (step.checkedFragmentRegion candidate))
+                  parentPatternExact.symm
       nodeImage := fun node =>
         if old : BatchCoveredNode sites restored node.1 then
           step.checkedPriorNode (state.nodeImage ⟨node.1, old⟩)
@@ -1962,6 +2272,10 @@ private theorem batchReconstructionTraceFold_exists
     {scope : source.val.RegionId}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
     (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (allContents : List (ContentOccurrence source pattern))
+    (first : ContentOccurrence source pattern)
+    (entries : CheckedOccurrenceList scope first allContents)
+    (sitesExact : sites = allContents.map ContentOccurrence.toConcreteSite)
     (parameters : List result.checked.val.WireId)
     (args : List Sig)
     {steps : List (ConcreteWireQuantifier.RelationJoinStep
@@ -1976,6 +2290,8 @@ private theorem batchReconstructionTraceFold_exists
       result.checked result.relationWire pattern parameters args steps current
         regionImage nodeImage wireImage currentDying currentScope)
     (contents : List (ContentOccurrence source pattern))
+    (suffix : List (ContentOccurrence source pattern))
+    (allContentsDecomposition : allContents = contents ++ suffix)
     (contentsLength : contents.length = steps.length)
     (applicationsExact :
       steps.map ConcreteWireQuantifier.RelationJoinStep.application =
@@ -1983,7 +2299,7 @@ private theorem batchReconstructionTraceFold_exists
     Nonempty
       (BatchReconstructionTraceState (steps := steps) result contents current
         nodeImage currentDying) := by
-  induction trace generalizing contents with
+  induction trace generalizing contents suffix with
   | nil =>
       have contentsEmpty : contents = [] :=
         List.eq_nil_of_length_eq_zero (by simpa using contentsLength)
@@ -2031,7 +2347,13 @@ private theorem batchReconstructionTraceFold_exists
         simpa [List.map_append, List.take_take,
           Nat.min_eq_left (Nat.le_succ priorSteps.length)] using restricted
       obtain ⟨priorState⟩ :=
-        induction prefixContents prefixLength prefixApplicationsExact
+        induction prefixContents (content :: suffix) (by
+          calc
+            allContents = contents ++ suffix := allContentsDecomposition
+            _ = (prefixContents ++ [content]) ++ suffix := by
+              rw [contentsDecomposition]
+            _ = prefixContents ++ content :: suffix := by simp)
+          prefixLength prefixApplicationsExact
       have atomsDecomposition :
           result.atoms =
             (priorSteps.map
@@ -2073,10 +2395,153 @@ private theorem batchReconstructionTraceFold_exists
       have priorNodeStateExact :
           HEq step.priorNodeImage priorState.state.joinNodeImage :=
         priorNodeExact.trans priorState.joinNodeImageExact.symm
+      have currentAllDecomposition :
+          allContents = prefixContents ++ content :: suffix := by
+        calc
+          allContents = contents ++ suffix := allContentsDecomposition
+          _ = (prefixContents ++ [content]) ++ suffix := by
+            rw [contentsDecomposition]
+          _ = prefixContents ++ content :: suffix := by simp
+      have freshRegionsNew :
+          ∀ region, region ≠ pattern.val.diagram.root →
+            ¬ BatchCoveredRegion sites prefixContents
+              (content.occurrence.regionMap region) :=
+        properRegion_not_covered_before result entries sitesExact content
+          suffix currentAllDecomposition
+      have contentMember : content ∈ allContents := by
+        rw [currentAllDecomposition]
+        simp
+      have positionLtSites : priorSteps.length < sites.length := by
+        have lengths := congrArg List.length sitesExact
+        rw [currentAllDecomposition] at lengths
+        simp at lengths
+        omega
+      let site : Fin sites.length :=
+        ⟨priorSteps.length, positionLtSites⟩
+      have siteExact : sites.get site = content.toConcreteSite := by
+        have atPosition := congrArg
+          (fun candidates => candidates[priorSteps.length]?) sitesExact
+        rw [currentAllDecomposition] at atPosition
+        change sites[priorSteps.length]? =
+          ((prefixContents ++ content :: suffix).map
+            ContentOccurrence.toConcreteSite)[priorSteps.length]?
+            at atPosition
+        have leftAt : sites[priorSteps.length]? = some (sites.get site) := by
+          simp [List.getElem?_eq_getElem, positionLtSites, site]
+        have rightAt :
+            ((prefixContents ++ content :: suffix).map
+              ContentOccurrence.toConcreteSite)[priorSteps.length]? =
+              some content.toConcreteSite := by
+          simp [prefixLength]
+        rw [leftAt, rightAt] at atPosition
+        exact Option.some.inj atPosition
+      have applicationExact : step.application = result.atom site := by
+        have atPosition := congrArg
+          (fun applications => applications[priorSteps.length]?)
+          applicationsExact
+        simpa [List.map_append, site,
+          ConcreteWireQuantifier.RelationSeverResult.atoms,
+          Data.Finite.allFin_eq_finRange, positionLtSites] using atPosition
+      have rootRetainedMember :
+          content.occurrence.regionMap pattern.val.diagram.root ∈
+            ConcreteWireQuantifier.Internal.retainedRegions source
+              (sites.flatMap
+                ConcreteWireQuantifier.RelationSeverSite.removedRegions) := by
+        have retained := result.siteRegion_survives site
+        rw [siteExact] at retained
+        have regionExact :=
+          entries.occurrenceRegion_eq_selectionRegion content contentMember
+        simpa [Occurrence.maps_root, regionExact] using retained
+      have rootRetained :
+          retainedBySitesRegion sites
+            (content.occurrence.regionMap pattern.val.diagram.root) :=
+        (result.retainedRegion_iff _).mp rootRetainedMember
+      have rootCovered :
+          BatchCoveredRegion sites prefixContents
+            (content.occurrence.regionMap pattern.val.diagram.root) :=
+        Or.inl rootRetained
       let next := batchReconstructionSnoc priorState.state content step
         rfl priorNodeStateExact
         (result.atoms.drop (priorSteps.length + 1)) (by
           rw [priorState.pendingOriginsExact, pendingHead])
+        freshRegionsNew rootCovered (by
+          apply Fin.ext
+          have sourceRegionExact :
+              step.sourceRegion =
+                result.regionImage
+                  (content.occurrence.regionMap
+                    pattern.val.diagram.root) rootRetainedMember := by
+            have sameNode := step.sourceNodeExact
+            rw [applicationExact, result.atom_generated] at sameNode
+            have regionExact :=
+              entries.occurrenceRegion_eq_selectionRegion content contentMember
+            have siteRegionExact :
+                (sites.get site).region =
+                  content.occurrence.regionMap pattern.val.diagram.root := by
+              have selectedRegionExact := congrArg
+                ConcreteWireQuantifier.RelationSeverSite.region siteExact
+              change (sites.get site).region = content.selection.region
+                at selectedRegionExact
+              simpa [Occurrence.maps_root, regionExact] using
+                selectedRegionExact
+            have siteRetainedMember := result.siteRegion_survives site
+            have sourceFromSite :
+                step.sourceRegion =
+                  result.regionImage (sites.get site).region
+                    siteRetainedMember := by
+              simpa using (CNode.atom.inj sameNode).1.symm
+            have regionImage_congr :
+                ∀ (left right : source.val.RegionId)
+                  (leftMember : left ∈
+                    ConcreteWireQuantifier.Internal.retainedRegions source
+                      (sites.flatMap
+                        ConcreteWireQuantifier.RelationSeverSite.removedRegions))
+                  (rightMember : right ∈
+                    ConcreteWireQuantifier.Internal.retainedRegions source
+                      (sites.flatMap
+                        ConcreteWireQuantifier.RelationSeverSite.removedRegions)),
+                  left = right →
+                    result.regionImage left leftMember =
+                      result.regionImage right rightMember := by
+              intro left right leftMember rightMember same
+              subst right
+              rfl
+            exact sourceFromSite.trans
+              (regionImage_congr _ _ siteRetainedMember rootRetainedMember
+                siteRegionExact)
+          change
+            (step.checkedFragmentRegion pattern.val.diagram.root).val =
+              (step.checkedPriorRegion
+                (priorState.state.regionImage
+                  ⟨content.occurrence.regionMap pattern.val.diagram.root,
+                    rootCovered⟩)).val
+          rw [step.checkedPriorRegion_val]
+          calc
+            (step.checkedFragmentRegion pattern.val.diagram.root).val =
+                step.site.val := by
+              simp [ConcreteWireQuantifier.RelationJoinStep.checkedFragmentRegion,
+                ConcreteSpliceAttachment.fragmentRegion,
+                ConcreteSpliceAttachment.hostRegion]
+            _ = (step.baseRegionImage step.sourceRegion).val := by
+              rw [step.siteExact]
+            _ = (step.priorRegionImage step.sourceRegion).val := by
+              rw [step.baseRegionImageExact]
+              rfl
+            _ = step.sourceRegion.val := step.priorRegionImageVal _
+            _ = (result.regionImage
+                  (content.occurrence.regionMap pattern.val.diagram.root)
+                  rootRetainedMember).val := congrArg Fin.val sourceRegionExact
+            _ = (ConcreteWireQuantifier.Internal.retainedRegionIndex source
+                  (sites.flatMap
+                    ConcreteWireQuantifier.RelationSeverSite.removedRegions)
+                  (content.occurrence.regionMap pattern.val.diagram.root)
+                  rootRetainedMember).val :=
+              result.regionImage_val _ rootRetainedMember
+            _ = (priorState.state.regionImage
+                  ⟨content.occurrence.regionMap pattern.val.diagram.root,
+                    rootCovered⟩).val := by
+              symm
+              exact priorState.state.retainedRegionImage_val _ rootRetained)
       have nextPending :
           next.pendingOrigins =
             result.atoms.drop (priorSteps ++ [step]).length := by
@@ -2149,9 +2614,11 @@ private theorem RelationSeverConcreteReceipt.fullReconstructionState_exists
       _ = receipt.result.atoms.take receipt.inverse.steps.length := by
         rw [stepsAtomsLength]
         simp
-  exact batchReconstructionTraceFold_exists receipt.result
-    receipt.parameters receipt.inverse.args receipt.inverse.semantic_trace
-      occurrences contentsLength applicationsExact
+  exact batchReconstructionTraceFold_exists receipt.result occurrences
+    receipt.extractions.first receipt.extractions.entries
+    receipt.extractions.entries.semanticEvidence_sites receipt.parameters
+    receipt.inverse.args receipt.inverse.semantic_trace occurrences []
+      (by simp) contentsLength applicationsExact
 
 private noncomputable def
     RelationSeverConcreteReceipt.fullReconstructionState

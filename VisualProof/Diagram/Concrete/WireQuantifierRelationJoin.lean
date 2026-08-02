@@ -329,6 +329,7 @@ structure RelationJoinStep
   priorApplicationImage :
     priorNodeImage application = some priorApplication
   priorRegionImage : source.val.RegionId → prior.val.RegionId
+  priorRegionImageVal : ∀ region, (priorRegionImage region).val = region.val
   priorRegionImageEncloses :
     ∀ outer inner,
       prior.val.Encloses
@@ -584,6 +585,13 @@ theorem checkedPriorRegion_injective
   intro left right same
   apply Fin.ext
   simpa using congrArg Fin.val same
+
+@[simp] theorem checkedRegionImage_val
+    (step : RelationJoinStep source dying content)
+    (region : source.val.RegionId) :
+    (step.checkedRegionImage region).val = region.val := by
+  rw [step.checkedRegionImageExact, step.baseRegionImageExact]
+  exact step.priorRegionImageVal region
 
 theorem checkedPriorWire_injective
     (step : RelationJoinStep source dying content) :
@@ -1233,6 +1241,7 @@ private structure RelationJoinState
     (args : List Sig) : Type where
   checked : CheckedDiagram definitions
   regionImage : source.val.RegionId → checked.val.RegionId
+  regionImage_val : ∀ region, (regionImage region).val = region.val
   regionImage_encloses :
     ∀ outer inner,
       checked.val.Encloses (regionImage outer) (regionImage inner) ↔
@@ -1305,6 +1314,7 @@ private def relationJoinInitialState
   let state : RelationJoinState source wire content parameters plan.args :=
     { checked := source
       regionImage := id
+      regionImage_val := fun _ => rfl
       regionImage_encloses := fun _ _ => Iff.rfl
       wireImage := id
       wireImage_injective := Function.injective_id
@@ -1517,6 +1527,8 @@ private def spliceRelationApplication
                                           priorApplicationAccepted
                                         priorRegionImage :=
                                           state.regionImage
+                                        priorRegionImageVal :=
+                                          state.regionImage_val
                                         priorRegionImageEncloses :=
                                           state.regionImage_encloses
                                         priorWireImage := state.wireImage
@@ -1608,6 +1620,8 @@ private def spliceRelationApplication
                                       { checked := next
                                         regionImage :=
                                           step.checkedRegionImage
+                                        regionImage_val :=
+                                          step.checkedRegionImage_val
                                         regionImage_encloses :=
                                           step.checkedRegionImageEncloses
                                         wireImage := step.checkedWireImage
