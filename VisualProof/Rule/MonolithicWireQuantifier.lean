@@ -497,7 +497,8 @@ private structure BatchReconstructionState
     {pattern : CheckedOpenDiagram definitions}
     (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
     (restored : List (ContentOccurrence source pattern))
-    (current : CheckedDiagram definitions) where
+    (current : CheckedDiagram definitions)
+    (joinSource : CheckedDiagram definitions) where
   regionImage :
     { region : source.val.RegionId //
         BatchCoveredRegion sites restored region } →
@@ -510,7 +511,11 @@ private structure BatchReconstructionState
     { wire : source.val.WireId //
         BatchCoveredWire sites restored wire } →
       current.val.WireId
+  joinNodeImage : joinSource.val.NodeId → Option current.val.NodeId
+  pendingOrigins : List joinSource.val.NodeId
   pendingApplications : List current.val.NodeId
+  pendingApplicationsExact :
+    pendingApplications = pendingOrigins.filterMap joinNodeImage
   representedNodesAvoidPending :
     ∀ node :
         { node : source.val.NodeId //
@@ -528,7 +533,8 @@ private def completeRegionImage
     {scope : source.val.RegionId}
     {first : ContentOccurrence source pattern}
     (state : BatchReconstructionState
-      (contents.map ContentOccurrence.toConcreteSite) contents current)
+      (contents.map ContentOccurrence.toConcreteSite) contents current
+        joinSource)
     (entries : CheckedOccurrenceList scope first contents) :
     source.val.RegionId → current.val.RegionId :=
   fun region => state.regionImage ⟨region, entries.regionCoverage region⟩
@@ -542,7 +548,8 @@ private def completeNodeImage
     {scope : source.val.RegionId}
     {first : ContentOccurrence source pattern}
     (state : BatchReconstructionState
-      (contents.map ContentOccurrence.toConcreteSite) contents current)
+      (contents.map ContentOccurrence.toConcreteSite) contents current
+        joinSource)
     (entries : CheckedOccurrenceList scope first contents) :
     source.val.NodeId → current.val.NodeId :=
   fun node => state.nodeImage ⟨node, entries.nodeCoverage node⟩
@@ -556,7 +563,8 @@ private def completeWireImage
     {scope : source.val.RegionId}
     {first : ContentOccurrence source pattern}
     (state : BatchReconstructionState
-      (contents.map ContentOccurrence.toConcreteSite) contents current)
+      (contents.map ContentOccurrence.toConcreteSite) contents current
+        joinSource)
     (entries : CheckedOccurrenceList scope first contents) :
     source.val.WireId → current.val.WireId :=
   fun wire => state.wireImage ⟨wire, entries.wireCoverage wire⟩
@@ -777,7 +785,8 @@ private def batchReconstructionNil
     {scope : source.val.RegionId}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
     (result : ConcreteWireQuantifier.RelationSeverResult source scope sites) :
-    BatchReconstructionState (pattern := pattern) sites [] result.checked where
+    BatchReconstructionState (pattern := pattern) sites [] result.checked
+      result.checked where
   regionImage := fun region =>
     result.regionImage region.1 (by
       have retained :
@@ -805,7 +814,10 @@ private def batchReconstructionNil
         simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
           using wire.2
       exact (result.retainedWire_iff wire.1).mpr retained)
+  joinNodeImage := fun node => some node
+  pendingOrigins := result.atoms
   pendingApplications := result.atoms
+  pendingApplicationsExact := by simp
   representedNodesAvoidPending := by
     intro node pending
     have retained :
@@ -834,19 +846,30 @@ private noncomputable def batchReconstructionSnoc
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
     {restored : List (ContentOccurrence source pattern)}
     {current : CheckedDiagram definitions}
-    (state : BatchReconstructionState sites restored current)
-    (content : ContentOccurrence source pattern)
     {joinSource : CheckedDiagram definitions}
+    (state : BatchReconstructionState sites restored current joinSource)
+    (content : ContentOccurrence source pattern)
     {dying : joinSource.val.WireId}
     (step : ConcreteWireQuantifier.RelationJoinStep joinSource dying pattern)
     (priorExact : step.prior = current)
-    (currentApplication :
-      step.priorApplication ∈
-        cast (congrArg (fun checked => List checked.val.NodeId)
-          priorExact.symm) state.pendingApplications) :
-    BatchReconstructionState sites (restored ++ [content]) step.checked := by
+    (priorNodeImageExact :
+      HEq step.priorNodeImage state.joinNodeImage)
+    (tail : List joinSource.val.NodeId)
+    (pendingOriginsExact :
+      state.pendingOrigins = step.application :: tail) :
+    BatchReconstructionState sites (restored ++ [content]) step.checked
+      joinSource := by
   classical
   subst current
+  have priorNodeImageExact' :
+      step.priorNodeImage = state.joinNodeImage :=
+    eq_of_heq priorNodeImageExact
+  have currentApplication :
+      step.priorApplication ∈ state.pendingApplications := by
+    rw [state.pendingApplicationsExact, pendingOriginsExact,
+      ← priorNodeImageExact']
+    simp only [List.filterMap_cons, step.priorApplicationImage,
+      List.mem_cons, true_or]
   exact
     { regionImage := fun region =>
         if old : BatchCoveredRegion sites restored region.1 then
@@ -911,8 +934,28 @@ private noncomputable def batchReconstructionSnoc
                 subst candidate
                 exact ⟨patternWire, internal, mapped⟩
           step.checkedFragmentWire fresh.choose
+      joinNodeImage := step.checkedNodeImage
+      pendingOrigins := tail
       pendingApplications :=
         step.checkedRemainingNodes state.pendingApplications
+      pendingApplicationsExact := by
+        rw [state.pendingApplicationsExact, pendingOriginsExact,
+          ← priorNodeImageExact', List.filterMap_cons,
+          step.priorApplicationImage]
+        change
+          step.checkedRemainingNodes
+              (step.priorApplication ::
+                tail.filterMap step.priorNodeImage) =
+            tail.filterMap step.checkedNodeImage
+        rw [show
+          step.checkedRemainingNodes
+              (step.priorApplication ::
+                tail.filterMap step.priorNodeImage) =
+            step.checkedRemainingNodes
+              (tail.filterMap step.priorNodeImage) by
+          simp [ConcreteWireQuantifier.RelationJoinStep.checkedRemainingNodes]]
+        exact
+          (step.checkedNodeImages_eq_checkedRemainingNodes tail).symm
       representedNodesAvoidPending := by
         intro node pending
         unfold ConcreteWireQuantifier.RelationJoinStep.checkedRemainingNodes at pending
