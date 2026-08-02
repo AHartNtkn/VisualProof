@@ -123,7 +123,8 @@ private def siteNodes
     List source.val.NodeId :=
   sites.sites.map AppliedSite.node
 
-private inductive LeafShape
+/-- Checker-owned local leaf shape selected for one rewritten application. -/
+inductive LeafShape
     (source : CheckedDiagram definitions)
   | formal
       (arguments : List Sig)
@@ -137,7 +138,8 @@ private inductive LeafShape
       (arguments : List Sig)
       (wires : List source.val.WireId)
 
-private def LeafShape.ports :
+/-- Exact retained-wire attachments and generated ports of a leaf shape. -/
+def LeafShape.ports :
     LeafShape source → List (source.val.WireId × CPort)
   | .formal _ head rest =>
       (head, .head) ::
@@ -271,6 +273,33 @@ def target
     CheckedDiagram definitions :=
   result.checked
 
+/-- Exact checker-selected leaf shape at one ordered source site. -/
+def shapeAt
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (site : Fin result.sites.sites.length) :
+    LeafShape source :=
+  result.spec.shapes site
+
+/-- Canonical checked region image of one source region. -/
+def targetRegion
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.RegionId :=
+  Internal.checkedRegion result.generated (leafRegion source region)
+
+/-- Canonical checked leaf node generated for one ordered source site. -/
+def targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated (leafNode result.plan site)
+
 /-- Source applications consumed by the leaf rewrite. -/
 def sourceRemovedNodes
     {source : CheckedDiagram definitions}
@@ -283,10 +312,9 @@ def sourceRemovedNodes
 def targetRemovedNodes
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
-    (result : LeafResult source wire) :
+  (result : LeafResult source wire) :
     List result.checked.val.NodeId :=
-  (Data.Finite.allFin result.sites.sites.length).map fun site =>
-    Internal.checkedNode result.generated (leafNode result.plan site)
+  (Data.Finite.allFin result.sites.sites.length).map result.targetNode
 
 /-- The consumed relation is the only source-local wire removed. -/
 def sourceRemovedWires
@@ -310,8 +338,7 @@ def targetScope
     {wire : source.val.WireId}
     (result : LeafResult source wire) :
     result.checked.val.RegionId :=
-  Internal.checkedRegion result.generated
-    (leafRegion source (source.val.wires wire).scope)
+  result.targetRegion (source.val.wires wire).scope
 
 theorem siteCount
     {source : CheckedDiagram definitions}
@@ -334,6 +361,107 @@ def regionOriginEquiv
     rw [Internal.retainedRegions_nil]
     simp [ConcreteDiagram.regionsList,
       Data.Finite.allFin_eq_finRange])
+
+/-- The canonical target image of a source region has that exact source
+origin. -/
+@[simp] theorem regionOriginEquiv_targetRegion
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (region : source.val.RegionId) :
+    result.regionOriginEquiv (result.targetRegion region) = region := by
+  apply Fin.ext
+  unfold regionOriginEquiv targetRegion finEquivOfEq
+    Internal.checkedRegion
+  change (leafRegion source region).val = region.val
+  let sourcePosition : Fin source.val.regionsList.length :=
+    Fin.cast (by
+      simp [ConcreteDiagram.regionsList,
+        Data.Finite.allFin_eq_finRange]) region
+  let position : Fin (Internal.retainedRegions source []).length :=
+    Fin.cast
+      (congrArg List.length (Internal.retainedRegions_nil source)).symm
+      sourcePosition
+  have getExact :
+      (Internal.retainedRegions source []).get position = region := by
+    rw [get_of_list_eq (Internal.retainedRegions_nil source) sourcePosition]
+    exact allFin_get region
+  have indexExact : leafRegion source region = position := by
+    unfold leafRegion Internal.retainedRegionIndex
+    rw [← getExact]
+    exact DenseList.index_get _
+      (by
+        rw [Internal.retainedRegions_nil]
+        exact Data.Finite.allFin_nodup _)
+      position
+  exact congrArg Fin.val indexExact
+
+/-- The canonical region image is exactly the inverse neutral-origin map. -/
+theorem targetRegion_eq_regionOriginEquiv_symm
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (region : source.val.RegionId) :
+    result.targetRegion region = result.regionOriginEquiv.symm region := by
+  apply result.regionOriginEquiv.injective
+  rw [result.regionOriginEquiv_targetRegion]
+  exact result.regionOriginEquiv.right_inv region
+
+/-- The target root is the canonical image of the source root. -/
+theorem targetRoot_exact
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    result.checked.val.root = result.targetRegion source.val.root := by
+  unfold targetRegion
+  calc
+    result.checked.val.root =
+        Internal.checkedRegion result.generated
+          (leafCandidate result.plan).root :=
+      Internal.checkedRoot_transport result.generated
+    _ = Internal.checkedRegion result.generated
+          (leafRegion source source.val.root) := by
+      congr 1
+
+/-- Region constructors and cut parents are transported exactly by the
+construction-owned region origin equivalence. -/
+theorem targetRegion_data
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.regions (result.targetRegion region) =
+      (source.val.regions region).rename result.regionOriginEquiv.symm := by
+  unfold targetRegion
+  change
+    result.checked.val.regions
+        (Internal.checkedRegionEquiv result.generated
+          (leafRegion source region)) = _
+  rw [Internal.checkedRegion_data_equiv]
+  have candidateExact :
+      (leafCandidate result.plan).regions (leafRegion source region) =
+        (source.val.regions region).rename
+          (Internal.noRegionRemovalEquiv source) := by
+    change
+      (Internal.batchRemovalCandidate result.plan.removal).regions
+          (leafRegion source region) = _
+    rw [show leafRegion source region =
+        Internal.noRegionRemovalEquiv source region by
+          apply Fin.ext
+          rfl]
+    exact Internal.batchRegionTable_noRegions result.plan.removal region
+  rw [candidateExact]
+  cases data : source.val.regions region with
+  | sheet => rfl
+  | cut parent =>
+      simp only [CRegion.rename]
+      congr 1
+      rw [show Internal.checkedRegionEquiv result.generated
+            (Internal.noRegionRemovalEquiv source parent) =
+          result.targetRegion parent by
+            unfold targetRegion
+            congr 1]
+      exact result.targetRegion_eq_regionOriginEquiv_symm parent
 
 private theorem sourceNodesNodup
     {source : CheckedDiagram definitions}
@@ -377,6 +505,500 @@ def nodeOriginEquiv
       ConcreteDiagram.nodesList])).trans
     (LeafConstruction.partitionEquiv (siteNodes result.sites)
       result.sourceNodesNodup)
+
+/-- Canonical checked image of a source node retained by leaf construction. -/
+def retainedNodeImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ siteNodes result.sites) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (Fin.castAdd result.sites.sites.length
+      (Internal.retainedNodeIndex source (siteNodes result.sites) node (by
+        unfold Internal.retainedNodes
+        apply List.mem_filter.mpr
+        exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩)))
+
+/-- A retained target-node image has exactly its supplied source-node
+origin. -/
+@[simp] theorem nodeOriginEquiv_retainedNodeImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ siteNodes result.sites) :
+    result.nodeOriginEquiv (result.retainedNodeImage node retained) = node := by
+  let member : node ∈ Internal.retainedNodes source
+      (siteNodes result.sites) := by
+    unfold Internal.retainedNodes
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩
+  let retainedIndex := Internal.retainedNodeIndex source
+    (siteNodes result.sites) node member
+  unfold retainedNodeImage
+  change result.nodeOriginEquiv
+      (Internal.checkedNode result.generated
+        (Fin.castAdd result.sites.sites.length retainedIndex)) = node
+  unfold nodeOriginEquiv LeafConstruction.partitionEquiv
+    LeafConstruction.enumerationEquiv finEquivOfEq
+  simp only [Data.Finite.FiniteEquiv.trans_apply]
+  simp [leafCandidate, leafBase, Internal.batchRemovalCandidate,
+    LeafConstruction.partitionOrder]
+  have checkedNodeVal :
+      (Internal.checkedNode result.generated
+        (Fin.castAdd result.sites.sites.length retainedIndex)).val =
+      retainedIndex.val := by rfl
+  have retainedListExact :
+      (Data.Finite.allFin source.val.nodeCount).filter
+          (fun value => !decide (value ∈ siteNodes result.sites)) =
+        Internal.retainedNodes source (siteNodes result.sites) := by
+    simp [Internal.retainedNodes, ConcreteDiagram.nodesList]
+  rw [List.getElem_append_left]
+  · simpa only [retainedListExact, checkedNodeVal,
+        List.get_eq_getElem] using
+      (Internal.sourceRetainedNode_retainedNodeIndex source
+        (siteNodes result.sites) node member)
+  · calc
+      (Internal.checkedNode result.generated
+          (Fin.castAdd result.sites.sites.length retainedIndex)).val =
+          retainedIndex.val := by rfl
+      _ < (Internal.retainedNodes source
+            (siteNodes result.sites)).length := retainedIndex.isLt
+      _ = ((Data.Finite.allFin source.val.nodeCount).filter
+          (fun value => !decide
+            (value ∈ siteNodes result.sites))).length :=
+        (congrArg List.length retainedListExact).symm
+
+/-- Retained node constructors and payloads are transported exactly through
+the neutral region origin. -/
+theorem retainedNodeImage_data
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ siteNodes result.sites) :
+    result.checked.val.nodes (result.retainedNodeImage node retained) =
+      (source.val.nodes node).rename result.regionOriginEquiv.symm := by
+  unfold retainedNodeImage
+  rw [Internal.checkedNode_data_transport]
+  let member : node ∈ Internal.retainedNodes source
+      (siteNodes result.sites) := by
+    unfold Internal.retainedNodes
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩
+  let retainedIndex :=
+    Internal.retainedNodeIndex source (siteNodes result.sites) node member
+  unfold leafCandidate
+  simp only [Fin.addCases_left]
+  change
+    Internal.checkedNodeData result.generated
+        (Internal.batchNodeTable result.plan.removal retainedIndex) = _
+  rw [Internal.batchNodeTable_noRegions]
+  have sourceExact :
+      Internal.sourceRetainedNode source (siteNodes result.sites)
+          retainedIndex = node :=
+    Internal.sourceRetainedNode_retainedNodeIndex source
+      (siteNodes result.sites) node member
+  rw [sourceExact]
+  cases data : source.val.nodes node <;>
+    simp only [CNode.rename, Internal.checkedNodeData]
+  all_goals
+    congr 1
+    calc
+      Internal.checkedRegion result.generated
+          (Internal.noRegionRemovalEquiv source _) =
+          result.targetRegion _ := by
+        unfold targetRegion
+        congr 1
+      _ = result.regionOriginEquiv.symm _ :=
+        result.targetRegion_eq_regionOriginEquiv_symm _
+
+/-- The generated target node at an ordered site has that site's consumed
+source application as its exact neutral origin. -/
+@[simp] theorem nodeOriginEquiv_targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.nodeOriginEquiv (result.targetNode site) =
+      (result.sites.sites.get site).node := by
+  unfold nodeOriginEquiv targetNode LeafConstruction.partitionEquiv
+    LeafConstruction.enumerationEquiv finEquivOfEq
+  simp only [Data.Finite.FiniteEquiv.trans_apply]
+  simp [leafNode, leafBase, Internal.batchRemovalCandidate,
+    LeafConstruction.partitionOrder, siteNodes,
+    Data.Finite.allFin_eq_finRange]
+  have checkedNodeVal : (Internal.checkedNode result.generated
+        (Fin.natAdd
+          (Internal.retainedNodes source
+            (List.map AppliedSite.node result.sites.sites)).length site)).val =
+      (Internal.retainedNodes source
+          (List.map AppliedSite.node result.sites.sites)).length +
+        site.val := by rfl
+  rw [List.getElem_append_right]
+  · simp only [checkedNodeVal]
+    simp [Internal.retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.allFin_eq_finRange]
+  · rw [checkedNodeVal]
+    simp [Internal.retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.allFin_eq_finRange]
+
+/-- Generated leaf payloads are exactly the checker-selected local shape at
+the canonical source-region image. -/
+theorem targetNode_data
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.nodes (result.targetNode site) =
+      match result.shapeAt site with
+      | .formal arguments _ _ =>
+          .atom (result.targetRegion
+            (result.sites.sites.get site).region) arguments
+      | .identity signature arguments =>
+          .identity (result.targetRegion
+            (result.sites.sites.get site).region) signature arguments.length
+      | .reference definition arguments _ =>
+          .ref (result.targetRegion
+            (result.sites.sites.get site).region) definition arguments := by
+  unfold targetNode shapeAt targetRegion
+  rw [Internal.checkedNode_data_transport]
+  unfold leafCandidate leafNode
+  simp only [Fin.addCases_right]
+  unfold leafNodeData
+  split <;> rfl
+
+/-- Neutral origin of a target wire: precisely one source wire other than the
+consumed relation. -/
+abbrev WireOrigin
+    (source : CheckedDiagram definitions)
+    (wire : source.val.WireId) :=
+  { sourceWire : source.val.WireId // sourceWire ≠ wire }
+
+private theorem wireOrigin_mem
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (origin : WireOrigin source wire) :
+    origin.1 ∈ Internal.retainedWires source [wire] := by
+  unfold Internal.retainedWires
+  apply List.mem_filter.mpr
+  exact ⟨Data.Finite.mem_allFin origin.1, by simp [origin.2]⟩
+
+private theorem sourceRetainedWire_ne
+    {source : CheckedDiagram definitions}
+    (wire : source.val.WireId)
+    (candidate : Fin (Internal.retainedWires source [wire]).length) :
+    Internal.sourceRetainedWire source [wire] candidate ≠ wire := by
+  have member := List.get_mem (Internal.retainedWires source [wire]) candidate
+  have survives := (List.mem_filter.mp member).2
+  have notRemoved :
+      Internal.sourceRetainedWire source [wire] candidate ∉ [wire] := by
+    exact of_decide_eq_true survives
+  simpa using notRemoved
+
+/-- Direct construction-owned target-wire classifier.  Its inverse is dense
+retained-wire allocation; no isomorphism is searched for. -/
+def wireOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    Data.Finite.FiniteEquiv result.checked.val.WireId
+      (WireOrigin source wire) where
+  toFun := fun targetWire =>
+    let candidate : Fin (Internal.retainedWires source [wire]).length :=
+      Fin.cast (congrArg ConcreteDiagram.wireCount result.generated) targetWire
+    ⟨Internal.sourceRetainedWire source [wire] candidate,
+      sourceRetainedWire_ne wire candidate⟩
+  invFun := fun origin =>
+    Internal.checkedWire result.generated
+      (Internal.retainedWireIndex source [wire] origin.1
+        (wireOrigin_mem origin))
+  left_inv := by
+    intro targetWire
+    apply Fin.ext
+    simp only [Internal.checkedWire]
+    rw [Internal.retainedWireIndex_sourceRetainedWire]
+    rfl
+  right_inv := by
+    intro origin
+    apply Subtype.ext
+    exact Internal.sourceRetainedWire_retainedWireIndex source [wire] origin.1
+      (wireOrigin_mem origin)
+
+/-- Canonical checked image of one retained source-wire origin. -/
+def targetWireImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    result.checked.val.WireId :=
+  result.wireOriginEquiv.symm origin
+
+@[simp] theorem wireOriginEquiv_targetWireImage
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    result.wireOriginEquiv (result.targetWireImage origin) = origin :=
+  result.wireOriginEquiv.apply_symm_apply origin
+
+/-- Retained wire signatures are unchanged. -/
+theorem targetWireImage_signature
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    (result.checked.val.wires (result.targetWireImage origin)).sig =
+      (source.val.wires origin.1).sig := by
+  unfold targetWireImage Data.Finite.FiniteEquiv.symm wireOriginEquiv
+  rw [Internal.checkedWire_signature_transport]
+  change
+    (Internal.batchWireTable result.plan.removal
+      (Internal.retainedWireIndex source [wire] origin.1
+        (wireOrigin_mem origin))).sig = _
+  rw [Internal.batchWireTable_signature,
+    Internal.sourceRetainedWire_retainedWireIndex]
+
+/-- Retained wire scopes are transported by the canonical region image. -/
+theorem targetWireImage_scope
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    (result.checked.val.wires (result.targetWireImage origin)).scope =
+      result.targetRegion (source.val.wires origin.1).scope := by
+  unfold targetWireImage Data.Finite.FiniteEquiv.symm wireOriginEquiv
+    targetRegion
+  rw [Internal.checkedWire_scope_transport]
+  change Internal.checkedRegion result.generated
+      (Internal.batchWireTable result.plan.removal
+        (Internal.retainedWireIndex source [wire] origin.1
+          (wireOrigin_mem origin))).scope = _
+  rw [Internal.batchWireTable_scope]
+  simp only [Internal.sourceRetainedWire_retainedWireIndex]
+  congr 1
+
+/-- Target-to-source endpoint carrier induced by the exact neutral node
+origin; ports are preserved verbatim. -/
+def endpointOriginEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire) :
+    Data.Finite.FiniteEquiv
+      (CEndpoint result.checked.val.nodeCount)
+      (CEndpoint source.val.nodeCount) where
+  toFun := fun endpoint =>
+    ⟨result.nodeOriginEquiv endpoint.node, endpoint.port⟩
+  invFun := fun endpoint =>
+    ⟨result.nodeOriginEquiv.symm endpoint.node, endpoint.port⟩
+  left_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        congr
+        exact result.nodeOriginEquiv.left_inv node
+  right_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        congr
+        exact result.nodeOriginEquiv.right_inv node
+
+/-- Retained batch endpoints of one target wire, transported through leaf
+node extension and checker acceptance. -/
+def retainedTargetEndpoints
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  let candidate := Internal.retainedWireIndex source [wire] origin.1
+    (wireOrigin_mem origin)
+  (Internal.batchWireTable result.plan.removal candidate).endpoints.map
+    (fun endpoint => Internal.checkedEndpoint result.generated
+      { node := Fin.castAdd result.sites.sites.length endpoint.node
+        port := endpoint.port })
+
+/-- Shape-selected generated attachments of one retained target wire. -/
+def targetAttachments
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  let candidate := Internal.retainedWireIndex source [wire] origin.1
+    (wireOrigin_mem origin)
+  (leafEndpoints result.plan candidate).map
+    (Internal.checkedEndpoint result.generated)
+
+/-- The generated-attachment table is exactly the ordered per-site leaf-shape
+port table for this source-wire origin. -/
+theorem targetAttachments_shape
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    result.targetAttachments origin =
+      (Data.Finite.allFin result.sites.sites.length).flatMap fun site =>
+        (result.shapeAt site).ports.filterMap fun attachment =>
+          if attachment.1 = origin.1 then
+            some
+              { node := result.targetNode site
+                port := attachment.2 }
+          else
+            none := by
+  unfold targetAttachments leafEndpoints shapeAt targetNode
+  simp only [Internal.sourceRetainedWire_retainedWireIndex]
+  have mapPorts : ∀ (site : Fin result.sites.sites.length)
+      (attachments : List (source.val.WireId × CPort)),
+      ((attachments.filterMap fun attachment =>
+          if attachment.1 = origin.1 then
+            some
+              ({ node := leafNode result.plan site
+                 port := attachment.2 } :
+                CEndpoint (leafCandidate result.plan).nodeCount)
+          else none).map (Internal.checkedEndpoint result.generated)) =
+        attachments.filterMap fun attachment =>
+          if attachment.1 = origin.1 then
+            some
+              { node := Internal.checkedNode result.generated
+                  (leafNode result.plan site)
+                port := attachment.2 }
+          else none := by
+    intro site attachments
+    induction attachments with
+    | nil => rfl
+    | cons attachment tail induction =>
+        by_cases exact : attachment.1 = origin.1
+        · simp [exact, induction, Internal.checkedEndpoint]
+        · simp [exact, induction]
+  induction Data.Finite.allFin result.sites.sites.length with
+  | nil => rfl
+  | cons site sites induction =>
+      change
+        List.map (Internal.checkedEndpoint result.generated)
+            (((result.spec.shapes site).ports.filterMap fun attachment =>
+              if attachment.1 = origin.1 then
+                some
+                  ({ node := leafNode result.plan site
+                     port := attachment.2 } :
+                    CEndpoint (leafCandidate result.plan).nodeCount)
+              else none) ++
+            (sites.flatMap fun nextSite =>
+              (result.spec.shapes nextSite).ports.filterMap fun attachment =>
+                if attachment.1 = origin.1 then
+                  some
+                    { node := leafNode result.plan nextSite
+                      port := attachment.2 }
+                else none)) = _
+      rw [List.map_append, List.flatMap_cons]
+      congr 1
+      · exact mapPorts site (result.spec.shapes site).ports
+
+/-- Exact ordered endpoint table for every retained target wire. -/
+theorem targetWireImage_endpoints
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    (result.checked.val.wires
+        (result.targetWireImage origin)).endpoints =
+      result.retainedTargetEndpoints origin ++
+        result.targetAttachments origin := by
+  unfold targetWireImage Data.Finite.FiniteEquiv.symm wireOriginEquiv
+    retainedTargetEndpoints targetAttachments
+  rw [Internal.checkedWire_endpoints_transport]
+  unfold leafCandidate
+  simp only [List.map_append]
+  congr 1
+  unfold leafBase Internal.batchRemovalCandidate
+  simp only [List.map_map]
+  apply List.map_congr_left
+  intro endpoint _member
+  rfl
+
+/-- Neutral endpoint list of one retained wire.  Together with
+`targetAttachments_shape`, this is the exact shape-aware target-to-origin
+incidence table. -/
+def originEndpoints
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    List (CEndpoint source.val.nodeCount) :=
+  (result.checked.val.wires
+      (result.targetWireImage origin)).endpoints.map
+    result.endpointOriginEquiv
+
+/-- The neutral endpoint list decomposes into retained incidence followed by
+the exact shape-selected generated attachments. -/
+theorem originEndpoints_decomposition
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    result.originEndpoints origin =
+      (result.retainedTargetEndpoints origin).map
+          result.endpointOriginEquiv ++
+        (result.targetAttachments origin).map
+          result.endpointOriginEquiv := by
+  unfold originEndpoints
+  rw [result.targetWireImage_endpoints, List.map_append]
+
+/-- Bidirectional endpoint fiber between one retained target wire and its
+neutral source-node origins. -/
+structure EndpointFiberEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) where
+  equivalence :
+    Data.Finite.FiniteEquiv
+      { endpoint // endpoint ∈
+        (result.checked.val.wires
+          (result.targetWireImage origin)).endpoints }
+      { endpoint // endpoint ∈ result.originEndpoints origin }
+  forward_exact : ∀ endpoint,
+    (equivalence endpoint).1 = result.endpointOriginEquiv endpoint.1
+  inverse_exact : ∀ endpoint,
+    (equivalence.symm endpoint).1 =
+      result.endpointOriginEquiv.symm endpoint.1
+
+/-- The canonical endpoint fiber is obtained by restricting the explicit
+endpoint-origin equivalence; both directions are construction-owned. -/
+def endpointFiberEquiv
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : LeafResult source wire)
+    (origin : WireOrigin source wire) :
+    EndpointFiberEquiv result origin where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨result.endpointOriginEquiv endpoint.1,
+          List.mem_map.mpr ⟨endpoint.1, endpoint.2, rfl⟩⟩
+      invFun := fun endpoint =>
+        ⟨result.endpointOriginEquiv.symm endpoint.1, by
+          rcases List.mem_map.mp endpoint.2 with
+            ⟨targetEndpoint, targetMember, exact⟩
+          have targetExact :
+              targetEndpoint =
+                result.endpointOriginEquiv.symm endpoint.1 := by
+            apply result.endpointOriginEquiv.injective
+            rw [result.endpointOriginEquiv.apply_symm_apply]
+            exact exact
+          simpa only [targetExact] using targetMember⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact result.endpointOriginEquiv.left_inv endpoint.1
+      right_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact result.endpointOriginEquiv.right_inv endpoint.1 }
+  forward_exact := by intro; rfl
+  inverse_exact := by intro; rfl
 
 /-- The target wires followed by the consumed relation recover the complete
 source wire carrier in the checker-owned dense order. -/
