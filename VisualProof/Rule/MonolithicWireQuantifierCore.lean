@@ -561,16 +561,16 @@ theorem CheckedOccurrenceList.removedWires_length
         checked.removedWires_length, induction, Nat.succ_mul,
         Nat.add_comm, Nat.add_mul]
 
-noncomputable def CheckedOccurrenceList.get
-    (entries : CheckedOccurrenceList scope first contents)
-    (position : Fin contents.length) :
-    CheckedOccurrence scope first (contents.get position) := by
-  induction entries with
-  | nil => exact Fin.elim0 position
-  | cons checked tail induction =>
-      refine Fin.cases ?_ (fun rest => ?_) position
-      · simpa using checked
-      · simpa [List.get_eq_getElem] using induction rest
+def CheckedOccurrenceList.get :
+    (entries : CheckedOccurrenceList scope first contents) →
+    (position : Fin contents.length) →
+    CheckedOccurrence scope first (contents.get position)
+  | .nil, position => Fin.elim0 position
+  | .cons checked tail, position =>
+      Fin.cases (by simpa using checked)
+        (fun rest => by
+          simpa [List.get_eq_getElem] using tail.get rest)
+        position
 
 def CheckedOccurrences.semanticEvidence
     {source : CheckedDiagram definitions}

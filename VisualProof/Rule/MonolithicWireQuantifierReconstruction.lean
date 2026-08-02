@@ -435,6 +435,23 @@ theorem optionMapM_eq_some_length_get
               · simpa [List.get_eq_getElem, tailLength] using
                   tailEvidence rest
 
+/-- Position transport for a caller-owned length equality. -/
+theorem optionMapM_eq_some_get
+    {α β : Type}
+    (transform : α → Option β)
+    {source : List α}
+    {target : List β}
+    (accepted : source.mapM transform = some target)
+    (exactLength : source.length = target.length)
+    (position : Fin source.length) :
+    transform (source.get position) =
+      some (target.get (Fin.cast exactLength position)) := by
+  obtain ⟨derivedLength, getExact⟩ :=
+    optionMapM_eq_some_length_get transform accepted
+  have sameLength : derivedLength = exactLength := Subsingleton.elim _ _
+  cases sameLength
+  exact getExact position
+
 theorem optionMapM_eq_some_of_pointwise
     {α β : Type}
     (transform : α → Option β)
@@ -682,7 +699,7 @@ theorem inverseStep_sourceArguments_exact
 
 /-- The checker-owned occurrence evidence and accepted sever transport
 determine the complete source attachment vector for its paired inverse step. -/
-noncomputable def inverseStepOccurrenceAlignmentOfChecked
+def inverseStepOccurrenceAlignmentOfChecked
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
     {scope : source.val.RegionId}
@@ -737,10 +754,13 @@ noncomputable def inverseStepOccurrenceAlignmentOfChecked
         rfl
       _ = some step.sourceAttachments :=
         congrArg some step.sourceAttachmentsExact.symm
-  let boundaryEvidence :=
-    optionMapM_eq_some_length_get result.wireImage? boundaryAccepted
-  let boundaryLength := boundaryEvidence.choose
-  have boundaryGet := boundaryEvidence.choose_spec
+  have boundaryLength :
+      content.occurrence.boundaryAttachments.length =
+        step.sourceAttachments.length :=
+    content.occurrence.boundaryAttachments_length.trans
+      step.sourceAttachmentArity.symm
+  have boundaryGet :=
+    optionMapM_eq_some_get result.wireImage? boundaryAccepted boundaryLength
   have boundaryLanding :
       ∀ position : Fin pattern.val.boundary.length,
         ∃ survives :
@@ -828,7 +848,7 @@ theorem RelationSeverConcreteReceipt.sites_occurrences_length
 
 /-- Every retained inverse step is paired, at the same accepted list
 position, with the checker-owned original occurrence it restores. -/
-noncomputable def RelationSeverConcreteReceipt.inverseStepAlignment
+def RelationSeverConcreteReceipt.inverseStepAlignment
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target)
     (position : Fin receipt.inverse.steps.length) :

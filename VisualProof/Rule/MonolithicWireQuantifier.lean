@@ -128,7 +128,7 @@ theorem inverseJoinPlainFinal_eq_inversePlainFinal
 /-- Total construction-owned reconstruction from the checked virtual inverse
 landing to the original sever source.  Compiler reversal composes against
 this witness and never rediscovers the graph. -/
-noncomputable def reconstructionIso
+def reconstructionIso
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationSeverInput source}
     (applied : AppliedMonolithicRelationSever source input) :
