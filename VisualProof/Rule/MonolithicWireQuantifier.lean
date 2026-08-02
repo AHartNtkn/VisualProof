@@ -505,6 +505,52 @@ private structure BatchReconstructionState
           BatchCoveredNode sites restored node },
       nodeImage node ∉ pendingApplications
 
+namespace BatchReconstructionState
+
+/-- Total region map once the restored prefix is the complete checked family. -/
+private def completeRegionImage
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {contents : List (ContentOccurrence source pattern)}
+    {current : CheckedDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    (state : BatchReconstructionState
+      (contents.map ContentOccurrence.toConcreteSite) contents current)
+    (entries : CheckedOccurrenceList scope first contents) :
+    source.val.RegionId → current.val.RegionId :=
+  fun region => state.regionImage ⟨region, entries.regionCoverage region⟩
+
+/-- Total node map once the restored prefix is the complete checked family. -/
+private def completeNodeImage
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {contents : List (ContentOccurrence source pattern)}
+    {current : CheckedDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    (state : BatchReconstructionState
+      (contents.map ContentOccurrence.toConcreteSite) contents current)
+    (entries : CheckedOccurrenceList scope first contents) :
+    source.val.NodeId → current.val.NodeId :=
+  fun node => state.nodeImage ⟨node, entries.nodeCoverage node⟩
+
+/-- Total wire map once the restored prefix is the complete checked family. -/
+private def completeWireImage
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {contents : List (ContentOccurrence source pattern)}
+    {current : CheckedDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    (state : BatchReconstructionState
+      (contents.map ContentOccurrence.toConcreteSite) contents current)
+    (entries : CheckedOccurrenceList scope first contents) :
+    source.val.WireId → current.val.WireId :=
+  fun wire => state.wireImage ⟨wire, entries.wireCoverage wire⟩
+
+end BatchReconstructionState
+
 private def formalBoundaryValid
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
