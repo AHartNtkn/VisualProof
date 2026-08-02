@@ -4529,6 +4529,25 @@ def inverseJoinApplied
     AppliedMonolithicRelationJoin applied.target applied.inverseJoinInput :=
   applied.inverseApplied
 
+/-- The unnormalized checked inverse-join landing reconstructed by the sever
+receipt before the inverse join's final identity normalization. -/
+def inversePlainFinal
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationSeverInput source}
+    (applied : AppliedMonolithicRelationSever source input) :
+    CheckedDiagram definitions :=
+  applied.concrete.inverse.plainFinal
+
+/-- Total construction-owned reconstruction from the checked virtual inverse
+landing to the original sever source.  Compiler reversal composes against
+this witness and never rediscovers the graph. -/
+noncomputable def reconstructionIso
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationSeverInput source}
+    (applied : AppliedMonolithicRelationSever source input) :
+    ConcreteIso applied.inversePlainFinal.val source.val :=
+  applied.concrete.constructionIso.symm
+
 end AppliedMonolithicRelationSever
 
 namespace AppliedMonolithicRelationJoin
