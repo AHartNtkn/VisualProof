@@ -485,6 +485,64 @@ theorem removedWires_nodup
     (sites.flatMap RelationSeverSite.removedWires).Nodup :=
   result.plan.removedWiresNodup
 
+/-- The parent of a retained source region is retained by the same batch. -/
+theorem regionParent_survives
+    (result : RelationSeverResult source scope sites)
+    (region : source.val.RegionId)
+    (survives :
+      region ∈ Internal.retainedRegions source (relationRemovedRegions sites))
+    (parent : source.val.RegionId)
+    (data : source.val.regions region = .cut parent) :
+    parent ∈
+      Internal.retainedRegions source (relationRemovedRegions sites) := by
+  have retained := result.plan.removal.parentRetained
+    (Internal.retainedRegionIndex source (relationRemovedRegions sites)
+      region survives)
+  change
+    match source.val.regions
+        ((Internal.retainedRegions source
+          (relationRemovedRegions sites)).get
+            (Internal.retainedRegionIndex source
+              (relationRemovedRegions sites) region survives)) with
+    | .sheet => True
+    | .cut parent =>
+        parent ∈ Internal.retainedRegions source
+          (relationRemovedRegions sites) at retained
+  unfold Internal.retainedRegionIndex at retained
+  rw [DenseList.get_index, data] at retained
+  exact retained
+
+/-- Retained sheet data is copied exactly through the sever's dense map. -/
+theorem regionImage_sheet
+    (result : RelationSeverResult source scope sites)
+    (region : source.val.RegionId)
+    (survives :
+      region ∈ Internal.retainedRegions source (relationRemovedRegions sites))
+    (data : source.val.regions region = .sheet) :
+    result.checked.val.regions (result.regionImage region survives) =
+      .sheet := by
+  unfold regionImage
+  apply Internal.checkedRegion_data_transport_sheet
+  exact Internal.batchRegionTable_retained_sheet result.plan.removal
+    region survives data
+
+/-- Retained cut data and its parent are copied through the sever's dense map. -/
+theorem regionImage_cut
+    (result : RelationSeverResult source scope sites)
+    (region : source.val.RegionId)
+    (survives :
+      region ∈ Internal.retainedRegions source (relationRemovedRegions sites))
+    (parent : source.val.RegionId)
+    (data : source.val.regions region = .cut parent) :
+    result.checked.val.regions (result.regionImage region survives) =
+      .cut (result.regionImage parent
+        (result.regionParent_survives region survives parent data)) := by
+  unfold regionImage
+  apply Internal.checkedRegion_data_transport_cut
+  exact Internal.batchRegionTable_retained_cut result.plan.removal
+    region survives parent data
+      (result.regionParent_survives region survives parent data)
+
 theorem retainedRegions_length_add_removedRegions_length
     (result : RelationSeverResult source scope sites) :
     (Internal.retainedRegions source

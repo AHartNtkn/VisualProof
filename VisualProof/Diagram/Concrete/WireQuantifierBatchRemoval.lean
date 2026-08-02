@@ -380,6 +380,68 @@ def batchRegionTable
         (retainedRegionIndex source removedRegions parent
           (batchParentRetained plan region parent regionData))
 
+theorem batchRegionTable_retained_sheet
+    {source : CheckedDiagram definitions}
+    {removedRegions : List source.val.RegionId}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan : BatchRemovalPlan source removedRegions removedNodes removedWires)
+    (region : source.val.RegionId)
+    (retained : region ∈ retainedRegions source removedRegions)
+    (data : source.val.regions region = .sheet) :
+    batchRegionTable plan
+        (retainedRegionIndex source removedRegions region retained) =
+      .sheet := by
+  have sourceAt :
+      sourceRetainedRegion source removedRegions
+          (retainedRegionIndex source removedRegions region retained) = region :=
+    DenseList.get_index _ _ _
+  unfold batchRegionTable
+  split
+  · rfl
+  · rename_i parent actual
+    have impossible : source.val.regions region = .cut parent := by
+      rw [← sourceAt]
+      exact actual
+    rw [data] at impossible
+    contradiction
+
+theorem batchRegionTable_retained_cut
+    {source : CheckedDiagram definitions}
+    {removedRegions : List source.val.RegionId}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan : BatchRemovalPlan source removedRegions removedNodes removedWires)
+    (region : source.val.RegionId)
+    (retained : region ∈ retainedRegions source removedRegions)
+    (parent : source.val.RegionId)
+    (data : source.val.regions region = .cut parent)
+    (parentRetained : parent ∈ retainedRegions source removedRegions) :
+    batchRegionTable plan
+        (retainedRegionIndex source removedRegions region retained) =
+      .cut (retainedRegionIndex source removedRegions parent
+        parentRetained) := by
+  have sourceAt :
+      sourceRetainedRegion source removedRegions
+          (retainedRegionIndex source removedRegions region retained) = region :=
+    DenseList.get_index _ _ _
+  unfold batchRegionTable
+  split
+  · rename_i actual
+    have impossible : source.val.regions region = .sheet := by
+      rw [← sourceAt]
+      exact actual
+    rw [data] at impossible
+    contradiction
+  · rename_i actualParent actual
+    have actualAt : source.val.regions region = .cut actualParent := by
+      rw [← sourceAt]
+      exact actual
+    have parentExact : actualParent = parent :=
+      CRegion.cut.inj (actualAt.symm.trans data)
+    subst actualParent
+    rfl
+
 @[simp] theorem batchRegionTable_noRegions
     {source : CheckedDiagram definitions}
     {removedNodes : List source.val.NodeId}
@@ -2058,6 +2120,27 @@ theorem checkedRegion_data_transport
   cases generated
   cases data : checked.val.regions region <;>
     simp [checkedRegion, checkedRegionData, data]
+
+theorem checkedRegion_data_transport_sheet
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (region : candidate.RegionId)
+    (data : candidate.regions region = .sheet) :
+    checked.val.regions (checkedRegion generated region) = .sheet := by
+  rw [checkedRegion_data_transport]
+  simp [checkedRegionData, data]
+
+theorem checkedRegion_data_transport_cut
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (region parent : candidate.RegionId)
+    (data : candidate.regions region = .cut parent) :
+    checked.val.regions (checkedRegion generated region) =
+      .cut (checkedRegion generated parent) := by
+  rw [checkedRegion_data_transport]
+  simp [checkedRegionData, data]
 
 theorem checkedNode_data_transport
     {checked : CheckedDiagram definitions}
