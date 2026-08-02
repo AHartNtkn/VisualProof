@@ -1730,6 +1730,255 @@ private noncomputable def batchReconstructionSnoc
               fresh.choose prior priorDifferent mappedFresh.symm
         · contradiction }
 
+/-- The reconstruction fold owns both the partial carrier state and the exact
+unconsumed suffix of sever-generated relation atoms. -/
+private structure BatchReconstructionTraceState
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (contents : List (ContentOccurrence source pattern))
+    {steps : List (ConcreteWireQuantifier.RelationJoinStep
+      result.checked result.relationWire pattern)}
+    (current : CheckedDiagram definitions)
+    (nodeImage : result.checked.val.NodeId → Option current.val.NodeId) where
+  state : BatchReconstructionState sites contents current result.checked
+  pendingOriginsExact :
+    state.pendingOrigins = result.atoms.drop steps.length
+  joinNodeImageExact : HEq state.joinNodeImage nodeImage
+
+/-- Structural fold of the accepted inverse trace.  Its only list premises
+state that the restored occurrence prefix and consumed application prefix
+have the same length and order as the trace itself. -/
+private theorem batchReconstructionTraceFold_exists
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (parameters : List result.checked.val.WireId)
+    (args : List Sig)
+    {steps : List (ConcreteWireQuantifier.RelationJoinStep
+      result.checked result.relationWire pattern)}
+    {current : CheckedDiagram definitions}
+    {regionImage : result.checked.val.RegionId → current.val.RegionId}
+    {nodeImage : result.checked.val.NodeId → Option current.val.NodeId}
+    {wireImage : result.checked.val.WireId → current.val.WireId}
+    {currentDying : current.val.WireId}
+    {currentScope : current.val.RegionId}
+    (trace : ConcreteWireQuantifier.RelationJoinSemanticTrace
+      result.checked result.relationWire pattern parameters args steps current
+        regionImage nodeImage wireImage currentDying currentScope)
+    (contents : List (ContentOccurrence source pattern))
+    (contentsLength : contents.length = steps.length)
+    (applicationsExact :
+      steps.map ConcreteWireQuantifier.RelationJoinStep.application =
+        result.atoms.take steps.length) :
+    Nonempty
+      (BatchReconstructionTraceState (steps := steps) result contents current
+        nodeImage) := by
+  induction trace generalizing contents with
+  | nil =>
+      have contentsEmpty : contents = [] :=
+        List.eq_nil_of_length_eq_zero (by simpa using contentsLength)
+      subst contents
+      exact ⟨
+        { state := batchReconstructionNil result
+          pendingOriginsExact := by simp [batchReconstructionNil]
+          joinNodeImageExact := by rfl }⟩
+  | @snoc priorSteps priorCurrent priorRegionImage priorNodeImage
+      priorWireImage priorDying priorScope trace step priorExact
+      priorRegionExact priorNodeExact priorWireExact priorDyingExact
+      priorScopeExact relationArgsExact sourceParametersExact induction =>
+      cases priorExact
+      have contentsNonempty : contents ≠ [] := by
+        intro contentsEmpty
+        subst contents
+        simp at contentsLength
+      let prefixContents := contents.dropLast
+      let content := contents.getLast contentsNonempty
+      have contentsDecomposition : prefixContents ++ [content] = contents := by
+        exact List.dropLast_concat_getLast contentsNonempty
+      have prefixLength : prefixContents.length = priorSteps.length := by
+        have finalLength : contents.length = priorSteps.length + 1 := by
+          simpa using contentsLength
+        simp [prefixContents, finalLength]
+      have prefixApplicationsExact :
+          priorSteps.map
+              ConcreteWireQuantifier.RelationJoinStep.application =
+            result.atoms.take priorSteps.length := by
+        have restricted := congrArg (List.take priorSteps.length)
+          applicationsExact
+        simpa [List.map_append, List.take_take,
+          Nat.min_eq_left (Nat.le_succ priorSteps.length)] using restricted
+      obtain ⟨priorState⟩ :=
+        induction prefixContents prefixLength prefixApplicationsExact
+      have atomsDecomposition :
+          result.atoms =
+            (priorSteps.map
+                ConcreteWireQuantifier.RelationJoinStep.application ++
+              [step.application]) ++
+              result.atoms.drop (priorSteps.length + 1) := by
+        calc
+          result.atoms =
+              result.atoms.take (priorSteps.length + 1) ++
+                result.atoms.drop (priorSteps.length + 1) := by
+            exact (List.take_append_drop (priorSteps.length + 1)
+              result.atoms).symm
+          _ =
+              (priorSteps.map
+                  ConcreteWireQuantifier.RelationJoinStep.application ++
+                [step.application]) ++
+                result.atoms.drop (priorSteps.length + 1) := by
+            have fullApplications :
+                priorSteps.map
+                    ConcreteWireQuantifier.RelationJoinStep.application ++
+                  [step.application] =
+                result.atoms.take (priorSteps.length + 1) := by
+              simpa [List.map_append] using applicationsExact
+            rw [← fullApplications]
+      have pendingHead :
+          result.atoms.drop priorSteps.length =
+            step.application ::
+              result.atoms.drop (priorSteps.length + 1) := by
+        calc
+          result.atoms.drop priorSteps.length =
+              ((priorSteps.map
+                    ConcreteWireQuantifier.RelationJoinStep.application ++
+                  [step.application]) ++
+                result.atoms.drop (priorSteps.length + 1)).drop
+                  priorSteps.length :=
+            congrArg (List.drop priorSteps.length) atomsDecomposition
+          _ = step.application ::
+              result.atoms.drop (priorSteps.length + 1) := by simp
+      have priorNodeStateExact :
+          HEq step.priorNodeImage priorState.state.joinNodeImage :=
+        priorNodeExact.trans priorState.joinNodeImageExact.symm
+      let next := batchReconstructionSnoc priorState.state content step
+        rfl priorNodeStateExact
+        (result.atoms.drop (priorSteps.length + 1)) (by
+          rw [priorState.pendingOriginsExact, pendingHead])
+      have nextPending :
+          next.pendingOrigins =
+            result.atoms.drop (priorSteps ++ [step]).length := by
+        dsimp [next, batchReconstructionSnoc]
+        simp
+      exact ⟨contentsDecomposition ▸
+        { state := next
+          pendingOriginsExact := nextPending
+          joinNodeImageExact := by
+            dsimp [next, batchReconstructionSnoc]
+            exact HEq.rfl }⟩
+
+/-- The complete accepted inverse trace has a construction-owned carrier
+state over the entire checked occurrence family. -/
+private theorem RelationSeverConcreteReceipt.fullReconstructionState_exists
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Nonempty
+      (BatchReconstructionTraceState (steps := receipt.inverse.steps)
+        receipt.result occurrences
+        receipt.inverse.boundFinal receipt.inverse.boundNodeImage) := by
+  have contentsLength :
+      occurrences.length = receipt.inverse.steps.length := by
+    exact
+      (receipt.sites_occurrences_length.symm.trans
+        receipt.inverseSteps_sites_length.symm)
+  have stepsAtomsLength :
+      receipt.inverse.steps.length = receipt.result.atoms.length := by
+    calc
+      receipt.inverse.steps.length =
+          (receipt.inverse.steps.map
+            ConcreteWireQuantifier.RelationJoinStep.application).length := by
+        simp
+      _ = receipt.result.atoms.length :=
+        congrArg List.length receipt.inverseStepsExact
+  have applicationsExact :
+      receipt.inverse.steps.map
+          ConcreteWireQuantifier.RelationJoinStep.application =
+        receipt.result.atoms.take receipt.inverse.steps.length := by
+    calc
+      receipt.inverse.steps.map
+          ConcreteWireQuantifier.RelationJoinStep.application =
+        receipt.result.atoms := receipt.inverseStepsExact
+      _ = receipt.result.atoms.take receipt.inverse.steps.length := by
+        rw [stepsAtomsLength]
+        simp
+  exact batchReconstructionTraceFold_exists receipt.result
+    receipt.parameters receipt.inverse.args receipt.inverse.semantic_trace
+      occurrences contentsLength applicationsExact
+
+private noncomputable def
+    RelationSeverConcreteReceipt.fullReconstructionState
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    BatchReconstructionTraceState (steps := receipt.inverse.steps)
+      receipt.result occurrences
+      receipt.inverse.boundFinal receipt.inverse.boundNodeImage :=
+  Classical.choice receipt.fullReconstructionState_exists
+
+/-- Reindex the completed fold by the occurrence-owned concrete site list,
+the authoritative index used by the coverage theorems. -/
+private noncomputable def
+    RelationSeverConcreteReceipt.completeCarrierState
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    BatchReconstructionState
+      (occurrences.map ContentOccurrence.toConcreteSite) occurrences
+      receipt.inverse.boundFinal receipt.result.checked := by
+  have sitesExact :=
+    receipt.extractions.entries.semanticEvidence_sites
+  exact sitesExact ▸ receipt.fullReconstructionState.state
+
+private noncomputable def
+    RelationSeverConcreteReceipt.completeRegionImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.RegionId → receipt.inverse.boundFinal.val.RegionId :=
+  receipt.completeCarrierState.completeRegionImage
+    receipt.extractions.entries
+
+private noncomputable def
+    RelationSeverConcreteReceipt.completeNodeImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.NodeId → receipt.inverse.boundFinal.val.NodeId :=
+  receipt.completeCarrierState.completeNodeImage
+    receipt.extractions.entries
+
+private noncomputable def
+    RelationSeverConcreteReceipt.completeWireImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.WireId → receipt.inverse.boundFinal.val.WireId :=
+  receipt.completeCarrierState.completeWireImage
+    receipt.extractions.entries
+
+private theorem RelationSeverConcreteReceipt.completeRegionImage_injective
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Function.Injective receipt.completeRegionImage := by
+  intro left right same
+  exact Subtype.ext_iff.mp
+    (receipt.completeCarrierState.regionImage_injective same)
+
+private theorem RelationSeverConcreteReceipt.completeNodeImage_injective
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Function.Injective receipt.completeNodeImage := by
+  intro left right same
+  exact Subtype.ext_iff.mp
+    (receipt.completeCarrierState.nodeImage_injective same)
+
+private theorem RelationSeverConcreteReceipt.completeWireImage_injective
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Function.Injective receipt.completeWireImage := by
+  intro left right same
+  exact Subtype.ext_iff.mp
+    (receipt.completeCarrierState.wireImage_injective same)
+
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin
     (source : CheckedDiagram definitions)
