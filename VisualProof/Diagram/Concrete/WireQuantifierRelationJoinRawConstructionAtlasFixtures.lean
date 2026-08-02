@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawConstructionAtlasConformance
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawWireOrigins
 
 namespace VisualProof
 namespace ConcreteWireQuantifier
@@ -211,6 +211,95 @@ def multiSnocConforms : Bool :=
         (multiAccepted.finalNodeOriginEquiv.invFun origin) = origin))
 
 example : multiSnocConforms = true := by
+  native_decide
+
+private def zeroSourceRaw : ConcreteDiagram 0 where
+  regionCount := 2
+  nodeCount := 1
+  wireCount := 2
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 0
+  nodes := fun _ => .atom 1 []
+  wires
+    | ⟨0, _⟩ =>
+        { sig := .rel [.iota, .iota]
+          scope := 1
+          endpoints := [] }
+    | ⟨1, _⟩ =>
+        { sig := .rel []
+          scope := 1
+          endpoints := [⟨0, .head⟩] }
+
+private theorem zeroSourceRaw_wellFormed : zeroSourceRaw.WellFormed [] := by
+  native_decide
+
+private def zeroSource : CheckedDiagram [] :=
+  ⟨zeroSourceRaw, zeroSourceRaw_wellFormed⟩
+
+private def zeroAccepted : RelationJoinResult zeroSource (idx 0) content [] :=
+  (joinRelation zeroSource (idx 0) content []).toOption.get
+    (by native_decide)
+
+private def constructionWireCode
+    {definitions : List (List Sig)}
+    {diagram : CheckedDiagram definitions}
+    {dyingWire : diagram.val.WireId}
+    {openContent : CheckedOpenDiagram definitions} :
+    {steps : List (RelationJoinStep diagram dyingWire openContent)} →
+      ConstructionWireOrigin steps → Nat × Nat
+  | _, .head position => (0, position.val)
+  | _, .tail origin =>
+      let code := constructionWireCode origin
+      (code.1 + 1, code.2)
+
+private def finalWireCode
+    {definitions : List (List Sig)}
+    {diagram : CheckedDiagram definitions}
+    {dyingWire : diagram.val.WireId}
+    {openContent : CheckedOpenDiagram definitions}
+    {parameters : List diagram.val.WireId}
+    {result : RelationJoinResult diagram dyingWire openContent parameters} :
+    FinalWireOrigin result → Nat × Nat
+  | .inl wire => (0, wire.1.val)
+  | .inr internal =>
+      let code := constructionWireCode internal
+      (code.1 + 1, code.2)
+
+/-- The terminal wire rows cover both surviving source wires and every
+occurrence-indexed internal content wire, with constructive inverse laws in
+both directions for singleton and multi-occurrence joins. -/
+def terminalWireOriginsConform : Bool :=
+  decide (zeroAccepted.steps = []) &&
+    decide ((finalWireOriginRows zeroAccepted).map
+      (finalWireCode (result := zeroAccepted)) =
+      [(0, 1)]) &&
+    decide ((finalWireOriginRows accepted).map
+      (finalWireCode (result := accepted)) =
+      [(0, 1), (0, 2), (0, 3), (1, 0)]) &&
+    decide ((finalWireOriginRows multiAccepted).map
+      (finalWireCode (result := multiAccepted)) =
+      [(0, 1), (0, 2), (1, 0), (2, 0)]) &&
+    ((Data.Finite.allFin accepted.plainFinal.val.wireCount).all fun target =>
+      decide ((finalWireOriginEquiv accepted).invFun
+        (finalWireOriginEquiv accepted target) = target)) &&
+    ((finalWireOriginRows accepted).all fun origin =>
+      decide (finalWireOriginEquiv accepted
+        ((finalWireOriginEquiv accepted).invFun origin) = origin)) &&
+    decide ((finalWireOriginRows accepted).length =
+      accepted.plainFinal.val.wireCount) &&
+    ((Data.Finite.allFin multiAccepted.plainFinal.val.wireCount).all
+      fun target =>
+        decide ((finalWireOriginEquiv multiAccepted).invFun
+          (finalWireOriginEquiv multiAccepted target) = target)) &&
+    ((finalWireOriginRows multiAccepted).all fun origin =>
+      decide (finalWireOriginEquiv multiAccepted
+        ((finalWireOriginEquiv multiAccepted).invFun origin) = origin)) &&
+    decide ((finalWireOriginRows multiAccepted).length =
+      multiAccepted.plainFinal.val.wireCount)
+
+example : terminalWireOriginsConform = true := by
   native_decide
 
 end RelationJoinConstructionAtlasFixtures

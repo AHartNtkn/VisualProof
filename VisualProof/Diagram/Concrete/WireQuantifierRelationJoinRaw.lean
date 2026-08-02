@@ -1493,8 +1493,14 @@ theorem plainFinal_wireCount_add_one
       result.boundFinal.val.wireCount := by
   unfold plainFinal boundFinal
   rw [result.finalRemoval.generated]
-  exact Data.Finite.filter_not_mem_length_add_removed_length
-    [result.finalState.wireImage wire] (by simp)
+  have countExact :=
+    filter_ne_length_add_one_of_nodup_mem
+      (by simpa [ConcreteDiagram.wiresList] using
+        Data.Finite.allFin_nodup result.finalState.checked.val.wireCount)
+      (result.finalState.wireImage wire)
+      (Data.Finite.mem_allFin (result.finalState.wireImage wire))
+  simpa [Internal.batchRemovalCandidate, Internal.retainedWires,
+    ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange] using countExact
 
 /-- The accepted construction's sole exact region/node atlas authority. -/
 def constructionAtlas

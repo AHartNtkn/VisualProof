@@ -180,37 +180,6 @@ theorem retained_allFin_eq_map_restoreFin
         intro position _
         exact (restoreFin_succ_succ tail position).symm
 
-/-- Removing one known member from a duplicate-free list decreases length once. -/
-theorem filter_ne_length_add_one_of_nodup_mem [DecidableEq α]
-    {values : List α} (nodup : values.Nodup) (removed : α)
-    (member : removed ∈ values) :
-    (values.filter fun value => decide (value ≠ removed)).length + 1 =
-      values.length := by
-  induction values with
-  | nil => simp at member
-  | cons head tail induction =>
-      rw [List.nodup_cons] at nodup
-      rcases nodup with ⟨headFresh, tailNodup⟩
-      by_cases same : head = removed
-      · subst head
-        have retained :
-            tail.filter (fun value => decide (value ≠ removed)) = tail :=
-          List.filter_eq_self.mpr fun value valueMember => by
-            apply decide_eq_true
-            intro equality
-            subst value
-            exact headFresh valueMember
-        rw [List.filter_cons_of_neg (by simp), retained]
-        simp
-      · have tailMember : removed ∈ tail := by
-          rcases List.mem_cons.mp member with equality | tailMember
-          · exact False.elim (same equality.symm)
-          · exact tailMember
-        rw [List.filter_cons_of_pos (by simp [same])]
-        simp only [List.length_cons]
-        have tailExact := induction tailNodup tailMember
-        omega
-
 /-- Lift a region origin through one accepted construction step. -/
 def liftRegionOrigin
     {steps : List (RelationJoinStep source dying content)}

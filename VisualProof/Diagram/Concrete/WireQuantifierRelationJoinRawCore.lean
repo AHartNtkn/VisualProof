@@ -439,9 +439,9 @@ structure RelationJoinStep
       (checked.val.wires (checkedWireImage sourceWire)).scope =
         checkedRegionImage (source.val.wires sourceWire).scope
 
-/-- Removing one known member from a duplicate-free list decreases its
-length by exactly one, without invoking a finite-enumeration inverse. -/
-private theorem relationJoin_filter_ne_length_add_one_of_nodup_mem
+/-- Removing one known member from a duplicate-free list decreases length once,
+without constructing an inverse for the ambient finite enumeration. -/
+theorem filter_ne_length_add_one_of_nodup_mem
     [DecidableEq α]
     {values : List α} (nodup : values.Nodup) (removed : α)
     (member : removed ∈ values) :
@@ -1192,7 +1192,7 @@ theorem checked_nodeCount_add_one
       step.prior.val.nodeCount := by
     rw [step.baseGenerated]
     have countExact :=
-      relationJoin_filter_ne_length_add_one_of_nodup_mem
+      filter_ne_length_add_one_of_nodup_mem
         (by simpa [ConcreteDiagram.nodesList] using
           Data.Finite.allFin_nodup step.prior.val.nodeCount)
         step.priorApplication
@@ -1214,7 +1214,7 @@ theorem base_nodeCount_add_one
     step.base.val.nodeCount + 1 = step.prior.val.nodeCount := by
   rw [step.baseGenerated]
   have countExact :=
-    relationJoin_filter_ne_length_add_one_of_nodup_mem
+    filter_ne_length_add_one_of_nodup_mem
       (by simpa [ConcreteDiagram.nodesList] using
         Data.Finite.allFin_nodup step.prior.val.nodeCount)
       step.priorApplication
