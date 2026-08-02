@@ -1,4 +1,5 @@
 import VisualProof.Rule.MonolithicWireQuantifierCore
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawOriginFacts
 
 namespace VisualProof
 

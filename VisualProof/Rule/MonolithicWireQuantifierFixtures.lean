@@ -398,6 +398,58 @@ private def repeatedBoundaryJoinApplied :
       repeatedBoundaryJoinInput).toOption.get
     (by native_decide)
 
+set_option maxHeartbeats 4000000 in
+/-- Executable complete-table comparison for the repeated-alias raw atlas. -/
+def repeatedBoundaryRawAtlasConforms : Bool :=
+  let result := repeatedBoundaryJoinApplied.concreteResult
+  let atlas := repeatedBoundaryJoinApplied.rawOriginAtlas
+  decide
+      (atlas.regionEquiv result.plainFinal.val.root =
+        MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedRoot result) &&
+    (Data.Finite.allFin result.plainFinal.val.regionCount).all fun region =>
+      decide
+        ((match result.plainFinal.val.regions region with
+          | .sheet =>
+              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawRegionData.sheet
+          | .cut parent =>
+              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawRegionData.cut
+                (atlas.regionEquiv parent)) =
+          MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedRegionData
+            result (atlas.regionEquiv region)) &&
+    (Data.Finite.allFin result.plainFinal.val.nodeCount).all fun node =>
+      decide
+        ((match result.plainFinal.val.nodes node with
+          | .atom region args =>
+              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawNodeData.atom
+                (atlas.regionEquiv region) args
+          | .ref region definition args =>
+              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawNodeData.ref
+                (atlas.regionEquiv region) definition args
+          | .identity region sig arity =>
+              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawNodeData.identity
+                (atlas.regionEquiv region) sig arity) =
+          MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedNodeData
+            result (atlas.nodeEquiv node)) &&
+    (Data.Finite.allFin result.plainFinal.val.wireCount).all fun wire =>
+      decide
+          ((result.plainFinal.val.wires wire).sig =
+            MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedWireSignature
+              result (atlas.wireEquiv wire)) &&
+        decide
+          (atlas.regionEquiv (result.plainFinal.val.wires wire).scope =
+            MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedWireScope
+              result (atlas.wireEquiv wire)) &&
+        decide
+          ((result.plainFinal.val.wires wire).endpoints.map
+              atlas.endpointOriginEquiv =
+            MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedWireEndpoints
+              result (atlas.wireEquiv wire))
+
+/-- The repeated-alias corpus checks the complete raw atlas: root, every
+region and node row, wire signatures/scopes, and ordered endpoint fibers. -/
+example : repeatedBoundaryRawAtlasConforms = true := by
+  native_decide +revert
+
 example :
     repeatedBoundaryJoinApplied.concreteResult.steps.map
         (fun step =>
