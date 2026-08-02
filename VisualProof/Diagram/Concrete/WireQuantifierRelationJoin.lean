@@ -649,6 +649,48 @@ theorem identityRequests_eq_nil_of_sourceAttachments_coherent
   rw [step.targetExact, step.targetExact]
   exact congrArg step.baseWireImage (coherent left right same)
 
+theorem checked_regionCount
+    (step : RelationJoinStep source dying content) :
+    step.checked.val.regionCount =
+      step.prior.val.regionCount + step.attachment.fragmentRegions.length := by
+  rw [step.generated]
+  change step.base.val.regionCount + step.attachment.fragmentRegions.length = _
+  have baseCount : step.base.val.regionCount = step.prior.val.regionCount := by
+    rw [step.baseGenerated]
+  rw [baseCount]
+
+theorem checked_nodeCount_add_one
+    (step : RelationJoinStep source dying content) :
+    step.checked.val.nodeCount + 1 =
+      step.prior.val.nodeCount + content.val.diagram.nodeCount +
+        step.attachment.identityRequests.length := by
+  rw [step.generated]
+  change
+    step.base.val.nodeCount +
+          (content.val.diagram.nodeCount +
+            step.attachment.identityRequests.length) + 1 = _
+  have baseCount : step.base.val.nodeCount + 1 =
+      step.prior.val.nodeCount := by
+    rw [step.baseGenerated]
+    exact Data.Finite.filter_not_mem_length_add_removed_length
+      [step.priorApplication] (by simp)
+  omega
+
+theorem checked_wireCount
+    (step : RelationJoinStep source dying content) :
+    step.checked.val.wireCount =
+      step.prior.val.wireCount +
+        step.attachment.fragmentInternalWires.length := by
+  rw [step.generated]
+  change step.base.val.wireCount +
+    step.attachment.fragmentInternalWires.length = _
+  have baseCount : step.base.val.wireCount = step.prior.val.wireCount := by
+    rw [step.baseGenerated]
+    simp [ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+      Internal.retainedWires, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange]
+  rw [baseCount]
+
 theorem checkedPriorNode_injective
     (step : RelationJoinStep source dying content)
     {left right : step.prior.val.NodeId}
@@ -1935,6 +1977,29 @@ theorem final_deletion_exact
     simp only [equation]
   · rename_i parent equation
     simp only [equation]
+
+theorem plainFinal_regionCount
+    (result : RelationJoinResult source wire content parameters) :
+    result.plainFinal.val.regionCount = result.boundFinal.val.regionCount := by
+  unfold plainFinal boundFinal
+  rw [result.finalRemoval.generated]
+  exact Data.Finite.filter_not_mem_length_add_removed_length [] (by simp)
+
+theorem plainFinal_nodeCount
+    (result : RelationJoinResult source wire content parameters) :
+    result.plainFinal.val.nodeCount = result.boundFinal.val.nodeCount := by
+  unfold plainFinal boundFinal
+  rw [result.finalRemoval.generated]
+  exact Data.Finite.filter_not_mem_length_add_removed_length [] (by simp)
+
+theorem plainFinal_wireCount_add_one
+    (result : RelationJoinResult source wire content parameters) :
+    result.plainFinal.val.wireCount + 1 =
+      result.boundFinal.val.wireCount := by
+  unfold plainFinal boundFinal
+  rw [result.finalRemoval.generated]
+  exact Data.Finite.filter_not_mem_length_add_removed_length
+    [result.finalState.wireImage wire] (by simp)
 
 @[simp] theorem bound_dying_scope
     (result : RelationJoinResult source wire content parameters) :

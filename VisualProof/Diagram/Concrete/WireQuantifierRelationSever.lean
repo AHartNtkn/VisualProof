@@ -58,6 +58,9 @@ private structure RelationSeverPlan
       (relationRemovedRegions sites)
       (relationRemovedNodes sites)
       (relationRemovedWires sites)
+  removedRegionsNodup : (relationRemovedRegions sites).Nodup
+  removedNodesNodup : (relationRemovedNodes sites).Nodup
+  removedWiresNodup : (relationRemovedWires sites).Nodup
   scopeRetained :
     scope ∈ Internal.retainedRegions source (relationRemovedRegions sites)
   siteRegionRetained :
@@ -118,6 +121,12 @@ private def checkRelationSeverPlan
                   { removal := by
                       simpa [removedRegions, removedNodes, removedWires]
                         using removalPlan
+                    removedRegionsNodup := by
+                      simpa [removedRegions] using disjoint.1
+                    removedNodesNodup := by
+                      simpa [removedNodes] using disjoint.2.1
+                    removedWiresNodup := by
+                      simpa [removedWires] using disjoint.2.2
                     scopeRetained := by
                       simpa [removedRegions] using scopeRetained
                     siteRegionRetained := by
@@ -438,6 +447,76 @@ theorem checked_generated
       (Internal.retainedWires source (relationRemovedWires sites)).length + 1 := by
   simpa [relationSeverCandidate] using
     congrArg ConcreteDiagram.wireCount result.generated
+
+theorem checkedRegionCount_eq_retainedRegions
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.regionCount =
+      (Internal.retainedRegions source
+        (sites.flatMap RelationSeverSite.removedRegions)).length :=
+  result.regionCount
+
+theorem checkedNodeCount_eq_retainedNodes_add_sites
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.nodeCount =
+      (Internal.retainedNodes source
+        (sites.flatMap RelationSeverSite.removedNodes)).length +
+          sites.length :=
+  result.nodeCount
+
+theorem checkedWireCount_eq_retainedWires_add_one
+    (result : RelationSeverResult source scope sites) :
+    result.checked.val.wireCount =
+      (Internal.retainedWires source
+        (sites.flatMap RelationSeverSite.removedWires)).length + 1 :=
+  result.wireCount
+
+theorem removedRegions_nodup
+    (result : RelationSeverResult source scope sites) :
+    (sites.flatMap RelationSeverSite.removedRegions).Nodup :=
+  result.plan.removedRegionsNodup
+
+theorem removedNodes_nodup
+    (result : RelationSeverResult source scope sites) :
+    (sites.flatMap RelationSeverSite.removedNodes).Nodup :=
+  result.plan.removedNodesNodup
+
+theorem removedWires_nodup
+    (result : RelationSeverResult source scope sites) :
+    (sites.flatMap RelationSeverSite.removedWires).Nodup :=
+  result.plan.removedWiresNodup
+
+theorem retainedRegions_length_add_removedRegions_length
+    (result : RelationSeverResult source scope sites) :
+    (Internal.retainedRegions source
+        (sites.flatMap RelationSeverSite.removedRegions)).length +
+      (sites.flatMap RelationSeverSite.removedRegions).length =
+        source.val.regionCount := by
+  simpa [Internal.retainedRegions, ConcreteDiagram.regionsList] using
+    Data.Finite.filter_not_mem_length_add_removed_length
+      (sites.flatMap RelationSeverSite.removedRegions)
+      result.removedRegions_nodup
+
+theorem retainedNodes_length_add_removedNodes_length
+    (result : RelationSeverResult source scope sites) :
+    (Internal.retainedNodes source
+        (sites.flatMap RelationSeverSite.removedNodes)).length +
+      (sites.flatMap RelationSeverSite.removedNodes).length =
+        source.val.nodeCount := by
+  simpa [Internal.retainedNodes, ConcreteDiagram.nodesList] using
+    Data.Finite.filter_not_mem_length_add_removed_length
+      (sites.flatMap RelationSeverSite.removedNodes)
+      result.removedNodes_nodup
+
+theorem retainedWires_length_add_removedWires_length
+    (result : RelationSeverResult source scope sites) :
+    (Internal.retainedWires source
+        (sites.flatMap RelationSeverSite.removedWires)).length +
+      (sites.flatMap RelationSeverSite.removedWires).length =
+        source.val.wireCount := by
+  simpa [Internal.retainedWires, ConcreteDiagram.wiresList] using
+    Data.Finite.filter_not_mem_length_add_removed_length
+      (sites.flatMap RelationSeverSite.removedWires)
+      result.removedWires_nodup
 
 /-- Public characterization of the batch-retained source regions. -/
 theorem retainedRegion_iff

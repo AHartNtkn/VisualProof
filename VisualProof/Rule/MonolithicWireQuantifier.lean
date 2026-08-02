@@ -259,6 +259,88 @@ private theorem checkedOccurrence_internalWires
       (fun region => Or.inl ((checkedOccurrence_allRegions checked _).mpr region))
       Or.inr
 
+private theorem CheckedOccurrence.removedRegions_length
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content) :
+    content.selection.allRegions.length =
+      (pattern.val.diagram.regionsList.filter fun region =>
+        decide (region ≠ pattern.val.diagram.root)).length := by
+  let proper := pattern.val.diagram.regionsList.filter fun region =>
+    decide (region ≠ pattern.val.diagram.root)
+  let images := proper.map content.occurrence.regionMap
+  have imagesNodup : images.Nodup := by
+    exact ((Data.Finite.allFin_nodup _).filter _).map
+      content.occurrence.regionMap (by
+        intro left right different same
+        exact different (content.occurrence.regionMap_injective same))
+  have sameMembers : ∀ region,
+      region ∈ content.selection.allRegions ↔ region ∈ images := by
+    intro region
+    rw [← checkedOccurrence_allRegions checked]
+    rw [content.occurrence.mem_toSelection_allRegions_iff_image]
+    simp [images, proper, ConcreteDiagram.regionsList,
+      Data.Finite.mem_allFin]
+  have permuted := Data.Finite.list_perm_of_nodup_mem_iff
+    content.selection.allRegions_nodup imagesNodup sameMembers
+  simpa [images, proper] using permuted.length_eq
+
+private theorem CheckedOccurrence.removedNodes_length
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content) :
+    content.selection.allNodes.length = pattern.val.diagram.nodeCount := by
+  let images := pattern.val.diagram.nodesList.map content.occurrence.nodeMap
+  have imagesNodup : images.Nodup := by
+    exact (Data.Finite.allFin_nodup _).map content.occurrence.nodeMap (by
+      intro left right different same
+      exact different (content.occurrence.nodeMap_injective same))
+  have sameMembers : ∀ node,
+      node ∈ content.selection.allNodes ↔ node ∈ images := by
+    intro node
+    rw [← checkedOccurrence_allNodes checked]
+    rw [content.occurrence.mem_toSelection_allNodes_iff_image]
+    simp [images, ConcreteDiagram.nodesList, Data.Finite.mem_allFin]
+  have permuted := Data.Finite.list_perm_of_nodup_mem_iff
+    content.selection.allNodes_nodup imagesNodup sameMembers
+  simpa [images, ConcreteDiagram.nodesList,
+    Data.Finite.allFin_eq_finRange] using permuted.length_eq
+
+private theorem CheckedOccurrence.removedWires_length
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content) :
+    content.selection.internalWires.length =
+      (pattern.val.diagram.wiresList.filter fun wire =>
+        decide (wire ∉ pattern.val.boundary)).length := by
+  let internal := pattern.val.diagram.wiresList.filter fun wire =>
+    decide (wire ∉ pattern.val.boundary)
+  let images := internal.map content.occurrence.wireMap
+  have imagesNodup : images.Nodup := by
+    apply Data.Finite.list_map_nodup_of_injective_on
+      ((Data.Finite.allFin_nodup _).filter _)
+    intro left right leftMember rightMember same
+    exact content.occurrence.internalWire_injective left right
+      (by simpa [internal, ConcreteDiagram.wiresList] using leftMember)
+      (by simpa [internal, ConcreteDiagram.wiresList] using rightMember)
+      same
+  have sameMembers : ∀ wire,
+      wire ∈ content.selection.internalWires ↔ wire ∈ images := by
+    intro wire
+    rw [← checkedOccurrence_internalWires checked]
+    rw [content.occurrence.mem_toSelection_internalWires_iff_image]
+    simp [images, internal, ConcreteDiagram.wiresList,
+      Data.Finite.mem_allFin]
+  have permuted := Data.Finite.list_perm_of_nodup_mem_iff
+    content.selection.internalWires_nodup imagesNodup sameMembers
+  simpa [images, internal] using permuted.length_eq
+
 /-- Pointwise checked evidence for the complete durable occurrence list. -/
 private inductive CheckedOccurrenceList
     {source : CheckedDiagram definitions}
@@ -320,6 +402,61 @@ private theorem CheckedOccurrenceList.semanticEvidence_sites
       simp [CheckedOccurrenceList.semanticEvidence,
         WireQuantifierSemantics.RelationSeverOccurrence.site,
         ContentOccurrence.toConcreteSite, induction]
+
+private theorem CheckedOccurrenceList.removedRegions_length
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents) :
+    ((contents.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedRegions).length =
+        contents.length *
+          (pattern.val.diagram.regionsList.filter fun region =>
+            decide (region ≠ pattern.val.diagram.root)).length := by
+  induction entries with
+  | nil => simp
+  | cons checked tail induction =>
+      simp [ContentOccurrence.toConcreteSite,
+        checked.removedRegions_length, induction, Nat.succ_mul,
+        Nat.add_comm, Nat.add_mul]
+
+private theorem CheckedOccurrenceList.removedNodes_length
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents) :
+    ((contents.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedNodes).length =
+        contents.length * pattern.val.diagram.nodeCount := by
+  induction entries with
+  | nil => simp
+  | cons checked tail induction =>
+      simp [ContentOccurrence.toConcreteSite,
+        checked.removedNodes_length, induction, Nat.succ_mul,
+        Nat.add_comm, Nat.add_mul]
+
+private theorem CheckedOccurrenceList.removedWires_length
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents) :
+    ((contents.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedWires).length =
+        contents.length *
+          (pattern.val.diagram.wiresList.filter fun wire =>
+            decide (wire ∉ pattern.val.boundary)).length := by
+  induction entries with
+  | nil => simp
+  | cons checked tail induction =>
+      simp [ContentOccurrence.toConcreteSite,
+        checked.removedWires_length, induction, Nat.succ_mul,
+        Nat.add_comm, Nat.add_mul]
 
 private noncomputable def CheckedOccurrenceList.get
     (entries : CheckedOccurrenceList scope first contents)
@@ -1110,6 +1247,71 @@ private theorem relationJoinTrace_step_exact
       · have stepExact : step = finalStep := by simpa using final
         subst step
         exact ⟨relationArgsExact, sourceParametersExact⟩
+
+private theorem relationJoinTrace_count_exact
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    {steps : List
+      (ConcreteWireQuantifier.RelationJoinStep source dying content)}
+    {final : CheckedDiagram definitions}
+    {regionImage : source.val.RegionId → final.val.RegionId}
+    {nodeImage : source.val.NodeId → Option final.val.NodeId}
+    {wireImage : source.val.WireId → final.val.WireId}
+    {finalDying : final.val.WireId}
+    {finalScope : final.val.RegionId}
+    (trace : ConcreteWireQuantifier.RelationJoinSemanticTrace
+      source dying content parameters args steps final regionImage nodeImage
+        wireImage finalDying finalScope)
+    (identitiesEmpty : ∀ step ∈ steps,
+      step.attachment.identityRequests = []) :
+    final.val.regionCount = source.val.regionCount +
+        steps.length *
+          (content.val.diagram.regionsList.filter fun region =>
+            decide (region ≠ content.val.diagram.root)).length ∧
+      final.val.nodeCount + steps.length = source.val.nodeCount +
+        steps.length * content.val.diagram.nodeCount ∧
+      final.val.wireCount = source.val.wireCount +
+        steps.length *
+          (content.val.diagram.wiresList.filter fun wire =>
+            decide (wire ∉ content.val.boundary)).length := by
+  induction trace with
+  | nil => simp
+  | snoc trace step priorExact priorRegionExact priorNodeExact priorWireExact
+      priorDyingExact priorScopeExact relationArgsExact sourceParametersExact
+      induction =>
+      cases priorExact
+      have stepIdentities : step.attachment.identityRequests = [] :=
+        identitiesEmpty step (by simp)
+      rcases induction (fun prior member =>
+        identitiesEmpty prior (List.mem_append_left _ member)) with
+        ⟨regionsExact, nodesExact, wiresExact⟩
+      simp only [decide_not] at *
+      constructor
+      · have stepRegions := step.checked_regionCount
+        change step.checked.val.regionCount = step.prior.val.regionCount +
+          (content.val.diagram.regionsList.filter fun region =>
+            decide (region ≠ content.val.diagram.root)).length at stepRegions
+        simp only [decide_not] at stepRegions
+        simp only [List.length_append, List.length_singleton] at *
+        simp [Nat.add_mul]
+        omega
+      · constructor
+        · have stepNodes := step.checked_nodeCount_add_one
+          simp [stepIdentities] at stepNodes
+          simp only [List.length_append, List.length_singleton] at *
+          simp [Nat.add_mul]
+          omega
+        · have stepWires := step.checked_wireCount
+          change step.checked.val.wireCount = step.prior.val.wireCount +
+            (content.val.diagram.wiresList.filter fun wire =>
+              decide (wire ∉ content.val.boundary)).length at stepWires
+          simp only [decide_not] at stepWires
+          simp only [List.length_append, List.length_singleton] at *
+          simp [Nat.add_mul]
+          omega
 
 /-- Positional alignment between one inverse join step and the original
 checked occurrence restored at that step. -/
@@ -2127,6 +2329,109 @@ private theorem
     (receipt.completeWireImage_ne_boundDying left)
     (receipt.completeWireImage_ne_boundDying right) same
 
+private theorem
+    RelationSeverConcreteReceipt.inverseSteps_identityRequestsEmpty
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    ∀ step ∈ receipt.inverse.steps,
+      step.attachment.identityRequests = [] := by
+  intro step member
+  obtain ⟨position, stepExact⟩ := List.get_of_mem member
+  subst step
+  exact receipt.inverseStep_identityRequestsEmpty position
+
+private theorem
+    RelationSeverConcreteReceipt.constructionRegionCount_eq
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.regionCount = receipt.inverse.plainFinal.val.regionCount := by
+  have traceCounts := relationJoinTrace_count_exact
+    receipt.inverse.semantic_trace receipt.inverseSteps_identityRequestsEmpty
+  have removedLength :
+      ((receipt.extractions.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedRegions).length =
+      occurrences.length *
+        (pattern.val.diagram.regionsList.filter fun region =>
+          decide (region ≠ pattern.val.diagram.root)).length := by
+    change
+      ((receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedRegions).length = _
+    rw [receipt.extractions.entries.semanticEvidence_sites]
+    exact receipt.extractions.entries.removedRegions_length
+  have stepsLength : receipt.inverse.steps.length = occurrences.length :=
+    receipt.inverseSteps_sites_length.trans receipt.sites_occurrences_length
+  have partition := receipt.result.retainedRegions_length_add_removedRegions_length
+  have severCount := receipt.result.checkedRegionCount_eq_retainedRegions
+  have finalCount := receipt.inverse.plainFinal_regionCount
+  rcases traceCounts with ⟨traceRegion, _traceNode, _traceWire⟩
+  rw [stepsLength, severCount, ← finalCount] at traceRegion
+  rw [removedLength] at partition
+  omega
+
+private theorem
+    RelationSeverConcreteReceipt.constructionNodeCount_eq
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.nodeCount = receipt.inverse.plainFinal.val.nodeCount := by
+  have traceCounts := relationJoinTrace_count_exact
+    receipt.inverse.semantic_trace receipt.inverseSteps_identityRequestsEmpty
+  have removedLength :
+      ((receipt.extractions.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedNodes).length =
+      occurrences.length * pattern.val.diagram.nodeCount := by
+    change
+      ((receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedNodes).length = _
+    rw [receipt.extractions.entries.semanticEvidence_sites]
+    exact receipt.extractions.entries.removedNodes_length
+  have stepsLength : receipt.inverse.steps.length = occurrences.length :=
+    receipt.inverseSteps_sites_length.trans receipt.sites_occurrences_length
+  have sitesLength :
+      (receipt.extractions.semanticEvidence.map
+        WireQuantifierSemantics.RelationSeverOccurrence.site).length =
+          occurrences.length := receipt.sites_occurrences_length
+  have partition := receipt.result.retainedNodes_length_add_removedNodes_length
+  have severCount := receipt.result.checkedNodeCount_eq_retainedNodes_add_sites
+  have finalCount := receipt.inverse.plainFinal_nodeCount
+  rcases traceCounts with ⟨_traceRegion, traceNode, _traceWire⟩
+  rw [stepsLength, severCount, sitesLength, ← finalCount] at traceNode
+  rw [removedLength] at partition
+  omega
+
+private theorem
+    RelationSeverConcreteReceipt.constructionWireCount_eq
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.wireCount = receipt.inverse.plainFinal.val.wireCount := by
+  have traceCounts := relationJoinTrace_count_exact
+    receipt.inverse.semantic_trace receipt.inverseSteps_identityRequestsEmpty
+  have removedLength :
+      ((receipt.extractions.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedWires).length =
+      occurrences.length *
+        (pattern.val.diagram.wiresList.filter fun wire =>
+          decide (wire ∉ pattern.val.boundary)).length := by
+    change
+      ((receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedWires).length = _
+    rw [receipt.extractions.entries.semanticEvidence_sites]
+    exact receipt.extractions.entries.removedWires_length
+  have stepsLength : receipt.inverse.steps.length = occurrences.length :=
+    receipt.inverseSteps_sites_length.trans receipt.sites_occurrences_length
+  have partition := receipt.result.retainedWires_length_add_removedWires_length
+  have severCount := receipt.result.checkedWireCount_eq_retainedWires_add_one
+  have finalCount := receipt.inverse.plainFinal_wireCount_add_one
+  rcases traceCounts with ⟨_traceRegion, _traceNode, traceWire⟩
+  rw [stepsLength, severCount, ← finalCount] at traceWire
+  rw [removedLength] at partition
+  omega
+
 private noncomputable def
     RelationSeverConcreteReceipt.constructionRegionEquiv
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2138,7 +2443,7 @@ private noncomputable def
       Data.Finite.fin_surjective_of_injective_of_card_eq
         receipt.completePlainRegionImage
         receipt.completePlainRegionImage_injective
-        receipt.inverseIso.regionCount_eq.symm⟩
+        receipt.constructionRegionCount_eq⟩
 
 private noncomputable def
     RelationSeverConcreteReceipt.constructionNodeEquiv
@@ -2151,7 +2456,7 @@ private noncomputable def
       Data.Finite.fin_surjective_of_injective_of_card_eq
         receipt.completePlainNodeImage
         receipt.completePlainNodeImage_injective
-        receipt.inverseIso.nodeCount_eq.symm⟩
+        receipt.constructionNodeCount_eq⟩
 
 private noncomputable def
     RelationSeverConcreteReceipt.constructionWireEquiv
@@ -2164,7 +2469,7 @@ private noncomputable def
       Data.Finite.fin_surjective_of_injective_of_card_eq
         receipt.completePlainWireImage
         receipt.completePlainWireImage_injective
-        receipt.inverseIso.wireCount_eq.symm⟩
+        receipt.constructionWireCount_eq⟩
 
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin

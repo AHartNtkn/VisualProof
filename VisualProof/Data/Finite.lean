@@ -425,6 +425,80 @@ theorem fin_surjective_of_injective_of_card_eq
   subst n
   exact fin_surjective_of_injective forward injective
 
+/-- A duplicate-free list of finite identifiers and its complement partition
+the complete dense carrier exactly. -/
+theorem filter_not_mem_length_add_removed_length
+    (removed : List (Fin n)) (nodup : removed.Nodup) :
+    ((allFin n).filter fun value => decide (value ∉ removed)).length +
+      removed.length = n := by
+  let selected :=
+    (allFin n).filter fun value => decide (value ∈ removed)
+  have selectedNodup : selected.Nodup :=
+    (allFin_nodup n).filter _
+  have selectedPerm : selected.Perm removed := by
+    rw [List.perm_iff_count]
+    intro value
+    rw [selectedNodup.count, nodup.count]
+    simp [selected, mem_allFin]
+  have partition :
+      ((allFin n).filter fun value => decide (value ∉ removed)).length +
+        selected.length = (allFin n).length := by
+    have partitionValues : ∀ values : List (Fin n),
+        (values.filter fun value => decide (value ∉ removed)).length +
+          (values.filter fun value => decide (value ∈ removed)).length =
+            values.length := by
+      intro values
+      induction values with
+      | nil => simp
+      | cons head tail induction =>
+          by_cases member : head ∈ removed
+          · simpa [member, Nat.add_assoc] using
+              congrArg Nat.succ induction
+          · simpa [member, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using congrArg Nat.succ induction
+    simpa [selected] using partitionValues (allFin n)
+  rw [selectedPerm.length_eq] at partition
+  simpa [allFin_eq_finRange] using partition
+
+theorem list_perm_of_nodup_mem_iff
+    [BEq α] [LawfulBEq α]
+    {left right : List α}
+    (leftNodup : left.Nodup)
+    (rightNodup : right.Nodup)
+    (sameMembers : ∀ value, value ∈ left ↔ value ∈ right) :
+    left.Perm right := by
+  rw [List.perm_iff_count]
+  intro value
+  rw [leftNodup.count, rightNodup.count]
+  by_cases leftMember : value ∈ left
+  · have rightMember := (sameMembers value).mp leftMember
+    simp [leftMember, rightMember]
+  · have rightMember : value ∉ right := by
+      exact fun member => leftMember ((sameMembers value).mpr member)
+    simp [leftMember, rightMember]
+
+theorem list_map_nodup_of_injective_on
+    {values : List α} (nodup : values.Nodup)
+    (mapping : α → β)
+    (injective : ∀ {left right}, left ∈ values → right ∈ values →
+      mapping left = mapping right → left = right) :
+    (values.map mapping).Nodup := by
+  induction values with
+  | nil => simp
+  | cons head tail induction =>
+      rw [List.nodup_cons] at nodup
+      rw [List.map_cons, List.nodup_cons]
+      constructor
+      · intro member
+        rcases List.mem_map.mp member with ⟨right, rightMember, same⟩
+        have exact := injective
+          (by simp only [List.mem_cons]; exact Or.inr rightMember)
+          (by simp) same
+        exact nodup.1 (exact ▸ rightMember)
+      · exact induction nodup.2 (by
+          intro left right leftMember rightMember same
+          exact injective (by simp [leftMember]) (by simp [rightMember]) same)
+
 def filterFin (p : Fin n -> Bool) : List (Fin n) :=
   (allFin n).filter p
 
