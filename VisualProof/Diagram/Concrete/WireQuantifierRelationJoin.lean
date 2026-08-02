@@ -236,6 +236,11 @@ structure RelationJoinStep
   prior : CheckedDiagram definitions
   priorApplication : prior.val.NodeId
   priorNodeImage : source.val.NodeId → Option prior.val.NodeId
+  priorNodeImage_injective :
+    ∀ {left right priorNode},
+      priorNodeImage left = some priorNode →
+      priorNodeImage right = some priorNode →
+      left = right
   priorApplicationImage :
     priorNodeImage application = some priorApplication
   priorRegionImage : source.val.RegionId → prior.val.RegionId
@@ -595,6 +600,59 @@ theorem checkedNodeImage_of_prior
   simp only [retained, dif_pos, Option.map_some]
   rfl
 
+/-- The post-step partial source-node landing has unique preimages. -/
+theorem checkedNodeImage_injective
+    (step : RelationJoinStep source dying content)
+    {left right : source.val.NodeId}
+    {checkedNode : step.checked.val.NodeId}
+    (leftExact : step.checkedNodeImage left = some checkedNode)
+    (rightExact : step.checkedNodeImage right = some checkedNode) :
+    left = right := by
+  classical
+  cases leftPriorExact : step.priorNodeImage left with
+  | none =>
+      rw [step.checkedNodeImageExact, step.baseNodeImageExact,
+        leftPriorExact] at leftExact
+      contradiction
+  | some leftPrior =>
+      cases rightPriorExact : step.priorNodeImage right with
+      | none =>
+          rw [step.checkedNodeImageExact, step.baseNodeImageExact,
+            rightPriorExact] at rightExact
+          contradiction
+      | some rightPrior =>
+          have leftDifferent : leftPrior ≠ step.priorApplication := by
+            intro same
+            subst leftPrior
+            have sourceExact : left = step.application :=
+              step.priorNodeImage_injective leftPriorExact
+                step.priorApplicationImage
+            subst left
+            rw [step.checkedNodeImage_application] at leftExact
+            contradiction
+          have rightDifferent : rightPrior ≠ step.priorApplication := by
+            intro same
+            subst rightPrior
+            have sourceExact : right = step.application :=
+              step.priorNodeImage_injective rightPriorExact
+                step.priorApplicationImage
+            subst right
+            rw [step.checkedNodeImage_application] at rightExact
+            contradiction
+          rw [step.checkedNodeImage_of_prior leftPriorExact leftDifferent]
+            at leftExact
+          rw [step.checkedNodeImage_of_prior rightPriorExact rightDifferent]
+            at rightExact
+          have transportedExact :
+              step.checkedPriorNode leftPrior leftDifferent =
+                step.checkedPriorNode rightPrior rightDifferent :=
+            Option.some.inj (leftExact.trans rightExact.symm)
+          have priorExact : leftPrior = rightPrior :=
+            step.checkedPriorNode_injective leftDifferent rightDifferent
+              transportedExact
+          subst rightPrior
+          exact step.priorNodeImage_injective leftPriorExact rightPriorExact
+
 theorem attachment_accepted
     (step : RelationJoinStep source dying content) :
     checkConcreteSpliceAttachment step.base step.site content
@@ -748,6 +806,11 @@ private structure RelationJoinState
       (checked.val.wires (wireImage sourceWire)).scope =
         regionImage (source.val.wires sourceWire).scope
   nodeImage : source.val.NodeId → Option checked.val.NodeId
+  nodeImage_injective :
+    ∀ {left right checkedNode},
+      nodeImage left = some checkedNode →
+      nodeImage right = some checkedNode →
+      left = right
   processed : List source.val.NodeId
   steps : List (RelationJoinStep source dying content)
   traceExact :
@@ -809,6 +872,9 @@ private def relationJoinInitialState
       wireImage_injective := Function.injective_id
       wireScopeExact := fun _ => rfl
       nodeImage := fun node => some node
+      nodeImage_injective := by
+        intro left right checkedNode leftExact rightExact
+        exact Option.some.inj (leftExact.trans rightExact.symm)
       processed := []
       steps := []
       traceExact := rfl
@@ -1004,6 +1070,8 @@ private def spliceRelationApplication
                                         priorApplication :=
                                           priorApplication
                                         priorNodeImage := state.nodeImage
+                                        priorNodeImage_injective :=
+                                          state.nodeImage_injective
                                         priorApplicationImage :=
                                           priorApplicationAccepted
                                         priorRegionImage :=
@@ -1119,6 +1187,8 @@ private def spliceRelationApplication
                                         wireScopeExact :=
                                           step.checkedWireScopeExact
                                         nodeImage := step.checkedNodeImage
+                                        nodeImage_injective :=
+                                          step.checkedNodeImage_injective
                                         processed :=
                                           state.processed ++
                                             [application.node]
@@ -1366,6 +1436,15 @@ def boundNodeImage
     (result : RelationJoinResult source wire content parameters) :
     source.val.NodeId → Option result.boundFinal.val.NodeId :=
   result.finalState.nodeImage
+
+theorem boundNodeImage_injective
+    (result : RelationJoinResult source wire content parameters)
+    {left right : source.val.NodeId}
+    {checkedNode : result.boundFinal.val.NodeId}
+    (leftExact : result.boundNodeImage left = some checkedNode)
+    (rightExact : result.boundNodeImage right = some checkedNode) :
+    left = right :=
+  result.finalState.nodeImage_injective leftExact rightExact
 
 def boundWireImage
     (result : RelationJoinResult source wire content parameters) :
