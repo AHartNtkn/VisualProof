@@ -572,8 +572,30 @@ private structure ResidualCompilation
   trackedLength : tracked.length = trackedCount
   ambients :
     List (PackedVar context × program.target.val.WireId)
+  construction :
+    Σ planned : CheckedDiagram definitions,
+      ConcreteIso program.target.val planned.val :=
+    ⟨program.target,
+      Vacuity.identityIso program.target.val program.target.property⟩
 
 namespace ResidualCompilation
+
+/-- Replace the provisional landing by a construction-owned correspondence. -/
+private def retarget
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (compiled : ResidualCompilation orientation source context trackedCount)
+    (planned : CheckedDiagram definitions)
+    (landing : ConcreteIso (definitions := definitions)
+      (show CheckedDiagram definitions from compiled.construction.1).val
+      planned.val) :
+    ResidualCompilation orientation source context trackedCount where
+  program := compiled.program
+  tracked := compiled.tracked
+  trackedLength := compiled.trackedLength
+  ambients := compiled.ambients
+  construction :=
+    ⟨planned, compiled.construction.2.trans landing⟩
 
 private def castTracked
     (compiled :
@@ -584,6 +606,7 @@ private def castTracked
   tracked := compiled.tracked
   trackedLength := compiled.trackedLength.trans exact
   ambients := compiled.ambients
+  construction := compiled.construction
 
 private def prepend
     {source : CheckedDiagram definitions}
@@ -595,6 +618,7 @@ private def prepend
   tracked := tail.tracked
   trackedLength := tail.trackedLength
   ambients := tail.ambients
+  construction := tail.construction
 
 end ResidualCompilation
 
@@ -620,7 +644,10 @@ private def combineParallel
         exact right'.trackedLength
       ambients := by
         rw [finalTarget]
-        exact right'.ambients }
+        exact right'.ambients
+      construction := by
+        rw [finalTarget]
+        exact right'.construction }
 
 private def terminalCompilation
     (context : List Sig)
@@ -1085,7 +1112,8 @@ private def compileIntrinsicResidual :
             { program := tail.program
               tracked := tail.tracked
               trackedLength := tail.trackedLength
-              ambients := lowered }
+              ambients := lowered
+              construction := tail.construction }
           pure
             ((loweredTail.castTracked transported.trackedLength).prepend
               shifted.step)
@@ -1364,19 +1392,14 @@ private def invertStep
       pure { step := inverseStep, normalizedIso := normalizedIso }
   | _ => throw .malformedResidual
 
-private structure ReversedProgram
-    (orientation : Orientation)
-    (real planned : CheckedDiagram definitions) where
-  program : PrimitiveProgram orientation real
-  normalizedIso : ConcreteIso program.target.val planned.val
-
 private def reversePrimitiveProgram :
     {planned : CheckedDiagram definitions} →
     (program : PrimitiveProgram joinOrientation planned) →
     (real : CheckedDiagram definitions) →
     ConcreteIso program.target.val real.val →
     (orientation : Orientation) →
-    Except CompilerError (ReversedProgram orientation real planned)
+    Except CompilerError
+      (PrimitiveProgram.ConstructionLanding orientation real planned)
   | planned, .nil _, real, finalIso, _ =>
       .ok
         { program := .nil real
@@ -1507,10 +1530,11 @@ private def compileAppliedRelationJoin
     compileResidual residual [] input.orientation
   have trackedEmpty : compiled.tracked = [] :=
     List.eq_nil_of_length_eq_zero compiled.trackedLength
-  let normalizedIso ←
+  let constructionLanding ←
     requireOption .redundancyMismatch <|
       ConcreteIsoSearch.findConcreteIso?
-        compiled.program.target.val monolithic.target.val
+        compiled.construction.1.val monolithic.target.val
+  let normalizedIso := compiled.construction.2.trans constructionLanding
   pure
     { monolithic := monolithic
       arguments := arguments

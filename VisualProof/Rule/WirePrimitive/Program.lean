@@ -277,6 +277,35 @@ def target :
   | source, .nil _ => source
   | _, .cons _ tail => tail.target
 
+/-- A primitive receipt chain together with its construction-owned landing.
+The planned diagram is explicit, so structural compilers can compose landing
+correspondences instead of rediscovering the final graph. -/
+structure ConstructionLanding
+    (orientation : Orientation)
+    (source planned : CheckedDiagram definitions) where
+  program : PrimitiveProgram orientation source
+  normalizedIso : ConcreteIso program.target.val planned.val
+
+namespace ConstructionLanding
+
+/-- Exact landing of an already constructed primitive program. -/
+def exact
+    (program : PrimitiveProgram orientation source) :
+    ConstructionLanding orientation source program.target where
+  program := program
+  normalizedIso := Vacuity.identityIso program.target.val
+    program.target.property
+
+/-- Retarget a construction landing by composing an owned correspondence. -/
+def retarget
+    (landing : ConstructionLanding orientation source middle)
+    (next : ConcreteIso middle.val planned.val) :
+    ConstructionLanding orientation source planned where
+  program := landing.program
+  normalizedIso := landing.normalizedIso.trans next
+
+end ConstructionLanding
+
 /-- Exact ordered public tag trace. -/
 def tags :
     {source : CheckedDiagram definitions} →
