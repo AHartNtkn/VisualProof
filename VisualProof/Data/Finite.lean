@@ -365,6 +365,66 @@ theorem fin_card_le_of_injective {m n : Nat} (f : Fin m → Fin n)
           have hle := ih reduced reduced_injective
           omega
 
+/-- An injective endomap of a finite initial segment is surjective. -/
+theorem fin_surjective_of_injective
+    {n : Nat} (forward : Fin n → Fin n)
+    (injective : Function.Injective forward) :
+    ∀ target, ∃ source, forward source = target := by
+  cases n with
+  | zero => exact fun target => Fin.elim0 target
+  | succ n =>
+      intro target
+      by_cases found : ∃ source, forward source = target
+      · exact found
+      have avoids (source : Fin (n + 1)) : forward source ≠ target := by
+        intro exact
+        exact found ⟨source, exact⟩
+      let lower (value : Fin (n + 1)) (different : value ≠ target) : Fin n :=
+        if before : value.val < target.val then
+          ⟨value.val, by omega⟩
+        else
+          ⟨value.val - 1, by
+            have bound := value.isLt
+            have unequal : value.val ≠ target.val := by
+              intro same
+              exact different (Fin.ext same)
+            omega⟩
+      have lower_injective :
+          ∀ {left right} (leftDifferent : left ≠ target)
+            (rightDifferent : right ≠ target),
+            lower left leftDifferent = lower right rightDifferent →
+              left = right := by
+        intro left right leftDifferent rightDifferent same
+        have leftUnequal : left.val ≠ target.val := by
+          intro equal
+          exact leftDifferent (Fin.ext equal)
+        have rightUnequal : right.val ≠ target.val := by
+          intro equal
+          exact rightDifferent (Fin.ext equal)
+        unfold lower at same
+        split at same <;> split at same
+        all_goals
+          apply Fin.ext
+          have values := congrArg Fin.val same
+          simp only at values
+          omega
+      let reduced (source : Fin (n + 1)) : Fin n :=
+        lower (forward source) (avoids source)
+      have reduced_injective : Function.Injective reduced := by
+        intro left right same
+        apply injective
+        exact lower_injective (avoids left) (avoids right) same
+      have impossible := fin_card_le_of_injective reduced reduced_injective
+      omega
+
+theorem fin_surjective_of_injective_of_card_eq
+    {m n : Nat} (forward : Fin m → Fin n)
+    (injective : Function.Injective forward)
+    (sameCardinality : m = n) :
+    ∀ target, ∃ source, forward source = target := by
+  subst n
+  exact fin_surjective_of_injective forward injective
+
 def filterFin (p : Fin n -> Bool) : List (Fin n) :=
   (allFin n).filter p
 

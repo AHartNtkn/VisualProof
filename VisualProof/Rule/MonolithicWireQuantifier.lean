@@ -2127,6 +2127,45 @@ private theorem
     (receipt.completeWireImage_ne_boundDying left)
     (receipt.completeWireImage_ne_boundDying right) same
 
+private noncomputable def
+    RelationSeverConcreteReceipt.constructionRegionEquiv
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Data.Finite.FiniteEquiv source.val.RegionId
+      receipt.inverse.plainFinal.val.RegionId :=
+  Data.Finite.FiniteEquiv.ofBijectiveFin receipt.completePlainRegionImage
+    ⟨receipt.completePlainRegionImage_injective,
+      Data.Finite.fin_surjective_of_injective_of_card_eq
+        receipt.completePlainRegionImage
+        receipt.completePlainRegionImage_injective
+        receipt.inverseIso.regionCount_eq.symm⟩
+
+private noncomputable def
+    RelationSeverConcreteReceipt.constructionNodeEquiv
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Data.Finite.FiniteEquiv source.val.NodeId
+      receipt.inverse.plainFinal.val.NodeId :=
+  Data.Finite.FiniteEquiv.ofBijectiveFin receipt.completePlainNodeImage
+    ⟨receipt.completePlainNodeImage_injective,
+      Data.Finite.fin_surjective_of_injective_of_card_eq
+        receipt.completePlainNodeImage
+        receipt.completePlainNodeImage_injective
+        receipt.inverseIso.nodeCount_eq.symm⟩
+
+private noncomputable def
+    RelationSeverConcreteReceipt.constructionWireEquiv
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Data.Finite.FiniteEquiv source.val.WireId
+      receipt.inverse.plainFinal.val.WireId :=
+  Data.Finite.FiniteEquiv.ofBijectiveFin receipt.completePlainWireImage
+    ⟨receipt.completePlainWireImage_injective,
+      Data.Finite.fin_surjective_of_injective_of_card_eq
+        receipt.completePlainWireImage
+        receipt.completePlainWireImage_injective
+        receipt.inverseIso.wireCount_eq.symm⟩
+
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin
     (source : CheckedDiagram definitions)
