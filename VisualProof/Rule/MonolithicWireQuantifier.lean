@@ -1457,6 +1457,16 @@ private noncomputable def RelationSeverConcreteReceipt.inverseStepAlignment
     receipt.parameters receipt.parametersAccepted step site siteExact
       applicationExact arityExact stepExact.2
 
+/-- No step in an accepted inverse reconstruction can allocate an identity:
+its complete boundary vector is the positional sever image of the original
+checked occurrence. -/
+private theorem RelationSeverConcreteReceipt.inverseStep_identityRequestsEmpty
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (position : Fin receipt.inverse.steps.length) :
+    (receipt.inverse.steps.get position).attachment.identityRequests = [] :=
+  (receipt.inverseStepAlignment position).identityRequestsEmpty
+
 /-- Snoc carrier step: transport the existing reconstructed prefix through
 atom deletion and splice, then allocate the newly restored occurrence in the
 fragment suffix.  The sole separation premise says that no original carrier
