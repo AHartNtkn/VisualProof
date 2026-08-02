@@ -23,6 +23,16 @@ structure CheckedRelationSeverOccurrence
         wire ∈ selection.touchingWires)
   compilation : OpenCompilation pattern
 
+namespace CheckedRelationSeverOccurrence
+
+/-- The validated selection has exactly the occurrence-owned durable input. -/
+theorem selection_input_eq
+    (checked : CheckedRelationSeverOccurrence selection occurrence) :
+    occurrence.toSelection.input = selection.input :=
+  checked.selectionExact
+
+end CheckedRelationSeverOccurrence
+
 private def relationSeverBoundaryCoverage
     {pattern : CheckedOpenDiagram definitions}
     {source : CheckedDiagram definitions}

@@ -202,6 +202,63 @@ private structure CheckedOccurrence
   parametersExact :
     content.parameters = first.parameters
 
+private theorem checkedOccurrence_allRegions
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content)
+    (region : source.val.RegionId) :
+    region ∈ content.occurrence.toSelection.allRegions ↔
+      region ∈ content.selection.allRegions := by
+  have inputExact := checked.extraction.selection_input_eq
+  have rootsExact := congrArg SelectionInput.regions inputExact
+  simp only [CheckedSelection.mem_allRegions,
+    CheckedSelection.IsSelectedRegion, CheckedSelection.subtreeRoots]
+  rw [rootsExact]
+
+private theorem checkedOccurrence_allNodes
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content)
+    (node : source.val.NodeId) :
+    node ∈ content.occurrence.toSelection.allNodes ↔
+      node ∈ content.selection.allNodes := by
+  have inputExact := checked.extraction.selection_input_eq
+  have nodesExact := congrArg SelectionInput.nodes inputExact
+  simp only [CheckedSelection.mem_allNodes,
+    CheckedSelection.IsSelectedNode, CheckedSelection.directNodes]
+  rw [nodesExact]
+  constructor <;> intro selected
+  · exact selected.elim Or.inl fun region =>
+      Or.inr ((checkedOccurrence_allRegions checked _).mp region)
+  · exact selected.elim Or.inl fun region =>
+      Or.inr ((checkedOccurrence_allRegions checked _).mpr region)
+
+private theorem checkedOccurrence_internalWires
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first content : ContentOccurrence source pattern}
+    (checked : CheckedOccurrence scope first content)
+    (wire : source.val.WireId) :
+    wire ∈ content.occurrence.toSelection.internalWires ↔
+      wire ∈ content.selection.internalWires := by
+  have inputExact := checked.extraction.selection_input_eq
+  have wiresExact := congrArg SelectionInput.wires inputExact
+  simp only [CheckedSelection.mem_internalWires,
+    CheckedSelection.IsInternal, CheckedSelection.explicitWires]
+  rw [wiresExact]
+  constructor <;> intro selected
+  · exact selected.elim
+      (fun region => Or.inl ((checkedOccurrence_allRegions checked _).mp region))
+      Or.inr
+  · exact selected.elim
+      (fun region => Or.inl ((checkedOccurrence_allRegions checked _).mpr region))
+      Or.inr
+
 /-- Pointwise checked evidence for the complete durable occurrence list. -/
 private inductive CheckedOccurrenceList
     {source : CheckedDiagram definitions}
@@ -339,6 +396,88 @@ private def BatchCoveredWire
     (restored : List (ContentOccurrence source pattern))
     (wire : source.val.WireId) : Prop :=
   retainedBySitesWire sites wire ∨ restoredWire restored wire
+
+private theorem CheckedOccurrenceList.regionCoverage
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (region : source.val.RegionId) :
+    BatchCoveredRegion (contents.map ContentOccurrence.toConcreteSite)
+      contents region := by
+  induction entries with
+  | nil => exact Or.inl (by simp [retainedBySitesRegion])
+  | @cons content rest checked tail induction =>
+      by_cases selected : region ∈ content.selection.allRegions
+      · apply Or.inr
+        obtain ⟨patternRegion, nonroot, mapped⟩ :=
+          content.occurrence.mem_toSelection_allRegions_iff_image region
+            |>.mp ((checkedOccurrence_allRegions checked region).mpr selected)
+        exact ⟨content, by simp, patternRegion, nonroot, mapped⟩
+      · rcases induction with retained | restored
+        · exact Or.inl (by
+            simpa [retainedBySitesRegion, ContentOccurrence.toConcreteSite,
+              selected] using retained)
+        · rcases restored with
+            ⟨candidate, member, patternRegion, nonroot, mapped⟩
+          exact Or.inr
+            ⟨candidate, by simp [member], patternRegion, nonroot, mapped⟩
+
+private theorem CheckedOccurrenceList.nodeCoverage
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (node : source.val.NodeId) :
+    BatchCoveredNode (contents.map ContentOccurrence.toConcreteSite)
+      contents node := by
+  induction entries with
+  | nil => exact Or.inl (by simp [retainedBySitesNode])
+  | @cons content rest checked tail induction =>
+      by_cases selected : node ∈ content.selection.allNodes
+      · apply Or.inr
+        obtain ⟨patternNode, mapped⟩ :=
+          content.occurrence.mem_toSelection_allNodes_iff_image node
+            |>.mp ((checkedOccurrence_allNodes checked node).mpr selected)
+        exact ⟨content, by simp, patternNode, mapped⟩
+      · rcases induction with retained | restored
+        · exact Or.inl (by
+            simpa [retainedBySitesNode, ContentOccurrence.toConcreteSite,
+              selected] using retained)
+        · rcases restored with ⟨candidate, member, patternNode, mapped⟩
+          exact Or.inr ⟨candidate, by simp [member], patternNode, mapped⟩
+
+private theorem CheckedOccurrenceList.wireCoverage
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (wire : source.val.WireId) :
+    BatchCoveredWire (contents.map ContentOccurrence.toConcreteSite)
+      contents wire := by
+  induction entries with
+  | nil => exact Or.inl (by simp [retainedBySitesWire])
+  | @cons content rest checked tail induction =>
+      by_cases selected : wire ∈ content.selection.internalWires
+      · apply Or.inr
+        obtain ⟨patternWire, internal, mapped⟩ :=
+          content.occurrence.mem_toSelection_internalWires_iff_image wire
+            |>.mp ((checkedOccurrence_internalWires checked wire).mpr selected)
+        exact ⟨content, by simp, patternWire, internal, mapped⟩
+      · rcases induction with retained | restored
+        · exact Or.inl (by
+            simpa [retainedBySitesWire, ContentOccurrence.toConcreteSite,
+              selected] using retained)
+        · rcases restored with
+            ⟨candidate, member, patternWire, internal, mapped⟩
+          exact Or.inr
+            ⟨candidate, by simp [member], patternWire, internal, mapped⟩
 
 /-- Construction state for the snoc induction restoring a severed family. -/
 private structure BatchReconstructionState
