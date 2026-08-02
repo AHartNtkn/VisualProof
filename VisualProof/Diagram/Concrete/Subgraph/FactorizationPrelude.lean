@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 
 namespace VisualProof.FactorizationInternal
 

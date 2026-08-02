@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturality
+import VisualProof.Diagram.Concrete.Subgraph.Splice
 import VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
 
 namespace VisualProof
@@ -29,18 +30,15 @@ theorem denote_splice
         (denoteChecked pre definitionEnv result.checked ↔
           denoteRegion pre definitionEnv Env.empty compiled.inserted) := by
   obtain ⟨compiled, compiledAccepted⟩ :=
-    compileInsertion_complete_of_splice fragmentCompiled attachment
-      result accepted
-  have resultEquality : compiled.candidate = result :=
-    Except.ok.inj (compiled.candidate_accepted.symm.trans accepted)
-  subst result
+    compileInsertion_complete_of_raw_splice fragmentCompiled attachment
+      result.rawResult (splice_success_raw accepted)
   let raw : CheckedDiagram definitions :=
     ⟨attachment.diagram, compiled.generated_wellFormed⟩
   have normalized :
-      compiled.candidate.checked =
+      result.checked =
         (ConcreteDiagram.normalizeIdentities raw).target := by
     simpa [raw] using
-      (splice_success_checked compiled.candidate_accepted)
+      (splice_success_checked accepted)
   refine ⟨compiled, compiledAccepted, ?_⟩
   rw [normalized]
   exact

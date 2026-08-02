@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturalitySupport
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
+import VisualProof.Diagram.Concrete.DenseErasure
 
 namespace VisualProof
 

@@ -63,6 +63,12 @@ private theorem castWireList_length
   subst exact
   rfl
 
+private def checkedDiagramEqIso
+    {left right : CheckedDiagram definitions}
+    (exact : left = right) : ConcreteIso left.val right.val := by
+  subst right
+  exact Vacuity.identityIso left.val left.property
+
 /--
 Exact ordered boundary validation for one accepted join input.  Lists are not
 deduplicated, so repeated and permuted formal positions remain observable.
@@ -102,6 +108,52 @@ def initialIntrinsicResidual
     (by simpa [checkedBoundarySigs] using monolithic.formalSignatures)
     (by simpa [checkedBoundarySigs] using monolithic.parameterSignatures)
     monolithic.live_not_parameter
+
+private theorem rawSourceSites_exists
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (result : ConcreteWireQuantifier.RelationJoinResult source input.wire
+      input.content input.parameters) :
+    ∃ all,
+      checkAllAppliedSites source input.wire = some all := by
+  apply checkAllAppliedSites_complete
+  intro endpoint member
+  obtain ⟨head, region, nodeData⟩ :=
+    result.endpoint_applied endpoint member
+  exact ⟨head, region, result.args, nodeData⟩
+
+private def rawSourceSites
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (result : ConcreteWireQuantifier.RelationJoinResult source input.wire
+      input.content input.parameters) :
+    AllAppliedSites source input.wire :=
+  match accepted : checkAllAppliedSites source input.wire with
+  | some sites => sites
+  | none => by
+      exfalso
+      obtain ⟨sites, complete⟩ := rawSourceSites_exists result
+      rw [accepted] at complete
+      contradiction
+
+/-- The initial compiler obligation derived solely from checked join evidence
+and the raw concrete construction. -/
+private def initialRawIntrinsicResidual
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (checked : MonolithicWireQuantifier.Internal.CheckedRelationJoin source
+      input.orientation input.wire
+      input.content input.parameters)
+    (result : ConcreteWireQuantifier.RelationJoinResult source input.wire
+      input.content input.parameters) :
+    IntrinsicCompilerResidual source
+      (ConcreteElaboration.openBoundaryClassSigs input.content.val) :=
+  IntrinsicCompilerResidual.initial checked.contentCompilation.compilation
+    input.wire checked.arguments checked.sourceSignature
+    (rawSourceSites result) input.parameters
+    (by simpa [checkedBoundarySigs] using checked.formalSignatures)
+    (by simpa [checkedBoundarySigs] using checked.parameterSignatures)
+    checked.liveNotParameter
 
 private def retainedAfterErasing
     (source : CheckedDiagram definitions)
@@ -1223,7 +1275,7 @@ private structure InverseStepRun
     (orientation : Orientation)
     (real planned : CheckedDiagram definitions) where
   step : CompiledPrimitiveStep orientation real
-  normalizedIso : ConcreteIso step.target.val planned.val
+  constructionIso : ConcreteIso step.target.val planned.val
 
 private def invertStep
     {planned : CheckedDiagram definitions}
@@ -1240,7 +1292,7 @@ private def invertStep
       pure
         { step := .wireJoin inverse.input inverse.orientationExact
             inverse.applied
-          normalizedIso := inverse.targetIso }
+          constructionIso := inverse.targetIso }
   | .wireJoin _ _ applied => do
       let inverse ←
         (Partition.invertWireJoinTransported applied real targetIso
@@ -1248,7 +1300,7 @@ private def invertStep
       pure
         { step := .wireSever inverse.input inverse.orientationExact
             inverse.applied
-          normalizedIso := inverse.targetIso }
+          constructionIso := inverse.targetIso }
   | .arityShift _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let wireExact := targetIso.wires.right_inv applied.targetWire
@@ -1258,9 +1310,9 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .arityUnshift inverseWire inversePosition inverseApplied
-      let normalizedIso := applied.inverseTransportIso inverseApplied
+      let constructionIso := applied.inverseTransportIso inverseApplied
         targetIso wireExact
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .argPermute _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let inverse := applied.inversePermutation
@@ -1269,9 +1321,9 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .argPermute inverseWire inverse inverseApplied
-      let normalizedIso := applied.inverseTransportIso inverseApplied
+      let constructionIso := applied.inverseTransportIso inverseApplied
         targetIso (targetIso.wires.right_inv applied.targetWire)
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .argDrop _ position applied => do
       match argumentExact : applied.sourceArgumentList[position]? with
       | none => throw .malformedResidual
@@ -1286,9 +1338,9 @@ private def invertStep
           let inverseStep : CompiledPrimitiveStep orientation real :=
             .argExtend inverseWire position signature inverseAttachments
               inverseApplied
-          let normalizedIso := applied.inverseTransportIso targetIso wireExact
+          let constructionIso := applied.inverseTransportIso targetIso wireExact
             inverseApplied argumentExact
-          pure { step := inverseStep, normalizedIso := normalizedIso }
+          pure { step := inverseStep, constructionIso := constructionIso }
   | .argExtend _ position _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let wireExact := targetIso.wires.right_inv applied.targetWire
@@ -1297,9 +1349,9 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .argDrop inverseWire position inverseApplied
-      let normalizedIso := applied.inverseTransportIso inverseApplied targetIso
+      let constructionIso := applied.inverseTransportIso inverseApplied targetIso
         wireExact
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .applyFormal _ _ applied => do
       let inverseNodes :=
         applied.inverseNodes.map targetIso.nodes.symm
@@ -1312,8 +1364,8 @@ private def invertStep
       let landing ←
         (applied.inverseTransport inverseApplied targetIso).mapError
           .leafRejected
-      let normalizedIso := landing.iso
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := landing.iso
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .identityLeaf _ applied => do
       let inverseNodes :=
         applied.inverseNodes.map targetIso.nodes.symm
@@ -1326,8 +1378,8 @@ private def invertStep
       let landing ←
         (applied.inverseTransport inverseApplied targetIso).mapError
           .leafRejected
-      let normalizedIso := landing.iso
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := landing.iso
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .refLeaf _ _ applied => do
       let inverseNodes :=
         applied.inverseNodes.map targetIso.nodes.symm
@@ -1340,8 +1392,8 @@ private def invertStep
       let landing ←
         (applied.inverseTransport inverseApplied targetIso).mapError
           .leafRejected
-      let normalizedIso := landing.iso
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := landing.iso
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .endsDelete _ applied => do
       let inverseWire := applied.transportedInverseWire targetIso
       let inverseSites := applied.transportedInverseSites targetIso
@@ -1353,8 +1405,8 @@ private def invertStep
       let landing ←
         (applied.inverseTransport targetIso inverseApplied).mapError
           .contentRejected
-      let normalizedIso := landing.iso
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := landing.iso
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .cutWrap _ applied => do
       let inverseWire := applied.transportedInverseWire targetIso
       let inverseApplied ←
@@ -1364,8 +1416,8 @@ private def invertStep
       let landing ←
         (applied.inverseTransport targetIso inverseApplied).mapError
           .contentRejected
-      let normalizedIso := landing.iso
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := landing.iso
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .parallelSplit _ applied => do
       let inverseLeft := applied.transportedInverseLeft targetIso
       let inverseRight := applied.transportedInverseRight targetIso
@@ -1377,8 +1429,8 @@ private def invertStep
       let landing ←
         (applied.inverseTransport targetIso inverseApplied).mapError
           .contentRejected
-      let normalizedIso := landing.iso
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := landing.iso
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .argDuplicate _ position applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let wireExact := targetIso.wires.right_inv applied.targetWire
@@ -1387,9 +1439,9 @@ private def invertStep
           .argumentRejected
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .argContract inverseWire position inverseApplied
-      let normalizedIso := applied.inverseTransportIso inverseApplied targetIso
+      let constructionIso := applied.inverseTransportIso inverseApplied targetIso
         wireExact
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      pure { step := inverseStep, constructionIso := constructionIso }
   | .vacuousElim input _ deletion => do
       let inverseSite := targetIso.regions.symm input.site
       let inverseInput : StructuralCore.VacuousInput real planned :=
@@ -1403,8 +1455,8 @@ private def invertStep
           inverseChecked rfl rfl
       let inverseStep : CompiledPrimitiveStep orientation real :=
         .vacuousIntro inverseInput inverseChecked inverseDeletion
-      let normalizedIso := Vacuity.identityIso planned.val planned.property
-      pure { step := inverseStep, normalizedIso := normalizedIso }
+      let constructionIso := Vacuity.identityIso planned.val planned.property
+      pure { step := inverseStep, constructionIso := constructionIso }
   | _ => throw .malformedResidual
 
 private def reversePrimitiveProgram :
@@ -1418,20 +1470,50 @@ private def reversePrimitiveProgram :
   | planned, .nil _, real, finalIso, _ =>
       .ok
         { program := .nil real
-          normalizedIso := finalIso.symm }
+          constructionIso := finalIso.symm }
   | planned, .cons head tail, real, finalIso, orientation => do
       let reversedTail ←
         reversePrimitiveProgram tail real finalIso orientation
       let inverse ←
         invertStep head reversedTail.program.target
-          reversedTail.normalizedIso orientation
+          reversedTail.constructionIso orientation
       pure
         { program :=
             reversedTail.program.append
               (.cons inverse.step (.nil inverse.step.target))
-          normalizedIso := by
+          constructionIso := by
             simpa only [PrimitiveProgram.target_append] using
-              inverse.normalizedIso }
+              inverse.constructionIso }
+
+/-- The primitive construction of a raw accepted relation join. -/
+private structure RawRelationJoinCompilation
+    (orientation : Orientation)
+    (source rawTarget : CheckedDiagram definitions) where
+  program : PrimitiveProgram orientation source
+  remainingTracked : List program.target.val.WireId
+  trackedEmpty : remainingTracked = []
+  constructionIso : ConcreteIso program.target.val rawTarget.val
+
+private def compileRawRelationJoinResidual
+    (source : CheckedDiagram definitions)
+    (rawTarget : CheckedDiagram definitions)
+    (residual : IntrinsicCompilerResidual source context)
+    (orientation : Orientation) :
+    Except CompilerError
+      (RawRelationJoinCompilation orientation source rawTarget) := do
+  let compiled ← compileResidual residual [] orientation
+  have trackedEmpty : compiled.tracked = [] :=
+    List.eq_nil_of_length_eq_zero compiled.trackedLength
+  let constructionLanding ←
+    requireOption .redundancyMismatch <|
+      ConcreteIsoSearch.findConcreteIso?
+        compiled.construction.1.val rawTarget.val
+  let compiled := compiled.retarget rawTarget constructionLanding
+  pure
+    { program := compiled.program
+      remainingTracked := compiled.tracked
+      trackedEmpty := trackedEmpty
+      constructionIso := compiled.construction.2 }
 
 /-- A successful join compilation and its independently checked redundancy. -/
 structure CompiledRelationJoin
@@ -1444,8 +1526,8 @@ structure CompiledRelationJoin
   program : PrimitiveProgram input.orientation source
   remainingTracked : List program.target.val.WireId
   trackedEmpty : remainingTracked = []
-  normalizedIso :
-    ConcreteIso program.target.val monolithic.target.val
+  constructionIso :
+    ConcreteIso program.target.val monolithic.plainFinal.val
 
 /-- A successful sever compilation and its independently checked redundancy. -/
 structure CompiledRelationSever
@@ -1453,23 +1535,20 @@ structure CompiledRelationSever
     (input : MonolithicRelationSeverInput source) where
   monolithic : AppliedMonolithicRelationSever source input
   program : PrimitiveProgram input.orientation source
-  normalizedIso :
+  constructionIso :
     ConcreteIso program.target.val monolithic.target.val
 
 namespace CompiledRelationJoin
 
-/--
-Transport any ordered final boundary through the checked normalization
-isomorphism.  `List.map` intentionally preserves positions and repeated
-aliases; this is the compiler's exact boundary transport, not a set image.
--/
+/-- Transport any ordered final boundary through the raw construction
+isomorphism. `List.map` preserves positions and repeated aliases. -/
 def transportBoundary
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
     (compiled : CompiledRelationJoin input)
     (boundary : List compiled.program.target.val.WireId) :
-    List compiled.monolithic.target.val.WireId :=
-  boundary.map compiled.normalizedIso.wires
+    List compiled.monolithic.plainFinal.val.WireId :=
+  boundary.map compiled.constructionIso.wires
 
 @[simp]
 theorem transportBoundary_length
@@ -1489,7 +1568,7 @@ theorem transportBoundary_get
     (position : Fin boundary.length) :
     (compiled.transportBoundary boundary).get
         (Fin.cast (compiled.transportBoundary_length boundary).symm position) =
-      compiled.normalizedIso.wires (boundary.get position) := by
+      compiled.constructionIso.wires (boundary.get position) := by
   simp [transportBoundary]
 
 end CompiledRelationJoin
@@ -1503,7 +1582,7 @@ def transportBoundary
     (compiled : CompiledRelationSever input)
     (boundary : List compiled.program.target.val.WireId) :
     List compiled.monolithic.target.val.WireId :=
-  boundary.map compiled.normalizedIso.wires
+  boundary.map compiled.constructionIso.wires
 
 @[simp]
 theorem transportBoundary_length
@@ -1523,7 +1602,7 @@ theorem transportBoundary_get
     (position : Fin boundary.length) :
     (compiled.transportBoundary boundary).get
         (Fin.cast (compiled.transportBoundary_length boundary).symm position) =
-      compiled.normalizedIso.wires (boundary.get position) := by
+      compiled.constructionIso.wires (boundary.get position) := by
   simp [transportBoundary]
 
 end CompiledRelationSever
@@ -1542,23 +1621,17 @@ private def compileAppliedRelationJoin
       parameterSignatures := monolithic.parameterSignatures }
   let residual := initialIntrinsicResidual monolithic
   let compiled ←
-    compileResidual residual [] input.orientation
-  have trackedEmpty : compiled.tracked = [] :=
-    List.eq_nil_of_length_eq_zero compiled.trackedLength
-  let constructionLanding ←
-    requireOption .redundancyMismatch <|
-      ConcreteIsoSearch.findConcreteIso?
-        compiled.construction.1.val monolithic.target.val
-  let compiled := compiled.retarget monolithic.target constructionLanding
+    compileRawRelationJoinResidual source monolithic.plainFinal residual
+      input.orientation
   pure
     { monolithic := monolithic
       arguments := arguments
       sourceSignature := sourceSignature
       boundary := boundary
       program := compiled.program
-      remainingTracked := compiled.tracked
-      trackedEmpty := trackedEmpty
-      normalizedIso := compiled.construction.2 }
+      remainingTracked := compiled.remainingTracked
+      trackedEmpty := compiled.trackedEmpty
+      constructionIso := compiled.constructionIso }
 
 /--
 Compile one accepted strongest-form relation join into the checked primitive
@@ -1586,10 +1659,14 @@ def compileRelationSever
   let monolithic ←
     (applyMonolithicRelationSever source input).mapError
       .monolithicSeverRejected
+  let receipt := monolithic.concreteReceipt
   let inverseInput := monolithic.inverseJoinInput
+  let residual :=
+    initialRawIntrinsicResidual (input := inverseInput)
+      receipt.inverseChecked receipt.inverse
   let planned ←
-    compileAppliedRelationJoin monolithic.target inverseInput
-      monolithic.inverseJoinApplied
+    compileRawRelationJoinResidual receipt.result.checked
+      receipt.inverse.plainFinal residual inverseInput.orientation
   let reconstruction ←
     requireOption .redundancyMismatch <|
       ConcreteIsoSearch.findConcreteIso?
@@ -1597,10 +1674,13 @@ def compileRelationSever
   let reversed ←
     reversePrimitiveProgram planned.program source reconstruction
       input.orientation
+  let targetIso :
+      ConcreteIso receipt.result.checked.val monolithic.target.val := by
+    exact checkedDiagramEqIso receipt.targetExact.symm
   pure
     { monolithic := monolithic
       program := reversed.program
-      normalizedIso := reversed.normalizedIso }
+      constructionIso := reversed.constructionIso.trans targetIso }
 
 end WirePrimitive
 

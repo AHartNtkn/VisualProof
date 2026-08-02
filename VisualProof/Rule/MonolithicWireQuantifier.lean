@@ -1,5 +1,5 @@
 import VisualProof.Rule.MonolithicWireQuantifierReconstructionIso
-import VisualProof.Rule.MonolithicWireQuantifierRawOriginAtlas
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinTerminalSemantics
 
 namespace VisualProof
 
@@ -31,11 +31,6 @@ structure AppliedMonolithicRelationSever
   private concrete :
     RelationSeverConcreteReceipt source input.orientation input.scope
       input.pattern input.occurrences target
-  private inverseInput : MonolithicRelationJoinInput target
-  private inverseApplied :
-    AppliedMonolithicRelationJoin target inverseInput
-  private inversePlainFinalExact :
-    inverseApplied.checked.result.plainFinal = concrete.inverse.plainFinal
 
 namespace AppliedMonolithicRelationJoin
 
@@ -46,15 +41,16 @@ def concreteResult
     (applied : AppliedMonolithicRelationJoin source input) :
     ConcreteWireQuantifier.RelationJoinResult source input.wire input.content
       input.parameters :=
-  applied.checked.result
+  applied.checked.result.raw
 
-/-- Executable, allocation-neutral classification of every raw final carrier. -/
-def rawOriginAtlas
+/-- The separately owned normalized result used by the public operation. -/
+def normalizedResult
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
     (applied : AppliedMonolithicRelationJoin source input) :
-    RelationJoinRawOriginAtlas applied.concreteResult :=
-  RelationJoinRawOriginAtlas.ofResult applied.concreteResult
+    ConcreteWireQuantifier.NormalizedRelationJoinResult
+      source input.wire input.content input.parameters :=
+  applied.checked.result
 
 /-- The accepted join landing before the concrete result's single eager
 identity-normalization pass.  The primitive compiler targets this raw carrier;
@@ -74,6 +70,7 @@ theorem concreteResult_unique
     {input : MonolithicRelationJoinInput source}
     (left right : AppliedMonolithicRelationJoin source input) :
     left.concreteResult = right.concreteResult := by
+  apply congrArg ConcreteWireQuantifier.NormalizedRelationJoinResult.raw
   apply Except.ok.inj
   exact left.checked.accepted.symm.trans right.checked.accepted
 
@@ -91,6 +88,16 @@ end AppliedMonolithicRelationJoin
 
 namespace AppliedMonolithicRelationSever
 
+/-- The concrete sever receipt, including its normalization-free virtual
+inverse join and reconstruction evidence. -/
+def concreteReceipt
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationSeverInput source}
+    (applied : AppliedMonolithicRelationSever source input) :
+    RelationSeverConcreteReceipt source input.orientation input.scope
+      input.pattern input.occurrences applied.target :=
+  applied.concrete
+
 /--
 The exact virtual join already checked as part of a strongest-form sever
 receipt.  This is exposed only so the authoring-layer primitive compiler can
@@ -101,38 +108,35 @@ def inverseJoinInput
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationSeverInput source}
     (applied : AppliedMonolithicRelationSever source input) :
-    MonolithicRelationJoinInput applied.target :=
-  applied.inverseInput
+    MonolithicRelationJoinInput applied.concreteReceipt.result.checked :=
+  { orientation := oppositeOrientation input.orientation
+    wire := applied.concreteReceipt.result.relationWire
+    content := input.pattern
+    parameters := applied.concreteReceipt.parameters }
 
 /--
-The already-accepted virtual inverse join retained by a strongest-form sever.
-The primitive compiler consumes this receipt directly, so sever compilation
-does not re-run or strengthen the monolithic acceptance boundary.
+The normalization-free virtual inverse join retained by a strongest-form
+sever.  This is the exact raw construction consumed by reconstruction and by
+the primitive compiler.
 -/
-def inverseJoinApplied
+def inverseResult
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationSeverInput source}
     (applied : AppliedMonolithicRelationSever source input) :
-    AppliedMonolithicRelationJoin applied.target applied.inverseJoinInput :=
-  applied.inverseApplied
+    ConcreteWireQuantifier.RelationJoinResult
+      applied.concreteReceipt.result.checked
+      applied.concreteReceipt.result.relationWire input.pattern
+      applied.concreteReceipt.parameters :=
+  applied.concreteReceipt.inverse
 
-/-- The unnormalized checked inverse-join landing reconstructed by the sever
-receipt before the inverse join's final identity normalization. -/
+/-- The raw inverse-join landing after its ordered splices and exhausted-wire
+deletion.  This is the terminal carrier used by sever reconstruction. -/
 def inversePlainFinal
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationSeverInput source}
-    (applied : AppliedMonolithicRelationSever source input) :
+  (applied : AppliedMonolithicRelationSever source input) :
     CheckedDiagram definitions :=
-  applied.concrete.inverse.plainFinal
-
-/-- The raw carrier exposed by the retained virtual join is exactly the raw
-inverse landing stored by the sever receipt. -/
-theorem inverseJoinPlainFinal_eq_inversePlainFinal
-    {source : CheckedDiagram definitions}
-    {input : MonolithicRelationSeverInput source}
-    (applied : AppliedMonolithicRelationSever source input) :
-    applied.inverseJoinApplied.plainFinal = applied.inversePlainFinal := by
-  exact applied.inversePlainFinalExact
+  applied.inverseResult.plainFinal
 
 /-- Total construction-owned reconstruction from the checked virtual inverse
 landing to the original sever source.  Compiler reversal composes against
@@ -166,16 +170,16 @@ theorem normalizedPlainFinal_eq_target
     applied.normalizedPlainFinal = applied.target := by
   obtain ⟨_steps, normalization, _semantic, _applications,
       normalizationExact, checkedExact⟩ :=
-    applied.concreteResult.trace_complete
+    applied.normalizedResult.trace_complete
   rw [normalizationExact] at checkedExact
   exact checkedExact.trans applied.checked.targetExact.symm
 
-/-- The public target is exactly the concrete strongest-form result. -/
-theorem target_eq_concreteResult
+/-- The public target is exactly the separately owned normalized result. -/
+theorem target_eq_normalizedResult
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
     (applied : AppliedMonolithicRelationJoin source input) :
-    applied.target = applied.concreteResult.checked :=
+    applied.target = applied.normalizedResult.checked :=
   applied.checked.targetExact
 
 /-- Every endpoint of the accepted source relation is an applied atom head. -/
@@ -620,8 +624,9 @@ def applyMonolithicRelationSever
               | .error _ => exact .error .inverseRelationJoinRejected
               | .ok inverseChecked =>
                   match inverseAccepted :
-                      ConcreteWireQuantifier.joinRelation result.checked
-                        result.relationWire input.pattern parameters with
+                      ConcreteWireQuantifier.joinRelation
+                        result.checked result.relationWire input.pattern
+                          parameters with
                   | .error _ =>
                       exact .error .inverseRelationJoinRejected
                   | .ok inverse =>
@@ -647,34 +652,7 @@ def applyMonolithicRelationSever
                                   rw [inverse.applications_storage_order]
                                   exact
                                     result.relationApplications_storage_order }
-                          { orientation :=
-                              oppositeOrientation input.orientation
-                            wire := result.relationWire
-                            content := input.pattern
-                            parameters := parameters }
-                          (AppliedMonolithicRelationJoin.mk
-                            inverse.checked inverse.applications
-                            { arguments := inverseChecked.arguments
-                              sourceSignature :=
-                                inverseChecked.sourceSignature
-                              boundaryLength :=
-                                inverseChecked.boundaryLength
-                              formalSignatures :=
-                                inverseChecked.formalSignatures
-                              parameterSignatures :=
-                                inverseChecked.parameterSignatures
-                              liveNotParameter :=
-                                inverseChecked.liveNotParameter
-                              polarity := inverseChecked.polarity
-                              contentCompilation :=
-                                inverseChecked.contentCompilation
-                              result := inverse
-                              accepted := inverseAccepted
-                              targetExact := rfl
-                              applicationsExact := rfl
-                              parameterScopes :=
-                                inverseChecked.parameterScopes })
-                          rfl)
+                          )
 
 /--
 Validate and apply one strongest join.  Relation joining consumes every
@@ -690,13 +668,13 @@ def applyMonolithicRelationJoin
   | .error error => exact .error error
   | .ok validated =>
       match accepted :
-          ConcreteWireQuantifier.joinRelation source input.wire input.content
-            input.parameters with
+          ConcreteWireQuantifier.joinRelationNormalized source input.wire
+            input.content input.parameters with
       | .error error => exact .error (.concreteRejected error)
       | .ok result =>
           exact .ok
             (AppliedMonolithicRelationJoin.mk
-              result.checked result.applications
+              result.checked result.raw.applications
               { arguments := validated.arguments
                 sourceSignature := validated.sourceSignature
                 boundaryLength := validated.boundaryLength

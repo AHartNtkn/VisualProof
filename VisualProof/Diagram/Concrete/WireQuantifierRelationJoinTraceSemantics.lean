@@ -6,15 +6,15 @@ universe u
 
 namespace ConcreteWireQuantifier
 
-private theorem splice_succeeds_of_wellFormed
+private theorem spliceRaw_succeeds_of_wellFormed
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
     (attachment : ConcreteSpliceAttachment base site fragment)
     (wellFormed : attachment.diagram.WellFormed definitions) :
-    ∃ result, splice attachment = .ok result := by
-  unfold splice
+    ∃ result, spliceRaw attachment = .ok result := by
+  unfold spliceRaw
   split
   · rename_i error rejected
     have complete :=
@@ -45,9 +45,9 @@ theorem insertionCompilation
     rw [← step.checked_generated]
     exact step.checked.property
   obtain ⟨spliceResult, spliceAccepted⟩ :=
-    splice_succeeds_of_wellFormed step.attachment generatedWellFormed
+    spliceRaw_succeeds_of_wellFormed step.attachment generatedWellFormed
   exact
-    compileInsertion_complete_of_splice contentCompiled step.attachment
+    compileInsertion_complete_of_raw_splice contentCompiled step.attachment
       spliceResult spliceAccepted
 
 end RelationJoinStep

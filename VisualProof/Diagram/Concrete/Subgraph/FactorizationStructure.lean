@@ -74,7 +74,7 @@ theorem generated_wellFormed
     {attachment : ConcreteSpliceAttachment base site fragment}
     (compiled : InsertionCompilation fragmentCompiled attachment) :
     attachment.diagram.WellFormed definitions :=
-  splice_success_wellFormed compiled.candidate_accepted
+  spliceRaw_success_wellFormed compiled.candidate_accepted
 
 /-- Every supplied target occurs in the compiler-visible insertion context. -/
 theorem target_visible

@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRaw
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverInsertionSemantics
 import VisualProof.Rule.Structural
@@ -1455,12 +1456,14 @@ structure RelationJoinReceipt
       (source.val.wires wire).scope
   contentCompilation : CheckedOpenCompilation content
   result :
-    ConcreteWireQuantifier.RelationJoinResult source wire content parameters
+    ConcreteWireQuantifier.NormalizedRelationJoinResult
+      source wire content parameters
   accepted :
-    ConcreteWireQuantifier.joinRelation source wire content parameters =
+    ConcreteWireQuantifier.joinRelationNormalized
+        source wire content parameters =
       .ok result
   targetExact : target = result.checked
-  applicationsExact : applications = result.applications
+  applicationsExact : applications = result.raw.applications
   parameterScopes :
     ∀ position : Fin parameters.length,
       source.val.Encloses
@@ -1495,11 +1498,12 @@ structure RelationSeverConcreteReceipt
     ConcreteWireQuantifier.RelationJoinResult result.checked
       result.relationWire pattern parameters
   inverseAccepted :
-    ConcreteWireQuantifier.joinRelation result.checked result.relationWire
-        pattern parameters =
+    ConcreteWireQuantifier.joinRelation result.checked
+        result.relationWire pattern parameters =
       .ok inverse
   inverseStepsExact :
-    inverse.steps.map ConcreteWireQuantifier.RelationJoinStep.application =
+    inverse.steps.map
+        ConcreteWireQuantifier.RelationJoinStep.application =
       result.atoms
 
 

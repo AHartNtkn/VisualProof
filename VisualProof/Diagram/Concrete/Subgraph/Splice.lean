@@ -11,10 +11,10 @@ structure ConcreteSpliceResult
     {fragment : CheckedOpenDiagram definitions}
     (attachment : ConcreteSpliceAttachment base site fragment) : Type where
   private mk ::
-  private rawWellFormed : attachment.diagram.WellFormed definitions
+  rawResult : RawConcreteSpliceResult attachment
   normalization :
     ConcreteDiagram.IdentityNormalization
-      (⟨attachment.diagram, rawWellFormed⟩ : CheckedDiagram definitions)
+      rawResult.checked
 
 namespace ConcreteSpliceResult
 
@@ -27,7 +27,7 @@ def raw
     {attachment : ConcreteSpliceAttachment base site fragment}
     (result : ConcreteSpliceResult attachment) :
     CheckedDiagram definitions :=
-  ⟨attachment.diagram, result.rawWellFormed⟩
+  result.rawResult.checked
 
 /-- The public splice result is exactly the retained eager normal form. -/
 def checked
@@ -114,19 +114,30 @@ def splice
     {fragment : CheckedOpenDiagram definitions}
     (attachment : ConcreteSpliceAttachment base site fragment) :
     Except WFError (ConcreteSpliceResult attachment) := by
-  match accepted :
-      ConcreteDiagram.checkWellFormed definitions attachment.diagram with
+  match accepted : spliceRaw attachment with
   | .error error => exact .error error
-  | .ok checked =>
-      have same :=
-        ConcreteDiagram.checkWellFormed_preserves_input accepted
-      let generated : CheckedDiagram definitions :=
-        ⟨attachment.diagram, by
-          rw [← same]
-          exact checked.property⟩
-      let normalized := ConcreteDiagram.normalizeIdentities generated
+  | .ok rawResult =>
+      let normalized := ConcreteDiagram.normalizeIdentities rawResult.checked
       exact .ok
-        (ConcreteSpliceResult.mk generated.property normalized)
+        (ConcreteSpliceResult.mk rawResult normalized)
+
+/-- A successful public splice retains the accepted raw construction. -/
+theorem splice_success_raw
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {fragment : CheckedOpenDiagram definitions}
+    {attachment : ConcreteSpliceAttachment base site fragment}
+    {result : ConcreteSpliceResult attachment}
+    (accepted : splice attachment = .ok result) :
+    spliceRaw attachment = .ok result.rawResult := by
+  unfold splice at accepted
+  split at accepted
+  · contradiction
+  · rename_i rawResult rawAccepted
+    simp only [Except.ok.injEq] at accepted
+    subst result
+    exact rawAccepted
 
 /-- Recover raw candidate well-formedness from a successful public splice. -/
 theorem splice_success_wellFormed
@@ -138,14 +149,7 @@ theorem splice_success_wellFormed
     {result : ConcreteSpliceResult attachment}
     (accepted : splice attachment = .ok result) :
     attachment.diagram.WellFormed definitions := by
-  unfold splice at accepted
-  split at accepted
-  · contradiction
-  · rename_i generated checked
-    have same :=
-      ConcreteDiagram.checkWellFormed_preserves_input checked
-    rw [← same]
-    exact generated.property
+  exact spliceRaw_success_wellFormed (splice_success_raw accepted)
 
 /-- A successful public target is exactly the eager normal form. -/
 theorem splice_success_checked
@@ -164,7 +168,7 @@ theorem splice_success_checked
   unfold splice at accepted
   split at accepted
   · contradiction
-  · rename_i checked checkedAccepted
+  · rename_i rawResult rawAccepted
     simp only [Except.ok.injEq] at accepted
     subst result
     rfl

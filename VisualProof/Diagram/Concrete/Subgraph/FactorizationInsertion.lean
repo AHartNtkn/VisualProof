@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationFrame
+import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 
 namespace VisualProof
 open ConcreteElaboration
@@ -448,9 +449,9 @@ structure InsertionCompilation
         site.frame.visible fragment.val.boundary attachment.target
         attachment.signature =
       some targets
-  candidate : ConcreteSpliceResult attachment
+  candidate : RawConcreteSpliceResult attachment
   private candidate_accepts :
-    splice attachment = .ok candidate
+    spliceRaw attachment = .ok candidate
 
 /--
 Resolve ordered targets and check a concrete splice at an already-compiled
@@ -471,7 +472,7 @@ def compileInsertionAt?
         attachment.target attachment.signature with
   | none => none
   | some targets =>
-      match candidateAccepted : splice attachment with
+      match candidateAccepted : spliceRaw attachment with
       | .error _ => none
       | .ok candidate =>
           some
@@ -509,8 +510,8 @@ theorem ofSite
     (siteCompiled : SiteCompilation base site)
     (fragmentCompiled : OpenCompilation fragment)
     (attachment : ConcreteSpliceAttachment base site fragment)
-    (result : ConcreteSpliceResult attachment)
-    (accepted : splice attachment = .ok result) :
+    (result : RawConcreteSpliceResult attachment)
+    (accepted : spliceRaw attachment = .ok result) :
     ∃ compiled,
       compileInsertionAt? siteCompiled fragmentCompiled attachment =
         some compiled := by
@@ -555,15 +556,15 @@ end InsertionCompilation
 Every accepted concrete splice internally supplies the complete structural
 insertion receipt. Callers provide only the executable splice equation.
 -/
-theorem compileInsertion_complete_of_splice
+theorem compileInsertion_complete_of_raw_splice
     {definitions : List (List Sig)}
     {base : CheckedDiagram definitions}
     {site : base.val.RegionId}
     {fragment : CheckedOpenDiagram definitions}
     (fragmentCompiled : OpenCompilation fragment)
     (attachment : ConcreteSpliceAttachment base site fragment)
-    (result : ConcreteSpliceResult attachment)
-    (accepted : splice attachment = .ok result) :
+    (result : RawConcreteSpliceResult attachment)
+    (accepted : spliceRaw attachment = .ok result) :
     ∃ compiled,
       compileInsertion? fragmentCompiled attachment = some compiled := by
   obtain ⟨siteCompiled, siteGenerated⟩ :=
@@ -938,7 +939,7 @@ theorem candidate_accepted
     {fragmentCompiled : OpenCompilation fragment}
     {attachment : ConcreteSpliceAttachment base site fragment}
     (compiled : InsertionCompilation fragmentCompiled attachment) :
-    splice attachment = .ok compiled.candidate :=
+    spliceRaw attachment = .ok compiled.candidate :=
   compiled.candidate_accepts
 
 /-- The ordinary intrinsic compilation of the accepted checked candidate. -/

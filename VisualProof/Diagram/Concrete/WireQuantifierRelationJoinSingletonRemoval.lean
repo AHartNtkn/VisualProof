@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRaw
 import VisualProof.Diagram.Concrete.WireQuantifierSingletonRemovalProvenance
 
 namespace VisualProof

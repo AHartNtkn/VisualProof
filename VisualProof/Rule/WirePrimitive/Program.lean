@@ -284,7 +284,7 @@ structure ConstructionLanding
     (orientation : Orientation)
     (source planned : CheckedDiagram definitions) where
   program : PrimitiveProgram orientation source
-  normalizedIso : ConcreteIso program.target.val planned.val
+  constructionIso : ConcreteIso program.target.val planned.val
 
 namespace ConstructionLanding
 
@@ -293,7 +293,7 @@ def exact
     (program : PrimitiveProgram orientation source) :
     ConstructionLanding orientation source program.target where
   program := program
-  normalizedIso := Vacuity.identityIso program.target.val
+  constructionIso := Vacuity.identityIso program.target.val
     program.target.property
 
 /-- Retarget a construction landing by composing an owned correspondence. -/
@@ -302,7 +302,7 @@ def retarget
     (next : ConcreteIso middle.val planned.val) :
     ConstructionLanding orientation source planned where
   program := landing.program
-  normalizedIso := landing.normalizedIso.trans next
+  constructionIso := landing.constructionIso.trans next
 
 end ConstructionLanding
 

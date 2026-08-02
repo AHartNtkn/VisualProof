@@ -877,13 +877,13 @@ private def joinHasIdentityLanding
     {source : CheckedDiagram definitions}
     (input : MonolithicRelationJoinInput source) : Bool :=
   (compileRelationJoin source input).toOption.any fun compiled =>
-    hasIdentityCarriers compiled.normalizedIso
+    hasIdentityCarriers compiled.constructionIso
 
 private def severHasIdentityLanding
     {source : CheckedDiagram definitions}
     (input : MonolithicRelationSeverInput source) : Bool :=
   (compileRelationSever source input).toOption.any fun compiled =>
-    hasIdentityCarriers compiled.normalizedIso
+    hasIdentityCarriers compiled.constructionIso
 
 theorem required_join_corpus_has_identity_landings :
     [ joinHasIdentityLanding unaryJoinInput,

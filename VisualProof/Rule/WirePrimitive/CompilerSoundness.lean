@@ -136,15 +136,16 @@ theorem runPrimitiveProgram_sound
       | backward =>
           exact fun targetHolds => headSound (tailSound targetHolds)
 
-/-- Exact checked redundancy certificate for a compiled strongest join. -/
+/-- Exact raw-construction redundancy certificate for a compiled strongest
+join. -/
 theorem compiled_join_redundant
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
     (compiled : CompiledRelationJoin input) :
     Nonempty
       (ConcreteIso compiled.program.target.val
-        compiled.monolithic.target.val) :=
-  ⟨compiled.normalizedIso⟩
+        compiled.monolithic.plainFinal.val) :=
+  ⟨compiled.constructionIso⟩
 
 /-- Exact checked redundancy certificate for a compiled strongest sever. -/
 theorem compiled_sever_redundant
@@ -154,11 +155,11 @@ theorem compiled_sever_redundant
     Nonempty
       (ConcreteIso compiled.program.target.val
         compiled.monolithic.target.val) :=
-  ⟨compiled.normalizedIso⟩
+  ⟨compiled.constructionIso⟩
 
 /--
-The monolithic join direction follows again from the primitive program and
-the independently checked final isomorphism.
+The raw monolithic join direction follows from the primitive program and the
+independently checked construction isomorphism.
 -/
 theorem compiled_join_sound
     {source : CheckedDiagram definitions}
@@ -169,11 +170,11 @@ theorem compiled_join_sound
     Directed input.orientation
       (denoteChecked model.toPreModel definitionEnv source)
       (denoteChecked model.toPreModel definitionEnv
-        compiled.monolithic.target) := by
+        compiled.monolithic.plainFinal) := by
   have programSound :=
     runPrimitiveProgram_sound compiled.program model definitionEnv
   have targetEquivalent :=
-    iso_denotation compiled.normalizedIso model.toPreModel definitionEnv
+    iso_denotation compiled.constructionIso model.toPreModel definitionEnv
   cases orientationExact : input.orientation with
   | forward =>
       have primitiveDirection :
@@ -209,7 +210,7 @@ theorem compiled_sever_sound
   have programSound :=
     runPrimitiveProgram_sound compiled.program model definitionEnv
   have targetEquivalent :=
-    iso_denotation compiled.normalizedIso model.toPreModel definitionEnv
+    iso_denotation compiled.constructionIso model.toPreModel definitionEnv
   cases orientationExact : input.orientation with
   | forward =>
       have primitiveDirection :

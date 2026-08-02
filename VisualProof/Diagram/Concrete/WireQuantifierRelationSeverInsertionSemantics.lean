@@ -1,5 +1,5 @@
 import VisualProof.Diagram.Concrete.IsomorphismSearch
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinTerminalSemantics
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawTerminalSemantics
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverRemovalSemantics
 
 namespace VisualProof
@@ -72,19 +72,17 @@ theorem inverseJoinDenotes
   · have joined :=
       result.denotes contentCompiled abstractedSite model definitionEnv
         parameterScopes
-    obtain ⟨_steps, _trace, _applications, normalized⟩ :=
-      result.trace_denotes model.toPreModel definitionEnv
     have reconstructed :=
       iso_denotation inverseIso model.toPreModel definitionEnv
     constructor
     · intro even originalHolds
       exact
         joined.1 even
-          (normalized.mpr (reconstructed.mpr originalHolds))
+          (reconstructed.mpr originalHolds)
     · intro odd abstractedHolds
       exact
         reconstructed.mp
-          (normalized.mp (joined.2 odd abstractedHolds))
+          (joined.2 odd abstractedHolds)
 
 end RelationSeverInsertionSemantics
 
