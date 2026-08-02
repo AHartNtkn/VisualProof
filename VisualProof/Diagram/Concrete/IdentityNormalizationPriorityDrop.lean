@@ -642,6 +642,86 @@ def dropRetainedNode
     simp [retainedNodes, ConcreteDiagram.nodesList,
       Data.Finite.mem_allFin, different]))).symm
 
+private theorem map_allFin_get (values : List α) :
+    (Data.Finite.allFin values.length).map values.get = values := by
+  rw [Data.Finite.allFin_eq_finRange]
+  unfold List.finRange
+  rw [List.map_ofFn]
+  simpa only [Function.comp_apply, List.get_eq_getElem] using
+    (List.ofFn_getElem (xs := values))
+
+/-- Sequential singleton deletion enumerates exactly the original nodes with
+both named nodes removed.  This is the carrier identity underlying the
+drop/drop critical-pair isomorphism. -/
+private theorem doubleDropNodeOrigins
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (eligible : DropEligibility source removed)
+    (different : other ≠ removed) :
+    (retainedNodes (dropCandidate source removed eligible)
+      [dropRetainedNode source removed other eligible different]).map
+        (retainedNodes source.val [removed]).get =
+      retainedNodes source.val [removed, other] := by
+  let first := retainedNodes source.val [removed]
+  let mapped := dropRetainedNode source removed other eligible different
+  have getMapped : first.get mapped = other := by
+    exact dropSourceNode_retained source removed other eligible different
+  have firstNodup : first.Nodup := by
+    dsimp only [first]
+    exact (Data.Finite.allFin_nodup source.val.nodeCount).filter _
+  change ((Data.Finite.allFin first.length).filter
+      (fun node => decide (node ∉ [mapped]))).map first.get = _
+  have predicate :
+      (fun node : Fin first.length => decide (node ∉ [mapped])) =
+      (fun node => decide (first.get node ≠ other)) := by
+    funext node
+    rw [decide_eq_decide]
+    constructor
+    · intro retained sameOrigin
+      have nodeDifferent : node ≠ mapped := fun same =>
+        retained (same ▸ List.mem_cons_self)
+      apply nodeDifferent
+      apply Fin.ext
+      apply (List.getElem_inj firstNodup).mp
+      simpa only [List.get_eq_getElem] using sameOrigin.trans getMapped.symm
+    · intro originDifferent sameNode
+      have nodeExact : node = mapped := List.mem_singleton.mp sameNode
+      subst node
+      exact originDifferent getMapped
+  have filteredExact :
+      (Data.Finite.allFin first.length).filter
+          (fun node => decide (node ∉ [mapped])) =
+        (Data.Finite.allFin first.length).filter
+          (fun node => decide (first.get node ≠ other)) :=
+    congrArg (fun selection =>
+      (Data.Finite.allFin first.length).filter selection) predicate
+  rw [filteredExact]
+  have mappedFilter :
+      ((Data.Finite.allFin first.length).filter
+        (fun node => decide (first.get node ≠ other))).map first.get =
+      ((Data.Finite.allFin first.length).map first.get).filter
+        (fun node => decide (node ≠ other)) := by
+    simpa only [Function.comp_apply] using
+      (List.filter_map
+        (f := first.get)
+        (p := fun node => decide (node ≠ other))
+        (l := Data.Finite.allFin first.length)).symm
+  rw [mappedFilter]
+  rw [map_allFin_get]
+  simp only [first, retainedNodes, List.filter_filter,
+    List.mem_singleton, List.mem_cons, List.not_mem_nil, or_false]
+  apply List.filter_congr
+  intro node _
+  rw [← Bool.decide_and]
+  rw [decide_eq_decide]
+  constructor
+  · rintro ⟨notOther, notRemoved⟩ (sameRemoved | sameOther)
+    · exact notRemoved sameRemoved
+    · exact notOther sameOther
+  · intro neither
+    exact ⟨fun same => neither (Or.inr same),
+      fun same => neither (Or.inl same)⟩
+
 private def dropRetainedWire
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
@@ -780,6 +860,547 @@ def dropEligibilityAfter
   incident_lt_two := by
     rw [dropIncident_length_eq source removed other removedEligible different]
     exact otherEligible.incident_lt_two
+
+/-- Checked endpoint of deleting two distinct Rule-1 candidates in the named
+order. -/
+def doubleDropTarget
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first) : CheckedDiagram definitions :=
+  let firstTarget : CheckedDiagram definitions :=
+    ⟨dropCandidate source first firstEligible,
+      dropCandidate_wellFormed source first firstEligible⟩
+  let mapped :=
+    dropRetainedNode source first second firstEligible different
+  let mappedEligible :=
+    dropEligibilityAfter source first second firstEligible secondEligible
+      different
+  ⟨dropCandidate firstTarget mapped mappedEligible,
+    dropCandidate_wellFormed firstTarget mapped mappedEligible⟩
+
+private theorem retainedNodes_pair_comm
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId) :
+    retainedNodes source.val [left, right] =
+      retainedNodes source.val [right, left] := by
+  unfold retainedNodes
+  apply List.filter_congr
+  intro node _
+  rw [decide_eq_decide]
+  simp only [List.mem_cons, List.not_mem_nil, or_false]
+  exact not_congr or_comm
+
+private def doubleDropOrigins
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (different : second ≠ first) : List source.val.NodeId :=
+  (retainedNodes (dropCandidate source first firstEligible)
+    [dropRetainedNode source first second firstEligible different]).map
+      (retainedNodes source.val [first]).get
+
+private theorem doubleDropOrigins_exact
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (different : second ≠ first) :
+    doubleDropOrigins source first second firstEligible different =
+      retainedNodes source.val [first, second] :=
+  doubleDropNodeOrigins source first second firstEligible different
+
+private theorem doubleDropOrigins_perm
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left) :
+    (doubleDropOrigins source left right leftEligible different).Perm
+      (doubleDropOrigins source right left rightEligible
+        (fun same => different same.symm)) := by
+  rw [doubleDropOrigins_exact, doubleDropOrigins_exact,
+    retainedNodes_pair_comm]
+
+private theorem doubleDropOrigins_length
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first) :
+    (doubleDropTarget source first second firstEligible secondEligible
+        different).val.nodeCount =
+      (doubleDropOrigins source first second firstEligible different).length := by
+  simp [doubleDropTarget, doubleDropOrigins, dropRetainedNode,
+    dropEligibilityAfter, dropCandidate, eraseNodeCandidate]
+
+private def doubleDropOriginNode
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first)
+    (node : (doubleDropTarget source first second firstEligible secondEligible
+      different).val.NodeId) : source.val.NodeId :=
+  (doubleDropOrigins source first second firstEligible different).get
+    (Fin.cast
+      (doubleDropOrigins_length source first second firstEligible
+        secondEligible different)
+      node)
+
+/-- Dense node correspondence between the two deletion orders, selected by
+the common original source node carried at each position. -/
+noncomputable def doubleDropNodeEquiv
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left) :
+    Data.Finite.FiniteEquiv
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val.NodeId
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val.NodeId :=
+  let leftCast := Data.Finite.FiniteEquiv.finCast
+    (doubleDropOrigins_length source left right leftEligible rightEligible
+      different)
+  let origins :=
+    (Data.Finite.FiniteEquiv.ofListPermStable
+      (doubleDropOrigins_perm source left right leftEligible rightEligible
+        different)).val
+  let rightCast := Data.Finite.FiniteEquiv.finCast
+    (doubleDropOrigins_length source right left rightEligible leftEligible
+      (fun same => different same.symm))
+  leftCast.trans (origins.trans rightCast.symm)
+
+private theorem doubleDropNodeEquiv_origin
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (node : (doubleDropTarget source left right leftEligible rightEligible
+      different).val.NodeId) :
+    doubleDropOriginNode source right left rightEligible leftEligible
+        (fun same => different same.symm)
+        (doubleDropNodeEquiv source left right leftEligible rightEligible
+          different node) =
+      doubleDropOriginNode source left right leftEligible rightEligible
+        different node := by
+  let leftCast := Data.Finite.FiniteEquiv.finCast
+    (doubleDropOrigins_length source left right leftEligible rightEligible
+      different)
+  let origins :=
+    Data.Finite.FiniteEquiv.ofListPermStable
+      (doubleDropOrigins_perm source left right leftEligible rightEligible
+        different)
+  have exact := origins.property (leftCast node)
+  simpa [doubleDropNodeEquiv, doubleDropOriginNode, leftCast, origins,
+    Data.Finite.FiniteEquiv.trans_apply] using exact
+
+private def doubleDropSourceWire
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first)
+    (wire : (doubleDropTarget source first second firstEligible secondEligible
+      different).val.WireId) : source.val.WireId :=
+  let firstTarget : CheckedDiagram definitions :=
+    ⟨dropCandidate source first firstEligible,
+      dropCandidate_wellFormed source first firstEligible⟩
+  source.val.wiresList.get (firstTarget.val.wiresList.get wire)
+
+private def doubleDropSourceEndpoint
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first)
+    (endpoint : CEndpoint
+      (doubleDropTarget source first second firstEligible secondEligible
+        different).val.nodeCount) : CEndpoint source.val.nodeCount :=
+  let firstTarget : CheckedDiagram definitions :=
+    ⟨dropCandidate source first firstEligible,
+      dropCandidate_wellFormed source first firstEligible⟩
+  let mapped := dropRetainedNode source first second firstEligible different
+  dropSourceEndpoint source first
+    (dropSourceEndpoint firstTarget mapped endpoint)
+
+private theorem doubleDrop_node_source
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first)
+    (node : (doubleDropTarget source first second firstEligible secondEligible
+      different).val.NodeId) :
+    (doubleDropTarget source first second firstEligible secondEligible
+      different).val.nodes node =
+      source.val.nodes
+        (doubleDropOriginNode source first second firstEligible secondEligible
+          different node) := by
+  simp only [doubleDropTarget, dropCandidate_node_source]
+  unfold doubleDropOriginNode doubleDropOrigins
+  simp only [List.get_eq_getElem, List.getElem_map]
+  congr 2 <;> apply Fin.ext <;> rfl
+
+private theorem doubleDrop_endpoint_mem_iff
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first)
+    (wire : (doubleDropTarget source first second firstEligible secondEligible
+      different).val.WireId)
+    (endpoint : CEndpoint
+      (doubleDropTarget source first second firstEligible secondEligible
+        different).val.nodeCount) :
+    endpoint ∈
+        ((doubleDropTarget source first second firstEligible secondEligible
+          different).val.wires wire).endpoints ↔
+      doubleDropSourceEndpoint source first second firstEligible secondEligible
+          different endpoint ∈
+        (source.val.wires
+          (doubleDropSourceWire source first second firstEligible secondEligible
+            different wire)).endpoints := by
+  simp only [doubleDropTarget, doubleDropSourceEndpoint,
+    doubleDropSourceWire]
+  let firstTarget : CheckedDiagram definitions :=
+    ⟨dropCandidate source first firstEligible,
+      dropCandidate_wellFormed source first firstEligible⟩
+  let mapped := dropRetainedNode source first second firstEligible different
+  let mappedEligible :=
+    dropEligibilityAfter source first second firstEligible secondEligible
+      different
+  constructor
+  · intro member
+    have inner := (dropCandidate_endpoint_mem_iff firstTarget mapped
+      mappedEligible wire endpoint).mp member
+    exact (dropCandidate_endpoint_mem_iff source first firstEligible
+      (firstTarget.val.wiresList.get wire)
+      (dropSourceEndpoint firstTarget mapped endpoint)).mp inner
+  · intro member
+    have outer := (dropCandidate_endpoint_mem_iff source first firstEligible
+      (firstTarget.val.wiresList.get wire)
+      (dropSourceEndpoint firstTarget mapped endpoint)).mpr member
+    exact (dropCandidate_endpoint_mem_iff firstTarget mapped mappedEligible
+      wire endpoint).mpr outer
+
+private theorem doubleDropSourceEndpoint_node
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first)
+    (endpoint : CEndpoint
+      (doubleDropTarget source first second firstEligible secondEligible
+        different).val.nodeCount) :
+    (doubleDropSourceEndpoint source first second firstEligible secondEligible
+      different endpoint).node =
+      doubleDropOriginNode source first second firstEligible secondEligible
+        different endpoint.node := by
+  unfold doubleDropSourceEndpoint dropSourceEndpoint
+  unfold doubleDropOriginNode doubleDropOrigins
+  simp only [List.get_eq_getElem, List.getElem_map]
+  congr 1 <;> apply Fin.ext <;> rfl
+
+private def doubleDropRegionEquiv
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left) :
+    Data.Finite.FiniteEquiv
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val.RegionId
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val.RegionId := by
+  change Data.Finite.FiniteEquiv source.val.RegionId source.val.RegionId
+  exact Data.Finite.FiniteEquiv.refl _
+
+private theorem doubleDropWireCount
+    (source : CheckedDiagram definitions)
+    (first second : source.val.NodeId)
+    (firstEligible : DropEligibility source first)
+    (secondEligible : DropEligibility source second)
+    (different : second ≠ first) :
+    (doubleDropTarget source first second firstEligible secondEligible
+      different).val.wireCount = source.val.wireCount := by
+  simp [doubleDropTarget, dropCandidate, eraseNodeCandidate,
+    ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange]
+
+private def doubleDropWireEquiv
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left) :
+    Data.Finite.FiniteEquiv
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val.WireId
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val.WireId := by
+  exact Data.Finite.FiniteEquiv.finCast
+    ((doubleDropWireCount source left right leftEligible rightEligible
+      different).trans
+      (doubleDropWireCount source right left rightEligible leftEligible
+        (fun same => different same.symm)).symm)
+
+noncomputable def doubleDropMapEndpoint
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (endpoint : CEndpoint
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val.nodeCount) :
+    CEndpoint
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val.nodeCount :=
+  ⟨doubleDropNodeEquiv source left right leftEligible rightEligible
+      different endpoint.node,
+    endpoint.port⟩
+
+private noncomputable def doubleDropInverseEndpoint
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (endpoint : CEndpoint
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val.nodeCount) :
+    CEndpoint
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val.nodeCount :=
+  ⟨(doubleDropNodeEquiv source left right leftEligible rightEligible
+      different).symm endpoint.node,
+    endpoint.port⟩
+
+private theorem doubleDropSourceWire_map
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (wire : (doubleDropTarget source left right leftEligible rightEligible
+      different).val.WireId) :
+    doubleDropSourceWire source right left rightEligible leftEligible
+        (fun same => different same.symm)
+        (doubleDropWireEquiv source left right leftEligible rightEligible
+          different wire) =
+      doubleDropSourceWire source left right leftEligible rightEligible
+        different wire := by
+  apply Fin.ext
+  rfl
+
+private theorem doubleDropSourceEndpoint_map
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (endpoint : CEndpoint
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val.nodeCount) :
+    doubleDropSourceEndpoint source right left rightEligible leftEligible
+        (fun same => different same.symm)
+        (doubleDropMapEndpoint source left right leftEligible rightEligible
+          different endpoint) =
+      doubleDropSourceEndpoint source left right leftEligible rightEligible
+        different endpoint := by
+  apply endpoint_eq
+  · rw [doubleDropSourceEndpoint_node, doubleDropSourceEndpoint_node]
+    exact doubleDropNodeEquiv_origin source left right leftEligible
+      rightEligible different endpoint.node
+  · rfl
+
+private theorem doubleDropSourceEndpoint_inverse
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (endpoint : CEndpoint
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val.nodeCount) :
+    doubleDropSourceEndpoint source left right leftEligible rightEligible
+        different
+        (doubleDropInverseEndpoint source left right leftEligible rightEligible
+          different endpoint) =
+      doubleDropSourceEndpoint source right left rightEligible leftEligible
+        (fun same => different same.symm) endpoint := by
+  have mapped := doubleDropSourceEndpoint_map source left right leftEligible
+    rightEligible different
+    (doubleDropInverseEndpoint source left right leftEligible rightEligible
+      different endpoint)
+  have mapInverse :
+      doubleDropMapEndpoint source left right leftEligible rightEligible
+          different
+          (doubleDropInverseEndpoint source left right leftEligible
+            rightEligible different endpoint) = endpoint := by
+    apply endpoint_eq
+    · exact (doubleDropNodeEquiv source left right leftEligible
+        rightEligible different).right_inv endpoint.node
+    · rfl
+  rw [mapInverse] at mapped
+  exact mapped.symm
+
+noncomputable def doubleDropEndpointFiber
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left)
+    (wire : (doubleDropTarget source left right leftEligible rightEligible
+      different).val.WireId) :
+    ConcreteIso.EndpointFiberEquiv
+      (doubleDropNodeEquiv source left right leftEligible rightEligible
+        different)
+      (doubleDropWireEquiv source left right leftEligible rightEligible
+        different) wire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨doubleDropMapEndpoint source left right leftEligible rightEligible
+          different endpoint.1, by
+            apply (doubleDrop_endpoint_mem_iff source right left rightEligible
+              leftEligible (fun same => different same.symm) _ _).mpr
+            rw [doubleDropSourceWire_map, doubleDropSourceEndpoint_map]
+            exact (doubleDrop_endpoint_mem_iff source left right leftEligible
+              rightEligible different wire endpoint.1).mp endpoint.2⟩
+      invFun := fun endpoint =>
+        ⟨doubleDropInverseEndpoint source left right leftEligible
+          rightEligible different endpoint.1, by
+            apply (doubleDrop_endpoint_mem_iff source left right leftEligible
+              rightEligible different _ _).mpr
+            rw [doubleDropSourceEndpoint_inverse]
+            exact (doubleDrop_endpoint_mem_iff source right left rightEligible
+              leftEligible (fun same => different same.symm) _ endpoint.1).mp
+                endpoint.2⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        apply endpoint_eq
+        · exact (doubleDropNodeEquiv source left right leftEligible
+            rightEligible different).left_inv endpoint.1.node
+        · rfl
+      right_inv := by
+        intro endpoint
+        apply Subtype.ext
+        apply endpoint_eq
+        · exact (doubleDropNodeEquiv source left right leftEligible
+            rightEligible different).right_inv endpoint.1.node
+        · rfl }
+  corresponds := by
+    intro endpoint
+    unfold PortCorresponds doubleDropMapEndpoint
+    constructor
+    · rfl
+    · have required := ConcreteDiagram.incident_port_required definitions
+        (doubleDropTarget source left right leftEligible rightEligible
+          different).val
+        (doubleDropTarget source left right leftEligible rightEligible
+          different).property wire endpoint.1 endpoint.2
+      have nodeExact :
+          (doubleDropTarget source right left rightEligible leftEligible
+            (fun same => different same.symm)).val.nodes
+              (doubleDropNodeEquiv source left right leftEligible rightEligible
+                different endpoint.1.node) =
+            (doubleDropTarget source left right leftEligible rightEligible
+              different).val.nodes endpoint.1.node := by
+        rw [doubleDrop_node_source, doubleDrop_node_source,
+          doubleDropNodeEquiv_origin]
+      cases nodeData :
+          (doubleDropTarget source left right leftEligible rightEligible
+            different).val.nodes endpoint.1.node with
+      | atom => simp [nodeExact, nodeData]
+      | ref => simp [nodeExact, nodeData]
+      | identity region signature arity =>
+          simp [ConcreteDiagram.requiredPorts, nodeData] at required
+          obtain ⟨index, _, exact⟩ := required
+          simp [nodeExact, nodeData]
+          exact ⟨index, exact.symm⟩
+
+/-- Deleting two distinct Rule-1 candidates commutes up to the concrete
+isomorphism induced by their shared original node, wire, and endpoint
+origins. -/
+noncomputable def doubleDropCandidateIso
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (leftEligible : DropEligibility source left)
+    (rightEligible : DropEligibility source right)
+    (different : right ≠ left) :
+    ConcreteIso
+      (doubleDropTarget source left right leftEligible rightEligible
+        different).val
+      (doubleDropTarget source right left rightEligible leftEligible
+        (fun same => different same.symm)).val :=
+  ConcreteIso.ofEquivs
+    (doubleDropRegionEquiv source left right leftEligible rightEligible
+      different)
+    (doubleDropNodeEquiv source left right leftEligible rightEligible
+      different)
+    (doubleDropWireEquiv source left right leftEligible rightEligible
+      different)
+    (by apply Fin.ext; rfl)
+    (by
+      intro region
+      change source.val.regions _ =
+        (source.val.regions region).rename _
+      have regionExact :
+          doubleDropRegionEquiv source left right leftEligible rightEligible
+            different region = region := by
+        apply Fin.ext
+        rfl
+      rw [regionExact]
+      cases data : source.val.regions region with
+      | sheet => simp only [CRegion.rename]
+      | cut parent =>
+          simp only [CRegion.rename]
+          congr)
+    (by
+      intro node
+      rw [doubleDrop_node_source, doubleDrop_node_source,
+        doubleDropNodeEquiv_origin]
+      cases data : source.val.nodes
+          (doubleDropOriginNode source left right leftEligible rightEligible
+            different node) <;>
+        simp only [CNode.rename] <;>
+        congr 1 <;>
+        apply Fin.ext <;>
+        rfl)
+    (by
+      intro wire
+      change
+        (source.val.wires
+          (doubleDropSourceWire source right left rightEligible leftEligible
+            (fun same => different same.symm)
+            (doubleDropWireEquiv source left right leftEligible rightEligible
+              different wire))).sig =
+        (source.val.wires
+          (doubleDropSourceWire source left right leftEligible rightEligible
+            different wire)).sig
+      rw [doubleDropSourceWire_map])
+    (by
+      intro wire
+      change
+        (source.val.wires
+          (doubleDropSourceWire source right left rightEligible leftEligible
+            (fun same => different same.symm)
+            (doubleDropWireEquiv source left right leftEligible rightEligible
+              different wire))).scope =
+        doubleDropRegionEquiv source left right leftEligible rightEligible
+          different
+          (source.val.wires
+            (doubleDropSourceWire source left right leftEligible rightEligible
+              different wire)).scope
+      rw [doubleDropSourceWire_map]
+      apply Fin.ext
+      rfl)
+    (doubleDropEndpointFiber source left right leftEligible rightEligible
+      different)
 
 /-- A paired Rule-1 rewrite constructs its target isomorphism directly
 from the retained carrier tables and restricted endpoint fibers. -/

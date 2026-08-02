@@ -155,6 +155,107 @@ def symm
 
 end Join
 
+/-- Recomputed second Rule-1 step at a distinct candidate. -/
+def dropStepAfter
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (removedEligible : DropEligibility source removed)
+    (otherEligible : DropEligibility source other)
+    (different : other ≠ removed) :
+    PriorityStep
+      (PriorityStep.target
+        (.drop ⟨removed, ⟨removedEligible⟩⟩ removed removedEligible)) :=
+  let mapped :=
+    dropRetainedNode source removed other removedEligible different
+  let eligible :=
+    dropEligibilityAfter source removed other removedEligible otherEligible
+      different
+  .drop ⟨mapped, ⟨eligible⟩⟩ mapped eligible
+
+/-- The distinct drop arm continues by deleting the retained image of the
+other source candidate. -/
+def dropReductionAfter
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (removedEligible : DropEligibility source removed)
+    (otherEligible : DropEligibility source other)
+    (different : other ≠ removed) :
+    ReductionStar
+      (PriorityStep.target
+        (.drop ⟨removed, ⟨removedEligible⟩⟩ removed removedEligible))
+      (dropStepAfter source removed other removedEligible otherEligible
+        different).target :=
+  .head
+    (dropStepAfter source removed other removedEligible otherEligible different)
+    (.refl _)
+
+/-- A same-node drop/drop peak is definitionally the same construction after
+receipt uniqueness; active-proof differences do not affect its target. -/
+def dropJoin_same
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (leftActive rightActive : Active source .drop)
+    (node : source.val.NodeId)
+    (leftEligible rightEligible : DropEligibility source node) :
+    Join
+      (PriorityStep.target (.drop leftActive node leftEligible))
+      (PriorityStep.target (.drop rightActive node rightEligible)) := by
+  have exactEligibility :=
+    IdentityNormalizationPriority.DropEligibility.unique
+      leftEligible rightEligible
+  subst rightEligible
+  exact .ofIso (checkedIsoRefl _)
+
+/-- A distinct drop/drop peak joins after one recomputed drop on each arm;
+the final isomorphism is the construction-owned commutation of the two dense
+deletions, including endpoint fibers. -/
+noncomputable def dropJoin_distinct
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (leftActive rightActive : Active source .drop)
+    (leftNode rightNode : source.val.NodeId)
+    (leftEligible : DropEligibility source leftNode)
+    (rightEligible : DropEligibility source rightNode)
+    (different : rightNode ≠ leftNode) :
+    Join
+      (PriorityStep.target (.drop leftActive leftNode leftEligible))
+      (PriorityStep.target (.drop rightActive rightNode rightEligible)) where
+  leftTarget :=
+    (dropStepAfter source leftNode rightNode leftEligible rightEligible
+      different).target
+  rightTarget :=
+    (dropStepAfter source rightNode leftNode rightEligible leftEligible
+      (fun same => different same.symm)).target
+  leftReduction :=
+    dropReductionAfter source leftNode rightNode leftEligible rightEligible
+      different
+  rightReduction :=
+    dropReductionAfter source rightNode leftNode rightEligible leftEligible
+      (fun same => different same.symm)
+  iso :=
+    doubleDropCandidateIso source leftNode rightNode leftEligible rightEligible
+      different
+
+/-- Complete same-active-class local confluence for Rule 1. -/
+noncomputable def dropConfluence
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (leftActive rightActive : Active source .drop)
+    (leftNode rightNode : source.val.NodeId)
+    (leftEligible : DropEligibility source leftNode)
+    (rightEligible : DropEligibility source rightNode) :
+    Join
+      (PriorityStep.target (.drop leftActive leftNode leftEligible))
+      (PriorityStep.target (.drop rightActive rightNode rightEligible)) := by
+  by_cases same : rightNode = leftNode
+  · subst rightNode
+    exact dropJoin_same leftActive rightActive leftNode leftEligible
+      rightEligible
+  · exact dropJoin_distinct leftActive rightActive leftNode rightNode
+      leftEligible rightEligible same
+
 /-- Two active priority witnesses at one source necessarily name the same
 class.  Consequently drop/collapse, drop/fusion, and collapse/fusion peaks do
 not occur in `ReductionStar`. -/
