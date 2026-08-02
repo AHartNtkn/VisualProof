@@ -2562,32 +2562,48 @@ def deleteEnds
 
 namespace EndsDeleteResult
 
-private theorem removedSiteNodes_nodup
-    {source : CheckedDiagram definitions}
-    {wire : source.val.WireId}
+/-- Exact source application nodes consumed by all-end deletion. -/
+def sourceRemovedNodes
+    (result : EndsDeleteResult source wire) : List source.val.NodeId :=
+  removedSiteNodes result.sites
+
+def retainedNodeCount
+    (result : EndsDeleteResult source wire) : Nat :=
+  (Internal.retainedNodes source result.sourceRemovedNodes).length
+
+/-- Checked target nodes in dense retained-source allocation order. -/
+def constructionNodeEquiv
     (result : EndsDeleteResult source wire) :
-    (removedSiteNodes result.sites).Nodup := by
-  have endpointsNodup := result.sites.endpoints_nodup
-  have general : ∀ values : List (AppliedSite source wire),
-      (values.map AppliedSite.endpoint).Nodup →
-        (values.map AppliedSite.node).Nodup := by
-    intro values
-    induction values with
-    | nil => simp
-    | cons head tail induction =>
-        simp only [List.map_cons, List.nodup_cons]
-        rintro ⟨headFresh, tailNodup⟩
-        constructor
-        · intro headMember
-          obtain ⟨candidate, candidateMember, nodeExact⟩ :=
-            List.mem_map.mp headMember
-          apply headFresh
-          apply List.mem_map.mpr
-          refine ⟨candidate, candidateMember, ?_⟩
-          unfold AppliedSite.endpoint
-          exact congrArg (fun node => CEndpoint.mk node .head) nodeExact
-        · exact induction tailNodup
-  exact general result.sites.sites endpointsNodup
+    Data.Finite.FiniteEquiv result.checked.val.NodeId
+      (Fin result.retainedNodeCount) :=
+  ContentConstruction.finEquivOfEq (by
+    rw [congrArg ConcreteDiagram.nodeCount result.generated]
+    rfl)
+
+/-- Canonical checked image of one source node retained by deletion. -/
+def retainedNodeImage
+    (result : EndsDeleteResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (Internal.retainedNodeIndex source result.sourceRemovedNodes node (by
+      unfold Internal.retainedNodes
+      exact List.mem_filter.mpr
+        ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩))
+
+@[simp] theorem constructionNodeEquiv_retainedNodeImage
+    (result : EndsDeleteResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.constructionNodeEquiv
+        (result.retainedNodeImage node retained) =
+      Internal.retainedNodeIndex source result.sourceRemovedNodes node (by
+        unfold Internal.retainedNodes
+        exact List.mem_filter.mpr
+          ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩) := by
+  apply Fin.ext
+  rfl
 
 /-- Target-to-source region carrier of dense all-end deletion. -/
 def regionOriginEquiv
@@ -2631,7 +2647,7 @@ def reconstructionNodeEquiv
       Internal.retainedNodes, ConcreteDiagram.nodesList,
       Data.Finite.allFin_eq_finRange])).trans
     (ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
-      result.removedSiteNodes_nodup)
+      (ContentConstruction.siteNodes_nodup result.sites))
 
 /-- Image of any retained source region in the exact dense deletion target. -/
 def targetRegion
@@ -2674,16 +2690,104 @@ def targetWire
   Internal.checkedWire result.generated
     (Internal.retainedWireIndex source [] wire retained)
 
-/-- Exact ordered spawn sites inverse to this all-ends deletion.  Region and
-argument-wire aliases are transported by the deletion construction itself. -/
-def targetSites
+theorem targetRoot_exact
+    (result : EndsDeleteResult source wire) :
+    result.checked.val.root = result.targetRegion source.val.root := by
+  unfold targetRegion
+  rw [Internal.checkedRoot_transport result.generated]
+  rfl
+
+theorem targetRegion_data
+    {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
-    (result : EndsDeleteResult source wire) :
-    List (EndSite result.checked result.targetWire) :=
-  result.sites.sites.map fun site =>
-    { region := result.targetRegion site.region
-      arguments := site.arguments.map result.targetWireImage }
+    (result : EndsDeleteResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.regions (result.targetRegion region) =
+      (match source.val.regions region with
+      | .sheet => .sheet
+      | .cut parent => .cut (result.targetRegion parent) :
+        CRegion result.checked.val.regionCount) := by
+  let retained : region ∈ Internal.retainedRegions source [] := by
+    rw [Internal.retainedRegions_nil]
+    exact Data.Finite.mem_allFin region
+  cases data : source.val.regions region with
+  | sheet =>
+      apply Internal.checkedRegion_data_transport_sheet result.generated
+      exact Internal.batchRegionTable_retained_sheet
+        result.plan.removal region retained data
+  | cut parent =>
+      let parentRetained : parent ∈ Internal.retainedRegions source [] := by
+        rw [Internal.retainedRegions_nil]
+        exact Data.Finite.mem_allFin parent
+      simpa [targetRegion] using
+        Internal.checkedRegion_data_transport_cut result.generated
+          (Internal.retainedRegionIndex source [] region retained)
+          (Internal.retainedRegionIndex source [] parent parentRetained)
+          (Internal.batchRegionTable_retained_cut result.plan.removal
+            region retained parent data parentRetained)
+
+theorem retainedNodeImage_data
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : EndsDeleteResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.checked.val.nodes (result.retainedNodeImage node retained) =
+      (match source.val.nodes node with
+      | .atom region arguments =>
+          .atom (result.targetRegion region) arguments
+      | .ref region definition arguments =>
+          .ref (result.targetRegion region) definition arguments
+      | .identity region signature arity =>
+          .identity (result.targetRegion region) signature arity :
+        CNode result.checked.val.regionCount definitions.length) := by
+  unfold retainedNodeImage sourceRemovedNodes targetRegion
+  rw [Internal.checkedNode_data_transport result.generated]
+  simp only [endsDeleteCandidate, Internal.batchRemovalCandidate]
+  rw [Internal.batchNodeTable_noRegions,
+    Internal.sourceRetainedNode_retainedNodeIndex]
+  cases source.val.nodes node <;> rfl
+
+theorem targetWireImage_signature
+    (result : EndsDeleteResult source wire)
+    (sourceWire : source.val.WireId) :
+    (result.checked.val.wires (result.targetWireImage sourceWire)).sig =
+      (source.val.wires sourceWire).sig := by
+  unfold targetWireImage
+  rw [Internal.checkedWire_signature_transport result.generated]
+  simp [endsDeleteCandidate, Internal.batchRemovalCandidate]
+
+theorem targetWireImage_scope
+    (result : EndsDeleteResult source wire)
+    (sourceWire : source.val.WireId) :
+    (result.checked.val.wires (result.targetWireImage sourceWire)).scope =
+      result.targetRegion (source.val.wires sourceWire).scope := by
+  unfold targetWireImage targetRegion
+  rw [Internal.checkedWire_scope_transport result.generated]
+  simp [endsDeleteCandidate, Internal.batchRemovalCandidate]
+
+/-- Source-filtered endpoint construction for one retained wire. -/
+def targetEndpoints
+    (result : EndsDeleteResult source wire)
+    (sourceWire : source.val.WireId) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  ((source.val.wires sourceWire).endpoints.filterMap
+    (Internal.batchEndpoint? source result.sourceRemovedNodes)).map
+      (Internal.checkedEndpoint result.generated)
+
+theorem targetWireImage_endpoints
+    (result : EndsDeleteResult source wire)
+    (sourceWire : source.val.WireId) :
+    (result.checked.val.wires
+      (result.targetWireImage sourceWire)).endpoints =
+      result.targetEndpoints sourceWire := by
+  unfold targetWireImage targetEndpoints sourceRemovedNodes
+  rw [Internal.checkedWire_endpoints_transport result.generated]
+  simp only [endsDeleteCandidate, Internal.batchRemovalCandidate]
+  simp only [Internal.batchWireTable]
+  rw [Internal.sourceRetainedWire_retainedWireIndex]
 
 end EndsDeleteResult
 

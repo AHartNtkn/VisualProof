@@ -588,6 +588,339 @@ def endpointFiberEquiv
 
 end ParallelSplitResult
 
+namespace EndsDeleteResult
+
+variable {definitions : List (List Sig)}
+variable {source : CheckedDiagram definitions}
+variable {wire : source.val.WireId}
+
+private theorem denseAllFinIndex_val
+    {count : Nat} (value : Fin count) :
+    (DenseList.index (Data.Finite.allFin count) value
+      (Data.Finite.mem_allFin value)).val = value.val := by
+  let position : Fin (Data.Finite.allFin count).length :=
+    Fin.cast (by
+      simp [Data.Finite.allFin_eq_finRange]) value
+  have getExact :
+      (Data.Finite.allFin count).get position = value := by
+    apply Fin.ext
+    simp [position, Data.Finite.allFin_eq_finRange, List.get_eq_getElem]
+  have sameIndex :
+      DenseList.index (Data.Finite.allFin count) value
+          (Data.Finite.mem_allFin value) =
+        DenseList.index (Data.Finite.allFin count)
+          ((Data.Finite.allFin count).get position)
+          (List.get_mem _ position) := by
+    congr
+    exact getExact.symm
+  rw [sameIndex]
+  exact congrArg Fin.val
+    (DenseList.index_get _ (Data.Finite.allFin_nodup count) position)
+
+private theorem denseIndexOfAllFinList_val
+    {count : Nat}
+    (values : List (Fin count))
+    (exact : values = Data.Finite.allFin count)
+    (value : Fin count)
+    (member : value ∈ values) :
+    (DenseList.index values value member).val = value.val := by
+  subst values
+  exact denseAllFinIndex_val value
+
+private theorem retainedWires_nil
+    (source : CheckedDiagram definitions) :
+    Internal.retainedWires source [] = source.val.wiresList := by
+  unfold Internal.retainedWires
+  apply List.filter_eq_self.mpr
+  intro sourceWire _
+  simp
+
+abbrev RegionOrigin (_result : EndsDeleteResult source wire) :=
+  source.val.RegionId
+
+abbrev NodeOrigin (result : EndsDeleteResult source wire) :=
+  { node : source.val.NodeId // node ∉ result.sourceRemovedNodes }
+
+abbrev WireOrigin (_result : EndsDeleteResult source wire) :=
+  source.val.WireId
+
+private theorem retainedNode_not_removed
+    (result : EndsDeleteResult source wire)
+    (candidate : Fin result.retainedNodeCount) :
+    Internal.sourceRetainedNode source result.sourceRemovedNodes candidate ∉
+      result.sourceRemovedNodes := by
+  have member := List.get_mem
+    (Internal.retainedNodes source result.sourceRemovedNodes) candidate
+  exact of_decide_eq_true (List.mem_filter.mp member).2
+
+private def allocationNodeOriginEquiv
+    (result : EndsDeleteResult source wire) :
+    Data.Finite.FiniteEquiv
+      (Fin result.retainedNodeCount) result.NodeOrigin where
+  toFun := fun retained =>
+    ⟨Internal.sourceRetainedNode source result.sourceRemovedNodes retained,
+      retainedNode_not_removed result retained⟩
+  invFun := fun origin =>
+    Internal.retainedNodeIndex source result.sourceRemovedNodes origin.1 (by
+      unfold Internal.retainedNodes
+      exact List.mem_filter.mpr
+        ⟨Data.Finite.mem_allFin origin.1,
+          decide_eq_true origin.2⟩)
+  left_inv := by
+    intro retained
+    apply Fin.ext
+    simp [Internal.retainedNodeIndex_sourceRetainedNode]
+  right_inv := by
+    intro origin
+    apply Subtype.ext
+    exact Internal.sourceRetainedNode_retainedNodeIndex _ _ _ _
+
+/-- Total neutral node classifier for all-end deletion. -/
+def nodeOriginEquiv
+    (result : EndsDeleteResult source wire) :
+    Data.Finite.FiniteEquiv
+      result.checked.val.NodeId result.NodeOrigin :=
+  result.constructionNodeEquiv.trans (allocationNodeOriginEquiv result)
+
+@[simp] theorem nodeOriginEquiv_retainedNodeImage
+    (result : EndsDeleteResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.nodeOriginEquiv (result.retainedNodeImage node retained) =
+      ⟨node, retained⟩ := by
+  rw [nodeOriginEquiv, Data.Finite.FiniteEquiv.trans_apply,
+    result.constructionNodeEquiv_retainedNodeImage]
+  apply Subtype.ext
+  exact Internal.sourceRetainedNode_retainedNodeIndex _ _ _ _
+
+@[simp] theorem regionOriginEquiv_targetRegion
+    (result : EndsDeleteResult source wire)
+    (region : source.val.RegionId) :
+    result.regionOriginEquiv (result.targetRegion region) = region := by
+  apply Fin.ext
+  unfold regionOriginEquiv targetRegion ContentConstruction.finEquivOfEq
+    Internal.checkedRegion
+  change (Internal.retainedRegionIndex source [] region _).val = region.val
+  unfold Internal.retainedRegionIndex
+  exact denseIndexOfAllFinList_val _ (by
+    rw [Internal.retainedRegions_nil]
+    rfl) region _
+
+@[simp] theorem wireOriginEquiv_targetWireImage
+    (result : EndsDeleteResult source wire)
+    (sourceWire : source.val.WireId) :
+    result.wireOriginEquiv (result.targetWireImage sourceWire) =
+      sourceWire := by
+  apply Fin.ext
+  unfold wireOriginEquiv targetWireImage ContentConstruction.finEquivOfEq
+    Internal.checkedWire
+  change (Internal.retainedWireIndex source [] sourceWire _).val =
+    sourceWire.val
+  unfold Internal.retainedWireIndex
+  exact denseIndexOfAllFinList_val _ (by
+    rw [retainedWires_nil]
+    rfl) sourceWire _
+
+theorem targetWire_eq_targetWireImage
+    (result : EndsDeleteResult source wire) :
+    result.targetWire = result.targetWireImage wire := by
+  apply result.wireOriginEquiv.injective
+  rw [result.wireOriginEquiv_targetWireImage]
+  apply Fin.ext
+  unfold targetWire wireOriginEquiv ContentConstruction.finEquivOfEq
+    Internal.checkedWire
+  change (Internal.retainedWireIndex source [] wire _).val = wire.val
+  unfold Internal.retainedWireIndex
+  exact denseIndexOfAllFinList_val _ (by
+    rw [retainedWires_nil]
+    rfl) wire _
+
+@[simp] theorem regionOriginEquiv_targetRoot
+    (result : EndsDeleteResult source wire) :
+    result.regionOriginEquiv result.checked.val.root =
+      source.val.root := by
+  rw [result.targetRoot_exact,
+    result.regionOriginEquiv_targetRegion]
+
+/-- Signature attached to one neutral wire origin. -/
+def originSignature
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) : Sig :=
+  (source.val.wires sourceWire).sig
+
+/-- Scope attached to one neutral wire origin. -/
+def originScope
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) : result.RegionOrigin :=
+  (source.val.wires sourceWire).scope
+
+@[simp] theorem targetWireImage_signatureOrigin
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) :
+    (result.checked.val.wires
+      (result.targetWireImage sourceWire)).sig =
+      result.originSignature sourceWire :=
+  result.targetWireImage_signature sourceWire
+
+@[simp] theorem targetWireImage_scopeOrigin
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) :
+    result.regionOriginEquiv
+        (result.checked.val.wires
+          (result.targetWireImage sourceWire)).scope =
+      result.originScope sourceWire := by
+  rw [result.targetWireImage_scope,
+    result.regionOriginEquiv_targetRegion]
+  rfl
+
+/-- Exact ordered spawn sites inverse to all-end deletion. -/
+def targetSites
+    (result : EndsDeleteResult source wire) :
+    List (EndSite result.checked result.targetWire) :=
+  result.sites.sites.map fun site =>
+    { region := result.targetRegion site.region
+      arguments := site.arguments.map result.targetWireImage }
+
+structure OriginEndpoint (result : EndsDeleteResult source wire) where
+  node : result.NodeOrigin
+  port : CPort
+  deriving DecidableEq
+
+def endpointOriginEquiv
+    (result : EndsDeleteResult source wire) :
+    Data.Finite.FiniteEquiv
+      (CEndpoint result.checked.val.nodeCount) (OriginEndpoint result) where
+  toFun := fun endpoint =>
+    ⟨result.nodeOriginEquiv endpoint.node, endpoint.port⟩
+  invFun := fun endpoint =>
+    ⟨result.nodeOriginEquiv.symm endpoint.node, endpoint.port⟩
+  left_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        exact congrArg (fun value => CEndpoint.mk value port)
+          (result.nodeOriginEquiv.left_inv node)
+  right_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        exact congrArg (fun value => OriginEndpoint.mk value port)
+          (result.nodeOriginEquiv.right_inv node)
+
+/-- Independent source-filtered endpoint table for one wire origin. -/
+def originEndpoints
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) : List (OriginEndpoint result) :=
+  (result.targetEndpoints sourceWire).map result.endpointOriginEquiv
+
+/-- The acted wire remains present but has no endpoints after all-end
+deletion. -/
+theorem originEndpoints_acted_empty
+    (result : EndsDeleteResult source wire) :
+    result.originEndpoints wire = [] := by
+  unfold originEndpoints targetEndpoints
+  have filteredEmpty :
+      (source.val.wires wire).endpoints.filterMap
+          (Internal.batchEndpoint? source result.sourceRemovedNodes) = [] := by
+    apply List.filterMap_eq_nil_iff.mpr
+    intro endpoint incident
+    unfold Internal.batchEndpoint?
+    apply dif_neg
+    intro retained
+    have notRemoved : endpoint.node ∉ result.sourceRemovedNodes :=
+      of_decide_eq_true (List.mem_filter.mp retained).2
+    apply notRemoved
+    have endpointAtSite :
+        endpoint ∈ result.sites.sites.map AppliedSite.endpoint := by
+      rw [result.sites.exhaustive]
+      exact incident
+    rcases List.mem_map.mp endpointAtSite with
+      ⟨site, siteMember, siteExact⟩
+    change endpoint.node ∈
+      result.sites.sites.map AppliedSite.node
+    have nodeExact : site.node = endpoint.node :=
+      congrArg CEndpoint.node siteExact
+    exact nodeExact ▸
+      List.mem_map.mpr ⟨site, siteMember, rfl⟩
+  rw [filteredEmpty]
+  rfl
+
+theorem classifiedEndpoints_eq_originEndpoints
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) :
+    (result.checked.val.wires
+      (result.targetWireImage sourceWire)).endpoints.map
+        result.endpointOriginEquiv =
+      result.originEndpoints sourceWire := by
+  rw [result.targetWireImage_endpoints]
+  rfl
+
+/-- Exact reverse incidence, derived only from construction-owned endpoint
+tables for every neutral wire origin. -/
+def nodeIncidence
+    (result : EndsDeleteResult source wire)
+    (node : result.NodeOrigin) : List (result.WireOrigin × CPort) :=
+  (Data.Finite.allFin source.val.wireCount).flatMap fun sourceWire =>
+    (result.originEndpoints sourceWire).filterMap fun endpoint =>
+      if endpoint.node = node then some (sourceWire, endpoint.port) else none
+
+structure EndpointFiberEquiv
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) where
+  equivalence : Data.Finite.FiniteEquiv
+    { endpoint // endpoint ∈
+      (result.checked.val.wires
+        (result.targetWireImage sourceWire)).endpoints }
+    { endpoint // endpoint ∈ result.originEndpoints sourceWire }
+  forward_exact : ∀ endpoint,
+    (equivalence endpoint).1 = result.endpointOriginEquiv endpoint.1
+  inverse_exact : ∀ endpoint,
+    (equivalence.symm endpoint).1 =
+      result.endpointOriginEquiv.symm endpoint.1
+
+def endpointFiberEquiv
+    (result : EndsDeleteResult source wire)
+    (sourceWire : result.WireOrigin) :
+    EndpointFiberEquiv result sourceWire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨result.endpointOriginEquiv endpoint.1, by
+          have member : result.endpointOriginEquiv endpoint.1 ∈
+              (result.checked.val.wires
+                (result.targetWireImage sourceWire)).endpoints.map
+                  result.endpointOriginEquiv :=
+            List.mem_map.mpr ⟨endpoint.1, endpoint.2, rfl⟩
+          rw [result.classifiedEndpoints_eq_originEndpoints] at member
+          exact member⟩
+      invFun := fun endpoint =>
+        ⟨result.endpointOriginEquiv.symm endpoint.1, by
+          have member : endpoint.1 ∈
+              (result.checked.val.wires
+                (result.targetWireImage sourceWire)).endpoints.map
+                  result.endpointOriginEquiv := by
+            rw [result.classifiedEndpoints_eq_originEndpoints]
+            exact endpoint.2
+          rcases List.mem_map.mp member with
+            ⟨targetEndpoint, targetMember, exact⟩
+          have targetExact : targetEndpoint =
+              result.endpointOriginEquiv.symm endpoint.1 := by
+            apply result.endpointOriginEquiv.injective
+            rw [result.endpointOriginEquiv.apply_symm_apply]
+            exact exact
+          simpa only [targetExact] using targetMember⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact result.endpointOriginEquiv.left_inv endpoint.1
+      right_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact result.endpointOriginEquiv.right_inv endpoint.1 }
+  forward_exact := by intro; rfl
+  inverse_exact := by intro; rfl
+
+end EndsDeleteResult
+
 end ConcreteWirePrimitive
 
 end VisualProof
