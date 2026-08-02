@@ -104,6 +104,7 @@ private structure RelationJoinApplication
   node : source.val.NodeId
   region : source.val.RegionId
   arguments : List source.val.WireId
+  nodeExact : source.val.nodes node = .atom region args
   argumentsAccepted :
     relationArgumentWires? source node args 0 = some arguments
 
@@ -129,9 +130,9 @@ private def relationJoinApplicationAt?
     (args : List Sig)
     (node : source.val.NodeId) :
     Option (RelationJoinApplication source args) :=
-  match source.val.nodes node with
+  match nodeData : source.val.nodes node with
   | .atom region nodeArgs =>
-      if nodeArgs = args then
+      if argsExact : nodeArgs = args then
         match accepted : relationArgumentWires? source node args 0 with
         | none => none
         | some arguments =>
@@ -139,6 +140,7 @@ private def relationJoinApplicationAt?
               { node := node
                 region := region
                 arguments := arguments
+                nodeExact := by simpa [argsExact] using nodeData
                 argumentsAccepted := accepted }
       else
         none
@@ -302,6 +304,7 @@ structure RelationJoinStep
   application : source.val.NodeId
   sourceRegion : source.val.RegionId
   relationArgs : List Sig
+  sourceNodeExact : source.val.nodes application = .atom sourceRegion relationArgs
   sourceArguments : List source.val.WireId
   sourceArgumentsAccepted :
     relationArgumentWires? source application relationArgs 0 =
@@ -508,6 +511,65 @@ def checkedFragmentWire
     (step : RelationJoinStep source dying content)
     (region : step.prior.val.RegionId) :
     (step.checkedPriorRegion region).val = region.val := by
+  rfl
+
+/-- A prior sheet remains a sheet through application deletion and splicing. -/
+theorem checkedPriorRegion_sheet
+    (step : RelationJoinStep source dying content)
+    (region : step.prior.val.RegionId)
+    (data : step.prior.val.regions region = .sheet) :
+    step.checked.val.regions (step.checkedPriorRegion region) = .sheet := by
+  unfold checkedPriorRegion
+  apply Internal.checkedRegion_data_transport_sheet step.generated
+  rw [ConcreteSpliceAttachment.diagram_region_hostRegion]
+  have erased :=
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_sheet
+      step.prior step.priorApplication region data
+  have baseData := Internal.checkedRegion_data_transport_sheet
+    step.baseGenerated _ erased
+  rw [baseData]
+  rfl
+
+/-- A prior cut and its parent remain exact through application deletion and
+splicing. -/
+theorem checkedPriorRegion_cut
+    (step : RelationJoinStep source dying content)
+    (region parent : step.prior.val.RegionId)
+    (data : step.prior.val.regions region = .cut parent) :
+    step.checked.val.regions (step.checkedPriorRegion region) =
+      .cut (step.checkedPriorRegion parent) := by
+  unfold checkedPriorRegion
+  apply Internal.checkedRegion_data_transport_cut step.generated
+  rw [ConcreteSpliceAttachment.diagram_region_hostRegion]
+  have erased :=
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_cut
+      step.prior step.priorApplication region parent data
+  have baseData := Internal.checkedRegion_data_transport_cut
+    step.baseGenerated _ _ erased
+  rw [baseData]
+  rfl
+
+/-- A non-root fragment cut is allocated freshly while retaining its exact
+fragment parent, including identification of a root parent with the splice
+site. -/
+theorem checkedFragmentRegion_cut
+    (step : RelationJoinStep source dying content)
+    (region parent : content.val.diagram.RegionId)
+    (nonroot : region ≠ content.val.diagram.root)
+    (data : content.val.diagram.regions region = .cut parent) :
+    step.checked.val.regions (step.checkedFragmentRegion region) =
+      .cut (step.checkedFragmentRegion parent) := by
+  unfold checkedFragmentRegion
+  apply Internal.checkedRegion_data_transport_cut step.generated
+  let fresh := DenseList.index step.attachment.fragmentRegions region (by
+    simp [ConcreteSpliceAttachment.fragmentRegions,
+      ConcreteDiagram.regionsList, Data.Finite.mem_allFin, nonroot])
+  have regionExact : step.attachment.fragmentRegions.get fresh = region :=
+    DenseList.get_index _ _ _
+  rw [show step.attachment.fragmentRegion region =
+      step.attachment.freshRegion fresh by
+    simp [ConcreteSpliceAttachment.fragmentRegion, nonroot, fresh]]
+  rw [ConcreteSpliceAttachment.diagram_region_freshRegion, regionExact, data]
   rfl
 
 @[simp] theorem checkedPriorWire_val
@@ -1444,6 +1506,7 @@ private def spliceRelationApplication
                                                 (sources.get position)
                                                 (List.get_mem _ position))
                                         relationArgs := args
+                                        sourceNodeExact := application.nodeExact
                                         prior := state.checked
                                         priorApplication :=
                                           priorApplication

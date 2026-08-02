@@ -391,6 +391,27 @@ theorem eraseNodeRegion_injective
   apply Fin.ext
   exact congrArg Fin.val same
 
+/-- Singleton-node deletion preserves sheet-region data exactly. -/
+theorem eraseNodeRegion_sheet
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region : source.val.RegionId)
+    (data : source.val.regions region = .sheet) :
+    (eraseNodeCandidate source node).regions
+        (eraseNodeRegion source node region) = .sheet := by
+  simp [eraseNodeCandidate, eraseNodeRegion, data]
+
+/-- Singleton-node deletion preserves cut-region data and parentage exactly. -/
+theorem eraseNodeRegion_cut
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (region parent : source.val.RegionId)
+    (data : source.val.regions region = .cut parent) :
+    (eraseNodeCandidate source node).regions
+        (eraseNodeRegion source node region) =
+      .cut (eraseNodeRegion source node parent) := by
+  simp [eraseNodeCandidate, eraseNodeRegion, data]
+
 theorem eraseNodeRegion_climb
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId) :
