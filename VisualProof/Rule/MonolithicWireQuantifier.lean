@@ -1742,11 +1742,14 @@ private structure BatchReconstructionTraceState
     {steps : List (ConcreteWireQuantifier.RelationJoinStep
       result.checked result.relationWire pattern)}
     (current : CheckedDiagram definitions)
-    (nodeImage : result.checked.val.NodeId → Option current.val.NodeId) where
+    (nodeImage : result.checked.val.NodeId → Option current.val.NodeId)
+    (currentDying : current.val.WireId) where
   state : BatchReconstructionState sites contents current result.checked
   pendingOriginsExact :
     state.pendingOrigins = result.atoms.drop steps.length
   joinNodeImageExact : HEq state.joinNodeImage nodeImage
+  representedWiresAvoidDying :
+    ∀ wire, state.wireImage wire ≠ currentDying
 
 /-- Structural fold of the accepted inverse trace.  Its only list premises
 state that the restored occurrence prefix and consumed application prefix
@@ -1777,7 +1780,7 @@ private theorem batchReconstructionTraceFold_exists
         result.atoms.take steps.length) :
     Nonempty
       (BatchReconstructionTraceState (steps := steps) result contents current
-        nodeImage) := by
+        nodeImage currentDying) := by
   induction trace generalizing contents with
   | nil =>
       have contentsEmpty : contents = [] :=
@@ -1786,7 +1789,20 @@ private theorem batchReconstructionTraceFold_exists
       exact ⟨
         { state := batchReconstructionNil result
           pendingOriginsExact := by simp [batchReconstructionNil]
-          joinNodeImageExact := by rfl }⟩
+          joinNodeImageExact := by rfl
+          representedWiresAvoidDying := by
+            intro wire same
+            have values := congrArg Fin.val same
+            simp [batchReconstructionNil] at values
+            have bound :=
+              (ConcreteWireQuantifier.Internal.retainedWireIndex source
+                (sites.flatMap
+                  ConcreteWireQuantifier.RelationSeverSite.removedWires)
+                wire.1 (by
+                  exact (result.retainedWire_iff wire.1).mpr (by
+                    simpa [BatchCoveredWire, restoredWire,
+                      retainedBySitesWire] using wire.2))).isLt
+            omega }⟩
   | @snoc priorSteps priorCurrent priorRegionImage priorNodeImage
       priorWireImage priorDying priorScope trace step priorExact
       priorRegionExact priorNodeExact priorWireExact priorDyingExact
@@ -1869,7 +1885,32 @@ private theorem batchReconstructionTraceFold_exists
           pendingOriginsExact := nextPending
           joinNodeImageExact := by
             dsimp [next, batchReconstructionSnoc]
-            exact HEq.rfl }⟩
+            exact HEq.rfl
+          representedWiresAvoidDying := by
+            intro wire same
+            by_cases old : BatchCoveredWire sites prefixContents wire.1
+            · have priorDyingEq :
+                  step.priorWireImage result.relationWire = priorDying :=
+                eq_of_heq priorDyingExact
+              have priorImageEq :
+                  step.checkedPriorWire (priorState.state.wireImage
+                      ⟨wire.1, old⟩) =
+                    step.checkedPriorWire
+                      (step.priorWireImage result.relationWire) := by
+                simpa [next, batchReconstructionSnoc, old,
+                  step.checkedWireImageExact, step.baseWireImageExact] using
+                  same
+              have representedEq :=
+                step.checkedPriorWire_injective priorImageEq
+              exact priorState.representedWiresAvoidDying ⟨wire.1, old⟩
+                (by simpa [priorDyingEq] using representedEq)
+            · let fresh := newlyCoveredWire content wire.1 wire.2 old
+              exact step.checkedFragmentWire_ne_checkedPriorWire_of_internal
+                fresh.choose fresh.choose_spec.1
+                (step.priorWireImage result.relationWire) (by
+                  simpa [next, batchReconstructionSnoc, old,
+                    step.checkedWireImageExact,
+                    step.baseWireImageExact] using same) }⟩
 
 /-- The complete accepted inverse trace has a construction-owned carrier
 state over the entire checked occurrence family. -/
@@ -1879,7 +1920,8 @@ private theorem RelationSeverConcreteReceipt.fullReconstructionState_exists
     Nonempty
       (BatchReconstructionTraceState (steps := receipt.inverse.steps)
         receipt.result occurrences
-        receipt.inverse.boundFinal receipt.inverse.boundNodeImage) := by
+        receipt.inverse.boundFinal receipt.inverse.boundNodeImage
+          receipt.inverse.boundDying) := by
   have contentsLength :
       occurrences.length = receipt.inverse.steps.length := by
     exact
@@ -1915,7 +1957,8 @@ private noncomputable def
       occurrences target) :
     BatchReconstructionTraceState (steps := receipt.inverse.steps)
       receipt.result occurrences
-      receipt.inverse.boundFinal receipt.inverse.boundNodeImage :=
+      receipt.inverse.boundFinal receipt.inverse.boundNodeImage
+        receipt.inverse.boundDying :=
   Classical.choice receipt.fullReconstructionState_exists
 
 private theorem
@@ -1979,8 +2022,14 @@ private noncomputable def
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target) :
     source.val.WireId → receipt.inverse.boundFinal.val.WireId :=
-  receipt.completeCarrierState.completeWireImage
-    receipt.extractions.entries
+  fun wire => receipt.fullReconstructionState.state.wireImage
+    ⟨wire, by
+      change BatchCoveredWire
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences wire
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.wireCoverage wire⟩
 
 private theorem RelationSeverConcreteReceipt.completeRegionImage_injective
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2004,7 +2053,45 @@ private theorem RelationSeverConcreteReceipt.completeWireImage_injective
     Function.Injective receipt.completeWireImage := by
   intro left right same
   exact Subtype.ext_iff.mp
-    (receipt.completeCarrierState.wireImage_injective same)
+    (receipt.fullReconstructionState.state.wireImage_injective same)
+
+private theorem
+    RelationSeverConcreteReceipt.completeWireImage_ne_boundDying
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    receipt.completeWireImage wire ≠ receipt.inverse.boundDying := by
+  simpa [RelationSeverConcreteReceipt.completeWireImage] using
+    receipt.fullReconstructionState.representedWiresAvoidDying
+      ⟨wire, by
+        change BatchCoveredWire
+          (receipt.extractions.entries.semanticEvidence.map
+            WireQuantifierSemantics.RelationSeverOccurrence.site)
+          occurrences wire
+        rw [receipt.extractions.entries.semanticEvidence_sites]
+        exact receipt.extractions.entries.wireCoverage wire⟩
+
+/-- Exact source-wire landing after the exhausted inverse relation is
+deleted from the completed bound reconstruction. -/
+private noncomputable def
+    RelationSeverConcreteReceipt.completePlainWireImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.WireId → receipt.inverse.plainFinal.val.WireId :=
+  fun wire => receipt.inverse.plainBoundWireImage
+    (receipt.completeWireImage wire)
+    (receipt.completeWireImage_ne_boundDying wire)
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainWireImage_injective
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Function.Injective receipt.completePlainWireImage := by
+  intro left right same
+  apply receipt.completeWireImage_injective
+  exact receipt.inverse.plainBoundWireImage_injective
+    (receipt.completeWireImage_ne_boundDying left)
+    (receipt.completeWireImage_ne_boundDying right) same
 
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin

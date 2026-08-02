@@ -1568,6 +1568,12 @@ private structure RelationJoinFinalRemoval
   allWireImage :
     ∀ boundWire : state.checked.val.WireId,
       boundWire ≠ state.wireImage wire → checked.val.WireId
+  allWireImage_injective :
+    ∀ {left right : state.checked.val.WireId}
+      (leftSurvives : left ≠ state.wireImage wire)
+      (rightSurvives : right ≠ state.wireImage wire),
+      allWireImage left leftSurvives = allWireImage right rightSurvives →
+        left = right
   regionImage : source.val.RegionId → checked.val.RegionId
   wireImage :
     ∀ sourceWire : source.val.WireId,
@@ -1621,6 +1627,24 @@ private def removeRelationJoinWire
                         List.mem_cons, List.not_mem_nil, or_false]
                       apply decide_eq_true
                       simpa [dying] using different))
+              allWireImage_injective := by
+                intro left right leftSurvives rightSurvives same
+                apply retainedWireIndex_injective state.checked [dying]
+                  (by
+                    simp only [Internal.retainedWires,
+                      ConcreteDiagram.wiresList, List.mem_filter,
+                      Data.Finite.mem_allFin, true_and, List.mem_cons,
+                      List.not_mem_nil, or_false]
+                    apply decide_eq_true
+                    simpa [dying] using leftSurvives)
+                  (by
+                    simp only [Internal.retainedWires,
+                      ConcreteDiagram.wiresList, List.mem_filter,
+                      Data.Finite.mem_allFin, true_and, List.mem_cons,
+                      List.not_mem_nil, or_false]
+                    apply decide_eq_true
+                    simpa [dying] using rightSurvives)
+                exact checkedWire_injective generated same
               regionImage := fun region =>
                 Internal.checkedRegion generated
                   (Internal.retainedRegionIndex state.checked []
@@ -1779,6 +1803,17 @@ def plainBoundWireImage
     (survives : boundWire ≠ result.boundDying) :
     result.plainFinal.val.WireId :=
   result.finalRemoval.allWireImage boundWire survives
+
+theorem plainBoundWireImage_injective
+    (result : RelationJoinResult source wire content parameters)
+    {left right : result.boundFinal.val.WireId}
+    (leftSurvives : left ≠ result.boundDying)
+    (rightSurvives : right ≠ result.boundDying)
+    (same :
+      result.plainBoundWireImage left leftSurvives =
+        result.plainBoundWireImage right rightSurvives) :
+    left = right :=
+  result.finalRemoval.allWireImage_injective leftSurvives rightSurvives same
 
 /-- Ordered occurrence-removal/splice steps retained by the accepted join. -/
 def steps
