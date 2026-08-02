@@ -714,8 +714,9 @@ checkers.
   orientations.
 - [ ] **Step 2: Derive insertion.** Compose vacuous introduction of a
   `rel []` wire, negative-gated atom spawn, and compiled relation join
-  grounding to the inserted content. Prove the result equals structural
-  insertion modulo normalization and fresh naming.
+  grounding to the inserted content. Prove the raw result is checked-concretely
+  isomorphic to raw structural insertion with exact ordered boundary transport;
+  identity normalization is outside this theorem and its proof.
 - [ ] **Step 3: Derive ref conservativity.** Show ref spawn followed by unfold
   is the insertion program for its stored definition body. Definitions remain
   macros and acquire no spawn-anywhere semantic authority.

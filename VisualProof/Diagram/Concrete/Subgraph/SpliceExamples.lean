@@ -1,6 +1,7 @@
 import VisualProof.Diagram.Concrete.Subgraph.SelectionFixtures
 import VisualProof.Diagram.Concrete.Subgraph.OccurrenceFixtures
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
+import VisualProof.Diagram.Concrete.Subgraph.Splice
 
 namespace VisualProof
 namespace ConcreteSpliceExamples

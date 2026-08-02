@@ -15,6 +15,23 @@ function leanSourcesUnder(dir: string): string[] {
   return sources.sort()
 }
 
+function leanImportClosure(entry: string): Map<string, string> {
+  const closure = new Map<string, string>()
+  const pending = [entry]
+  while (pending.length > 0) {
+    const module = pending.pop()
+    if (module === undefined || closure.has(module)) continue
+    const path = `${module.replaceAll('.', '/')}.lean`
+    if (!existsSync(path)) continue
+    const source = readFileSync(path, 'utf8')
+    closure.set(module, source)
+    for (const match of source.matchAll(/^import\s+(VisualProof(?:\.[A-Za-z0-9_]+)+)\s*$/gm)) {
+      pending.push(match[1])
+    }
+  }
+  return closure
+}
+
 describe('Lean semantics architecture', () => {
   it('freezes one 34-constructor Lean proof-step inventory', () => {
     const source = readFileSync('VisualProof/Rule/Tag.lean', 'utf8')
@@ -49,5 +66,21 @@ describe('Lean semantics architecture', () => {
     expect(existsSync('VisualProof/Sig.lean')).toBe(true)
     expect(existsSync('VisualProof/Model.lean')).toBe(true)
     expect(existsSync('VisualProof/Data/Finite.lean')).toBe(true)
+  })
+
+  it('keeps raw primitive compiler adequacy independent of identity normalization', () => {
+    const closure = leanImportClosure(
+      'VisualProof.Rule.WirePrimitive.CompilerSoundness',
+    )
+
+    expect(closure.size).toBeGreaterThan(0)
+    expect(
+      [...closure.keys()].filter((module) =>
+        module.includes('IdentityNormalization'),
+      ),
+    ).toEqual([])
+    expect([...closure.values()].join('\n')).not.toMatch(
+      /\b(?:normalizeIdentities|IdentityNormalization)\b/,
+    )
   })
 })

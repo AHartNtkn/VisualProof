@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRaw
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawOriginFacts
 import VisualProof.Diagram.Concrete.IdentityNormalization
 
 namespace VisualProof

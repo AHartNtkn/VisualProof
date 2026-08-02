@@ -25,6 +25,7 @@ import VisualProof.Rule.StructuralAudit
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRaw
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawConstructionAtlasFixtures
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
 import VisualProof.Diagram.Concrete.WirePartition
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverSemantics

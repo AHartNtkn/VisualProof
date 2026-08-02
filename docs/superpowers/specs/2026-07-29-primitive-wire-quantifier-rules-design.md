@@ -128,9 +128,10 @@ then remaining argument plumbing). Case on the live wire's residual ψ:
    definition body, then `fold` each site (fold is already an equivalence).
 
 Every case strictly shrinks the measure, and the cases cover every content
-constructor. The terminal state equals the monolithic join's output up to
-fresh naming and identity normalization — the same quotient splice already
-owns.
+constructor. The raw terminal state is checked-concretely isomorphic to the
+raw monolithic join output with exact ordered boundary transport. Identity
+normalization is a separate mechanism and is not part of this statement or
+its proof.
 
 Sever is not argued separately. Every primitive is one of an inverse pair with
 dual gates, and a legal monolithic sever instance is the exact inverse of a
@@ -230,8 +231,9 @@ The monolithic rule and the in-flight relation-content-join soundness plan
 stay; that plan should land first, because its singleton-erasure and insertion
 receipts are the ingredients the primitive proofs reuse. Then: one soundness
 theorem per primitive (each an instance of the witness lemma above), and a
-redundancy theorem stating that the compiled primitive sequence replays to the
-monolithic rule's output modulo identity normalization and fresh naming.
+redundancy theorem stating that the compiled primitive sequence replays to a
+raw target checked-concretely isomorphic to the raw monolithic rule output,
+with exact ordered boundary transport and no identity-normalization dependency.
 Monolithic soundness and primitive-set completeness become corollaries of the
 same statement.
 

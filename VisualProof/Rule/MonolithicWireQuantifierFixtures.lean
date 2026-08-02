@@ -1,5 +1,4 @@
 import VisualProof.Rule.MonolithicWireQuantifier
-import VisualProof.Rule.MonolithicWireQuantifierRawOriginAtlasApplied
 import VisualProof.Diagram.Concrete.Examples
 
 namespace VisualProof
@@ -350,8 +349,8 @@ private def relationJoinApplied :
 
 /-!
 A repeated content boundary attached to two distinct same-signature source
-wires generates one equality node.  The raw atlas must retain that generated
-origin explicitly rather than collapsing it into either attachment.
+wires generates one equality node.  The executor-owned raw atlas retains that
+generated origin explicitly rather than collapsing it into either attachment.
 -/
 
 private def repeatedBoundaryJoinSourceRaw : ConcreteDiagram 0 where
@@ -399,58 +398,6 @@ private def repeatedBoundaryJoinApplied :
       repeatedBoundaryJoinInput).toOption.get
     (by native_decide)
 
-set_option maxHeartbeats 4000000 in
-/-- Executable complete-table comparison for the repeated-alias raw atlas. -/
-def repeatedBoundaryRawAtlasConforms : Bool :=
-  let result := repeatedBoundaryJoinApplied.concreteResult
-  let atlas := repeatedBoundaryJoinApplied.rawOriginAtlas
-  decide
-      (atlas.regionEquiv result.plainFinal.val.root =
-        MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedRoot result) &&
-    (Data.Finite.allFin result.plainFinal.val.regionCount).all fun region =>
-      decide
-        ((match result.plainFinal.val.regions region with
-          | .sheet =>
-              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawRegionData.sheet
-          | .cut parent =>
-              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawRegionData.cut
-                (atlas.regionEquiv parent)) =
-          MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedRegionData
-            result (atlas.regionEquiv region)) &&
-    (Data.Finite.allFin result.plainFinal.val.nodeCount).all fun node =>
-      decide
-        ((match result.plainFinal.val.nodes node with
-          | .atom region args =>
-              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawNodeData.atom
-                (atlas.regionEquiv region) args
-          | .ref region definition args =>
-              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawNodeData.ref
-                (atlas.regionEquiv region) definition args
-          | .identity region sig arity =>
-              MonolithicWireQuantifier.RelationJoinRawOriginAtlas.RelationJoinRawNodeData.identity
-                (atlas.regionEquiv region) sig arity) =
-          MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedNodeData
-            result (atlas.nodeEquiv node)) &&
-    (Data.Finite.allFin result.plainFinal.val.wireCount).all fun wire =>
-      decide
-          ((result.plainFinal.val.wires wire).sig =
-            MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedWireSignature
-              result (atlas.wireEquiv wire)) &&
-        decide
-          (atlas.regionEquiv (result.plainFinal.val.wires wire).scope =
-            MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedWireScope
-              result (atlas.wireEquiv wire)) &&
-        decide
-          ((result.plainFinal.val.wires wire).endpoints.map
-              atlas.endpointOriginEquiv =
-            MonolithicWireQuantifier.RelationJoinRawOriginAtlas.expectedWireEndpoints
-              result (atlas.wireEquiv wire))
-
-/-- The repeated-alias corpus checks the complete raw atlas: root, every
-region and node row, wire signatures/scopes, and ordered endpoint fibers. -/
-example : repeatedBoundaryRawAtlasConforms = true := by
-  native_decide +revert
-
 example :
     repeatedBoundaryJoinApplied.concreteResult.steps.map
         (fun step =>
@@ -460,66 +407,40 @@ example :
   native_decide
 
 example :
-    (match repeatedBoundaryJoinApplied.rawOriginAtlas.nodeOrigin (idx 0) with
+    (match
+      (repeatedBoundaryJoinApplied.concreteResult.finalNodeOriginEquiv
+        (idx 0)).1 with
     | .inr ⟨occurrence, .inr request⟩ =>
         occurrence.val = 0 && request.val = 0
     | _ => false) = true := by
   native_decide
 
-example :
-    (match repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 0) with
-    | .inl wire => wire.val.val = 1
-    | _ => false) = true := by
-  native_decide
-
-example :
-    (match repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 1) with
-    | .inl wire => wire.val.val = 2
-    | _ => false) = true := by
-  native_decide
-
 private def repeatedBoundaryRepresentativeSnapshot :
-    Nat × Nat × Nat × Bool × Bool :=
+    Nat × Nat × Nat :=
   let step := repeatedBoundaryJoinApplied.concreteResult.steps.get (idx 0)
   let source := ConcreteExamples.repeatedBoundaryAlias_checked.val.boundary.get
     (idx 0)
   let sourceMember :
       source ∈ ConcreteExamples.repeatedBoundaryAlias_checked.val.boundary := by
     native_decide
-  let representativeOrigin :=
-    repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 0)
-  let nonrepresentativeOrigin :=
-    repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 1)
   ((step.attachment.representativePosition source sourceMember).val,
     (step.attachment.representativeTarget source sourceMember).val,
-    (step.attachment.target (idx 1)).val,
-    (match representativeOrigin with
-      | .inl wire => wire.val.val = 1
-      | _ => false),
-    (match nonrepresentativeOrigin with
-      | .inl wire => wire.val.val = 2
-      | _ => false))
+    (step.attachment.target (idx 1)).val)
 
 example :
-    repeatedBoundaryRepresentativeSnapshot = (0, 1, 2, true, true) := by
+    repeatedBoundaryRepresentativeSnapshot = (0, 1, 2) := by
   native_decide
 
 example :
-    (match relationJoinApplied.rawOriginAtlas.regionOrigin (idx 0) with
+    (match relationJoinApplied.concreteResult.finalRegionOriginEquiv (idx 0) with
     | .inl region => region.val = 0
     | _ => false) = true := by
   native_decide
 
 example :
-    (match relationJoinApplied.rawOriginAtlas.nodeOrigin (idx 0) with
+    (match (relationJoinApplied.concreteResult.finalNodeOriginEquiv (idx 0)).1 with
     | .inr ⟨occurrence, .inl node⟩ =>
         occurrence.val = 0 && node.val = 0
-    | _ => false) = true := by
-  native_decide
-
-example :
-    (match relationJoinApplied.rawOriginAtlas.wireOrigin (idx 0) with
-    | .inl wire => wire.val.val = 1
     | _ => false) = true := by
   native_decide
 

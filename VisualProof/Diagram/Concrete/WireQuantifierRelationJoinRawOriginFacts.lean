@@ -4,70 +4,6 @@ namespace VisualProof
 
 namespace ConcreteWireQuantifier
 
-/-- Exact node-domain characterization of the data-bearing construction trace. -/
-theorem RelationJoinConstructionTrace.nodeImage_eq_none_iff
-    {source : CheckedDiagram definitions}
-    {dying : source.val.WireId}
-    {content : CheckedOpenDiagram definitions}
-    {parameters : List source.val.WireId}
-    {args : List Sig}
-    {steps : List (RelationJoinStep source dying content)}
-    {final : CheckedDiagram definitions}
-    {finalRegionImage : source.val.RegionId → final.val.RegionId}
-    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
-    {finalWireImage : source.val.WireId → final.val.WireId}
-    {finalDying : final.val.WireId}
-    {finalScope : final.val.RegionId}
-    (trace : RelationJoinConstructionTrace source dying content parameters args
-      steps final finalRegionImage finalNodeImage finalWireImage finalDying
-        finalScope)
-    (sourceNode : source.val.NodeId) :
-    finalNodeImage sourceNode = none ↔
-      sourceNode ∈ steps.map RelationJoinStep.application := by
-  induction trace with
-  | nil => simp
-  | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
-      priorWireImageExact priorDyingExact priorScopeExact relationArgsExact
-      sourceParametersExact induction =>
-      subst priorExact
-      cases eq_of_heq priorRegionImageExact
-      have nodeImageExact := eq_of_heq priorNodeImageExact
-      cases eq_of_heq priorWireImageExact
-      cases eq_of_heq priorDyingExact
-      cases eq_of_heq priorScopeExact
-      cases relationArgsExact
-      cases sourceParametersExact
-      rw [List.map_append]
-      simp only [List.map_singleton, List.mem_append, List.mem_singleton]
-      cases priorExact : step.priorNodeImage sourceNode with
-      | none =>
-          have checkedExact : step.checkedNodeImage sourceNode = none := by
-            simp [step.checkedNodeImageExact, step.baseNodeImageExact,
-              priorExact]
-          rw [checkedExact]
-          simp only [true_iff]
-          exact Or.inl (induction.mp (nodeImageExact ▸ priorExact))
-      | some priorNode =>
-          by_cases applicationExact : sourceNode = step.application
-          · subst sourceNode
-            simp [step.checkedNodeImage_application]
-          · have priorDifferent : priorNode ≠ step.priorApplication := by
-              intro same
-              subst priorNode
-              exact applicationExact
-                (step.priorNodeImage_injective priorExact
-                  step.priorApplicationImage)
-            have checkedExact :=
-              step.checkedNodeImage_of_prior priorExact priorDifferent
-            rw [checkedExact]
-            simp only [Option.some_ne_none, false_iff]
-            intro present
-            rcases present with member | same
-            · have noneCurrent := induction.mpr member
-              rw [← nodeImageExact, priorExact] at noneCurrent
-              contradiction
-            · exact applicationExact same
-
 namespace RelationJoinStep
 
 /-- Generated request nodes occupy a one-to-one checked allocation range. -/
@@ -225,7 +161,8 @@ theorem boundNodeImage_eq_none_iff
     (sourceNode : source.val.NodeId) :
     result.boundNodeImage sourceNode = none ↔
       sourceNode ∈ result.applications := by
-  rw [result.construction_trace.nodeImage_eq_none_iff]
+  change result.constructionAtlas.nodeImage sourceNode = none ↔ _
+  rw [CertifiedAtlas.nodeImage_eq_none_iff]
   rw [result.steps_application_order]
 
 theorem trace_complete
@@ -238,6 +175,94 @@ theorem trace_complete
             (result.boundRegionImage (source.val.wires wire).scope) ∧
         steps.map RelationJoinStep.application = result.applications := by
   exact ⟨result.steps, result.semantic_trace, result.steps_application_order⟩
+
+/-- The exact origin type for terminal raw regions. -/
+abbrev FinalRegionOrigin
+    (result : RelationJoinResult source wire content parameters) : Type :=
+  PrefixRegionOrigin (source := source) (dying := wire)
+    (content := content) result.steps
+
+/-- The exact live-origin type for terminal raw nodes. -/
+abbrev FinalNodeOrigin
+    (result : RelationJoinResult source wire content parameters) : Type :=
+  { origin : PrefixNodeOrigin (source := source) (dying := wire)
+      (content := content) result.steps // PrefixNodeLive origin }
+
+/-- Terminal raw regions are exactly the certified construction rows.  The
+forward direction is a direct terminal cast followed by row lookup; the
+inverse is the atlas-owned constructive locator followed by the inverse cast. -/
+def finalRegionOriginEquiv
+    (result : RelationJoinResult source wire content parameters) :
+    Data.Finite.FiniteEquiv result.plainFinal.val.RegionId
+      (FinalRegionOrigin result) where
+  toFun target :=
+    result.constructionAtlas.rows.regionAt
+      (Fin.cast result.plainFinal_regionCount target)
+  invFun origin :=
+    Fin.cast result.plainFinal_regionCount.symm
+      (result.constructionAtlas.locateRegion origin).1
+  left_inv target := by
+    let boundTarget : result.boundFinal.val.RegionId :=
+      Fin.cast result.plainFinal_regionCount target
+    let landing := result.constructionAtlas.locateRegion
+      (result.constructionAtlas.rows.regionAt boundTarget)
+    have targetExact : landing.1 = boundTarget :=
+      result.constructionAtlas.rows.regionAt_injective
+        result.constructionAtlas.regionNodup landing.2.exact
+    apply Fin.ext
+    simpa [boundTarget, landing] using congrArg Fin.val targetExact
+  right_inv origin := by
+    let landing := result.constructionAtlas.locateRegion origin
+    change result.constructionAtlas.rows.regionAt
+        (Fin.cast result.plainFinal_regionCount
+          (Fin.cast result.plainFinal_regionCount.symm landing.1)) = origin
+    have targetExact :
+        Fin.cast result.plainFinal_regionCount
+            (Fin.cast result.plainFinal_regionCount.symm landing.1) =
+          landing.1 := by
+      apply Fin.ext
+      rfl
+    rw [targetExact]
+    exact landing.2.exact
+
+/-- Terminal raw nodes are exactly the live certified construction rows. -/
+def finalNodeOriginEquiv
+    (result : RelationJoinResult source wire content parameters) :
+    Data.Finite.FiniteEquiv result.plainFinal.val.NodeId
+      (FinalNodeOrigin result) where
+  toFun target :=
+    let boundTarget : result.boundFinal.val.NodeId :=
+      Fin.cast result.plainFinal_nodeCount target
+    ⟨result.constructionAtlas.rows.nodeAt boundTarget,
+      result.constructionAtlas.nodeRowsLive boundTarget⟩
+  invFun origin :=
+    Fin.cast result.plainFinal_nodeCount.symm
+      (result.constructionAtlas.locateNode origin.1 origin.2).1
+  left_inv target := by
+    let boundTarget : result.boundFinal.val.NodeId :=
+      Fin.cast result.plainFinal_nodeCount target
+    let landing := result.constructionAtlas.locateNode
+      (result.constructionAtlas.rows.nodeAt boundTarget)
+      (result.constructionAtlas.nodeRowsLive boundTarget)
+    have targetExact : landing.1 = boundTarget :=
+      result.constructionAtlas.rows.nodeAt_injective
+        result.constructionAtlas.nodeNodup landing.2.exact
+    apply Fin.ext
+    simpa [boundTarget, landing] using congrArg Fin.val targetExact
+  right_inv origin := by
+    let landing := result.constructionAtlas.locateNode origin.1 origin.2
+    apply Subtype.ext
+    change result.constructionAtlas.rows.nodeAt
+        (Fin.cast result.plainFinal_nodeCount
+          (Fin.cast result.plainFinal_nodeCount.symm landing.1)) = origin.1
+    have targetExact :
+        Fin.cast result.plainFinal_nodeCount
+            (Fin.cast result.plainFinal_nodeCount.symm landing.1) =
+          landing.1 := by
+      apply Fin.ext
+      rfl
+    rw [targetExact]
+    exact landing.2.exact
 
 end RelationJoinResult
 
