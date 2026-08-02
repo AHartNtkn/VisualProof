@@ -1,4 +1,4 @@
-import VisualProof.Rule.MonolithicWireQuantifierRawOriginAtlas
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawOriginFacts
 
 namespace VisualProof
 
@@ -47,7 +47,7 @@ def prefixRegionOriginLift
 
 /-- Construction-owned region landing relation for a proof-only join prefix.
 The semantic trace is itself a proposition, so this relation records its
-total, functional landing without selecting a runtime carrier from proof data. -/
+total landing without selecting a runtime carrier from proof data. -/
 inductive PrefixRegionLands {args : List Sig} :
     ∀ {steps : List (RelationJoinStep source dying content)}
       {final : CheckedDiagram definitions}
