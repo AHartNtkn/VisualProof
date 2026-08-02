@@ -600,6 +600,66 @@ theorem checkedFragmentNode_data
     simp [ConcreteSpliceAttachment.renameFragmentNode, CNode.relocate,
       CNode.region, Internal.checkedNodeData, Internal.checkedRegion]
 
+/-- A prior wire preserves its signature through application deletion and
+splice. -/
+theorem checkedPriorWire_signature
+    (step : RelationJoinStep source dying content)
+    (wire : step.prior.val.WireId) :
+    (step.checked.val.wires (step.checkedPriorWire wire)).sig =
+      (step.prior.val.wires wire).sig := by
+  unfold checkedPriorWire
+  change (step.checked.val.wires
+    (Internal.checkedWire step.generated _)).sig = _
+  rw [Internal.checkedWire_signature_transport,
+    ConcreteSpliceAttachment.diagram_wire_hostWire,
+    Internal.checkedWire_signature_transport,
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature]
+
+/-- A prior wire's scope follows the exact prior region transport. -/
+theorem checkedPriorWire_scope
+    (step : RelationJoinStep source dying content)
+    (wire : step.prior.val.WireId) :
+    (step.checked.val.wires (step.checkedPriorWire wire)).scope =
+      step.checkedPriorRegion (step.prior.val.wires wire).scope := by
+  unfold checkedPriorWire checkedPriorRegion
+  change (step.checked.val.wires
+    (Internal.checkedWire step.generated _)).scope = _
+  rw [Internal.checkedWire_scope_transport,
+    ConcreteSpliceAttachment.diagram_wire_hostWire_scope,
+    Internal.checkedWire_scope_transport,
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_scope]
+  rfl
+
+/-- A freshly allocated internal fragment wire preserves its signature. -/
+theorem checkedFragmentWire_signature_of_internal
+    (step : RelationJoinStep source dying content)
+    (wire : content.val.diagram.WireId)
+    (internal : wire ∉ content.val.boundary) :
+    (step.checked.val.wires (step.checkedFragmentWire wire)).sig =
+      (content.val.diagram.wires wire).sig := by
+  unfold checkedFragmentWire
+  change (step.checked.val.wires
+    (Internal.checkedWire step.generated _)).sig = _
+  rw [Internal.checkedWire_signature_transport]
+  exact step.attachment.diagram_wire_fragmentWire_signature_of_internal
+    wire internal
+
+/-- A freshly allocated internal fragment wire's scope follows the fragment
+region transport. -/
+theorem checkedFragmentWire_scope_of_internal
+    (step : RelationJoinStep source dying content)
+    (wire : content.val.diagram.WireId)
+    (internal : wire ∉ content.val.boundary) :
+    (step.checked.val.wires (step.checkedFragmentWire wire)).scope =
+      step.checkedFragmentRegion (content.val.diagram.wires wire).scope := by
+  unfold checkedFragmentWire checkedFragmentRegion
+  change (step.checked.val.wires
+    (Internal.checkedWire step.generated _)).scope = _
+  rw [Internal.checkedWire_scope_transport]
+  rw [step.attachment.diagram_wire_fragmentWire_scope_of_internal
+    wire internal]
+  rfl
+
 /-- A non-root fragment cut is allocated freshly while retaining its exact
 fragment parent, including identification of a root parent with the splice
 site. -/
@@ -1806,6 +1866,16 @@ private structure RelationJoinFinalRemoval
   allWireImage :
     ∀ boundWire : state.checked.val.WireId,
       boundWire ≠ state.wireImage wire → checked.val.WireId
+  allWireImageExact :
+    ∀ (boundWire : state.checked.val.WireId)
+      (different : boundWire ≠ state.wireImage wire),
+      allWireImage boundWire different =
+        Internal.checkedWire generated
+          (Internal.retainedWireIndex state.checked [state.wireImage wire]
+            boundWire (by
+              simp [Internal.retainedWires,
+                ConcreteDiagram.wiresList, Data.Finite.mem_allFin,
+                different]))
   allWireImage_injective :
     ∀ {left right : state.checked.val.WireId}
       (leftSurvives : left ≠ state.wireImage wire)
@@ -1883,6 +1953,7 @@ private def removeRelationJoinWire
                         List.mem_cons, List.not_mem_nil, or_false]
                       apply decide_eq_true
                       simpa [dying] using different))
+              allWireImageExact := fun _ _ => rfl
               allWireImage_injective := by
                 intro left right leftSurvives rightSurvives same
                 apply retainedWireIndex_injective state.checked [dying]
@@ -2157,6 +2228,78 @@ theorem plainBoundWireImage_injective
         result.plainBoundWireImage right rightSurvives) :
     left = right :=
   result.finalRemoval.allWireImage_injective leftSurvives rightSurvives same
+
+theorem plainBoundWireImage_signature
+    (result : RelationJoinResult source wire content parameters)
+    (boundWire : result.boundFinal.val.WireId)
+    (survives : boundWire ≠ result.boundDying) :
+    (result.plainFinal.val.wires
+      (result.plainBoundWireImage boundWire survives)).sig =
+        (result.boundFinal.val.wires boundWire).sig := by
+  unfold plainBoundWireImage
+  rw [result.finalRemoval.allWireImageExact]
+  change (result.plainFinal.val.wires
+    (Internal.checkedWire result.finalRemoval.generated _)).sig = _
+  rw [Internal.checkedWire_signature_transport]
+  let target := Internal.retainedWireIndex result.boundFinal
+    [result.boundDying] boundWire (by
+      simp [Internal.retainedWires, ConcreteDiagram.wiresList,
+        Data.Finite.mem_allFin, survives])
+  change (Internal.batchWireTable result.finalRemoval.plan target).sig = _
+  rw [Internal.batchWireTable_signature]
+  have sourceAt : Internal.sourceRetainedWire result.boundFinal
+      [result.boundDying] target = boundWire := DenseList.get_index _ _ _
+  change Internal.sourceRetainedWire result.finalState.checked
+      [result.finalState.wireImage wire] target = boundWire at sourceAt
+  rw [sourceAt]
+  rfl
+
+theorem plainBoundWireImage_scope
+    (result : RelationJoinResult source wire content parameters)
+    (boundWire : result.boundFinal.val.WireId)
+    (survives : boundWire ≠ result.boundDying) :
+    (result.plainFinal.val.wires
+      (result.plainBoundWireImage boundWire survives)).scope =
+        result.plainBoundRegionImage
+          (result.boundFinal.val.wires boundWire).scope := by
+  unfold plainBoundWireImage plainBoundRegionImage
+  rw [result.finalRemoval.allWireImageExact,
+    result.finalRemoval.allRegionImageExact]
+  change (result.plainFinal.val.wires
+    (Internal.checkedWire result.finalRemoval.generated _)).scope = _
+  rw [Internal.checkedWire_scope_transport]
+  let target := Internal.retainedWireIndex result.boundFinal
+    [result.boundDying] boundWire (by
+      simp [Internal.retainedWires, ConcreteDiagram.wiresList,
+        Data.Finite.mem_allFin, survives])
+  change Internal.checkedRegion result.finalRemoval.generated
+      (Internal.batchWireTable result.finalRemoval.plan target).scope = _
+  rw [Internal.batchWireTable_scope]
+  have sourceAt : Internal.sourceRetainedWire result.boundFinal
+      [result.boundDying] target = boundWire := DenseList.get_index _ _ _
+  change Internal.sourceRetainedWire result.finalState.checked
+      [result.finalState.wireImage wire] target = boundWire at sourceAt
+  have scope_congr :
+      ∀ (left right : result.finalState.checked.val.WireId)
+        (leftScope : (result.finalState.checked.val.wires left).scope ∈
+          Internal.retainedRegions result.finalState.checked [])
+        (rightScope : (result.finalState.checked.val.wires right).scope ∈
+          Internal.retainedRegions result.finalState.checked []),
+        left = right →
+          Internal.checkedRegion result.finalRemoval.generated
+              (Internal.retainedRegionIndex result.finalState.checked []
+                (result.finalState.checked.val.wires left).scope leftScope) =
+            Internal.checkedRegion result.finalRemoval.generated
+              (Internal.retainedRegionIndex result.finalState.checked []
+                (result.finalState.checked.val.wires right).scope
+                rightScope) := by
+    intro left right leftScope rightScope same
+    subst right
+    rfl
+  exact scope_congr _ _
+    (result.finalRemoval.plan.wireScopeRetained target)
+    (by simp [Internal.retainedRegions, ConcreteDiagram.regionsList,
+      Data.Finite.mem_allFin]) sourceAt
 
 /-- Ordered occurrence-removal/splice steps retained by the accepted join. -/
 def steps

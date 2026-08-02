@@ -1086,6 +1086,15 @@ def diagram
   unfold diagram wireTable hostWire
   simp only [Fin.addCases_left]
 
+@[simp] theorem diagram_wire_freshWire
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (fresh : Fin attachment.fragmentInternalWires.length) :
+    (attachment.diagram.wires (attachment.freshWire fresh)).sig =
+      (fragment.val.diagram.wires
+        (attachment.fragmentInternalWires.get fresh)).sig := by
+  unfold diagram wireTable freshWire
+  simp only [Fin.addCases_right]
+
 @[simp] theorem diagram_wire_freshWire_scope
     (attachment : ConcreteSpliceAttachment base site fragment)
     (fresh : Fin attachment.fragmentInternalWires.length) :
@@ -1095,6 +1104,34 @@ def diagram
           (attachment.fragmentInternalWires.get fresh)).scope := by
   unfold diagram wireTable freshWire
   simp only [Fin.addCases_right]
+
+theorem diagram_wire_fragmentWire_signature_of_internal
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : fragment.val.diagram.WireId)
+    (internal : wire ∉ fragment.val.boundary) :
+    (attachment.diagram.wires (attachment.fragmentWire wire)).sig =
+      (fragment.val.diagram.wires wire).sig := by
+  let fresh := DenseList.index attachment.fragmentInternalWires wire (by
+    simp [fragmentInternalWires, ConcreteDiagram.wiresList,
+      Data.Finite.mem_allFin, internal])
+  have wireExact : attachment.fragmentInternalWires.get fresh = wire :=
+    DenseList.get_index _ _ _
+  rw [fragmentWire, dif_neg internal]
+  rw [attachment.diagram_wire_freshWire, wireExact]
+
+theorem diagram_wire_fragmentWire_scope_of_internal
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : fragment.val.diagram.WireId)
+    (internal : wire ∉ fragment.val.boundary) :
+    (attachment.diagram.wires (attachment.fragmentWire wire)).scope =
+      attachment.fragmentRegion (fragment.val.diagram.wires wire).scope := by
+  let fresh := DenseList.index attachment.fragmentInternalWires wire (by
+    simp [fragmentInternalWires, ConcreteDiagram.wiresList,
+      Data.Finite.mem_allFin, internal])
+  have wireExact : attachment.fragmentInternalWires.get fresh = wire :=
+    DenseList.get_index _ _ _
+  rw [fragmentWire, dif_neg internal]
+  rw [attachment.diagram_wire_freshWire_scope, wireExact]
 
 @[simp] theorem diagram_node_hostNode
     (attachment : ConcreteSpliceAttachment base site fragment)

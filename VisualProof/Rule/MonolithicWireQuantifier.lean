@@ -841,6 +841,21 @@ private structure BatchReconstructionState
         BatchCoveredWire sites restored wire } →
       current.val.WireId
   wireImage_injective : Function.Injective wireImage
+  wireScopeCovered :
+    ∀ wire : { wire : source.val.WireId //
+        BatchCoveredWire sites restored wire },
+      BatchCoveredRegion sites restored (source.val.wires wire.1).scope
+  wireSignatureExact :
+    ∀ wire : { wire : source.val.WireId //
+        BatchCoveredWire sites restored wire },
+      (current.val.wires (wireImage wire)).sig =
+        (source.val.wires wire.1).sig
+  wireScopeExact :
+    ∀ wire : { wire : source.val.WireId //
+        BatchCoveredWire sites restored wire },
+      (current.val.wires (wireImage wire)).scope =
+        regionImage
+          ⟨(source.val.wires wire.1).scope, wireScopeCovered wire⟩
   joinNodeImage : joinSource.val.NodeId → Option current.val.NodeId
   pendingOrigins : List joinSource.val.NodeId
   pendingApplications : List current.val.NodeId
@@ -1236,6 +1251,26 @@ private def batchReconstructionNil
             using right.2))
     apply Fin.ext
     simpa using congrArg Fin.val same
+  wireScopeCovered := by
+    intro wire
+    apply Or.inl
+    have wireRetained := (result.retainedWire_iff wire.1).mpr (by
+      simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+        using wire.2)
+    exact (result.retainedRegion_iff _).mp
+      (result.wireScope_survives wire.1 wireRetained)
+  wireSignatureExact := by
+    intro wire
+    exact result.wireImage_signature wire.1
+      ((result.retainedWire_iff wire.1).mpr (by
+        simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+          using wire.2))
+  wireScopeExact := by
+    intro wire
+    exact result.wireImage_scope wire.1
+      ((result.retainedWire_iff wire.1).mpr (by
+        simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+          using wire.2))
   joinNodeImage := fun node => some node
   pendingOrigins := result.atoms
   pendingApplications := result.atoms
@@ -2364,6 +2399,140 @@ private noncomputable def batchReconstructionSnoc
             apply Subtype.ext
             exact leftFresh.choose_spec.2.symm.trans
               (patternSame ▸ rightFresh.choose_spec.2)
+      wireScopeCovered := by
+        intro wire
+        by_cases old : BatchCoveredWire sites restored wire.1
+        · exact coveredRegion_mono
+            (state.wireScopeCovered ⟨wire.1, old⟩)
+        · let fresh := newlyCoveredWire content wire.1 wire.2 old
+          have scopeExact := content.occurrence.internalWire_scope
+            fresh.choose fresh.choose_spec.1
+          rw [fresh.choose_spec.2] at scopeExact
+          rw [scopeExact]
+          by_cases root :
+              (pattern.val.diagram.wires fresh.choose).scope =
+                pattern.val.diagram.root
+          · rw [root]
+            exact coveredRegion_mono rootCovered
+          · exact Or.inr ⟨content, by simp,
+              (pattern.val.diagram.wires fresh.choose).scope, root, rfl⟩
+      wireSignatureExact := by
+        intro wire
+        by_cases old : BatchCoveredWire sites restored wire.1
+        · rw [dif_pos old]
+          calc
+            (step.checked.val.wires
+                (step.checkedPriorWire
+                  (state.wireImage ⟨wire.1, old⟩))).sig =
+                (step.prior.val.wires
+                  (state.wireImage ⟨wire.1, old⟩)).sig :=
+              step.checkedPriorWire_signature _
+            _ = (source.val.wires wire.1).sig :=
+              state.wireSignatureExact ⟨wire.1, old⟩
+        · rw [dif_neg old]
+          let fresh := newlyCoveredWire content wire.1 wire.2 old
+          have sourceSignature := content.occurrence.wire_signature_preserved
+            fresh.choose
+          rw [fresh.choose_spec.2] at sourceSignature
+          exact (step.checkedFragmentWire_signature_of_internal fresh.choose
+            fresh.choose_spec.1).trans sourceSignature.symm
+      wireScopeExact := by
+        intro wire
+        by_cases old : BatchCoveredWire sites restored wire.1
+        · have transported := step.checkedPriorWire_scope
+            (state.wireImage ⟨wire.1, old⟩)
+          rw [state.wireScopeExact ⟨wire.1, old⟩] at transported
+          have scopeOld := state.wireScopeCovered ⟨wire.1, old⟩
+          simpa only [dif_pos old, dif_pos scopeOld] using transported
+        · let fresh := newlyCoveredWire content wire.1 wire.2 old
+          have sourceScope := content.occurrence.internalWire_scope
+            fresh.choose fresh.choose_spec.1
+          rw [fresh.choose_spec.2] at sourceScope
+          have fragmentScope := step.checkedFragmentWire_scope_of_internal
+            fresh.choose fresh.choose_spec.1
+          rw [dif_neg old]
+          let allocatedRegion :
+              { region : source.val.RegionId //
+                BatchCoveredRegion sites (restored ++ [content]) region } →
+                step.checked.val.RegionId := fun region =>
+            if prior : BatchCoveredRegion sites restored region.1 then
+              step.checkedPriorRegion (state.regionImage ⟨region.1, prior⟩)
+            else
+              have new := newlyCoveredRegion content region.1 region.2 prior
+              step.checkedFragmentRegion new.choose
+          have sourceCovered :
+              BatchCoveredRegion sites (restored ++ [content])
+                (source.val.wires wire.1).scope := by
+            rw [sourceScope]
+            by_cases atRoot :
+                (pattern.val.diagram.wires fresh.choose).scope =
+                  pattern.val.diagram.root
+            · rw [atRoot]
+              exact coveredRegion_mono rootCovered
+            · exact Or.inr ⟨content, by simp,
+                (pattern.val.diagram.wires fresh.choose).scope,
+                atRoot, rfl⟩
+          let sourceCarrier :
+              { region : source.val.RegionId //
+                BatchCoveredRegion sites (restored ++ [content]) region } :=
+            ⟨(source.val.wires wire.1).scope, sourceCovered⟩
+          change
+            (step.checked.val.wires
+              (step.checkedFragmentWire fresh.choose)).scope =
+                allocatedRegion sourceCarrier
+          by_cases root :
+              (pattern.val.diagram.wires fresh.choose).scope =
+                pattern.val.diagram.root
+          · have mappedImage :
+                allocatedRegion
+                    ⟨content.occurrence.regionMap pattern.val.diagram.root,
+                      coveredRegion_mono rootCovered⟩ =
+                  step.checkedFragmentRegion pattern.val.diagram.root := by
+              unfold allocatedRegion
+              rw [dif_pos rootCovered]
+              exact rootExact.symm
+            have sourceRoot :
+                (source.val.wires wire.1).scope =
+                  content.occurrence.regionMap pattern.val.diagram.root := by
+              simpa [root] using sourceScope
+            have sourceImage :
+                allocatedRegion sourceCarrier =
+                  step.checkedFragmentRegion pattern.val.diagram.root :=
+              (congrArg allocatedRegion
+                (Subtype.ext sourceRoot)).trans mappedImage
+            rw [fragmentScope, root]
+            exact sourceImage.symm
+          · have regionNew := freshRegionsNew
+              (pattern.val.diagram.wires fresh.choose).scope root
+            let regionFresh := newlyCoveredRegion content
+              (content.occurrence.regionMap
+                (pattern.val.diagram.wires fresh.choose).scope)
+              (Or.inr ⟨content, by simp,
+                (pattern.val.diagram.wires fresh.choose).scope, root, rfl⟩)
+              regionNew
+            have patternRegionExact : regionFresh.choose =
+                (pattern.val.diagram.wires fresh.choose).scope :=
+              content.occurrence.regionMap_injective
+                regionFresh.choose_spec.2
+            have mappedImage :
+                allocatedRegion
+                    ⟨content.occurrence.regionMap
+                        (pattern.val.diagram.wires fresh.choose).scope,
+                      Or.inr ⟨content, by simp,
+                        (pattern.val.diagram.wires fresh.choose).scope,
+                        root, rfl⟩⟩ =
+                  step.checkedFragmentRegion
+                    (pattern.val.diagram.wires fresh.choose).scope := by
+              unfold allocatedRegion
+              rw [dif_neg regionNew]
+              exact congrArg step.checkedFragmentRegion patternRegionExact
+            have sourceImage :
+                allocatedRegion sourceCarrier =
+                  step.checkedFragmentRegion
+                    (pattern.val.diagram.wires fresh.choose).scope :=
+              (congrArg allocatedRegion
+                (Subtype.ext sourceScope)).trans mappedImage
+            exact fragmentScope.trans sourceImage.symm
       joinNodeImage := step.checkedNodeImage
       pendingOrigins := tail
       pendingApplications :=
@@ -2868,16 +3037,28 @@ private noncomputable def
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target) :
     source.val.RegionId → receipt.inverse.boundFinal.val.RegionId :=
-  receipt.completeCarrierState.completeRegionImage
-    receipt.extractions.entries
+  fun region => receipt.fullReconstructionState.state.regionImage
+    ⟨region, by
+      change BatchCoveredRegion
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences region
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.regionCoverage region⟩
 
 private noncomputable def
     RelationSeverConcreteReceipt.completeNodeImage
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target) :
     source.val.NodeId → receipt.inverse.boundFinal.val.NodeId :=
-  receipt.completeCarrierState.completeNodeImage
-    receipt.extractions.entries
+  fun node => receipt.fullReconstructionState.state.nodeImage
+    ⟨node, by
+      change BatchCoveredNode
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences node
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.nodeCoverage node⟩
 
 private noncomputable def
     RelationSeverConcreteReceipt.completeWireImage
@@ -2899,7 +3080,7 @@ private theorem RelationSeverConcreteReceipt.completeRegionImage_injective
     Function.Injective receipt.completeRegionImage := by
   intro left right same
   exact Subtype.ext_iff.mp
-    (receipt.completeCarrierState.regionImage_injective same)
+    (receipt.fullReconstructionState.state.regionImage_injective same)
 
 private theorem RelationSeverConcreteReceipt.completeRegionImage_sheet
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2908,8 +3089,14 @@ private theorem RelationSeverConcreteReceipt.completeRegionImage_sheet
     (data : source.val.regions region = .sheet) :
     receipt.inverse.boundFinal.val.regions
         (receipt.completeRegionImage region) = .sheet := by
-  exact receipt.completeCarrierState.regionSheetExact
-    ⟨region, receipt.extractions.entries.regionCoverage region⟩ data
+  exact receipt.fullReconstructionState.state.regionSheetExact
+    ⟨region, by
+      change BatchCoveredRegion
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences region
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.regionCoverage region⟩ data
 
 private theorem RelationSeverConcreteReceipt.completeRegionImage_cut
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2919,10 +3106,14 @@ private theorem RelationSeverConcreteReceipt.completeRegionImage_cut
     receipt.inverse.boundFinal.val.regions
         (receipt.completeRegionImage region) =
       .cut (receipt.completeRegionImage parent) := by
-  simpa [RelationSeverConcreteReceipt.completeRegionImage,
-    BatchReconstructionState.completeRegionImage] using
-    receipt.completeCarrierState.regionCutExact
-      ⟨region, receipt.extractions.entries.regionCoverage region⟩ parent data
+  exact receipt.fullReconstructionState.state.regionCutExact
+    ⟨region, by
+      change BatchCoveredRegion
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences region
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.regionCoverage region⟩ parent data
 
 private theorem RelationSeverConcreteReceipt.completeNodeImage_injective
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2930,7 +3121,7 @@ private theorem RelationSeverConcreteReceipt.completeNodeImage_injective
     Function.Injective receipt.completeNodeImage := by
   intro left right same
   exact Subtype.ext_iff.mp
-    (receipt.completeCarrierState.nodeImage_injective same)
+    (receipt.fullReconstructionState.state.nodeImage_injective same)
 
 private theorem RelationSeverConcreteReceipt.completeNodeImage_data
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2940,12 +3131,14 @@ private theorem RelationSeverConcreteReceipt.completeNodeImage_data
         (receipt.completeNodeImage node) =
       (source.val.nodes node).relocate
         (receipt.completeRegionImage (source.val.nodes node).region) := by
-  simpa [RelationSeverConcreteReceipt.completeNodeImage,
-    BatchReconstructionState.completeNodeImage,
-    RelationSeverConcreteReceipt.completeRegionImage,
-    BatchReconstructionState.completeRegionImage] using
-    receipt.completeCarrierState.nodeTableExact
-      ⟨node, receipt.extractions.entries.nodeCoverage node⟩
+  exact receipt.fullReconstructionState.state.nodeTableExact
+    ⟨node, by
+      change BatchCoveredNode
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences node
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.nodeCoverage node⟩
 
 private noncomputable def
     RelationSeverConcreteReceipt.completePlainRegionImage
@@ -3029,6 +3222,39 @@ private theorem RelationSeverConcreteReceipt.completeWireImage_injective
   exact Subtype.ext_iff.mp
     (receipt.fullReconstructionState.state.wireImage_injective same)
 
+private theorem RelationSeverConcreteReceipt.completeWireImage_signature
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    (receipt.inverse.boundFinal.val.wires
+      (receipt.completeWireImage wire)).sig =
+        (source.val.wires wire).sig := by
+  exact receipt.fullReconstructionState.state.wireSignatureExact
+    ⟨wire, by
+      change BatchCoveredWire
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences wire
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.wireCoverage wire⟩
+
+private theorem RelationSeverConcreteReceipt.completeWireImage_scope
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    (receipt.inverse.boundFinal.val.wires
+      (receipt.completeWireImage wire)).scope =
+        receipt.completeRegionImage (source.val.wires wire).scope := by
+  have fullScope := receipt.fullReconstructionState.state.wireScopeExact
+    ⟨wire, by
+      change BatchCoveredWire
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences wire
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.wireCoverage wire⟩
+  exact fullScope
+
 private theorem
     RelationSeverConcreteReceipt.completeWireImage_ne_boundDying
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -3066,6 +3292,32 @@ private theorem
   exact receipt.inverse.plainBoundWireImage_injective
     (receipt.completeWireImage_ne_boundDying left)
     (receipt.completeWireImage_ne_boundDying right) same
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainWireImage_signature
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    (receipt.inverse.plainFinal.val.wires
+      (receipt.completePlainWireImage wire)).sig =
+        (source.val.wires wire).sig :=
+  (receipt.inverse.plainBoundWireImage_signature _
+    (receipt.completeWireImage_ne_boundDying wire)).trans
+      (receipt.completeWireImage_signature wire)
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainWireImage_scope
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    (receipt.inverse.plainFinal.val.wires
+      (receipt.completePlainWireImage wire)).scope =
+        receipt.completePlainRegionImage (source.val.wires wire).scope := by
+  unfold RelationSeverConcreteReceipt.completePlainWireImage
+    RelationSeverConcreteReceipt.completePlainRegionImage
+  rw [receipt.inverse.plainBoundWireImage_scope _
+    (receipt.completeWireImage_ne_boundDying wire)]
+  rw [receipt.completeWireImage_scope]
 
 private theorem
     RelationSeverConcreteReceipt.inverseSteps_identityRequestsEmpty
@@ -3255,6 +3507,29 @@ private noncomputable def
         receipt.completePlainWireImage
         receipt.completePlainWireImage_injective
         receipt.constructionWireCount_eq⟩
+
+private theorem RelationSeverConcreteReceipt.constructionWireSignature
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    (receipt.inverse.plainFinal.val.wires
+      (receipt.constructionWireEquiv wire)).sig =
+        (source.val.wires wire).sig := by
+  change (receipt.inverse.plainFinal.val.wires
+    (receipt.completePlainWireImage wire)).sig = _
+  exact receipt.completePlainWireImage_signature wire
+
+private theorem RelationSeverConcreteReceipt.constructionWireScope
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    (receipt.inverse.plainFinal.val.wires
+      (receipt.constructionWireEquiv wire)).scope =
+        receipt.constructionRegionEquiv (source.val.wires wire).scope := by
+  change (receipt.inverse.plainFinal.val.wires
+    (receipt.completePlainWireImage wire)).scope =
+      receipt.completePlainRegionImage (source.val.wires wire).scope
+  exact receipt.completePlainWireImage_scope wire
 
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin

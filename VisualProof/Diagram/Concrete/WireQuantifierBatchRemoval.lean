@@ -590,6 +590,30 @@ def batchWireTable
     endpoints := data.endpoints.filterMap
       (batchEndpoint? source removedNodes) }
 
+@[simp] theorem batchWireTable_signature
+    {source : CheckedDiagram definitions}
+    {removedRegions : List source.val.RegionId}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan : BatchRemovalPlan source removedRegions removedNodes removedWires)
+    (wire : Fin (retainedWires source removedWires).length) :
+    (batchWireTable plan wire).sig =
+      (source.val.wires
+        (sourceRetainedWire source removedWires wire)).sig := rfl
+
+@[simp] theorem batchWireTable_scope
+    {source : CheckedDiagram definitions}
+    {removedRegions : List source.val.RegionId}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan : BatchRemovalPlan source removedRegions removedNodes removedWires)
+    (wire : Fin (retainedWires source removedWires).length) :
+    (batchWireTable plan wire).scope =
+      retainedRegionIndex source removedRegions
+        (source.val.wires
+          (sourceRetainedWire source removedWires wire)).scope
+        (plan.wireScopeRetained wire) := rfl
+
 def batchRemovalCandidate
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}

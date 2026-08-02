@@ -505,6 +505,23 @@ theorem eraseNodeWire_injective
   simp [eraseNodeWire, ConcreteDiagram.wiresList,
     Data.Finite.allFin_eq_finRange]
 
+@[simp] theorem eraseNodeWire_scope
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (wire : source.val.WireId) :
+    ((eraseNodeCandidate source removed).wires
+      (eraseNodeWire source removed wire)).scope =
+      (source.val.wires wire).scope := by
+  change
+    (source.val.wires
+      (source.val.wiresList.get
+        (eraseNodeWire source removed wire))).scope =
+      (source.val.wires wire).scope
+  congr 2
+  apply Fin.ext
+  simp [eraseNodeWire, ConcreteDiagram.wiresList,
+    Data.Finite.allFin_eq_finRange]
+
 /-- Dense image of one retained node in a raw singleton-node deletion. -/
 def eraseNodeIndex
     (source : CheckedDiagram definitions)
