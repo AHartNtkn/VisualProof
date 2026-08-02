@@ -853,6 +853,25 @@ def fragmentWire
         simp [fragmentInternalWires, ConcreteDiagram.wiresList,
           Data.Finite.mem_allFin, boundary]))
 
+/-- The internal fragment wire enumerated at one fresh position maps to that
+exact fresh wire identifier. -/
+theorem fragmentWire_get_fragmentInternalWires
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (position : Fin attachment.fragmentInternalWires.length) :
+    attachment.fragmentWire
+        (attachment.fragmentInternalWires.get position) =
+      attachment.freshWire position := by
+  have internal : attachment.fragmentInternalWires.get position ∉
+      fragment.val.boundary := by
+    have member := List.get_mem attachment.fragmentInternalWires position
+    simpa [fragmentInternalWires, ConcreteDiagram.wiresList] using
+      (List.mem_filter.mp member).2
+  unfold fragmentWire
+  rw [dif_neg internal]
+  congr 1
+  exact DenseList.index_get attachment.fragmentInternalWires
+    ((Data.Finite.allFin_nodup fragment.val.diagram.wireCount).filter _) _
+
 /-- Rename one retained host endpoint into the enlarged node carrier. -/
 def hostEndpoint
     (attachment : ConcreteSpliceAttachment base site fragment)
