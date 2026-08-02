@@ -1032,6 +1032,50 @@ private theorem inverseStep_sourceArguments_exact
     simpa [argumentPosition, formalPosition, List.get_eq_getElem] using
       ownerSame
 
+/-- Positional alignment between one inverse join step and the original
+checked occurrence restored at that step. -/
+private structure InverseStepOccurrenceAlignment
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    {dying : result.checked.val.WireId}
+    (step : ConcreteWireQuantifier.RelationJoinStep
+      result.checked dying pattern)
+    (content : ContentOccurrence source pattern) where
+  site : Fin sites.length
+  siteExact : sites.get site = content.toConcreteSite
+  applicationExact : step.application = result.atom site
+  boundarySurvives :
+    ∀ position : Fin pattern.val.boundary.length,
+      content.occurrence.wireMap (pattern.val.boundary.get position) ∈
+        ConcreteWireQuantifier.Internal.retainedWires source
+          (sites.flatMap
+            ConcreteWireQuantifier.RelationSeverSite.removedWires)
+  sourceAttachmentExact :
+    ∀ position : Fin pattern.val.boundary.length,
+      step.sourceAttachments.get
+          (Fin.cast step.sourceAttachmentArity.symm position) =
+        result.wireImage
+          (content.occurrence.wireMap
+            (pattern.val.boundary.get position))
+          (boundarySurvives position)
+
+private theorem InverseStepOccurrenceAlignment.identityRequestsEmpty
+    (alignment : InverseStepOccurrenceAlignment result step content) :
+    step.attachment.identityRequests = [] := by
+  apply step.identityRequests_eq_nil_of_sourceAttachments_coherent
+  intro left right same
+  rw [alignment.sourceAttachmentExact, alignment.sourceAttachmentExact]
+  apply Fin.ext
+  simp only [ConcreteWireQuantifier.RelationSeverResult.wireImage_val]
+  have mapped := congrArg content.occurrence.wireMap same
+  have mappedGetElem := mapped
+  simp only [List.get_eq_getElem] at mappedGetElem
+  unfold ConcreteWireQuantifier.Internal.retainedWireIndex DenseList.index
+  simp [mappedGetElem]
+
 /-- Snoc carrier step: transport the existing reconstructed prefix through
 atom deletion and splice, then allocate the newly restored occurrence in the
 fragment suffix.  The sole separation premise says that no original carrier
