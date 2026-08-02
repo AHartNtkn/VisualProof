@@ -492,6 +492,19 @@ private theorem CheckedOccurrenceList.wireCoverage
             ⟨candidate, by simp [member], patternWire, internal, mapped⟩
 
 /-- Construction state for the snoc induction restoring a severed family. -/
+private theorem denseIndex_injective
+    [DecidableEq α]
+    (values : List α)
+    {left right : α}
+    (leftMember : left ∈ values)
+    (rightMember : right ∈ values)
+    (same : DenseList.index values left leftMember =
+      DenseList.index values right rightMember) :
+    left = right := by
+  have mapped := congrArg values.get same
+  rw [DenseList.get_index, DenseList.get_index] at mapped
+  exact mapped
+
 private structure BatchReconstructionState
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -503,14 +516,17 @@ private structure BatchReconstructionState
     { region : source.val.RegionId //
         BatchCoveredRegion sites restored region } →
       current.val.RegionId
+  regionImage_injective : Function.Injective regionImage
   nodeImage :
     { node : source.val.NodeId //
         BatchCoveredNode sites restored node } →
       current.val.NodeId
+  nodeImage_injective : Function.Injective nodeImage
   wireImage :
     { wire : source.val.WireId //
         BatchCoveredWire sites restored wire } →
       current.val.WireId
+  wireImage_injective : Function.Injective wireImage
   joinNodeImage : joinSource.val.NodeId → Option current.val.NodeId
   pendingOrigins : List joinSource.val.NodeId
   pendingApplications : List current.val.NodeId
@@ -796,6 +812,23 @@ private def batchReconstructionNil
         simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
           using region.2
       exact (result.retainedRegion_iff region.1).mpr retained)
+  regionImage_injective := by
+    intro left right same
+    apply Subtype.ext
+    apply denseIndex_injective
+      (ConcreteWireQuantifier.Internal.retainedRegions source
+        (sites.flatMap
+          ConcreteWireQuantifier.RelationSeverSite.removedRegions))
+      (by
+        exact (result.retainedRegion_iff left.1).mpr (by
+          simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
+            using left.2))
+      (by
+        exact (result.retainedRegion_iff right.1).mpr (by
+          simpa [BatchCoveredRegion, restoredRegion, retainedBySitesRegion]
+            using right.2))
+    apply Fin.ext
+    simpa using congrArg Fin.val same
   nodeImage := fun node =>
     result.nodeImage node.1 (by
       have retained :
@@ -805,6 +838,23 @@ private def batchReconstructionNil
         simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
           using node.2
       exact (result.retainedNode_iff node.1).mpr retained)
+  nodeImage_injective := by
+    intro left right same
+    apply Subtype.ext
+    apply denseIndex_injective
+      (ConcreteWireQuantifier.Internal.retainedNodes source
+        (sites.flatMap
+          ConcreteWireQuantifier.RelationSeverSite.removedNodes))
+      (by
+        exact (result.retainedNode_iff left.1).mpr (by
+          simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+            using left.2))
+      (by
+        exact (result.retainedNode_iff right.1).mpr (by
+          simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+            using right.2))
+    apply Fin.ext
+    simpa using congrArg Fin.val same
   wireImage := fun wire =>
     result.wireImage wire.1 (by
       have retained :
@@ -814,6 +864,23 @@ private def batchReconstructionNil
         simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
           using wire.2
       exact (result.retainedWire_iff wire.1).mpr retained)
+  wireImage_injective := by
+    intro left right same
+    apply Subtype.ext
+    apply denseIndex_injective
+      (ConcreteWireQuantifier.Internal.retainedWires source
+        (sites.flatMap
+          ConcreteWireQuantifier.RelationSeverSite.removedWires))
+      (by
+        exact (result.retainedWire_iff left.1).mpr (by
+          simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+            using left.2))
+      (by
+        exact (result.retainedWire_iff right.1).mpr (by
+          simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+            using right.2))
+    apply Fin.ext
+    simpa using congrArg Fin.val same
   joinNodeImage := fun node => some node
   pendingOrigins := result.atoms
   pendingApplications := result.atoms
@@ -835,6 +902,74 @@ private def batchReconstructionNil
     have imageBound :=
       result.nodeImage_lt_retainedCount node.1 retainedMember
     omega
+
+private theorem newlyCoveredRegion
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    (content : ContentOccurrence source pattern)
+    (region : source.val.RegionId)
+    (covered : BatchCoveredRegion sites (restored ++ [content]) region)
+    (notOld : ¬ BatchCoveredRegion sites restored region) :
+    ∃ patternRegion,
+      patternRegion ≠ pattern.val.diagram.root ∧
+        content.occurrence.regionMap patternRegion = region := by
+  rcases covered with retained | restoredAll
+  · exact False.elim (notOld (Or.inl retained))
+  · rcases restoredAll with
+      ⟨candidate, member, patternRegion, nonroot, mapped⟩
+    rcases List.mem_append.mp member with previous | final
+    · exact False.elim
+        (notOld (Or.inr
+          ⟨candidate, previous, patternRegion, nonroot, mapped⟩))
+    · have candidateExact : candidate = content := by simpa using final
+      subst candidate
+      exact ⟨patternRegion, nonroot, mapped⟩
+
+private theorem newlyCoveredNode
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    (content : ContentOccurrence source pattern)
+    (node : source.val.NodeId)
+    (covered : BatchCoveredNode sites (restored ++ [content]) node)
+    (notOld : ¬ BatchCoveredNode sites restored node) :
+    ∃ patternNode, content.occurrence.nodeMap patternNode = node := by
+  rcases covered with retained | restoredAll
+  · exact False.elim (notOld (Or.inl retained))
+  · rcases restoredAll with ⟨candidate, member, patternNode, mapped⟩
+    rcases List.mem_append.mp member with previous | final
+    · exact False.elim
+        (notOld (Or.inr ⟨candidate, previous, patternNode, mapped⟩))
+    · have candidateExact : candidate = content := by simpa using final
+      subst candidate
+      exact ⟨patternNode, mapped⟩
+
+private theorem newlyCoveredWire
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    (content : ContentOccurrence source pattern)
+    (wire : source.val.WireId)
+    (covered : BatchCoveredWire sites (restored ++ [content]) wire)
+    (notOld : ¬ BatchCoveredWire sites restored wire) :
+    ∃ patternWire,
+      patternWire ∉ pattern.val.boundary ∧
+        content.occurrence.wireMap patternWire = wire := by
+  rcases covered with retained | restoredAll
+  · exact False.elim (notOld (Or.inl retained))
+  · rcases restoredAll with
+      ⟨candidate, member, patternWire, internal, mapped⟩
+    rcases List.mem_append.mp member with previous | final
+    · exact False.elim
+        (notOld (Or.inr
+          ⟨candidate, previous, patternWire, internal, mapped⟩))
+    · have candidateExact : candidate = content := by simpa using final
+      subst candidate
+      exact ⟨patternWire, internal, mapped⟩
 
 /-- Snoc carrier step: transport the existing reconstructed prefix through
 atom deletion and splice, then allocate the newly restored occurrence in the
@@ -875,22 +1010,48 @@ private noncomputable def batchReconstructionSnoc
         if old : BatchCoveredRegion sites restored region.1 then
           step.checkedPriorRegion (state.regionImage ⟨region.1, old⟩)
         else
-          have fresh : ∃ patternRegion,
-              patternRegion ≠ pattern.val.diagram.root ∧
-                content.occurrence.regionMap patternRegion = region.1 := by
-            rcases region.2 with retained | restoredAll
-            · exact False.elim (old (Or.inl retained))
-            · rcases restoredAll with
-                ⟨candidate, member, patternRegion, nonroot, mapped⟩
-              rcases List.mem_append.mp member with previous | final
-              · exact False.elim
-                  (old (Or.inr
-                    ⟨candidate, previous, patternRegion, nonroot, mapped⟩))
-              · have candidateExact : candidate = content := by
-                  simpa using final
-                subst candidate
-                exact ⟨patternRegion, nonroot, mapped⟩
+          have fresh := newlyCoveredRegion content region.1 region.2 old
           step.checkedFragmentRegion fresh.choose
+      regionImage_injective := by
+        intro left right same
+        by_cases leftOld : BatchCoveredRegion sites restored left.1
+        · by_cases rightOld : BatchCoveredRegion sites restored right.1
+          · have priorSame :
+                state.regionImage ⟨left.1, leftOld⟩ =
+                  state.regionImage ⟨right.1, rightOld⟩ :=
+              step.checkedPriorRegion_injective (by
+                simpa only [dif_pos leftOld, dif_pos rightOld] using same)
+            have coveredSame := state.regionImage_injective priorSame
+            apply Subtype.ext
+            exact congrArg
+              (fun value : { region : source.val.RegionId //
+                BatchCoveredRegion sites restored region } => value.1)
+              coveredSame
+          · let fresh := newlyCoveredRegion content right.1 right.2 rightOld
+            exact False.elim
+              (step.checkedFragmentRegion_ne_checkedPriorRegion_of_nonroot
+                fresh.choose fresh.choose_spec.1
+                (state.regionImage ⟨left.1, leftOld⟩) (by
+                  simpa only [dif_pos leftOld, dif_neg rightOld] using
+                    same.symm))
+        · by_cases rightOld : BatchCoveredRegion sites restored right.1
+          · let fresh := newlyCoveredRegion content left.1 left.2 leftOld
+            exact False.elim
+              (step.checkedFragmentRegion_ne_checkedPriorRegion_of_nonroot
+                fresh.choose fresh.choose_spec.1
+                (state.regionImage ⟨right.1, rightOld⟩) (by
+                  simpa only [dif_neg leftOld, dif_pos rightOld] using same))
+          · let leftFresh :=
+                newlyCoveredRegion content left.1 left.2 leftOld
+            let rightFresh :=
+                newlyCoveredRegion content right.1 right.2 rightOld
+            have patternSame : leftFresh.choose = rightFresh.choose :=
+              step.checkedFragmentRegion_injective_of_nonroot
+                leftFresh.choose_spec.1 rightFresh.choose_spec.1 (by
+                  simpa only [dif_neg leftOld, dif_neg rightOld] using same)
+            apply Subtype.ext
+            exact leftFresh.choose_spec.2.symm.trans
+              (patternSame ▸ rightFresh.choose_spec.2)
       nodeImage := fun node =>
         if old : BatchCoveredNode sites restored node.1 then
           step.checkedPriorNode (state.nodeImage ⟨node.1, old⟩)
@@ -899,41 +1060,109 @@ private noncomputable def batchReconstructionSnoc
               exact state.representedNodesAvoidPending ⟨node.1, old⟩
                 (by simpa [same] using currentApplication))
         else
-          have fresh : ∃ patternNode,
-              content.occurrence.nodeMap patternNode = node.1 := by
-            rcases node.2 with retained | restoredAll
-            · exact False.elim (old (Or.inl retained))
-            · rcases restoredAll with
-                ⟨candidate, member, patternNode, mapped⟩
-              rcases List.mem_append.mp member with previous | final
-              · exact False.elim
-                  (old (Or.inr
-                    ⟨candidate, previous, patternNode, mapped⟩))
-              · have candidateExact : candidate = content := by
-                  simpa using final
-                subst candidate
-                exact ⟨patternNode, mapped⟩
+          have fresh := newlyCoveredNode content node.1 node.2 old
           step.checkedFragmentNode fresh.choose
+      nodeImage_injective := by
+        intro left right same
+        by_cases leftOld : BatchCoveredNode sites restored left.1
+        · by_cases rightOld : BatchCoveredNode sites restored right.1
+          · have leftDifferent :
+                state.nodeImage ⟨left.1, leftOld⟩ ≠
+                  step.priorApplication := by
+              intro exact
+              exact state.representedNodesAvoidPending ⟨left.1, leftOld⟩
+                (by simpa [exact] using currentApplication)
+            have rightDifferent :
+                state.nodeImage ⟨right.1, rightOld⟩ ≠
+                  step.priorApplication := by
+              intro exact
+              exact state.representedNodesAvoidPending ⟨right.1, rightOld⟩
+                (by simpa [exact] using currentApplication)
+            have priorSame := step.checkedPriorNode_injective
+              leftDifferent rightDifferent (by
+                simpa only [dif_pos leftOld, dif_pos rightOld] using same)
+            have coveredSame := state.nodeImage_injective priorSame
+            apply Subtype.ext
+            exact congrArg
+              (fun value : { node : source.val.NodeId //
+                BatchCoveredNode sites restored node } => value.1)
+              coveredSame
+          · let fresh := newlyCoveredNode content right.1 right.2 rightOld
+            have leftDifferent :
+                state.nodeImage ⟨left.1, leftOld⟩ ≠
+                  step.priorApplication := by
+              intro exact
+              exact state.representedNodesAvoidPending ⟨left.1, leftOld⟩
+                (by simpa [exact] using currentApplication)
+            exact False.elim
+              (step.checkedFragmentNode_ne_checkedPriorNode fresh.choose
+                (state.nodeImage ⟨left.1, leftOld⟩) leftDifferent (by
+                  simpa only [dif_pos leftOld, dif_neg rightOld] using
+                    same.symm))
+        · by_cases rightOld : BatchCoveredNode sites restored right.1
+          · let fresh := newlyCoveredNode content left.1 left.2 leftOld
+            have rightDifferent :
+                state.nodeImage ⟨right.1, rightOld⟩ ≠
+                  step.priorApplication := by
+              intro exact
+              exact state.representedNodesAvoidPending ⟨right.1, rightOld⟩
+                (by simpa [exact] using currentApplication)
+            exact False.elim
+              (step.checkedFragmentNode_ne_checkedPriorNode fresh.choose
+                (state.nodeImage ⟨right.1, rightOld⟩) rightDifferent (by
+                  simpa only [dif_neg leftOld, dif_pos rightOld] using same))
+          · let leftFresh := newlyCoveredNode content left.1 left.2 leftOld
+            let rightFresh := newlyCoveredNode content right.1 right.2 rightOld
+            have patternSame : leftFresh.choose = rightFresh.choose :=
+              step.checkedFragmentNode_injective (by
+                simpa only [dif_neg leftOld, dif_neg rightOld] using same)
+            apply Subtype.ext
+            exact leftFresh.choose_spec.symm.trans
+              (patternSame ▸ rightFresh.choose_spec)
       wireImage := fun wire =>
         if old : BatchCoveredWire sites restored wire.1 then
           step.checkedPriorWire (state.wireImage ⟨wire.1, old⟩)
         else
-          have fresh : ∃ patternWire,
-              patternWire ∉ pattern.val.boundary ∧
-                content.occurrence.wireMap patternWire = wire.1 := by
-            rcases wire.2 with retained | restoredAll
-            · exact False.elim (old (Or.inl retained))
-            · rcases restoredAll with
-                ⟨candidate, member, patternWire, internal, mapped⟩
-              rcases List.mem_append.mp member with previous | final
-              · exact False.elim
-                  (old (Or.inr
-                    ⟨candidate, previous, patternWire, internal, mapped⟩))
-              · have candidateExact : candidate = content := by
-                  simpa using final
-                subst candidate
-                exact ⟨patternWire, internal, mapped⟩
+          have fresh := newlyCoveredWire content wire.1 wire.2 old
           step.checkedFragmentWire fresh.choose
+      wireImage_injective := by
+        intro left right same
+        by_cases leftOld : BatchCoveredWire sites restored left.1
+        · by_cases rightOld : BatchCoveredWire sites restored right.1
+          · have priorSame :
+                state.wireImage ⟨left.1, leftOld⟩ =
+                  state.wireImage ⟨right.1, rightOld⟩ :=
+              step.checkedPriorWire_injective (by
+                simpa only [dif_pos leftOld, dif_pos rightOld] using same)
+            have coveredSame := state.wireImage_injective priorSame
+            apply Subtype.ext
+            exact congrArg
+              (fun value : { wire : source.val.WireId //
+                BatchCoveredWire sites restored wire } => value.1)
+              coveredSame
+          · let fresh := newlyCoveredWire content right.1 right.2 rightOld
+            exact False.elim
+              (step.checkedFragmentWire_ne_checkedPriorWire_of_internal
+                fresh.choose fresh.choose_spec.1
+                (state.wireImage ⟨left.1, leftOld⟩) (by
+                  simpa only [dif_pos leftOld, dif_neg rightOld] using
+                    same.symm))
+        · by_cases rightOld : BatchCoveredWire sites restored right.1
+          · let fresh := newlyCoveredWire content left.1 left.2 leftOld
+            exact False.elim
+              (step.checkedFragmentWire_ne_checkedPriorWire_of_internal
+                fresh.choose fresh.choose_spec.1
+                (state.wireImage ⟨right.1, rightOld⟩) (by
+                  simpa only [dif_neg leftOld, dif_pos rightOld] using same))
+          · let leftFresh := newlyCoveredWire content left.1 left.2 leftOld
+            let rightFresh := newlyCoveredWire content right.1 right.2 rightOld
+            have patternSame : leftFresh.choose = rightFresh.choose :=
+              step.checkedFragmentWire_injective_of_internal
+                leftFresh.choose_spec.1 rightFresh.choose_spec.1 (by
+                  simpa only [dif_neg leftOld, dif_neg rightOld] using same)
+            apply Subtype.ext
+            exact leftFresh.choose_spec.2.symm.trans
+              (patternSame ▸ rightFresh.choose_spec.2)
       joinNodeImage := step.checkedNodeImage
       pendingOrigins := tail
       pendingApplications :=

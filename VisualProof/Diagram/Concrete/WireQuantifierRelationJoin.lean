@@ -434,6 +434,122 @@ def checkedFragmentWire
     (step.checkedPriorWire wire).val = wire.val := by
   rfl
 
+theorem checkedPriorRegion_injective
+    (step : RelationJoinStep source dying content) :
+    Function.Injective step.checkedPriorRegion := by
+  intro left right same
+  apply Fin.ext
+  simpa using congrArg Fin.val same
+
+theorem checkedPriorWire_injective
+    (step : RelationJoinStep source dying content) :
+    Function.Injective step.checkedPriorWire := by
+  intro left right same
+  apply Fin.ext
+  simpa using congrArg Fin.val same
+
+theorem checkedFragmentNode_injective
+    (step : RelationJoinStep source dying content) :
+    Function.Injective step.checkedFragmentNode := by
+  intro left right same
+  apply Fin.ext
+  have values := congrArg Fin.val same
+  simpa [checkedFragmentNode,
+    ConcreteSpliceAttachment.fragmentNode] using values
+
+theorem checkedFragmentRegion_injective_of_nonroot
+    (step : RelationJoinStep source dying content)
+    {left right : content.val.diagram.RegionId}
+    (leftNonroot : left ≠ content.val.diagram.root)
+    (rightNonroot : right ≠ content.val.diagram.root)
+    (same : step.checkedFragmentRegion left =
+      step.checkedFragmentRegion right) :
+    left = right := by
+  have values := congrArg Fin.val same
+  have indices :
+      DenseList.index step.attachment.fragmentRegions left (by
+        simp [ConcreteSpliceAttachment.fragmentRegions,
+          ConcreteDiagram.regionsList, Data.Finite.mem_allFin,
+          leftNonroot]) =
+        DenseList.index step.attachment.fragmentRegions right (by
+          simp [ConcreteSpliceAttachment.fragmentRegions,
+            ConcreteDiagram.regionsList, Data.Finite.mem_allFin,
+            rightNonroot]) := by
+    apply Fin.ext
+    simpa [checkedFragmentRegion,
+      ConcreteSpliceAttachment.fragmentRegion, leftNonroot, rightNonroot,
+      ConcreteSpliceAttachment.freshRegion] using values
+  have mapped := congrArg step.attachment.fragmentRegions.get indices
+  rw [DenseList.get_index, DenseList.get_index] at mapped
+  exact mapped
+
+theorem checkedFragmentWire_injective_of_internal
+    (step : RelationJoinStep source dying content)
+    {left right : content.val.diagram.WireId}
+    (leftInternal : left ∉ content.val.boundary)
+    (rightInternal : right ∉ content.val.boundary)
+    (same : step.checkedFragmentWire left =
+      step.checkedFragmentWire right) :
+    left = right := by
+  have values := congrArg Fin.val same
+  have indices :
+      DenseList.index step.attachment.fragmentInternalWires left (by
+        simp [ConcreteSpliceAttachment.fragmentInternalWires,
+          ConcreteDiagram.wiresList, Data.Finite.mem_allFin,
+          leftInternal]) =
+        DenseList.index step.attachment.fragmentInternalWires right (by
+          simp [ConcreteSpliceAttachment.fragmentInternalWires,
+            ConcreteDiagram.wiresList, Data.Finite.mem_allFin,
+            rightInternal]) := by
+    apply Fin.ext
+    simpa [checkedFragmentWire,
+      ConcreteSpliceAttachment.fragmentWire, leftInternal, rightInternal,
+      ConcreteSpliceAttachment.freshWire] using values
+  have mapped :=
+    congrArg step.attachment.fragmentInternalWires.get indices
+  rw [DenseList.get_index, DenseList.get_index] at mapped
+  exact mapped
+
+theorem checkedFragmentRegion_ne_checkedPriorRegion_of_nonroot
+    (step : RelationJoinStep source dying content)
+    (fragment : content.val.diagram.RegionId)
+    (nonroot : fragment ≠ content.val.diagram.root)
+    (prior : step.prior.val.RegionId) :
+    step.checkedFragmentRegion fragment ≠
+      step.checkedPriorRegion prior := by
+  intro same
+  have underlying :
+      step.attachment.fragmentRegion fragment =
+        step.attachment.hostRegion
+          (Internal.checkedRegion step.baseGenerated
+            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+              step.prior step.priorApplication prior)) := by
+    apply Fin.ext
+    have values := congrArg Fin.val same
+    simpa [checkedFragmentRegion, checkedPriorRegion] using values
+  rw [ConcreteSpliceAttachment.fragmentRegion, dif_neg nonroot] at underlying
+  exact step.attachment.hostRegion_ne_freshRegion _ _ underlying.symm
+
+theorem checkedFragmentWire_ne_checkedPriorWire_of_internal
+    (step : RelationJoinStep source dying content)
+    (fragment : content.val.diagram.WireId)
+    (internal : fragment ∉ content.val.boundary)
+    (prior : step.prior.val.WireId) :
+    step.checkedFragmentWire fragment ≠
+      step.checkedPriorWire prior := by
+  intro same
+  have underlying :
+      step.attachment.fragmentWire fragment =
+        step.attachment.hostWire
+          (Internal.checkedWire step.baseGenerated
+            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+              step.prior step.priorApplication prior)) := by
+    apply Fin.ext
+    have values := congrArg Fin.val same
+    simpa [checkedFragmentWire, checkedPriorWire] using values
+  rw [ConcreteSpliceAttachment.fragmentWire, dif_neg internal] at underlying
+  exact step.attachment.hostWire_ne_freshWire _ _ underlying.symm
+
 theorem checkedPriorNode_injective
     (step : RelationJoinStep source dying content)
     {left right : step.prior.val.NodeId}
