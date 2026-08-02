@@ -626,6 +626,114 @@ theorem normalizeOne_provenance
           exact fusionSearch?_provenance source
             (identityNodeIds source.val) result found
 
+/-- Priority-aware public classification of a successful executable step.
+Unlike raw provenance, later constructors retain proof that every higher
+rewrite class was exhausted. -/
+inductive NormalizeOneSelection
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    (result : IdentityRewrite source) : Prop
+  | drop
+      (node : source.val.NodeId)
+      (eligible : DropEligibility source node)
+      (kind_eq : result.kind = .drop node eligible)
+  | collapse
+      (noDrop : DropExhausted source)
+      (node : source.val.NodeId)
+      (eligible : CollapseEligibility source node)
+      (kind_eq : result.kind = .collapse node eligible)
+  | fusion
+      (noDrop : DropExhausted source)
+      (noCollapse : CollapseExhausted source)
+      (left right : source.val.NodeId)
+      (eligible : FusionEligibility source left right)
+      (kind_eq : result.kind = .fusion left right eligible)
+
+private theorem dropDegenerate_kind
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (result : IdentityRewrite source)
+    (found : dropDegenerate source node = some result) :
+    ∃ eligible, result.kind = .drop node eligible := by
+  unfold dropDegenerate at found
+  cases eligibilityEq : dropEligibility? source node with
+  | none => simp [eligibilityEq] at found
+  | some eligible =>
+      simp [eligibilityEq] at found
+      subst result
+      exact ⟨eligible, rfl⟩
+
+private theorem collapseOnePoint_kind
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (result : IdentityRewrite source)
+    (found : collapseOnePoint source node = some result) :
+    ∃ eligible, result.kind = .collapse node eligible := by
+  unfold collapseOnePoint at found
+  cases eligibilityEq : collapseEligibility? source node with
+  | none => simp [eligibilityEq] at found
+  | some eligible =>
+      simp [eligibilityEq] at found
+      subst result
+      exact ⟨eligible, rfl⟩
+
+private theorem fuseSameRegion_kind
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (result : IdentityRewrite source)
+    (found : fuseSameRegion source left right = some result) :
+    ∃ eligible, result.kind = .fusion left right eligible := by
+  unfold fuseSameRegion at found
+  cases eligibilityEq : fusionEligibility? source left right with
+  | none => simp [eligibilityEq] at found
+  | some eligible =>
+      simp [eligibilityEq] at found
+      subst result
+      exact ⟨eligible, rfl⟩
+
+/-- Every successful deterministic step carries exactly the public primitive
+receipt selected by Rule 1→2→3 priority. -/
+theorem normalizeOne_selection
+    (source : CheckedDiagram definitions)
+    (result : IdentityRewrite source)
+    (found : normalizeOneIdentity source = some result) :
+    NormalizeOneSelection source result := by
+  unfold normalizeOneIdentity at found
+  cases dropEq : firstDrop? source with
+  | some dropResult =>
+      rw [dropEq] at found
+      have exactResult := Option.some.inj found
+      subst dropResult
+      obtain ⟨node, _, ruleFound⟩ :=
+        findSome?_provenance dropEq
+      obtain ⟨eligible, kindEq⟩ :=
+        dropDegenerate_kind source node result ruleFound
+      exact .drop node eligible kindEq
+  | none =>
+      rw [dropEq] at found
+      have noDrop := (firstDrop?_none_iff source).mp dropEq
+      cases collapseEq : firstCollapse? source with
+      | some collapseResult =>
+          rw [collapseEq] at found
+          have exactResult := Option.some.inj found
+          subst collapseResult
+          obtain ⟨node, _, ruleFound⟩ :=
+            findSome?_provenance collapseEq
+          obtain ⟨eligible, kindEq⟩ :=
+            collapseOnePoint_kind source node result ruleFound
+          exact .collapse noDrop node eligible kindEq
+      | none =>
+          rw [collapseEq] at found
+          have noCollapse :=
+            (firstCollapse?_none_iff source).mp collapseEq
+          unfold firstFusion? at found
+          obtain ⟨left, _, right, _, ruleFound⟩ :=
+            fusionSearch?_provenance source
+              (identityNodeIds source.val) result found
+          obtain ⟨eligible, kindEq⟩ :=
+            fuseSameRegion_kind source left right result ruleFound
+          exact .fusion noDrop noCollapse left right eligible kindEq
+
 /-- Every nonempty valid trace exposes the exact public rewrite constructor
 that produced its first checked target. -/
 theorem IdentityNormalizationTrace.Valid.first_provenance
