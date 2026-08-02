@@ -2047,6 +2047,40 @@ private theorem RelationSeverConcreteReceipt.completeNodeImage_injective
   exact Subtype.ext_iff.mp
     (receipt.completeCarrierState.nodeImage_injective same)
 
+private noncomputable def
+    RelationSeverConcreteReceipt.completePlainRegionImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.RegionId → receipt.inverse.plainFinal.val.RegionId :=
+  fun region => receipt.inverse.plainBoundRegionImage
+    (receipt.completeRegionImage region)
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainRegionImage_injective
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Function.Injective receipt.completePlainRegionImage := by
+  intro left right same
+  apply receipt.completeRegionImage_injective
+  exact receipt.inverse.plainBoundRegionImage_injective same
+
+private noncomputable def
+    RelationSeverConcreteReceipt.completePlainNodeImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    source.val.NodeId → receipt.inverse.plainFinal.val.NodeId :=
+  fun node => receipt.inverse.plainBoundNodeImage
+    (receipt.completeNodeImage node)
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainNodeImage_injective
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Function.Injective receipt.completePlainNodeImage := by
+  intro left right same
+  apply receipt.completeNodeImage_injective
+  exact receipt.inverse.plainBoundNodeImage_injective same
+
 private theorem RelationSeverConcreteReceipt.completeWireImage_injective
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target) :

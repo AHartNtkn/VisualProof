@@ -1054,6 +1054,57 @@ private theorem checkedWire_injective
   apply Fin.ext
   simpa [Internal.checkedWire] using congrArg Fin.val same
 
+private theorem relationJoin_checkedRegion_injective
+    {definitions : List (List Sig)}
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate) :
+    Function.Injective (Internal.checkedRegion generated) := by
+  intro left right same
+  apply Fin.ext
+  simpa [Internal.checkedRegion] using congrArg Fin.val same
+
+private theorem relationJoin_checkedNode_injective
+    {definitions : List (List Sig)}
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate) :
+    Function.Injective (Internal.checkedNode generated) := by
+  intro left right same
+  apply Fin.ext
+  simpa [Internal.checkedNode] using congrArg Fin.val same
+
+private theorem retainedRegionIndex_injective
+    (source : CheckedDiagram definitions)
+    (removed : List source.val.RegionId)
+    {left right : source.val.RegionId}
+    (leftMember : left ∈ Internal.retainedRegions source removed)
+    (rightMember : right ∈ Internal.retainedRegions source removed)
+    (same :
+      Internal.retainedRegionIndex source removed left leftMember =
+        Internal.retainedRegionIndex source removed right rightMember) :
+    left = right := by
+  have values :=
+    congrArg (Internal.retainedRegions source removed).get same
+  unfold Internal.retainedRegionIndex at values
+  rw [DenseList.get_index, DenseList.get_index] at values
+  exact values
+
+private theorem retainedNodeIndex_injective
+    (source : CheckedDiagram definitions)
+    (removed : List source.val.NodeId)
+    {left right : source.val.NodeId}
+    (leftMember : left ∈ Internal.retainedNodes source removed)
+    (rightMember : right ∈ Internal.retainedNodes source removed)
+    (same :
+      Internal.retainedNodeIndex source removed left leftMember =
+        Internal.retainedNodeIndex source removed right rightMember) :
+    left = right := by
+  have values := congrArg (Internal.retainedNodes source removed).get same
+  unfold Internal.retainedNodeIndex at values
+  rw [DenseList.get_index, DenseList.get_index] at values
+  exact values
+
 private theorem retainedWireIndex_injective
     (source : CheckedDiagram definitions)
     (removed : List source.val.WireId)
@@ -1564,7 +1615,9 @@ private structure RelationJoinFinalRemoval
   generated :
     checked.val = Internal.batchRemovalCandidate plan
   allRegionImage : state.checked.val.RegionId → checked.val.RegionId
+  allRegionImage_injective : Function.Injective allRegionImage
   allNodeImage : state.checked.val.NodeId → checked.val.NodeId
+  allNodeImage_injective : Function.Injective allNodeImage
   allWireImage :
     ∀ boundWire : state.checked.val.WireId,
       boundWire ≠ state.wireImage wire → checked.val.WireId
@@ -1611,12 +1664,28 @@ private def removeRelationJoinWire
                     simp [Internal.retainedRegions,
                       ConcreteDiagram.regionsList,
                       Data.Finite.mem_allFin]))
+              allRegionImage_injective := by
+                intro left right same
+                apply retainedRegionIndex_injective state.checked []
+                  (by simp [Internal.retainedRegions,
+                    ConcreteDiagram.regionsList, Data.Finite.mem_allFin])
+                  (by simp [Internal.retainedRegions,
+                    ConcreteDiagram.regionsList, Data.Finite.mem_allFin])
+                exact relationJoin_checkedRegion_injective generated same
               allNodeImage := fun node =>
                 Internal.checkedNode generated
                   (Internal.retainedNodeIndex state.checked [] node (by
                     simp [Internal.retainedNodes,
                       ConcreteDiagram.nodesList,
                       Data.Finite.mem_allFin]))
+              allNodeImage_injective := by
+                intro left right same
+                apply retainedNodeIndex_injective state.checked []
+                  (by simp [Internal.retainedNodes,
+                    ConcreteDiagram.nodesList, Data.Finite.mem_allFin])
+                  (by simp [Internal.retainedNodes,
+                    ConcreteDiagram.nodesList, Data.Finite.mem_allFin])
+                exact relationJoin_checkedNode_injective generated same
               allWireImage := fun boundWire different =>
                 Internal.checkedWire generated
                   (Internal.retainedWireIndex state.checked [dying]
@@ -1790,11 +1859,21 @@ def plainBoundRegionImage
     result.boundFinal.val.RegionId → result.plainFinal.val.RegionId :=
   result.finalRemoval.allRegionImage
 
+theorem plainBoundRegionImage_injective
+    (result : RelationJoinResult source wire content parameters) :
+    Function.Injective result.plainBoundRegionImage :=
+  result.finalRemoval.allRegionImage_injective
+
 /-- Exact final-deletion landing for every node present after all splices. -/
 def plainBoundNodeImage
     (result : RelationJoinResult source wire content parameters) :
     result.boundFinal.val.NodeId → result.plainFinal.val.NodeId :=
   result.finalRemoval.allNodeImage
+
+theorem plainBoundNodeImage_injective
+    (result : RelationJoinResult source wire content parameters) :
+    Function.Injective result.plainBoundNodeImage :=
+  result.finalRemoval.allNodeImage_injective
 
 /-- Exact final-deletion landing for every surviving post-splice wire. -/
 def plainBoundWireImage
