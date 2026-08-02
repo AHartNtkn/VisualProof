@@ -1138,6 +1138,13 @@ theorem checked_regionCount
     rw [step.baseGenerated]
   rw [baseCount]
 
+/-- Deleting one application node leaves the prior region carrier size
+unchanged before the fragment's fresh regions are appended. -/
+theorem base_regionCount
+    (step : RelationJoinStep source dying content) :
+    step.base.val.regionCount = step.prior.val.regionCount := by
+  rw [step.baseGenerated]
+
 theorem checked_nodeCount_add_one
     (step : RelationJoinStep source dying content) :
     step.checked.val.nodeCount + 1 =
@@ -1154,6 +1161,42 @@ theorem checked_nodeCount_add_one
     exact Data.Finite.filter_not_mem_length_add_removed_length
       [step.priorApplication] (by simp)
   omega
+
+/-- Deleting the consumed application leaves exactly the ordered retained
+prior-node carrier before splice allocation appends fresh node blocks. -/
+theorem base_nodeCount_add_one
+    (step : RelationJoinStep source dying content) :
+    step.base.val.nodeCount + 1 = step.prior.val.nodeCount := by
+  rw [step.baseGenerated]
+  exact Data.Finite.filter_not_mem_length_add_removed_length
+    [step.priorApplication] (by simp)
+
+@[simp] theorem checkedPriorNode_val
+    (step : RelationJoinStep source dying content)
+    (node : step.prior.val.NodeId)
+    (different : node ≠ step.priorApplication) :
+    (step.checkedPriorNode node different).val =
+      (ConcreteDiagram.DenseErasure.eraseNodeIndex step.prior
+        step.priorApplication node (by
+          simp [ConcreteDiagram.DenseErasure.retainedNodes,
+            ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+            different])).val := by
+  simp [checkedPriorNode, ConcreteSpliceAttachment.hostNode,
+    Internal.checkedNode]
+
+@[simp] theorem checkedFragmentNode_val
+    (step : RelationJoinStep source dying content)
+    (node : content.val.diagram.NodeId) :
+    (step.checkedFragmentNode node).val = step.base.val.nodeCount + node.val := by
+  simp [checkedFragmentNode, ConcreteSpliceAttachment.fragmentNode]
+
+@[simp] theorem checkedIdentityNode_val
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length) :
+    (step.checkedIdentityNode request).val =
+      step.base.val.nodeCount + content.val.diagram.nodeCount + request.val := by
+  simp [checkedIdentityNode, ConcreteSpliceAttachment.identityNode,
+    Internal.checkedNode]
 
 theorem checked_wireCount
     (step : RelationJoinStep source dying content) :
@@ -1210,31 +1253,6 @@ theorem checkedPriorNode_injective
         step.prior.val [step.priorApplication]).get indexed
   rw [DenseList.get_index, DenseList.get_index] at values
   exact values
-
-theorem checkedFragmentNode_ne_checkedPriorNode
-    (step : RelationJoinStep source dying content)
-    (fragment : content.val.diagram.NodeId)
-    (prior : step.prior.val.NodeId)
-    (different : prior ≠ step.priorApplication) :
-    step.checkedFragmentNode fragment ≠
-      step.checkedPriorNode prior different := by
-  intro same
-  have values := congrArg Fin.val same
-  have baseCount :
-      step.base.val.nodeCount =
-        (ConcreteDiagram.DenseErasure.retainedNodes
-          step.prior.val [step.priorApplication]).length := by
-    rw [step.baseGenerated]
-  have priorBound :=
-    (ConcreteDiagram.DenseErasure.eraseNodeIndex
-      step.prior step.priorApplication prior (by
-        simp [ConcreteDiagram.DenseErasure.retainedNodes,
-          ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
-          different])).isLt
-  simp [checkedFragmentNode, checkedPriorNode, Internal.checkedNode,
-    ConcreteSpliceAttachment.fragmentNode,
-    ConcreteSpliceAttachment.hostNode] at values
-  omega
 
 /-- Transport every still-generated application except the atom consumed by
 this step into the checked splice target. -/
@@ -2786,6 +2804,51 @@ theorem plainFinal_nodeCount
   rw [result.finalRemoval.generated]
   exact Data.Finite.filter_not_mem_length_add_removed_length [] (by simp)
 
+@[simp] theorem plainBoundNodeImage_val
+    (result : RelationJoinResult source wire content parameters)
+    (node : result.boundFinal.val.NodeId) :
+    (result.plainBoundNodeImage node).val = node.val := by
+  unfold boundFinal at node
+  have retainedExact :
+      Internal.retainedNodes result.finalState.checked [] =
+        Data.Finite.allFin result.finalState.checked.val.nodeCount := by
+    simp [Internal.retainedNodes, ConcreteDiagram.nodesList]
+  let position : Fin
+      (Data.Finite.allFin result.finalState.checked.val.nodeCount).length :=
+    Fin.cast (by simp [Data.Finite.allFin_eq_finRange]) node
+  have getExact :
+      (Data.Finite.allFin result.finalState.checked.val.nodeCount).get position =
+        node := by
+    apply Fin.ext
+    simp [position, Data.Finite.allFin_eq_finRange, List.get_eq_getElem]
+  have desiredIndex :
+      DenseList.index
+          (Data.Finite.allFin result.finalState.checked.val.nodeCount) node
+          (Data.Finite.mem_allFin node) = position := by
+    have same : DenseList.index
+        (Data.Finite.allFin result.finalState.checked.val.nodeCount) node
+        (Data.Finite.mem_allFin node) = DenseList.index _
+          ((Data.Finite.allFin
+            result.finalState.checked.val.nodeCount).get position)
+          (List.get_mem _ position) := by
+      congr
+      exact getExact.symm
+    rw [same]
+    exact DenseList.index_get _
+      (Data.Finite.allFin_nodup result.finalState.checked.val.nodeCount) position
+  have indexVal (values : List result.finalState.checked.val.NodeId)
+      (exact : values =
+        Data.Finite.allFin result.finalState.checked.val.nodeCount)
+      (member : node ∈ values) :
+      (DenseList.index values node member).val = node.val := by
+    subst values
+    exact congrArg Fin.val desiredIndex
+  unfold plainBoundNodeImage
+  rw [result.finalRemoval.allNodeImageExact]
+  simpa [Internal.retainedNodeIndex, Internal.checkedNode] using
+    indexVal (Internal.retainedNodes result.finalState.checked [])
+      retainedExact _
+
 theorem plainFinal_wireCount_add_one
     (result : RelationJoinResult source wire content parameters) :
     result.plainFinal.val.wireCount + 1 =
@@ -2795,12 +2858,6 @@ theorem plainFinal_wireCount_add_one
   exact Data.Finite.filter_not_mem_length_add_removed_length
     [result.finalState.wireImage wire] (by simp)
 
-@[simp] theorem bound_dying_scope
-    (result : RelationJoinResult source wire content parameters) :
-    (result.boundFinal.val.wires result.boundDying).scope =
-      result.boundRegionImage (source.val.wires wire).scope :=
-  result.finalState.wireScopeExact wire
-
 /-- The accepted construction's sole data-bearing trace authority. -/
 def construction_trace
     (result : RelationJoinResult source wire content parameters) :
@@ -2809,14 +2866,6 @@ def construction_trace
         result.boundNodeImage result.boundWireImage result.boundDying
         (result.boundRegionImage (source.val.wires wire).scope) :=
   result.finalState.constructionTrace
-
-theorem semantic_trace
-    (result : RelationJoinResult source wire content parameters) :
-    RelationJoinSemanticTrace source wire content parameters result.args
-      result.steps result.boundFinal result.boundRegionImage
-        result.boundNodeImage result.boundWireImage result.boundDying
-        (result.boundRegionImage (source.val.wires wire).scope) :=
-  result.construction_trace.semanticTrace
 
 end FinalDeletion
 
@@ -2908,22 +2957,6 @@ theorem endpoint_applied
   exact
     ⟨rfl, region, by
       simpa [args, accepted] using nodeData⟩
-
-theorem trace_complete
-    {definitions : List (List Sig)}
-    {source : CheckedDiagram definitions}
-    {wire : source.val.WireId}
-    {content : CheckedOpenDiagram definitions}
-    {parameters : List source.val.WireId}
-    (result : RelationJoinResult source wire content parameters) :
-    ∃ steps : List (RelationJoinStep source wire content),
-      RelationJoinSemanticTrace source wire content parameters result.args
-          steps result.boundFinal result.boundRegionImage
-            result.boundNodeImage result.boundWireImage
-            result.boundDying
-            (result.boundRegionImage (source.val.wires wire).scope) ∧
-        steps.map RelationJoinStep.application = result.applications := by
-  exact ⟨result.steps, result.semantic_trace, result.steps_application_order⟩
 
 end RelationJoinResult
 

@@ -1,10 +1,10 @@
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawOriginFacts
+import VisualProof.Rule.MonolithicWireQuantifierRawRegionOrigin
 
 namespace VisualProof
 
 namespace MonolithicWireQuantifier
 
-open ConcreteWireQuantifier
+open _root_.VisualProof.ConcreteWireQuantifier
 
 section RawRegionTrace
 
@@ -14,105 +14,17 @@ variable {dying : source.val.WireId}
 variable {content : CheckedOpenDiagram definitions}
 variable {parameters : List source.val.WireId}
 
-/-- Region origins carried by one construction prefix. -/
-abbrev RelationJoinPrefixRegionOrigin
-    (steps : List (RelationJoinStep source dying content)) :=
-  source.val.RegionId ⊕
-    Σ _occurrence : Fin steps.length,
-      { region : content.val.diagram.RegionId //
-        region ≠ content.val.diagram.root }
-
 namespace ConcreteWireQuantifier.RelationJoinConstructionTrace
 
-private def priorRegionCast
+/-- Cast a prefix target back to the exact prior carrier owned by a checked
+construction snoc. -/
+def priorRegionCast
     {current : CheckedDiagram definitions}
     (step : RelationJoinStep source dying content)
     (priorExact : step.prior = current) :
     current.val.RegionId → step.prior.val.RegionId :=
   cast (congrArg (fun diagram : CheckedDiagram definitions =>
     diagram.val.RegionId) priorExact.symm)
-
-/-- Lift a prefix origin across one checked construction snoc. -/
-def prefixRegionOriginLift
-    {steps : List (RelationJoinStep source dying content)}
-    (step : RelationJoinStep source dying content) :
-    RelationJoinPrefixRegionOrigin (source := source) (dying := dying)
-      (content := content) steps →
-    RelationJoinPrefixRegionOrigin (source := source) (dying := dying)
-      (content := content) (steps ++ [step])
-  | .inl region => .inl region
-  | .inr ⟨occurrence, region⟩ =>
-      .inr ⟨Fin.cast (by simp) (Fin.castAdd 1 occurrence), region⟩
-
-/-- The new occurrence origin introduced by one checked construction snoc. -/
-def prefixRegionFreshOrigin
-    {steps : List (RelationJoinStep source dying content)}
-    (step : RelationJoinStep source dying content)
-    (region : { region : content.val.diagram.RegionId //
-      region ≠ content.val.diagram.root }) :
-    RelationJoinPrefixRegionOrigin (source := source) (dying := dying)
-      (content := content) (steps ++ [step]) :=
-  .inr ⟨Fin.cast (by simp) (Fin.last steps.length), region⟩
-
-theorem prefixRegionOriginLift_injective
-    {steps : List (RelationJoinStep source dying content)}
-    (step : RelationJoinStep source dying content) :
-    Function.Injective (prefixRegionOriginLift (steps := steps) step) := by
-  intro left right same
-  cases left with
-  | inl leftRegion =>
-      cases right with
-      | inl rightRegion =>
-          exact congrArg Sum.inl (Sum.inl.inj same)
-      | inr rightOccurrence => cases same
-  | inr leftOccurrence =>
-      cases right with
-      | inl rightRegion => cases same
-      | inr rightOccurrence =>
-          rcases leftOccurrence with ⟨leftIndex, leftRegion⟩
-          rcases rightOccurrence with ⟨rightIndex, rightRegion⟩
-          have sigmaSame := Sum.inr.inj same
-          have mappedIndexSame := congrArg Sigma.fst sigmaSame
-          have indexSame : leftIndex = rightIndex := by
-            apply Fin.ext
-            simpa [prefixRegionOriginLift] using
-              congrArg Fin.val mappedIndexSame
-          have regionSame : leftRegion = rightRegion :=
-            congrArg Sigma.snd sigmaSame
-          cases indexSame
-          cases regionSame
-          rfl
-
-theorem prefixRegionOriginLift_ne_fresh
-    {steps : List (RelationJoinStep source dying content)}
-    (step : RelationJoinStep source dying content)
-    (origin : RelationJoinPrefixRegionOrigin (source := source)
-      (dying := dying) (content := content) steps)
-    (region : { region : content.val.diagram.RegionId //
-      region ≠ content.val.diagram.root }) :
-    prefixRegionOriginLift step origin ≠ prefixRegionFreshOrigin step region := by
-  intro same
-  cases origin with
-  | inl sourceRegion => cases same
-  | inr occurrence =>
-      rcases occurrence with ⟨index, priorRegion⟩
-      have sigmaSame := Sum.inr.inj same
-      have indexSame := congrArg Sigma.fst sigmaSame
-      have values := congrArg Fin.val indexSame
-      have bound := index.isLt
-      simp only [Fin.val_cast, Fin.val_castAdd, Fin.val_last] at values
-      omega
-
-theorem prefixRegionFreshOrigin_injective
-    {steps : List (RelationJoinStep source dying content)}
-    (step : RelationJoinStep source dying content)
-    {left right : { region : content.val.diagram.RegionId //
-      region ≠ content.val.diagram.root }}
-    (same : prefixRegionFreshOrigin (steps := steps) step left =
-      prefixRegionFreshOrigin (steps := steps) step right) :
-    left = right := by
-  have sigmaSame := Sum.inr.inj same
-  exact congrArg Sigma.snd sigmaSame
 
 /-- Construction-owned region landing defined by structural recursion on the
 validated Type-valued construction trace. -/

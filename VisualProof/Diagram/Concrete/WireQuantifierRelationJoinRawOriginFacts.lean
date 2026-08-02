@@ -68,7 +68,157 @@ theorem RelationJoinConstructionTrace.nodeImage_eq_none_iff
               contradiction
             · exact applicationExact same
 
+namespace RelationJoinStep
+
+/-- Generated request nodes occupy a one-to-one checked allocation range. -/
+theorem checkedIdentityNode_injective
+    (step : RelationJoinStep source dying content) :
+    Function.Injective step.checkedIdentityNode := by
+  intro left right same
+  apply Fin.ext
+  have values := congrArg Fin.val same
+  simpa [checkedIdentityNode, Internal.checkedNode,
+    ConcreteSpliceAttachment.identityNode] using values
+
+/-- Copied fragment nodes and generated request nodes occupy disjoint checked
+allocation ranges. -/
+theorem checkedFragmentNode_ne_checkedIdentityNode
+    (step : RelationJoinStep source dying content)
+    (node : content.val.diagram.NodeId)
+    (request : Fin step.attachment.identityRequests.length) :
+    step.checkedFragmentNode node ≠ step.checkedIdentityNode request := by
+  intro same
+  have values := congrArg Fin.val same
+  have underlying : step.attachment.fragmentNode node =
+      step.attachment.identityNode request := by
+    apply Fin.ext
+    simpa [checkedFragmentNode, checkedIdentityNode,
+      Internal.checkedNode] using values
+  exact step.attachment.fragmentNode_ne_identityNode _ _ underlying
+
+/-- A generated request node cannot collide with a transported prior node. -/
+theorem checkedPriorNode_ne_checkedIdentityNode
+    (step : RelationJoinStep source dying content)
+    (prior : step.prior.val.NodeId)
+    (different : prior ≠ step.priorApplication)
+    (request : Fin step.attachment.identityRequests.length) :
+    step.checkedPriorNode prior different ≠
+      step.checkedIdentityNode request := by
+  intro same
+  have values := congrArg Fin.val same
+  have priorBound :=
+    (ConcreteDiagram.DenseErasure.eraseNodeIndex
+      step.prior step.priorApplication prior (by
+        simp [ConcreteDiagram.DenseErasure.retainedNodes,
+          ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+          different])).isLt
+  have erasedCount :
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
+        step.prior step.priorApplication).nodeCount + 1 =
+        step.prior.val.nodeCount :=
+    Data.Finite.filter_not_mem_length_add_removed_length
+      [step.priorApplication] (by simp)
+  have baseCount := step.base_nodeCount_add_one
+  have priorValBound :
+      (ConcreteDiagram.DenseErasure.eraseNodeIndex step.prior
+        step.priorApplication prior (by
+          simp [ConcreteDiagram.DenseErasure.retainedNodes,
+            ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+            different])).val < step.base.val.nodeCount := by
+    omega
+  simp only [step.checkedPriorNode_val,
+    step.checkedIdentityNode_val] at values
+  omega
+
+/-- Copied fragment nodes cannot collide with transported prior nodes. -/
+theorem checkedFragmentNode_ne_checkedPriorNode
+    (step : RelationJoinStep source dying content)
+    (fragment : content.val.diagram.NodeId)
+    (prior : step.prior.val.NodeId)
+    (different : prior ≠ step.priorApplication) :
+    step.checkedFragmentNode fragment ≠
+      step.checkedPriorNode prior different := by
+  intro same
+  have values := congrArg Fin.val same
+  have priorBound :=
+    (ConcreteDiagram.DenseErasure.eraseNodeIndex
+      step.prior step.priorApplication prior (by
+        simp [ConcreteDiagram.DenseErasure.retainedNodes,
+          ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+          different])).isLt
+  have erasedCount :
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
+        step.prior step.priorApplication).nodeCount + 1 =
+        step.prior.val.nodeCount :=
+    Data.Finite.filter_not_mem_length_add_removed_length
+      [step.priorApplication] (by simp)
+  have baseCount := step.base_nodeCount_add_one
+  have priorValBound :
+      (ConcreteDiagram.DenseErasure.eraseNodeIndex step.prior
+        step.priorApplication prior (by
+          simp [ConcreteDiagram.DenseErasure.retainedNodes,
+            ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+            different])).val < step.base.val.nodeCount := by
+    omega
+  simp only [step.checkedFragmentNode_val,
+    step.checkedPriorNode_val] at values
+  omega
+
+/-- A generated request node is carried by the occurrence's checked source
+region image. -/
+theorem checkedIdentityNode_data_at_sourceRegion
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length) :
+    step.checked.val.nodes (step.checkedIdentityNode request) =
+      .identity (step.checkedRegionImage step.sourceRegion)
+        (step.attachment.identityRequests.get request).sig
+        (step.attachment.identityRequests.get request).attachments.length := by
+  rw [step.checkedIdentityNode_data, step.checkedRegionImageExact,
+    ← step.siteExact]
+  unfold Internal.checkedRegion
+  rfl
+
+end RelationJoinStep
+
+theorem RelationJoinSemanticTrace.finalDyingScope_raw
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    {steps : List (RelationJoinStep source dying content)}
+    {final : CheckedDiagram definitions}
+    {finalRegionImage : source.val.RegionId → final.val.RegionId}
+    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
+    {finalWireImage : source.val.WireId → final.val.WireId}
+    {finalDying : final.val.WireId}
+    {finalScope : final.val.RegionId}
+    (trace : RelationJoinSemanticTrace source dying content parameters args
+      steps final finalRegionImage finalNodeImage finalWireImage finalDying
+        finalScope) :
+    (final.val.wires finalDying).scope = finalScope := by
+  induction trace with
+  | nil => rfl
+  | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
+      priorWireImageExact priorDyingExact priorScopeExact relationArgsExact
+      sourceParametersExact induction =>
+      exact step.checked_dying_scope
+
 namespace RelationJoinResult
+
+theorem semantic_trace
+    (result : RelationJoinResult source wire content parameters) :
+    RelationJoinSemanticTrace source wire content parameters result.args
+      result.steps result.boundFinal result.boundRegionImage
+        result.boundNodeImage result.boundWireImage result.boundDying
+        (result.boundRegionImage (source.val.wires wire).scope) :=
+  result.construction_trace.semanticTrace
+
+@[simp] theorem bound_dying_scope
+    (result : RelationJoinResult source wire content parameters) :
+    (result.boundFinal.val.wires result.boundDying).scope =
+      result.boundRegionImage (source.val.wires wire).scope :=
+  result.semantic_trace.finalDyingScope_raw
 
 theorem boundNodeImage_eq_none_iff
     (result : RelationJoinResult source wire content parameters)
@@ -78,9 +228,31 @@ theorem boundNodeImage_eq_none_iff
   rw [result.construction_trace.nodeImage_eq_none_iff]
   rw [result.steps_application_order]
 
+theorem trace_complete
+    (result : RelationJoinResult source wire content parameters) :
+    ∃ steps : List (RelationJoinStep source wire content),
+      RelationJoinSemanticTrace source wire content parameters result.args
+          steps result.boundFinal result.boundRegionImage
+            result.boundNodeImage result.boundWireImage
+            result.boundDying
+            (result.boundRegionImage (source.val.wires wire).scope) ∧
+        steps.map RelationJoinStep.application = result.applications := by
+  exact ⟨result.steps, result.semantic_trace, result.steps_application_order⟩
+
 end RelationJoinResult
 
 namespace RelationJoinStep
+
+/-- The copied content root is the checked image of the occurrence's source
+site.  This is the root-identification half of the splice's region map. -/
+theorem checkedFragmentRegion_root_eq_checkedRegionImage
+    (step : RelationJoinStep source dying content) :
+    step.checkedFragmentRegion content.val.diagram.root =
+      step.checkedRegionImage step.sourceRegion := by
+  apply Fin.ext
+  simp [checkedFragmentRegion, ConcreteSpliceAttachment.fragmentRegion,
+    step.checkedRegionImageExact, step.baseRegionImageExact,
+    step.siteExact, Internal.checkedRegion]
 
 theorem checkedFragmentRegion_injective_of_nonroot
     (step : RelationJoinStep source dying content)
@@ -308,6 +480,15 @@ theorem plainSourceRegionImage_data
   | cut parent =>
       apply result.plainBoundRegionImage_cut
       simpa [data] using result.boundRegionImage_data region
+
+/-- Final wire deletion preserves the dense node position. -/
+theorem plainBoundNodeImage_eq_cast
+    (result : RelationJoinResult source wire content parameters)
+    (node : result.boundFinal.val.NodeId) :
+    result.plainBoundNodeImage node =
+      Fin.cast result.plainFinal_nodeCount.symm node := by
+  apply Fin.ext
+  simpa using result.plainBoundNodeImage_val node
 
 end RelationJoinResult
 
