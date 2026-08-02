@@ -973,6 +973,130 @@ private theorem newlyCoveredWire
       subst candidate
       exact ⟨patternWire, internal, mapped⟩
 
+/-- A successful option-valued list traversal retains exact positional
+ownership; consumers need not inspect the traversal implementation again. -/
+private theorem optionMapM_eq_some_length_get
+    {α β : Type}
+    (transform : α → Option β)
+    {source : List α}
+    {target : List β}
+    (accepted : source.mapM transform = some target) :
+    ∃ exactLength : source.length = target.length,
+      ∀ position : Fin source.length,
+        transform (source.get position) =
+          some (target.get (Fin.cast exactLength position)) := by
+  induction source generalizing target with
+  | nil =>
+      simp at accepted
+      subst target
+      refine ⟨rfl, ?_⟩
+      intro position
+      exact Fin.elim0 position
+  | cons head tail induction =>
+      cases headExact : transform head with
+      | none => simp [List.mapM_cons, headExact] at accepted
+      | some image =>
+          cases tailExact : tail.mapM transform with
+          | none => simp [List.mapM_cons, headExact, tailExact] at accepted
+          | some images =>
+              simp [List.mapM_cons, headExact, tailExact] at accepted
+              subst target
+              obtain ⟨tailLength, tailEvidence⟩ := induction tailExact
+              refine ⟨by simp [tailLength], ?_⟩
+              intro position
+              refine Fin.cases ?_ (fun rest => ?_) position
+              · simpa using headExact
+              · simpa [List.get_eq_getElem, tailLength] using
+                  tailEvidence rest
+
+private theorem optionMapM_eq_some_of_pointwise
+    {α β : Type}
+    (transform : α → Option β)
+    (image : α → β)
+    (values : List α)
+    (pointwise : ∀ value, value ∈ values →
+      transform value = some (image value)) :
+    values.mapM transform = some (values.map image) := by
+  induction values with
+  | nil => simp
+  | cons head tail induction =>
+      rw [List.mapM_cons, pointwise head (by simp)]
+      rw [induction (fun value member => pointwise value (by simp [member]))]
+      rfl
+
+/-- The sever result transports one site's ordered formal vector exactly to
+the stored formal-image vector. -/
+private theorem relationSeverSiteFormals_mapM
+    {source : CheckedDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    (sites.get site).formals.mapM result.wireImage? =
+      some (result.siteFormalImages site) := by
+  let survives :
+      ∀ wire, wire ∈ (sites.get site).formals →
+        wire ∈ ConcreteWireQuantifier.Internal.retainedWires source
+          (sites.flatMap
+            ConcreteWireQuantifier.RelationSeverSite.removedWires) :=
+    fun wire member => by
+      obtain ⟨position, rfl⟩ := List.get_of_mem member
+      exact result.siteFormal_survives site position
+  let image : source.val.WireId → result.checked.val.WireId :=
+    fun wire =>
+      if member : wire ∈ (sites.get site).formals then
+        result.wireImage wire (survives wire member)
+      else
+        result.relationWire
+  have pointwise :
+      ∀ wire, wire ∈ (sites.get site).formals →
+        result.wireImage? wire = some (image wire) := by
+    intro wire member
+    have imageExact :
+        image wire = result.wireImage wire (survives wire member) := by
+      unfold image
+      rw [dif_pos member]
+    rw [imageExact]
+    simp [ConcreteWireQuantifier.RelationSeverResult.wireImage?,
+      survives wire member]
+  rw [optionMapM_eq_some_of_pointwise result.wireImage? image _ pointwise]
+  congr 1
+  apply List.ext_get
+  · simp
+  · intro index leftBound rightBound
+    rw [result.siteFormalImages_get site ⟨index, rightBound⟩]
+    simp [List.get_eq_getElem, image]
+
+/-- Positional alignment between one inverse join step and the original
+checked occurrence restored at that step. -/
+private structure InverseStepOccurrenceAlignment
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    {dying : result.checked.val.WireId}
+    (step : ConcreteWireQuantifier.RelationJoinStep
+      result.checked dying pattern)
+    (content : ContentOccurrence source pattern) where
+  site : Fin sites.length
+  siteExact : sites.get site = content.toConcreteSite
+  applicationExact : step.application = result.atom site
+  boundarySurvives :
+    ∀ position : Fin pattern.val.boundary.length,
+      content.occurrence.wireMap (pattern.val.boundary.get position) ∈
+        ConcreteWireQuantifier.Internal.retainedWires source
+          (sites.flatMap
+            ConcreteWireQuantifier.RelationSeverSite.removedWires)
+  sourceAttachmentExact :
+    ∀ position : Fin pattern.val.boundary.length,
+      step.sourceAttachments.get
+          (Fin.cast step.sourceAttachmentArity.symm position) =
+        result.wireImage
+          (content.occurrence.wireMap
+            (pattern.val.boundary.get position))
+          (boundarySurvives position)
+
 private theorem inverseStep_sourceArguments_exact
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -1032,35 +1156,109 @@ private theorem inverseStep_sourceArguments_exact
     simpa [argumentPosition, formalPosition, List.get_eq_getElem] using
       ownerSame
 
-/-- Positional alignment between one inverse join step and the original
-checked occurrence restored at that step. -/
-private structure InverseStepOccurrenceAlignment
+/-- The checker-owned occurrence evidence and accepted sever transport
+determine the complete source attachment vector for its paired inverse step. -/
+private noncomputable def inverseStepOccurrenceAlignmentOfChecked
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
     {scope : source.val.RegionId}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
     (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (first content : ContentOccurrence source pattern)
+    (checked : CheckedOccurrence scope first content)
+    (parameters : List result.checked.val.WireId)
+    (parametersAccepted :
+      first.parameters.mapM result.wireImage? = some parameters)
     {dying : result.checked.val.WireId}
     (step : ConcreteWireQuantifier.RelationJoinStep
       result.checked dying pattern)
-    (content : ContentOccurrence source pattern) where
-  site : Fin sites.length
-  siteExact : sites.get site = content.toConcreteSite
-  applicationExact : step.application = result.atom site
-  boundarySurvives :
-    ∀ position : Fin pattern.val.boundary.length,
-      content.occurrence.wireMap (pattern.val.boundary.get position) ∈
-        ConcreteWireQuantifier.Internal.retainedWires source
-          (sites.flatMap
-            ConcreteWireQuantifier.RelationSeverSite.removedWires)
-  sourceAttachmentExact :
-    ∀ position : Fin pattern.val.boundary.length,
-      step.sourceAttachments.get
-          (Fin.cast step.sourceAttachmentArity.symm position) =
-        result.wireImage
-          (content.occurrence.wireMap
-            (pattern.val.boundary.get position))
-          (boundarySurvives position)
+    (site : Fin sites.length)
+    (siteExact : sites.get site = content.toConcreteSite)
+    (applicationExact : step.application = result.atom site)
+    (arityExact :
+      (sites.get site).formals.length = step.relationArgs.length)
+    (sourceParametersExact : step.sourceParameters = parameters) :
+    InverseStepOccurrenceAlignment result step content := by
+  have siteFormalsExact :
+      (sites.get site).formals = content.formals := by
+    exact congrArg
+      ConcreteWireQuantifier.RelationSeverSite.formals siteExact
+  have sourceArgumentsExact :=
+    inverseStep_sourceArguments_exact result step site applicationExact
+      arityExact
+  have formalsAccepted :
+      content.formals.mapM result.wireImage? =
+        some step.sourceArguments := by
+    calc
+      content.formals.mapM result.wireImage? =
+          (sites.get site).formals.mapM result.wireImage? := by
+        rw [siteFormalsExact]
+      _ = some (result.siteFormalImages site) :=
+        relationSeverSiteFormals_mapM result site
+      _ = some step.sourceArguments := congrArg some sourceArgumentsExact.symm
+  have contentParametersAccepted :
+      content.parameters.mapM result.wireImage? = some parameters := by
+    rw [checked.parametersExact, parametersAccepted]
+  have boundaryAccepted :
+      content.occurrence.boundaryAttachments.mapM result.wireImage? =
+        some step.sourceAttachments := by
+    calc
+      content.occurrence.boundaryAttachments.mapM result.wireImage? =
+          (content.formals ++ content.parameters).mapM result.wireImage? :=
+        congrArg (fun wires => wires.mapM result.wireImage?)
+          checked.boundaryExact
+      _ = some (step.sourceArguments ++ step.sourceParameters) := by
+        rw [List.mapM_append, formalsAccepted,
+          contentParametersAccepted, sourceParametersExact]
+        rfl
+      _ = some step.sourceAttachments :=
+        congrArg some step.sourceAttachmentsExact.symm
+  let boundaryEvidence :=
+    optionMapM_eq_some_length_get result.wireImage? boundaryAccepted
+  let boundaryLength := boundaryEvidence.choose
+  have boundaryGet := boundaryEvidence.choose_spec
+  have boundaryLanding :
+      ∀ position : Fin pattern.val.boundary.length,
+        ∃ survives :
+            content.occurrence.wireMap
+                (pattern.val.boundary.get position) ∈
+              ConcreteWireQuantifier.Internal.retainedWires source
+                (sites.flatMap
+                  ConcreteWireQuantifier.RelationSeverSite.removedWires),
+          result.wireImage
+              (content.occurrence.wireMap
+                (pattern.val.boundary.get position)) survives =
+            step.sourceAttachments.get
+              (Fin.cast step.sourceAttachmentArity.symm position) := by
+    intro position
+    let sourcePosition :
+        Fin content.occurrence.boundaryAttachments.length :=
+      Fin.cast content.occurrence.boundaryAttachments_length.symm position
+    have transported := boundaryGet sourcePosition
+    have sourceGet :
+        content.occurrence.boundaryAttachments.get sourcePosition =
+          content.occurrence.wireMap
+            (pattern.val.boundary.get position) := by
+      simp [sourcePosition, Occurrence.boundaryAttachments,
+        List.get_eq_getElem]
+    have targetPosition :
+        Fin.cast boundaryLength sourcePosition =
+          Fin.cast step.sourceAttachmentArity.symm position := by
+      apply Fin.ext
+      rfl
+    rw [sourceGet, targetPosition] at transported
+    unfold ConcreteWireQuantifier.RelationSeverResult.wireImage? at transported
+    split at transported
+    · rename_i survives
+      exact ⟨by simpa using survives, Option.some.inj transported⟩
+    · simp at transported
+  exact
+    { site := site
+      siteExact := siteExact
+      applicationExact := applicationExact
+      boundarySurvives := fun position => (boundaryLanding position).choose
+      sourceAttachmentExact := fun position =>
+        (boundaryLanding position).choose_spec.symm }
 
 private theorem InverseStepOccurrenceAlignment.identityRequestsEmpty
     (alignment : InverseStepOccurrenceAlignment result step content) :
