@@ -2708,6 +2708,29 @@ private theorem RelationSeverConcreteReceipt.completeRegionImage_injective
   exact Subtype.ext_iff.mp
     (receipt.completeCarrierState.regionImage_injective same)
 
+private theorem RelationSeverConcreteReceipt.completeRegionImage_sheet
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (region : source.val.RegionId)
+    (data : source.val.regions region = .sheet) :
+    receipt.inverse.boundFinal.val.regions
+        (receipt.completeRegionImage region) = .sheet := by
+  exact receipt.completeCarrierState.regionSheetExact
+    ⟨region, receipt.extractions.entries.regionCoverage region⟩ data
+
+private theorem RelationSeverConcreteReceipt.completeRegionImage_cut
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (region parent : source.val.RegionId)
+    (data : source.val.regions region = .cut parent) :
+    receipt.inverse.boundFinal.val.regions
+        (receipt.completeRegionImage region) =
+      .cut (receipt.completeRegionImage parent) := by
+  simpa [RelationSeverConcreteReceipt.completeRegionImage,
+    BatchReconstructionState.completeRegionImage] using
+    receipt.completeCarrierState.regionCutExact
+      ⟨region, receipt.extractions.entries.regionCoverage region⟩ parent data
+
 private theorem RelationSeverConcreteReceipt.completeNodeImage_injective
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target) :
@@ -2732,6 +2755,29 @@ private theorem
   intro left right same
   apply receipt.completeRegionImage_injective
   exact receipt.inverse.plainBoundRegionImage_injective same
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainRegionImage_sheet
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (region : source.val.RegionId)
+    (data : source.val.regions region = .sheet) :
+    receipt.inverse.plainFinal.val.regions
+        (receipt.completePlainRegionImage region) = .sheet :=
+  receipt.inverse.plainBoundRegionImage_sheet _
+    (receipt.completeRegionImage_sheet region data)
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainRegionImage_cut
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (region parent : source.val.RegionId)
+    (data : source.val.regions region = .cut parent) :
+    receipt.inverse.plainFinal.val.regions
+        (receipt.completePlainRegionImage region) =
+      .cut (receipt.completePlainRegionImage parent) :=
+  receipt.inverse.plainBoundRegionImage_cut _ _
+    (receipt.completeRegionImage_cut region parent data)
 
 private noncomputable def
     RelationSeverConcreteReceipt.completePlainNodeImage
@@ -2911,6 +2957,40 @@ private noncomputable def
         receipt.completePlainRegionImage
         receipt.completePlainRegionImage_injective
         receipt.constructionRegionCount_eq⟩
+
+private theorem RelationSeverConcreteReceipt.constructionRegionRoot
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    receipt.constructionRegionEquiv source.val.root =
+      receipt.inverse.plainFinal.val.root := by
+  change receipt.completePlainRegionImage source.val.root =
+    receipt.inverse.plainFinal.val.root
+  have mappedSheet := receipt.completePlainRegionImage_sheet source.val.root
+    source.property.root_is_sheet
+  have onlyRoot :=
+    (List.all_eq_true.mp
+      receipt.inverse.plainFinal.property.only_root_is_sheet)
+      (receipt.completePlainRegionImage source.val.root)
+      (Data.Finite.mem_allFin _)
+  exact (of_decide_eq_true onlyRoot) mappedSheet
+
+private theorem RelationSeverConcreteReceipt.constructionRegionTable
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (region : source.val.RegionId) :
+    receipt.inverse.plainFinal.val.regions
+        (receipt.constructionRegionEquiv region) =
+      (source.val.regions region).rename receipt.constructionRegionEquiv := by
+  change receipt.inverse.plainFinal.val.regions
+      (receipt.completePlainRegionImage region) =
+    (source.val.regions region).rename receipt.constructionRegionEquiv
+  cases data : source.val.regions region with
+  | sheet =>
+      simpa [data, CRegion.rename] using
+        receipt.completePlainRegionImage_sheet region data
+  | cut parent =>
+      simpa [data, CRegion.rename] using
+        receipt.completePlainRegionImage_cut region parent data
 
 private noncomputable def
     RelationSeverConcreteReceipt.constructionNodeEquiv

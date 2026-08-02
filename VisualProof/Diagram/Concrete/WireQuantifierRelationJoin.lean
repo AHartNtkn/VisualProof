@@ -1734,6 +1734,14 @@ private structure RelationJoinFinalRemoval
   generated :
     checked.val = Internal.batchRemovalCandidate plan
   allRegionImage : state.checked.val.RegionId → checked.val.RegionId
+  allRegionImageExact :
+    ∀ region,
+      allRegionImage region =
+        Internal.checkedRegion generated
+          (Internal.retainedRegionIndex state.checked [] region (by
+            simp [Internal.retainedRegions,
+              ConcreteDiagram.regionsList,
+              Data.Finite.mem_allFin]))
   allRegionImage_injective : Function.Injective allRegionImage
   allNodeImage : state.checked.val.NodeId → checked.val.NodeId
   allNodeImage_injective : Function.Injective allNodeImage
@@ -1783,6 +1791,7 @@ private def removeRelationJoinWire
                     simp [Internal.retainedRegions,
                       ConcreteDiagram.regionsList,
                       Data.Finite.mem_allFin]))
+              allRegionImageExact := fun _ => rfl
               allRegionImage_injective := by
                 intro left right same
                 apply retainedRegionIndex_injective state.checked []
@@ -1982,6 +1991,36 @@ theorem plainBoundRegionImage_injective
     (result : RelationJoinResult source wire content parameters) :
     Function.Injective result.plainBoundRegionImage :=
   result.finalRemoval.allRegionImage_injective
+
+/-- Final exhausted-relation deletion preserves an exact sheet entry. -/
+theorem plainBoundRegionImage_sheet
+    (result : RelationJoinResult source wire content parameters)
+    (region : result.boundFinal.val.RegionId)
+    (data : result.boundFinal.val.regions region = .sheet) :
+    result.plainFinal.val.regions
+        (result.plainBoundRegionImage region) = .sheet := by
+  unfold plainBoundRegionImage
+  rw [result.finalRemoval.allRegionImageExact]
+  apply Internal.checkedRegion_data_transport_sheet
+    result.finalRemoval.generated
+  apply Internal.batchRegionTable_retained_sheet result.finalRemoval.plan
+    region _ data
+
+/-- Final exhausted-relation deletion preserves an exact cut entry. -/
+theorem plainBoundRegionImage_cut
+    (result : RelationJoinResult source wire content parameters)
+    (region parent : result.boundFinal.val.RegionId)
+    (data : result.boundFinal.val.regions region = .cut parent) :
+    result.plainFinal.val.regions
+        (result.plainBoundRegionImage region) =
+      .cut (result.plainBoundRegionImage parent) := by
+  unfold plainBoundRegionImage
+  rw [result.finalRemoval.allRegionImageExact,
+    result.finalRemoval.allRegionImageExact]
+  apply Internal.checkedRegion_data_transport_cut
+    result.finalRemoval.generated
+  apply Internal.batchRegionTable_retained_cut result.finalRemoval.plan
+    region _ parent data
 
 /-- Exact final-deletion landing for every node present after all splices. -/
 def plainBoundNodeImage
