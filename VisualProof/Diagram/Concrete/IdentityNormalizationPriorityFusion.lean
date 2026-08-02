@@ -22,38 +22,38 @@ private abbrev fusionNodes
     (right : source.val.NodeId) : List source.val.NodeId :=
   retainedNodes source.val [right]
 
-private abbrev fusionIncident
+abbrev fusionIncident
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId) : List source.val.WireId :=
   (source.val.identityIncidentWires left ++
     source.val.identityIncidentWires right).eraseDups
 
-private def fusionSourceNode
+def fusionSourceNode
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (node : Fin (fusionNodes source right).length) : source.val.NodeId :=
   (fusionNodes source right).get node
 
-private def fusionSourceEndpoint
+def fusionSourceEndpoint
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (endpoint : CEndpoint (fusionNodes source right).length) :
     CEndpoint source.val.nodeCount :=
   ⟨fusionSourceNode source right endpoint.node, endpoint.port⟩
 
-private def fusionSourceWire
+def fusionSourceWire
     (source : CheckedDiagram definitions)
     (wire : Fin source.val.wiresList.length) : source.val.WireId :=
   source.val.wiresList.get wire
 
-private def fusionTargetWire
+def fusionTargetWire
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId) : Fin source.val.wiresList.length :=
   ⟨wire.val, by
     simp [ConcreteDiagram.wiresList,
       Data.Finite.allFin_eq_finRange, wire.isLt]⟩
 
-@[simp] private theorem fusionSourceWire_target
+@[simp] theorem fusionSourceWire_target
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId) :
     fusionSourceWire source (fusionTargetWire source wire) = wire := by
@@ -203,7 +203,7 @@ private theorem left_mem_fusionNodes
   apply List.mem_filter.mpr
   exact ⟨Data.Finite.mem_allFin left, by simp [distinct]⟩
 
-private def fusionLeftNode
+def fusionLeftNode
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (distinct : left ≠ right) : Fin (fusionNodes source right).length :=
@@ -211,7 +211,7 @@ private def fusionLeftNode
     (Data.Finite.indexOf?_isSome_iff.mpr
       (left_mem_fusionNodes source left right distinct))
 
-@[simp] private theorem fusionSourceNode_left
+@[simp] theorem fusionSourceNode_left
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (distinct : left ≠ right) :
@@ -620,7 +620,7 @@ private theorem fusionIncident_of_left_endpoint
   · rw [sourceWire]
     exact List.get_mem _ index
 
-private theorem fusionRetained_of_not_left
+theorem fusionRetained_of_not_left
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right)

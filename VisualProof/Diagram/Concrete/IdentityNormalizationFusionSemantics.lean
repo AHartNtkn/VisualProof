@@ -11,7 +11,7 @@ open IdentityNormalizationCore
 
 namespace IdentityNormalizationFusionSemantics
 
-private abbrev Target
+abbrev Target
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right) :=
@@ -22,13 +22,13 @@ private abbrev fusionNodes
     (right : source.val.NodeId) :=
   retainedNodes source.val [right]
 
-private def sourceWire
+def sourceWire
     (source : CheckedDiagram definitions)
     (wire : Fin source.val.wiresList.length) :
     source.val.WireId :=
   source.val.wiresList.get wire
 
-private def targetWire
+def targetWire
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId) :
     Fin source.val.wiresList.length :=
@@ -36,7 +36,7 @@ private def targetWire
     simp [ConcreteDiagram.wiresList,
       Data.Finite.allFin_eq_finRange, wire.isLt]⟩
 
-@[simp] private theorem sourceWire_targetWire
+@[simp] theorem sourceWire_targetWire
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId) :
     sourceWire source (targetWire source wire) = wire := by
@@ -44,14 +44,14 @@ private def targetWire
   simp [sourceWire, targetWire, ConcreteDiagram.wiresList,
     Data.Finite.allFin_eq_finRange]
 
-private theorem targetWire_injective
+theorem targetWire_injective
     (source : CheckedDiagram definitions) :
     Function.Injective (targetWire source) := by
   intro leftWire rightWire equality
   apply Fin.ext
   simpa [targetWire] using congrArg Fin.val equality
 
-@[simp] private theorem targetWire_sourceWire
+@[simp] theorem targetWire_sourceWire
     (source : CheckedDiagram definitions)
     (wire : Fin source.val.wiresList.length) :
     targetWire source (sourceWire source wire) = wire := by
@@ -59,7 +59,7 @@ private theorem targetWire_injective
   simp [targetWire, sourceWire, ConcreteDiagram.wiresList,
     Data.Finite.allFin_eq_finRange]
 
-private def targetNode
+def targetNode
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (node : source.val.NodeId)
@@ -70,7 +70,7 @@ private def targetNode
       apply List.mem_filter.mpr
       exact ⟨Data.Finite.mem_allFin _, by simp [survives]⟩))
 
-@[simp] private theorem fusionNodes_get_targetNode
+@[simp] theorem fusionNodes_get_targetNode
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (node : source.val.NodeId)
@@ -84,14 +84,14 @@ private def targetNode
       apply List.mem_filter.mpr
       exact ⟨Data.Finite.mem_allFin _, by simp [survives]⟩))
 
-private def sourceNode
+def sourceNode
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (node : Fin (fusionNodes source right).length) :
     source.val.NodeId :=
   (fusionNodes source right).get node
 
-private theorem sourceNode_ne_right
+theorem sourceNode_ne_right
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (node : Fin (fusionNodes source right).length) :
@@ -101,7 +101,7 @@ private theorem sourceNode_ne_right
   simpa [sourceNode, fusionNodes, retainedNodes] using
     of_decide_eq_true accepted
 
-@[simp] private theorem targetNode_sourceNode
+@[simp] theorem targetNode_sourceNode
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId)
     (node : Fin (fusionNodes source right).length) :
@@ -386,7 +386,7 @@ private theorem targetContext_extend
     target_wiresAt, List.map_append]
   rfl
 
-private theorem targetEndpoint_incident
+theorem targetEndpoint_incident
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right)
@@ -422,7 +422,7 @@ private theorem targetEndpoint_incident
       exact (Option.some_get _).symm
     simp [fusionNodes, found]
 
-private theorem target_node_of_not_left
+theorem target_node_of_not_left
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right)
@@ -1078,14 +1078,14 @@ private theorem ordinary_singleton_denotation
   rw [expectedEquation,
     denoteItemSeq_renameWires]
 
-private abbrev incidentUnion
+abbrev incidentUnion
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId) :
     List source.val.WireId :=
   (source.val.identityIncidentWires left ++
     source.val.identityIncidentWires right).eraseDups
 
-private abbrev fusedNode
+abbrev fusedNode
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right) :
@@ -1099,7 +1099,7 @@ private abbrev fusedNode
     sourceNode source right (fusedNode source left right eligible) = left :=
   fusionNodes_get_targetNode source right left eligible.distinct
 
-private theorem target_identity_incident_iff
+theorem target_identity_incident_iff
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right)
@@ -1212,7 +1212,7 @@ private theorem fusion_signature_eq
       (identityIncidentWire_signature definitions source.val source.property
         eligible.leftIdentity.node_eq pivot leftIncident)
 
-private theorem target_node_fused
+theorem target_node_fused
     (source : CheckedDiagram definitions)
     (left right : source.val.NodeId)
     (eligible : FusionEligibility source left right) :

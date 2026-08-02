@@ -159,14 +159,14 @@ theorem dropAvailable_iff
     simpa only [Data.Finite.FiniteEquiv.apply_symm_apply] using
       transportDropEligibility iso.symm eligible
 
-private def outerIncidentWires
+def outerIncidentWires
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (region : source.val.RegionId) : List source.val.WireId :=
   (source.val.identityIncidentWires node).filter fun wire =>
     decide ((source.val.wires wire).scope ≠ region)
 
-private theorem outerIncidentWires_nodup
+theorem outerIncidentWires_nodup
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (region : source.val.RegionId) :
@@ -207,7 +207,7 @@ private theorem outerIncidentWires_length_eq
     (outerIncidentWires_nodup right (iso.nodes node) (iso.regions region))
     (mem_outerIncidentWires_map iso node region)
 
-private theorem collapseEligible_outer_length_le_one
+theorem collapseEligible_outer_length_le_one
     {definitions : List (List Sig)}
     {source : CheckedDiagram definitions}
     {node : source.val.NodeId}
@@ -246,7 +246,7 @@ private theorem collapseEligible_outer_length_le_one
             simp
           exact secondOuter secondInner
 
-private theorem collapse_tail_coScoped_of_outer_le_one
+theorem collapse_tail_coScoped_of_outer_le_one
     {definitions : List (List Sig)}
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
@@ -299,6 +299,37 @@ private theorem collapse_tail_coScoped_of_outer_le_one
         exact member
       have accepted := (List.mem_filter.mp innerMember).2
       simpa using accepted
+
+/-- Rule-2 eligibility is exactly an identity with at least two incident wires
+and at most one incident wire scoped outside its identity region. -/
+def collapseEligibilityOfOuterBound
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (identity : IdentityNodeInfo source node)
+    (incidentAtLeastTwo :
+      2 ≤ (source.val.identityIncidentWires node).length)
+    (outerAtMostOne :
+      (outerIncidentWires source node identity.region).length ≤ 1) :
+    CollapseEligibility source node := by
+  have collapseAtLeastTwo :
+      2 ≤ (collapseIncidentWires source node identity.region).length := by
+    rw [(collapseIncidentWires_perm source node identity.region).length_eq]
+    exact incidentAtLeastTwo
+  cases shape : collapseIncidentWires source node identity.region with
+  | nil => simp [shape] at collapseAtLeastTwo
+  | cons survivor tail =>
+      cases tail with
+      | nil => simp [shape] at collapseAtLeastTwo
+      | cons second rest =>
+          exact
+            { identity := identity
+              survivor := survivor
+              second := second
+              rest := rest
+              incident_eq := shape
+              absorbedCoScoped :=
+                collapse_tail_coScoped_of_outer_le_one source node
+                  identity.region survivor second rest shape outerAtMostOne }
 
 /-- Rule-2 eligibility transports under arbitrary carrier permutations.  The
 target survivor is selected by the target's own survivor-first enumeration;
