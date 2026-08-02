@@ -561,6 +561,40 @@ theorem checkedNodeImages_eq_checkedRemainingNodes
                     nodes.filterMap step.priorNodeImage)
             simpa [checkedRemainingNodes] using induction
 
+/-- The consumed source application has no post-step representative. -/
+@[simp] theorem checkedNodeImage_application
+    (step : RelationJoinStep source dying content) :
+    step.checkedNodeImage step.application = none := by
+  rw [step.checkedNodeImageExact, step.baseNodeImageExact,
+    step.priorApplicationImage]
+  have notRetained :
+      step.priorApplication ∉
+        ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+          step.prior.val [step.priorApplication] := by
+    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.mem_allFin]
+  simp [notRetained]
+
+/-- Every non-consumed prior source-node image lands at the exact checked
+prior-node transport used by the carrier reconstruction fold. -/
+theorem checkedNodeImage_of_prior
+    (step : RelationJoinStep source dying content)
+    {sourceNode : source.val.NodeId}
+    {priorNode : step.prior.val.NodeId}
+    (priorExact : step.priorNodeImage sourceNode = some priorNode)
+    (different : priorNode ≠ step.priorApplication) :
+    step.checkedNodeImage sourceNode =
+      some (step.checkedPriorNode priorNode different) := by
+  rw [step.checkedNodeImageExact, step.baseNodeImageExact, priorExact]
+  have retained :
+      priorNode ∈
+        ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+          step.prior.val [step.priorApplication] := by
+    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.mem_allFin, different]
+  simp only [retained, dif_pos, Option.map_some]
+  rfl
+
 theorem attachment_accepted
     (step : RelationJoinStep source dying content) :
     checkConcreteSpliceAttachment step.base step.site content
