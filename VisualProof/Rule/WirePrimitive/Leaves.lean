@@ -290,6 +290,18 @@ def target
     (applied : AppliedApplyFormal source orientation wire position) :=
   applied.result.target
 
+/-- The exact concrete construction accepted by this opaque formal-leaf
+receipt.  Compiler factorization consumes its carrier-origin maps without
+rerunning the leaf checker. -/
+def constructionResult
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedApplyFormal source orientation wire position) :
+    ConcreteWirePrimitive.LeafResult source wire :=
+  applied.result
+
 /-- Exact ordered leaf nodes introduced by formal application. -/
 def inverseNodes
     {source : CheckedDiagram definitions}
@@ -350,6 +362,16 @@ def target
     (applied : AppliedIdentityLeaf source orientation wire) :=
   applied.result.target
 
+/-- The exact concrete construction accepted by this opaque identity-leaf
+receipt. -/
+def constructionResult
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedIdentityLeaf source orientation wire) :
+    ConcreteWirePrimitive.LeafResult source wire :=
+  applied.result
+
 /-- Exact ordered identity nodes introduced by identity leaf expansion. -/
 def inverseNodes
     {source : CheckedDiagram definitions}
@@ -407,6 +429,17 @@ def target
     {definition : Fin definitions.length}
     (applied : AppliedRefLeaf source orientation wire definition) :=
   applied.result.target
+
+/-- The exact concrete construction accepted by this opaque reference-leaf
+receipt. -/
+def constructionResult
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    {definition : Fin definitions.length}
+    (applied : AppliedRefLeaf source orientation wire definition) :
+    ConcreteWirePrimitive.LeafResult source wire :=
+  applied.result
 
 /-- Exact ordered reference nodes introduced by reference leaf expansion. -/
 def inverseNodes
