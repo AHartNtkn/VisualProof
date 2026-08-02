@@ -1,4 +1,5 @@
 import VisualProof.Rule.MonolithicWireQuantifierReconstructionIso
+import VisualProof.Rule.MonolithicWireQuantifierRawOriginAtlas
 
 namespace VisualProof
 
@@ -46,6 +47,14 @@ def concreteResult
     ConcreteWireQuantifier.RelationJoinResult source input.wire input.content
       input.parameters :=
   applied.checked.result
+
+/-- Executable, allocation-neutral classification of every raw final carrier. -/
+def rawOriginAtlas
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    RelationJoinRawOriginAtlas applied.concreteResult :=
+  RelationJoinRawOriginAtlas.ofResult applied.concreteResult
 
 /-- The accepted join landing before the concrete result's single eager
 identity-normalization pass.  The primitive compiler targets this raw carrier;

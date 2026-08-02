@@ -347,6 +347,129 @@ private def relationJoinApplied :
     |>.toOption.get
     (by native_decide)
 
+/-!
+A repeated content boundary attached to two distinct same-signature source
+wires generates one equality node.  The raw atlas must retain that generated
+origin explicitly rather than collapsing it into either attachment.
+-/
+
+private def repeatedBoundaryJoinSourceRaw : ConcreteDiagram 0 where
+  regionCount := 2
+  nodeCount := 1
+  wireCount := 3
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 0
+  nodes := fun _ => .atom 1 [.iota, .iota]
+  wires
+    | ⟨0, _⟩ =>
+        { sig := .rel [.iota, .iota]
+          scope := 1
+          endpoints := [⟨0, .head⟩] }
+    | ⟨1, _⟩ =>
+        { sig := .iota
+          scope := 1
+          endpoints := [⟨0, .arg 0⟩] }
+    | ⟨2, _⟩ =>
+        { sig := .iota
+          scope := 1
+          endpoints := [⟨0, .arg 1⟩] }
+
+private theorem repeatedBoundaryJoinSourceRaw_wellFormed :
+    repeatedBoundaryJoinSourceRaw.WellFormed [] := by
+  native_decide
+
+private def repeatedBoundaryJoinSource : CheckedDiagram [] :=
+  ⟨repeatedBoundaryJoinSourceRaw,
+    repeatedBoundaryJoinSourceRaw_wellFormed⟩
+
+private def repeatedBoundaryJoinInput :
+    MonolithicRelationJoinInput repeatedBoundaryJoinSource where
+  orientation := .forward
+  wire := idx 0
+  content := ConcreteExamples.repeatedBoundaryAlias_checked
+  parameters := []
+
+private def repeatedBoundaryJoinApplied :
+    AppliedMonolithicRelationJoin repeatedBoundaryJoinSource
+      repeatedBoundaryJoinInput :=
+  (applyMonolithicRelationJoin repeatedBoundaryJoinSource
+      repeatedBoundaryJoinInput).toOption.get
+    (by native_decide)
+
+example :
+    repeatedBoundaryJoinApplied.concreteResult.steps.map
+        (fun step =>
+          (step.sourceAttachments,
+            step.attachment.identityRequests.length)) =
+      [([idx 1, idx 2], 1)] := by
+  native_decide
+
+example :
+    (match repeatedBoundaryJoinApplied.rawOriginAtlas.nodeOrigin (idx 0) with
+    | .inr ⟨occurrence, .inr request⟩ =>
+        occurrence.val = 0 && request.val = 0
+    | _ => false) = true := by
+  native_decide
+
+example :
+    (match repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 0) with
+    | .inl wire => wire.val.val = 1
+    | _ => false) = true := by
+  native_decide
+
+example :
+    (match repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 1) with
+    | .inl wire => wire.val.val = 2
+    | _ => false) = true := by
+  native_decide
+
+private def repeatedBoundaryRepresentativeSnapshot :
+    Nat × Nat × Nat × Bool × Bool :=
+  let step := repeatedBoundaryJoinApplied.concreteResult.steps.get (idx 0)
+  let source := ConcreteExamples.repeatedBoundaryAlias_checked.val.boundary.get
+    (idx 0)
+  let sourceMember :
+      source ∈ ConcreteExamples.repeatedBoundaryAlias_checked.val.boundary := by
+    native_decide
+  let representativeOrigin :=
+    repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 0)
+  let nonrepresentativeOrigin :=
+    repeatedBoundaryJoinApplied.rawOriginAtlas.wireOrigin (idx 1)
+  ((step.attachment.representativePosition source sourceMember).val,
+    (step.attachment.representativeTarget source sourceMember).val,
+    (step.attachment.target (idx 1)).val,
+    (match representativeOrigin with
+      | .inl wire => wire.val.val = 1
+      | _ => false),
+    (match nonrepresentativeOrigin with
+      | .inl wire => wire.val.val = 2
+      | _ => false))
+
+example :
+    repeatedBoundaryRepresentativeSnapshot = (0, 1, 2, true, true) := by
+  native_decide
+
+example :
+    (match relationJoinApplied.rawOriginAtlas.regionOrigin (idx 0) with
+    | .inl region => region.val = 0
+    | _ => false) = true := by
+  native_decide
+
+example :
+    (match relationJoinApplied.rawOriginAtlas.nodeOrigin (idx 0) with
+    | .inr ⟨occurrence, .inl node⟩ =>
+        occurrence.val = 0 && node.val = 0
+    | _ => false) = true := by
+  native_decide
+
+example :
+    (match relationJoinApplied.rawOriginAtlas.wireOrigin (idx 0) with
+    | .inl wire => wire.val.val = 1
+    | _ => false) = true := by
+  native_decide
+
 example
     (model : Model.{u})
     (definitionEnv : DefinitionEnv model.toPreModel []) :
