@@ -4,6 +4,36 @@ namespace VisualProof
 
 namespace ConcreteWireQuantifier
 
+namespace RelationJoinStep
+
+theorem checkedFragmentRegion_injective_of_nonroot
+    (step : RelationJoinStep source dying content)
+    {left right : content.val.diagram.RegionId}
+    (leftNonroot : left ≠ content.val.diagram.root)
+    (rightNonroot : right ≠ content.val.diagram.root)
+    (same : step.checkedFragmentRegion left =
+      step.checkedFragmentRegion right) :
+    left = right := by
+  have values := congrArg Fin.val same
+  have indices :
+      DenseList.index step.attachment.fragmentRegions left (by
+        simp [ConcreteSpliceAttachment.fragmentRegions,
+          ConcreteDiagram.regionsList, Data.Finite.mem_allFin,
+          leftNonroot]) =
+        DenseList.index step.attachment.fragmentRegions right (by
+          simp [ConcreteSpliceAttachment.fragmentRegions,
+            ConcreteDiagram.regionsList, Data.Finite.mem_allFin,
+            rightNonroot]) := by
+    apply Fin.ext
+    simpa [checkedFragmentRegion,
+      ConcreteSpliceAttachment.fragmentRegion, leftNonroot, rightNonroot,
+      ConcreteSpliceAttachment.freshRegion] using values
+  have mapped := congrArg step.attachment.fragmentRegions.get indices
+  rw [DenseList.get_index, DenseList.get_index] at mapped
+  exact mapped
+
+end RelationJoinStep
+
 /-- Every snoc step preserves the source root's dense position. -/
 theorem RelationJoinSemanticTrace.root_val
     {source : CheckedDiagram definitions}

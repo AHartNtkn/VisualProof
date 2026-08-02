@@ -965,6 +965,26 @@ theorem checkedFragmentWire_scope_of_internal
     wire internal]
   rfl
 
+/-- A non-root fragment sheet is allocated freshly without changing its row. -/
+theorem checkedFragmentRegion_sheet
+    (step : RelationJoinStep source dying content)
+    (region : content.val.diagram.RegionId)
+    (nonroot : region ≠ content.val.diagram.root)
+    (data : content.val.diagram.regions region = .sheet) :
+    step.checked.val.regions (step.checkedFragmentRegion region) = .sheet := by
+  unfold checkedFragmentRegion
+  apply Internal.checkedRegion_data_transport_sheet step.generated
+  let fresh := DenseList.index step.attachment.fragmentRegions region (by
+    simp [ConcreteSpliceAttachment.fragmentRegions,
+      ConcreteDiagram.regionsList, Data.Finite.mem_allFin, nonroot])
+  have regionExact : step.attachment.fragmentRegions.get fresh = region :=
+    DenseList.get_index _ _ _
+  rw [show step.attachment.fragmentRegion region =
+      step.attachment.freshRegion fresh by
+    simp [ConcreteSpliceAttachment.fragmentRegion, nonroot, fresh]]
+  rw [ConcreteSpliceAttachment.diagram_region_freshRegion, regionExact, data]
+  rfl
+
 /-- A non-root fragment cut is allocated freshly while retaining its exact
 fragment parent, including identification of a root parent with the splice
 site. -/
@@ -1023,32 +1043,6 @@ theorem checkedFragmentNode_injective
   have values := congrArg Fin.val same
   simpa [checkedFragmentNode,
     ConcreteSpliceAttachment.fragmentNode] using values
-
-theorem checkedFragmentRegion_injective_of_nonroot
-    (step : RelationJoinStep source dying content)
-    {left right : content.val.diagram.RegionId}
-    (leftNonroot : left ≠ content.val.diagram.root)
-    (rightNonroot : right ≠ content.val.diagram.root)
-    (same : step.checkedFragmentRegion left =
-      step.checkedFragmentRegion right) :
-    left = right := by
-  have values := congrArg Fin.val same
-  have indices :
-      DenseList.index step.attachment.fragmentRegions left (by
-        simp [ConcreteSpliceAttachment.fragmentRegions,
-          ConcreteDiagram.regionsList, Data.Finite.mem_allFin,
-          leftNonroot]) =
-        DenseList.index step.attachment.fragmentRegions right (by
-          simp [ConcreteSpliceAttachment.fragmentRegions,
-            ConcreteDiagram.regionsList, Data.Finite.mem_allFin,
-            rightNonroot]) := by
-    apply Fin.ext
-    simpa [checkedFragmentRegion,
-      ConcreteSpliceAttachment.fragmentRegion, leftNonroot, rightNonroot,
-      ConcreteSpliceAttachment.freshRegion] using values
-  have mapped := congrArg step.attachment.fragmentRegions.get indices
-  rw [DenseList.get_index, DenseList.get_index] at mapped
-  exact mapped
 
 theorem checkedFragmentWire_injective_of_internal
     (step : RelationJoinStep source dying content)
