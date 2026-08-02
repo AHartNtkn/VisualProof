@@ -636,6 +636,95 @@ def restoredWire
     patternWire ∉ pattern.val.boundary ∧
       content.occurrence.wireMap patternWire = wire
 
+/-- Explicit carrier images for the restored prefix.  These lists are the
+computational authority for deciding whether a carrier is already represented;
+the existential predicates below remain proof-facing specifications. -/
+def restoredRegionImages
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern)) :
+    List source.val.RegionId :=
+  restored.flatMap fun content =>
+    (pattern.val.diagram.regionsList.filter fun region =>
+      decide (region ≠ pattern.val.diagram.root)).map
+        content.occurrence.regionMap
+
+def restoredNodeImages
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern)) :
+    List source.val.NodeId :=
+  restored.flatMap fun content =>
+    pattern.val.diagram.nodesList.map content.occurrence.nodeMap
+
+def restoredWireImages
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern)) :
+    List source.val.WireId :=
+  restored.flatMap fun content =>
+    (pattern.val.diagram.wiresList.filter fun wire =>
+      decide (wire ∉ pattern.val.boundary)).map content.occurrence.wireMap
+
+theorem mem_restoredRegionImages_iff
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern))
+    (region : source.val.RegionId) :
+    region ∈ restoredRegionImages restored ↔ restoredRegion restored region := by
+  constructor
+  · intro member
+    rcases List.mem_flatMap.mp member with
+      ⟨content, contentMember, imageMember⟩
+    rcases List.mem_map.mp imageMember with
+      ⟨patternRegion, properMember, mapped⟩
+    exact ⟨content, contentMember, patternRegion,
+      of_decide_eq_true (List.mem_filter.mp properMember).2, mapped⟩
+  · rintro ⟨content, contentMember, patternRegion, nonroot, rfl⟩
+    apply List.mem_flatMap.mpr
+    refine ⟨content, contentMember, List.mem_map.mpr ⟨patternRegion, ?_, rfl⟩⟩
+    exact List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin patternRegion, decide_eq_true nonroot⟩
+
+theorem mem_restoredNodeImages_iff
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern))
+    (node : source.val.NodeId) :
+    node ∈ restoredNodeImages restored ↔ restoredNode restored node := by
+  constructor
+  · intro member
+    rcases List.mem_flatMap.mp member with
+      ⟨content, contentMember, imageMember⟩
+    rcases List.mem_map.mp imageMember with
+      ⟨patternNode, _patternMember, mapped⟩
+    exact ⟨content, contentMember, patternNode, mapped⟩
+  · rintro ⟨content, contentMember, patternNode, rfl⟩
+    apply List.mem_flatMap.mpr
+    exact ⟨content, contentMember,
+      List.mem_map.mpr
+        ⟨patternNode, Data.Finite.mem_allFin patternNode, rfl⟩⟩
+
+theorem mem_restoredWireImages_iff
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (restored : List (ContentOccurrence source pattern))
+    (wire : source.val.WireId) :
+    wire ∈ restoredWireImages restored ↔ restoredWire restored wire := by
+  constructor
+  · intro member
+    rcases List.mem_flatMap.mp member with
+      ⟨content, contentMember, imageMember⟩
+    rcases List.mem_map.mp imageMember with
+      ⟨patternWire, internalMember, mapped⟩
+    exact ⟨content, contentMember, patternWire,
+      of_decide_eq_true (List.mem_filter.mp internalMember).2, mapped⟩
+  · rintro ⟨content, contentMember, patternWire, internal, rfl⟩
+    apply List.mem_flatMap.mpr
+    refine ⟨content, contentMember, List.mem_map.mpr ⟨patternWire, ?_, rfl⟩⟩
+    exact List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin patternWire, decide_eq_true internal⟩
+
 def BatchCoveredRegion
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -659,6 +748,45 @@ def BatchCoveredWire
     (restored : List (ContentOccurrence source pattern))
     (wire : source.val.WireId) : Prop :=
   retainedBySitesWire sites wire ∨ restoredWire restored wire
+
+def batchCoveredRegionDecidable
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (region : source.val.RegionId) :
+    Decidable (BatchCoveredRegion sites restored region) := by
+  exact decidable_of_iff
+    (region ∉ sites.flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedRegions ∨
+      region ∈ restoredRegionImages restored)
+    (by rw [mem_restoredRegionImages_iff]; rfl)
+
+def batchCoveredNodeDecidable
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (node : source.val.NodeId) :
+    Decidable (BatchCoveredNode sites restored node) := by
+  exact decidable_of_iff
+    (node ∉ sites.flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedNodes ∨
+      node ∈ restoredNodeImages restored)
+    (by rw [mem_restoredNodeImages_iff]; rfl)
+
+def batchCoveredWireDecidable
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    (sites : List (ConcreteWireQuantifier.RelationSeverSite source))
+    (restored : List (ContentOccurrence source pattern))
+    (wire : source.val.WireId) :
+    Decidable (BatchCoveredWire sites restored wire) := by
+  exact decidable_of_iff
+    (wire ∉ sites.flatMap
+        ConcreteWireQuantifier.RelationSeverSite.removedWires ∨
+      wire ∈ restoredWireImages restored)
+    (by rw [mem_restoredWireImages_iff]; rfl)
 
 theorem CheckedOccurrenceList.regionCoverage
     {source : CheckedDiagram definitions}

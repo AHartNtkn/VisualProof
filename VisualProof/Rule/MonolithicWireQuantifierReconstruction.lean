@@ -206,7 +206,39 @@ def batchReconstructionNil
       result.nodeImage_lt_retainedCount node.1 retainedMember
     omega
 
-theorem newlyCoveredRegion
+/-- First finite source whose image is the requested carrier.  The existence
+proof establishes totality but is erased; runtime selection is `List.find?`. -/
+def finitePreimage
+    [DecidableEq α]
+    (forward : Fin sourceCount → α)
+    (target : α)
+    (witnessed : ∃ source, forward source = target) : Fin sourceCount :=
+  ((Data.Finite.allFin sourceCount).find? fun source =>
+    decide (forward source = target)).get (by
+      apply List.find?_isSome.mpr
+      obtain ⟨source, exact⟩ := witnessed
+      exact ⟨source, Data.Finite.mem_allFin source, by simpa [exact]⟩)
+
+theorem finitePreimage_exact
+    [DecidableEq α]
+    (forward : Fin sourceCount → α)
+    (target : α)
+    (witnessed : ∃ source, forward source = target) :
+    forward (finitePreimage forward target witnessed) = target := by
+  unfold finitePreimage
+  let found := (Data.Finite.allFin sourceCount).find? fun source =>
+    decide (forward source = target)
+  have foundSome : found.isSome = true := by
+    apply List.find?_isSome.mpr
+    obtain ⟨source, exact⟩ := witnessed
+    exact ⟨source, Data.Finite.mem_allFin source, by simpa [exact]⟩
+  obtain ⟨candidate, candidateFound⟩ :=
+    Option.isSome_iff_exists.mp foundSome
+  rw [Option.get_of_eq_some foundSome candidateFound]
+  exact of_decide_eq_true (by
+    simpa [found] using List.find?_some candidateFound)
+
+theorem newlyCoveredRegion_exists
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
@@ -230,7 +262,7 @@ theorem newlyCoveredRegion
       subst candidate
       exact ⟨patternRegion, nonroot, mapped⟩
 
-theorem newlyCoveredNode
+theorem newlyCoveredNode_exists
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
@@ -250,7 +282,7 @@ theorem newlyCoveredNode
       subst candidate
       exact ⟨patternNode, mapped⟩
 
-theorem newlyCoveredWire
+theorem newlyCoveredWire_exists
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
@@ -273,6 +305,99 @@ theorem newlyCoveredWire
     · have candidateExact : candidate = content := by simpa using final
       subst candidate
       exact ⟨patternWire, internal, mapped⟩
+
+structure NewlyCoveredRegionWitness
+    {source : CheckedDiagram definitions}
+    (pattern : CheckedOpenDiagram definitions)
+    (content : ContentOccurrence source pattern)
+    (region : source.val.RegionId) where
+  choose : pattern.val.diagram.RegionId
+  choose_spec : choose ≠ pattern.val.diagram.root ∧
+    content.occurrence.regionMap choose = region
+
+structure NewlyCoveredNodeWitness
+    {source : CheckedDiagram definitions}
+    (pattern : CheckedOpenDiagram definitions)
+    (content : ContentOccurrence source pattern)
+    (node : source.val.NodeId) where
+  choose : pattern.val.diagram.NodeId
+  choose_spec : content.occurrence.nodeMap choose = node
+
+structure NewlyCoveredWireWitness
+    {source : CheckedDiagram definitions}
+    (pattern : CheckedOpenDiagram definitions)
+    (content : ContentOccurrence source pattern)
+    (wire : source.val.WireId) where
+  choose : pattern.val.diagram.WireId
+  choose_spec : choose ∉ pattern.val.boundary ∧
+    content.occurrence.wireMap choose = wire
+
+def newlyCoveredRegion
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    (content : ContentOccurrence source pattern)
+    (region : source.val.RegionId)
+    (covered : BatchCoveredRegion sites (restored ++ [content]) region)
+    (notOld : ¬ BatchCoveredRegion sites restored region) :
+    NewlyCoveredRegionWitness pattern content region := by
+  let witness := newlyCoveredRegion_exists content region covered notOld
+  let chosen := finitePreimage content.occurrence.regionMap region
+    ⟨witness.choose, witness.choose_spec.2⟩
+  have chosenExact : content.occurrence.regionMap chosen = region :=
+    finitePreimage_exact content.occurrence.regionMap region
+      ⟨witness.choose, witness.choose_spec.2⟩
+  have chosenSource : chosen = witness.choose :=
+    content.occurrence.regionMap_injective
+      (chosenExact.trans witness.choose_spec.2.symm)
+  exact
+    { choose := chosen
+      choose_spec := ⟨chosenSource ▸ witness.choose_spec.1, chosenExact⟩ }
+
+def newlyCoveredNode
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    (content : ContentOccurrence source pattern)
+    (node : source.val.NodeId)
+    (covered : BatchCoveredNode sites (restored ++ [content]) node)
+    (notOld : ¬ BatchCoveredNode sites restored node) :
+    NewlyCoveredNodeWitness pattern content node :=
+  { choose := finitePreimage content.occurrence.nodeMap node
+      (newlyCoveredNode_exists content node covered notOld)
+    choose_spec := finitePreimage_exact content.occurrence.nodeMap node
+      (newlyCoveredNode_exists content node covered notOld) }
+
+def newlyCoveredWire
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    (content : ContentOccurrence source pattern)
+    (wire : source.val.WireId)
+    (covered : BatchCoveredWire sites (restored ++ [content]) wire)
+    (notOld : ¬ BatchCoveredWire sites restored wire) :
+    NewlyCoveredWireWitness pattern content wire := by
+  let witness := newlyCoveredWire_exists content wire covered notOld
+  let chosen := finitePreimage content.occurrence.wireMap wire
+    ⟨witness.choose, witness.choose_spec.2⟩
+  have chosenExact : content.occurrence.wireMap chosen = wire :=
+    finitePreimage_exact content.occurrence.wireMap wire
+      ⟨witness.choose, witness.choose_spec.2⟩
+  have chosenInternal : chosen ∉ pattern.val.boundary := by
+    intro boundary
+    exact content.occurrence.internalBoundary_disjoint witness.choose chosen
+      witness.choose_spec.1 boundary
+      (witness.choose_spec.2.trans chosenExact.symm)
+  have chosenSource : chosen = witness.choose :=
+    content.occurrence.internalWire_injective chosen witness.choose
+      chosenInternal witness.choose_spec.1
+      (chosenExact.trans witness.choose_spec.2.symm)
+  exact
+    { choose := chosen
+      choose_spec := ⟨chosenInternal, chosenExact⟩ }
 
 /-- A successful option-valued list traversal retains exact positional
 ownership; consumers need not inspect the traversal implementation again. -/
@@ -826,7 +951,7 @@ theorem RelationSeverConcreteReceipt.inverseStep_identityRequestsEmpty
 atom deletion and splice, then allocate the newly restored occurrence in the
 fragment suffix.  The sole separation premise says that no original carrier
 already represented by the prefix is the generated atom being consumed. -/
-noncomputable def batchReconstructionSnoc
+def batchReconstructionSnoc
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
     {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
@@ -886,7 +1011,12 @@ noncomputable def batchReconstructionSnoc
                 rootCovered⟩))) :
     BatchReconstructionState sites (restored ++ [content]) step.checked
       joinSource := by
-  classical
+  letI : DecidablePred (BatchCoveredRegion sites restored) :=
+    fun region => batchCoveredRegionDecidable sites restored region
+  letI : DecidablePred (BatchCoveredNode sites restored) :=
+    fun node => batchCoveredNodeDecidable sites restored node
+  letI : DecidablePred (BatchCoveredWire sites restored) :=
+    fun wire => batchCoveredWireDecidable sites restored wire
   subst current
   have priorNodeImageExact' :
       step.priorNodeImage = state.joinNodeImage :=
@@ -1656,7 +1786,16 @@ noncomputable def batchReconstructionSnoc
               rw [← congrArg CEndpoint.port endpointExact,
                 ← patternNodeExact]
               exact Data.Finite.FiniteEquiv.symm_apply_apply _ _
-            simpa only [dif_pos wireOld, dif_neg nodeOld,
+            simp only [dif_pos wireOld, dif_neg nodeOld]
+            change
+              { node := step.checkedFragmentNode freshNode.choose
+                port :=
+                  (content.occurrence.portEquivForNode
+                    freshNode.choose).symm endpoint.port } ∈
+                (step.checked.val.wires
+                  (step.checkedPriorWire
+                    (state.wireImage ⟨wire.1, wireOld⟩))).endpoints
+            simpa only [
               ConcreteWireQuantifier.RelationJoinStep.checkedFragmentEndpoint,
               Occurrence.endpointMapForNode, patternNodeExact,
               inversePortExact] using mappedIncident
@@ -1704,7 +1843,15 @@ noncomputable def batchReconstructionSnoc
               rw [← congrArg CEndpoint.port endpointExact,
                 ← patternNodeExact]
               exact Data.Finite.FiniteEquiv.symm_apply_apply _ _
-            simpa only [dif_neg wireOld, dif_neg nodeOld, patternWireExact,
+            simp only [dif_neg wireOld, dif_neg nodeOld]
+            change
+              { node := step.checkedFragmentNode freshNode.choose
+                port :=
+                  (content.occurrence.portEquivForNode
+                    freshNode.choose).symm endpoint.port } ∈
+                (step.checked.val.wires
+                  (step.checkedFragmentWire freshWire.choose)).endpoints
+            simpa only [patternWireExact,
               ConcreteWireQuantifier.RelationJoinStep.checkedFragmentEndpoint,
               Occurrence.endpointMapForNode, patternNodeExact,
               inversePortExact] using mappedIncident
@@ -1756,21 +1903,7 @@ noncomputable def batchReconstructionSnoc
                 priorDifferent mappedOld.symm
             exact state.representedNodesAvoidPending ⟨node.1, old⟩
               (priorExact.symm ▸ priorMember)
-          · have fresh : ∃ patternNode,
-                content.occurrence.nodeMap patternNode = node.1 := by
-              rcases node.2 with retained | restoredAll
-              · exact False.elim (old (Or.inl retained))
-              · rcases restoredAll with
-                  ⟨candidate, member, patternNode, occurrenceExact⟩
-                rcases List.mem_append.mp member with previous | final
-                · exact False.elim
-                    (old (Or.inr
-                      ⟨candidate, previous, patternNode,
-                        occurrenceExact⟩))
-                · have candidateExact : candidate = content := by
-                    simpa using final
-                  subst candidate
-                  exact ⟨patternNode, occurrenceExact⟩
+          · let fresh := newlyCoveredNode content node.1 node.2 old
             have mappedFresh :
                 step.checkedPriorNode prior priorDifferent =
                   step.checkedFragmentNode fresh.choose := by
