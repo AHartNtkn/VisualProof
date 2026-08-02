@@ -26,7 +26,8 @@ theorem trace_denotes
     ∃ steps : List (RelationJoinStep source wire content),
       RelationJoinSemanticTrace source wire content parameters result.args
           steps result.boundFinal result.boundRegionImage
-            result.boundWireImage result.boundDying
+            result.boundNodeImage result.boundWireImage
+            result.boundDying
             (result.boundRegionImage (source.val.wires wire).scope) ∧
         steps.map RelationJoinStep.application =
           result.applications ∧

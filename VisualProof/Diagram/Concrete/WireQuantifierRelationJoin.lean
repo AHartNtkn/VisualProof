@@ -283,6 +283,23 @@ structure RelationJoinStep
         Internal.checkedWire baseGenerated
           (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
             prior priorApplication (priorWireImage sourceWire))
+  baseNodeImage : source.val.NodeId → Option base.val.NodeId
+  baseNodeImageExact :
+    ∀ sourceNode,
+      baseNodeImage sourceNode =
+        match priorNodeImage sourceNode with
+        | none => none
+        | some priorNode =>
+            if retained :
+                priorNode ∈
+                  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                    prior.val [priorApplication] then
+              some
+                (Internal.checkedNode baseGenerated
+                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+                    prior priorApplication priorNode retained))
+            else
+              none
   baseWireScopeExact :
     ∀ sourceWire,
       (base.val.wires (baseWireImage sourceWire)).scope =
@@ -313,6 +330,12 @@ structure RelationJoinStep
       checked.val.Encloses
           (checkedRegionImage outer) (checkedRegionImage inner) ↔
         source.val.Encloses outer inner
+  checkedNodeImage : source.val.NodeId → Option checked.val.NodeId
+  checkedNodeImageExact :
+    ∀ sourceNode,
+      checkedNodeImage sourceNode =
+        (baseNodeImage sourceNode).map fun baseNode =>
+          Internal.checkedNode generated (attachment.hostNode baseNode)
   checkedWireImage : source.val.WireId → checked.val.WireId
   checkedWireImageExact :
     ∀ sourceWire,
@@ -484,6 +507,60 @@ def checkedRemainingNodes
     else
       none
 
+/-- The indexed post-step node image is exactly the prior image with the
+consumed application removed and every survivor transported through the
+checked splice.  This is the authoritative snoc-tail equation used by inverse
+reconstruction. -/
+theorem checkedNodeImages_eq_checkedRemainingNodes
+    (step : RelationJoinStep source dying content)
+    (nodes : List source.val.NodeId) :
+    nodes.filterMap step.checkedNodeImage =
+      step.checkedRemainingNodes
+        (nodes.filterMap step.priorNodeImage) := by
+  induction nodes with
+  | nil => rfl
+  | cons sourceNode nodes induction =>
+      rw [List.filterMap_cons, List.filterMap_cons,
+        step.checkedNodeImageExact, step.baseNodeImageExact]
+      cases priorExact : step.priorNodeImage sourceNode with
+      | none =>
+          simp only [Option.map_none]
+          exact induction
+      | some priorNode =>
+          by_cases different : priorNode ≠ step.priorApplication
+          · have retained :
+                priorNode ∈
+                  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                    step.prior.val [step.priorApplication] := by
+              simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+                ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+                different]
+            simp only [retained, dif_pos, Option.map_some]
+            change
+              step.checkedPriorNode priorNode different ::
+                    nodes.filterMap step.checkedNodeImage =
+                step.checkedRemainingNodes
+                  (priorNode :: nodes.filterMap step.priorNodeImage)
+            simpa [checkedRemainingNodes, different] using
+              congrArg (fun tail =>
+                step.checkedPriorNode priorNode different :: tail) induction
+          · have same : priorNode = step.priorApplication :=
+              Classical.byContradiction different
+            subst priorNode
+            have notRetained :
+                step.priorApplication ∉
+                  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                    step.prior.val [step.priorApplication] := by
+              simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+                ConcreteDiagram.nodesList, Data.Finite.mem_allFin]
+            simp only [notRetained, dif_neg, Option.map_none]
+            change
+              nodes.filterMap step.checkedNodeImage =
+                step.checkedRemainingNodes
+                  (step.priorApplication ::
+                    nodes.filterMap step.priorNodeImage)
+            simpa [checkedRemainingNodes] using induction
+
 theorem attachment_accepted
     (step : RelationJoinStep source dying content) :
     checkConcreteSpliceAttachment step.base step.site content
@@ -562,20 +639,24 @@ inductive RelationJoinSemanticTrace
     (steps : List (RelationJoinStep source dying content)) →
     (final : CheckedDiagram definitions) →
     (source.val.RegionId → final.val.RegionId) →
+    (source.val.NodeId → Option final.val.NodeId) →
     (source.val.WireId → final.val.WireId) →
     final.val.WireId → final.val.RegionId → Prop
   | nil :
       RelationJoinSemanticTrace source dying content parameters args []
-        source id id dying (source.val.wires dying).scope
+        source id (fun node => some node) id dying
+          (source.val.wires dying).scope
   | snoc
-      {steps current currentRegionImage currentWireImage
+      {steps current currentRegionImage currentNodeImage currentWireImage
         currentDying currentScope}
       (trace :
         RelationJoinSemanticTrace source dying content parameters args steps
-          current currentRegionImage currentWireImage currentDying currentScope)
+          current currentRegionImage currentNodeImage currentWireImage
+            currentDying currentScope)
       (step : RelationJoinStep source dying content)
       (_ : step.prior = current)
       (_ : HEq step.priorRegionImage currentRegionImage)
+      (_ : HEq step.priorNodeImage currentNodeImage)
       (_ : HEq step.priorWireImage currentWireImage)
       (_ : HEq (step.priorWireImage dying) currentDying)
       (_ : HEq
@@ -584,7 +665,8 @@ inductive RelationJoinSemanticTrace
       (_ : step.sourceParameters = parameters) :
       RelationJoinSemanticTrace source dying content parameters args
         (steps ++ [step]) step.checked step.checkedRegionImage
-        step.checkedWireImage (step.checkedWireImage dying)
+        step.checkedNodeImage step.checkedWireImage
+        (step.checkedWireImage dying)
         (step.checkedRegionImage (source.val.wires dying).scope)
 
 private theorem checkedWire_injective
@@ -638,7 +720,7 @@ private structure RelationJoinState
     steps.map RelationJoinStep.application = processed
   semanticTrace :
     RelationJoinSemanticTrace source dying content parameters args steps
-      checked regionImage wireImage (wireImage dying)
+      checked regionImage nodeImage wireImage (wireImage dying)
         (regionImage (source.val.wires dying).scope)
 
 private structure RelationJoinStepResult
@@ -912,6 +994,22 @@ private def spliceRelationApplication
                                         baseRegionImageExact := fun _ => rfl
                                         baseWireImage := baseWireImage
                                         baseWireImageExact := fun _ => rfl
+                                        baseNodeImage := baseNodeImage
+                                        baseNodeImageExact := by
+                                          intro sourceNode
+                                          unfold baseNodeImage
+                                          generalize imageExact :
+                                            state.nodeImage sourceNode = image
+                                          cases image with
+                                          | none => rfl
+                                          | some priorNode =>
+                                              by_cases retained :
+                                                  priorNode ∈
+                                                    ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                                                      state.checked.val
+                                                        [priorApplication]
+                                              · simp [retained]
+                                              · simp [retained]
                                         baseWireScopeExact :=
                                           baseWireScopeExact
                                         site := site
@@ -940,6 +1038,12 @@ private def spliceRelationApplication
                                           exact
                                             state.regionImage_encloses
                                               outer inner
+                                        checkedNodeImage := fun sourceNode =>
+                                          (baseNodeImage sourceNode).map
+                                            fun baseNode =>
+                                              Internal.checkedNode generated
+                                                (attachment.hostNode baseNode)
+                                        checkedNodeImageExact := fun _ => rfl
                                         checkedWireImage := fun sourceWire =>
                                           Internal.checkedWire generated
                                             (attachment.hostWire
@@ -980,12 +1084,7 @@ private def spliceRelationApplication
                                           exact same
                                         wireScopeExact :=
                                           step.checkedWireScopeExact
-                                        nodeImage := fun sourceNode =>
-                                          (baseNodeImage sourceNode).map
-                                            fun baseNode =>
-                                              Internal.checkedNode generated
-                                                (attachment.hostNode
-                                                  baseNode)
+                                        nodeImage := step.checkedNodeImage
                                         processed :=
                                           state.processed ++
                                             [application.node]
@@ -995,6 +1094,7 @@ private def spliceRelationApplication
                                         semanticTrace :=
                                           .snoc state.semanticTrace step
                                             rfl (by simp [step]) (by simp [step])
+                                            (by simp [step])
                                             (by simp [step]) (by simp [step])
                                             rfl rfl }
                                     exact .ok
@@ -1225,6 +1325,14 @@ def boundRegionImage
     source.val.RegionId → result.boundFinal.val.RegionId :=
   result.finalState.regionImage
 
+/-- Exact source-node landing after the complete splice fold. Consumed
+relation applications map to `none`; every surviving source node maps to its
+checked final representative. -/
+def boundNodeImage
+    (result : RelationJoinResult source wire content parameters) :
+    source.val.NodeId → Option result.boundFinal.val.NodeId :=
+  result.finalState.nodeImage
+
 def boundWireImage
     (result : RelationJoinResult source wire content parameters) :
     source.val.WireId → result.boundFinal.val.WireId :=
@@ -1317,7 +1425,7 @@ theorem semantic_trace
     (result : RelationJoinResult source wire content parameters) :
     RelationJoinSemanticTrace source wire content parameters result.args
       result.steps result.boundFinal result.boundRegionImage
-        result.boundWireImage result.boundDying
+        result.boundNodeImage result.boundWireImage result.boundDying
         (result.boundRegionImage (source.val.wires wire).scope) :=
   result.finalState.semanticTrace
 
@@ -1425,7 +1533,8 @@ theorem trace_complete
           ConcreteDiagram.IdentityNormalization result.plainFinal,
         RelationJoinSemanticTrace source wire content parameters result.args
             steps result.boundFinal result.boundRegionImage
-              result.boundWireImage result.boundDying
+              result.boundNodeImage result.boundWireImage
+              result.boundDying
               (result.boundRegionImage (source.val.wires wire).scope) ∧
           steps.map RelationJoinStep.application =
             result.applications ∧

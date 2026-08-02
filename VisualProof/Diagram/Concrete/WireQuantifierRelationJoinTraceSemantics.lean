@@ -171,16 +171,19 @@ theorem RelationJoinSemanticTrace.finalDyingScope
     {steps : List (RelationJoinStep source dying content)}
     {final : CheckedDiagram definitions}
     {finalRegionImage : source.val.RegionId → final.val.RegionId}
+    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
     {finalWireImage : source.val.WireId → final.val.WireId}
     {finalDying : final.val.WireId}
     {finalScope : final.val.RegionId}
     (trace :
       RelationJoinSemanticTrace source dying content parameters args steps
-        final finalRegionImage finalWireImage finalDying finalScope) :
+        final finalRegionImage finalNodeImage finalWireImage finalDying
+          finalScope) :
     (final.val.wires finalDying).scope = finalScope := by
   induction trace with
   | nil => rfl
-  | snoc trace step priorExact priorRegionImageExact priorWireImageExact
+  | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
+      priorWireImageExact
       priorDyingExact priorScopeExact relationArgsExact
       sourceParametersExact induction =>
       exact step.checked_dying_scope
@@ -473,12 +476,14 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
     {steps : List (RelationJoinStep source dying content)}
     {final : CheckedDiagram definitions}
     {finalRegionImage : source.val.RegionId → final.val.RegionId}
+    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
     {finalWireImage : source.val.WireId → final.val.WireId}
     {finalDying : final.val.WireId}
     {finalScope : final.val.RegionId}
     (trace :
       RelationJoinSemanticTrace source dying content parameters args steps
-        final finalRegionImage finalWireImage finalDying finalScope)
+        final finalRegionImage finalNodeImage finalWireImage finalDying
+          finalScope)
     (contentCompiled : OpenCompilation content)
     (sourceScope :
       SiteCompilation source (source.val.wires dying).scope)
@@ -636,11 +641,13 @@ theorem RelationJoinSemanticTrace.preBinderDenotationAtTraceScope
               (Env.comp finalEnv (fun {_} value => value))
               sourceScope.frame.siteBody
         simpa [Env.comp] using finalHolds
-  | snoc trace step priorExact priorRegionImageExact priorWireImageExact
+  | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
+      priorWireImageExact
       priorDyingExact priorScopeExact relationArgsExact
       sourceParametersExact induction =>
       cases priorExact
       cases eq_of_heq priorRegionImageExact
+      cases eq_of_heq priorNodeImageExact
       cases eq_of_heq priorWireImageExact
       cases eq_of_heq priorDyingExact
       cases eq_of_heq priorScopeExact
@@ -803,12 +810,14 @@ theorem Internal.relationJoin_preBinderDenotation
     {steps : List (RelationJoinStep source dying content)}
     {final : CheckedDiagram definitions}
     {finalRegionImage : source.val.RegionId → final.val.RegionId}
+    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
     {finalWireImage : source.val.WireId → final.val.WireId}
     {finalDying : final.val.WireId}
     {finalScope : final.val.RegionId}
     (trace :
       RelationJoinSemanticTrace source dying content parameters args steps
-        final finalRegionImage finalWireImage finalDying finalScope)
+        final finalRegionImage finalNodeImage finalWireImage finalDying
+          finalScope)
     (contentCompiled : OpenCompilation content)
     (sourceScope :
       SiteCompilation source (source.val.wires dying).scope)
