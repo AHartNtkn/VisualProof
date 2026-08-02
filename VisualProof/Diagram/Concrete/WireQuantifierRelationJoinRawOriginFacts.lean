@@ -4,6 +4,82 @@ namespace VisualProof
 
 namespace ConcreteWireQuantifier
 
+/-- Exact node-domain characterization of the data-bearing construction trace. -/
+theorem RelationJoinConstructionTrace.nodeImage_eq_none_iff
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    {steps : List (RelationJoinStep source dying content)}
+    {final : CheckedDiagram definitions}
+    {finalRegionImage : source.val.RegionId → final.val.RegionId}
+    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
+    {finalWireImage : source.val.WireId → final.val.WireId}
+    {finalDying : final.val.WireId}
+    {finalScope : final.val.RegionId}
+    (trace : RelationJoinConstructionTrace source dying content parameters args
+      steps final finalRegionImage finalNodeImage finalWireImage finalDying
+        finalScope)
+    (sourceNode : source.val.NodeId) :
+    finalNodeImage sourceNode = none ↔
+      sourceNode ∈ steps.map RelationJoinStep.application := by
+  induction trace with
+  | nil => simp
+  | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
+      priorWireImageExact priorDyingExact priorScopeExact relationArgsExact
+      sourceParametersExact induction =>
+      subst priorExact
+      cases eq_of_heq priorRegionImageExact
+      have nodeImageExact := eq_of_heq priorNodeImageExact
+      cases eq_of_heq priorWireImageExact
+      cases eq_of_heq priorDyingExact
+      cases eq_of_heq priorScopeExact
+      cases relationArgsExact
+      cases sourceParametersExact
+      rw [List.map_append]
+      simp only [List.map_singleton, List.mem_append, List.mem_singleton]
+      cases priorExact : step.priorNodeImage sourceNode with
+      | none =>
+          have checkedExact : step.checkedNodeImage sourceNode = none := by
+            simp [step.checkedNodeImageExact, step.baseNodeImageExact,
+              priorExact]
+          rw [checkedExact]
+          simp only [true_iff]
+          exact Or.inl (induction.mp (nodeImageExact ▸ priorExact))
+      | some priorNode =>
+          by_cases applicationExact : sourceNode = step.application
+          · subst sourceNode
+            simp [step.checkedNodeImage_application]
+          · have priorDifferent : priorNode ≠ step.priorApplication := by
+              intro same
+              subst priorNode
+              exact applicationExact
+                (step.priorNodeImage_injective priorExact
+                  step.priorApplicationImage)
+            have checkedExact :=
+              step.checkedNodeImage_of_prior priorExact priorDifferent
+            rw [checkedExact]
+            simp only [Option.some_ne_none, false_iff]
+            intro present
+            rcases present with member | same
+            · have noneCurrent := induction.mpr member
+              rw [← nodeImageExact, priorExact] at noneCurrent
+              contradiction
+            · exact applicationExact same
+
+namespace RelationJoinResult
+
+theorem boundNodeImage_eq_none_iff
+    (result : RelationJoinResult source wire content parameters)
+    (sourceNode : source.val.NodeId) :
+    result.boundNodeImage sourceNode = none ↔
+      sourceNode ∈ result.applications := by
+  rw [result.construction_trace.nodeImage_eq_none_iff]
+  rw [result.steps_application_order]
+
+end RelationJoinResult
+
 namespace RelationJoinStep
 
 theorem checkedFragmentRegion_injective_of_nonroot

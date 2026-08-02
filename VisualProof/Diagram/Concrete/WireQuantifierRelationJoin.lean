@@ -1497,10 +1497,49 @@ inductive RelationJoinSemanticTrace
         (step.checkedWireImage dying)
         (step.checkedRegionImage (source.val.wires dying).scope)
 
-/-- Exact node-domain characterization of the construction trace: a source
-node lacks a final representative precisely when it is one of the consumed
-relation applications, in the trace's ordered step list. -/
-theorem RelationJoinSemanticTrace.nodeImage_eq_none_iff
+/-- Data-bearing checked relation-join construction.  Unlike the semantic Prop
+view, every snoc receipt remains available to structural recursion and
+inversion. -/
+inductive RelationJoinConstructionTrace
+    (source : CheckedDiagram definitions) (dying : source.val.WireId)
+    (content : CheckedOpenDiagram definitions)
+    (parameters : List source.val.WireId) (args : List Sig) :
+    (steps : List (RelationJoinStep source dying content)) →
+    (final : CheckedDiagram definitions) →
+    (source.val.RegionId → final.val.RegionId) →
+    (source.val.NodeId → Option final.val.NodeId) →
+    (source.val.WireId → final.val.WireId) →
+    final.val.WireId → final.val.RegionId → Type
+  | nil :
+      RelationJoinConstructionTrace source dying content parameters args []
+        source id (fun node => some node) id dying
+          (source.val.wires dying).scope
+  | snoc
+      {steps current currentRegionImage currentNodeImage currentWireImage
+        currentDying currentScope}
+      (trace :
+        RelationJoinConstructionTrace source dying content parameters args steps
+          current currentRegionImage currentNodeImage currentWireImage
+            currentDying currentScope)
+      (step : RelationJoinStep source dying content)
+      (_ : step.prior = current)
+      (_ : HEq step.priorRegionImage currentRegionImage)
+      (_ : HEq step.priorNodeImage currentNodeImage)
+      (_ : HEq step.priorWireImage currentWireImage)
+      (_ : HEq (step.priorWireImage dying) currentDying)
+      (_ : HEq
+        (step.priorRegionImage (source.val.wires dying).scope) currentScope)
+      (_ : step.relationArgs = args)
+      (_ : step.sourceParameters = parameters) :
+      RelationJoinConstructionTrace source dying content parameters args
+        (steps ++ [step]) step.checked step.checkedRegionImage
+        step.checkedNodeImage step.checkedWireImage
+        (step.checkedWireImage dying)
+        (step.checkedRegionImage (source.val.wires dying).scope)
+
+/-- Erase only the trace's data-bearing status, preserving its exact semantic
+indices and receipts. -/
+def RelationJoinConstructionTrace.semanticTrace
     {source : CheckedDiagram definitions}
     {dying : source.val.WireId}
     {content : CheckedOpenDiagram definitions}
@@ -1513,57 +1552,19 @@ theorem RelationJoinSemanticTrace.nodeImage_eq_none_iff
     {finalWireImage : source.val.WireId → final.val.WireId}
     {finalDying : final.val.WireId}
     {finalScope : final.val.RegionId}
-    (trace :
-      RelationJoinSemanticTrace source dying content parameters args steps
-        final finalRegionImage finalNodeImage finalWireImage finalDying
-          finalScope)
-    (sourceNode : source.val.NodeId) :
-    finalNodeImage sourceNode = none ↔
-      sourceNode ∈ steps.map RelationJoinStep.application := by
+    (trace : RelationJoinConstructionTrace source dying content parameters args
+      steps final finalRegionImage finalNodeImage finalWireImage finalDying
+        finalScope) :
+    RelationJoinSemanticTrace source dying content parameters args steps final
+      finalRegionImage finalNodeImage finalWireImage finalDying finalScope := by
   induction trace with
-  | nil => simp
+  | nil => exact .nil
   | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
       priorWireImageExact priorDyingExact priorScopeExact relationArgsExact
       sourceParametersExact induction =>
-      subst priorExact
-      cases eq_of_heq priorRegionImageExact
-      have nodeImageExact := eq_of_heq priorNodeImageExact
-      cases eq_of_heq priorWireImageExact
-      cases eq_of_heq priorDyingExact
-      cases eq_of_heq priorScopeExact
-      cases relationArgsExact
-      cases sourceParametersExact
-      rw [List.map_append]
-      simp only [List.map_singleton, List.mem_append, List.mem_singleton]
-      cases priorExact : step.priorNodeImage sourceNode with
-      | none =>
-          have checkedExact : step.checkedNodeImage sourceNode = none := by
-            simp [step.checkedNodeImageExact, step.baseNodeImageExact,
-              priorExact]
-          rw [checkedExact]
-          simp only [true_iff]
-          exact Or.inl (induction.mp (nodeImageExact ▸ priorExact))
-      | some priorNode =>
-          by_cases applicationExact : sourceNode = step.application
-          · subst sourceNode
-            simp [step.checkedNodeImage_application]
-          · have priorDifferent :
-                priorNode ≠ step.priorApplication := by
-              intro same
-              subst priorNode
-              exact applicationExact
-                (step.priorNodeImage_injective priorExact
-                  step.priorApplicationImage)
-            have checkedExact :=
-              step.checkedNodeImage_of_prior priorExact priorDifferent
-            rw [checkedExact]
-            simp only [Option.some_ne_none, false_iff]
-            intro present
-            rcases present with member | same
-            · have noneCurrent := induction.mpr member
-              rw [← nodeImageExact, priorExact] at noneCurrent
-              contradiction
-            · exact applicationExact same
+      exact .snoc induction step priorExact priorRegionImageExact
+        priorNodeImageExact priorWireImageExact priorDyingExact priorScopeExact
+        relationArgsExact sourceParametersExact
 
 private theorem checkedWire_injective
     {definitions : List (List Sig)}
@@ -1671,8 +1672,8 @@ private structure RelationJoinState
   steps : List (RelationJoinStep source dying content)
   traceExact :
     steps.map RelationJoinStep.application = processed
-  semanticTrace :
-    RelationJoinSemanticTrace source dying content parameters args steps
+  constructionTrace :
+    RelationJoinConstructionTrace source dying content parameters args steps
       checked regionImage nodeImage wireImage (wireImage dying)
         (regionImage (source.val.wires dying).scope)
 
@@ -1735,7 +1736,7 @@ private def relationJoinInitialState
       processed := []
       steps := []
       traceExact := rfl
-      semanticTrace := .nil }
+      constructionTrace := .nil }
   exact
     { state := state
       checkedExact := rfl
@@ -2059,8 +2060,8 @@ private def spliceRelationApplication
                                         steps := state.steps ++ [step]
                                         traceExact := by
                                           simp [step, state.traceExact]
-                                        semanticTrace :=
-                                          .snoc state.semanticTrace step
+                                        constructionTrace :=
+                                          .snoc state.constructionTrace step
                                             rfl (by simp [step]) (by simp [step])
                                             (by simp [step])
                                             (by simp [step]) (by simp [step])
@@ -2386,15 +2387,6 @@ theorem boundNodeImage_injective
     (rightExact : result.boundNodeImage right = some checkedNode) :
     left = right :=
   result.finalState.nodeImage_injective leftExact rightExact
-
-theorem boundNodeImage_eq_none_iff
-    (result : RelationJoinResult source wire content parameters)
-    (sourceNode : source.val.NodeId) :
-    result.boundNodeImage sourceNode = none ↔
-      sourceNode ∈ result.applications := by
-  change result.finalState.nodeImage sourceNode = none ↔ _
-  rw [result.finalState.semanticTrace.nodeImage_eq_none_iff]
-  rw [result.finalState.traceExact, result.applicationsExact]
 
 def boundWireImage
     (result : RelationJoinResult source wire content parameters) :
@@ -2815,13 +2807,22 @@ theorem plainFinal_wireCount_add_one
       result.boundRegionImage (source.val.wires wire).scope :=
   result.finalState.wireScopeExact wire
 
+/-- The accepted construction's sole data-bearing trace authority. -/
+def construction_trace
+    (result : RelationJoinResult source wire content parameters) :
+    RelationJoinConstructionTrace source wire content parameters result.args
+      result.steps result.boundFinal result.boundRegionImage
+        result.boundNodeImage result.boundWireImage result.boundDying
+        (result.boundRegionImage (source.val.wires wire).scope) :=
+  result.finalState.constructionTrace
+
 theorem semantic_trace
     (result : RelationJoinResult source wire content parameters) :
     RelationJoinSemanticTrace source wire content parameters result.args
       result.steps result.boundFinal result.boundRegionImage
         result.boundNodeImage result.boundWireImage result.boundDying
         (result.boundRegionImage (source.val.wires wire).scope) :=
-  result.finalState.semanticTrace
+  result.construction_trace.semanticTrace
 
 end FinalDeletion
 
@@ -2937,7 +2938,7 @@ theorem trace_complete
           normalization.target = result.checked := by
   refine
     ⟨result.finalState.steps, result.normalization,
-      result.finalState.semanticTrace, ?_, result.normalizationExact,
+      result.semantic_trace, ?_, result.normalizationExact,
       result.checkedExact.symm⟩
   exact
     result.finalState.traceExact.trans result.applicationsExact.symm
