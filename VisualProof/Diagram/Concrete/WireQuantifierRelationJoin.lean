@@ -869,6 +869,7 @@ theorem checkedIdentityAttachmentWire_eq_checkedWireImage
         (step.identityRequestSourceWire request port) := by
   rw [step.checkedWireImageExact,
     step.identityRequestSourceWire_baseImage]
+  apply Fin.ext
   rfl
 
 /-- A prior wire preserves its signature through application deletion and
