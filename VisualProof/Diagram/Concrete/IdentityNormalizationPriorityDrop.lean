@@ -618,6 +618,169 @@ private theorem drop_wire_scope
   rw [dropSourceWire_map iso removed eligible wire]
   exact iso.wire_scope sourceWire
 
+/-- Dense position of a distinct source node after a Rule-1 deletion. -/
+def dropRetainedNode
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (eligible : DropEligibility source removed)
+    (different : other ≠ removed) :
+    (dropCandidate source removed eligible).NodeId :=
+  eraseNodeIndex source removed other (by
+    simp [retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.mem_allFin, different])
+
+@[simp] theorem dropSourceNode_retained
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (eligible : DropEligibility source removed)
+    (different : other ≠ removed) :
+    dropSourceNode source removed
+        (dropRetainedNode source removed other eligible different) = other := by
+  unfold dropRetainedNode dropSourceNode eraseNodeIndex
+  apply Data.Finite.indexOf?_sound
+  exact (Option.some_get (Data.Finite.indexOf?_isSome_iff.mpr (by
+    simp [retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.mem_allFin, different]))).symm
+
+private def dropRetainedWire
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (eligible : DropEligibility source removed) :
+    Data.Finite.FiniteEquiv source.val.WireId
+      (dropCandidate source removed eligible).WireId where
+  toFun := eraseNodeWire source removed
+  invFun := fun wire => source.val.wiresList.get wire
+  left_inv := by
+    intro wire
+    apply Fin.ext
+    simp [eraseNodeWire, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange]
+  right_inv := by
+    intro wire
+    apply Fin.ext
+    simp [eraseNodeWire, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange]
+
+@[simp] private theorem dropSourceWire_retained
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (eligible : DropEligibility source removed)
+    (wire : source.val.WireId) :
+    source.val.wiresList.get (dropRetainedWire source removed eligible wire) =
+      wire := by
+  exact (dropRetainedWire source removed eligible).left_inv wire
+
+private theorem dropIdentityIncident_mem_iff
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (eligible : DropEligibility source removed)
+    (different : other ≠ removed)
+    (wire : source.val.WireId) :
+    dropRetainedWire source removed eligible wire ∈
+        (dropCandidate source removed eligible).identityIncidentWires
+          (dropRetainedNode source removed other eligible different) ↔
+      wire ∈ source.val.identityIncidentWires other := by
+  constructor
+  · intro incident
+    obtain ⟨endpoint, endpointMember, endpointNode⟩ :=
+      (mem_identityIncidentWires
+        (dropCandidate source removed eligible)
+        (dropRetainedNode source removed other eligible different)
+        (dropRetainedWire source removed eligible wire)).mp incident
+    have sourceMember :=
+      (dropCandidate_endpoint_mem_iff source removed eligible
+        (dropRetainedWire source removed eligible wire) endpoint).mp
+        endpointMember
+    refine (mem_identityIncidentWires source.val other wire).mpr
+      ⟨dropSourceEndpoint source removed endpoint, ?_, ?_⟩
+    · rw [dropSourceWire_retained] at sourceMember
+      exact sourceMember
+    · change dropSourceNode source removed endpoint.node = other
+      rw [endpointNode, dropSourceNode_retained]
+  · intro incident
+    obtain ⟨endpoint, endpointMember, endpointNode⟩ :=
+      (mem_identityIncidentWires source.val other wire).mp incident
+    have endpointDifferent : endpoint.node ≠ removed := by
+      intro same
+      exact different (endpointNode.symm.trans same)
+    let mapped := eraseNodeEndpoint source removed endpoint endpointDifferent
+    have mappedMember : mapped ∈
+        ((dropCandidate source removed eligible).wires
+          (dropRetainedWire source removed eligible wire)).endpoints := by
+      have raw := eraseNodeEndpoint_mem source removed wire endpoint
+        endpointDifferent endpointMember
+      change mapped ∈
+        ((eraseNodeCandidate source removed).wires
+          (dropRetainedWire source removed eligible wire)).endpoints
+      exact raw
+    apply (mem_identityIncidentWires
+      (dropCandidate source removed eligible)
+      (dropRetainedNode source removed other eligible different)
+      (dropRetainedWire source removed eligible wire)).mpr
+    refine ⟨mapped, mappedMember, ?_⟩
+    unfold mapped eraseNodeEndpoint dropRetainedNode
+    apply Fin.ext
+    simp only
+    simpa only [endpointNode]
+
+private theorem dropIncident_length_eq
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (eligible : DropEligibility source removed)
+    (different : other ≠ removed) :
+    ((dropCandidate source removed eligible).identityIncidentWires
+      (dropRetainedNode source removed other eligible different)).length =
+      (source.val.identityIncidentWires other).length := by
+  let equivalence := dropRetainedWire source removed eligible
+  let sourceWires := source.val.identityIncidentWires other
+  let targetWires :=
+    (dropCandidate source removed eligible).identityIncidentWires
+      (dropRetainedNode source removed other eligible different)
+  apply Nat.le_antisymm
+  · let restricted := Data.Finite.FiniteEquiv.restrictLists equivalence.symm
+      targetWires sourceWires
+      ((dropCandidate source removed eligible).identityIncidentWires_nodup _)
+      (source.val.identityIncidentWires_nodup other)
+      (fun wire => by
+        simpa only [equivalence, sourceWires, targetWires,
+          Data.Finite.FiniteEquiv.apply_symm_apply] using
+          (dropIdentityIncident_mem_iff source removed other eligible different
+            (equivalence.symm wire)).symm)
+    exact Data.Finite.fin_card_le_of_injective restricted restricted.injective
+  · let restricted := Data.Finite.FiniteEquiv.restrictLists equivalence
+      sourceWires targetWires
+      (source.val.identityIncidentWires_nodup other)
+      ((dropCandidate source removed eligible).identityIncidentWires_nodup _)
+      (dropIdentityIncident_mem_iff source removed other eligible different)
+    exact Data.Finite.fin_card_le_of_injective restricted restricted.injective
+
+/-- A distinct Rule-1 candidate remains Rule-1 eligible after the first
+deletion, so priority recomputation stays in the drop class. -/
+def dropEligibilityAfter
+    (source : CheckedDiagram definitions)
+    (removed other : source.val.NodeId)
+    (removedEligible : DropEligibility source removed)
+    (otherEligible : DropEligibility source other)
+    (different : other ≠ removed) :
+    DropEligibility
+      (⟨dropCandidate source removed removedEligible,
+        dropCandidate_wellFormed source removed removedEligible⟩ :
+        CheckedDiagram definitions)
+      (dropRetainedNode source removed other removedEligible different) where
+  identity :=
+    { region := eraseNodeRegion source removed otherEligible.identity.region
+      signature := otherEligible.identity.signature
+      arity := otherEligible.identity.arity
+      node_eq := by
+        change (eraseNodeCandidate source removed).nodes
+            (eraseNodeIndex source removed other _) = _
+        rw [eraseNodeIndex_data source removed other]
+        rw [otherEligible.identity.node_eq]
+        rfl }
+  incident_lt_two := by
+    rw [dropIncident_length_eq source removed other removedEligible different]
+    exact otherEligible.incident_lt_two
+
 /-- A paired Rule-1 rewrite constructs its target isomorphism directly
 from the retained carrier tables and restricted endpoint fibers. -/
 def transportDropCandidate

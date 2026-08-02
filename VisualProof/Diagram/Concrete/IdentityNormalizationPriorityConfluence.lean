@@ -10,6 +10,61 @@ open IdentityNormalizationCore
 
 namespace IdentityNormalizationPriority
 
+private theorem identityNodeInfo_unique
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {node : source.val.NodeId}
+    (left right : IdentityNodeInfo source node) : left = right := by
+  cases left with
+  | mk leftRegion leftSignature leftArity leftNode =>
+      cases right with
+      | mk rightRegion rightSignature rightArity rightNode =>
+          have same := leftNode.symm.trans rightNode
+          have parts := CNode.identity.inj same
+          rcases parts with ⟨rfl, rfl, rfl⟩
+          rfl
+
+theorem DropEligibility.unique
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {node : source.val.NodeId}
+    (left right : DropEligibility source node) : left = right := by
+  cases left
+  cases right
+  congr
+  exact identityNodeInfo_unique _ _
+
+theorem CollapseEligibility.unique
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {node : source.val.NodeId}
+    (left right : CollapseEligibility source node) : left = right := by
+  cases left with
+  | mk leftInfo leftSurvivor leftSecond leftRest leftIncident leftScope =>
+      cases right with
+      | mk rightInfo rightSurvivor rightSecond rightRest rightIncident
+          rightScope =>
+          have infoExact := identityNodeInfo_unique leftInfo rightInfo
+          subst rightInfo
+          have incidentExact := leftIncident.symm.trans rightIncident
+          have survivorExact := (List.cons.inj incidentExact).1
+          have tailExact := (List.cons.inj incidentExact).2
+          have secondExact := (List.cons.inj tailExact).1
+          have restExact := (List.cons.inj tailExact).2
+          subst rightSurvivor
+          subst rightSecond
+          subst rightRest
+          rfl
+
+theorem FusionEligibility.unique
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {leftNode rightNode : source.val.NodeId}
+    (left right : FusionEligibility source leftNode rightNode) : left = right := by
+  cases left
+  cases right
+  congr <;> exact identityNodeInfo_unique _ _
+
 /-- Identity concrete isomorphism for a checked diagram.  Identity endpoint
 ports use checked incidence to discharge the semantic identity-port clause. -/
 def checkedIsoRefl
