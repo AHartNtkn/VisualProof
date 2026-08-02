@@ -6,6 +6,8 @@ namespace ConcreteDiagram
 
 namespace IdentityNormalizationCore
 
+open DenseErasure
+
 private abbrev fusionNodes
     (source : CheckedDiagram definitions)
     (right : source.val.NodeId) :

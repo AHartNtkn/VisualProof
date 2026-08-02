@@ -110,7 +110,7 @@ structure Internal.RelationJoinStep.PairedAboveScopeReflection
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     {fragment : CheckedOpenDiagram definitions}
     {fragmentCompiled : OpenCompilation fragment}
@@ -248,7 +248,7 @@ theorem Internal.RelationJoinStep.pairedStopAboveCurrent
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     {fragment : CheckedOpenDiagram definitions}
     {fragmentCompiled : OpenCompilation fragment}
@@ -822,7 +822,7 @@ theorem Internal.RelationJoinStep.pairedSiblingAboveScope
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     {fragment : CheckedOpenDiagram definitions}
     {fragmentCompiled : OpenCompilation fragment}
@@ -1084,12 +1084,12 @@ theorem Internal.RelationJoinStep.pairedSiblingAboveScope
           intro pre definitionEnv env
           exact
             SingletonRemovalSemantics.compiledChildren_equiv source
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (ConcreteElaboration.compileRegion? definitions source.val
                 fuel)
               (ConcreteElaboration.compileRegion? definitions
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed) fuel)
               sourceContext
               (SingletonRemovalSemantics.targetContext source removed

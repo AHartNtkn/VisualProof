@@ -8,6 +8,7 @@ namespace VisualProof
 namespace ConcreteDiagram
 
 open IdentityNormalizationCore
+open DenseErasure
 
 /-- The construction-owned primitive and complete eligibility receipt for one
 eager identity rewrite.  Consumers never need to rediscover which rule made a
@@ -36,7 +37,7 @@ def removedNodes : IdentityRewriteKind source → List source.val.NodeId
 /-- Source nodes retained by the rewrite, in canonical dense order. -/
 def retainedNodes (kind : IdentityRewriteKind source) :
     List source.val.NodeId :=
-  IdentityNormalizationCore.retainedNodes source.val kind.removedNodes
+  DenseErasure.retainedNodes source.val kind.removedNodes
 
 /-- Original storage-port owners, in port-index order, for every identity
 represented by this rewrite.  Fusion deliberately retains two separate
@@ -115,7 +116,7 @@ def nodeImage?
             rw [generated]
             have retainedExact :
                 retained =
-                  IdentityNormalizationCore.retainedNodes source.val
+                  DenseErasure.retainedNodes source.val
                     [removed] := by
               simp [retained, IdentityRewriteKind.retainedNodes,
                 kindEquation, IdentityRewriteKind.removedNodes]
@@ -131,7 +132,7 @@ def nodeImage?
             rw [generated]
             have retainedExact :
                 retained =
-                  IdentityNormalizationCore.retainedNodes source.val
+                  DenseErasure.retainedNodes source.val
                     [removed] := by
               simp [retained, IdentityRewriteKind.retainedNodes,
                 kindEquation, IdentityRewriteKind.removedNodes]
@@ -147,7 +148,7 @@ def nodeImage?
             rw [generated]
             have retainedExact :
                 retained =
-                  IdentityNormalizationCore.retainedNodes source.val
+                  DenseErasure.retainedNodes source.val
                     [right] := by
               simp [retained, IdentityRewriteKind.retainedNodes,
                 kindEquation, IdentityRewriteKind.removedNodes]

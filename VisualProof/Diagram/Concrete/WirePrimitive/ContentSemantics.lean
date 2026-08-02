@@ -952,7 +952,7 @@ structure SiteLedger
   commonCore : CommonCoreReceipt source result.checked
   erasureTrace : AppliedSiteErasure.Result source wire
   private target_deletion_wellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       erasureTrace.target erasureTrace.targetWire).WellFormed definitions
   erasureIso :
     ConcreteIso erasureTrace.target.val result.checked.val
@@ -986,7 +986,7 @@ def checkSiteLedger
     compileSite? result.checked
       (result.checked.val.wires result.targetWire).scope
   if targetDeletion :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         erasureTrace.target erasureTrace.targetWire).WellFormed
           definitions then
     if exact :
@@ -1032,7 +1032,7 @@ theorem targetDeletionWellFormed
     {wire : source.val.WireId}
     {result : EndsDeleteResult source wire}
     (ledger : SiteLedger result) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       ledger.erasureTrace.target
       ledger.erasureTrace.targetWire).WellFormed definitions :=
   ledger.target_deletion_wellFormed
@@ -1127,7 +1127,7 @@ private theorem scope_environment_coherence
       ConcreteElaboration.WireContext source.val)
     (targetScope :
       ConcreteElaboration.WireContext
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed))
     (sourceExact : sourceScope = outer.extend region)
     (targetExact :
@@ -1415,7 +1415,7 @@ private theorem endpointFree_reassign_universal
     {bound : CheckedDiagram definitions}
     {removed : bound.val.WireId}
     {targetWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound removed).WellFormed definitions}
     {compiled :
       SiteCompilation bound (bound.val.wires removed).scope}
@@ -1514,7 +1514,7 @@ private theorem endpointFree_reassign_universal
         targetOuter sourceValues
   let targetExtended :=
     ConcreteElaboration.extendEnvironment
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound removed)
       receipt.reflected.targetSiteOuter
       (targetRegion bound removed (bound.val.wires removed).scope)
@@ -1774,7 +1774,7 @@ theorem endpointFree_reassign_frame
     {bound : CheckedDiagram definitions}
     {removed : bound.val.WireId}
     {targetWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound removed).WellFormed definitions}
     {compiled :
       SiteCompilation bound (bound.val.wires removed).scope}
@@ -2014,7 +2014,7 @@ theorem replacement_denotation
         Vars site.frame.frame.visible.sigs site.argumentSignatures)
       (targetFrame :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source site.node)
           (targetContext source site.node
             (ConcreteElaboration.WireContext.empty source.val)))
@@ -2022,7 +2022,7 @@ theorem replacement_denotation
         targetFrame.visible =
           targetContext source site.node site.frame.frame.visible),
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source site.node)
           (targetRegion source site.node
             (source.val.nodes site.node).region)
@@ -2157,14 +2157,14 @@ private theorem canonical_scope_transport
     (site : AppliedSite source wire)
     (erasure : CheckedErasure source site.node) :
     let target : CheckedDiagram definitions :=
-      ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ⟨ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source site.node,
         erasure.candidate_wellFormed⟩
     Nonempty
       (UniversalOuterTransport.{u} source wire target
         (targetWire source site.node wire)) := by
   let target : CheckedDiagram definitions :=
-    ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    ⟨ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source site.node,
       erasure.candidate_wellFormed⟩
   have encloses :
@@ -2875,7 +2875,7 @@ private noncomputable def canonical_transport
     (site : AppliedSite source wire)
     (erasure : CheckedErasure source site.node) :
     let target : CheckedDiagram definitions :=
-      ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ⟨ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source site.node,
         erasure.candidate_wellFormed⟩
     UniversalOuterTransport.{u} source wire target
@@ -2889,7 +2889,7 @@ private noncomputable def normalize_outer_erasure
     (erasure : CheckedErasure source site.node)
     (canonicalTransport :
       let canonical : CheckedDiagram definitions :=
-        ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        ⟨ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source site.node,
           erasure.candidate_wellFormed⟩
       UniversalOuterTransport.{u} source wire canonical
@@ -2897,7 +2897,7 @@ private noncomputable def normalize_outer_erasure
     UniversalOuterTransport.{u} source wire erasure.target
       (erasure.wireImage wire) := by
   let canonical : CheckedDiagram definitions :=
-    ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    ⟨ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source site.node,
       erasure.candidate_wellFormed⟩
   have targetExact : canonical = erasure.target := by

@@ -270,7 +270,7 @@ private theorem RelationJoinStep.pairedFrameAboveScope
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     {fragment : CheckedOpenDiagram definitions}
     {fragmentCompiled : OpenCompilation fragment}
@@ -663,13 +663,13 @@ private theorem RelationJoinStep.pairedFrameAboveScope
                 SingletonRemovalSemantics.targetRegion source removed
                   selected := by
             change
-              ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed).childrenOf
                 (SingletonRemovalSemantics.targetRegion source removed
                   region)).find?
                   (fun candidate =>
                     decide
-                      ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         source removed).Encloses candidate
                         (SingletonRemovalSemantics.targetRegion source removed
                           (source.val.nodes removed).region))) =
@@ -677,13 +677,13 @@ private theorem RelationJoinStep.pairedFrameAboveScope
             apply Option.some.inj
             calc
               some baseSelected =
-                  ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed).childrenOf
                     (SingletonRemovalSemantics.targetRegion source removed
                       region)).find?
                     (fun candidate =>
                       decide
-                        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                        ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                           source removed).Encloses candidate
                           (SingletonRemovalSemantics.targetRegion source
                             removed (source.val.nodes removed).region))) :=
@@ -2105,7 +2105,7 @@ theorem Internal.RelationJoinStep.aboveDyingScopeReceiptOfExplicitBase
     (step : RelationJoinStep source dying content)
     (contentCompiled : OpenCompilation content)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         step.prior step.priorApplication).WellFormed definitions)
     (base : CheckedDiagram definitions)
     (baseExact :

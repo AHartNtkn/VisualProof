@@ -68,7 +68,7 @@ theorem rawTargetContext_above
     (above :
       ConcreteElaboration.ContextAbove step.prior.val context region) :
     ConcreteElaboration.ContextAbove
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         step.prior step.priorApplication)
       (targetContext step.prior step.priorApplication context)
       (targetRegion step.prior step.priorApplication region) :=

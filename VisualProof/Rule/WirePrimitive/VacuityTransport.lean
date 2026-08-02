@@ -87,7 +87,7 @@ structure EliminationReceipt
   private mk ::
   wire : bound.val.WireId
   deletionIso : ConcreteIso plain.val
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate bound wire)
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate bound wire)
   siteExact :
     deletionIso.regions input.site =
       targetRegion bound wire (bound.val.wires wire).scope
@@ -102,7 +102,7 @@ def recordElimination
     (checked : CheckedVacuous input)
     (wire : bound.val.WireId)
     (deletionIso : ConcreteIso plain.val
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate bound wire))
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate bound wire))
     (siteExact :
       deletionIso.regions input.site =
         targetRegion bound wire (bound.val.wires wire).scope)
@@ -150,17 +150,17 @@ theorem candidateWire_endpoints
     (removed : source.val.WireId)
     (wire : source.val.WireId)
     (survives : wire ≠ removed) :
-    ((ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    ((ConcreteDiagram.DenseErasure.eraseWireCandidate
       source removed).wires
         (targetWire source removed wire survives)).endpoints =
       (source.val.wires wire).endpoints.map (fun endpoint =>
         ({ node := targetNode source removed endpoint.node
            port := endpoint.port } :
           CEndpoint
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            (ConcreteDiagram.DenseErasure.eraseWireCandidate
               source removed).nodeCount)) := by
   unfold targetWire
-  simp only [ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate,
+  simp only [ConcreteDiagram.DenseErasure.eraseWireCandidate,
     DenseList.get_index]
   unfold targetNode DenseList.index Internal.retainedNodes
   induction (source.val.wires wire).endpoints with
@@ -239,7 +239,7 @@ private def candidateRegionOriginEquiv
     {checked : CheckedVacuous input}
     (receipt : EliminationReceipt input checked) :
     Data.Finite.FiniteEquiv
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound receipt.wire).RegionId
       receipt.RegionOrigin where
   toFun := sourceRegion bound receipt.wire
@@ -253,7 +253,7 @@ private def candidateNodeOriginEquiv
     {checked : CheckedVacuous input}
     (receipt : EliminationReceipt input checked) :
     Data.Finite.FiniteEquiv
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound receipt.wire).NodeId
       receipt.NodeOrigin where
   toFun := sourceNode bound receipt.wire
@@ -267,7 +267,7 @@ private def candidateWireOriginEquiv
     {checked : CheckedVacuous input}
     (receipt : EliminationReceipt input checked) :
     Data.Finite.FiniteEquiv
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound receipt.wire).WireId
       receipt.WireOrigin where
   toFun := fun wire =>
@@ -459,13 +459,13 @@ private def candidateEndpointFiberEquiv
     (receipt : EliminationReceipt input checked)
     (origin : receipt.WireOrigin)
     (candidateWire :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound receipt.wire).WireId)
     (wireExact : candidateWire =
       targetWire bound receipt.wire origin.1 origin.2) :
     Data.Finite.FiniteEquiv
       { endpoint // endpoint ∈
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        ((ConcreteDiagram.DenseErasure.eraseWireCandidate
           bound receipt.wire).wires candidateWire).endpoints }
       { endpoint // endpoint ∈ (bound.val.wires origin.1).endpoints } where
   toFun := fun endpoint =>
@@ -475,7 +475,7 @@ private def candidateEndpointFiberEquiv
           (bound.val.wires origin.1).endpoints.map (fun sourceEndpoint =>
             (⟨targetNode bound receipt.wire sourceEndpoint.node,
               sourceEndpoint.port⟩ : CEndpoint
-                (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                (ConcreteDiagram.DenseErasure.eraseWireCandidate
                   bound receipt.wire).nodeCount)) := by
         rw [← candidateWire_endpoints bound receipt.wire
           origin.1 origin.2, ← wireExact]
@@ -545,7 +545,7 @@ structure EndpointFiberEquiv
   corresponds : ∀ (endpoint : { endpoint // endpoint ∈
       (plain.val.wires (receipt.targetWireImage origin)).endpoints }),
     PortCorresponds plain.val
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound receipt.wire)
       receipt.deletionIso.nodes endpoint.1
       (receipt.deletionIso.endpointMap

@@ -18,11 +18,11 @@ abbrev PairedInnerFrame
     (sourceFrame : RegionFrame definitions source.val sourceOuter)
     (targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter)) :=
   RegionFrame.PairedInner region
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+    (ConcreteDiagram.DenseErasure.eraseNodeRegion
       source removed region)
     sourceOuter (targetContext source removed sourceOuter) sourceFrame
       targetFrame
@@ -34,7 +34,7 @@ def LocalReplacementAt
     (sourceVisible : ConcreteElaboration.WireContext source.val)
     (targetVisible :
       ConcreteElaboration.WireContext
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed))
     (visibleExact :
       targetVisible = targetContext source removed sourceVisible)
@@ -65,7 +65,7 @@ def PairedInnerFrame.ReplacementDenotation
     {sourceFrame : RegionFrame definitions source.val sourceOuter}
     {targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter)}
     (paired :
@@ -81,7 +81,7 @@ def PairedInnerFrame.ReplacementDenotation
   ∀ fixedTargetEnv :
       Env pre
         ((targetContext source removed sourceOuter).extend
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          (ConcreteDiagram.DenseErasure.eraseNodeRegion
             source removed region)).sigs,
     (∀ descendant : Env pre targetFrame.visible.sigs,
       DiagramContext.PreservesOuter paired.targetInner fixedTargetEnv

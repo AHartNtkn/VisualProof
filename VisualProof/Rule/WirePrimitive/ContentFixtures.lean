@@ -236,9 +236,9 @@ private def emptyWrappedLedger :=
 
 example :
     ConcreteIso
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         spawnSource (idx 0))
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         emptyWrapped.checked emptyWrapped.targetWire) :=
   (emptyWrappedLedger.emptyCore rfl).deletionIso
 
@@ -251,9 +251,9 @@ private def emptySplitLedger :=
 
 example :
     ConcreteIso
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         spawnSource (idx 0))
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         (ConcreteWireQuantifier.ExhaustedWireRemovalSemantics.deletedCheckedDiagram
           emptySplit.checked emptySplit.firstWire
           (emptySplitLedger.emptyCore rfl).firstWellFormed)

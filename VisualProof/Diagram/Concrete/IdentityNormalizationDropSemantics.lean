@@ -9,6 +9,7 @@ universe u
 namespace ConcreteDiagram
 
 open IdentityNormalizationCore
+open DenseErasure
 
 namespace IdentityNormalizationDropSemantics
 

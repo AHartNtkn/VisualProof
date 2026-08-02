@@ -55,7 +55,7 @@ theorem RelationJoinStep.aboveDyingScopeReceipt
       (RelationJoinStep.AboveDyingScopeReceipt.{u} step priorScope
         checkedScope) := by
   let candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         step.prior step.priorApplication).WellFormed definitions := by
     rw [← step.base_generated]
     exact step.base.property
@@ -1860,7 +1860,7 @@ theorem Internal.RelationJoinStep.preBinderDenotation
           step.priorApplication) (by
             intro left right different equality
             exact different
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_injective
+              (ConcreteDiagram.DenseErasure.eraseNodeWire_injective
                 step.prior step.priorApplication equality))
     have erasureSourceInnerExact :
         erasureInner.sourceInner = priorInner := by

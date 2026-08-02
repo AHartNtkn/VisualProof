@@ -30,7 +30,7 @@ theorem Internal.RelationJoinStep.strictDescendantBodyDenotation
     {sourceFrame : RegionFrame definitions step.prior.val outer}
     {relativeRaw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication outer)}
@@ -656,7 +656,7 @@ def relationJoinPriorToCheckedRegion
   transportRegion step.checked_generated.symm
     (step.attachment.hostRegion
       (transportRegion step.base_generated.symm
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        (ConcreteDiagram.DenseErasure.eraseNodeRegion
           step.prior step.priorApplication region)))
 
 theorem relationJoinPriorToCheckedRegion_injective
@@ -672,26 +672,26 @@ theorem relationJoinPriorToCheckedRegion_injective
           (Fin.cast
             (congrArg ConcreteDiagram.regionCount
               step.base_generated).symm
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            (ConcreteDiagram.DenseErasure.eraseNodeRegion
               step.prior step.priorApplication left)) =
         step.attachment.hostRegion
           (Fin.cast
             (congrArg ConcreteDiagram.regionCount
               step.base_generated).symm
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            (ConcreteDiagram.DenseErasure.eraseNodeRegion
               step.prior step.priorApplication right)) := by
     apply Fin.ext
     simpa using congrArg Fin.val same
   have baseSame := step.attachment.hostRegion_injective hostSame
   have rawSame :
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+      ConcreteDiagram.DenseErasure.eraseNodeRegion
           step.prior step.priorApplication left =
-        ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        ConcreteDiagram.DenseErasure.eraseNodeRegion
           step.prior step.priorApplication right := by
     apply Fin.ext
     simpa using congrArg Fin.val baseSame
   exact
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_injective
+    ConcreteDiagram.DenseErasure.eraseNodeRegion_injective
       step.prior step.priorApplication rawSame
 
 theorem relationJoinPriorToCheckedRegion_climb
@@ -709,7 +709,7 @@ theorem relationJoinPriorToCheckedRegion_climb
   rw [transportRegion_climb,
     ConcreteSpliceAttachment.hostRegion_climb,
     transportRegion_climb,
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_climb]
+    ConcreteDiagram.DenseErasure.eraseNodeRegion_climb]
   cases step.prior.val.climb depth region <;> rfl
 
 theorem relationJoinPriorToCheckedRegion_root
@@ -1001,10 +1001,10 @@ def Internal.singletonErasureBase
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions) :
     CheckedDiagram definitions :=
-  ⟨ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+  ⟨ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed,
     candidateWellFormed⟩
 
@@ -1013,11 +1013,11 @@ theorem Internal.RelationJoinStep.erasureRegionLocalSigs_eq
     (removed : source.val.NodeId)
     (outer : ConcreteElaboration.WireContext source.val)
     (region : source.val.RegionId) :
-    (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).wiresAt
           (SingletonRemovalSemantics.targetRegion source removed region)).map
         fun wire =>
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).wires wire).sig) =
       (source.val.wiresAt region).map
         (fun wire => (source.val.wires wire).sig) := by
@@ -1032,11 +1032,11 @@ theorem Internal.RelationJoinStep.erasureRegionLocalSigs_eq
         region)
   rw [contextExact] at extended
   have extended' :
-      (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).wiresAt
             (SingletonRemovalSemantics.targetRegion source removed region)).map
           fun wire =>
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wires wire).sig) ++
           (SingletonRemovalSemantics.targetContext source removed outer).sigs =
         (source.val.wiresAt region).map

@@ -456,7 +456,7 @@ private def runEmptyResidual
   | [] => throw .allocationMismatch
   | live :: tracked' =>
       let candidate :=
-        ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        ConcreteDiagram.DenseErasure.eraseWireCandidate
           deleteStep.target live
       match accepted :
           ConcreteDiagram.checkWellFormed definitions candidate with
@@ -469,7 +469,7 @@ private def runEmptyResidual
                 deleteStep.target.val.regionCount := by
             rw [generated]
             simp [candidate,
-              ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate,
+              ConcreteDiagram.DenseErasure.eraseWireCandidate,
               ConcreteDiagram.regionsList, length_filter_true,
               Data.Finite.allFin_eq_finRange]
           let scope : plain.val.RegionId :=

@@ -14,7 +14,7 @@ private def eraseWireSourceNode
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
     (target :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source removed).NodeId) :
     source.val.NodeId :=
   (eraseWireNodes source).get target
@@ -23,7 +23,7 @@ private def eraseWireTargetNode
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
     (node : source.val.NodeId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       source removed).NodeId :=
   (Data.Finite.indexOf? (eraseWireNodes source) node).get
     (Data.Finite.indexOf?_isSome_iff.mpr (by
@@ -49,7 +49,7 @@ private def eraseWireSourceEndpoint
     (removed : source.val.WireId)
     (endpoint :
       CEndpoint
-        (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        (ConcreteDiagram.DenseErasure.eraseWireCandidate
           source removed).nodeCount) :
     CEndpoint source.val.nodeCount :=
   ⟨eraseWireSourceNode source removed endpoint.node, endpoint.port⟩
@@ -58,7 +58,7 @@ private theorem eraseWireCandidate_target_requiredPorts
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
     (node : source.val.NodeId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source removed).requiredPorts
           (eraseWireTargetNode source removed node) =
       source.val.requiredPorts node := by
@@ -70,28 +70,28 @@ private theorem eraseWireCandidate_target_requiredPorts
   unfold ConcreteDiagram.requiredPorts
   cases sourceNodeEq : source.val.nodes node <;>
     simp only [eraseWireNodes, eraseWireTargetNode,
-      ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate] at nodeExact ⊢ <;>
+      ConcreteDiagram.DenseErasure.eraseWireCandidate] at nodeExact ⊢ <;>
     simp only [nodeExact, sourceNodeEq]
 
 private theorem eraseWireCandidate_endpoint_origin
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
     (targetWire :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source removed).WireId)
     (endpoint :
       CEndpoint
-        (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        (ConcreteDiagram.DenseErasure.eraseWireCandidate
           source removed).nodeCount)
     (incident :
       endpoint ∈
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        ((ConcreteDiagram.DenseErasure.eraseWireCandidate
           source removed).wires targetWire).endpoints) :
     eraseWireSourceEndpoint source removed endpoint ∈
       (source.val.wires
-        ((ConcreteDiagram.IdentityNormalizationCore.retainedWires
+        ((ConcreteDiagram.DenseErasure.retainedWires
           source.val [removed]).get targetWire)).endpoints := by
-  unfold ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate at incident
+  unfold ConcreteDiagram.DenseErasure.eraseWireCandidate at incident
   rcases List.mem_filterMap.mp incident with
     ⟨sourceEndpoint, sourceIncident, mapped⟩
   split at mapped
@@ -134,13 +134,13 @@ theorem eraseWireCandidate_wellFormed_implies_endpoints_empty
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source removed).WellFormed definitions) :
     (source.val.wires removed).endpoints = [] := by
   apply List.eq_nil_iff_forall_not_mem.mpr
   intro endpoint incident
   let candidate :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate source removed
+    ConcreteDiagram.DenseErasure.eraseWireCandidate source removed
   let targetNode : candidate.NodeId :=
     eraseWireTargetNode source removed endpoint.node
   have sourceRequired :=
@@ -158,7 +158,7 @@ theorem eraseWireCandidate_wellFormed_implies_endpoints_empty
       (⟨targetNode, endpoint.port⟩ : CEndpoint candidate.nodeCount)
       targetWire targetOwner
   let survivor :=
-    (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+    (ConcreteDiagram.DenseErasure.retainedWires
       source.val [removed]).get targetWire
   have survivorIncident :
       endpoint ∈ (source.val.wires survivor).endpoints := by
@@ -170,10 +170,10 @@ theorem eraseWireCandidate_wellFormed_implies_endpoints_empty
       eraseWireSourceEndpoint] using origin
   have survivorDifferent : survivor ≠ removed := by
     have member := List.get_mem
-      (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+      (ConcreteDiagram.DenseErasure.retainedWires
         source.val [removed]) targetWire
     simpa [survivor,
-      ConcreteDiagram.IdentityNormalizationCore.retainedWires] using
+      ConcreteDiagram.DenseErasure.retainedWires] using
         (List.mem_filter.mp member).2
   have removedOwner :=
     ConcreteDiagram.endpointOwner?_eq_of_incident definitions source.val

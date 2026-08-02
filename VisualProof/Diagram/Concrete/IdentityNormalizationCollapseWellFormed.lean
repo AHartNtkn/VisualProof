@@ -7,6 +7,8 @@ namespace ConcreteDiagram
 
 namespace IdentityNormalizationCore
 
+open DenseErasure
+
 private theorem retainedNodes_nodup
     (diagram : ConcreteDiagram definitionCount)
     (removed : List diagram.NodeId) :

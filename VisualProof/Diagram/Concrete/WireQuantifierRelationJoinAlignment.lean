@@ -484,13 +484,13 @@ def checkedBaseFrameReceipt
       ConcreteElaboration.WireContext step.prior.val)
     (raw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
     (generated :
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetRegion step.prior
             step.priorApplication site)
@@ -527,13 +527,13 @@ def checkedBaseInnerFrameReceipt
       ConcreteElaboration.WireContext step.prior.val)
     (raw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
     (generated :
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetRegion step.prior
             step.priorApplication site)
@@ -545,7 +545,7 @@ def checkedBaseInnerFrameReceipt
         some raw)
     (above :
       ConcreteElaboration.ContextAbove
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter)
@@ -560,11 +560,11 @@ def checkedBaseInnerFrameReceipt
     (decomposition :
       raw.context =
         bindContextFor
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetContext step.prior
             step.priorApplication sourceOuter).ids
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication).wiresAt
             (SingletonRemovalSemantics.targetRegion step.prior
               step.priorApplication region))
@@ -594,13 +594,13 @@ theorem checkedBaseInnerFrameReceipt_toFrame
       ConcreteElaboration.WireContext step.prior.val)
     (raw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
     (generated :
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetRegion step.prior
             step.priorApplication site)
@@ -612,7 +612,7 @@ theorem checkedBaseInnerFrameReceipt_toFrame
         some raw)
     (above :
       ConcreteElaboration.ContextAbove
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter)
@@ -627,11 +627,11 @@ theorem checkedBaseInnerFrameReceipt_toFrame
     (decomposition :
       raw.context =
         bindContextFor
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetContext step.prior
             step.priorApplication sourceOuter).ids
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication).wiresAt
             (SingletonRemovalSemantics.targetRegion step.prior
               step.priorApplication region))
@@ -655,13 +655,13 @@ private theorem checkedBaseFrameReceipt_site
       ConcreteElaboration.WireContext step.prior.val)
     (raw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
     (generated :
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetRegion step.prior
             step.priorApplication site)
@@ -701,13 +701,13 @@ theorem checkedBaseFrameReceipt_region
       ConcreteElaboration.WireContext step.prior.val)
     (raw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
     (generated :
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetRegion step.prior
             step.priorApplication site)
@@ -750,7 +750,7 @@ private theorem checkedBaseSiteFrame_eq
       InsertionCompilation contentCompiled step.attachment)
     (raw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication
@@ -812,7 +812,7 @@ private theorem checkedBaseSiteFrame_eq
       _ = step.prior.val.root.val := by simp
       _ = step.base.val.root.val := by
         simpa [
-          ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate] using
+          ConcreteDiagram.DenseErasure.eraseNodeCandidate] using
             (transport_root_val step.base_generated).symm
   have outerExact :
       receipt.outer =
@@ -841,7 +841,7 @@ private theorem checkedBaseSiteFrame_eq
                       generated := provenance.targetGenerated }
       _ = step.base_generated.symm ▸
             ConcreteElaboration.WireContext.empty
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 step.prior step.priorApplication) := by rfl
       _ = ConcreteElaboration.WireContext.empty step.base.val :=
         transport_empty_context step.base_generated.symm
@@ -853,7 +853,7 @@ private theorem checkedBaseSiteFrame_eq
     have countExact :
         step.prior.val.regionCount = step.base.val.regionCount := by
       simpa [
-        ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate] using
+        ConcreteDiagram.DenseErasure.eraseNodeCandidate] using
           sameCount.symm
     omega
   have generated := receipt.generated
@@ -881,7 +881,7 @@ private theorem RelationJoinStep.baseSiteAlignment
       InsertionCompilation contentCompiled step.attachment) :
     ∃ (raw :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetContext step.prior
             step.priorApplication
@@ -941,7 +941,7 @@ private theorem checkedBaseRelativeVisible_eq_site
     (fuel : Nat)
     (relativeRaw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
@@ -952,7 +952,7 @@ private theorem checkedBaseRelativeVisible_eq_site
         sourceFrame relativeRaw)
     (rootRaw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication
@@ -1139,7 +1139,7 @@ theorem RelationJoinStep.pairedInsertionAtDying
         fuel sourceOuter sourceFrame) :
     ∃ (relativeRaw :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetContext step.prior
             step.priorApplication sourceOuter))
@@ -1259,7 +1259,7 @@ theorem RelationJoinStep.pairedInsertion_baseVisibleExact
     {fuel : Nat}
     (relativeRaw :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))

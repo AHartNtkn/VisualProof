@@ -21,7 +21,7 @@ inductive ErasureSiblingProvenance
       RegionFrame definitions source.val sourceOuter)
     (targetNested :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter)) :
     ItemSeq definitions sourceOuter.sigs →
@@ -29,7 +29,7 @@ inductive ErasureSiblingProvenance
     List source.val.RegionId →
     RegionFrame definitions source.val sourceOuter →
     RegionFrame definitions
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed)
       (targetContext source removed sourceOuter) →
     Prop where
@@ -49,10 +49,10 @@ inductive ErasureSiblingProvenance
           some sourceSuffix)
       (targetSuffixCompiled :
         ConcreteElaboration.compileChildrenWith? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (ConcreteElaboration.compileRegion? definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed) fuel)
             (targetContext source removed sourceOuter)
             (tail.map (targetRegion source removed)) =
@@ -85,7 +85,7 @@ inductive ErasureSiblingProvenance
           some sourceBody)
       (targetBodyCompiled :
         ConcreteElaboration.compileRegion? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             fuel (targetRegion source removed child)
             (targetContext source removed sourceOuter) =
@@ -94,7 +94,7 @@ inductive ErasureSiblingProvenance
         RegionFrame definitions source.val sourceOuter}
       {targetFrame :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed sourceOuter)}
       (rest :
@@ -111,7 +111,7 @@ private theorem compileSiblingFrame_withProvenance
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     (fuel : Nat)
     (sourceOuter : ConcreteElaboration.WireContext source.val)
@@ -119,7 +119,7 @@ private theorem compileSiblingFrame_withProvenance
     (sourceNested : RegionFrame definitions source.val sourceOuter)
     (targetNested :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter))
     (nestedVisible :
@@ -138,11 +138,11 @@ private theorem compileSiblingFrame_withProvenance
         ConcreteElaboration.ContextAbove source.val sourceOuter child) →
       ∃ targetFrame :
           RegionFrame definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed sourceOuter),
         compileSiblingFrame? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             fuel (targetContext source removed sourceOuter)
             (targetRegion source removed sourceTarget) targetNested
@@ -178,11 +178,11 @@ private theorem compileSiblingFrame_withProvenance
         subst sourceFrame
         obtain ⟨targetSuffix, targetSuffixCompiled⟩ :=
           compileChildren_natural_of source.val
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (ConcreteElaboration.compileRegion? definitions source.val fuel)
             (ConcreteElaboration.compileRegion? definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed) fuel)
             sourceOuter (targetContext source removed sourceOuter)
             (targetRegion source removed) tail sourceSuffixCompiled
@@ -196,7 +196,7 @@ private theorem compileSiblingFrame_withProvenance
                   bodyCompiled)
         let targetFrame :
             RegionFrame definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (targetContext source removed sourceOuter) :=
           { visible := targetNested.visible
@@ -324,7 +324,7 @@ theorem compileFrameBranch_cast_context_withProvenance
     (sourceOuter : ConcreteElaboration.WireContext source.val)
     {right :
       ConcreteElaboration.WireContext
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)}
     (same : targetContext source removed sourceOuter = right)
     (site : source.val.RegionId)
@@ -332,7 +332,7 @@ theorem compileFrameBranch_cast_context_withProvenance
     (selected : source.val.RegionId)
     (sourceSelected : source.val.RegionId)
     (nodes : List
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).NodeId)
     (children : List source.val.RegionId)
     {sourceLeading : ItemSeq definitions sourceOuter.sigs}
@@ -342,17 +342,17 @@ theorem compileFrameBranch_cast_context_withProvenance
       ItemSeq definitions (targetContext source removed sourceOuter).sigs}
     {targetNested targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed) (targetContext source removed sourceOuter)}
     (targetLeadingCompiled :
       ConcreteElaboration.compileNodes? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed sourceOuter) nodes =
         some targetLeading)
     (targetNestedCompiled :
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetRegion source removed site) fuel
           (targetRegion source removed selected)
@@ -360,7 +360,7 @@ theorem compileFrameBranch_cast_context_withProvenance
         some targetNested)
     (targetFrameCompiled :
       compileSiblingFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           fuel (targetContext source removed sourceOuter)
           (targetRegion source removed selected) targetNested
@@ -373,20 +373,20 @@ theorem compileFrameBranch_cast_context_withProvenance
     ∃ (rightLeading : ItemSeq definitions right.sigs)
       (rightNested rightFrame :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed) right),
       ConcreteElaboration.compileNodes? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           right nodes = some rightLeading ∧
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetRegion source removed site) fuel
           (targetRegion source removed selected) right =
         some rightNested ∧
       compileSiblingFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           fuel right (targetRegion source removed selected) rightNested
           rightLeading (children.map (targetRegion source removed)) =
@@ -454,7 +454,7 @@ inductive ErasureFrameProvenance
     (region : source.val.RegionId) →
     RegionFrame definitions source.val sourceOuter →
     RegionFrame definitions
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed)
       (targetContext source removed sourceOuter) →
     Prop where
@@ -473,7 +473,7 @@ inductive ErasureFrameProvenance
           some sourceBody)
       (targetBodyCompiled :
         compileRegionBody? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             childFuel (targetRegion source removed site)
             (targetContext source removed sourceOuter) =
@@ -488,10 +488,10 @@ inductive ErasureFrameProvenance
             (targetRegion source removed site)
           siteBody := targetBody
           context := bindContextFor
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed sourceOuter).ids
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wiresAt (targetRegion source removed site))
             .hole }
   | ancestor
@@ -510,7 +510,7 @@ inductive ErasureFrameProvenance
         RegionFrame definitions source.val (sourceOuter.extend region))
       (targetNested targetAround :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed (sourceOuter.extend region)))
       (sourceNodesCompiled :
@@ -519,10 +519,10 @@ inductive ErasureFrameProvenance
           some sourceNodes)
       (targetNodesCompiled :
         ConcreteElaboration.compileNodes? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed (sourceOuter.extend region))
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).nodesAt (targetRegion source removed region)) =
           some targetNodes)
       (selectedFound :
@@ -540,7 +540,7 @@ inductive ErasureFrameProvenance
           some sourceAround)
       (targetAroundCompiled :
         compileSiblingFrame? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             childFuel
             (targetContext source removed (sourceOuter.extend region))
@@ -571,10 +571,10 @@ inductive ErasureFrameProvenance
               (targetContext_extend source removed sourceOuter region)
               targetAround).siteBody
           context := bindContextFor
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed sourceOuter).ids
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wiresAt (targetRegion source removed region))
             (erasureRebaseRegionFrame
               (targetContext_extend source removed sourceOuter region)
@@ -590,14 +590,14 @@ theorem ErasureFrameProvenance.targetGenerated
     {sourceFrame : RegionFrame definitions source.val sourceOuter}
     {targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter)}
     (provenance :
       ErasureFrameProvenance source removed site fuel sourceOuter region
         sourceFrame targetFrame) :
     compileRegionFrame? definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetRegion source removed site) fuel
         (targetRegion source removed region)
@@ -621,7 +621,7 @@ theorem ErasureFrameProvenance.targetGenerated
         compileFrameBranch_cast_context_withProvenance source removed
           (sourceOuter.extend region) contextEquality site childFuel selected
           selected
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).nodesAt (targetRegion source removed region))
           (source.val.childrenOf region) targetNodesCompiled induction
           targetAroundCompiled siblings
@@ -640,29 +640,29 @@ theorem ErasureFrameProvenance.targetGenerated
         erasureRebaseRegionFrame contextEquality targetAround
       let finalFrame :
           RegionFrame definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed sourceOuter) :=
         { visible := finalAround.visible
           siteBody := finalAround.siteBody
           context := bindContextFor
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed sourceOuter).ids
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wiresAt
                 (targetRegion source removed region))
             finalAround.context }
       change
         (compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetRegion source removed site) childFuel
           (targetRegion source removed selected)
           ((targetContext source removed sourceOuter).extend
             (targetRegion source removed region))).bind (fun nested =>
             (compileSiblingFrame? definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               childFuel
               ((targetContext source removed sourceOuter).extend
@@ -675,10 +675,10 @@ theorem ErasureFrameProvenance.targetGenerated
                     { visible := around.visible
                       siteBody := around.siteBody
                       context := bindContextFor
-                        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                           source removed)
                         (targetContext source removed sourceOuter).ids
-                        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                        ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                           source removed).wiresAt
                             (targetRegion source removed region))
                         around.context })) =
@@ -698,7 +698,7 @@ theorem ErasureFrameProvenance.targetVisible
     {sourceFrame : RegionFrame definitions source.val sourceOuter}
     {targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter)}
     (provenance :
@@ -722,7 +722,7 @@ theorem ErasureFrameProvenance.targetVisible
           (source.val.childrenOf region) sourceAroundCompiled
       have targetAroundVisible :=
         siblingFrame_visible definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           childFuel
           (targetContext source removed (sourceOuter.extend region))
@@ -749,7 +749,7 @@ private theorem compileRegionFrame_withProvenance
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions) :
     ∀ (fuel : Nat)
       (sourceOuter : ConcreteElaboration.WireContext source.val)
@@ -762,7 +762,7 @@ private theorem compileRegionFrame_withProvenance
         some sourceFrame →
       ∃ targetFrame :
           RegionFrame definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed sourceOuter),
         ErasureFrameProvenance source removed site fuel sourceOuter region
@@ -794,7 +794,7 @@ private theorem compileRegionFrame_withProvenance
             childFuel sourceOuter site sourceAbove sourceBodyCompiled
         let targetFrame :
             RegionFrame definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (targetContext source removed sourceOuter) :=
           { visible :=
@@ -803,10 +803,10 @@ private theorem compileRegionFrame_withProvenance
             siteBody := targetBody
             context :=
               bindContextFor
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed)
                 (targetContext source removed sourceOuter).ids
-                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed).wiresAt
                     (targetRegion source removed site))
                 .hole }
@@ -846,7 +846,7 @@ private theorem compileRegionFrame_withProvenance
         have sourceTargetNodesCompiled :
             ConcreteElaboration.compileNodes? definitions source.val
                 (sourceOuter.extend region)
-                (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed).nodesAt
                   (targetRegion source removed region)).map
                   (sourceNode source removed)) =
@@ -857,7 +857,7 @@ private theorem compileRegionFrame_withProvenance
         obtain ⟨targetNodes, targetNodesCompiled, _⟩ :=
           survivingNodes_natural source removed candidateWellFormed
             (sourceOuter.extend region) sourceExtendedNodup
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).nodesAt
               (targetRegion source removed region))
             sourceTargetNodesCompiled
@@ -903,7 +903,7 @@ private theorem compileRegionFrame_withProvenance
           compileFrameBranch_cast_context_withProvenance source removed
             (sourceOuter.extend region) targetContextExtended site childFuel
             sourceChild sourceChild
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).nodesAt
                 (targetRegion source removed region))
             (source.val.childrenOf region) targetNodesCompiled
@@ -913,7 +913,7 @@ private theorem compileRegionFrame_withProvenance
         subst targetAround'
         let targetFrame :
             RegionFrame definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (targetContext source removed sourceOuter) :=
           { visible :=
@@ -924,10 +924,10 @@ private theorem compileRegionFrame_withProvenance
                 targetAround).siteBody
             context :=
               bindContextFor
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed)
                 (targetContext source removed sourceOuter).ids
-                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed).wiresAt
                     (targetRegion source removed region))
                 (erasureRebaseRegionFrame targetContextExtended
@@ -955,7 +955,7 @@ inductive PairedGeneratedFrame
   | intro
     (targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed sourceOuter))
     (sourceAbove :

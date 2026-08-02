@@ -11,7 +11,7 @@ namespace SingletonRemovalSemantics
 private abbrev Target
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId) :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate source removed
+  ConcreteDiagram.DenseErasure.eraseNodeCandidate source removed
 
 private theorem removed_mem_nodesAt
     (source : CheckedDiagram definitions)

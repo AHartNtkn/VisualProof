@@ -25,7 +25,7 @@ structure CheckedErasure
   target : CheckedDiagram definitions
   generated :
     target.val =
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed
 
 namespace CheckedErasure
@@ -40,7 +40,7 @@ def check
     (removed : source.val.NodeId) :
     Except WFError (CheckedErasure source removed) := by
   let candidate :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed
   match accepted :
       ConcreteDiagram.checkWellFormed definitions candidate with
@@ -57,7 +57,7 @@ theorem candidate_wellFormed
     {source : CheckedDiagram definitions}
     {removed : source.val.NodeId}
     (erasure : CheckedErasure source removed) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed).WellFormed definitions := by
   rw [← erasure.generated]
   exact erasure.target.property
@@ -207,7 +207,7 @@ private def retainedNodes
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId) :
     List source.val.NodeId :=
-  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+  ConcreteDiagram.DenseErasure.retainedNodes
     source.val [removed]
 
 /-- The count-preserving image of one wire in the raw erase candidate. -/
@@ -215,9 +215,9 @@ def targetWire
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (wire : source.val.WireId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed).WireId :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+  ConcreteDiagram.DenseErasure.eraseNodeWire
     source removed wire
 
 /-- Image of one source wire in the checked singleton-erasure target. -/
@@ -239,23 +239,23 @@ def CheckedErasure.wireImage
     source.val.wiresList.get (targetWire source removed wire) = wire := by
   apply Fin.ext
   simp [targetWire,
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire,
+    ConcreteDiagram.DenseErasure.eraseNodeWire,
     ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange]
 
 private theorem targetWire_injective
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId) :
     Function.Injective (targetWire source removed) :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_injective
+  ConcreteDiagram.DenseErasure.eraseNodeWire_injective
     source removed
 
 def targetRegion
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed).RegionId :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+  ConcreteDiagram.DenseErasure.eraseNodeRegion
     source removed region
 
 /-- Image of one source region in the checked singleton-erasure target. -/
@@ -296,13 +296,13 @@ theorem target_childrenOf
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).childrenOf
         (targetRegion source removed region) =
       (source.val.childrenOf region).map
         (targetRegion source removed) := by
   change
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed).childrenOf region =
       (source.val.childrenOf region).map (targetRegion source removed)
   have mappedIdentity :
@@ -318,7 +318,7 @@ theorem target_childrenOf
   intro child _
   generalize dataEquation : source.val.regions child = data
   cases data <;>
-    simp [ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+    simp [ConcreteDiagram.DenseErasure.eraseNodeCandidate,
       dataEquation]
 
 private theorem all_targetWires
@@ -337,7 +337,7 @@ private theorem all_targetWires
     apply Fin.ext
     simp only [List.get_eq_getElem, List.getElem_map]
     simp [targetWire,
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire,
+      ConcreteDiagram.DenseErasure.eraseNodeWire,
       ConcreteDiagram.wiresList]
 
 /-- Singleton node erasure preserves the ordered local wires of every region. -/
@@ -345,7 +345,7 @@ theorem target_wiresAt
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).wiresAt
         (targetRegion source removed region) =
       (source.val.wiresAt region).map (targetWire source removed) := by
@@ -375,11 +375,11 @@ theorem target_localSigs
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
-    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).wiresAt
         (targetRegion source removed region)).map
           (fun wire =>
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wires wire).sig) =
       (source.val.wiresAt region).map
         (fun wire => (source.val.wires wire).sig) := by
@@ -387,7 +387,7 @@ theorem target_localSigs
   apply List.map_congr_left
   intro wire _member
   exact
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+    ConcreteDiagram.DenseErasure.eraseNodeWire_signature
       source removed wire
 
 /-- The dense target index of one retained source node. -/
@@ -395,14 +395,14 @@ def targetNode
     (source : CheckedDiagram definitions)
     (removed sourceNode : source.val.NodeId)
     (survives : sourceNode ≠ removed) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed).NodeId :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+  ConcreteDiagram.DenseErasure.eraseNodeIndex
     source removed sourceNode (by
       apply List.mem_filter.mpr
       exact
         ⟨Data.Finite.mem_allFin _, by
-          simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+          simp [ConcreteDiagram.DenseErasure.retainedNodes,
             survives]⟩)
 
 private def targetEndpoint
@@ -411,7 +411,7 @@ private def targetEndpoint
     (endpoint : CEndpoint source.val.nodeCount)
     (survives : endpoint.node ≠ removed) :
     CEndpoint
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).nodeCount :=
   ⟨targetNode source removed endpoint.node survives, endpoint.port⟩
 
@@ -426,9 +426,9 @@ private theorem targetEndpoint_incident
         (source.val.wires wire).endpoints) :
     (⟨targetNode source removed sourceNode survives, port⟩ :
       CEndpoint
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).nodeCount) ∈
-      ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).wires
         (targetWire source removed wire)).endpoints := by
   apply List.mem_filterMap.mpr
@@ -440,14 +440,14 @@ private theorem targetEndpoint_incident
     · rw [wiresList_get_targetWire]
       exact incident
     · simp [survives]
-  · unfold ConcreteDiagram.IdentityNormalizationCore.reindexEndpoint?
+  · unfold ConcreteDiagram.DenseErasure.reindexEndpoint?
     have present :
         Data.Finite.indexOf?
-            (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+            (ConcreteDiagram.DenseErasure.retainedNodes
               source.val [removed]) sourceNode =
           some (targetNode source removed sourceNode survives) := by
       unfold targetNode
-        ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+        ConcreteDiagram.DenseErasure.eraseNodeIndex
       exact (Option.some_get _).symm
     rw [present]
     rfl
@@ -458,7 +458,7 @@ def targetContext
     (removed : source.val.NodeId)
     (context : ConcreteElaboration.WireContext source.val) :
     ConcreteElaboration.WireContext
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed) :=
   ⟨context.ids.map (targetWire source removed)⟩
 
@@ -472,7 +472,7 @@ theorem targetContext_sigs
   apply List.map_inj_left.mpr
   intro wire _
   exact
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+    ConcreteDiagram.DenseErasure.eraseNodeWire_signature
       source removed wire
 
 theorem targetContext_extend
@@ -513,7 +513,7 @@ private def contextRenamingFor
     WireRenaming
       (ids.map fun wire => (source.val.wires wire).sig)
       ((ids.map (targetWire source removed)).map fun wire =>
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).wires wire).sig) :=
   match ids with
   | [] => fun value => nomatch value
@@ -524,9 +524,9 @@ private def contextRenamingFor
             mappedHere
               (tail :=
                 (tail.map (targetWire source removed)).map fun wire =>
-                  ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed).wires wire).sig)
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+              (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                 source removed head)
         | Var.there value =>
             Var.there
@@ -584,13 +584,13 @@ private def targetContextSigsStructural
     (ids : List source.val.WireId) →
       ((ids.map (targetWire source removed)).map
         fun wire =>
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).wires wire).sig) =
         ids.map fun wire => (source.val.wires wire).sig
   | [] => rfl
   | head :: tail =>
       consSigsExact
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+        (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
           source removed head)
         (targetContextSigsStructural source removed tail)
 
@@ -631,30 +631,30 @@ theorem contextRenaming_reindex_identity
               simp only [contextRenamingFor]
               change
                 consSigsExact
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                    (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                       source removed head)
                     (targetContextSigsStructural source removed tail) ▸
                     mappedHere
-                      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                      (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                         source removed head) =
                   Var.here
               unfold mappedHere
               exact
                 cast_consSigsExact_here
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                  (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                     source removed head)
                   (targetContextSigsStructural source removed tail)
           | there value =>
               simp only [contextRenamingFor]
               change
                 consSigsExact
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                    (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                       source removed head)
                     (targetContextSigsStructural source removed tail) ▸
                     Var.there (contextRenamingFor source removed tail value) =
                   Var.there value
               rw [cast_consSigsExact_there
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                   source removed head)
                 (targetContextSigsStructural source removed tail)]
               exact congrArg Var.there
@@ -678,11 +678,11 @@ private def sourceWire
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (wire :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WireId) :
     source.val.WireId :=
   ⟨wire.val, by
-    simpa [ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+    simpa [ConcreteDiagram.DenseErasure.eraseNodeCandidate,
       ConcreteDiagram.wiresList,
       Data.Finite.allFin_eq_finRange] using wire.isLt⟩
 
@@ -698,7 +698,7 @@ private def sourceWire
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (wire :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WireId) :
     targetWire source removed (sourceWire source removed wire) = wire := by
   apply Fin.ext
@@ -770,14 +770,14 @@ private def contextSection
       context.sigs := fun {sig} value =>
   let targetOrigin :=
     ConcreteElaboration.WireContext.origin
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed)
       (targetContext source removed context).ids value
   let original := sourceWire source removed targetOrigin
   let sourceMember : original ∈ context.ids := by
     have targetMember :=
       origin_mem
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed) value
     rcases List.mem_map.mp targetMember with
       ⟨wire, member, equality⟩
@@ -787,15 +787,15 @@ private def contextSection
   let sourceVar :=
     varForMember source.val original context.ids sourceMember
   let signature : (source.val.wires original).sig = sig :=
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+    (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
       source removed original).symm.trans
       ((congrArg
         (fun wire =>
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).wires wire).sig)
         (targetWire_sourceWire source removed targetOrigin)).trans
       (ConcreteElaboration.WireContext.origin_signature
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed context).ids value))
   castVar signature sourceVar
@@ -811,7 +811,7 @@ private theorem contextSection_origin
         (contextSection source removed context value) =
       sourceWire source removed
         (ConcreteElaboration.WireContext.origin
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed context).ids value) := by
   unfold contextSection
@@ -831,7 +831,7 @@ private theorem contextSection_action
         (ConcreteElaboration.WireContext.origin source.val context.ids
           (contextSection source removed context value)) =
       ConcreteElaboration.WireContext.origin
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed context).ids value := by
   rw [contextSection_origin, targetWire_sourceWire]
@@ -889,7 +889,7 @@ theorem contextRenaming_action
     (context : ConcreteElaboration.WireContext source.val) :
     ∀ {sig} (value : Var context.sigs sig),
       ConcreteElaboration.WireContext.origin
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed context).ids
           (contextRenaming source removed context value) =
@@ -908,11 +908,11 @@ theorem contextRenaming_action
                 contextRenamingFor,
                 ConcreteElaboration.WireContext.origin]
               exact origin_mappedHere
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed)
                 (targetWire source removed head)
                 (tail.map (targetWire source removed))
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+                (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
                   source removed head)
           | there value =>
               simpa [contextRenaming, contextRenamingFor, targetContext,
@@ -928,7 +928,7 @@ private theorem contextRenaming_section
         (contextSection source removed context value) =
       value := by
   apply origin_injective_of_nodup
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed) targetNodup
   rw [contextRenaming_action, contextSection_action]
 
@@ -975,7 +975,7 @@ private theorem targetContext_nodup
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (wire : source.val.WireId) :
-    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).wires (targetWire source removed wire)).scope =
       targetRegion source removed (source.val.wires wire).scope := by
   change
@@ -997,7 +997,7 @@ private theorem targetContext_nodup
     (ConcreteWireQuantifier.Internal.checkedWire_signature_transport
       erasure.generated
       (targetWire source removed wire)).trans
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+      (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
         source removed wire)
 
 /-- Canonical singleton erasure transports a wire to its transported scope. -/
@@ -1021,7 +1021,7 @@ private theorem target_climb
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId) :
     ∀ (steps : Nat) (region : source.val.RegionId),
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).climb steps (targetRegion source removed region) =
         (source.val.climb steps region).map
           (targetRegion source removed) := by
@@ -1034,18 +1034,18 @@ private theorem target_climb
       cases dataEquation : source.val.regions region with
       | sheet =>
           simp [ConcreteDiagram.climb,
-            ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+            ConcreteDiagram.DenseErasure.eraseNodeCandidate,
             dataEquation]
       | cut parent =>
           simpa [ConcreteDiagram.climb,
-            ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+            ConcreteDiagram.DenseErasure.eraseNodeCandidate,
             dataEquation, targetRegion_eq] using induction parent
 
 theorem target_encloses
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (outer inner : source.val.RegionId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).Encloses
         (targetRegion source removed outer)
         (targetRegion source removed inner) ↔
@@ -1094,7 +1094,7 @@ theorem target_find_enclosing
     ∀ (regions : List source.val.RegionId),
       ((regions.map (targetRegion source removed)).find? fun candidate =>
           decide
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).Encloses candidate
                 (targetRegion source removed site))) =
         (regions.find? fun candidate =>
@@ -1111,13 +1111,13 @@ theorem target_find_enclosing
   have predicates :
       (fun candidate =>
           decide
-            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).Encloses candidate
                 (targetRegion source removed site))) =
         (fun candidate => decide (source.val.Encloses candidate site)) := by
     funext candidate
     have equivalent :
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).Encloses candidate
               (targetRegion source removed site) ↔
           source.val.Encloses candidate site := by
@@ -1128,7 +1128,7 @@ theorem target_find_enclosing
       rw [targetRegion_eq] at targetAccepts
       simp [encloses, targetAccepts]
     · have targetRejects :
-          ¬(ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ¬(ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).Encloses candidate
               (targetRegion source removed site) :=
         fun accepted => encloses (equivalent.mp accepted)
@@ -1146,12 +1146,12 @@ theorem erased_childrenOf
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).childrenOf
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        (ConcreteDiagram.DenseErasure.eraseNodeRegion
           source removed region) =
       (source.val.childrenOf region).map
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        (ConcreteDiagram.DenseErasure.eraseNodeRegion
           source removed) :=
   target_childrenOf source removed region
 
@@ -1161,16 +1161,16 @@ theorem erased_find_enclosing
     (site : source.val.RegionId)
     (regions : List source.val.RegionId) :
     (((regions.map
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        (ConcreteDiagram.DenseErasure.eraseNodeRegion
           source removed)).find? fun candidate =>
       decide
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).Encloses candidate
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            (ConcreteDiagram.DenseErasure.eraseNodeRegion
               source removed site)))) =
       (regions.find? fun candidate =>
         decide (source.val.Encloses candidate site)).map
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          (ConcreteDiagram.DenseErasure.eraseNodeRegion
             source removed) :=
   target_find_enclosing source removed site regions
 
@@ -1182,7 +1182,7 @@ theorem targetContext_above
     (region : source.val.RegionId)
     (above : ConcreteElaboration.ContextAbove source.val context region) :
     ConcreteElaboration.ContextAbove
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed)
       (targetContext source removed context)
       (targetRegion source removed region) := by
@@ -1194,14 +1194,14 @@ theorem targetContext_above
   obtain ⟨steps, positive, climbed⟩ := above.2 wire wireMember
   refine ⟨steps, positive, ?_⟩
   calc
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).climb steps (targetRegion source removed region) =
         some (targetRegion source removed (source.val.wires wire).scope) := by
       rw [target_climb, climbed]
       rfl
     _ =
         some
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).wires
               (targetWire source removed wire)).scope :=
       congrArg some (targetWire_scope source removed wire).symm
@@ -1329,13 +1329,13 @@ private theorem extendedRenaming_appendRight
         (ConcreteElaboration.appendRightVar source.val
           (source.val.wiresAt region) value) =
       ConcreteElaboration.appendRightVar
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).wiresAt (targetRegion source removed region))
         (contextRenaming source removed context value) := by
   apply origin_injective_of_nodup
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed)
   · exact
       (targetContext_extend source removed context region) ▸
@@ -1343,7 +1343,7 @@ private theorem extendedRenaming_appendRight
           sourceExtendedNodup
   · unfold extendedContextRenaming
     rw [origin_cast_renaming
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed)
       (targetContext_extend source removed context region)
       (context.extend region).sigs
@@ -1365,9 +1365,9 @@ private theorem extendedSection_appendRight
       Var (targetContext source removed context).sigs sig) :
     extendedContextSection source removed context region
         (ConcreteElaboration.appendRightVar
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).wiresAt
               (targetRegion source removed region))
           value) =
@@ -1433,26 +1433,26 @@ theorem extendedEnvironment_correspondence
             (source.val.wires wire).sig),
       ∃ targetValues :
           ConcreteElaboration.WireValues pre
-            (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wiresAt
                 (targetRegion source removed region)).map fun wire =>
-              ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed).wires wire).sig),
         ConcreteElaboration.extendEnvironment source.val context region
             sourceValues sourceOuter =
           Env.comp
             (ConcreteElaboration.extendEnvironment
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (targetContext source removed context)
               (targetRegion source removed region) targetValues targetOuter)
             (extendedContextRenaming source removed context region)) ∧
       (∀ targetValues :
           ConcreteElaboration.WireValues pre
-            (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).wiresAt
                 (targetRegion source removed region)).map fun wire =>
-              ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed).wires wire).sig),
         ∃ sourceValues :
             ConcreteElaboration.WireValues pre
@@ -1462,7 +1462,7 @@ theorem extendedEnvironment_correspondence
               sourceValues sourceOuter =
             Env.comp
               (ConcreteElaboration.extendEnvironment
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed)
                 (targetContext source removed context)
                 (targetRegion source removed region) targetValues targetOuter)
@@ -1481,16 +1481,16 @@ theorem extendedEnvironment_correspondence
         (extendedContextSection source removed context region)
     let targetValues :=
       ConcreteElaboration.valuesFromEnvironmentFor
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed context).ids
-        ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).wiresAt (targetRegion source removed region))
         targetExtended
     refine ⟨targetValues, ?_⟩
     have targetRealized :
         ConcreteElaboration.extendEnvironment
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed context)
             (targetRegion source removed region) targetValues targetOuter =
@@ -1501,9 +1501,9 @@ theorem extendedEnvironment_correspondence
         sourceExtended sig
             (extendedContextSection source removed context region
               (ConcreteElaboration.appendRightVar
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed)
-                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed).wiresAt
                     (targetRegion source removed region))
                 value)) =
@@ -1525,7 +1525,7 @@ theorem extendedEnvironment_correspondence
   · intro targetValues
     let targetExtended :=
       ConcreteElaboration.extendEnvironment
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         (targetContext source removed context)
         (targetRegion source removed region) targetValues targetOuter
@@ -1565,7 +1565,7 @@ def sourceNode
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (target :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).NodeId) :
     source.val.NodeId :=
   (retainedNodes source removed).get target
@@ -1574,20 +1574,20 @@ theorem sourceNode_ne
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (target :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).NodeId) :
     sourceNode source removed target ≠ removed := by
   have member := List.get_mem (retainedNodes source removed) target
   exact by
     simpa [sourceNode, retainedNodes,
-      ConcreteDiagram.IdentityNormalizationCore.retainedNodes] using
+      ConcreteDiagram.DenseErasure.retainedNodes] using
         of_decide_eq_true (List.mem_filter.mp member).2
 
 @[simp] theorem targetNode_sourceNode
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (target :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).NodeId) :
     targetNode source removed (sourceNode source removed target)
         (sourceNode_ne source removed target) =
@@ -1609,9 +1609,9 @@ theorem erased_nodesAt_sources
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (region : source.val.RegionId) :
-    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).nodesAt
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+      (ConcreteDiagram.DenseErasure.eraseNodeRegion
         source removed region)).map
         (sourceNode source removed) =
       (source.val.nodesAt region).filter
@@ -1635,7 +1635,7 @@ theorem erased_nodesAt_sources
     simpa [sourceNode] using map_get_allFin (retainedNodes source removed)
   rw [allSources]
   simp only [retainedNodes,
-    ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+    ConcreteDiagram.DenseErasure.retainedNodes,
     List.filter_filter]
   apply List.filter_congr
   intro candidate _
@@ -1648,12 +1648,12 @@ private theorem survivingNode_singleton_natural
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     (context : ConcreteElaboration.WireContext source.val)
     (contextNodup : context.ids.Nodup)
     (target :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).NodeId)
     {sourceItems : ItemSeq definitions context.sigs}
     (sourceCompiled :
@@ -1663,7 +1663,7 @@ private theorem survivingNode_singleton_natural
     ∃ targetItems :
         ItemSeq definitions (targetContext source removed context).sigs,
       ConcreteElaboration.compileNodes? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed context) [target] =
         some targetItems ∧
@@ -1675,19 +1675,19 @@ private theorem survivingNode_singleton_natural
     (targetContext_nodup source removed context contextNodup)
     (contextRenaming source removed context)
     (targetWire source removed)
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+    (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
       source removed)
     (contextRenaming_action source removed context)
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+    (ConcreteDiagram.DenseErasure.eraseNodeRegion
       source removed)
     (sourceNode source removed target)
     target
   · simp only [
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+      ConcreteDiagram.DenseErasure.eraseNodeCandidate,
       sourceNode, retainedNodes]
     generalize nodeData :
       source.val.nodes
-          ((ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+          ((ConcreteDiagram.DenseErasure.retainedNodes
             source.val [removed]).get target) =
         data
     cases data <;> simp
@@ -1794,13 +1794,13 @@ theorem survivingNodes_natural
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     (context : ConcreteElaboration.WireContext source.val)
     (contextNodup : context.ids.Nodup) :
     ∀ (targets :
         List
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed).NodeId)
       {sourceItems : ItemSeq definitions context.sigs},
       ConcreteElaboration.compileNodes? definitions source.val context
@@ -1809,7 +1809,7 @@ theorem survivingNodes_natural
       ∃ targetItems :
           ItemSeq definitions (targetContext source removed context).sigs,
         ConcreteElaboration.compileNodes? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             (targetContext source removed context) targets =
           some targetItems ∧
@@ -1844,24 +1844,24 @@ theorem survivingNodes_natural
       refine ⟨targetHead.append targetTail, ?_, ?_⟩
       · calc
           ConcreteElaboration.compileNodes? definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (targetContext source removed context)
               (target :: tail) =
               (do
                 let headItems ←
                   ConcreteElaboration.compileNodes? definitions
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed)
                     (targetContext source removed context) [target]
                 let tailItems ←
                   ConcreteElaboration.compileNodes? definitions
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed)
                     (targetContext source removed context) tail
                 pure (headItems.append tailItems)) :=
             compileNodes_cons_eq_singleton_bind definitions
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                 source removed)
               (targetContext source removed context) target tail
           _ = some (targetHead.append targetTail) := by
@@ -1961,7 +1961,7 @@ theorem compileRegion_natural
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions) :
     ∀ (fuel : Nat)
       (context : ConcreteElaboration.WireContext source.val)
@@ -1974,7 +1974,7 @@ theorem compileRegion_natural
       ∃ targetBody :
           Region definitions (targetContext source removed context).sigs,
         ConcreteElaboration.compileRegion? definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed)
             fuel (targetRegion source removed region)
             (targetContext source removed context) =
@@ -2016,7 +2016,7 @@ theorem compileRegion_natural
               have sourceTargetNodesCompiled :
                   ConcreteElaboration.compileNodes? definitions source.val
                       (context.extend region)
-                      (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                           source removed).nodesAt
                         (targetRegion source removed region)).map
                         (sourceNode source removed)) =
@@ -2027,7 +2027,7 @@ theorem compileRegion_natural
               obtain ⟨targetNodes, targetNodesCompiled, _⟩ :=
                 survivingNodes_natural source removed candidateWellFormed
                   (context.extend region) sourceExtendedNodup
-                  ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed).nodesAt
                     (targetRegion source removed region))
                   sourceTargetNodesCompiled
@@ -2038,12 +2038,12 @@ theorem compileRegion_natural
                 targetContext_extend source removed context region
               obtain ⟨targetChildren, targetChildrenCompiled⟩ :=
                 compileChildren_natural_of source.val
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed)
                   (ConcreteElaboration.compileRegion? definitions source.val
                     fuel)
                   (ConcreteElaboration.compileRegion? definitions
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed) fuel)
                   (context.extend region)
                   (targetContext source removed (context.extend region))
@@ -2073,43 +2073,43 @@ theorem compileRegion_natural
                 targetContextSigs ▸ targetChildren
               have targetNodesCompiled' :
                   ConcreteElaboration.compileNodes? definitions
-                      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         source removed)
                       ((targetContext source removed context).extend
                         (targetRegion source removed region))
-                      ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         source removed).nodesAt
                         (targetRegion source removed region)) =
                     some targetNodes' :=
                 compileNodes_cast_context
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed)
                   targetContextExtended _ _ targetNodesCompiled
               have targetChildrenCompiled' :
                   ConcreteElaboration.compileChildrenWith? definitions
-                      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         source removed)
                       (ConcreteElaboration.compileRegion? definitions
-                        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                           source removed) fuel)
                       ((targetContext source removed context).extend
                         (targetRegion source removed region))
-                      ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         source removed).childrenOf
                         (targetRegion source removed region)) =
                     some targetChildren' := by
                 apply compileChildren_cast_context
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                  (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                     source removed)
                   (ConcreteElaboration.compileRegion? definitions
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed) fuel)
                   targetContextExtended
                 rw [target_childrenOf]
                 exact targetChildrenCompiled
               refine
                 ⟨ConcreteElaboration.finishRegion
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed)
                     (targetContext source removed context)
                     (targetRegion source removed region)
@@ -2123,7 +2123,7 @@ theorem compileRegionBody_natural
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     (fuel : Nat)
     (context : ConcreteElaboration.WireContext source.val)
@@ -2138,7 +2138,7 @@ theorem compileRegionBody_natural
           ((targetContext source removed context).extend
             (targetRegion source removed region)).sigs,
       compileRegionBody? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           fuel (targetRegion source removed region)
           (targetContext source removed context) =
@@ -2171,11 +2171,11 @@ theorem compileRegionBody_natural
           simp only [ConcreteElaboration.compileRegion?] at targetCompiled
           cases targetNodesEquation :
               ConcreteElaboration.compileNodes? definitions
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed)
                 ((targetContext source removed context).extend
                   (targetRegion source removed region))
-                ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                   source removed).nodesAt
                     (targetRegion source removed region)) with
           | none =>
@@ -2185,14 +2185,14 @@ theorem compileRegionBody_natural
               rw [targetNodesEquation] at targetCompiled
               cases targetChildrenEquation :
                   ConcreteElaboration.compileChildrenWith? definitions
-                    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed)
                     (ConcreteElaboration.compileRegion? definitions
-                      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         source removed) fuel)
                     ((targetContext source removed context).extend
                       (targetRegion source removed region))
-                    ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                    ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                       source removed).childrenOf
                         (targetRegion source removed region)) with
               | none =>
@@ -2201,49 +2201,49 @@ theorem compileRegionBody_natural
               | some targetChildren =>
                   have targetNodesEquation' :
                       ConcreteElaboration.compileNodes? definitions
-                          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                             source removed)
                           ((targetContext source removed context).extend
                             (targetRegion source removed region))
-                          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                             source removed).nodesAt region) =
                         some targetNodes := by
                     calc
                       _ =
                           ConcreteElaboration.compileNodes? definitions
-                            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                               source removed)
                             ((targetContext source removed context).extend
                               (targetRegion source removed region))
-                            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                               source removed).nodesAt
                                 (targetRegion source removed region)) := by
                         rw [targetRegion_eq]
                       _ = some targetNodes := targetNodesEquation
                   have targetChildrenEquation' :
                       ConcreteElaboration.compileChildrenWith? definitions
-                          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                             source removed)
                           (ConcreteElaboration.compileRegion? definitions
-                            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                               source removed) fuel)
                           ((targetContext source removed context).extend
                             (targetRegion source removed region))
-                          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                             source removed).childrenOf
                               region) =
                         some targetChildren := by
                     calc
                       _ =
                           ConcreteElaboration.compileChildrenWith? definitions
-                            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                            (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                               source removed)
                             (ConcreteElaboration.compileRegion? definitions
-                              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                              (ConcreteDiagram.DenseErasure.eraseNodeCandidate
                                 source removed) fuel)
                             ((targetContext source removed context).extend
                               (targetRegion source removed region))
-                            ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                            ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
                               source removed).childrenOf
                                 (targetRegion source removed region)) := by
                         rw [targetRegion_eq]
@@ -2262,13 +2262,13 @@ theorem survivingNodes_denotation
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     (context : ConcreteElaboration.WireContext source.val)
     (contextNodup : context.ids.Nodup)
     (targets :
       List
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).NodeId)
     {sourceItems : ItemSeq definitions context.sigs}
     (sourceCompiled :
@@ -2282,7 +2282,7 @@ theorem survivingNodes_denotation
     ∃ targetItems :
         ItemSeq definitions (targetContext source removed context).sigs,
       ConcreteElaboration.compileNodes? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed context) targets =
         some targetItems ∧
@@ -2306,7 +2306,7 @@ theorem erasedNodes_denotation
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (candidateWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      (ConcreteDiagram.DenseErasure.eraseNodeCandidate
         source removed).WellFormed definitions)
     (context : ConcreteElaboration.WireContext source.val)
     (contextNodup : context.ids.Nodup)
@@ -2325,12 +2325,12 @@ theorem erasedNodes_denotation
       ItemSeq definitions (targetContext source removed context).sigs)
     (targetCompiled :
       ConcreteElaboration.compileNodes? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             source removed)
           (targetContext source removed context)
-          ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).nodesAt
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            (ConcreteDiagram.DenseErasure.eraseNodeRegion
               source removed region)) =
         some targetItems)
     (removedItem : Item definitions context.sigs)
@@ -2350,9 +2350,9 @@ theorem erasedNodes_denotation
       (source.val.nodesAt region) sourceCompiled
   have sourceTargetsCompiled :
       ConcreteElaboration.compileNodes? definitions source.val context
-          (((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (((ConcreteDiagram.DenseErasure.eraseNodeCandidate
               source removed).nodesAt
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            (ConcreteDiagram.DenseErasure.eraseNodeRegion
               source removed region)).map
             (sourceNode source removed)) =
         some filteredItems := by
@@ -2361,9 +2361,9 @@ theorem erasedNodes_denotation
   obtain ⟨expectedItems, expectedCompiled, targetDenotation⟩ :=
     survivingNodes_denotation source removed candidateWellFormed context
       contextNodup
-      ((ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ((ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed).nodesAt
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        (ConcreteDiagram.DenseErasure.eraseNodeRegion
           source removed region))
       sourceTargetsCompiled pre definitionEnv targetEnv
   have targetEquality : targetItems = expectedItems :=

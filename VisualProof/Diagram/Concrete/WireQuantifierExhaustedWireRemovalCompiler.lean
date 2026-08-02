@@ -336,7 +336,7 @@ private theorem targetEndpoint_incident
         (targetWire source removed wire survives)).endpoints := by
   unfold Target targetWire targetEndpoint targetNode retainedNodes
   simp only [
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate,
+    ConcreteDiagram.DenseErasure.eraseWireCandidate,
     DenseList.get_index]
   apply List.mem_filterMap.mpr
   refine ⟨endpoint, incident, ?_⟩

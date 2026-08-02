@@ -12,7 +12,7 @@ namespace SingletonRemovalSemantics
 private abbrev Target
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId) :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate source removed
+  ConcreteDiagram.DenseErasure.eraseNodeCandidate source removed
 
 /--
 An erasure frame split strictly above a retained scope. The unequal binder

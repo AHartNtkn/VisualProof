@@ -6,6 +6,8 @@ namespace ConcreteDiagram
 
 namespace IdentityNormalizationCore
 
+open DenseErasure
+
 /-- Total signature-preserving representation of every source wire. -/
 structure WireTransport
     (source target : ConcreteDiagram definitionCount) where

@@ -304,14 +304,14 @@ theorem Internal.RelationJoinStep.baseRegionImage_injective
   intro left right same
   rw [step.baseRegionImageExact, step.baseRegionImageExact] at same
   have erasedSame :
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+      ConcreteDiagram.DenseErasure.eraseNodeRegion
           step.prior step.priorApplication (step.priorRegionImage left) =
-        ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        ConcreteDiagram.DenseErasure.eraseNodeRegion
           step.prior step.priorApplication
           (step.priorRegionImage right) := by
     exact checkedRegion_injective step.base_generated same
   have priorSame :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_injective
+    ConcreteDiagram.DenseErasure.eraseNodeRegion_injective
       step.prior step.priorApplication erasedSame
   have leftRight :
       source.val.Encloses left right := by
@@ -568,7 +568,7 @@ theorem Internal.extendedContextRenaming_origin
     {sig : Sig}
     (value : Var (context.extend region).sigs sig) :
     ConcreteElaboration.WireContext.origin
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           source removed)
         ((SingletonRemovalSemantics.targetContext source removed context).extend
           (SingletonRemovalSemantics.targetRegion source removed region)).ids
@@ -579,7 +579,7 @@ theorem Internal.extendedContextRenaming_origin
           (context.extend region).ids value) := by
   unfold SingletonRemovalSemantics.extendedContextRenaming
   rw [origin_cast_renaming
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       source removed)
     (SingletonRemovalSemantics.targetContext_extend source removed
       context region)
@@ -1875,7 +1875,7 @@ theorem Internal.RelationJoinStep.erasureLocalReplacementAt
     {fuel : Nat}
     (targetFrame :
       RegionFrame definitions
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+        (ConcreteDiagram.DenseErasure.eraseNodeCandidate
           step.prior step.priorApplication)
         (SingletonRemovalSemantics.targetContext step.prior
           step.priorApplication sourceOuter))
@@ -1984,7 +1984,7 @@ private theorem RelationJoinStep.coScopedErasureBodyDenotation
       (sourceFrame : RegionFrame definitions step.prior.val outer)
       (targetFrame :
         RegionFrame definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetContext step.prior
             step.priorApplication outer))
@@ -2034,7 +2034,7 @@ private theorem RelationJoinStep.coScopedErasureBodyDenotation
           (step.priorRegionImage (source.val.wires dying).scope) outer =
         some sourceFrame ∧
       compileRegionFrame? definitions
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+          (ConcreteDiagram.DenseErasure.eraseNodeCandidate
             step.prior step.priorApplication)
           (SingletonRemovalSemantics.targetRegion step.prior
             step.priorApplication

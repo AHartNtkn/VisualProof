@@ -16,16 +16,16 @@ structure EmptyCore
     (result : CutWrapResult source wire) where
   private mk ::
   sourceWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       source wire).WellFormed definitions
   targetWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       result.checked result.targetWire).WellFormed definitions
   deletionIso :
     ConcreteIso
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source wire)
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         result.checked result.targetWire)
 
 /-- Check the deletion landing exactly when the exhaustive site list is empty. -/
@@ -36,16 +36,16 @@ def checkOptionalEmptyCore
     Option (result.sites.sites = [] → EmptyCore result) :=
   if empty : result.sites.sites = [] then do
     if sourceWellFormed :
-        (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        (ConcreteDiagram.DenseErasure.eraseWireCandidate
           source wire).WellFormed definitions then
       if targetWellFormed :
-          (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+          (ConcreteDiagram.DenseErasure.eraseWireCandidate
             result.checked result.targetWire).WellFormed definitions then
         let deletionIso ←
           ConcreteIsoSearch.findConcreteIso?
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            (ConcreteDiagram.DenseErasure.eraseWireCandidate
               source wire)
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            (ConcreteDiagram.DenseErasure.eraseWireCandidate
               result.checked result.targetWire)
         pure (fun _ =>
           EmptyCore.mk sourceWellFormed targetWellFormed deletionIso)
@@ -70,28 +70,28 @@ structure EmptyCore
     (result : ParallelSplitResult source wire) where
   private mk ::
   sourceWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       source wire).WellFormed definitions
   different : result.secondWire ≠ result.firstWire
   firstWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       result.checked result.firstWire).WellFormed definitions
   secondEmpty :
-    ((ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    ((ConcreteDiagram.DenseErasure.eraseWireCandidate
         result.checked result.firstWire).wires
       (targetWire result.checked result.firstWire result.secondWire
         different)).endpoints = []
   secondWellFormed :
-    (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    (ConcreteDiagram.DenseErasure.eraseWireCandidate
       (deletedCheckedDiagram result.checked result.firstWire
         firstWellFormed)
       (targetWire result.checked result.firstWire result.secondWire
         different)).WellFormed definitions
   deletionIso :
     ConcreteIso
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source wire)
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         (deletedCheckedDiagram result.checked result.firstWire
           firstWellFormed)
         (targetWire result.checked result.firstWire result.secondWire
@@ -105,30 +105,30 @@ def checkOptionalEmptyCore
     Option (result.sites.sites = [] → EmptyCore result) :=
   if empty : result.sites.sites = [] then do
     if sourceWellFormed :
-        (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        (ConcreteDiagram.DenseErasure.eraseWireCandidate
           source wire).WellFormed definitions then
       if different : result.secondWire ≠ result.firstWire then
         if firstWellFormed :
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            (ConcreteDiagram.DenseErasure.eraseWireCandidate
               result.checked result.firstWire).WellFormed definitions then
           let secondWire :=
             targetWire result.checked result.firstWire result.secondWire
               different
           if secondEmpty :
-              ((ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+              ((ConcreteDiagram.DenseErasure.eraseWireCandidate
                 result.checked result.firstWire).wires
                 secondWire).endpoints = [] then
             let firstDeleted :=
               deletedCheckedDiagram result.checked result.firstWire
                 firstWellFormed
             if secondWellFormed :
-                (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                (ConcreteDiagram.DenseErasure.eraseWireCandidate
                   firstDeleted secondWire).WellFormed definitions then
               let deletionIso ←
                 ConcreteIsoSearch.findConcreteIso?
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                  (ConcreteDiagram.DenseErasure.eraseWireCandidate
                     source wire)
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                  (ConcreteDiagram.DenseErasure.eraseWireCandidate
                     firstDeleted secondWire)
               pure (fun _ =>
                 EmptyCore.mk sourceWellFormed different firstWellFormed

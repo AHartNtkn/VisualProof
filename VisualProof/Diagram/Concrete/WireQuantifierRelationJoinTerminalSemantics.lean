@@ -201,7 +201,7 @@ private theorem relationJoin_removedFrameValue
     (removed : source.val.WireId)
     (targetContext :
       ConcreteElaboration.WireContext
-        (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+        (ConcreteDiagram.DenseErasure.eraseWireCandidate
           source removed))
     (sourceContext : ConcreteElaboration.WireContext source.val)
     (correspond :
@@ -412,7 +412,7 @@ private noncomputable def relationJoin_composeDeletion
     {boundScope :
       SiteCompilation bound (bound.val.wires removed).scope}
     {targetWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         bound removed).WellFormed definitions}
     (first :
       RelationJoinSemanticTrace.AboveDyingScopeTransport.{u}
@@ -429,7 +429,7 @@ private noncomputable def relationJoin_composeDeletion
         Env.comp env
           (ExhaustedWireRemovalSemantics.contextProjection bound removed
             (ConcreteElaboration.WireContext.empty
-              (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+              (ConcreteDiagram.DenseErasure.eraseWireCandidate
                 bound removed))
             (ConcreteElaboration.WireContext.empty bound.val)
             receipt.reflected.outerCorrespond
@@ -504,7 +504,7 @@ theorem _root_.VisualProof.ConcreteWireQuantifier.RelationJoinResult.denotes
       denoteChecked model.toPreModel definitionEnv source →
         denoteChecked model.toPreModel definitionEnv result.checked) := by
   have targetWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         result.boundFinal result.boundDying).WellFormed definitions := by
     rw [← result.final_deletion_exact]
     exact result.plainFinal.property
@@ -535,7 +535,7 @@ theorem _root_.VisualProof.ConcreteWireQuantifier.RelationJoinResult.denotes
           sourceSite.frame.siteBody)
   let targetFinished :=
     ConcreteElaboration.finishRegion
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         result.boundFinal result.boundDying)
       deletionReceipt.reflected.targetSiteOuter
       (ExhaustedWireRemovalSemantics.targetRegion result.boundFinal
@@ -548,7 +548,7 @@ theorem _root_.VisualProof.ConcreteWireQuantifier.RelationJoinResult.denotes
         intro targetOuterEnv _preservesOuter targetDenotes
         obtain ⟨targetValues, targetCore⟩ :=
           (ConcreteElaboration.denote_finishRegion definitions
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            (ConcreteDiagram.DenseErasure.eraseWireCandidate
               result.boundFinal result.boundDying)
             deletionReceipt.reflected.targetSiteOuter
             (ExhaustedWireRemovalSemantics.targetRegion result.boundFinal
@@ -558,7 +558,7 @@ theorem _root_.VisualProof.ConcreteWireQuantifier.RelationJoinResult.denotes
             deletionReceipt.reflected.targetBody).mp targetDenotes
         let targetExtended :=
           ConcreteElaboration.extendEnvironment
-            (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+            (ConcreteDiagram.DenseErasure.eraseWireCandidate
               result.boundFinal result.boundDying)
             deletionReceipt.reflected.targetSiteOuter
             (ExhaustedWireRemovalSemantics.targetRegion result.boundFinal
@@ -1066,7 +1066,7 @@ theorem _root_.VisualProof.ConcreteWireQuantifier.RelationJoinResult.denotes
             (ExhaustedWireRemovalSemantics.contextProjection
               result.boundFinal result.boundDying
               (ConcreteElaboration.WireContext.empty
-                (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+                (ConcreteDiagram.DenseErasure.eraseWireCandidate
                   result.boundFinal result.boundDying))
               (ConcreteElaboration.WireContext.empty result.boundFinal.val)
               deletionReceipt.reflected.outerCorrespond

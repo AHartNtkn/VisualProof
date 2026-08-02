@@ -358,21 +358,21 @@ structure RelationJoinStep
   base : CheckedDiagram definitions
   private baseGenerated :
     base.val =
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ConcreteDiagram.DenseErasure.eraseNodeCandidate
         prior priorApplication
   baseRegionImage : source.val.RegionId → base.val.RegionId
   baseRegionImageExact :
     ∀ region,
       baseRegionImage region =
         Internal.checkedRegion baseGenerated
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+          (ConcreteDiagram.DenseErasure.eraseNodeRegion
             prior priorApplication (priorRegionImage region))
   baseWireImage : source.val.WireId → base.val.WireId
   baseWireImageExact :
     ∀ sourceWire,
       baseWireImage sourceWire =
         Internal.checkedWire baseGenerated
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+          (ConcreteDiagram.DenseErasure.eraseNodeWire
             prior priorApplication (priorWireImage sourceWire))
   baseNodeImage : source.val.NodeId → Option base.val.NodeId
   baseNodeImageExact :
@@ -383,11 +383,11 @@ structure RelationJoinStep
         | some priorNode =>
             if retained :
                 priorNode ∈
-                  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                  ConcreteDiagram.DenseErasure.retainedNodes
                     prior.val [priorApplication] then
               some
                 (Internal.checkedNode baseGenerated
-                  (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+                  (ConcreteDiagram.DenseErasure.eraseNodeIndex
                     prior priorApplication priorNode retained))
             else
               none
@@ -450,7 +450,7 @@ def checkedPriorRegion
     (congrArg ConcreteDiagram.regionCount step.generated).symm
     (step.attachment.hostRegion
       (Internal.checkedRegion step.baseGenerated
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+        (ConcreteDiagram.DenseErasure.eraseNodeRegion
           step.prior step.priorApplication region)))
 
 /-- Transport any non-application prior node through deletion and splice. -/
@@ -463,9 +463,9 @@ def checkedPriorNode
     (congrArg ConcreteDiagram.nodeCount step.generated).symm
     (step.attachment.hostNode
       (Internal.checkedNode step.baseGenerated
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+        (ConcreteDiagram.DenseErasure.eraseNodeIndex
           step.prior step.priorApplication node (by
-            simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+            simp [ConcreteDiagram.DenseErasure.retainedNodes,
               ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
               different]))))
 
@@ -478,7 +478,7 @@ def checkedPriorWire
     (congrArg ConcreteDiagram.wireCount step.generated).symm
     (step.attachment.hostWire
       (Internal.checkedWire step.baseGenerated
-      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+      (ConcreteDiagram.DenseErasure.eraseNodeWire
           step.prior step.priorApplication wire)))
 
 /-- Allocate one fragment region in the checked splice target. -/
@@ -546,7 +546,7 @@ theorem checkedWireImage_eq_checkedPriorWire
   rw [Internal.checkedRoot_transport step.baseGenerated]
   unfold Internal.checkedRegion
   change
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+    (ConcreteDiagram.DenseErasure.eraseNodeCandidate
       step.prior step.priorApplication).root.val = step.prior.val.root.val
   rfl
 
@@ -587,15 +587,15 @@ theorem checkedPriorEndpoint_mem
     step.checkedPriorEndpoint endpoint different ∈
       (step.checked.val.wires (step.checkedPriorWire wire)).endpoints := by
   have erased :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint_mem
+    ConcreteDiagram.DenseErasure.eraseNodeEndpoint_mem
       step.prior step.priorApplication wire endpoint different incident
   have baseIncident :
       Internal.checkedEndpoint step.baseGenerated
-          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint
+          (ConcreteDiagram.DenseErasure.eraseNodeEndpoint
             step.prior step.priorApplication endpoint different) ∈
         (step.base.val.wires
           (Internal.checkedWire step.baseGenerated
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+            (ConcreteDiagram.DenseErasure.eraseNodeWire
               step.prior step.priorApplication wire))).endpoints := by
     rw [Internal.checkedWire_endpoints_transport]
     exact List.mem_map.mpr ⟨_, erased, rfl⟩
@@ -604,18 +604,18 @@ theorem checkedPriorEndpoint_mem
       Internal.checkedEndpoint step.generated
           (step.attachment.hostEndpoint
             (Internal.checkedEndpoint step.baseGenerated
-              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint
+              (ConcreteDiagram.DenseErasure.eraseNodeEndpoint
                 step.prior step.priorApplication endpoint different))) ∈
         (step.checked.val.wires
           (Internal.checkedWire step.generated
             (step.attachment.hostWire
               (Internal.checkedWire step.baseGenerated
-                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+                (ConcreteDiagram.DenseErasure.eraseNodeWire
                   step.prior step.priorApplication wire))))).endpoints := by
     rw [Internal.checkedWire_endpoints_transport]
     exact List.mem_map.mpr ⟨_, attached, rfl⟩
   simpa [checkedPriorEndpoint, checkedPriorNode, checkedPriorWire,
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint] using
+    ConcreteDiagram.DenseErasure.eraseNodeEndpoint] using
     checkedIncident
 
 /-- Every copied fragment incidence remains incident to the transported
@@ -656,7 +656,7 @@ theorem checkedPriorRegion_sheet
   apply Internal.checkedRegion_data_transport_sheet step.generated
   rw [ConcreteSpliceAttachment.diagram_region_hostRegion]
   have erased :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_sheet
+    ConcreteDiagram.DenseErasure.eraseNodeRegion_sheet
       step.prior step.priorApplication region data
   have baseData := Internal.checkedRegion_data_transport_sheet
     step.baseGenerated _ erased
@@ -675,7 +675,7 @@ theorem checkedPriorRegion_cut
   apply Internal.checkedRegion_data_transport_cut step.generated
   rw [ConcreteSpliceAttachment.diagram_region_hostRegion]
   have erased :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_cut
+    ConcreteDiagram.DenseErasure.eraseNodeRegion_cut
       step.prior step.priorApplication region parent data
   have baseData := Internal.checkedRegion_data_transport_cut
     step.baseGenerated _ _ erased
@@ -697,15 +697,15 @@ theorem checkedPriorNode_data
   rw [Internal.checkedNode_data_transport]
   rw [ConcreteSpliceAttachment.diagram_node_hostNode]
   have retained :
-      node ∈ ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+      node ∈ ConcreteDiagram.DenseErasure.retainedNodes
         step.prior.val [step.priorApplication] := by
-    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+    simp [ConcreteDiagram.DenseErasure.retainedNodes,
       ConcreteDiagram.nodesList, Data.Finite.mem_allFin, different]
   have erased :=
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex_data
+    ConcreteDiagram.DenseErasure.eraseNodeIndex_data
       step.prior step.priorApplication node retained
   have baseData := Internal.checkedNode_data_transport step.baseGenerated
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+    (ConcreteDiagram.DenseErasure.eraseNodeIndex
       step.prior step.priorApplication node retained)
   unfold ConcreteSpliceAttachment.renameHostNode
   rw [baseData, erased]
@@ -918,7 +918,7 @@ theorem checkedPriorWire_signature
   rw [Internal.checkedWire_signature_transport,
     ConcreteSpliceAttachment.diagram_wire_hostWire,
     Internal.checkedWire_signature_transport,
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature]
+    ConcreteDiagram.DenseErasure.eraseNodeWire_signature]
 
 /-- A prior wire's scope follows the exact prior region transport. -/
 theorem checkedPriorWire_scope
@@ -932,7 +932,7 @@ theorem checkedPriorWire_scope
   rw [Internal.checkedWire_scope_transport,
     ConcreteSpliceAttachment.diagram_wire_hostWire_scope,
     Internal.checkedWire_scope_transport,
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_scope]
+    ConcreteDiagram.DenseErasure.eraseNodeWire_scope]
   rfl
 
 /-- A freshly allocated internal fragment wire preserves its signature. -/
@@ -1083,7 +1083,7 @@ theorem checkedFragmentRegion_ne_checkedPriorRegion_of_nonroot
       step.attachment.fragmentRegion fragment =
         step.attachment.hostRegion
           (Internal.checkedRegion step.baseGenerated
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+            (ConcreteDiagram.DenseErasure.eraseNodeRegion
               step.prior step.priorApplication prior)) := by
     apply Fin.ext
     have values := congrArg Fin.val same
@@ -1103,7 +1103,7 @@ theorem checkedFragmentWire_ne_checkedPriorWire_of_internal
       step.attachment.fragmentWire fragment =
         step.attachment.hostWire
           (Internal.checkedWire step.baseGenerated
-            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+            (ConcreteDiagram.DenseErasure.eraseNodeWire
               step.prior step.priorApplication prior)) := by
     apply Fin.ext
     have values := congrArg Fin.val same
@@ -1165,7 +1165,7 @@ theorem checked_wireCount
     step.attachment.fragmentInternalWires.length = _
   have baseCount : step.base.val.wireCount = step.prior.val.wireCount := by
     rw [step.baseGenerated]
-    simp [ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate,
+    simp [ConcreteDiagram.DenseErasure.eraseNodeCandidate,
       Internal.retainedWires, ConcreteDiagram.wiresList,
       Data.Finite.allFin_eq_finRange]
   rw [baseCount]
@@ -1180,33 +1180,33 @@ theorem checkedPriorNode_injective
         step.checkedPriorNode right rightDifferent) :
     left = right := by
   have leftRetained :
-      left ∈ ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+      left ∈ ConcreteDiagram.DenseErasure.retainedNodes
         step.prior.val [step.priorApplication] := by
-    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+    simp [ConcreteDiagram.DenseErasure.retainedNodes,
       ConcreteDiagram.nodesList, Data.Finite.mem_allFin, leftDifferent]
   have rightRetained :
-      right ∈ ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+      right ∈ ConcreteDiagram.DenseErasure.retainedNodes
         step.prior.val [step.priorApplication] := by
-    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+    simp [ConcreteDiagram.DenseErasure.retainedNodes,
       ConcreteDiagram.nodesList, Data.Finite.mem_allFin, rightDifferent]
   have indexed :
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+      ConcreteDiagram.DenseErasure.eraseNodeIndex
           step.prior step.priorApplication left leftRetained =
-        ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+        ConcreteDiagram.DenseErasure.eraseNodeIndex
           step.prior step.priorApplication right rightRetained := by
     apply Fin.ext
     simpa [checkedPriorNode, Internal.checkedNode,
       ConcreteSpliceAttachment.hostNode] using congrArg Fin.val same
   change
     DenseList.index
-        (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        (ConcreteDiagram.DenseErasure.retainedNodes
           step.prior.val [step.priorApplication]) left leftRetained =
       DenseList.index
-        (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        (ConcreteDiagram.DenseErasure.retainedNodes
           step.prior.val [step.priorApplication]) right rightRetained at indexed
   have values :=
     congrArg
-      (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+      (ConcreteDiagram.DenseErasure.retainedNodes
         step.prior.val [step.priorApplication]).get indexed
   rw [DenseList.get_index, DenseList.get_index] at values
   exact values
@@ -1222,13 +1222,13 @@ theorem checkedFragmentNode_ne_checkedPriorNode
   have values := congrArg Fin.val same
   have baseCount :
       step.base.val.nodeCount =
-        (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        (ConcreteDiagram.DenseErasure.retainedNodes
           step.prior.val [step.priorApplication]).length := by
     rw [step.baseGenerated]
   have priorBound :=
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+    (ConcreteDiagram.DenseErasure.eraseNodeIndex
       step.prior step.priorApplication prior (by
-        simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+        simp [ConcreteDiagram.DenseErasure.retainedNodes,
           ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
           different])).isLt
   simp [checkedFragmentNode, checkedPriorNode, Internal.checkedNode,
@@ -1271,9 +1271,9 @@ theorem checkedNodeImages_eq_checkedRemainingNodes
           by_cases different : priorNode ≠ step.priorApplication
           · have retained :
                 priorNode ∈
-                  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                  ConcreteDiagram.DenseErasure.retainedNodes
                     step.prior.val [step.priorApplication] := by
-              simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+              simp [ConcreteDiagram.DenseErasure.retainedNodes,
                 ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
                 different]
             simp only [retained, dif_pos, Option.map_some]
@@ -1290,9 +1290,9 @@ theorem checkedNodeImages_eq_checkedRemainingNodes
             subst priorNode
             have notRetained :
                 step.priorApplication ∉
-                  ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                  ConcreteDiagram.DenseErasure.retainedNodes
                     step.prior.val [step.priorApplication] := by
-              simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+              simp [ConcreteDiagram.DenseErasure.retainedNodes,
                 ConcreteDiagram.nodesList, Data.Finite.mem_allFin]
             simp only [notRetained, dif_neg, Option.map_none]
             change
@@ -1310,9 +1310,9 @@ theorem checkedNodeImages_eq_checkedRemainingNodes
     step.priorApplicationImage]
   have notRetained :
       step.priorApplication ∉
-        ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        ConcreteDiagram.DenseErasure.retainedNodes
           step.prior.val [step.priorApplication] := by
-    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+    simp [ConcreteDiagram.DenseErasure.retainedNodes,
       ConcreteDiagram.nodesList, Data.Finite.mem_allFin]
   simp [notRetained]
 
@@ -1329,9 +1329,9 @@ theorem checkedNodeImage_of_prior
   rw [step.checkedNodeImageExact, step.baseNodeImageExact, priorExact]
   have retained :
       priorNode ∈
-        ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        ConcreteDiagram.DenseErasure.retainedNodes
           step.prior.val [step.priorApplication] := by
-    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+    simp [ConcreteDiagram.DenseErasure.retainedNodes,
       ConcreteDiagram.nodesList, Data.Finite.mem_allFin, different]
   simp only [retained, dif_pos, Option.map_some]
   rfl
@@ -1404,7 +1404,7 @@ theorem checked_generated
 theorem base_generated
     (step : RelationJoinStep source dying content) :
     step.base.val =
-      ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+      ConcreteDiagram.DenseErasure.eraseNodeCandidate
         step.prior step.priorApplication :=
   step.baseGenerated
 
@@ -1417,7 +1417,7 @@ theorem baseRegionImageEncloses
   rw [step.baseRegionImageExact, step.baseRegionImageExact]
   rw [Internal.checkedRegion_encloses]
   rw [
-    ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_encloses_iff]
+    ConcreteDiagram.DenseErasure.eraseNodeRegion_encloses_iff]
   exact step.priorRegionImageEncloses outer inner
 
 @[simp] theorem baseWire_signature
@@ -1427,7 +1427,7 @@ theorem baseRegionImageEncloses
       (step.base.val.wires (step.baseWireImage sourceWire)).sig := by
   rw [step.baseWireImageExact, Internal.checkedWire_signature_transport]
   exact
-    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_signature
+    (ConcreteDiagram.DenseErasure.eraseNodeWire_signature
       step.prior step.priorApplication
         (step.priorWireImage sourceWire)).symm
 
@@ -1785,7 +1785,7 @@ private def spliceRelationApplication
                     exact .error .invalidRemoval
                 | some removal =>
                     let baseCandidate :=
-                      ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate
+                      ConcreteDiagram.DenseErasure.eraseNodeCandidate
                         state.checked priorApplication
                     match baseAccepted :
                         ConcreteDiagram.checkWellFormed definitions
@@ -1800,14 +1800,14 @@ private def spliceRelationApplication
                             source.val.RegionId → base.val.RegionId :=
                           fun region =>
                             Internal.checkedRegion baseGenerated
-                              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion
+                              (ConcreteDiagram.DenseErasure.eraseNodeRegion
                                 state.checked priorApplication
                                 (state.regionImage region))
                         let baseWireImage :
                             source.val.WireId → base.val.WireId :=
                           fun sourceWire =>
                             Internal.checkedWire baseGenerated
-                              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+                              (ConcreteDiagram.DenseErasure.eraseNodeWire
                                 state.checked priorApplication
                                 (state.wireImage sourceWire))
                         let baseNodeImage :
@@ -1819,11 +1819,11 @@ private def spliceRelationApplication
                             | some priorNode =>
                                 if retained :
                                     priorNode ∈
-                                      ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                                      ConcreteDiagram.DenseErasure.retainedNodes
                                         state.checked.val [priorApplication] then
                                   some
                                     (Internal.checkedNode baseGenerated
-                                      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+                                      (ConcreteDiagram.DenseErasure.eraseNodeIndex
                                         state.checked priorApplication
                                         priorNode retained))
                                 else
@@ -1886,15 +1886,15 @@ private def spliceRelationApplication
                                       apply congrArg
                                         (Internal.checkedRegion baseGenerated)
                                       simp only [baseCandidate,
-                                        ConcreteDiagram.IdentityNormalizationCore.eraseNodeCandidate]
+                                        ConcreteDiagram.DenseErasure.eraseNodeCandidate]
                                       have sourceExact :
                                           state.checked.val.wiresList.get
-                                              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+                                              (ConcreteDiagram.DenseErasure.eraseNodeWire
                                                 state.checked priorApplication
                                                 (state.wireImage sourceWire)) =
                                             state.wireImage sourceWire := by
                                         apply Fin.ext
-                                        simp [ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire,
+                                        simp [ConcreteDiagram.DenseErasure.eraseNodeWire,
                                           ConcreteDiagram.wiresList,
                                           Data.Finite.allFin_eq_finRange]
                                       rw [sourceExact,
@@ -1970,7 +1970,7 @@ private def spliceRelationApplication
                                           | some priorNode =>
                                               by_cases retained :
                                                   priorNode ∈
-                                                    ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+                                                    ConcreteDiagram.DenseErasure.retainedNodes
                                                       state.checked.val
                                                         [priorApplication]
                                               · simp [retained]
@@ -1999,7 +1999,7 @@ private def spliceRelationApplication
                                           rw [ConcreteSpliceAttachment.hostRegion_encloses_iff]
                                           unfold baseRegionImage
                                           rw [Internal.checkedRegion_encloses]
-                                          rw [ConcreteDiagram.IdentityNormalizationCore.eraseNodeRegion_encloses_iff]
+                                          rw [ConcreteDiagram.DenseErasure.eraseNodeRegion_encloses_iff]
                                           exact
                                             state.regionImage_encloses
                                               outer inner
@@ -2039,7 +2039,7 @@ private def spliceRelationApplication
                                           intro left right same
                                           apply state.wireImage_injective
                                           apply
-                                            ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire_injective
+                                            ConcreteDiagram.DenseErasure.eraseNodeWire_injective
                                               state.checked priorApplication
                                           apply
                                             checkedWire_injective
@@ -2759,17 +2759,17 @@ def plainWireImage
 theorem final_deletion_exact
     (result : RelationJoinResult source wire content parameters) :
     result.plainFinal.val =
-      ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      ConcreteDiagram.DenseErasure.eraseWireCandidate
         result.boundFinal result.boundDying := by
   unfold plainFinal; rw [result.finalRemoval.generated]
   unfold boundFinal boundDying Internal.batchRemovalCandidate
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+    ConcreteDiagram.DenseErasure.eraseWireCandidate
     Internal.batchRegionTable Internal.batchNodeTable Internal.batchWireTable Internal.batchEndpoint?
   unfold Internal.retainedRegionIndex Internal.retainedNodeIndex
     Internal.sourceRetainedRegion Internal.sourceRetainedNode Internal.sourceRetainedWire
     DenseList.index
   unfold Internal.retainedRegions Internal.retainedNodes Internal.retainedWires
-    ConcreteDiagram.IdentityNormalizationCore.retainedWires
+    ConcreteDiagram.DenseErasure.retainedWires
   congr 1
   funext target
   split

@@ -20,7 +20,7 @@ theorem endpointFreeDeletion_denotes
     (wire : source.val.WireId)
     (empty : (source.val.wires wire).endpoints = [])
     (targetWellFormed :
-      (ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate
+      (ConcreteDiagram.DenseErasure.eraseWireCandidate
         source wire).WellFormed definitions)
     (pre : PreModel.{u})
     (definitionEnv : DefinitionEnv pre definitions) :

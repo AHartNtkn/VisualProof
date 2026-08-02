@@ -14,7 +14,7 @@ namespace Internal
 abbrev Target
     (source : CheckedDiagram definitions)
     (removed : source.val.WireId) :=
-  ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate source removed
+  ConcreteDiagram.DenseErasure.eraseWireCandidate source removed
 
 end Internal
 
@@ -64,7 +64,7 @@ def targetRegion
     intro values
     induction values <;> simp_all
   simp [Target,
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate,
+    ConcreteDiagram.DenseErasure.eraseWireCandidate,
     ConcreteDiagram.regionsList,
     Data.Finite.allFin_eq_finRange, keepAll]
 
@@ -119,7 +119,7 @@ theorem targetRegion_shape
       | .cut parent => .cut (targetRegion source removed parent) := by
   unfold Target targetRegion retainedRegions
   simp only [
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate,
+    ConcreteDiagram.DenseErasure.eraseWireCandidate,
     DenseList.get_index]
   unfold DenseList.index
   split <;> simp_all <;> apply Fin.ext <;> rfl
@@ -131,7 +131,7 @@ theorem targetRegion_shape
       targetRegion source removed source.val.root := by
   unfold Target targetRegion retainedRegions
   simp only [
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate]
+    ConcreteDiagram.DenseErasure.eraseWireCandidate]
   rfl
 
 /-- Exact inverse copied region shape. -/
@@ -302,7 +302,7 @@ theorem targetNode_shape
           .identity (targetRegion source removed region) sig arity := by
   unfold Target targetNode targetRegion retainedNodes retainedRegions
   simp only [
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate]
+    ConcreteDiagram.DenseErasure.eraseWireCandidate]
   simp only [DenseList.get_index]
   unfold DenseList.index
   split <;> simp_all <;> apply Fin.ext <;> rfl
@@ -344,10 +344,10 @@ def targetWire
     (survives : wire ≠ removed) :
     (Target source removed).WireId :=
   DenseList.index
-    (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+    (ConcreteDiagram.DenseErasure.retainedWires
       source.val [removed])
     wire (by
-      simpa [ConcreteDiagram.IdentityNormalizationCore.retainedWires,
+      simpa [ConcreteDiagram.DenseErasure.retainedWires,
         ConcreteDiagram.wiresList, Data.Finite.mem_allFin] using survives)
 
 /-- Pull one dense target wire back to its retained source wire. -/
@@ -356,7 +356,7 @@ def sourceWire
     (removed : source.val.WireId)
     (wire : (Target source removed).WireId) :
     source.val.WireId :=
-  (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+  (ConcreteDiagram.DenseErasure.retainedWires
     source.val [removed]).get wire
 
 theorem sourceWire_ne
@@ -366,10 +366,10 @@ theorem sourceWire_ne
     sourceWire source removed wire ≠ removed := by
   have member :=
     List.get_mem
-      (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+      (ConcreteDiagram.DenseErasure.retainedWires
         source.val [removed]) wire
   simpa [sourceWire,
-    ConcreteDiagram.IdentityNormalizationCore.retainedWires] using
+    ConcreteDiagram.DenseErasure.retainedWires] using
     (List.mem_filter.mp member).2
 
 @[simp] theorem sourceWire_targetWire
@@ -380,7 +380,7 @@ theorem sourceWire_ne
     sourceWire source removed (targetWire source removed wire survives) =
       wire :=
   DenseList.get_index
-    (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+    (ConcreteDiagram.DenseErasure.retainedWires
       source.val [removed])
     wire _
 
@@ -394,13 +394,13 @@ theorem sourceWire_ne
   apply Fin.ext
   change
     (DenseList.index
-      (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+      (ConcreteDiagram.DenseErasure.retainedWires
         source.val [removed])
-      ((ConcreteDiagram.IdentityNormalizationCore.retainedWires
+      ((ConcreteDiagram.DenseErasure.retainedWires
         source.val [removed]).get wire) _).val =
       wire.val
   rw [DenseList.index_get
-    (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+    (ConcreteDiagram.DenseErasure.retainedWires
       source.val [removed])
     ((Data.Finite.allFin_nodup source.val.wireCount).filter _) wire]
 
@@ -414,7 +414,7 @@ theorem sourceWire_ne
       (source.val.wires wire).sig := by
   unfold targetWire Target
   simp only [
-    ConcreteDiagram.IdentityNormalizationCore.eraseWireCandidate]
+    ConcreteDiagram.DenseErasure.eraseWireCandidate]
   rw [DenseList.get_index]
 
 @[simp] theorem targetWire_scope
@@ -427,16 +427,16 @@ theorem sourceWire_ne
       targetRegion source removed (source.val.wires wire).scope := by
   let target := targetWire source removed wire survives
   have sourceExact :
-      (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+      (ConcreteDiagram.DenseErasure.retainedWires
           source.val [removed]).get target =
         wire := by
     exact DenseList.get_index
-      (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+      (ConcreteDiagram.DenseErasure.retainedWires
         source.val [removed]) wire _
   change
     targetRegion source removed
         (source.val.wires
-          ((ConcreteDiagram.IdentityNormalizationCore.retainedWires
+          ((ConcreteDiagram.DenseErasure.retainedWires
             source.val [removed]).get target)).scope =
       targetRegion source removed (source.val.wires wire).scope
   exact congrArg (targetRegion source removed)
@@ -701,15 +701,15 @@ theorem wiresAt_sources
   have allSources :
       (Data.Finite.allFin (Target source removed).wireCount).map
           (sourceWire source removed) =
-        ConcreteDiagram.IdentityNormalizationCore.retainedWires
+        ConcreteDiagram.DenseErasure.retainedWires
           source.val [removed] := by
     simpa [sourceWire] using
       map_get_allFin
-        (ConcreteDiagram.IdentityNormalizationCore.retainedWires
+        (ConcreteDiagram.DenseErasure.retainedWires
           source.val [removed])
   rw [allSources]
   simp only [
-    ConcreteDiagram.IdentityNormalizationCore.retainedWires,
+    ConcreteDiagram.DenseErasure.retainedWires,
     List.filter_filter]
   apply List.filter_congr
   intro candidate _

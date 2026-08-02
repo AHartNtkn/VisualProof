@@ -6,6 +6,8 @@ namespace ConcreteDiagram
 
 namespace IdentityNormalizationCore
 
+open DenseErasure
+
 private def dropNodes
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId) :
