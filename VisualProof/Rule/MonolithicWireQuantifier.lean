@@ -4501,6 +4501,52 @@ structure AppliedMonolithicRelationSever
   private inverseInput : MonolithicRelationJoinInput target
   private inverseApplied :
     AppliedMonolithicRelationJoin target inverseInput
+  private inversePlainFinalExact :
+    inverseApplied.checked.result.plainFinal = concrete.inverse.plainFinal
+
+namespace AppliedMonolithicRelationJoin
+
+/-- The concrete strongest-form construction retained by the accepted receipt. -/
+def concreteResult
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    ConcreteWireQuantifier.RelationJoinResult source input.wire input.content
+      input.parameters :=
+  applied.checked.result
+
+/-- The accepted join landing before the concrete result's single eager
+identity-normalization pass.  The primitive compiler targets this raw carrier;
+normalization remains derived state rather than a durable primitive step. -/
+def plainFinal
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (applied : AppliedMonolithicRelationJoin source input) :
+    CheckedDiagram definitions :=
+  applied.concreteResult.plainFinal
+
+/-- Accepted strongest joins for the same checked input retain the same
+concrete result because both receipts witness the output of the same total
+checker call. -/
+theorem concreteResult_unique
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (left right : AppliedMonolithicRelationJoin source input) :
+    left.concreteResult = right.concreteResult := by
+  apply Except.ok.inj
+  exact left.checked.accepted.symm.trans right.checked.accepted
+
+/-- Consequently, the raw accepted join carrier is unique for a checked
+input even when callers hold distinct opaque receipt values. -/
+theorem plainFinal_unique
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationJoinInput source}
+    (left right : AppliedMonolithicRelationJoin source input) :
+    left.plainFinal = right.plainFinal :=
+  congrArg ConcreteWireQuantifier.RelationJoinResult.plainFinal
+    (left.concreteResult_unique right)
+
+end AppliedMonolithicRelationJoin
 
 namespace AppliedMonolithicRelationSever
 
@@ -4538,6 +4584,15 @@ def inversePlainFinal
     CheckedDiagram definitions :=
   applied.concrete.inverse.plainFinal
 
+/-- The raw carrier exposed by the retained virtual join is exactly the raw
+inverse landing stored by the sever receipt. -/
+theorem inverseJoinPlainFinal_eq_inversePlainFinal
+    {source : CheckedDiagram definitions}
+    {input : MonolithicRelationSeverInput source}
+    (applied : AppliedMonolithicRelationSever source input) :
+    applied.inverseJoinApplied.plainFinal = applied.inversePlainFinal := by
+  exact applied.inversePlainFinalExact
+
 /-- Total construction-owned reconstruction from the checked virtual inverse
 landing to the original sever source.  Compiler reversal composes against
 this witness and never rediscovers the graph. -/
@@ -4551,25 +4606,6 @@ noncomputable def reconstructionIso
 end AppliedMonolithicRelationSever
 
 namespace AppliedMonolithicRelationJoin
-
-/-- The concrete strongest-form construction retained by the accepted receipt. -/
-def concreteResult
-    {source : CheckedDiagram definitions}
-    {input : MonolithicRelationJoinInput source}
-    (applied : AppliedMonolithicRelationJoin source input) :
-    ConcreteWireQuantifier.RelationJoinResult source input.wire input.content
-      input.parameters :=
-  applied.checked.result
-
-/-- The accepted join landing before the concrete result's single eager
-identity-normalization pass.  The primitive compiler targets this raw carrier;
-normalization remains derived state rather than a durable primitive step. -/
-def plainFinal
-    {source : CheckedDiagram definitions}
-    {input : MonolithicRelationJoinInput source}
-    (applied : AppliedMonolithicRelationJoin source input) :
-    CheckedDiagram definitions :=
-  applied.concreteResult.plainFinal
 
 /-- The canonical checked carrier obtained by normalizing the raw accepted
 join landing. -/
@@ -5096,7 +5132,8 @@ def applyMonolithicRelationSever
                               targetExact := rfl
                               applicationsExact := rfl
                               parameterScopes :=
-                                inverseChecked.parameterScopes }))
+                                inverseChecked.parameterScopes })
+                          rfl)
 
 /--
 Validate and apply one strongest join.  Relation joining consumes every
