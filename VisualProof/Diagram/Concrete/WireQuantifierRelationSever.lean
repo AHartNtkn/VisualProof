@@ -858,6 +858,42 @@ theorem wireImage_endpoints
   unfold Internal.sourceRetainedWire Internal.retainedWireIndex
   rw [DenseList.get_index, List.map_append]
 
+/-- A source incidence whose node survives the sever remains incident to the
+exact retained wire image. -/
+theorem wireImage_endpoint_mem
+    (result : RelationSeverResult source scope sites)
+    (wire : source.val.WireId)
+    (wireSurvives :
+      wire ∈ Internal.retainedWires source (relationRemovedWires sites))
+    (endpoint : CEndpoint source.val.nodeCount)
+    (nodeSurvives :
+      endpoint.node ∈
+        Internal.retainedNodes source (relationRemovedNodes sites))
+    (incident : endpoint ∈ (source.val.wires wire).endpoints) :
+    ({ node := result.nodeImage endpoint.node nodeSurvives
+       port := endpoint.port } : CEndpoint result.checked.val.nodeCount) ∈
+      (result.checked.val.wires
+        (result.wireImage wire wireSurvives)).endpoints := by
+  rw [result.wireImage_endpoints wire wireSurvives]
+  apply List.mem_append_left
+  unfold retainedEndpoints relationSeverEndpoint?
+  apply List.mem_map.mpr
+  let mapped :
+      CEndpoint
+        ((Internal.retainedNodes source
+          (relationRemovedNodes sites)).length + sites.length) :=
+    { node := Fin.castAdd sites.length
+        (Internal.retainedNodeIndex source (relationRemovedNodes sites)
+          endpoint.node nodeSurvives)
+      port := endpoint.port }
+  refine ⟨mapped, ?_, ?_⟩
+  · apply List.mem_filterMap.mpr
+    refine ⟨endpoint, incident, ?_⟩
+    unfold Internal.batchEndpoint?
+    rw [dif_pos nodeSurvives]
+    rfl
+  · rfl
+
 /-- Every ordered site formal survives the batch abstraction. -/
 theorem siteFormal_survives
     (result : RelationSeverResult source scope sites)

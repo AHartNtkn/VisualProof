@@ -562,6 +562,60 @@ theorem eraseNodeIndex_data
   rw [indexed]
   cases source.val.nodes candidate <;> rfl
 
+/-- Dense image of an endpoint whose node survives singleton deletion. -/
+def eraseNodeEndpoint
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (different : endpoint.node ≠ removed) :
+    CEndpoint (eraseNodeCandidate source removed).nodeCount :=
+  ⟨eraseNodeIndex source removed endpoint.node (by
+      simp [retainedNodes, ConcreteDiagram.nodesList,
+        Data.Finite.mem_allFin, different]),
+    endpoint.port⟩
+
+/-- Every surviving endpoint remains incident to the same dense wire after
+singleton deletion. -/
+theorem eraseNodeEndpoint_mem
+    (source : CheckedDiagram definitions)
+    (removed : source.val.NodeId)
+    (wire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (different : endpoint.node ≠ removed)
+    (incident : endpoint ∈ (source.val.wires wire).endpoints) :
+    eraseNodeEndpoint source removed endpoint different ∈
+      ((eraseNodeCandidate source removed).wires
+        (eraseNodeWire source removed wire)).endpoints := by
+  have wireExact :
+      source.val.wiresList.get (eraseNodeWire source removed wire) = wire := by
+    apply Fin.ext
+    simp [eraseNodeWire, ConcreteDiagram.wiresList,
+      Data.Finite.allFin_eq_finRange]
+  change eraseNodeEndpoint source removed endpoint different ∈
+    reindexEndpoints (retainedNodes source.val [removed])
+      (eraseNodeEndpoints removed
+        (source.val.wires
+          (source.val.wiresList.get
+            (eraseNodeWire source removed wire))).endpoints)
+  rw [wireExact]
+  unfold reindexEndpoints
+  apply List.mem_filterMap.mpr
+  refine ⟨endpoint, ?_, ?_⟩
+  · simpa [eraseNodeEndpoints, different] using incident
+  · unfold reindexEndpoint? eraseNodeEndpoint
+    have foundSome :
+        (Data.Finite.indexOf?
+          (retainedNodes source.val [removed]) endpoint.node).isSome = true :=
+      Data.Finite.indexOf?_isSome_iff.mpr (by
+        simp [retainedNodes, ConcreteDiagram.nodesList,
+          Data.Finite.mem_allFin, different])
+    obtain ⟨index, found⟩ := Option.isSome_iff_exists.mp foundSome
+    rw [found]
+    simp only [Option.map_some, Option.some.injEq]
+    congr 2
+    exact (Option.get_of_eq_some _ found).symm
+
+
 /-- Raw Rule 1 candidate. Its sole consumer is the preservation proof layer. -/
 def dropCandidate
     (source : CheckedDiagram definitions)

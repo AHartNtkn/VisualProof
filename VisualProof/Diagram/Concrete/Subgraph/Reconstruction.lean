@@ -1427,6 +1427,7 @@ theorem occurrenceEndpointMap_mem
             cases port <;> cases candidatePort <;>
               simp_all [OccurrencePort.ofConcrete]
           simpa [candidateExact] using candidateIncident
+
       | ref region definition args =>
           have sourceNode :
               pattern.val.diagram.nodes node =
@@ -1448,6 +1449,116 @@ theorem occurrenceEndpointMap_mem
             cases port <;> cases candidatePort <;>
               simp_all [OccurrencePort.ofConcrete]
           simpa [candidateExact] using candidateIncident
+
+/-- Invert the positional endpoint map at an explicitly identified occurrence
+node.  The owning pattern wire is recovered from well-formed port ownership. -/
+theorem occurrenceEndpointMap_preimage
+    (occurrence : Occurrence pattern host)
+    (patternNode : pattern.val.diagram.NodeId)
+    (wire : host.val.WireId)
+    (candidate : CEndpoint host.val.nodeCount)
+    (incident : candidate ∈ (host.val.wires wire).endpoints)
+    (nodeExact : occurrence.nodeMap patternNode = candidate.node) :
+    ∃ sourceWire : pattern.val.diagram.WireId,
+      ∃ sourceEndpoint : CEndpoint pattern.val.diagram.nodeCount,
+        sourceEndpoint ∈
+            (pattern.val.diagram.wires sourceWire).endpoints ∧
+          occurrence.wireMap sourceWire = wire ∧
+          occurrence.endpointMapForNode sourceEndpoint = candidate := by
+  let sourcePort :=
+    (occurrence.portEquivForNode patternNode).symm candidate.port
+  let sourceEndpoint : CEndpoint pattern.val.diagram.nodeCount :=
+    ⟨patternNode, sourcePort⟩
+  have candidateRequired :=
+    ConcreteDiagram.incident_port_required _ host.val host.property
+      wire candidate incident
+  have sourceRequired :
+      sourcePort ∈ pattern.val.diagram.requiredPorts patternNode := by
+    have correspondence := occurrence.node_correspondence patternNode
+    cases nodeData : pattern.val.diagram.nodes patternNode with
+    | atom region args =>
+        have hostData : host.val.nodes candidate.node =
+            .atom (occurrence.regionMap region) args := by
+          rw [← nodeExact]
+          simpa [OccurrenceNodeCorresponds, nodeData] using correspondence
+        simpa [sourcePort, ConcreteDiagram.requiredPorts, nodeData, hostData,
+          Occurrence.portEquivForNode_atom occurrence patternNode region args
+            nodeData] using candidateRequired
+    | ref region definition args =>
+        have hostData : host.val.nodes candidate.node =
+            .ref (occurrence.regionMap region) definition args := by
+          rw [← nodeExact]
+          simpa [OccurrenceNodeCorresponds, nodeData] using correspondence
+        simpa [sourcePort, ConcreteDiagram.requiredPorts, nodeData, hostData,
+          Occurrence.portEquivForNode_ref occurrence patternNode region
+            definition args nodeData] using candidateRequired
+    | identity region sig arity =>
+        have hostData : host.val.nodes candidate.node =
+            .identity (occurrence.regionMap region) sig arity := by
+          rw [← nodeExact]
+          simpa [OccurrenceNodeCorresponds, nodeData] using correspondence
+        have candidateIdentity :
+            candidate.port ∈ (List.range arity).map CPort.identity := by
+          simpa [ConcreteDiagram.requiredPorts, hostData] using
+            candidateRequired
+        obtain ⟨index, indexBound, portExact⟩ :=
+          List.mem_map.mp candidateIdentity
+        have indexLt : index < arity := List.mem_range.mp indexBound
+        unfold sourcePort
+        rw [← portExact]
+        simp [ConcreteDiagram.requiredPorts, nodeData,
+          Occurrence.portEquivForNode_identity occurrence patternNode region
+            sig arity nodeData,
+          Occurrence.identityCPortEquiv, indexLt]
+  obtain ⟨sourceWire, sourceOwner⟩ :=
+    ConcreteDiagram.endpointOwner?_complete _ pattern.val.diagram
+      pattern.property.diagram patternNode sourcePort sourceRequired
+  have sourceIncident :=
+    ConcreteDiagram.endpointOwner?_incident pattern.val.diagram
+      sourceEndpoint sourceWire sourceOwner
+  have mappedIncident := occurrenceEndpointMap_mem occurrence
+    sourceWire sourceEndpoint sourceIncident
+  have endpointExact :
+      occurrence.endpointMapForNode sourceEndpoint = candidate := by
+    rcases candidate with ⟨candidateNode, candidatePort⟩
+    simp only [Occurrence.endpointMapForNode, sourceEndpoint, sourcePort]
+    congr
+    exact (occurrence.portEquivForNode patternNode).right_inv candidatePort
+  have mappedOwner :=
+    ConcreteDiagram.endpointOwner?_eq_of_incident _ host.val host.property
+      candidate.node candidate.port candidateRequired
+      (occurrence.wireMap sourceWire) (by
+        rw [← endpointExact]
+        exact mappedIncident)
+  have candidateOwner :=
+    ConcreteDiagram.endpointOwner?_eq_of_incident _ host.val host.property
+      candidate.node candidate.port candidateRequired wire incident
+  exact ⟨sourceWire, sourceEndpoint, sourceIncident,
+    Option.some.inj (mappedOwner.symm.trans candidateOwner), endpointExact⟩
+
+/-- Every endpoint of an internal occurrence wire lies on an occurrence-mapped
+node, independently of identity storage-position renaming. -/
+theorem occurrenceInternalEndpoint_node_preimage
+    (occurrence : Occurrence pattern host)
+    (wire : pattern.val.diagram.WireId)
+    (internal : wire ∉ pattern.val.boundary)
+    (candidate : CEndpoint host.val.nodeCount)
+    (incident :
+      candidate ∈ (host.val.wires (occurrence.wireMap wire)).endpoints) :
+    ∃ endpoint : CEndpoint pattern.val.diagram.nodeCount,
+      endpoint ∈ (pattern.val.diagram.wires wire).endpoints ∧
+        occurrence.nodeMap endpoint.node = candidate.node := by
+  have actualMember :
+      occurrenceEndpointKey candidate ∈
+        (host.val.wires (occurrence.wireMap wire)).endpoints.map
+          occurrenceEndpointKey :=
+    List.mem_map.mpr ⟨candidate, incident, rfl⟩
+  have expectedMember :=
+    (occurrence.internalEndpoints_exact wire internal).mem_iff.mpr actualMember
+  rcases List.mem_map.mp expectedMember with
+    ⟨endpoint, endpointIncident, keyExact⟩
+  exact ⟨endpoint, endpointIncident,
+    congrArg Prod.fst keyExact⟩
 
 /-- Positional occurrence transport preserves the semantic endpoint key. -/
 private theorem occurrenceEndpointMap_key

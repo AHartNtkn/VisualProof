@@ -508,6 +508,85 @@ def checkedFragmentWire
     (congrArg ConcreteDiagram.wireCount step.generated).symm
     (step.attachment.fragmentWire wire)
 
+/-- Transport one endpoint whose prior node is not the consumed application. -/
+def checkedPriorEndpoint
+    (step : RelationJoinStep source dying content)
+    (endpoint : CEndpoint step.prior.val.nodeCount)
+    (different : endpoint.node ≠ step.priorApplication) :
+    CEndpoint step.checked.val.nodeCount :=
+  ⟨step.checkedPriorNode endpoint.node different, endpoint.port⟩
+
+/-- Transport one copied fragment endpoint into the checked splice target. -/
+def checkedFragmentEndpoint
+    (step : RelationJoinStep source dying content)
+    (endpoint : CEndpoint content.val.diagram.nodeCount) :
+    CEndpoint step.checked.val.nodeCount :=
+  ⟨step.checkedFragmentNode endpoint.node, endpoint.port⟩
+
+/-- A surviving prior incidence remains incident to the transported prior
+wire after deletion and splice. -/
+theorem checkedPriorEndpoint_mem
+    (step : RelationJoinStep source dying content)
+    (wire : step.prior.val.WireId)
+    (endpoint : CEndpoint step.prior.val.nodeCount)
+    (different : endpoint.node ≠ step.priorApplication)
+    (incident : endpoint ∈ (step.prior.val.wires wire).endpoints) :
+    step.checkedPriorEndpoint endpoint different ∈
+      (step.checked.val.wires (step.checkedPriorWire wire)).endpoints := by
+  have erased :=
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint_mem
+      step.prior step.priorApplication wire endpoint different incident
+  have baseIncident :
+      Internal.checkedEndpoint step.baseGenerated
+          (ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint
+            step.prior step.priorApplication endpoint different) ∈
+        (step.base.val.wires
+          (Internal.checkedWire step.baseGenerated
+            (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+              step.prior step.priorApplication wire))).endpoints := by
+    rw [Internal.checkedWire_endpoints_transport]
+    exact List.mem_map.mpr ⟨_, erased, rfl⟩
+  have attached := step.attachment.hostEndpoint_mem_diagram _ _ baseIncident
+  have checkedIncident :
+      Internal.checkedEndpoint step.generated
+          (step.attachment.hostEndpoint
+            (Internal.checkedEndpoint step.baseGenerated
+              (ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint
+                step.prior step.priorApplication endpoint different))) ∈
+        (step.checked.val.wires
+          (Internal.checkedWire step.generated
+            (step.attachment.hostWire
+              (Internal.checkedWire step.baseGenerated
+                (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+                  step.prior step.priorApplication wire))))).endpoints := by
+    rw [Internal.checkedWire_endpoints_transport]
+    exact List.mem_map.mpr ⟨_, attached, rfl⟩
+  simpa [checkedPriorEndpoint, checkedPriorNode, checkedPriorWire,
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeEndpoint] using
+    checkedIncident
+
+/-- Every copied fragment incidence remains incident to the transported
+fragment wire in the checked splice target. -/
+theorem checkedFragmentEndpoint_mem
+    (step : RelationJoinStep source dying content)
+    (wire : content.val.diagram.WireId)
+    (endpoint : CEndpoint content.val.diagram.nodeCount)
+    (incident : endpoint ∈ (content.val.diagram.wires wire).endpoints) :
+    step.checkedFragmentEndpoint endpoint ∈
+      (step.checked.val.wires (step.checkedFragmentWire wire)).endpoints := by
+  have attached :=
+    step.attachment.fragmentEndpoint_mem_diagram wire endpoint incident
+  have checkedIncident :
+      Internal.checkedEndpoint step.generated
+          (step.attachment.fragmentEndpoint endpoint) ∈
+        (step.checked.val.wires
+          (Internal.checkedWire step.generated
+            (step.attachment.fragmentWire wire))).endpoints := by
+    rw [Internal.checkedWire_endpoints_transport]
+    exact List.mem_map.mpr ⟨_, attached, rfl⟩
+  simpa [checkedFragmentEndpoint, checkedFragmentNode,
+    checkedFragmentWire] using checkedIncident
+
 @[simp] theorem checkedPriorRegion_val
     (step : RelationJoinStep source dying content)
     (region : step.prior.val.RegionId) :

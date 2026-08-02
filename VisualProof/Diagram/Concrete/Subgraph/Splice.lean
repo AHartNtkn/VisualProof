@@ -1133,6 +1133,57 @@ theorem diagram_wire_fragmentWire_scope_of_internal
   rw [fragmentWire, dif_neg internal]
   rw [attachment.diagram_wire_freshWire_scope, wireExact]
 
+/-- A retained host incidence remains incident after the splice. -/
+theorem hostEndpoint_mem_diagram
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : base.val.WireId)
+    (endpoint : CEndpoint base.val.nodeCount)
+    (incident : endpoint ∈ (base.val.wires wire).endpoints) :
+    attachment.hostEndpoint endpoint ∈
+      (attachment.diagram.wires (attachment.hostWire wire)).endpoints := by
+  unfold diagram wireTable hostWire
+  simp only [Fin.addCases_left]
+  exact List.mem_append_left _ (List.mem_map.mpr ⟨endpoint, incident, rfl⟩)
+
+/-- A copied fragment incidence is incident to its attached or fresh splice
+wire. -/
+theorem fragmentEndpoint_mem_diagram
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (wire : fragment.val.diagram.WireId)
+    (endpoint : CEndpoint fragment.val.diagram.nodeCount)
+    (incident : endpoint ∈ (fragment.val.diagram.wires wire).endpoints) :
+    attachment.fragmentEndpoint endpoint ∈
+      (attachment.diagram.wires
+        (attachment.fragmentWire wire)).endpoints := by
+  have generated :
+      attachment.fragmentEndpoint endpoint ∈
+        attachment.generatedEndpoints (attachment.fragmentWire wire) := by
+    apply List.mem_filterMap.mpr
+    refine ⟨(attachment.fragmentWire wire,
+      attachment.fragmentEndpoint endpoint), ?_, by simp⟩
+    apply List.mem_append_left
+    apply List.mem_map.mpr
+    refine ⟨(wire, endpoint), ?_, rfl⟩
+    simp [ConcreteDiagram.endpointOccurrences,
+      ConcreteDiagram.wiresList, Data.Finite.mem_allFin, incident]
+  by_cases boundary : wire ∈ fragment.val.boundary
+  · rw [show attachment.fragmentWire wire =
+        attachment.hostWire
+          (attachment.representativeTarget wire boundary) by
+      simp [fragmentWire, boundary]] at generated ⊢
+    unfold diagram wireTable hostWire
+    simp only [Fin.addCases_left]
+    exact List.mem_append_right _ generated
+  · rw [show attachment.fragmentWire wire =
+        attachment.freshWire
+          (DenseList.index attachment.fragmentInternalWires wire (by
+            simp [fragmentInternalWires, ConcreteDiagram.wiresList,
+              Data.Finite.mem_allFin, boundary])) by
+      simp [fragmentWire, boundary]] at generated ⊢
+    unfold diagram wireTable freshWire
+    simp only [Fin.addCases_right]
+    exact generated
+
 @[simp] theorem diagram_node_hostNode
     (attachment : ConcreteSpliceAttachment base site fragment)
     (node : base.val.NodeId) :

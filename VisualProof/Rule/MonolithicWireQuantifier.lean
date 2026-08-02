@@ -441,6 +441,54 @@ private theorem CheckedOccurrenceList.properRegion_mem_removedRegions
         exact ⟨region, nonroot, rfl⟩
       · exact induction content member
 
+private theorem CheckedOccurrenceList.nodeImage_mem_removedNodes
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (content : ContentOccurrence source pattern)
+    (member : content ∈ contents)
+    (node : pattern.val.diagram.NodeId) :
+    content.occurrence.nodeMap node ∈
+      content.toConcreteSite.removedNodes := by
+  induction entries generalizing content with
+  | nil => simp at member
+  | @cons head rest checked tail induction =>
+      rcases List.mem_cons.mp member with rfl | member
+      · change content.occurrence.nodeMap node ∈ content.selection.allNodes
+        rw [← checkedOccurrence_allNodes checked]
+        rw [content.occurrence.mem_toSelection_allNodes_iff_image]
+        exact ⟨node, rfl⟩
+      · exact induction content member
+
+private theorem CheckedOccurrenceList.internalWireImage_mem_removedWires
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {first : ContentOccurrence source pattern}
+    {contents : List (ContentOccurrence source pattern)}
+    (entries : CheckedOccurrenceList scope first contents)
+    (content : ContentOccurrence source pattern)
+    (member : content ∈ contents)
+    (wire : pattern.val.diagram.WireId)
+    (internal : wire ∉ pattern.val.boundary) :
+    content.occurrence.wireMap wire ∈
+      content.toConcreteSite.removedWires := by
+  induction entries generalizing content with
+  | nil => simp at member
+  | @cons head rest checked tail induction =>
+      rcases List.mem_cons.mp member with rfl | member
+      · change content.occurrence.wireMap wire ∈
+          content.selection.internalWires
+        rw [← checkedOccurrence_internalWires checked]
+        rw [content.occurrence.mem_toSelection_internalWires_iff_image]
+        exact ⟨wire, internal, rfl⟩
+      · exact induction content member
+
 private theorem CheckedOccurrenceList.occurrenceRegion_eq_selectionRegion
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -765,6 +813,127 @@ private theorem properRegion_not_covered_before
     exact (List.nodup_append.mp nodup).2.2 _ prefixMember _
       currentInSuffix rfl
 
+private theorem nodeImage_not_covered_before
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {first : ContentOccurrence source pattern}
+    {contents restored : List (ContentOccurrence source pattern)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (entries : CheckedOccurrenceList scope first contents)
+    (sitesExact : sites = contents.map ContentOccurrence.toConcreteSite)
+    (content : ContentOccurrence source pattern)
+    (suffix : List (ContentOccurrence source pattern))
+    (decomposition : contents = restored ++ content :: suffix)
+    (node : pattern.val.diagram.NodeId) :
+    ¬ BatchCoveredNode sites restored
+      (content.occurrence.nodeMap node) := by
+  intro covered
+  have contentMember : content ∈ contents := by rw [decomposition]; simp
+  have currentMember := entries.nodeImage_mem_removedNodes content
+    contentMember node
+  let prefixRemoved :=
+    (restored.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedNodes
+  let suffixRemoved :=
+    (suffix.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedNodes
+  have removedExact :
+      sites.flatMap ConcreteWireQuantifier.RelationSeverSite.removedNodes =
+        prefixRemoved ++ content.toConcreteSite.removedNodes ++
+          suffixRemoved := by
+    rw [sitesExact, decomposition]
+    simp [prefixRemoved, suffixRemoved]
+  rcases covered with retained | represented
+  · exact retained (removedExact.symm ▸ (by simp [currentMember]))
+  · rcases represented with ⟨candidate, candidateMember, patternNode, mapped⟩
+    have candidateInContents : candidate ∈ contents := by
+      rw [decomposition]
+      exact List.mem_append.mpr (Or.inl candidateMember)
+    have candidateRemoved := entries.nodeImage_mem_removedNodes candidate
+      candidateInContents patternNode
+    have prefixMember : content.occurrence.nodeMap node ∈ prefixRemoved := by
+      rw [← mapped]
+      exact List.mem_flatMap.mpr
+        ⟨candidate.toConcreteSite,
+          List.mem_map.mpr ⟨candidate, candidateMember, rfl⟩,
+          candidateRemoved⟩
+    have currentInSuffix : content.occurrence.nodeMap node ∈
+        content.toConcreteSite.removedNodes ++ suffixRemoved :=
+      List.mem_append.mpr (Or.inl currentMember)
+    have nodup :
+        (prefixRemoved ++
+          (content.toConcreteSite.removedNodes ++ suffixRemoved)).Nodup := by
+      have fullNodup := result.removedNodes_nodup
+      rw [removedExact] at fullNodup
+      simpa [List.append_assoc] using fullNodup
+    exact (List.nodup_append.mp nodup).2.2 _ prefixMember _
+      currentInSuffix rfl
+
+private theorem internalWireImage_not_covered_before
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {first : ContentOccurrence source pattern}
+    {contents restored : List (ContentOccurrence source pattern)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    (entries : CheckedOccurrenceList scope first contents)
+    (sitesExact : sites = contents.map ContentOccurrence.toConcreteSite)
+    (content : ContentOccurrence source pattern)
+    (suffix : List (ContentOccurrence source pattern))
+    (decomposition : contents = restored ++ content :: suffix)
+    (wire : pattern.val.diagram.WireId)
+    (internal : wire ∉ pattern.val.boundary) :
+    ¬ BatchCoveredWire sites restored
+      (content.occurrence.wireMap wire) := by
+  intro covered
+  have contentMember : content ∈ contents := by rw [decomposition]; simp
+  have currentMember := entries.internalWireImage_mem_removedWires content
+    contentMember wire internal
+  let prefixRemoved :=
+    (restored.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedWires
+  let suffixRemoved :=
+    (suffix.map ContentOccurrence.toConcreteSite).flatMap
+      ConcreteWireQuantifier.RelationSeverSite.removedWires
+  have removedExact :
+      sites.flatMap ConcreteWireQuantifier.RelationSeverSite.removedWires =
+        prefixRemoved ++ content.toConcreteSite.removedWires ++
+          suffixRemoved := by
+    rw [sitesExact, decomposition]
+    simp [prefixRemoved, suffixRemoved]
+  rcases covered with retained | represented
+  · exact retained (removedExact.symm ▸ (by simp [currentMember]))
+  · rcases represented with
+      ⟨candidate, candidateMember, patternWire, candidateInternal, mapped⟩
+    have candidateInContents : candidate ∈ contents := by
+      rw [decomposition]
+      exact List.mem_append.mpr (Or.inl candidateMember)
+    have candidateRemoved :=
+      entries.internalWireImage_mem_removedWires candidate
+        candidateInContents patternWire candidateInternal
+    have prefixMember : content.occurrence.wireMap wire ∈ prefixRemoved := by
+      rw [← mapped]
+      exact List.mem_flatMap.mpr
+        ⟨candidate.toConcreteSite,
+          List.mem_map.mpr ⟨candidate, candidateMember, rfl⟩,
+          candidateRemoved⟩
+    have currentInSuffix : content.occurrence.wireMap wire ∈
+        content.toConcreteSite.removedWires ++ suffixRemoved :=
+      List.mem_append.mpr (Or.inl currentMember)
+    have nodup :
+        (prefixRemoved ++
+          (content.toConcreteSite.removedWires ++ suffixRemoved)).Nodup := by
+      have fullNodup := result.removedWires_nodup
+      rw [removedExact] at fullNodup
+      simpa [List.append_assoc] using fullNodup
+    exact (List.nodup_append.mp nodup).2.2 _ prefixMember _
+      currentInSuffix rfl
+
 /-- Construction state for the snoc induction restoring a severed family. -/
 private theorem denseIndex_injective
     [DecidableEq α]
@@ -836,11 +1005,25 @@ private structure BatchReconstructionState
         (source.val.nodes node.1).relocate
           (regionImage
             ⟨(source.val.nodes node.1).region, nodeRegionCovered node⟩)
+  portImage :
+    { node : source.val.NodeId //
+        BatchCoveredNode sites restored node } →
+      Data.Finite.FiniteEquiv CPort CPort
   wireImage :
     { wire : source.val.WireId //
         BatchCoveredWire sites restored wire } →
       current.val.WireId
   wireImage_injective : Function.Injective wireImage
+  retainedWireImage_val :
+    ∀ wire (retained : retainedBySitesWire sites wire),
+      (wireImage ⟨wire, Or.inl retained⟩).val =
+        (ConcreteWireQuantifier.Internal.retainedWireIndex source
+          (sites.flatMap
+            ConcreteWireQuantifier.RelationSeverSite.removedWires)
+          wire (by
+            apply List.mem_filter.mpr
+            exact ⟨by simp [ConcreteDiagram.wiresList,
+              Data.Finite.mem_allFin], decide_eq_true retained⟩)).val
   wireScopeCovered :
     ∀ wire : { wire : source.val.WireId //
         BatchCoveredWire sites restored wire },
@@ -856,6 +1039,16 @@ private structure BatchReconstructionState
       (current.val.wires (wireImage wire)).scope =
         regionImage
           ⟨(source.val.wires wire.1).scope, wireScopeCovered wire⟩
+  wireEndpointForward :
+    ∀ (wire : { wire : source.val.WireId //
+          BatchCoveredWire sites restored wire })
+      (endpoint : CEndpoint source.val.nodeCount)
+      (incident : endpoint ∈ (source.val.wires wire.1).endpoints)
+      (nodeCovered : BatchCoveredNode sites restored endpoint.node),
+      ({ node := nodeImage ⟨endpoint.node, nodeCovered⟩
+         port := portImage ⟨endpoint.node, nodeCovered⟩ endpoint.port } :
+          CEndpoint current.val.nodeCount) ∈
+        (current.val.wires (wireImage wire)).endpoints
   joinNodeImage : joinSource.val.NodeId → Option current.val.NodeId
   pendingOrigins : List joinSource.val.NodeId
   pendingApplications : List current.val.NodeId
@@ -1225,6 +1418,7 @@ private def batchReconstructionNil
       simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
         using node.2)
     exact result.nodeImage_data node.1 nodeRetained
+  portImage := fun _ => Data.Finite.FiniteEquiv.refl CPort
   wireImage := fun wire =>
     result.wireImage wire.1 (by
       have retained :
@@ -1251,6 +1445,9 @@ private def batchReconstructionNil
             using right.2))
     apply Fin.ext
     simpa using congrArg Fin.val same
+  retainedWireImage_val := by
+    intro wire retained
+    rfl
   wireScopeCovered := by
     intro wire
     apply Or.inl
@@ -1271,6 +1468,16 @@ private def batchReconstructionNil
       ((result.retainedWire_iff wire.1).mpr (by
         simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
           using wire.2))
+  wireEndpointForward := by
+    intro wire endpoint incident nodeCovered
+    have wireRetained := (result.retainedWire_iff wire.1).mpr (by
+      simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
+        using wire.2)
+    have nodeRetained := (result.retainedNode_iff endpoint.node).mpr (by
+      simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+        using nodeCovered)
+    exact result.wireImage_endpoint_mem wire.1 wireRetained endpoint
+      nodeRetained incident
   joinNodeImage := fun node => some node
   pendingOrigins := result.atoms
   pendingApplications := result.atoms
@@ -1934,6 +2141,30 @@ private noncomputable def batchReconstructionSnoc
       ∀ region, region ≠ pattern.val.diagram.root →
         ¬ BatchCoveredRegion sites restored
           (content.occurrence.regionMap region))
+    (freshNodesNew :
+      ∀ node, ¬ BatchCoveredNode sites restored
+        (content.occurrence.nodeMap node))
+    (freshWiresNew :
+      ∀ wire, wire ∉ pattern.val.boundary →
+        ¬ BatchCoveredWire sites restored
+          (content.occurrence.wireMap wire))
+    (boundaryRetained :
+      ∀ position : Fin pattern.val.boundary.length,
+        retainedBySitesWire sites
+          (content.occurrence.wireMap
+            (pattern.val.boundary.get position)))
+    (boundaryWireExact :
+      ∀ position : Fin pattern.val.boundary.length,
+        step.checkedFragmentWire (pattern.val.boundary.get position) =
+          step.checkedPriorWire
+            (Fin.cast
+              (congrArg
+                (fun checked : CheckedDiagram definitions =>
+                  checked.val.wireCount) priorExact).symm
+              (state.wireImage
+                ⟨content.occurrence.wireMap
+                    (pattern.val.boundary.get position),
+                  Or.inl (boundaryRetained position)⟩)))
     (rootCovered :
       BatchCoveredRegion sites restored
         (content.occurrence.regionMap pattern.val.diagram.root))
@@ -2355,6 +2586,12 @@ private noncomputable def batchReconstructionSnoc
                     (allocatedRegion sourceCarrier) := by
                 simpa only [CNode.relocate_relocate] using
                   relocatedSource.symm
+      portImage := fun node =>
+        if old : BatchCoveredNode sites restored node.1 then
+          state.portImage ⟨node.1, old⟩
+        else
+          have fresh := newlyCoveredNode content node.1 node.2 old
+          (content.occurrence.portEquivForNode fresh.choose).symm
       wireImage := fun wire =>
         if old : BatchCoveredWire sites restored wire.1 then
           step.checkedPriorWire (state.wireImage ⟨wire.1, old⟩)
@@ -2399,6 +2636,11 @@ private noncomputable def batchReconstructionSnoc
             apply Subtype.ext
             exact leftFresh.choose_spec.2.symm.trans
               (patternSame ▸ rightFresh.choose_spec.2)
+      retainedWireImage_val := by
+        intro wire retained
+        have old : BatchCoveredWire sites restored wire := Or.inl retained
+        rw [dif_pos old, step.checkedPriorWire_val]
+        exact state.retainedWireImage_val wire retained
       wireScopeCovered := by
         intro wire
         by_cases old : BatchCoveredWire sites restored wire.1
@@ -2533,6 +2775,127 @@ private noncomputable def batchReconstructionSnoc
               (congrArg allocatedRegion
                 (Subtype.ext sourceScope)).trans mappedImage
             exact fragmentScope.trans sourceImage.symm
+      wireEndpointForward := by
+        intro wire endpoint incident nodeCovered
+        by_cases wireOld : BatchCoveredWire sites restored wire.1
+        · by_cases nodeOld : BatchCoveredNode sites restored endpoint.node
+          · let priorEndpoint : CEndpoint step.prior.val.nodeCount :=
+              { node := state.nodeImage ⟨endpoint.node, nodeOld⟩
+                port := state.portImage ⟨endpoint.node, nodeOld⟩ endpoint.port }
+            have priorIncident := state.wireEndpointForward
+              ⟨wire.1, wireOld⟩ endpoint incident nodeOld
+            have different : priorEndpoint.node ≠ step.priorApplication := by
+              intro same
+              exact state.representedNodesAvoidPending ⟨endpoint.node, nodeOld⟩
+                (by
+                  have imageExact :
+                      state.nodeImage ⟨endpoint.node, nodeOld⟩ =
+                        step.priorApplication := by
+                    simpa [priorEndpoint] using same
+                  rw [imageExact]
+                  exact currentApplication)
+            have transported := step.checkedPriorEndpoint_mem
+              (state.wireImage ⟨wire.1, wireOld⟩) priorEndpoint different
+              priorIncident
+            simpa only [dif_pos wireOld, dif_pos nodeOld,
+              ConcreteWireQuantifier.RelationJoinStep.checkedPriorEndpoint,
+              priorEndpoint] using transported
+          · let freshNode := newlyCoveredNode content endpoint.node
+              nodeCovered nodeOld
+            rcases Reconstruction.occurrenceEndpointMap_preimage
+                content.occurrence
+                freshNode.choose wire.1 endpoint incident
+                freshNode.choose_spec with
+              ⟨patternWire, patternEndpoint, patternIncident,
+                mappedWire, endpointExact⟩
+            have patternNodeExact : patternEndpoint.node = freshNode.choose := by
+              apply content.occurrence.nodeMap_injective
+              exact (congrArg CEndpoint.node endpointExact).trans
+                freshNode.choose_spec.symm
+            have boundary : patternWire ∈ pattern.val.boundary :=
+              Classical.byContradiction (fun internal =>
+                (freshWiresNew patternWire internal)
+                  (mappedWire ▸ wireOld))
+            obtain ⟨position, positionExact⟩ := List.get_of_mem boundary
+            have imageWireExact :
+                step.checkedFragmentWire patternWire =
+                  step.checkedPriorWire
+                    (state.wireImage ⟨wire.1, wireOld⟩) := by
+              subst patternWire
+              rw [boundaryWireExact position]
+              have carriers :
+                  (⟨content.occurrence.wireMap
+                      (pattern.val.boundary.get position),
+                    Or.inl (boundaryRetained position)⟩ :
+                    { sourceWire : source.val.WireId //
+                      BatchCoveredWire sites restored sourceWire }) =
+                    ⟨wire.1, wireOld⟩ := by
+                apply Subtype.ext
+                exact mappedWire
+              apply congrArg step.checkedPriorWire
+              apply Fin.ext
+              simpa using congrArg Fin.val (congrArg state.wireImage carriers)
+            have mappedIncident := step.checkedFragmentEndpoint_mem
+              patternWire patternEndpoint patternIncident
+            rw [imageWireExact] at mappedIncident
+            have inversePortExact :
+                (content.occurrence.portEquivForNode freshNode.choose).symm
+                    endpoint.port = patternEndpoint.port := by
+              rw [← congrArg CEndpoint.port endpointExact,
+                ← patternNodeExact]
+              exact Data.Finite.FiniteEquiv.symm_apply_apply _ _
+            simpa only [dif_pos wireOld, dif_neg nodeOld,
+              ConcreteWireQuantifier.RelationJoinStep.checkedFragmentEndpoint,
+              Occurrence.endpointMapForNode, patternNodeExact,
+              inversePortExact] using mappedIncident
+        · let freshWire := newlyCoveredWire content wire.1 wire.2 wireOld
+          by_cases nodeOld : BatchCoveredNode sites restored endpoint.node
+          · have internalIncident : endpoint ∈
+                (source.val.wires
+                  (content.occurrence.wireMap freshWire.choose)).endpoints := by
+              simpa [freshWire.choose_spec.2] using incident
+            rcases Reconstruction.occurrenceInternalEndpoint_node_preimage
+                content.occurrence
+                freshWire.choose freshWire.choose_spec.1 endpoint
+                internalIncident with
+              ⟨patternEndpoint, _patternIncident, mappedNode⟩
+            exact False.elim
+              ((freshNodesNew patternEndpoint.node)
+                (mappedNode ▸ nodeOld))
+          · let freshNode := newlyCoveredNode content endpoint.node
+              nodeCovered nodeOld
+            rcases Reconstruction.occurrenceEndpointMap_preimage
+                content.occurrence
+                freshNode.choose wire.1 endpoint incident
+                freshNode.choose_spec with
+              ⟨patternWire, patternEndpoint, patternIncident,
+                mappedWire, endpointExact⟩
+            have patternInternal : patternWire ∉ pattern.val.boundary := by
+              intro boundary
+              exact content.occurrence.internalBoundary_disjoint
+                freshWire.choose patternWire freshWire.choose_spec.1 boundary
+                (freshWire.choose_spec.2.trans mappedWire.symm)
+            have patternWireExact : patternWire = freshWire.choose :=
+              content.occurrence.internalWire_injective
+                patternWire freshWire.choose patternInternal
+                freshWire.choose_spec.1
+                (mappedWire.trans freshWire.choose_spec.2.symm)
+            have patternNodeExact : patternEndpoint.node = freshNode.choose := by
+              apply content.occurrence.nodeMap_injective
+              exact (congrArg CEndpoint.node endpointExact).trans
+                freshNode.choose_spec.symm
+            have mappedIncident := step.checkedFragmentEndpoint_mem
+              patternWire patternEndpoint patternIncident
+            have inversePortExact :
+                (content.occurrence.portEquivForNode freshNode.choose).symm
+                    endpoint.port = patternEndpoint.port := by
+              rw [← congrArg CEndpoint.port endpointExact,
+                ← patternNodeExact]
+              exact Data.Finite.FiniteEquiv.symm_apply_apply _ _
+            simpa only [dif_neg wireOld, dif_neg nodeOld, patternWireExact,
+              ConcreteWireQuantifier.RelationJoinStep.checkedFragmentEndpoint,
+              Occurrence.endpointMapForNode, patternNodeExact,
+              inversePortExact] using mappedIncident
       joinNodeImage := step.checkedNodeImage
       pendingOrigins := tail
       pendingApplications :=
@@ -2625,6 +2988,24 @@ private structure BatchReconstructionTraceState
   representedWiresAvoidDying :
     ∀ wire, state.wireImage wire ≠ currentDying
 
+private theorem relationJoinTrace_wireImage_val
+    (trace : ConcreteWireQuantifier.RelationJoinSemanticTrace
+      source dying pattern parameters args steps final regionImage nodeImage
+        wireImage finalDying finalScope) :
+    ∀ wire, (wireImage wire).val = wire.val := by
+  induction trace with
+  | nil => intro wire; rfl
+  | snoc trace step priorExact priorRegionExact priorNodeExact priorWireExact
+      priorDyingExact priorScopeExact relationArgsExact sourceParametersExact
+      induction =>
+      cases priorExact
+      intro wire
+      rw [step.checkedWireImageExact, step.baseWireImageExact]
+      change (step.priorWireImage wire).val = wire.val
+      have imagesExact := eq_of_heq priorWireExact
+      rw [imagesExact]
+      exact induction wire
+
 /-- Structural fold of the accepted inverse trace.  Its only list premises
 state that the restored occurrence prefix and consumed application prefix
 have the same length and order as the trace itself. -/
@@ -2639,7 +3020,11 @@ private theorem batchReconstructionTraceFold_exists
     (entries : CheckedOccurrenceList scope first allContents)
     (sitesExact : sites = allContents.map ContentOccurrence.toConcreteSite)
     (parameters : List result.checked.val.WireId)
+    (parametersAccepted : first.parameters.mapM result.wireImage? =
+      some parameters)
     (args : List Sig)
+    (relationSignature :
+      (result.checked.val.wires result.relationWire).sig = .rel args)
     {steps : List (ConcreteWireQuantifier.RelationJoinStep
       result.checked result.relationWire pattern)}
     {current : CheckedDiagram definitions}
@@ -2770,6 +3155,17 @@ private theorem batchReconstructionTraceFold_exists
               (content.occurrence.regionMap region) :=
         properRegion_not_covered_before result entries sitesExact content
           suffix currentAllDecomposition
+      have freshNodesNew :
+          ∀ node, ¬ BatchCoveredNode sites prefixContents
+            (content.occurrence.nodeMap node) :=
+        nodeImage_not_covered_before result entries sitesExact content suffix
+          currentAllDecomposition
+      have freshWiresNew :
+          ∀ wire, wire ∉ pattern.val.boundary →
+            ¬ BatchCoveredWire sites prefixContents
+              (content.occurrence.wireMap wire) :=
+        internalWireImage_not_covered_before result entries sitesExact content
+          suffix currentAllDecomposition
       have contentMember : content ∈ allContents := by
         rw [currentAllDecomposition]
         simp
@@ -2804,6 +3200,130 @@ private theorem batchReconstructionTraceFold_exists
         simpa [List.map_append, site,
           ConcreteWireQuantifier.RelationSeverResult.atoms,
           Data.Finite.allFin_eq_finRange, positionLtSites] using atPosition
+      obtain ⟨contentPosition, contentPositionExact⟩ :=
+        List.get_of_mem contentMember
+      let checkedContent : CheckedOccurrence scope first content :=
+        contentPositionExact ▸ entries.get contentPosition
+      have siteArgumentsExact :
+          (sites.get site).formals.map
+              (fun wire => (source.val.wires wire).sig) = args := by
+        apply Sig.rel.inj
+        calc
+          .rel ((sites.get site).formals.map
+              (fun wire => (source.val.wires wire).sig)) =
+              (result.checked.val.wires result.relationWire).sig := by
+            rw [result.site_formal_signatures site,
+              result.relationWire_signature]
+          _ = .rel args := relationSignature
+      have arityExact :
+          (sites.get site).formals.length = step.relationArgs.length := by
+        calc
+          (sites.get site).formals.length =
+              ((sites.get site).formals.map
+                (fun wire => (source.val.wires wire).sig)).length := by simp
+          _ = args.length := congrArg List.length siteArgumentsExact
+          _ = step.relationArgs.length :=
+            congrArg List.length relationArgsExact.symm
+      let alignment := inverseStepOccurrenceAlignmentOfChecked result first
+        content checkedContent parameters parametersAccepted step site
+        siteExact applicationExact arityExact sourceParametersExact
+      have priorWireVal :
+          ∀ wire, (step.priorWireImage wire).val = wire.val := by
+        intro wire
+        have imagesExact := eq_of_heq priorWireExact
+        rw [imagesExact]
+        exact relationJoinTrace_wireImage_val trace wire
+      have boundaryRetained :
+          ∀ position : Fin pattern.val.boundary.length,
+            retainedBySitesWire sites
+              (content.occurrence.wireMap
+                (pattern.val.boundary.get position)) := by
+        intro position
+        exact (result.retainedWire_iff _).mp
+          (alignment.boundarySurvives position)
+      have boundaryWireExact :
+          ∀ position : Fin pattern.val.boundary.length,
+            step.checkedFragmentWire (pattern.val.boundary.get position) =
+              step.checkedPriorWire
+                (priorState.state.wireImage
+                  ⟨content.occurrence.wireMap
+                      (pattern.val.boundary.get position),
+                    Or.inl (boundaryRetained position)⟩) := by
+        intro position
+        apply Fin.ext
+        let representative := DenseList.index pattern.val.boundary
+          (pattern.val.boundary.get position)
+            (List.get_mem pattern.val.boundary position)
+        have representativeGet :
+            pattern.val.boundary.get representative =
+              pattern.val.boundary.get position :=
+          DenseList.get_index _ _ _
+        have attachmentAt := alignment.sourceAttachmentExact representative
+        let originalWire := content.occurrence.wireMap
+          (pattern.val.boundary.get position)
+        have originalSurvives : originalWire ∈
+            ConcreteWireQuantifier.Internal.retainedWires source
+              (sites.flatMap
+                ConcreteWireQuantifier.RelationSeverSite.removedWires) := by
+          unfold originalWire
+          rw [← representativeGet]
+          exact alignment.boundarySurvives representative
+        have attachmentVal :
+            (step.sourceAttachments.get
+              (Fin.cast step.sourceAttachmentArity.symm representative)).val =
+              (ConcreteWireQuantifier.Internal.retainedWireIndex source
+                (sites.flatMap
+                  ConcreteWireQuantifier.RelationSeverSite.removedWires)
+                originalWire originalSurvives).val := by
+          calc
+            (step.sourceAttachments.get
+                (Fin.cast step.sourceAttachmentArity.symm representative)).val =
+                (result.wireImage
+                  (content.occurrence.wireMap
+                    (pattern.val.boundary.get representative))
+                  (alignment.boundarySurvives representative)).val :=
+              congrArg Fin.val attachmentAt
+            _ = (ConcreteWireQuantifier.Internal.retainedWireIndex source
+                  (sites.flatMap
+                    ConcreteWireQuantifier.RelationSeverSite.removedWires)
+                  (content.occurrence.wireMap
+                    (pattern.val.boundary.get representative))
+                  (alignment.boundarySurvives representative)).val :=
+              result.wireImage_val _ _
+            _ = (ConcreteWireQuantifier.Internal.retainedWireIndex source
+                  (sites.flatMap
+                    ConcreteWireQuantifier.RelationSeverSite.removedWires)
+                  originalWire
+                  originalSurvives).val := by
+              congr 2
+              exact congrArg content.occurrence.wireMap representativeGet
+        calc
+          (step.checkedFragmentWire
+              (pattern.val.boundary.get position)).val =
+              (step.sourceAttachments.get
+                (Fin.cast step.sourceAttachmentArity.symm representative)).val := by
+            simp [ConcreteWireQuantifier.RelationJoinStep.checkedFragmentWire,
+              ConcreteSpliceAttachment.fragmentWire,
+              ConcreteSpliceAttachment.representativeTarget,
+              ConcreteSpliceAttachment.representativePosition,
+              representative, step.targetExact]
+            rw [step.baseWireImageExact]
+            exact priorWireVal _
+          _ = (ConcreteWireQuantifier.Internal.retainedWireIndex source
+                (sites.flatMap
+                  ConcreteWireQuantifier.RelationSeverSite.removedWires)
+                originalWire
+                originalSurvives).val :=
+            attachmentVal
+          _ = (priorState.state.wireImage
+                ⟨originalWire, Or.inl (boundaryRetained position)⟩).val := by
+            symm
+            exact priorState.state.retainedWireImage_val originalWire
+              (boundaryRetained position)
+          _ = (step.checkedPriorWire
+                (priorState.state.wireImage
+                  ⟨originalWire, Or.inl (boundaryRetained position)⟩)).val := by
+            rw [step.checkedPriorWire_val]
       have rootRetainedMember :
           content.occurrence.regionMap pattern.val.diagram.root ∈
             ConcreteWireQuantifier.Internal.retainedRegions source
@@ -2826,7 +3346,8 @@ private theorem batchReconstructionTraceFold_exists
         rfl priorNodeStateExact
         (result.atoms.drop (priorSteps.length + 1)) (by
           rw [priorState.pendingOriginsExact, pendingHead])
-        freshRegionsNew rootCovered (by
+        freshRegionsNew freshNodesNew freshWiresNew boundaryRetained
+          boundaryWireExact rootCovered (by
           apply Fin.ext
           have sourceRegionExact :
               step.sourceRegion =
@@ -2979,7 +3500,9 @@ private theorem RelationSeverConcreteReceipt.fullReconstructionState_exists
   exact batchReconstructionTraceFold_exists receipt.result occurrences
     receipt.extractions.first receipt.extractions.entries
     receipt.extractions.entries.semanticEvidence_sites receipt.parameters
-    receipt.inverse.args receipt.inverse.semantic_trace occurrences []
+    receipt.parametersAccepted receipt.inverse.args
+      receipt.inverse.relation_signature receipt.inverse.semantic_trace
+      occurrences []
       (by simp) contentsLength applicationsExact
 
 private noncomputable def
