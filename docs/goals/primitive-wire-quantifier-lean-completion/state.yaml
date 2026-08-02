@@ -633,10 +633,12 @@ tasks:
       - "Plan Task 9"
       - "Tasks 3 and 6-8 primitive receipts"
       - "Merged src/kernel/proof/compile-content.ts"
+      - "/tmp/vpa-task9-raw-adequacy-foundation-20260802.md (controlling)"
     constraints:
       - "Use structural well-founded recursion, not caller fuel."
       - "Compiler logic never enters primitive checkers."
       - "The monolithic specification receipt may expose only checker-owned structural evidence required to prove compiler completeness."
+      - "Adequacy is direct raw ConcreteIso reproduction: join lands at plainFinal and sever at its raw monolithic target, with exact boundary transport and no identity-normalization dependency."
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/Rule/WirePrimitive.lean"
@@ -661,14 +663,13 @@ tasks:
       - "VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean"
       - "VisualProof/Rule/WirePrimitive/Arguments.lean"
-      - "VisualProof/Diagram/Concrete/IsomorphismSearch.lean"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
     verify:
       - "lake build"
       - "npm run formal:size"
     stop_if:
       - "A compiler case is not structurally decreasing."
-      - "Redundancy weakens exact normalized isomorphism or boundary transport."
+      - "Redundancy weakens exact raw ConcreteIso reproduction or boundary transport."
     receipt: null
   - id: T011
     type: worker

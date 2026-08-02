@@ -11,8 +11,8 @@ monolithic strongest-form relation sever/join rules redundant.
 as a semantic specification. The durable kernel is the exact 34-constructor
 TypeScript `ProofStep` language. Small checked concrete primitive receipts
 feed one generic uniform-site witness theorem; an authoring-layer compiler
-emits checked primitive programs and a redundancy theorem relates their
-normalized result to the monolithic specification. The completed Phase 3
+emits checked primitive programs and a redundancy theorem directly relates
+their raw result to the raw monolithic replacement. The completed Phase 3
 stack then proves one-step, replay, theorem, citation, and ordered-theory
 soundness and checks TypeScript/Lean tag parity mechanically.
 
@@ -111,9 +111,11 @@ order, matching `src/kernel/proof/step.ts`:
   parameters, definition identities, and boundary transports are all
   checker-owned receipts. A public soundness theorem accepts no semantic
   premise manufactured by its caller.
-- Normalized concrete results are compared by checked concrete isomorphism
-  with exact ordered boundary transport. Source-name equality is never used
-  as a substitute for fresh-name equivalence.
+- Compiler adequacy compares raw concrete replacements by checked concrete
+  isomorphism with exact ordered boundary transport: join lands at
+  `plainFinal` and sever lands at its raw monolithic target. It has no
+  dependency on identity normalization. Source-name equality is never used as
+  a substitute for fresh-name equivalence.
 - The monolithic relation rule may be imported only by the compiler
   correctness/redundancy layer and its fixtures. It must not appear in
   `StepTag`, `ProofStep`, replay JSON correspondence, or application dispatch.
@@ -667,9 +669,10 @@ checkers.
   theorem and exact ordered boundary transport. The compiler is
   authoring-layer logic; primitive checkers remain unaware of residuals and
   monolithic inputs.
-- [ ] **Step 6: Prove redundancy.** For join and sever, show the compiled
-  program's final normalized diagram is checked-isomorphic to the
-  monolithic result with exact boundary transport. Derive monolithic
+- [ ] **Step 6: Prove redundancy.** For join, show the compiled raw program
+  target is checked-isomorphic to the monolithic raw `plainFinal`; for sever,
+  show it is checked-isomorphic to the raw monolithic target, in both cases
+  with exact boundary transport and no normalization dependency. Derive monolithic
   soundness again as a corollary and prove primitive-set completeness for
   every checked monolithic input.
 - [ ] **Step 7: Run GREEN and commit.**
