@@ -465,6 +465,16 @@ def targetWire
     applied.target.val.WireId :=
   applied.result.targetWire
 
+/-- Canonical generated target node for one ordered source site. -/
+def targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {position : Nat}
+    (applied : AppliedArityUnshift source wire position)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.target.val.NodeId :=
+  applied.result.targetNode site
+
 def targetSites
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}

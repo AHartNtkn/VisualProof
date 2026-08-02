@@ -40,6 +40,23 @@ def source
     {permutation : List Nat}
     (_ : AppliedArgPermute source wire permutation) := source
 
+/-- Checker-owned concrete construction receipt for carrier transport. -/
+def argumentResult
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :=
+  applied.result
+
+/-- Exhaustive ordered source application sites of the permuted head. -/
+def sourceSites
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation) :
+    AllAppliedSites source wire :=
+  applied.result.sites
+
 /-- The exact source relation argument vector selected by the permutation
 checker. -/
 def sourceArgumentList
@@ -72,6 +89,16 @@ def targetWire
     (applied : AppliedArgPermute source wire permutation) :
     applied.target.val.WireId :=
   applied.result.targetWire
+
+/-- Canonical generated target node for one ordered source site. -/
+def targetNode
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {permutation : List Nat}
+    (applied : AppliedArgPermute source wire permutation)
+    (site : Fin applied.sourceSites.sites.length) :
+    applied.target.val.NodeId :=
+  applied.result.targetNode site
 
 def targetSites
     {source : CheckedDiagram definitions}
