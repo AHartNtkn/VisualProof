@@ -603,6 +603,249 @@ theorem indexOf?_unique_of_nodup [DecidableEq α] {xs : List α}
   subst found
   exact hfound
 
+namespace FiniteEquiv
+
+/-!
+Stable, executable transport between two permutations of the same list.  The
+rank of each occurrence among equal values selects its target position, so
+duplicate values remain distinct without a choice principle.
+-/
+
+private def matchingPositions [DecidableEq α] :
+    (values : List α) → α → List (Fin values.length)
+  | [], _ => []
+  | head :: tail, value =>
+      if head = value then
+        0 :: (matchingPositions tail value).map Fin.succ
+      else
+        (matchingPositions tail value).map Fin.succ
+
+private theorem matchingPositions_mem [DecidableEq α]
+    (values : List α) (value : α) (position : Fin values.length) :
+    position ∈ matchingPositions values value ↔ values.get position = value := by
+  induction values with
+  | nil => exact Fin.elim0 position
+  | cons head tail induction =>
+      refine Fin.cases ?_ (fun position => ?_) position
+      · by_cases same : head = value
+        · simp [matchingPositions, same]
+        · rw [matchingPositions, if_neg same]
+          rw [List.mem_map]
+          constructor
+          · rintro ⟨candidate, _member, exact⟩
+            have values := congrArg Fin.val exact
+            simp at values
+          · exact False.elim ∘ same
+      · by_cases same : head = value
+        · rw [matchingPositions, if_pos same]
+          simp only [List.mem_cons, Fin.succ_ne_zero, false_or, List.mem_map]
+          constructor
+          · rintro ⟨candidate, member, exact⟩
+            have candidateExact : candidate = position := Fin.succ_inj.mp exact
+            subst candidate
+            simpa using (induction position).mp member
+          · intro exact
+            have tailExact : tail.get position = value := by simpa using exact
+            exact ⟨position, (induction position).mpr tailExact, rfl⟩
+        · rw [matchingPositions, if_neg same]
+          simp only [List.mem_map]
+          constructor
+          · rintro ⟨candidate, member, exact⟩
+            have candidateExact : candidate = position := Fin.succ_inj.mp exact
+            subst candidate
+            simpa using (induction position).mp member
+          · intro exact
+            have tailExact : tail.get position = value := by simpa using exact
+            exact ⟨position, (induction position).mpr tailExact, rfl⟩
+
+private theorem matchingPositions_nodup [DecidableEq α]
+    (values : List α) (value : α) :
+    (matchingPositions values value).Nodup := by
+  induction values with
+  | nil => simp [matchingPositions]
+  | cons head tail induction =>
+      have mappedNodup :
+          ((matchingPositions tail value).map Fin.succ).Nodup :=
+        induction.map Fin.succ (by
+          intro left right different same
+          exact different (Fin.succ_inj.mp same))
+      by_cases same : head = value
+      · rw [matchingPositions, if_pos same, List.nodup_cons]
+        exact ⟨by
+          intro member
+          rcases List.mem_map.mp member with ⟨position, _, exact⟩
+          exact Fin.succ_ne_zero position exact, mappedNodup⟩
+      · simpa [matchingPositions, same] using mappedNodup
+
+private theorem matchingPositions_length [DecidableEq α]
+    (values : List α) (value : α) :
+    (matchingPositions values value).length = values.count value := by
+  induction values with
+  | nil => simp [matchingPositions]
+  | cons head tail induction =>
+      by_cases same : head = value
+      · simp [matchingPositions, same, induction]
+      · simp [matchingPositions, same, induction]
+
+private def matchingRank [DecidableEq α]
+    (values : List α) (value : α) (position : Fin values.length)
+    (exact : values.get position = value) :
+    Fin (matchingPositions values value).length :=
+  (indexOf? (matchingPositions values value) position).get (by
+    rw [indexOf?_isSome_iff]
+    exact (matchingPositions_mem values value position).mpr exact)
+
+private theorem matchingRank_spec [DecidableEq α]
+    (values : List α) (value : α) (position : Fin values.length)
+    (exact : values.get position = value) :
+    (matchingPositions values value).get
+        (matchingRank values value position exact) = position := by
+  unfold matchingRank
+  let found := indexOf? (matchingPositions values value) position
+  have foundSome : found.isSome = true := by
+    rw [indexOf?_isSome_iff]
+    exact (matchingPositions_mem values value position).mpr exact
+  obtain ⟨candidate, candidateFound⟩ :=
+    Option.isSome_iff_exists.mp foundSome
+  rw [Option.get_of_eq_some foundSome candidateFound]
+  exact indexOf?_sound candidateFound
+
+private theorem matchingRank_congr [DecidableEq α]
+    (values : List α) (value : α)
+    (first second : Fin values.length)
+    (firstExact : values.get first = value)
+    (secondExact : values.get second = value)
+    (same : first = second) :
+    matchingRank values value first firstExact =
+      matchingRank values value second secondExact := by
+  subst second
+  rfl
+
+private theorem matchingRank_get [DecidableEq α]
+    (values : List α) (value : α)
+    (rank : Fin (matchingPositions values value).length) :
+    matchingRank values value
+        ((matchingPositions values value).get rank)
+        ((matchingPositions_mem values value _).mp
+          (List.get_mem _ rank)) = rank := by
+  let computed := matchingRank values value
+    ((matchingPositions values value).get rank)
+    ((matchingPositions_mem values value _).mp
+      (List.get_mem _ rank))
+  have dataExact :
+      (matchingPositions values value).get computed =
+        (matchingPositions values value).get rank := by
+    exact matchingRank_spec values value
+      ((matchingPositions values value).get rank)
+      ((matchingPositions_mem values value _).mp
+        (List.get_mem _ rank))
+  apply Fin.ext
+  exact (List.getElem_inj
+    (i := computed.val) (j := rank.val)
+    (matchingPositions_nodup values value)).mp (by
+      simpa only [List.get_eq_getElem] using dataExact)
+
+private def stablePermForward [DecidableEq α]
+    {left right : List α} (permuted : left.Perm right) :
+    Fin left.length → Fin right.length := fun position =>
+  let value := left.get position
+  let sourcePositions := matchingPositions left value
+  let targetPositions := matchingPositions right value
+  let rank := matchingRank left value position rfl
+  let lengthExact : sourcePositions.length = targetPositions.length := by
+    simp only [sourcePositions, targetPositions, matchingPositions_length]
+    exact permuted.count_eq value
+  targetPositions.get (Fin.cast lengthExact rank)
+
+private theorem stablePermForward_exact [DecidableEq α]
+    {left right : List α} (permuted : left.Perm right)
+    (position : Fin left.length) :
+    right.get (stablePermForward permuted position) = left.get position := by
+  unfold stablePermForward
+  apply (matchingPositions_mem right (left.get position) _).mp
+  exact List.get_mem _ _
+
+private theorem stablePermForward_rank [DecidableEq α]
+    {left right : List α} (permuted : left.Perm right)
+    (position : Fin left.length) (value : α)
+    (sourceExact : left.get position = value) :
+    let lengthExact :
+        (matchingPositions left value).length =
+          (matchingPositions right value).length := by
+      simp only [matchingPositions_length]
+      exact permuted.count_eq value
+    matchingRank right value (stablePermForward permuted position)
+        ((stablePermForward_exact permuted position).trans sourceExact) =
+      Fin.cast lengthExact
+        (matchingRank left value position sourceExact) := by
+  subst value
+  dsimp only
+  unfold stablePermForward
+  dsimp only
+  exact matchingRank_get right (left.get position) _
+
+private theorem stablePermForward_injective [DecidableEq α]
+    {left right : List α} (permuted : left.Perm right) :
+    Function.Injective (stablePermForward permuted) := by
+  intro first second mappedSame
+  let value := left.get first
+  have secondExact : left.get second = value := by
+    calc
+      left.get second = right.get (stablePermForward permuted second) :=
+        (stablePermForward_exact permuted second).symm
+      _ = right.get (stablePermForward permuted first) :=
+        congrArg right.get mappedSame.symm
+      _ = left.get first := stablePermForward_exact permuted first
+      _ = value := rfl
+  let lengthExact :
+      (matchingPositions left value).length =
+        (matchingPositions right value).length := by
+    simp only [matchingPositions_length]
+    exact permuted.count_eq value
+  have targetRanksSame :
+      matchingRank right value (stablePermForward permuted first)
+          ((stablePermForward_exact permuted first).trans rfl) =
+        matchingRank right value (stablePermForward permuted second)
+          ((stablePermForward_exact permuted second).trans secondExact) :=
+    matchingRank_congr right value _ _ _ _ mappedSame
+  rw [stablePermForward_rank permuted first value rfl,
+    stablePermForward_rank permuted second value secondExact] at targetRanksSame
+  have sourceRanksSame :
+      matchingRank left value first rfl =
+        matchingRank left value second secondExact := by
+    apply Fin.ext
+    simpa using congrArg Fin.val targetRanksSame
+  have sourcePositionsSame :
+      (matchingPositions left value).get
+          (matchingRank left value first rfl) =
+        (matchingPositions left value).get
+          (matchingRank left value second secondExact) :=
+    congrArg (matchingPositions left value).get sourceRanksSame
+  rw [matchingRank_spec left value first rfl,
+    matchingRank_spec left value second secondExact] at sourcePositionsSame
+  exact sourcePositionsSame
+
+private def stablePermEquiv [DecidableEq α]
+    {left right : List α} (permuted : left.Perm right) :
+    FiniteEquiv (Fin left.length) (Fin right.length) :=
+  ofBijectiveFin (stablePermForward permuted)
+    ⟨stablePermForward_injective permuted,
+      fin_surjective_of_injective_of_card_eq
+        (stablePermForward permuted)
+        (stablePermForward_injective permuted) permuted.length_eq⟩
+
+/--
+Executable positional equivalence between permuted lists.  Equal values are
+matched by their left-to-right occurrence rank.
+-/
+def ofListPermStable [DecidableEq α]
+    {left right : List α} (permuted : left.Perm right) :
+    {equivalence : FiniteEquiv (Fin left.length) (Fin right.length) //
+      ∀ position, right.get (equivalence position) = left.get position} :=
+  ⟨stablePermEquiv permuted, stablePermForward_exact permuted⟩
+
+end FiniteEquiv
+
 end VisualProof.Data.Finite
 
 namespace VisualProof.Data.Finite.FiniteEquiv

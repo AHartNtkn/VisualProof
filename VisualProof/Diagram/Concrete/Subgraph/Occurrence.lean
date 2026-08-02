@@ -584,7 +584,7 @@ Construction-owned renaming of identity storage positions.  It is selected
 from the occurrence's exact owner-multiset permutation, so repeated ownership
 by one wire is retained positionally.
 -/
-noncomputable def identityPortEquiv
+def identityPortEquiv
     (occurrence : Occurrence pattern host)
     (node : pattern.val.diagram.NodeId)
     (region : pattern.val.diagram.RegionId)
@@ -608,7 +608,7 @@ noncomputable def identityPortEquiv
       targetNode
   let permuted := occurrence.identityIncidence_permuted
     node region sig arity identity
-  let positions := Data.Finite.FiniteEquiv.ofListPerm permuted
+  let positions := Data.Finite.FiniteEquiv.ofListPermStable permuted
   exact
     (Data.Finite.FiniteEquiv.finCast
         (by simp [sourceOwners, sourceLength])).trans
@@ -650,7 +650,7 @@ theorem identityPortEquiv_owner
       targetNode
   let permuted := occurrence.identityIncidence_permuted
     node region sig arity identity
-  let positions := Data.Finite.FiniteEquiv.ofListPerm permuted
+  let positions := Data.Finite.FiniteEquiv.ofListPermStable permuted
   let sourcePosition :
       Fin (sourceOwners.map occurrence.wireMap).length :=
     Data.Finite.FiniteEquiv.finCast
@@ -752,7 +752,7 @@ theorem identityPortEquiv_symm_owner
   exact Option.some.inj (mappedOwner.symm.trans targetOwner)
 
 /-- Extend the finite identity-position renaming to every concrete port. -/
-noncomputable def identityCPortEquiv
+def identityCPortEquiv
     (occurrence : Occurrence pattern host)
     (node : pattern.val.diagram.NodeId)
     (region : pattern.val.diagram.RegionId)
@@ -824,7 +824,7 @@ noncomputable def identityCPortEquiv
         · simp [bound]
 
 /-- Total port renaming selected by the exposed source-node data. -/
-noncomputable def portEquivForNode
+def portEquivForNode
     {definitions : List (List Sig)}
     {pattern : CheckedOpenDiagram definitions}
     {host : CheckedDiagram definitions}
@@ -890,7 +890,7 @@ theorem portEquivForNode_identity
     rfl
 
 /-- Deterministic endpoint transport for an explicitly exposed source node. -/
-noncomputable def endpointMapForNode
+def endpointMapForNode
     {definitions : List (List Sig)}
     {pattern : CheckedOpenDiagram definitions}
     {host : CheckedDiagram definitions}
