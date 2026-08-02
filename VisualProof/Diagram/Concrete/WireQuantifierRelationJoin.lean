@@ -715,6 +715,129 @@ theorem checkedIdentityNode_data
     step.attachment.diagram_node_identityNode]
   rfl
 
+/-- Every generated request attachment is one of the splice's checked
+positional targets.  This is the construction-owned range fact used to
+recover the corresponding source-wire origin without inspecting a result
+diagram. -/
+theorem identityRequestAttachment_mem_targets
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    (step.attachment.identityRequests.get request).attachments.get port ∈
+      (Data.Finite.allFin content.val.boundary.length).map
+        step.attachment.target := by
+  have requestMember :=
+    List.get_mem step.attachment.identityRequests request
+  unfold ConcreteSpliceAttachment.identityRequests
+    computedIdentityRequests at requestMember
+  rw [List.mem_eraseDups, List.mem_filterMap] at requestMember
+  rcases requestMember with ⟨sourceWire, _sourceMember, emitted⟩
+  change
+    (if 2 ≤ (concreteAttachmentTargets step.base content
+        step.attachment.target sourceWire).length then
+      some
+        ({ source := sourceWire
+           attachments := concreteAttachmentTargets step.base content
+             step.attachment.target sourceWire } :
+          ConcreteIdentityRequest step.base.val content.val.diagram)
+    else none) = some _ at emitted
+  split at emitted
+  · rename_i generated
+    have requestExact := Option.some.inj emitted
+    change
+      ({ source := sourceWire
+         attachments := concreteAttachmentTargets step.base content
+           step.attachment.target sourceWire } :
+        ConcreteIdentityRequest step.base.val content.val.diagram) =
+          step.attachment.identityRequests.get request at requestExact
+    have attachmentsExact :=
+      congrArg ConcreteIdentityRequest.attachments requestExact
+    change concreteAttachmentTargets step.base content
+        step.attachment.target sourceWire =
+      (step.attachment.identityRequests.get request).attachments at attachmentsExact
+    have attachmentMember :
+        (step.attachment.identityRequests.get request).attachments.get port ∈
+          concreteAttachmentTargets step.base content
+            step.attachment.target sourceWire := by
+      simpa only [attachmentsExact] using
+        List.get_mem
+          (step.attachment.identityRequests.get request).attachments port
+    unfold concreteAttachmentTargets at attachmentMember
+    rw [List.mem_eraseDups, List.mem_filterMap] at attachmentMember
+    rcases attachmentMember with ⟨position, positionMember, targetEmitted⟩
+    split at targetEmitted
+    · have targetExact := Option.some.inj targetEmitted
+      exact List.mem_map.mpr
+        ⟨position, positionMember, targetExact⟩
+    · contradiction
+  · contradiction
+
+/-- Every generated request attachment is the checked base image of one of
+the source attachment wires. -/
+theorem identityRequestAttachment_mem_baseWireImages
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    (step.attachment.identityRequests.get request).attachments.get port ∈
+      step.sourceAttachments.map step.baseWireImage := by
+  rcases List.mem_map.mp
+      (step.identityRequestAttachment_mem_targets request port) with
+    ⟨position, _positionMember, targetExact⟩
+  let sourcePosition : Fin step.sourceAttachments.length :=
+    Fin.cast step.sourceAttachmentArity.symm position
+  refine List.mem_map.mpr
+    ⟨step.sourceAttachments.get sourcePosition,
+      List.get_mem _ sourcePosition, ?_⟩
+  exact (step.targetExact position).symm.trans targetExact
+
+/-- Deterministic first source-attachment position represented by one
+generated request port. -/
+def identityRequestSourcePosition
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    Fin step.sourceAttachments.length :=
+  Fin.cast (by simp)
+    (DenseList.index (step.sourceAttachments.map step.baseWireImage)
+      ((step.attachment.identityRequests.get request).attachments.get port)
+      (step.identityRequestAttachment_mem_baseWireImages request port))
+
+/-- Source wire represented by one generated request port. -/
+def identityRequestSourceWire
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    source.val.WireId :=
+  step.sourceAttachments.get
+    (step.identityRequestSourcePosition request port)
+
+theorem identityRequestSourceWire_survives
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    step.identityRequestSourceWire request port ≠ dying :=
+  step.sourceAttachmentsSurvive
+    (step.identityRequestSourcePosition request port)
+
+theorem identityRequestSourceWire_baseImage
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length)
+    (port : Fin
+      (step.attachment.identityRequests.get request).attachments.length) :
+    step.baseWireImage (step.identityRequestSourceWire request port) =
+      (step.attachment.identityRequests.get request).attachments.get port := by
+  unfold identityRequestSourceWire identityRequestSourcePosition
+  have indexed := DenseList.get_index
+    (step.sourceAttachments.map step.baseWireImage)
+    ((step.attachment.identityRequests.get request).attachments.get port)
+    (step.identityRequestAttachment_mem_baseWireImages request port)
+  simpa only [List.get_eq_getElem, List.getElem_map] using indexed
+
 /-- A prior wire preserves its signature through application deletion and
 splice. -/
 theorem checkedPriorWire_signature

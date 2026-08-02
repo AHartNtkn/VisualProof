@@ -560,6 +560,206 @@ def wireOrigin (atlas : RelationJoinRawOriginAtlas result)
     RelationJoinRawWireOrigin result :=
   atlas.wireEquiv wire
 
+/-- Allocation-neutral region payload. -/
+inductive RelationJoinRawRegionData (Region : Type)
+  | sheet
+  | cut (parent : Region)
+  deriving Repr, DecidableEq
+
+/-- Allocation-neutral node payload. -/
+inductive RelationJoinRawNodeData (Region : Type) (definitionCount : Nat)
+  | atom (region : Region) (args : List Sig)
+  | ref (region : Region) (definition : Fin definitionCount)
+      (args : List Sig)
+  | identity (region : Region) (sig : Sig) (arity : Nat)
+  deriving Repr, DecidableEq
+
+/-- Allocation-neutral incidence endpoint. -/
+structure RelationJoinRawEndpoint (Node : Type) where
+  node : Node
+  port : CPort
+  deriving Repr, DecidableEq
+
+/-- Allocation-neutral wire payload, including its authoritative ordered
+endpoint fiber. -/
+structure RelationJoinRawWireData (Region Node : Type) where
+  sig : Sig
+  scope : Region
+  endpoints : List (RelationJoinRawEndpoint Node)
+  deriving Repr, DecidableEq
+
+/-- A content region lands at the occurrence's source site when it is the
+fragment root, and otherwise retains its occurrence-local origin. -/
+def contentRegionOrigin
+    (result : RelationJoinResult source dying content parameters)
+    (occurrence : Fin result.steps.length)
+    (region : content.val.diagram.RegionId) :
+    RelationJoinRawRegionOrigin result :=
+  if root : region = content.val.diagram.root then
+    .inl (result.steps.get occurrence).sourceRegion
+  else
+    .inr ⟨occurrence, ⟨region, root⟩⟩
+
+/-- Authoritative raw region row derived only from source/content tables and
+the occurrence's checked splice site. -/
+def expectedRegionData
+    (result : RelationJoinResult source dying content parameters) :
+    RelationJoinRawRegionOrigin result →
+      RelationJoinRawRegionData (RelationJoinRawRegionOrigin result)
+  | .inl region =>
+      match source.val.regions region with
+      | .sheet => .sheet
+      | .cut parent => .cut (.inl parent)
+  | .inr ⟨occurrence, region⟩ =>
+      match content.val.diagram.regions region.1 with
+      | .sheet => .sheet
+      | .cut parent => .cut (contentRegionOrigin result occurrence parent)
+
+/-- Authoritative raw node row derived only from retained source nodes,
+occurrence content, and the attachment's generated request list. -/
+def expectedNodeData
+    (result : RelationJoinResult source dying content parameters) :
+    RelationJoinRawNodeOrigin result →
+      RelationJoinRawNodeData (RelationJoinRawRegionOrigin result)
+        definitions.length
+  | .inl node =>
+      match source.val.nodes node.1 with
+      | .atom region args => .atom (.inl region) args
+      | .ref region definition args => .ref (.inl region) definition args
+      | .identity region sig arity => .identity (.inl region) sig arity
+  | .inr ⟨occurrence, .inl node⟩ =>
+      match content.val.diagram.nodes node with
+      | .atom region args =>
+          .atom (contentRegionOrigin result occurrence region) args
+      | .ref region definition args =>
+          .ref (contentRegionOrigin result occurrence region) definition args
+      | .identity region sig arity =>
+          .identity (contentRegionOrigin result occurrence region) sig arity
+  | .inr ⟨occurrence, .inr request⟩ =>
+      let step := result.steps.get occurrence
+      let requestData := step.attachment.identityRequests.get request
+      .identity (.inl step.sourceRegion) requestData.sig
+        requestData.attachments.length
+
+/-- The signature of a raw wire origin is inherited from exactly one source
+or occurrence-internal content wire. -/
+def expectedWireSignature
+    (result : RelationJoinResult source dying content parameters) :
+    RelationJoinRawWireOrigin result → Sig
+  | .inl wire => (source.val.wires wire.1).sig
+  | .inr ⟨_occurrence, wire⟩ =>
+      (content.val.diagram.wires wire.1).sig
+
+/-- The scope of a raw wire origin is inherited from its source region or
+mapped through the occurrence's root-identifying region construction. -/
+def expectedWireScope
+    (result : RelationJoinResult source dying content parameters) :
+    RelationJoinRawWireOrigin result → RelationJoinRawRegionOrigin result
+  | .inl wire => .inl (source.val.wires wire.1).scope
+  | .inr ⟨occurrence, wire⟩ =>
+      contentRegionOrigin result occurrence
+        (content.val.diagram.wires wire.1).scope
+
+/-- Destination origin of one content wire at a checked occurrence.  Boundary
+wires use the first positional representative selected by the attachment;
+internal wires retain an occurrence-local origin. -/
+def contentWireOrigin
+    (result : RelationJoinResult source dying content parameters)
+    (occurrence : Fin result.steps.length)
+    (wire : content.val.diagram.WireId) :
+    RelationJoinRawWireOrigin result :=
+  let step := result.steps.get occurrence
+  if boundary : wire ∈ content.val.boundary then
+    let position := step.attachment.representativePosition wire boundary
+    let sourcePosition : Fin step.sourceAttachments.length :=
+      Fin.cast step.sourceAttachmentArity.symm position
+    .inl
+      ⟨step.sourceAttachments.get sourcePosition,
+        step.sourceAttachmentsSurvive sourcePosition⟩
+  else
+    .inr ⟨occurrence, ⟨wire, boundary⟩⟩
+
+/-- Retained source incidence before any generated occurrence incidence is
+appended.  Consumed application endpoints and the exhausted relation wire
+are removed by the same construction predicates used by the join. -/
+def expectedSourceEndpointOccurrences
+    (result : RelationJoinResult source dying content parameters) :
+    List
+      (RelationJoinRawWireOrigin result ×
+        RelationJoinRawEndpoint (RelationJoinRawNodeOrigin result)) :=
+  source.val.endpointOccurrences.filterMap fun occurrence =>
+    if nodeSurvives : occurrence.2.node ∉ result.applications then
+      if wireSurvives : occurrence.1 ≠ dying then
+        some
+          (.inl ⟨occurrence.1, wireSurvives⟩,
+            { node := .inl ⟨occurrence.2.node, nodeSurvives⟩
+              port := occurrence.2.port })
+      else none
+    else none
+
+/-- Copied content incidence contributed by one occurrence, in the content
+diagram's authoritative wire/endpoint order. -/
+def expectedFragmentEndpointOccurrences
+    (result : RelationJoinResult source dying content parameters)
+    (occurrence : Fin result.steps.length) :
+    List
+      (RelationJoinRawWireOrigin result ×
+        RelationJoinRawEndpoint (RelationJoinRawNodeOrigin result)) :=
+  content.val.diagram.endpointOccurrences.map fun endpointOccurrence =>
+    (contentWireOrigin result occurrence endpointOccurrence.1,
+      { node := .inr ⟨occurrence, .inl endpointOccurrence.2.node⟩
+        port := endpointOccurrence.2.port })
+
+/-- Equality-node incidence contributed by repeated boundary aliases at one
+occurrence, in request order and then attachment-port order. -/
+def expectedIdentityEndpointOccurrences
+    (result : RelationJoinResult source dying content parameters)
+    (occurrence : Fin result.steps.length) :
+    List
+      (RelationJoinRawWireOrigin result ×
+        RelationJoinRawEndpoint (RelationJoinRawNodeOrigin result)) :=
+  let step := result.steps.get occurrence
+  (Data.Finite.allFin step.attachment.identityRequests.length).flatMap
+    fun request =>
+      let requestData := step.attachment.identityRequests.get request
+      (Data.Finite.allFin requestData.attachments.length).map fun port =>
+        (.inl
+            ⟨step.identityRequestSourceWire request port,
+              step.identityRequestSourceWire_survives request port⟩,
+          { node := .inr ⟨occurrence, .inr request⟩
+            port := .identity port.val })
+
+/-- Complete construction-order incidence stream.  This is the independent
+wire-endpoint fold: retained source incidence first, followed by each splice's
+fragment incidences and request incidences. -/
+def expectedEndpointOccurrences
+    (result : RelationJoinResult source dying content parameters) :
+    List
+      (RelationJoinRawWireOrigin result ×
+        RelationJoinRawEndpoint (RelationJoinRawNodeOrigin result)) :=
+  expectedSourceEndpointOccurrences result ++
+    (Data.Finite.allFin result.steps.length).flatMap fun occurrence =>
+      expectedFragmentEndpointOccurrences result occurrence ++
+        expectedIdentityEndpointOccurrences result occurrence
+
+/-- Authoritative ordered endpoint fiber of one raw wire origin. -/
+def expectedWireEndpoints
+    (result : RelationJoinResult source dying content parameters)
+    (wire : RelationJoinRawWireOrigin result) :
+    List (RelationJoinRawEndpoint (RelationJoinRawNodeOrigin result)) :=
+  (expectedEndpointOccurrences result).filterMap fun occurrence =>
+    if occurrence.1 = wire then some occurrence.2 else none
+
+/-- Complete authoritative raw wire row. -/
+def expectedWireData
+    (result : RelationJoinResult source dying content parameters)
+    (wire : RelationJoinRawWireOrigin result) :
+    RelationJoinRawWireData (RelationJoinRawRegionOrigin result)
+      (RelationJoinRawNodeOrigin result) :=
+  { sig := expectedWireSignature result wire
+    scope := expectedWireScope result wire
+    endpoints := expectedWireEndpoints result wire }
+
 end RelationJoinRawOriginAtlas
 
 end Origins
