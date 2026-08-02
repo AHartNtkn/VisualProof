@@ -332,6 +332,22 @@ private def firstFusion?
     Option (IdentityRewrite source) :=
   fusionSearch? source (identityNodeIds source.val)
 
+/-- No propositional Rule-1 receipt exists at any node. -/
+def DropExhausted (source : CheckedDiagram definitions) : Prop :=
+  ∀ node, ¬ Nonempty (DropEligibility source node)
+
+/-- No propositional Rule-2 receipt exists at any node. -/
+def CollapseExhausted (source : CheckedDiagram definitions) : Prop :=
+  ∀ node, ¬ Nonempty (CollapseEligibility source node)
+
+/-- No propositional Rule-3 receipt exists at any ordered node pair. -/
+def FusionExhausted (source : CheckedDiagram definitions) : Prop :=
+  ∀ left right, ¬ Nonempty (FusionEligibility source left right)
+
+/-- The public receipt-level characterization of executable normality. -/
+def IdentityRewriteExhausted (source : CheckedDiagram definitions) : Prop :=
+  DropExhausted source ∧ CollapseExhausted source ∧ FusionExhausted source
+
 /-- Apply exactly the first eligible rewrite in Rule 1→2→3 priority. -/
 def normalizeOneIdentity
     (source : CheckedDiagram definitions) :
@@ -398,6 +414,172 @@ private theorem fusionSearch?_provenance
             induction result found
           exact ⟨foundLeft, List.mem_cons_of_mem left leftMember,
             foundRight, List.mem_cons_of_mem left rightMember, ruleFound⟩
+
+private theorem firstDrop?_none_iff
+    (source : CheckedDiagram definitions) :
+    firstDrop? source = none ↔ DropExhausted source := by
+  unfold firstDrop? DropExhausted
+  constructor
+  · intro exhausted node ⟨eligible⟩
+    have nodeMember := eligible.identity.mem_identityNodeIds
+    have nodeNone :=
+      List.findSome?_eq_none_iff.mp exhausted node nodeMember
+    obtain ⟨found, foundEq⟩ :=
+      dropEligibility?_complete source node eligible
+    unfold dropDegenerate at nodeNone
+    rw [foundEq] at nodeNone
+    contradiction
+  · intro exhausted
+    apply List.findSome?_eq_none_iff.mpr
+    intro node _
+    unfold dropDegenerate
+    cases found : dropEligibility? source node with
+    | none => rfl
+    | some eligible => exact False.elim (exhausted node ⟨eligible⟩)
+
+private theorem firstCollapse?_none_iff
+    (source : CheckedDiagram definitions) :
+    firstCollapse? source = none ↔ CollapseExhausted source := by
+  unfold firstCollapse? CollapseExhausted
+  constructor
+  · intro exhausted node ⟨eligible⟩
+    have nodeMember := eligible.identity.mem_identityNodeIds
+    have nodeNone :=
+      List.findSome?_eq_none_iff.mp exhausted node nodeMember
+    obtain ⟨found, foundEq⟩ :=
+      collapseEligibility?_complete source node eligible
+    unfold collapseOnePoint at nodeNone
+    rw [foundEq] at nodeNone
+    contradiction
+  · intro exhausted
+    apply List.findSome?_eq_none_iff.mpr
+    intro node _
+    unfold collapseOnePoint
+    cases found : collapseEligibility? source node with
+    | none => rfl
+    | some eligible => exact False.elim (exhausted node ⟨eligible⟩)
+
+private theorem fusionSearch?_some_of_eligible
+    (source : CheckedDiagram definitions)
+    (candidates : List source.val.NodeId)
+    (left right : source.val.NodeId)
+    (leftMember : left ∈ candidates)
+    (rightMember : right ∈ candidates)
+    (eligible : FusionEligibility source left right) :
+    ∃ result, fusionSearch? source candidates = some result := by
+  induction candidates with
+  | nil => simp at leftMember
+  | cons head tail induction =>
+      by_cases headLeft : head = left
+      · subst head
+        have rightTail : right ∈ tail := by
+          rcases List.mem_cons.mp rightMember with same | member
+          · exact False.elim (eligible.distinct same.symm)
+          · exact member
+        obtain ⟨foundEligible, eligibilityEq⟩ :=
+          fusionEligibility?_complete source left right eligible
+        have rewriteExists :
+            ∃ rewrite, fuseSameRegion source left right = some rewrite := by
+          exact ⟨fusionRewrite source left right foundEligible, by
+            simp [fuseSameRegion, eligibilityEq]⟩
+        unfold fusionSearch?
+        cases pairEq : tail.findSome? fun candidate =>
+            fuseSameRegion source left candidate with
+        | some result => exact ⟨result, rfl⟩
+        | none =>
+            obtain ⟨rewrite, rewriteEq⟩ := rewriteExists
+            have impossible :=
+              List.findSome?_eq_none_iff.mp pairEq right rightTail
+            rw [rewriteEq] at impossible
+            contradiction
+      · by_cases headRight : head = right
+        · subst head
+          have leftTail : left ∈ tail := by
+            rcases List.mem_cons.mp leftMember with same | member
+            · exact False.elim (eligible.distinct same)
+            · exact member
+          let symmetric := eligible.symm
+          obtain ⟨foundEligible, eligibilityEq⟩ :=
+            fusionEligibility?_complete source right left symmetric
+          have rewriteExists :
+              ∃ rewrite, fuseSameRegion source right left = some rewrite := by
+            exact ⟨fusionRewrite source right left foundEligible, by
+              simp [fuseSameRegion, eligibilityEq]⟩
+          unfold fusionSearch?
+          cases pairEq : tail.findSome? fun candidate =>
+              fuseSameRegion source right candidate with
+          | some result => exact ⟨result, rfl⟩
+          | none =>
+              obtain ⟨rewrite, rewriteEq⟩ := rewriteExists
+              have impossible :=
+                List.findSome?_eq_none_iff.mp pairEq left leftTail
+              rw [rewriteEq] at impossible
+              contradiction
+        · have leftTail : left ∈ tail :=
+            (List.mem_cons.mp leftMember).resolve_left
+              (fun same => headLeft same.symm)
+          have rightTail : right ∈ tail :=
+            (List.mem_cons.mp rightMember).resolve_left
+              (fun same => headRight same.symm)
+          obtain ⟨recursive, recursiveEq⟩ :=
+            induction leftTail rightTail
+          unfold fusionSearch?
+          cases pairEq : tail.findSome? fun candidate =>
+              fuseSameRegion source head candidate with
+          | some result => exact ⟨result, rfl⟩
+          | none => exact ⟨recursive, recursiveEq⟩
+
+private theorem firstFusion?_none_iff
+    (source : CheckedDiagram definitions) :
+    firstFusion? source = none ↔ FusionExhausted source := by
+  constructor
+  · intro exhausted left right ⟨eligible⟩
+    have leftMember := eligible.leftIdentity.mem_identityNodeIds
+    have rightMember := eligible.rightIdentity.mem_identityNodeIds
+    obtain ⟨result, found⟩ := fusionSearch?_some_of_eligible source
+      (identityNodeIds source.val) left right leftMember rightMember eligible
+    unfold firstFusion? at exhausted
+    rw [found] at exhausted
+    contradiction
+  · intro exhausted
+    unfold firstFusion?
+    cases found : fusionSearch? source (identityNodeIds source.val) with
+    | none => rfl
+    | some result =>
+        obtain ⟨left, _, right, _, ruleFound⟩ :=
+          fusionSearch?_provenance source
+            (identityNodeIds source.val) result found
+        unfold fuseSameRegion at ruleFound
+        cases eligibilityEq : fusionEligibility? source left right with
+        | none => simp [eligibilityEq] at ruleFound
+        | some eligible => exact False.elim (exhausted left right ⟨eligible⟩)
+
+/-- The executable one-step normalizer reports exhaustion exactly when no
+receipt for any of its three primitive classes exists. -/
+theorem normalizeOneIdentity_eq_none_iff
+    (source : CheckedDiagram definitions) :
+    normalizeOneIdentity source = none ↔ IdentityRewriteExhausted source := by
+  constructor
+  · intro normalized
+    unfold normalizeOneIdentity at normalized
+    cases dropEq : firstDrop? source with
+    | some result => simp [dropEq] at normalized
+    | none =>
+        have noDrop := (firstDrop?_none_iff source).mp dropEq
+        rw [dropEq] at normalized
+        cases collapseEq : firstCollapse? source with
+        | some result => simp [collapseEq] at normalized
+        | none =>
+            have noCollapse :=
+              (firstCollapse?_none_iff source).mp collapseEq
+            rw [collapseEq] at normalized
+            have noFusion := (firstFusion?_none_iff source).mp normalized
+            exact ⟨noDrop, noCollapse, noFusion⟩
+  · rintro ⟨noDrop, noCollapse, noFusion⟩
+    unfold normalizeOneIdentity
+    rw [(firstDrop?_none_iff source).mpr noDrop,
+      (firstCollapse?_none_iff source).mpr noCollapse,
+      (firstFusion?_none_iff source).mpr noFusion]
 
 /--
 Every successful eager step is exactly one public primitive rule result.

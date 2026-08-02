@@ -196,6 +196,138 @@ def fusionEligibility?
         exact none
   | _, _ => exact none
 
+/-- Every propositional Rule-1 receipt is rediscovered by the executable
+eligibility checker.  The returned receipt may differ only in proof fields. -/
+theorem dropEligibility?_complete
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : DropEligibility source node) :
+    ∃ found, dropEligibility? source node = some found := by
+  unfold dropEligibility?
+  split
+  next region sig arity nodeData =>
+    split
+    next _ => exact ⟨_, rfl⟩
+    next rejected => exact False.elim (rejected eligible.incident_lt_two)
+  next _ _ nodeData =>
+    exact False.elim (by
+      rw [eligible.identity.node_eq] at nodeData
+      contradiction)
+  next _ _ _ nodeData =>
+    exact False.elim (by
+      rw [eligible.identity.node_eq] at nodeData
+      contradiction)
+
+/-- Every propositional Rule-2 receipt is rediscovered by the executable
+eligibility checker. -/
+theorem collapseEligibility?_complete
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (eligible : CollapseEligibility source node) :
+    ∃ found, collapseEligibility? source node = some found := by
+  unfold collapseEligibility?
+  split
+  next region sig arity nodeData =>
+    split
+    next survivor second rest incidentEq =>
+      split
+      next _ => exact ⟨_, rfl⟩
+      next rejected =>
+        have sameRegion : region = eligible.identity.region := by
+          have sameNode := nodeData.symm.trans eligible.identity.node_eq
+          exact (CNode.identity.inj sameNode).1
+        subst region
+        have sameIncident := eligible.incident_eq
+        rw [incidentEq] at sameIncident
+        obtain ⟨rfl, rfl, rfl⟩ := List.cons.inj sameIncident
+        exact False.elim (rejected eligible.absorbedCoScoped)
+    next noPair =>
+      have sameRegion : region = eligible.identity.region := by
+        have sameNode := nodeData.symm.trans eligible.identity.node_eq
+        exact (CNode.identity.inj sameNode).1
+      subst region
+      exact False.elim
+        (noPair eligible.survivor eligible.second eligible.rest
+          eligible.incident_eq)
+  next _ _ nodeData =>
+    exact False.elim (by
+      rw [eligible.identity.node_eq] at nodeData
+      contradiction)
+  next _ _ _ nodeData =>
+    exact False.elim (by
+      rw [eligible.identity.node_eq] at nodeData
+      contradiction)
+
+/-- Erasing duplicates makes the union cardinality insensitive to the order
+of its two input lists. -/
+private theorem eraseDups_append_length_comm
+    (left right : List α) [BEq α] [LawfulBEq α] :
+    (left ++ right).eraseDups.length =
+      (right ++ left).eraseDups.length := by
+  apply List.Perm.length_eq
+  rw [List.perm_iff_count]
+  intro value
+  rw [(VisualProof.Data.Finite.eraseDups_nodup _).count,
+    (VisualProof.Data.Finite.eraseDups_nodup _).count]
+  simp only [List.mem_eraseDups, List.mem_append, or_comm]
+
+/-- Fusion eligibility is unordered even though the construction retains its
+left node. -/
+def FusionEligibility.symm
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {left right : source.val.NodeId}
+    (eligible : FusionEligibility source left right) :
+    FusionEligibility source right left where
+  leftIdentity := eligible.rightIdentity
+  rightIdentity := eligible.leftIdentity
+  distinct := eligible.distinct.symm
+  sameRegion := eligible.sameRegion.symm
+  shared := by
+    obtain ⟨wire, leftMember, rightMember⟩ := eligible.shared
+    exact ⟨wire, rightMember, leftMember⟩
+  union_at_least_two := by
+    rw [eraseDups_append_length_comm]
+    exact eligible.union_at_least_two
+
+/-- Every propositional Rule-3 receipt is rediscovered by the executable
+eligibility checker. -/
+theorem fusionEligibility?_complete
+    (source : CheckedDiagram definitions)
+    (left right : source.val.NodeId)
+    (eligible : FusionEligibility source left right) :
+    ∃ found, fusionEligibility? source left right = some found := by
+  unfold fusionEligibility?
+  split
+  next leftRegion leftSig leftArity rightRegion rightSig rightArity
+      leftData rightData =>
+    split
+    next _ =>
+      split
+      next _ =>
+        split
+        next _ =>
+          split
+          next _ => exact ⟨_, rfl⟩
+          next rejected =>
+            exact False.elim (rejected eligible.union_at_least_two)
+        next rejected => exact False.elim (rejected eligible.shared)
+      next rejected =>
+        exact False.elim (rejected (by
+          have leftParts := CNode.identity.inj
+            (leftData.symm.trans eligible.leftIdentity.node_eq)
+          have rightParts := CNode.identity.inj
+            (rightData.symm.trans eligible.rightIdentity.node_eq)
+          exact leftParts.1.trans
+            (eligible.sameRegion.trans rightParts.1.symm)))
+    next rejected => exact False.elim (rejected eligible.distinct)
+  next noPair =>
+    exact False.elim
+      (noPair eligible.leftIdentity.region eligible.leftIdentity.signature
+        eligible.leftIdentity.arity eligible.rightIdentity.region
+        eligible.rightIdentity.signature eligible.rightIdentity.arity
+        eligible.leftIdentity.node_eq eligible.rightIdentity.node_eq)
+
 def identityNodeIds
     (diagram : ConcreteDiagram definitionCount) :
     List diagram.NodeId :=
@@ -203,6 +335,17 @@ def identityNodeIds
     match diagram.nodes node with
     | .identity _ _ _ => true
     | _ => false
+
+/-- A stored identity-table receipt places its node in the executable
+identity enumeration. -/
+theorem IdentityNodeInfo.mem_identityNodeIds
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {node : source.val.NodeId}
+    (info : IdentityNodeInfo source node) :
+    node ∈ identityNodeIds source.val := by
+  simp only [identityNodeIds, List.mem_filter]
+  exact ⟨Data.Finite.mem_allFin node, by rw [info.node_eq]⟩
 
 def retainedNodes
     (diagram : ConcreteDiagram definitionCount)
