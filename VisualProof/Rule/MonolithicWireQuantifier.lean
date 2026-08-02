@@ -321,6 +321,17 @@ private theorem CheckedOccurrenceList.semanticEvidence_sites
         WireQuantifierSemantics.RelationSeverOccurrence.site,
         ContentOccurrence.toConcreteSite, induction]
 
+private noncomputable def CheckedOccurrenceList.get
+    (entries : CheckedOccurrenceList scope first contents)
+    (position : Fin contents.length) :
+    CheckedOccurrence scope first (contents.get position) := by
+  induction entries with
+  | nil => exact Fin.elim0 position
+  | cons checked tail induction =>
+      refine Fin.cases ?_ (fun rest => ?_) position
+      · simpa using checked
+      · simpa [List.get_eq_getElem] using induction rest
+
 private def CheckedOccurrences.semanticEvidence
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -1067,6 +1078,39 @@ private theorem relationSeverSiteFormals_mapM
     rw [result.siteFormalImages_get site ⟨index, rightBound⟩]
     simp [List.get_eq_getElem, image]
 
+/-- Every retained semantic step carries the batch-wide relation signature
+and ambient parameter vector fixed by its accepted trace. -/
+private theorem relationJoinTrace_step_exact
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    {steps : List
+      (ConcreteWireQuantifier.RelationJoinStep source dying content)}
+    {final : CheckedDiagram definitions}
+    {regionImage : source.val.RegionId → final.val.RegionId}
+    {nodeImage : source.val.NodeId → Option final.val.NodeId}
+    {wireImage : source.val.WireId → final.val.WireId}
+    {finalDying : final.val.WireId}
+    {finalScope : final.val.RegionId}
+    (trace : ConcreteWireQuantifier.RelationJoinSemanticTrace
+      source dying content parameters args steps final regionImage nodeImage
+        wireImage finalDying finalScope)
+    (step : ConcreteWireQuantifier.RelationJoinStep source dying content)
+    (member : step ∈ steps) :
+    step.relationArgs = args ∧ step.sourceParameters = parameters := by
+  induction trace with
+  | nil => simp at member
+  | snoc trace finalStep priorExact priorRegionExact priorNodeExact
+      priorWireExact priorDyingExact priorScopeExact relationArgsExact
+      sourceParametersExact induction =>
+      rcases List.mem_append.mp member with previous | final
+      · exact induction previous
+      · have stepExact : step = finalStep := by simpa using final
+        subst step
+        exact ⟨relationArgsExact, sourceParametersExact⟩
+
 /-- Positional alignment between one inverse join step and the original
 checked occurrence restored at that step. -/
 private structure InverseStepOccurrenceAlignment
@@ -1273,6 +1317,145 @@ private theorem InverseStepOccurrenceAlignment.identityRequestsEmpty
   simp only [List.get_eq_getElem] at mappedGetElem
   unfold ConcreteWireQuantifier.Internal.retainedWireIndex DenseList.index
   simp [mappedGetElem]
+
+private theorem RelationSeverConcreteReceipt.inverseSteps_sites_length
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    receipt.inverse.steps.length =
+      (receipt.extractions.semanticEvidence.map
+        WireQuantifierSemantics.RelationSeverOccurrence.site).length := by
+  calc
+    receipt.inverse.steps.length =
+        (receipt.inverse.steps.map
+          ConcreteWireQuantifier.RelationJoinStep.application).length := by
+      simp
+    _ = receipt.result.atoms.length :=
+      congrArg List.length receipt.inverseStepsExact
+    _ =
+        (receipt.extractions.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site).length := by
+      simp [ConcreteWireQuantifier.RelationSeverResult.atoms,
+        Data.Finite.allFin_eq_finRange]
+
+private theorem RelationSeverConcreteReceipt.sites_occurrences_length
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    (receipt.extractions.semanticEvidence.map
+        WireQuantifierSemantics.RelationSeverOccurrence.site).length =
+      occurrences.length := by
+  simpa using congrArg List.length
+    receipt.extractions.entries.semanticEvidence_sites
+
+/-- Every retained inverse step is paired, at the same accepted list
+position, with the checker-owned original occurrence it restores. -/
+private noncomputable def RelationSeverConcreteReceipt.inverseStepAlignment
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (position : Fin receipt.inverse.steps.length) :
+    let sites :=
+      receipt.extractions.semanticEvidence.map
+        WireQuantifierSemantics.RelationSeverOccurrence.site
+    let steps := receipt.inverse.steps
+    let stepsSitesLength : steps.length = sites.length :=
+      receipt.inverseSteps_sites_length
+    let sitesContentsLength : sites.length = occurrences.length :=
+      receipt.sites_occurrences_length
+    let site := Fin.cast stepsSitesLength position
+    let contentPosition :=
+      Fin.cast (stepsSitesLength.trans sitesContentsLength) position
+    InverseStepOccurrenceAlignment receipt.result (steps.get position)
+      (occurrences.get contentPosition) := by
+  dsimp only
+  let sites :=
+    receipt.extractions.semanticEvidence.map
+      WireQuantifierSemantics.RelationSeverOccurrence.site
+  let steps := receipt.inverse.steps
+  have sitesExact : sites = occurrences.map ContentOccurrence.toConcreteSite :=
+    receipt.extractions.entries.semanticEvidence_sites
+  have stepsSitesLength : steps.length = sites.length :=
+    receipt.inverseSteps_sites_length
+  have sitesContentsLength : sites.length = occurrences.length :=
+    receipt.sites_occurrences_length
+  let site : Fin sites.length := Fin.cast stepsSitesLength position
+  let contentPosition : Fin occurrences.length :=
+    Fin.cast (stepsSitesLength.trans sitesContentsLength) position
+  let step := steps.get position
+  let content := occurrences.get contentPosition
+  have siteExact : sites.get site = content.toConcreteSite := by
+    have atPosition := congrArg (fun values => values[site.val]?) sitesExact
+    change sites[site.val]? =
+      (occurrences.map ContentOccurrence.toConcreteSite)[site.val]?
+        at atPosition
+    have siteAt : sites[site.val]? = some (sites.get site) := by
+      simp [List.getElem?_eq_getElem, site.isLt]
+    have indexExact : site.val = contentPosition.val := rfl
+    have contentAt : occurrences[site.val]? = some content := by
+      rw [indexExact]
+      simp [content, List.getElem?_eq_getElem, contentPosition.isLt]
+    rw [siteAt, List.getElem?_map, contentAt] at atPosition
+    exact Option.some.inj (by simpa using atPosition)
+  have applicationExact : step.application = receipt.result.atom site := by
+    have applicationsAt := congrArg
+      (fun applications => applications[position.val]?)
+      receipt.inverseStepsExact
+    change
+      (steps.map
+        ConcreteWireQuantifier.RelationJoinStep.application)[position.val]? =
+        receipt.result.atoms[position.val]? at applicationsAt
+    have stepAt :
+        (steps.map
+          ConcreteWireQuantifier.RelationJoinStep.application)[position.val]? =
+          some step.application := by
+      simp [step, steps, List.getElem?_eq_getElem, position.isLt]
+    have positionLtSites : position.val < sites.length := by
+      rw [← stepsSitesLength]
+      simpa [steps] using position.isLt
+    have siteAt :
+        (Data.Finite.allFin sites.length)[position.val]? = some site := by
+      rw [Data.Finite.allFin_eq_finRange]
+      have atPosition :
+          (List.finRange sites.length)[position.val]? =
+            some ⟨position.val, positionLtSites⟩ := by
+        simp [positionLtSites]
+      rw [atPosition]
+      congr 2
+    rw [stepAt] at applicationsAt
+    change
+      some step.application =
+        ((Data.Finite.allFin sites.length).map
+          receipt.result.atom)[position.val]? at applicationsAt
+    rw [List.getElem?_map, siteAt] at applicationsAt
+    exact Option.some.inj applicationsAt
+  have stepExact := relationJoinTrace_step_exact
+    receipt.inverse.semantic_trace step (List.get_mem steps position)
+  have siteArgumentsExact :
+      (sites.get site).formals.map
+          (fun wire => (source.val.wires wire).sig) =
+        receipt.inverse.args := by
+    apply Sig.rel.inj
+    calc
+      .rel ((sites.get site).formals.map
+          (fun wire => (source.val.wires wire).sig)) =
+          (receipt.result.checked.val.wires
+            receipt.result.relationWire).sig := by
+        rw [receipt.result.site_formal_signatures site,
+          receipt.result.relationWire_signature]
+      _ = .rel receipt.inverse.args := receipt.inverse.relation_signature
+  have arityExact :
+      (sites.get site).formals.length = step.relationArgs.length := by
+    calc
+      (sites.get site).formals.length =
+          ((sites.get site).formals.map
+            (fun wire => (source.val.wires wire).sig)).length := by simp
+      _ = receipt.inverse.args.length :=
+        congrArg List.length siteArgumentsExact
+      _ = step.relationArgs.length :=
+        congrArg List.length stepExact.1.symm
+  exact inverseStepOccurrenceAlignmentOfChecked receipt.result
+    receipt.extractions.first content
+    (receipt.extractions.entries.get contentPosition)
+    receipt.parameters receipt.parametersAccepted step site siteExact
+      applicationExact arityExact stepExact.2
 
 /-- Snoc carrier step: transport the existing reconstructed prefix through
 atom deletion and splice, then allocate the newly restored occurrence in the
