@@ -1,4 +1,5 @@
 import VisualProof.Rule.MonolithicWireQuantifier
+import VisualProof.Rule.MonolithicWireQuantifierRawOriginAtlasApplied
 import VisualProof.Diagram.Concrete.Examples
 
 namespace VisualProof
