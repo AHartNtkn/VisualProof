@@ -948,6 +948,49 @@ private theorem denseIndex_injective
   rw [DenseList.get_index, DenseList.get_index] at mapped
   exact mapped
 
+private def PortDataCorresponds
+    (left : CNode leftRegionCount definitionCount)
+    (right : CNode rightRegionCount definitionCount)
+    (leftPort rightPort : CPort) : Prop :=
+  match left, right with
+  | .identity _ leftSig leftArity, .identity _ rightSig rightArity =>
+      leftSig = rightSig ∧ leftArity = rightArity ∧
+        ∃ leftIndex rightIndex,
+          leftPort = .identity leftIndex ∧ rightPort = .identity rightIndex
+  | _, _ => rightPort = leftPort
+
+private def requiredPortsForNode
+    (node : CNode regionCount definitionCount) : List CPort :=
+  match node with
+  | .atom _ args => CPort.head :: (List.range args.length).map CPort.arg
+  | .ref _ _ args => (List.range args.length).map CPort.arg
+  | .identity _ _ arity => (List.range arity).map CPort.identity
+
+@[simp] private theorem requiredPortsForNode_relocate
+    (node : CNode regionCount definitionCount)
+    (region : Fin targetRegionCount) :
+    requiredPortsForNode (node.relocate region) = requiredPortsForNode node := by
+  cases node <;> rfl
+
+private theorem portDataCorresponds_refl_relocate
+    (diagram : ConcreteDiagram definitionCount)
+    (node : diagram.NodeId)
+    (region : Fin targetRegionCount)
+    (port : CPort)
+    (required : port ∈ diagram.requiredPorts node) :
+    PortDataCorresponds (diagram.nodes node)
+      ((diagram.nodes node).relocate region) port port := by
+  cases data : diagram.nodes node with
+  | atom sourceRegion args => simp [PortDataCorresponds, CNode.relocate, data]
+  | ref sourceRegion definition args =>
+      simp [PortDataCorresponds, CNode.relocate, data]
+  | identity sourceRegion sig arity =>
+      have identityRequired :
+          port ∈ (List.range arity).map CPort.identity := by
+        simpa [ConcreteDiagram.requiredPorts, data] using required
+      obtain ⟨index, member, rfl⟩ := List.mem_map.mp identityRequired
+      exact ⟨rfl, rfl, index, index, rfl, rfl⟩
+
 private structure BatchReconstructionState
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
@@ -1009,6 +1052,21 @@ private structure BatchReconstructionState
     { node : source.val.NodeId //
         BatchCoveredNode sites restored node } →
       Data.Finite.FiniteEquiv CPort CPort
+  portImageCorresponds :
+    ∀ (node : { node : source.val.NodeId //
+          BatchCoveredNode sites restored node })
+      (port : CPort)
+      (required : port ∈ source.val.requiredPorts node.1),
+      PortDataCorresponds (source.val.nodes node.1)
+        (current.val.nodes (nodeImage node))
+        port (portImage node port)
+  portImageRequired :
+    ∀ (node : { node : source.val.NodeId //
+          BatchCoveredNode sites restored node })
+      (port : CPort),
+      portImage node port ∈
+          requiredPortsForNode (current.val.nodes (nodeImage node)) ↔
+        port ∈ requiredPortsForNode (source.val.nodes node.1)
   wireImage :
     { wire : source.val.WireId //
         BatchCoveredWire sites restored wire } →
@@ -1419,6 +1477,21 @@ private def batchReconstructionNil
         using node.2)
     exact result.nodeImage_data node.1 nodeRetained
   portImage := fun _ => Data.Finite.FiniteEquiv.refl CPort
+  portImageCorresponds := by
+    intro node port required
+    have nodeRetained := (result.retainedNode_iff node.1).mpr (by
+      simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+        using node.2)
+    rw [result.nodeImage_data node.1 nodeRetained]
+    exact portDataCorresponds_refl_relocate
+      source.val node.1 _ port required
+  portImageRequired := by
+    intro node port
+    have nodeRetained := (result.retainedNode_iff node.1).mpr (by
+      simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+        using node.2)
+    rw [result.nodeImage_data node.1 nodeRetained]
+    simp
   wireImage := fun wire =>
     result.wireImage wire.1 (by
       have retained :
@@ -2458,7 +2531,7 @@ private noncomputable def batchReconstructionSnoc
           have sourceRegionExact := congrArg CNode.region sourceData
           simp only [CNode.region_relocate] at sourceRegionExact
           have fragmentData := step.checkedFragmentNode_data fresh.choose
-          rw [dif_neg old]
+          simp only [dif_neg old]
           let allocatedRegion :
               { region : source.val.RegionId //
                 BatchCoveredRegion sites (restored ++ [content]) region } →
@@ -2592,6 +2665,112 @@ private noncomputable def batchReconstructionSnoc
         else
           have fresh := newlyCoveredNode content node.1 node.2 old
           (content.occurrence.portEquivForNode fresh.choose).symm
+      portImageCorresponds := by
+        intro node port required
+        by_cases old : BatchCoveredNode sites restored node.1
+        · have different :
+              state.nodeImage ⟨node.1, old⟩ ≠ step.priorApplication := by
+            intro same
+            exact state.representedNodesAvoidPending ⟨node.1, old⟩
+              (by simpa [same] using currentApplication)
+          have transported := step.checkedPriorNode_data
+            (state.nodeImage ⟨node.1, old⟩) different
+          have priorData := state.nodeTableExact ⟨node.1, old⟩
+          rw [priorData] at transported
+          have priorCorresponds := state.portImageCorresponds
+            ⟨node.1, old⟩ port required
+          rw [dif_pos old]
+          cases sourceData : source.val.nodes node.1 <;>
+            simp_all [PortDataCorresponds, CNode.relocate]
+        · let fresh := newlyCoveredNode content node.1 node.2 old
+          simp only [dif_neg old]
+          have sourceData := content.occurrence.node_data fresh.choose
+          rw [fresh.choose_spec] at sourceData
+          have fragmentData := step.checkedFragmentNode_data fresh.choose
+          change PortDataCorresponds (source.val.nodes node.1)
+            (step.checked.val.nodes
+              (step.checkedFragmentNode fresh.choose)) port
+            ((content.occurrence.portEquivForNode fresh.choose).symm port)
+          cases patternData : pattern.val.diagram.nodes fresh.choose with
+          | atom region args =>
+              have portExact := content.occurrence.portEquivForNode_atom
+                fresh.choose region args patternData
+              rw [portExact]
+              rw [sourceData, fragmentData, patternData]
+              exact rfl
+          | ref region definition args =>
+              have portExact := content.occurrence.portEquivForNode_ref
+                fresh.choose region definition args patternData
+              rw [portExact]
+              rw [sourceData, fragmentData, patternData]
+              exact rfl
+          | identity region sig arity =>
+              have sourceNodeData : source.val.nodes node.1 =
+                  .identity (content.occurrence.regionMap region) sig arity := by
+                simpa [patternData, CNode.relocate] using sourceData
+              have requiredIdentity :
+                  port ∈ (List.range arity).map CPort.identity := by
+                simpa [ConcreteDiagram.requiredPorts, sourceNodeData] using
+                  required
+              obtain ⟨index, indexMember, portExact⟩ :=
+                List.mem_map.mp requiredIdentity
+              have indexLt : index < arity := List.mem_range.mp indexMember
+              subst port
+              rw [content.occurrence.portEquivForNode_identity fresh.choose
+                region sig arity patternData]
+              rw [sourceNodeData, fragmentData, patternData]
+              refine ⟨rfl, rfl, index,
+                ((content.occurrence.identityPortEquiv fresh.choose region sig
+                  arity patternData).symm ⟨index, indexLt⟩).1, rfl, ?_⟩
+              simp [Occurrence.identityCPortEquiv, indexLt]
+      portImageRequired := by
+        intro node port
+        by_cases old : BatchCoveredNode sites restored node.1
+        · have different :
+              state.nodeImage ⟨node.1, old⟩ ≠ step.priorApplication := by
+            intro same
+            exact state.representedNodesAvoidPending ⟨node.1, old⟩
+              (by simpa [same] using currentApplication)
+          have transported := step.checkedPriorNode_data
+            (state.nodeImage ⟨node.1, old⟩) different
+          have priorData := state.nodeTableExact ⟨node.1, old⟩
+          have priorRequired := state.portImageRequired ⟨node.1, old⟩ port
+          simp only [dif_pos old]
+          rw [priorData] at transported
+          rw [priorData] at priorRequired
+          rw [transported]
+          simpa using priorRequired
+        · let fresh := newlyCoveredNode content node.1 node.2 old
+          simp only [dif_neg old]
+          have sourceData := content.occurrence.node_data fresh.choose
+          rw [fresh.choose_spec] at sourceData
+          have fragmentData := step.checkedFragmentNode_data fresh.choose
+          cases patternData : pattern.val.diagram.nodes fresh.choose with
+          | atom region args =>
+              rw [content.occurrence.portEquivForNode_atom fresh.choose
+                region args patternData]
+              rw [sourceData, fragmentData, patternData]
+              rfl
+          | ref region definition args =>
+              rw [content.occurrence.portEquivForNode_ref fresh.choose
+                region definition args patternData]
+              rw [sourceData, fragmentData, patternData]
+              rfl
+          | identity region sig arity =>
+              rw [content.occurrence.portEquivForNode_identity fresh.choose
+                region sig arity patternData]
+              rw [sourceData, fragmentData, patternData]
+              cases port with
+              | head => simp [requiredPortsForNode, CNode.relocate, CNode.region,
+                  Occurrence.identityCPortEquiv]
+              | arg index => simp [requiredPortsForNode, CNode.relocate, CNode.region,
+                  Occurrence.identityCPortEquiv]
+              | identity index =>
+                  by_cases indexLt : index < arity
+                  · simp [requiredPortsForNode, CNode.relocate, CNode.region,
+                      Occurrence.identityCPortEquiv, indexLt]
+                  · simp [requiredPortsForNode, CNode.relocate, CNode.region,
+                      Occurrence.identityCPortEquiv, indexLt]
       wireImage := fun wire =>
         if old : BatchCoveredWire sites restored wire.1 then
           step.checkedPriorWire (state.wireImage ⟨wire.1, old⟩)
@@ -3597,6 +3776,21 @@ private noncomputable def
       rw [receipt.extractions.entries.semanticEvidence_sites]
       exact receipt.extractions.entries.wireCoverage wire⟩
 
+private noncomputable def
+    RelationSeverConcreteReceipt.completePortImage
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (node : source.val.NodeId) :
+    Data.Finite.FiniteEquiv CPort CPort :=
+  receipt.fullReconstructionState.state.portImage
+    ⟨node, by
+      change BatchCoveredNode
+        (receipt.extractions.entries.semanticEvidence.map
+          WireQuantifierSemantics.RelationSeverOccurrence.site)
+        occurrences node
+      rw [receipt.extractions.entries.semanticEvidence_sites]
+      exact receipt.extractions.entries.nodeCoverage node⟩
+
 private theorem RelationSeverConcreteReceipt.completeRegionImage_injective
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target) :
@@ -3841,6 +4035,42 @@ private theorem
   rw [receipt.inverse.plainBoundWireImage_scope _
     (receipt.completeWireImage_ne_boundDying wire)]
   rw [receipt.completeWireImage_scope]
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainEndpoint_mem
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (incident : endpoint ∈ (source.val.wires wire).endpoints) :
+    ({ node := receipt.completePlainNodeImage endpoint.node
+       port := receipt.completePortImage endpoint.node endpoint.port } :
+        CEndpoint receipt.inverse.plainFinal.val.nodeCount) ∈
+      (receipt.inverse.plainFinal.val.wires
+        (receipt.completePlainWireImage wire)).endpoints := by
+  have boundIncident :=
+    receipt.fullReconstructionState.state.wireEndpointForward
+      ⟨wire, by
+        change BatchCoveredWire
+          (receipt.extractions.entries.semanticEvidence.map
+            WireQuantifierSemantics.RelationSeverOccurrence.site)
+          occurrences wire
+        rw [receipt.extractions.entries.semanticEvidence_sites]
+        exact receipt.extractions.entries.wireCoverage wire⟩
+      endpoint incident (by
+        change BatchCoveredNode
+          (receipt.extractions.entries.semanticEvidence.map
+            WireQuantifierSemantics.RelationSeverOccurrence.site)
+          occurrences endpoint.node
+        rw [receipt.extractions.entries.semanticEvidence_sites]
+        exact receipt.extractions.entries.nodeCoverage endpoint.node)
+  have deleted := receipt.inverse.plainBoundWireImage_endpoint_mem
+    (receipt.completeWireImage wire)
+    (receipt.completeWireImage_ne_boundDying wire)
+    { node := receipt.completeNodeImage endpoint.node
+      port := receipt.completePortImage endpoint.node endpoint.port }
+    boundIncident
+  exact deleted
 
 private theorem
     RelationSeverConcreteReceipt.inverseSteps_identityRequestsEmpty

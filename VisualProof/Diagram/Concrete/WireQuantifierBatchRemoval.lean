@@ -590,6 +590,38 @@ def batchWireTable
     endpoints := data.endpoints.filterMap
       (batchEndpoint? source removedNodes) }
 
+/-- A retained endpoint remains incident to the exact retained dense wire. -/
+theorem batchWireTable_endpoint_mem
+    (plan : BatchRemovalPlan source removedRegions removedNodes removedWires)
+    (wire : source.val.WireId)
+    (wireSurvives : wire ∈ retainedWires source removedWires)
+    (endpoint : CEndpoint source.val.nodeCount)
+    (nodeSurvives : endpoint.node ∈ retainedNodes source removedNodes)
+    (incident : endpoint ∈ (source.val.wires wire).endpoints) :
+    ({ node := retainedNodeIndex source removedNodes endpoint.node nodeSurvives
+       port := endpoint.port } :
+        CEndpoint (retainedNodes source removedNodes).length) ∈
+      (batchWireTable plan
+        (retainedWireIndex source removedWires wire wireSurvives)).endpoints := by
+  unfold batchWireTable
+  have sourceExact :
+      sourceRetainedWire source removedWires
+          (retainedWireIndex source removedWires wire wireSurvives) = wire :=
+    DenseList.get_index _ _ _
+  change
+    ({ node := retainedNodeIndex source removedNodes endpoint.node nodeSurvives
+       port := endpoint.port } :
+        CEndpoint (retainedNodes source removedNodes).length) ∈
+      (source.val.wires
+        (sourceRetainedWire source removedWires
+          (retainedWireIndex source removedWires wire wireSurvives))).endpoints.filterMap
+            (batchEndpoint? source removedNodes)
+  rw [sourceExact]
+  apply List.mem_filterMap.mpr
+  refine ⟨endpoint, incident, ?_⟩
+  unfold batchEndpoint?
+  rw [dif_pos nodeSurvives]
+
 @[simp] theorem batchWireTable_signature
     {source : CheckedDiagram definitions}
     {removedRegions : List source.val.RegionId}

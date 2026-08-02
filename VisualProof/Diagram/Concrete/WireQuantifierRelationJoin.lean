@@ -2380,6 +2380,44 @@ theorem plainBoundWireImage_scope
     (by simp [Internal.retainedRegions, ConcreteDiagram.regionsList,
       Data.Finite.mem_allFin]) sourceAt
 
+/-- Final exhausted-wire deletion preserves every endpoint of each surviving
+bound wire, transporting only the dense node carrier. -/
+theorem plainBoundWireImage_endpoint_mem
+    (result : RelationJoinResult source wire content parameters)
+    (boundWire : result.boundFinal.val.WireId)
+    (survives : boundWire ≠ result.boundDying)
+    (endpoint : CEndpoint result.boundFinal.val.nodeCount)
+    (incident : endpoint ∈
+      (result.boundFinal.val.wires boundWire).endpoints) :
+    ({ node := result.plainBoundNodeImage endpoint.node
+       port := endpoint.port } : CEndpoint result.plainFinal.val.nodeCount) ∈
+      (result.plainFinal.val.wires
+        (result.plainBoundWireImage boundWire survives)).endpoints := by
+  have wireMember : boundWire ∈
+      Internal.retainedWires result.boundFinal [result.boundDying] := by
+    simp [Internal.retainedWires, ConcreteDiagram.wiresList,
+      Data.Finite.mem_allFin, survives]
+  have nodeMember : endpoint.node ∈
+      Internal.retainedNodes result.boundFinal [] := by
+    simp [Internal.retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.mem_allFin]
+  have raw := Internal.batchWireTable_endpoint_mem
+    result.finalRemoval.plan boundWire wireMember endpoint nodeMember incident
+  have checked :
+      Internal.checkedEndpoint result.finalRemoval.generated
+          { node := Internal.retainedNodeIndex result.boundFinal []
+              endpoint.node nodeMember
+            port := endpoint.port } ∈
+        (result.plainFinal.val.wires
+          (Internal.checkedWire result.finalRemoval.generated
+            (Internal.retainedWireIndex result.boundFinal
+              [result.boundDying] boundWire wireMember))).endpoints := by
+    rw [Internal.checkedWire_endpoints_transport]
+    exact List.mem_map.mpr ⟨_, raw, rfl⟩
+  simpa [plainBoundWireImage, plainBoundNodeImage,
+    result.finalRemoval.allWireImageExact,
+    result.finalRemoval.allNodeImageExact] using checked
+
 /-- Ordered occurrence-removal/splice steps retained by the accepted join. -/
 def steps
     (result : RelationJoinResult source wire content parameters) :
