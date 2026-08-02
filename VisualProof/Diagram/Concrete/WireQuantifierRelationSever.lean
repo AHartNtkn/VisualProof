@@ -641,6 +641,46 @@ theorem wireImage_endpoints
   unfold Internal.sourceRetainedWire Internal.retainedWireIndex
   rw [DenseList.get_index, List.map_append]
 
+/-- Every ordered site formal survives the batch abstraction. -/
+theorem siteFormal_survives
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length)
+    (position : Fin (sites.get site).formals.length) :
+    (sites.get site).formals.get position ∈
+      Internal.retainedWires source (relationRemovedWires sites) :=
+  result.plan.formalRetained site position
+
+/-- The generated atom argument is incident to the exact retained image of
+its ordered site formal. -/
+theorem atomArgument_incident
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length)
+    (position : Fin (sites.get site).formals.length) :
+    ({ node := result.atom site, port := .arg position.val } :
+        CEndpoint result.checked.val.nodeCount) ∈
+      (result.checked.val.wires
+        (result.wireImage ((sites.get site).formals.get position)
+          (result.siteFormal_survives site position))).endpoints := by
+  rw [result.wireImage_endpoints]
+  apply List.mem_append_right
+  unfold formalEndpoints
+  rw [List.mem_map]
+  let raw :
+      CEndpoint
+        ((Internal.retainedNodes source (relationRemovedNodes sites)).length +
+          sites.length) :=
+    { node := relationSeverAtom sites (relationRemovedNodes sites) site
+      port := .arg position.val }
+  refine ⟨raw, ?_, ?_⟩
+  · unfold relationSeverFormalEndpoints
+    apply List.mem_flatMap.mpr
+    refine ⟨site, Data.Finite.mem_allFin site, ?_⟩
+    change raw ∈ _
+    apply List.mem_filterMap.mpr
+    refine ⟨position.val, by simp [position.isLt], ?_⟩
+    simp [List.getElem?_eq_getElem, position.isLt, raw]
+  · rfl
+
 end RelationSeverResult
 
 end ConcreteWireQuantifier

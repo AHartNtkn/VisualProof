@@ -7,12 +7,6 @@ namespace VisualProof
 
 namespace ConcreteWireQuantifier
 
-private structure RelationJoinApplication
-    (source : CheckedDiagram definitions) where
-  node : source.val.NodeId
-  region : source.val.RegionId
-  arguments : List source.val.WireId
-
 def relationArgumentWires?
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId) :
@@ -25,6 +19,15 @@ def relationArgumentWires?
         pure (wire :: tail)
       else
         none
+
+private structure RelationJoinApplication
+    (source : CheckedDiagram definitions)
+    (args : List Sig) where
+  node : source.val.NodeId
+  region : source.val.RegionId
+  arguments : List source.val.WireId
+  argumentsAccepted :
+    relationArgumentWires? source node args 0 = some arguments
 
 private def relationEndpointIsApplied
     (source : CheckedDiagram definitions)
@@ -47,12 +50,18 @@ private def relationJoinApplicationAt?
     (source : CheckedDiagram definitions)
     (args : List Sig)
     (node : source.val.NodeId) :
-    Option (RelationJoinApplication source) := do
+    Option (RelationJoinApplication source args) :=
   match source.val.nodes node with
   | .atom region nodeArgs =>
       if nodeArgs = args then
-        let arguments ← relationArgumentWires? source node args 0
-        pure { node := node, region := region, arguments := arguments }
+        match accepted : relationArgumentWires? source node args 0 with
+        | none => none
+        | some arguments =>
+            some
+              { node := node
+                region := region
+                arguments := arguments
+                argumentsAccepted := accepted }
       else
         none
   | _ => none
@@ -61,7 +70,7 @@ private def relationJoinApplications?
     (source : CheckedDiagram definitions)
     (wire : source.val.WireId)
     (args : List Sig) :
-    Option (List (RelationJoinApplication source)) :=
+    Option (List (RelationJoinApplication source args)) :=
   (relationApplicationNodes source wire).mapM
     (relationJoinApplicationAt? source args)
 
@@ -69,33 +78,25 @@ private theorem relationJoinApplicationAt?_node
     (source : CheckedDiagram definitions)
     (args : List Sig)
     (node : source.val.NodeId)
-    (application : RelationJoinApplication source)
+    (application : RelationJoinApplication source args)
     (accepted :
       relationJoinApplicationAt? source args node = some application) :
     application.node = node := by
   unfold relationJoinApplicationAt? at accepted
-  split at accepted <;> simp_all
-  rename_i region nodeArgs nodeExact
-  rcases accepted with ⟨_, accepted⟩
-  change
-    (relationArgumentWires? source node args 0).bind
-        (fun arguments =>
-          some
-            { node := node
-              region := region
-              arguments := arguments }) =
-      some application at accepted
-  rw [Option.bind_eq_some_iff] at accepted
-  obtain ⟨arguments, _, accepted⟩ := accepted
-  simp only [Option.some.injEq] at accepted
-  subst application
-  rfl
+  split at accepted
+  · split at accepted
+    · split at accepted
+      · contradiction
+      · cases accepted
+        rfl
+    · contradiction
+  · contradiction
 
 private theorem relationJoinApplications?_nodes
     (source : CheckedDiagram definitions)
     (args : List Sig)
     (nodes : List source.val.NodeId)
-    (applications : List (RelationJoinApplication source))
+    (applications : List (RelationJoinApplication source args))
     (accepted :
       nodes.mapM (relationJoinApplicationAt? source args) =
         some applications) :
@@ -147,7 +148,7 @@ private structure RelationJoinPlan
   endpointsApplied :
     (source.val.wires wire).endpoints.all
         (relationEndpointIsApplied source args) = true
-  applications : List (RelationJoinApplication source)
+  applications : List (RelationJoinApplication source args)
   applicationsExact :
     relationJoinApplications? source wire args = some applications
   boundaryExact :
@@ -222,7 +223,11 @@ structure RelationJoinStep
   private mk ::
   application : source.val.NodeId
   sourceRegion : source.val.RegionId
+  relationArgs : List Sig
   sourceArguments : List source.val.WireId
+  sourceArgumentsAccepted :
+    relationArgumentWires? source application relationArgs 0 =
+      some sourceArguments
   sourceParameters : List source.val.WireId
   sourceAttachments : List source.val.WireId
   sourceAttachmentsExact :
@@ -232,7 +237,6 @@ structure RelationJoinStep
   sourceAttachmentsSurvive :
     ∀ position : Fin sourceAttachments.length,
       sourceAttachments.get position ≠ dying
-  relationArgs : List Sig
   prior : CheckedDiagram definitions
   priorApplication : prior.val.NodeId
   priorNodeImage : source.val.NodeId → Option prior.val.NodeId
@@ -1028,7 +1032,7 @@ private structure RelationJoinStepResult
     {parameters : List source.val.WireId}
     {args : List Sig}
     (state : RelationJoinState source dying content parameters args)
-    (application : RelationJoinApplication source) : Type where
+    (application : RelationJoinApplication source args) : Type where
   next : RelationJoinState source dying content parameters args
   processedExact :
     next.processed = state.processed ++ [application.node]
@@ -1087,7 +1091,7 @@ private def relationJoinInitialState
 
 private def relationJoinAttachments
     {source : CheckedDiagram definitions}
-    (application : RelationJoinApplication source)
+    (application : RelationJoinApplication source args)
     (parameters : List source.val.WireId) :
     List source.val.WireId :=
   application.arguments ++ parameters
@@ -1099,7 +1103,7 @@ private def spliceRelationApplication
     (parameters : List source.val.WireId)
     (args : List Sig)
     (state : RelationJoinState source wire content parameters args)
-    (application : RelationJoinApplication source) :
+    (application : RelationJoinApplication source args) :
     Except Error (RelationJoinStepResult state application) := by
   match priorApplicationAccepted :
       state.nodeImage application.node with
@@ -1255,6 +1259,8 @@ private def spliceRelationApplication
                                         sourceRegion := application.region
                                         sourceArguments :=
                                           application.arguments
+                                        sourceArgumentsAccepted :=
+                                          application.argumentsAccepted
                                         sourceParameters := parameters
                                         sourceAttachments := sources
                                         sourceAttachmentsExact := rfl
@@ -1423,7 +1429,7 @@ private def spliceRelationApplications
     (parameters : List source.val.WireId) :
     (args : List Sig) →
     RelationJoinState source wire content parameters args →
-      List (RelationJoinApplication source) →
+      List (RelationJoinApplication source args) →
         Except Error
           (RelationJoinState source wire content parameters args)
   | _, state, [] => .ok state
@@ -1441,7 +1447,7 @@ private theorem spliceRelationApplications_processed
     (parameters : List source.val.WireId)
     (args : List Sig)
     (state final : RelationJoinState source wire content parameters args)
-    (applications : List (RelationJoinApplication source))
+    (applications : List (RelationJoinApplication source args))
     (accepted :
       spliceRelationApplications source wire content parameters args
           state applications =
