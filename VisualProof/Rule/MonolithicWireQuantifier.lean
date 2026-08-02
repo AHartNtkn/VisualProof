@@ -1918,6 +1918,33 @@ private noncomputable def
       receipt.inverse.boundFinal receipt.inverse.boundNodeImage :=
   Classical.choice receipt.fullReconstructionState_exists
 
+private theorem
+    RelationSeverConcreteReceipt.fullReconstruction_pendingOriginsEmpty
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    receipt.fullReconstructionState.state.pendingOrigins = [] := by
+  rw [receipt.fullReconstructionState.pendingOriginsExact]
+  have stepsAtomsLength :
+      receipt.inverse.steps.length = receipt.result.atoms.length := by
+    calc
+      receipt.inverse.steps.length =
+          (receipt.inverse.steps.map
+            ConcreteWireQuantifier.RelationJoinStep.application).length := by
+        simp
+      _ = receipt.result.atoms.length :=
+        congrArg List.length receipt.inverseStepsExact
+  rw [stepsAtomsLength]
+  simp
+
+private theorem
+    RelationSeverConcreteReceipt.fullReconstruction_pendingApplicationsEmpty
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    receipt.fullReconstructionState.state.pendingApplications = [] := by
+  rw [receipt.fullReconstructionState.state.pendingApplicationsExact,
+    receipt.fullReconstruction_pendingOriginsEmpty]
+  rfl
+
 /-- Reindex the completed fold by the occurrence-owned concrete site list,
 the authoritative index used by the coverage theorems. -/
 private noncomputable def
