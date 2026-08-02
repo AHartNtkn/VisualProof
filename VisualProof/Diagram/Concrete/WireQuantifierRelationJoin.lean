@@ -499,6 +499,15 @@ def checkedFragmentNode
     (congrArg ConcreteDiagram.nodeCount step.generated).symm
     (step.attachment.fragmentNode node)
 
+/-- Allocate one attachment-generated request identity node in the checked
+splice target. -/
+def checkedIdentityNode
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length) :
+    step.checked.val.NodeId :=
+  Internal.checkedNode step.generated
+    (step.attachment.identityNode request)
+
 /-- Allocate one fragment wire in the checked splice target. -/
 def checkedFragmentWire
     (step : RelationJoinStep source dying content)
@@ -522,6 +531,17 @@ def checkedFragmentEndpoint
     (endpoint : CEndpoint content.val.diagram.nodeCount) :
     CEndpoint step.checked.val.nodeCount :=
   ⟨step.checkedFragmentNode endpoint.node, endpoint.port⟩
+
+/-- Every checked splice wire has exactly the attachment-owned ordered
+endpoint table, transported only across the checked carrier cast. -/
+theorem checkedAttachmentWire_endpoints
+    (step : RelationJoinStep source dying content)
+    (wire : step.attachment.diagram.WireId) :
+    (step.checked.val.wires
+      (Internal.checkedWire step.generated wire)).endpoints =
+        (step.attachment.diagram.wires wire).endpoints.map
+          (Internal.checkedEndpoint step.generated) := by
+  exact Internal.checkedWire_endpoints_transport step.generated wire
 
 /-- A surviving prior incidence remains incident to the transported prior
 wire after deletion and splice. -/
@@ -678,6 +698,22 @@ theorem checkedFragmentNode_data
   cases data : content.val.diagram.nodes node <;>
     simp [ConcreteSpliceAttachment.renameFragmentNode, CNode.relocate,
       CNode.region, Internal.checkedNodeData, Internal.checkedRegion]
+
+/-- A generated request node has exactly the attachment request's identity
+payload at the checked splice site. -/
+theorem checkedIdentityNode_data
+    (step : RelationJoinStep source dying content)
+    (request : Fin step.attachment.identityRequests.length) :
+    step.checked.val.nodes (step.checkedIdentityNode request) =
+      .identity
+        (Internal.checkedRegion step.generated
+          (step.attachment.hostRegion step.site))
+        (step.attachment.identityRequests.get request).sig
+        (step.attachment.identityRequests.get request).attachments.length := by
+  unfold checkedIdentityNode
+  rw [Internal.checkedNode_data_transport,
+    step.attachment.diagram_node_identityNode]
+  rfl
 
 /-- A prior wire preserves its signature through application deletion and
 splice. -/
@@ -2417,6 +2453,71 @@ theorem plainBoundWireImage_endpoint_mem
   simpa [plainBoundWireImage, plainBoundNodeImage,
     result.finalRemoval.allWireImageExact,
     result.finalRemoval.allNodeImageExact] using checked
+
+/-- Final exhausted-wire deletion preserves the complete ordered endpoint
+table of each surviving wire, transporting only its dense node carrier. -/
+theorem plainBoundWireImage_endpoints
+    (result : RelationJoinResult source wire content parameters)
+    (boundWire : result.boundFinal.val.WireId)
+    (survives : boundWire ≠ result.boundDying) :
+    (result.plainFinal.val.wires
+      (result.plainBoundWireImage boundWire survives)).endpoints =
+        (result.boundFinal.val.wires boundWire).endpoints.map fun endpoint =>
+          ({ node := result.plainBoundNodeImage endpoint.node
+             port := endpoint.port } :
+            CEndpoint result.plainFinal.val.nodeCount) := by
+  unfold plainBoundWireImage plainBoundNodeImage
+  rw [result.finalRemoval.allWireImageExact]
+  change (result.plainFinal.val.wires
+      (Internal.checkedWire result.finalRemoval.generated _)).endpoints = _
+  rw [Internal.checkedWire_endpoints_transport]
+  let wireMember : boundWire ∈
+      Internal.retainedWires result.boundFinal [result.boundDying] := by
+    simp [Internal.retainedWires, ConcreteDiagram.wiresList,
+      Data.Finite.mem_allFin, survives]
+  let target := Internal.retainedWireIndex result.boundFinal
+    [result.boundDying] boundWire wireMember
+  change (Internal.batchWireTable result.finalRemoval.plan target).endpoints.map
+      (Internal.checkedEndpoint result.finalRemoval.generated) = _
+  unfold Internal.batchWireTable
+  have sourceAt :
+      Internal.sourceRetainedWire result.boundFinal [result.boundDying]
+        target = boundWire :=
+    DenseList.get_index _ _ _
+  change Internal.sourceRetainedWire result.finalState.checked
+      [result.finalState.wireImage wire] target = boundWire at sourceAt
+  simp only [sourceAt]
+  change ((result.boundFinal.val.wires boundWire).endpoints.filterMap
+      (Internal.batchEndpoint? result.boundFinal [])).map
+        (Internal.checkedEndpoint result.finalRemoval.generated) = _
+  have endpointExact
+      (endpoint : CEndpoint result.boundFinal.val.nodeCount) :
+      Internal.batchEndpoint? result.boundFinal [] endpoint =
+        some
+          ({ node := Internal.retainedNodeIndex result.boundFinal []
+                endpoint.node (by
+                  simp [Internal.retainedNodes,
+                    ConcreteDiagram.nodesList,
+                    Data.Finite.mem_allFin])
+             port := endpoint.port } :
+            CEndpoint (Internal.retainedNodes result.boundFinal []).length) := by
+    unfold Internal.batchEndpoint?
+    rw [dif_pos]
+  have nodeImageExact (node : result.boundFinal.val.NodeId) :
+      result.finalRemoval.allNodeImage node =
+        Internal.checkedNode result.finalRemoval.generated
+          (Internal.retainedNodeIndex result.boundFinal [] node (by
+            simp [Internal.retainedNodes,
+              ConcreteDiagram.nodesList,
+              Data.Finite.mem_allFin])) :=
+    result.finalRemoval.allNodeImageExact node
+  induction (result.boundFinal.val.wires boundWire).endpoints with
+  | nil => rfl
+  | cons endpoint endpoints ih =>
+      have ih' := ih
+      simp only [nodeImageExact] at ih'
+      simp [endpointExact, nodeImageExact]
+      exact congrArg (List.cons _) ih'
 
 /-- Ordered occurrence-removal/splice steps retained by the accepted join. -/
 def steps
