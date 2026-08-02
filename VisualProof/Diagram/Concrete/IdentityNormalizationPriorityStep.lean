@@ -63,10 +63,10 @@ this closure. -/
 inductive ReductionStar {definitions : List (List Sig)} :
     CheckedDiagram definitions → CheckedDiagram definitions → Type
   | refl (source : CheckedDiagram definitions) : ReductionStar source source
-  | tail
-      {source middle : CheckedDiagram definitions}
-      (path : ReductionStar source middle)
-      (step : PriorityStep middle) : ReductionStar source step.target
+  | head
+      {source target : CheckedDiagram definitions}
+      (step : PriorityStep source)
+      (suffix : ReductionStar step.target target) : ReductionStar source target
 
 namespace ReductionStar
 
@@ -76,9 +76,9 @@ def trans
     {source middle target : CheckedDiagram definitions}
     (first : ReductionStar source middle)
     (second : ReductionStar middle target) : ReductionStar source target :=
-  match second with
-  | .refl _ => first
-  | .tail path step => .tail (trans first path) step
+  match first with
+  | .refl _ => second
+  | .head step suffix => .head step (trans suffix second)
 
 /-- Node count never increases along a priority reduction. -/
 theorem nodeCount_le
@@ -88,8 +88,8 @@ theorem nodeCount_le
     target.val.nodeCount ≤ source.val.nodeCount := by
   induction reduction with
   | refl => exact Nat.le_refl _
-  | tail path step induction =>
-      exact Nat.le_trans (Nat.le_of_lt step.nodeCount_lt) induction
+  | head step suffix induction =>
+      exact Nat.le_trans induction (Nat.le_of_lt step.nodeCount_lt)
 
 /-- Result of transporting a complete reduction: a paired reduction from the
 isomorphic source and a construction-owned isomorphism between endpoints. -/
@@ -114,13 +114,13 @@ noncomputable def transport
       { mappedTarget := right
         reduction := .refl right
         targetIso := iso }
-  | .tail path step =>
-      let mappedPath := transport iso path
-      let mappedStep := PriorityStep.transport mappedPath.targetIso step
-      { mappedTarget := mappedStep.target
-        reduction := .tail mappedPath.reduction mappedStep
-        targetIso := PriorityStep.transport_target_iso
-          mappedPath.targetIso step }
+  | .head step suffix =>
+      let mappedStep := PriorityStep.transport iso step
+      let mappedStepIso := PriorityStep.transport_target_iso iso step
+      let mappedSuffix := transport mappedStepIso suffix
+      { mappedTarget := mappedSuffix.mappedTarget
+        reduction := .head mappedStep mappedSuffix.reduction
+        targetIso := mappedSuffix.targetIso }
 
 end ReductionStar
 
