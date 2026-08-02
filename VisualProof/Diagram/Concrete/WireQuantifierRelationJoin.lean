@@ -761,6 +761,74 @@ inductive RelationJoinSemanticTrace
         (step.checkedWireImage dying)
         (step.checkedRegionImage (source.val.wires dying).scope)
 
+/-- Exact node-domain characterization of the construction trace: a source
+node lacks a final representative precisely when it is one of the consumed
+relation applications, in the trace's ordered step list. -/
+theorem RelationJoinSemanticTrace.nodeImage_eq_none_iff
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {args : List Sig}
+    {steps : List (RelationJoinStep source dying content)}
+    {final : CheckedDiagram definitions}
+    {finalRegionImage : source.val.RegionId → final.val.RegionId}
+    {finalNodeImage : source.val.NodeId → Option final.val.NodeId}
+    {finalWireImage : source.val.WireId → final.val.WireId}
+    {finalDying : final.val.WireId}
+    {finalScope : final.val.RegionId}
+    (trace :
+      RelationJoinSemanticTrace source dying content parameters args steps
+        final finalRegionImage finalNodeImage finalWireImage finalDying
+          finalScope)
+    (sourceNode : source.val.NodeId) :
+    finalNodeImage sourceNode = none ↔
+      sourceNode ∈ steps.map RelationJoinStep.application := by
+  induction trace with
+  | nil => simp
+  | snoc trace step priorExact priorRegionImageExact priorNodeImageExact
+      priorWireImageExact priorDyingExact priorScopeExact relationArgsExact
+      sourceParametersExact induction =>
+      subst priorExact
+      cases eq_of_heq priorRegionImageExact
+      have nodeImageExact := eq_of_heq priorNodeImageExact
+      cases eq_of_heq priorWireImageExact
+      cases eq_of_heq priorDyingExact
+      cases eq_of_heq priorScopeExact
+      cases relationArgsExact
+      cases sourceParametersExact
+      rw [List.map_append]
+      simp only [List.map_singleton, List.mem_append, List.mem_singleton]
+      cases priorExact : step.priorNodeImage sourceNode with
+      | none =>
+          have checkedExact : step.checkedNodeImage sourceNode = none := by
+            simp [step.checkedNodeImageExact, step.baseNodeImageExact,
+              priorExact]
+          rw [checkedExact]
+          simp only [true_iff]
+          exact Or.inl (induction.mp (nodeImageExact ▸ priorExact))
+      | some priorNode =>
+          by_cases applicationExact : sourceNode = step.application
+          · subst sourceNode
+            simp [step.checkedNodeImage_application]
+          · have priorDifferent :
+                priorNode ≠ step.priorApplication := by
+              intro same
+              subst priorNode
+              exact applicationExact
+                (step.priorNodeImage_injective priorExact
+                  step.priorApplicationImage)
+            have checkedExact :=
+              step.checkedNodeImage_of_prior priorExact priorDifferent
+            rw [checkedExact]
+            simp only [Option.some_ne_none, false_iff]
+            intro present
+            rcases present with member | same
+            · have noneCurrent := induction.mpr member
+              rw [← nodeImageExact, priorExact] at noneCurrent
+              contradiction
+            · exact applicationExact same
+
 private theorem checkedWire_injective
     {definitions : List (List Sig)}
     {checked : CheckedDiagram definitions}
@@ -1445,6 +1513,15 @@ theorem boundNodeImage_injective
     (rightExact : result.boundNodeImage right = some checkedNode) :
     left = right :=
   result.finalState.nodeImage_injective leftExact rightExact
+
+theorem boundNodeImage_eq_none_iff
+    (result : RelationJoinResult source wire content parameters)
+    (sourceNode : source.val.NodeId) :
+    result.boundNodeImage sourceNode = none ↔
+      sourceNode ∈ result.applications := by
+  change result.finalState.nodeImage sourceNode = none ↔ _
+  rw [result.finalState.semanticTrace.nodeImage_eq_none_iff]
+  rw [result.finalState.traceExact, result.applicationsExact]
 
 def boundWireImage
     (result : RelationJoinResult source wire content parameters) :
