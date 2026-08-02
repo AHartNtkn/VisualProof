@@ -3,7 +3,7 @@ import VisualProof.Rule.WirePrimitive.ArgumentsDropTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsExtendTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsDuplicateTransport
-import VisualProof.Rule.MonolithicWireQuantifier
+import VisualProof.Rule.MonolithicWireQuantifierRaw
 import VisualProof.Diagram.Concrete.IsomorphismSearch
 
 namespace VisualProof
@@ -22,7 +22,7 @@ inductive CompilerError
   | argumentRejected (error : Arguments.WireArgumentError)
   | leafRejected (error : Leaves.WireLeafError)
   | partitionRejected (error : Partition.WirePartitionError)
-  | vacuousRejected (error : StructuralCore.StructuralError)
+  | vacuousRejected (error : StructuralCore.VacuousError)
   | redundancyMismatch
   deriving Repr, DecidableEq
 
@@ -99,7 +99,7 @@ applied-site, ordered-boundary, and non-aliasing evidence.
 def initialIntrinsicResidual
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
-    (monolithic : AppliedMonolithicRelationJoin source input) :
+    (monolithic : AcceptedMonolithicRelationJoin source input) :
     IntrinsicCompilerResidual source
       (ConcreteElaboration.openBoundaryClassSigs input.content.val) :=
   IntrinsicCompilerResidual.initial monolithic.contentCompilation
@@ -1519,7 +1519,7 @@ private def compileRawRelationJoinResidual
 structure CompiledRelationJoin
     {source : CheckedDiagram definitions}
     (input : MonolithicRelationJoinInput source) where
-  monolithic : AppliedMonolithicRelationJoin source input
+  monolithic : AcceptedMonolithicRelationJoin source input
   arguments : List Sig
   sourceSignature : (source.val.wires input.wire).sig = .rel arguments
   boundary : JoinBoundaryReceipt input arguments
@@ -1610,7 +1610,7 @@ end CompiledRelationSever
 private def compileAppliedRelationJoin
     (source : CheckedDiagram definitions)
     (input : MonolithicRelationJoinInput source)
-    (monolithic : AppliedMonolithicRelationJoin source input) :
+    (monolithic : AcceptedMonolithicRelationJoin source input) :
     Except CompilerError (CompiledRelationJoin input) := do
   let arguments := monolithic.arguments
   let sourceSignature := monolithic.sourceSignature
@@ -1644,7 +1644,7 @@ def compileRelationJoin
     (input : MonolithicRelationJoinInput source) :
     Except CompilerError (CompiledRelationJoin input) := do
   let monolithic ←
-    (applyMonolithicRelationJoin source input).mapError
+    (applyAcceptedMonolithicRelationJoin source input).mapError
       .monolithicJoinRejected
   compileAppliedRelationJoin source input monolithic
 

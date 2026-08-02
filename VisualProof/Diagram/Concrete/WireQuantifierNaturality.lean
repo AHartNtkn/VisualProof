@@ -1,5 +1,5 @@
 import VisualProof.Diagram.Concrete.WirePartition
-import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturality
 
 namespace VisualProof
 

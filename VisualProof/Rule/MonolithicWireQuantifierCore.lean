@@ -1,10 +1,8 @@
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
+import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverSemantics
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRaw
-import VisualProof.Diagram.Concrete.WireQuantifierRelationJoin
-import VisualProof.Diagram.Concrete.WireQuantifierRelationSeverInsertionSemantics
-import VisualProof.Rule.Structural
-import VisualProof.Rule.WirePrimitive.Site
+import VisualProof.Rule.Orientation
 
 namespace VisualProof
 
@@ -1424,46 +1422,6 @@ structure CheckedRelationJoin
       (source.val.wires wire).scope
   applications : List source.val.NodeId
   contentCompilation : CheckedOpenCompilation content
-  parameterScopes :
-    ∀ position : Fin parameters.length,
-      source.val.Encloses
-        (source.val.wires (parameters.get position)).scope
-        (source.val.wires wire).scope
-
-structure RelationJoinReceipt
-    (source : CheckedDiagram definitions)
-    (orientation : Orientation)
-    (wire : source.val.WireId)
-    (content : CheckedOpenDiagram definitions)
-    (parameters : List source.val.WireId)
-    (target : CheckedDiagram definitions)
-    (applications : List source.val.NodeId) where
-  arguments : List Sig
-  sourceSignature : (source.val.wires wire).sig = .rel arguments
-  boundaryLength :
-    content.val.boundary.length = arguments.length + parameters.length
-  formalSignatures :
-    (content.val.boundary.take arguments.length).map
-        (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
-      arguments
-  parameterSignatures :
-    (content.val.boundary.drop arguments.length).map
-        (fun boundaryWire => (content.val.diagram.wires boundaryWire).sig) =
-      parameters.map (fun parameter => (source.val.wires parameter).sig)
-  liveNotParameter : wire ∉ parameters
-  polarity :
-    CheckedJoinPolarity source orientation
-      (source.val.wires wire).scope
-  contentCompilation : CheckedOpenCompilation content
-  result :
-    ConcreteWireQuantifier.NormalizedRelationJoinResult
-      source wire content parameters
-  accepted :
-    ConcreteWireQuantifier.joinRelationNormalized
-        source wire content parameters =
-      .ok result
-  targetExact : target = result.checked
-  applicationsExact : applications = result.raw.applications
   parameterScopes :
     ∀ position : Fin parameters.length,
       source.val.Encloses

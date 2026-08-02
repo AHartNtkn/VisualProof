@@ -1,6 +1,6 @@
 import VisualProof.Diagram.Concrete.WirePartitionIsomorphism
 import VisualProof.Diagram.Concrete.WirePartitionSemantics
-import VisualProof.Rule.Structural
+import VisualProof.Rule.Orientation
 
 namespace VisualProof
 

@@ -1,6 +1,6 @@
 import VisualProof.Diagram.Concrete.WirePrimitive.ArgumentsCylindrificationRecursiveComplete
 import VisualProof.Rule.Tag
-import VisualProof.Rule.Structural
+import VisualProof.Rule.Orientation
 
 namespace VisualProof
 

@@ -75,6 +75,14 @@ theorem trace_complete
 
 end NormalizedRelationJoinResult
 
+/-- Apply only the independently owned normalization pass to an already
+accepted raw relation-join result. -/
+def normalizeRelationJoinResult
+    (raw : RelationJoinResult source wire content parameters) :
+    NormalizedRelationJoinResult source wire content parameters :=
+  let normalization := ConcreteDiagram.normalizeIdentities raw.plainFinal
+  ⟨raw, normalization, rfl⟩
+
 /-- Run the raw relation join, then perform the separately owned eager
 identity-normalization pass used by the public interactive operation. -/
 def joinRelationNormalized
@@ -86,10 +94,7 @@ def joinRelationNormalized
       (NormalizedRelationJoinResult source wire content parameters) := by
   match accepted : joinRelation source wire content parameters with
   | .error error => exact .error error
-  | .ok raw =>
-      let normalization :=
-        ConcreteDiagram.normalizeIdentities raw.plainFinal
-      exact .ok ⟨raw, normalization, rfl⟩
+  | .ok raw => exact .ok (normalizeRelationJoinResult raw)
 
 end ConcreteWireQuantifier
 

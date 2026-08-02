@@ -4,7 +4,7 @@ import VisualProof.Diagram.Concrete.WirePrimitive.ContentOrigin
 import VisualProof.Diagram.Concrete.WirePrimitive.ContentShapeSemantics
 import VisualProof.Rule.WirePrimitive.ContentWitnesses
 import VisualProof.Rule.Tag
-import VisualProof.Rule.Structural
+import VisualProof.Rule.Orientation
 
 namespace VisualProof
 

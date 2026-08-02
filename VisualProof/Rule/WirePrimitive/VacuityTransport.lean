@@ -1,4 +1,4 @@
-import VisualProof.Rule.Structural
+import VisualProof.Rule.Vacuous
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierExhaustedWireRemovalCorrespondence
 
