@@ -284,14 +284,14 @@ private noncomputable def collapseWireEquiv
         (transportCollapseEligibility iso eligible).rest))
     (retainedWires_mem_iff iso node eligible)
 
-private def collapseSourceNode
+def collapseSourceNode
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (target : Fin (retainedNodes source.val [removed]).length) :
     source.val.NodeId :=
   (retainedNodes source.val [removed]).get target
 
-@[simp] private theorem collapseCandidate_node_source
+@[simp] theorem collapseCandidate_node_source
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -301,7 +301,7 @@ private def collapseSourceNode
   change source.val.nodes ((retainedNodes source.val [node]).get target) = _
   rfl
 
-private def collapseSourceWire
+def collapseSourceWire
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -353,7 +353,7 @@ private theorem collapseSourceWire_map
         (transportCollapseEligibility iso eligible).rest))
     (retainedWires_mem_iff iso node eligible) targetWire
 
-private def collapseSourceEndpoint
+def collapseSourceEndpoint
     (source : CheckedDiagram definitions)
     (removed : source.val.NodeId)
     (endpoint : CEndpoint (retainedNodes source.val [removed]).length) :
@@ -455,7 +455,7 @@ private theorem collapseJoined_mem_iff
       simp [collapseSourceEndpoint,
         collapseSourceNode_ne source node endpoint.node]⟩⟩
 
-private theorem collapseCandidate_endpoint_mem_iff
+theorem collapseCandidate_endpoint_mem_iff
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)

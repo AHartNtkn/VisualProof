@@ -19,7 +19,7 @@ private abbrev Target
     (eligible : CollapseEligibility source node) :=
   collapseCandidate source node eligible
 
-private def representative
+def representative
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -63,7 +63,7 @@ private theorem representative_mem_retained
       intro absorbed
       exact notIncident (absorbedSubset wire absorbed)
 
-private def targetWire
+def targetWire
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -75,7 +75,7 @@ private def targetWire
       (Data.Finite.indexOf?_isSome_iff.mpr
         (representative_mem_retained source node eligible wire))
 
-private def sourceWire
+def sourceWire
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -139,7 +139,7 @@ private theorem sourceWire_mem_retained
       retainedWires source.val (eligible.second :: eligible.rest) :=
   List.get_mem _ _
 
-private theorem targetWire_sourceWire
+theorem targetWire_sourceWire
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -242,7 +242,7 @@ private theorem targetWire_scope_representative
         (representative source node eligible wire)).scope
   rw [retained_get_targetWire]
 
-private theorem targetWire_eq_survivor_of_incident
+theorem targetWire_eq_survivor_of_incident
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -254,7 +254,7 @@ private theorem targetWire_eq_survivor_of_incident
   unfold targetWire representative
   simp only [if_pos incident, if_pos (survivor_incident source node eligible)]
 
-private def targetNode
+def targetNode
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -286,7 +286,7 @@ private theorem sourceNode_ne
   simpa [sourceNode, retainedNodes] using
     (List.mem_filter.mp member).2
 
-@[simp] private theorem retained_get_targetNode
+@[simp] theorem retained_get_targetNode
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -337,7 +337,7 @@ private theorem sourceNode_ne
       source.val.nodes (sourceNode source node eligible target) := by
   rfl
 
-private def targetEndpoint
+def targetEndpoint
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
@@ -372,7 +372,7 @@ private def targetEndpoint
       simp [reindexEndpoint?, targetEndpoint, targetNode, found]
       rfl
 
-private theorem targetEndpoint_incident
+theorem targetEndpoint_incident
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
