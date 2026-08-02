@@ -39,7 +39,6 @@ inductive MonolithicWireQuantifierError
   | concreteRejected (error : ConcreteWireQuantifier.Error)
   | parameterTransportFailed
   | inverseRelationJoinRejected
-  | inverseReconstructionRejected
   deriving Repr, DecidableEq
 
 /--
@@ -1373,7 +1372,6 @@ private structure RelationSeverConcreteReceipt
   inverseStepsExact :
     inverse.steps.map ConcreteWireQuantifier.RelationJoinStep.application =
       result.atoms
-  inverseIso : ConcreteIso inverse.plainFinal.val source.val
 
 /-- Nil case of the batch reconstruction fold: only sever-retained carriers
 have representatives before the first occurrence is restored. -/
@@ -4261,6 +4259,103 @@ private noncomputable def
         receipt.completePlainWireImage_injective
         receipt.constructionWireCount_eq⟩
 
+private noncomputable def
+    RelationSeverConcreteReceipt.constructionEndpointEquiv
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    Data.Finite.FiniteEquiv
+      (CEndpoint source.val.nodeCount)
+      (CEndpoint receipt.inverse.plainFinal.val.nodeCount) where
+  toFun := fun endpoint =>
+    { node := receipt.constructionNodeEquiv endpoint.node
+      port := receipt.completePortImage endpoint.node endpoint.port }
+  invFun := fun candidate =>
+    let node := receipt.constructionNodeEquiv.symm candidate.node
+    { node := node
+      port := (receipt.completePortImage node).symm candidate.port }
+  left_inv := by
+    intro endpoint
+    cases endpoint
+    simp
+  right_inv := by
+    intro candidate
+    cases candidate with
+    | mk node port =>
+        let sourceNode := receipt.constructionNodeEquiv.symm node
+        have nodeExact :
+            receipt.constructionNodeEquiv sourceNode = node :=
+          receipt.constructionNodeEquiv.right_inv node
+        have portExact :
+            receipt.completePortImage sourceNode
+                ((receipt.completePortImage sourceNode).symm port) = port :=
+          (receipt.completePortImage sourceNode).right_inv port
+        rw [CEndpoint.mk.injEq]
+        exact ⟨nodeExact, portExact⟩
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainPortImage_required
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (node : source.val.NodeId) (port : CPort) :
+    receipt.completePortImage node port ∈
+        receipt.inverse.plainFinal.val.requiredPorts
+          (receipt.constructionNodeEquiv node) ↔
+      port ∈ source.val.requiredPorts node := by
+  have preserved :=
+    receipt.fullReconstructionState.state.portImageRequired
+      ⟨node, by
+        change BatchCoveredNode
+          (receipt.extractions.entries.semanticEvidence.map
+            WireQuantifierSemantics.RelationSeverOccurrence.site)
+          occurrences node
+        rw [receipt.extractions.entries.semanticEvidence_sites]
+        exact receipt.extractions.entries.nodeCoverage node⟩ port
+  have boundData := receipt.completeNodeImage_data node
+  change receipt.completePortImage node port ∈
+      requiredPortsForNode
+        (receipt.inverse.boundFinal.val.nodes
+          (receipt.completeNodeImage node)) ↔
+    port ∈ requiredPortsForNode (source.val.nodes node) at preserved
+  rw [boundData] at preserved
+  simp only [requiredPortsForNode_relocate] at preserved
+  simp only [ConcreteDiagram.requiredPorts]
+  rw [receipt.constructionNodeTable node]
+  rw [CNode.rename_eq_relocate]
+  cases sourceData : source.val.nodes node <;>
+    simpa [ConcreteDiagram.requiredPorts, requiredPortsForNode,
+      sourceData, CNode.relocate] using preserved
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainPortCorresponds
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (node : source.val.NodeId) (port : CPort)
+    (required : port ∈ source.val.requiredPorts node) :
+    PortCorresponds source.val receipt.inverse.plainFinal.val
+      receipt.constructionNodeEquiv
+      { node := node, port := port }
+      { node := receipt.constructionNodeEquiv node
+        port := receipt.completePortImage node port } := by
+  refine ⟨rfl, ?_⟩
+  have corresponds :=
+    receipt.fullReconstructionState.state.portImageCorresponds
+      ⟨node, by
+        change BatchCoveredNode
+          (receipt.extractions.entries.semanticEvidence.map
+            WireQuantifierSemantics.RelationSeverOccurrence.site)
+          occurrences node
+        rw [receipt.extractions.entries.semanticEvidence_sites]
+        exact receipt.extractions.entries.nodeCoverage node⟩ port required
+  change PortDataCorresponds (source.val.nodes node)
+      (receipt.inverse.boundFinal.val.nodes
+        (receipt.completeNodeImage node)) port
+      (receipt.completePortImage node port) at corresponds
+  rw [receipt.completeNodeImage_data] at corresponds
+  rw [receipt.constructionNodeTable node]
+  cases sourceData : source.val.nodes node <;>
+    simp_all [PortDataCorresponds, sourceData, CNode.rename_eq_relocate,
+      CNode.relocate]
+
 private theorem RelationSeverConcreteReceipt.constructionWireSignature
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
       occurrences target)
@@ -4283,6 +4378,103 @@ private theorem RelationSeverConcreteReceipt.constructionWireScope
     (receipt.completePlainWireImage wire)).scope =
       receipt.completePlainRegionImage (source.val.wires wire).scope
   exact receipt.completePlainWireImage_scope wire
+
+private theorem
+    RelationSeverConcreteReceipt.constructionEndpoint_mem_iff
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId)
+    (endpoint : CEndpoint source.val.nodeCount) :
+    receipt.constructionEndpointEquiv endpoint ∈
+        (receipt.inverse.plainFinal.val.wires
+          (receipt.constructionWireEquiv wire)).endpoints ↔
+      endpoint ∈ (source.val.wires wire).endpoints := by
+  constructor
+  · intro mappedIncident
+    have mappedRequired := ConcreteDiagram.incident_port_required _
+      receipt.inverse.plainFinal.val receipt.inverse.plainFinal.property
+      (receipt.constructionWireEquiv wire)
+      (receipt.constructionEndpointEquiv endpoint) mappedIncident
+    have sourceRequired :
+        endpoint.port ∈ source.val.requiredPorts endpoint.node :=
+      (receipt.completePlainPortImage_required endpoint.node endpoint.port).mp
+        (by
+          simpa [RelationSeverConcreteReceipt.constructionEndpointEquiv]
+            using mappedRequired)
+    obtain ⟨owner, ownerEquation⟩ :=
+      ConcreteDiagram.endpointOwner?_complete _ source.val source.property
+        endpoint.node endpoint.port sourceRequired
+    have ownerIncident := ConcreteDiagram.endpointOwner?_incident
+      source.val endpoint owner ownerEquation
+    have mappedOwnerIncident := receipt.completePlainEndpoint_mem
+      owner endpoint ownerIncident
+    have mappedOwnerEquation := ConcreteDiagram.endpointOwner?_eq_of_incident _
+      receipt.inverse.plainFinal.val receipt.inverse.plainFinal.property
+      (receipt.constructionEndpointEquiv endpoint).node
+      (receipt.constructionEndpointEquiv endpoint).port mappedRequired
+      (receipt.constructionWireEquiv owner) (by
+        simpa [RelationSeverConcreteReceipt.constructionEndpointEquiv]
+          using mappedOwnerIncident)
+    have mappedWireEquation := ConcreteDiagram.endpointOwner?_eq_of_incident _
+      receipt.inverse.plainFinal.val receipt.inverse.plainFinal.property
+      (receipt.constructionEndpointEquiv endpoint).node
+      (receipt.constructionEndpointEquiv endpoint).port mappedRequired
+      (receipt.constructionWireEquiv wire) mappedIncident
+    have mappedWiresEqual :
+        receipt.constructionWireEquiv owner =
+          receipt.constructionWireEquiv wire :=
+      Option.some.inj
+        (mappedOwnerEquation.symm.trans mappedWireEquation)
+    have ownerExact : owner = wire :=
+      receipt.constructionWireEquiv.injective mappedWiresEqual
+    simpa [ownerExact] using ownerIncident
+  · intro incident
+    simpa [RelationSeverConcreteReceipt.constructionEndpointEquiv] using
+      receipt.completePlainEndpoint_mem wire endpoint incident
+
+private noncomputable def
+    RelationSeverConcreteReceipt.constructionEndpointFiber
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (wire : source.val.WireId) :
+    ConcreteIso.EndpointFiberEquiv receipt.constructionNodeEquiv
+      receipt.constructionWireEquiv wire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨receipt.constructionEndpointEquiv endpoint.1,
+          (receipt.constructionEndpoint_mem_iff wire endpoint.1).mpr endpoint.2⟩
+      invFun := fun candidate =>
+        let endpoint := receipt.constructionEndpointEquiv.symm candidate.1
+        ⟨endpoint,
+          (receipt.constructionEndpoint_mem_iff wire endpoint).mp (by
+            dsimp [endpoint]
+            rw [receipt.constructionEndpointEquiv.right_inv candidate.1]
+            exact candidate.2)⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact receipt.constructionEndpointEquiv.left_inv endpoint.1
+      right_inv := by
+        intro candidate
+        apply Subtype.ext
+        exact receipt.constructionEndpointEquiv.right_inv candidate.1 }
+  corresponds := by
+    intro endpoint
+    have required := ConcreteDiagram.incident_port_required _ source.val
+      source.property wire endpoint.1 endpoint.2
+    simpa [RelationSeverConcreteReceipt.constructionEndpointEquiv] using
+      receipt.completePlainPortCorresponds endpoint.1.node endpoint.1.port
+        required
+
+private noncomputable def RelationSeverConcreteReceipt.constructionIso
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target) :
+    ConcreteIso source.val receipt.inverse.plainFinal.val :=
+  ConcreteIso.ofEquivs receipt.constructionRegionEquiv
+    receipt.constructionNodeEquiv receipt.constructionWireEquiv
+    receipt.constructionRegionRoot receipt.constructionRegionTable
+    receipt.constructionNodeTable receipt.constructionWireSignature
+    receipt.constructionWireScope receipt.constructionEndpointFiber
 
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin
@@ -4805,62 +4997,55 @@ def applyMonolithicRelationSever
                   | .error _ =>
                       exact .error .inverseRelationJoinRejected
                   | .ok inverse =>
-                      match inverseIsoAccepted :
-                          ConcreteIsoSearch.findConcreteIso?
-                            inverse.plainFinal.val source.val with
-                      | none =>
-                          exact .error .inverseReconstructionRejected
-                      | some inverseIso =>
-                          exact .ok
-                            (AppliedMonolithicRelationSever.mk
-                              result.checked polarity
-                              { extractions := extractions
-                                result := result
-                                accepted := accepted
-                                targetExact := rfl
-                                parameters := parameters
-                                parametersAccepted := parametersAccepted
-                                inverseChecked := inverseChecked
-                                inverse := inverse
-                                inverseAccepted := inverseAccepted
-                                inverseStepsExact := by
-                                  calc
-                                    inverse.steps.map
-                                          ConcreteWireQuantifier.RelationJoinStep.application =
-                                        inverse.applications :=
-                                      inverse.steps_application_order
-                                    _ = result.atoms := by
-                                      rw [inverse.applications_storage_order]
-                                      exact
-                                        result.relationApplications_storage_order
-                                inverseIso := inverseIso }
-                              { orientation :=
-                                  oppositeOrientation input.orientation
-                                wire := result.relationWire
-                                content := input.pattern
-                                parameters := parameters }
-                              (AppliedMonolithicRelationJoin.mk
-                                inverse.checked inverse.applications
-                                { arguments := inverseChecked.arguments
-                                  sourceSignature :=
-                                    inverseChecked.sourceSignature
-                                  boundaryLength :=
-                                    inverseChecked.boundaryLength
-                                  formalSignatures :=
-                                    inverseChecked.formalSignatures
-                                  parameterSignatures :=
-                                    inverseChecked.parameterSignatures
-                                  liveNotParameter :=
-                                    inverseChecked.liveNotParameter
-                                  polarity := inverseChecked.polarity
-                                  contentCompilation :=
-                                    inverseChecked.contentCompilation
-                                  result := inverse
-                                  accepted := inverseAccepted
-                                  targetExact := rfl
-                                  applicationsExact := rfl
-                                  parameterScopes :=
-                                    inverseChecked.parameterScopes }))
+                      exact .ok
+                        (AppliedMonolithicRelationSever.mk
+                          result.checked polarity
+                          { extractions := extractions
+                            result := result
+                            accepted := accepted
+                            targetExact := rfl
+                            parameters := parameters
+                            parametersAccepted := parametersAccepted
+                            inverseChecked := inverseChecked
+                            inverse := inverse
+                            inverseAccepted := inverseAccepted
+                            inverseStepsExact := by
+                              calc
+                                inverse.steps.map
+                                      ConcreteWireQuantifier.RelationJoinStep.application =
+                                    inverse.applications :=
+                                  inverse.steps_application_order
+                                _ = result.atoms := by
+                                  rw [inverse.applications_storage_order]
+                                  exact
+                                    result.relationApplications_storage_order }
+                          { orientation :=
+                              oppositeOrientation input.orientation
+                            wire := result.relationWire
+                            content := input.pattern
+                            parameters := parameters }
+                          (AppliedMonolithicRelationJoin.mk
+                            inverse.checked inverse.applications
+                            { arguments := inverseChecked.arguments
+                              sourceSignature :=
+                                inverseChecked.sourceSignature
+                              boundaryLength :=
+                                inverseChecked.boundaryLength
+                              formalSignatures :=
+                                inverseChecked.formalSignatures
+                              parameterSignatures :=
+                                inverseChecked.parameterSignatures
+                              liveNotParameter :=
+                                inverseChecked.liveNotParameter
+                              polarity := inverseChecked.polarity
+                              contentCompilation :=
+                                inverseChecked.contentCompilation
+                              result := inverse
+                              accepted := inverseAccepted
+                              targetExact := rfl
+                              applicationsExact := rfl
+                              parameterScopes :=
+                                inverseChecked.parameterScopes }))
 
 /--
 Validate and apply one strongest join.  Relation joining consumes every
@@ -4900,8 +5085,8 @@ def applyMonolithicRelationJoin
 /--
 Relation-content abstraction is sound in the direction selected by the
 checker-owned sever polarity. The accepted receipt contains a checked inverse
-join and an independently checked reconstruction isomorphism; callers supply
-no semantic evidence.
+join and its construction-owned reconstruction isomorphism; callers supply no
+semantic evidence.
 -/
 theorem relation_sever_sound
     {source : CheckedDiagram definitions}
@@ -4926,7 +5111,7 @@ theorem relation_sever_sound
       checked.inverse
         checked.inverseChecked.contentCompilation.compilation
         checked.inverseChecked.polarity.compiled
-        checked.inverseChecked.parameterScopes checked.inverseIso
+        checked.inverseChecked.parameterScopes checked.constructionIso.symm
         model definitionEnv
   rw [checked.targetExact]
   cases orientation with
