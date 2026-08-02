@@ -190,7 +190,7 @@ theorem targetWire_sourceWire
   exact (Data.Finite.indexOf?_unique_of_nodup
     retainedNodup indexed stored).symm
 
-@[simp] private theorem sourceWire_targetWire
+@[simp] theorem sourceWire_targetWire
     (source : CheckedDiagram definitions)
     (node : source.val.NodeId)
     (eligible : CollapseEligibility source node)
