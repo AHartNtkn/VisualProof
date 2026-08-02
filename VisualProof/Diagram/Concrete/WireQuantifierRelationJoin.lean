@@ -403,6 +403,47 @@ def checkedFragmentWire
     (step.checkedPriorWire wire).val = wire.val := by
   rfl
 
+theorem checkedPriorNode_injective
+    (step : RelationJoinStep source dying content)
+    {left right : step.prior.val.NodeId}
+    (leftDifferent : left ≠ step.priorApplication)
+    (rightDifferent : right ≠ step.priorApplication)
+    (same :
+      step.checkedPriorNode left leftDifferent =
+        step.checkedPriorNode right rightDifferent) :
+    left = right := by
+  have leftRetained :
+      left ∈ ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        step.prior.val [step.priorApplication] := by
+    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.mem_allFin, leftDifferent]
+  have rightRetained :
+      right ∈ ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        step.prior.val [step.priorApplication] := by
+    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.mem_allFin, rightDifferent]
+  have indexed :
+      ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+          step.prior step.priorApplication left leftRetained =
+        ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+          step.prior step.priorApplication right rightRetained := by
+    apply Fin.ext
+    simpa [checkedPriorNode, Internal.checkedNode,
+      ConcreteSpliceAttachment.hostNode] using congrArg Fin.val same
+  change
+    DenseList.index
+        (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+          step.prior.val [step.priorApplication]) left leftRetained =
+      DenseList.index
+        (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+          step.prior.val [step.priorApplication]) right rightRetained at indexed
+  have values :=
+    congrArg
+      (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        step.prior.val [step.priorApplication]).get indexed
+  rw [DenseList.get_index, DenseList.get_index] at values
+  exact values
+
 theorem attachment_accepted
     (step : RelationJoinStep source dying content) :
     checkConcreteSpliceAttachment step.base step.site content
