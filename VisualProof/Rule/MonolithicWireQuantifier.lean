@@ -309,6 +309,18 @@ private def CheckedOccurrenceList.semanticEvidence
         extraction := checked.extraction
         formals := content.formals } :: tail.semanticEvidence
 
+private theorem CheckedOccurrenceList.semanticEvidence_sites
+    (entries : CheckedOccurrenceList scope first contents) :
+    entries.semanticEvidence.map
+        WireQuantifierSemantics.RelationSeverOccurrence.site =
+      contents.map ContentOccurrence.toConcreteSite := by
+  induction entries with
+  | nil => rfl
+  | cons checked tail induction =>
+      simp [CheckedOccurrenceList.semanticEvidence,
+        WireQuantifierSemantics.RelationSeverOccurrence.site,
+        ContentOccurrence.toConcreteSite, induction]
+
 private def CheckedOccurrences.semanticEvidence
     {source : CheckedDiagram definitions}
     {pattern : CheckedOpenDiagram definitions}
