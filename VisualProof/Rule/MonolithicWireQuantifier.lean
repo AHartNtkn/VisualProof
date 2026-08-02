@@ -778,6 +778,8 @@ private structure RelationSeverConcreteReceipt
       .ok result
   targetExact : target = result.checked
   parameters : List result.checked.val.WireId
+  parametersAccepted :
+    extractions.first.parameters.mapM result.wireImage? = some parameters
   inverseChecked :
     CheckedRelationJoin result.checked (oppositeOrientation orientation)
       result.relationWire pattern parameters
@@ -970,6 +972,65 @@ private theorem newlyCoveredWire
     · have candidateExact : candidate = content := by simpa using final
       subst candidate
       exact ⟨patternWire, internal, mapped⟩
+
+private theorem inverseStep_sourceArguments_exact
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {scope : source.val.RegionId}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    (result : ConcreteWireQuantifier.RelationSeverResult source scope sites)
+    {dying : result.checked.val.WireId}
+    (step : ConcreteWireQuantifier.RelationJoinStep
+      result.checked dying pattern)
+    (site : Fin sites.length)
+    (applicationExact : step.application = result.atom site)
+    (arityExact :
+      (sites.get site).formals.length = step.relationArgs.length) :
+    step.sourceArguments = result.siteFormalImages site := by
+  have sourceLength :=
+    ConcreteWireQuantifier.relationArgumentWires?_length result.checked
+      step.application step.relationArgs 0 step.sourceArguments
+        step.sourceArgumentsAccepted
+  apply List.ext_get
+  · calc
+      step.sourceArguments.length = step.relationArgs.length := sourceLength
+      _ = (sites.get site).formals.length := arityExact.symm
+      _ = (result.siteFormalImages site).length :=
+        (result.siteFormalImages_length site).symm
+  · intro index sourceBound targetBound
+    let argumentPosition : Fin step.relationArgs.length :=
+      ⟨index, by simpa [sourceLength] using sourceBound⟩
+    let formalPosition : Fin (sites.get site).formals.length :=
+      Fin.cast arityExact.symm argumentPosition
+    have sourceOwner :=
+      ConcreteWireQuantifier.relationArgumentWires?_owner result.checked
+        step.application step.relationArgs 0 step.sourceArguments
+          step.sourceArgumentsAccepted argumentPosition
+    have formalOwner :
+        result.checked.val.endpointOwner?
+            ⟨result.atom site, .arg formalPosition.val⟩ =
+          some
+            (result.wireImage
+              ((sites.get site).formals.get formalPosition)
+              (result.siteFormal_survives site formalPosition)) :=
+      have incident := result.atomArgument_incident site formalPosition
+      have required :=
+        ConcreteDiagram.incident_port_required definitions
+          result.checked.val result.checked.property _ _ incident
+      ConcreteDiagram.endpointOwner?_eq_of_incident definitions
+        result.checked.val result.checked.property _ _ required _ incident
+    have sourceOwnerAtAtom :
+        result.checked.val.endpointOwner?
+            ⟨result.atom site, .arg argumentPosition.val⟩ =
+          some
+            (step.sourceArguments.get
+              (Fin.cast sourceLength.symm argumentPosition)) := by
+      simpa only [applicationExact, Nat.zero_add] using sourceOwner
+    have ownerSame := Option.some.inj (sourceOwnerAtAtom.symm.trans (by
+      simpa [argumentPosition, formalPosition] using formalOwner))
+    rw [result.siteFormalImages_get site ⟨index, targetBound⟩]
+    simpa [argumentPosition, formalPosition, List.get_eq_getElem] using
+      ownerSame
 
 /-- Snoc carrier step: transport the existing reconstructed prefix through
 atom deletion and splice, then allocate the newly restored occurrence in the
@@ -1769,6 +1830,7 @@ def applyMonolithicRelationSever
                                 accepted := accepted
                                 targetExact := rfl
                                 parameters := parameters
+                                parametersAccepted := parametersAccepted
                                 inverseChecked := inverseChecked
                                 inverse := inverse
                                 inverseAccepted := inverseAccepted

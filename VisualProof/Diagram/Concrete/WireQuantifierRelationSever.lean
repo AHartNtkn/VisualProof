@@ -650,6 +650,34 @@ theorem siteFormal_survives
       Internal.retainedWires source (relationRemovedWires sites) :=
   result.plan.formalRetained site position
 
+/-- Ordered retained-wire images of one sever site's formal vector. -/
+def siteFormalImages
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    List result.checked.val.WireId :=
+  List.ofFn fun position : Fin (sites.get site).formals.length =>
+    result.wireImage ((sites.get site).formals.get position)
+      (result.siteFormal_survives site position)
+
+@[simp] theorem siteFormalImages_length
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length) :
+    (result.siteFormalImages site).length =
+      (sites.get site).formals.length := by
+  simp [siteFormalImages]
+
+@[simp] theorem siteFormalImages_get
+    (result : RelationSeverResult source scope sites)
+    (site : Fin sites.length)
+    (position : Fin (result.siteFormalImages site).length) :
+    (result.siteFormalImages site).get position =
+      result.wireImage
+        ((sites.get site).formals.get
+          (Fin.cast (result.siteFormalImages_length site) position))
+        (result.siteFormal_survives site
+          (Fin.cast (result.siteFormalImages_length site) position)) := by
+  simp [siteFormalImages]
+
 /-- The generated atom argument is incident to the exact retained image of
 its ordered site formal. -/
 theorem atomArgument_incident
