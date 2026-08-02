@@ -1502,6 +1502,27 @@ theorem plainFinal_wireCount_add_one
   simpa [Internal.batchRemovalCandidate, Internal.retainedWires,
     ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange] using countExact
 
+/-- Exact singleton-deletion position of every surviving post-splice wire. -/
+theorem plainBoundWireImage_val_dropFin
+    (result : RelationJoinResult source wire content parameters)
+    (boundWire : result.boundFinal.val.WireId)
+    (survives : boundWire ≠ result.boundDying) :
+    (result.plainBoundWireImage boundWire survives).val =
+      (dropFin
+        (Fin.cast result.plainFinal_wireCount_add_one.symm result.boundDying)
+        (Fin.cast result.plainFinal_wireCount_add_one.symm boundWire)
+        (by
+          intro same
+          apply survives
+          apply Fin.ext
+          simpa using congrArg Fin.val same)).val := by
+  unfold plainBoundWireImage
+  rw [result.finalRemoval.allWireImageExact]
+  simp only [Internal.checkedWire, Fin.val_cast]
+  unfold Internal.retainedWireIndex
+  exact retained_allFin_index_eq_dropFin_cast
+    result.plainFinal_wireCount_add_one result.boundDying boundWire survives
+
 /-- The accepted construction's sole exact region/node atlas authority. -/
 def constructionAtlas
     (result : RelationJoinResult source wire content parameters) :
