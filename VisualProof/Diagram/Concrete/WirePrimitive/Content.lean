@@ -82,6 +82,14 @@ theorem finCount_eq
       have lifted := congrArg equiv.toFun equality
       simpa only [equiv.right_inv] using lifted)
 
+theorem map_get_allFin (values : List α) :
+    (Data.Finite.allFin values.length).map values.get = values := by
+  rw [Data.Finite.allFin_eq_finRange]
+  unfold List.finRange
+  rw [List.map_ofFn]
+  simpa only [Function.comp_apply, List.get_eq_getElem] using
+    (List.ofFn_getElem (xs := values))
+
 theorem siteNodes_nodup
     {source : CheckedDiagram definitions}
     {wire : source.val.WireId}
@@ -151,6 +159,59 @@ def partitionEquiv
   right_inv := by
     intro value
     exact DenseList.get_index _ value (partitionOrder_complete selected value)
+
+/-- Dense left-summand position of one carrier not in the selected suffix. -/
+def retainedPosition
+    (selected : List (Fin count))
+    (value : Fin count)
+    (retained : value ∉ selected) :
+    Fin (partitionOrder selected).length := by
+  let index := DenseList.index
+    ((Data.Finite.allFin count).filter
+      (fun candidate => decide (candidate ∉ selected)))
+    value (List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin value, decide_eq_true retained⟩)
+  exact ⟨index.val, by
+    unfold partitionOrder
+    simp only [List.length_append]
+    omega⟩
+
+/-- Dense right-summand position of one selected carrier. -/
+def selectedPosition
+    (selected : List (Fin count))
+    (position : Fin selected.length) :
+    Fin (partitionOrder selected).length :=
+  ⟨((Data.Finite.allFin count).filter
+      (fun candidate => decide (candidate ∉ selected))).length +
+      position.val, by
+    unfold partitionOrder
+    simp only [List.length_append]
+    omega⟩
+
+@[simp] theorem partitionEquiv_retainedPosition
+    (selected : List (Fin count))
+    (selectedNodup : selected.Nodup)
+    (value : Fin count)
+    (retained : value ∉ selected) :
+    partitionEquiv selected selectedNodup
+        (retainedPosition selected value retained) = value := by
+  change (partitionOrder selected).get
+      (retainedPosition selected value retained) = value
+  unfold retainedPosition partitionOrder
+  rw [List.get_eq_getElem, List.getElem_append_left]
+  exact DenseList.get_index _ value
+    (List.mem_filter.mpr
+      ⟨Data.Finite.mem_allFin value, decide_eq_true retained⟩)
+
+@[simp] theorem partitionEquiv_selectedPosition
+    (selected : List (Fin count))
+    (selectedNodup : selected.Nodup)
+    (position : Fin selected.length) :
+    partitionEquiv selected selectedNodup
+        (selectedPosition selected position) = selected.get position := by
+  change (partitionOrder selected).get
+      (selectedPosition selected position) = selected.get position
+  simp [selectedPosition, partitionOrder]
 
 /-- Extend a supplied equivalence by the same ordered generated suffix. -/
 def addRightEquiv
@@ -372,6 +433,74 @@ structure CutWrapResult
 
 namespace CutWrapResult
 
+/-- Relation argument signature selected by the successful cut-wrap check. -/
+def targetArguments
+    (result : CutWrapResult source wire) : List Sig :=
+  result.signature
+
+/-- Canonical checked image of one source region retained by cut wrapping. -/
+def targetRegion
+    (result : CutWrapResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.RegionId :=
+  Internal.checkedRegion result.generated
+    (Fin.castAdd result.sites.sites.length
+      (Internal.noRegionRemovalEquiv source region))
+
+/-- Canonical checked cut region generated for one ordered source site. -/
+def targetCutRegion
+    (result : CutWrapResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.RegionId :=
+  Internal.checkedRegion result.generated (cutWrapRegion result.plan site)
+
+/-- Source application nodes consumed by cut wrapping. -/
+def sourceRemovedNodes
+    (result : CutWrapResult source wire) :
+    List source.val.NodeId :=
+  removedSiteNodes result.sites
+
+/-- The acted relation is the only source wire consumed by cut wrapping. -/
+def sourceRemovedWires
+    (_result : CutWrapResult source wire) :
+    List source.val.WireId :=
+  [wire]
+
+/-- Canonical checked image of one source node retained by cut wrapping. -/
+def retainedNodeImage
+    (result : CutWrapResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (Fin.castAdd result.sites.sites.length
+      (Internal.retainedNodeIndex source result.sourceRemovedNodes node (by
+        unfold Internal.retainedNodes
+        apply List.mem_filter.mpr
+        exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩)))
+
+/-- Canonical checked atom node generated for one ordered source site. -/
+def targetNode
+    (result : CutWrapResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated (cutWrapNode result.plan site)
+
+/-- Canonical checked image of one source wire retained by cut wrapping. -/
+def retainedWireImage
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (Fin.castAdd 1
+      (Internal.retainedWireIndex source result.sourceRemovedWires sourceWire
+        (by
+          unfold Internal.retainedWires
+          apply List.mem_filter.mpr
+          exact ⟨Data.Finite.mem_allFin sourceWire,
+            decide_eq_true retained⟩)))
+
 /-- Wrap checking identifies its checked region carrier with the original
 regions followed by the exact generated-cut positions. -/
 def extendedRegionOriginEquiv
@@ -387,33 +516,602 @@ def extendedRegionOriginEquiv
       Data.Finite.allFin_eq_finRange,
       ContentConstruction.length_filter_true])
 
+/-- A retained source region has its exact left-summand origin. -/
+@[simp] theorem extendedRegionOriginEquiv_targetRegion
+    (result : CutWrapResult source wire)
+    (region : source.val.RegionId) :
+    result.extendedRegionOriginEquiv (result.targetRegion region) =
+      Fin.castAdd result.sites.sites.length region := by
+  apply Fin.ext
+  unfold extendedRegionOriginEquiv targetRegion
+    ContentConstruction.finEquivOfEq Internal.checkedRegion
+  change (sourceRegionAfterRemoval (source := source) [] region _).val =
+    region.val
+  let sourcePosition : Fin source.val.regionsList.length :=
+    Fin.cast (by
+      simp [ConcreteDiagram.regionsList,
+        Data.Finite.allFin_eq_finRange]) region
+  let position : Fin (Internal.retainedRegions source []).length :=
+    Fin.cast
+      (congrArg List.length (Internal.retainedRegions_nil source)).symm
+      sourcePosition
+  have getExact :
+      (Internal.retainedRegions source []).get position = region := by
+    simpa [position, sourcePosition, ConcreteDiagram.regionsList,
+      Data.Finite.allFin_eq_finRange] using allFin_get region
+  have regionRetained : region ∈ Internal.retainedRegions source [] := by
+    rw [Internal.retainedRegions_nil]
+    exact Data.Finite.mem_allFin region
+  have indexExact :
+      sourceRegionAfterRemoval (source := source) [] region regionRetained =
+        position := by
+    unfold sourceRegionAfterRemoval Internal.retainedRegionIndex
+    have sameIndex :
+        DenseList.index (Internal.retainedRegions source []) region
+            regionRetained =
+          DenseList.index (Internal.retainedRegions source [])
+            ((Internal.retainedRegions source []).get position)
+            (List.get_mem _ position) := by
+      congr
+      exact getExact.symm
+    rw [sameIndex]
+    exact DenseList.index_get _ (by
+      rw [Internal.retainedRegions_nil]
+      exact Data.Finite.allFin_nodup _) position
+  exact congrArg Fin.val indexExact
+
+/-- A generated cut has its exact right-summand site origin. -/
+@[simp] theorem extendedRegionOriginEquiv_targetCutRegion
+    (result : CutWrapResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.extendedRegionOriginEquiv (result.targetCutRegion site) =
+      Fin.natAdd source.val.regionCount site := by
+  apply Fin.ext
+  unfold extendedRegionOriginEquiv targetCutRegion cutWrapRegion
+    ContentConstruction.finEquivOfEq Internal.checkedRegion
+  change (cutWrapBase result.plan).regionCount + site.val =
+    source.val.regionCount + site.val
+  congr 1
+  exact Internal.batchRemovalCandidate_regionCount_noRegions
+    result.plan.removal
+
+/-- Exact checked-node allocation count for the retained/source-site
+partition used by cut wrapping. -/
+private theorem nodeCountExact
+    (result : CutWrapResult source wire) :
+    result.checked.val.nodeCount =
+      (ContentConstruction.partitionOrder
+        (removedSiteNodes result.sites)).length := by
+  rw [congrArg ConcreteDiagram.nodeCount result.generated]
+  simp [cutWrapCandidate, cutWrapBase,
+    Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+    removedSiteNodes, siteNodes, Internal.retainedNodes,
+    ConcreteDiagram.nodesList, Data.Finite.allFin_eq_finRange]
+
 /-- Wrap checking reorders source nodes as retained nodes followed by the
 exact acted-site nodes. -/
 def nodeOriginEquiv
     (result : CutWrapResult source wire) :
     Data.Finite.FiniteEquiv result.checked.val.NodeId source.val.NodeId :=
-  (ContentConstruction.finEquivOfEq (by
-    rw [congrArg ConcreteDiagram.nodeCount result.generated]
-    simp [cutWrapCandidate, cutWrapBase,
-      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
-      removedSiteNodes, siteNodes, Internal.retainedNodes,
-      ConcreteDiagram.nodesList, Data.Finite.allFin_eq_finRange])).trans
+  (ContentConstruction.finEquivOfEq (nodeCountExact result)).trans
     (ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
       (ContentConstruction.siteNodes_nodup result.sites))
+
+/-- A retained checked node has its supplied source-node origin. -/
+@[simp] theorem nodeOriginEquiv_retainedNodeImage
+    (result : CutWrapResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.nodeOriginEquiv (result.retainedNodeImage node retained) = node := by
+  change node ∉ removedSiteNodes result.sites at retained
+  unfold retainedNodeImage sourceRemovedNodes nodeOriginEquiv
+  simp only [Data.Finite.FiniteEquiv.trans_apply]
+  let allocated : Fin
+      (ContentConstruction.partitionOrder
+        (removedSiteNodes result.sites)).length :=
+    Fin.cast (nodeCountExact result)
+      (Internal.checkedNode result.generated
+        (Fin.castAdd result.sites.sites.length
+          (Internal.retainedNodeIndex source
+            (removedSiteNodes result.sites) node (by
+              unfold Internal.retainedNodes
+              apply List.mem_filter.mpr
+              exact ⟨Data.Finite.mem_allFin node,
+                decide_eq_true retained⟩))))
+  change
+    ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
+        (ContentConstruction.siteNodes_nodup result.sites) allocated = node
+  have allocatedExact : allocated =
+      ContentConstruction.retainedPosition
+        (removedSiteNodes result.sites) node retained := by
+    apply Fin.ext
+    rfl
+  rw [allocatedExact]
+  exact ContentConstruction.partitionEquiv_retainedPosition _ _ _ _
+
+/-- A generated checked atom has the consumed source application at that
+site as its exact neutral node origin. -/
+@[simp] theorem nodeOriginEquiv_targetNode
+    (result : CutWrapResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.nodeOriginEquiv (result.targetNode site) =
+      (result.sites.sites.get site).node := by
+  unfold nodeOriginEquiv targetNode ContentConstruction.finEquivOfEq
+  simp only [Data.Finite.FiniteEquiv.trans_apply]
+  let selectedSite : Fin (removedSiteNodes result.sites).length :=
+    Fin.cast (by simp [removedSiteNodes, siteNodes]) site
+  let allocated : Fin
+      (ContentConstruction.partitionOrder
+        (removedSiteNodes result.sites)).length :=
+    Fin.cast (nodeCountExact result)
+      (Internal.checkedNode result.generated
+        (cutWrapNode result.plan site))
+  change
+    ContentConstruction.partitionEquiv (removedSiteNodes result.sites)
+        (ContentConstruction.siteNodes_nodup result.sites) allocated =
+      (result.sites.sites.get site).node
+  have allocatedExact : allocated =
+      ContentConstruction.selectedPosition
+        (removedSiteNodes result.sites) selectedSite := by
+    apply Fin.ext
+    rfl
+  rw [allocatedExact,
+    ContentConstruction.partitionEquiv_selectedPosition]
+  simp [selectedSite, removedSiteNodes, siteNodes]
+
+/-- Exact checked-wire allocation count for the retained/acted partition
+used by cut wrapping. -/
+private theorem wireCountExact
+    (result : CutWrapResult source wire) :
+    result.checked.val.wireCount =
+      (ContentConstruction.partitionOrder [wire]).length := by
+  rw [congrArg ConcreteDiagram.wireCount result.generated]
+  simp [cutWrapCandidate, cutWrapBase,
+    Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
+    Internal.retainedWires, ConcreteDiagram.wiresList,
+    Data.Finite.allFin_eq_finRange,
+    ContentConstruction.length_filter_true]
 
 /-- Wrap checking reorders wires as retained wires followed by the acted
 relation wire. -/
 def wireOriginEquiv
     (result : CutWrapResult source wire) :
     Data.Finite.FiniteEquiv result.checked.val.WireId source.val.WireId :=
-  (ContentConstruction.finEquivOfEq (by
-    rw [congrArg ConcreteDiagram.wireCount result.generated]
-    simp [cutWrapCandidate, cutWrapBase,
-      Internal.batchRemovalCandidate, ContentConstruction.partitionOrder,
-      Internal.retainedWires, ConcreteDiagram.wiresList,
-      Data.Finite.allFin_eq_finRange,
-      ContentConstruction.length_filter_true])).trans
-    (ContentConstruction.partitionEquiv [wire] (by simp))
+  (ContentConstruction.finEquivOfEq (wireCountExact result)).trans
+      (ContentConstruction.partitionEquiv [wire] (by simp))
+
+/-- A retained checked wire has its supplied source-wire origin. -/
+@[simp] theorem wireOriginEquiv_retainedWireImage
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.wireOriginEquiv
+        (result.retainedWireImage sourceWire retained) = sourceWire := by
+  change sourceWire ∉ [wire] at retained
+  unfold retainedWireImage sourceRemovedWires wireOriginEquiv
+  simp only [Data.Finite.FiniteEquiv.trans_apply]
+  let allocated : Fin (ContentConstruction.partitionOrder [wire]).length :=
+    Fin.cast (wireCountExact result)
+      (Internal.checkedWire result.generated
+        (Fin.castAdd 1
+          (Internal.retainedWireIndex source [wire] sourceWire (by
+            unfold Internal.retainedWires
+            apply List.mem_filter.mpr
+            exact ⟨Data.Finite.mem_allFin sourceWire,
+              decide_eq_true retained⟩))))
+  change ContentConstruction.partitionEquiv [wire] (by simp) allocated =
+    sourceWire
+  have allocatedExact : allocated =
+      ContentConstruction.retainedPosition [wire] sourceWire retained := by
+    apply Fin.ext
+    rfl
+  rw [allocatedExact]
+  exact ContentConstruction.partitionEquiv_retainedPosition _ _ _ _
+
+/-- The generated acted-wire witness has the consumed source relation as its
+exact neutral wire origin. -/
+@[simp] theorem wireOriginEquiv_targetWire
+    (result : CutWrapResult source wire) :
+    result.wireOriginEquiv result.targetWire = wire := by
+  rw [result.targetWire_exact]
+  unfold wireOriginEquiv ContentConstruction.finEquivOfEq
+  simp only [Data.Finite.FiniteEquiv.trans_apply]
+  let position : Fin ([wire] : List source.val.WireId).length := ⟨0, by simp⟩
+  let allocated : Fin (ContentConstruction.partitionOrder [wire]).length :=
+    Fin.cast (wireCountExact result)
+      (Internal.checkedWire result.generated
+        (cutWrapCandidateWire result.signature result.plan))
+  change ContentConstruction.partitionEquiv [wire] (by simp) allocated = wire
+  have allocatedExact : allocated =
+      ContentConstruction.selectedPosition [wire] position := by
+    apply Fin.ext
+    rfl
+  rw [allocatedExact,
+    ContentConstruction.partitionEquiv_selectedPosition]
+  simp [position]
+
+/-- Canonical checked image of any source wire under the total cut-wrap
+wire-origin classifier. -/
+def targetWireImage
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId) :
+    result.checked.val.WireId :=
+  result.wireOriginEquiv.symm sourceWire
+
+@[simp] theorem wireOriginEquiv_targetWireImage
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId) :
+    result.wireOriginEquiv (result.targetWireImage sourceWire) = sourceWire :=
+  result.wireOriginEquiv.apply_symm_apply sourceWire
+
+/-- The total source-wire image agrees with the direct retained allocation. -/
+theorem targetWireImage_eq_retainedWireImage
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.targetWireImage sourceWire =
+      result.retainedWireImage sourceWire retained := by
+  apply result.wireOriginEquiv.injective
+  rw [result.wireOriginEquiv_targetWireImage,
+    result.wireOriginEquiv_retainedWireImage]
+
+/-- The total source-wire image sends the acted relation to the generated
+cut-wrap witness. -/
+theorem targetWireImage_acted
+    (result : CutWrapResult source wire) :
+    result.targetWireImage wire = result.targetWire := by
+  apply result.wireOriginEquiv.injective
+  rw [result.wireOriginEquiv_targetWireImage,
+    result.wireOriginEquiv_targetWire]
+
+/-- The target root is the direct retained image of the source root. -/
+theorem targetRoot_exact
+    (result : CutWrapResult source wire) :
+    result.checked.val.root = result.targetRegion source.val.root := by
+  unfold targetRegion
+  rw [Internal.checkedRoot_transport result.generated]
+  congr 1
+
+/-- Exact constructor and parent table for every retained source region. -/
+theorem targetRegion_data
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.regions (result.targetRegion region) =
+      (match source.val.regions region with
+      | .sheet => .sheet
+      | .cut parent => .cut (result.targetRegion parent) :
+        CRegion result.checked.val.regionCount) := by
+  unfold targetRegion
+  rw [Internal.checkedRegion_data_transport result.generated]
+  unfold cutWrapCandidate cutWrapBase Internal.batchRemovalCandidate
+  simp only [Fin.addCases_left]
+  rw [Internal.batchRegionTable_noRegions]
+  cases data : source.val.regions region with
+  | sheet => rfl
+  | cut parent =>
+      simp only [data, CRegion.rename]
+      rfl
+
+/-- Exact generated-cut region table in checker-owned site order. -/
+theorem targetCutRegion_data
+    (result : CutWrapResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.regions (result.targetCutRegion site) =
+      .cut (result.targetRegion (result.sites.sites.get site).region) := by
+  unfold targetCutRegion targetRegion
+  rw [Internal.checkedRegion_data_transport result.generated]
+  unfold cutWrapCandidate cutWrapRegion
+  simp only [Fin.addCases_right]
+  congr 1
+
+/-- Exact constructor, payload, and retained-region table for a retained
+source node. -/
+theorem retainedNodeImage_data
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.checked.val.nodes (result.retainedNodeImage node retained) =
+      (match source.val.nodes node with
+      | .atom region arguments =>
+          .atom (result.targetRegion region) arguments
+      | .ref region definition arguments =>
+          .ref (result.targetRegion region) definition arguments
+      | .identity region signature arity =>
+          .identity (result.targetRegion region) signature arity :
+        CNode result.checked.val.regionCount definitions.length) := by
+  unfold retainedNodeImage sourceRemovedNodes
+  rw [Internal.checkedNode_data_transport result.generated]
+  unfold cutWrapCandidate cutWrapBase Internal.batchRemovalCandidate
+  simp only [Fin.addCases_left]
+  let member : node ∈ Internal.retainedNodes source
+      (removedSiteNodes result.sites) := by
+    unfold Internal.retainedNodes
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩
+  let retainedIndex := Internal.retainedNodeIndex source
+    (removedSiteNodes result.sites) node member
+  rw [Internal.batchNodeTable_noRegions,
+    Internal.sourceRetainedNode_retainedNodeIndex]
+  cases data : source.val.nodes node <;>
+    simp only [data, CNode.rename, Internal.checkedNodeData]
+  all_goals rfl
+
+/-- The generated atom at a site has the exact cut region and acted
+relation arguments selected by the checker. -/
+theorem targetNode_data
+    (result : CutWrapResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.nodes (result.targetNode site) =
+      .atom (result.targetCutRegion site) result.targetArguments := by
+  unfold targetNode targetCutRegion targetArguments
+  rw [Internal.checkedNode_data_transport result.generated]
+  unfold cutWrapCandidate cutWrapNode
+  simp only [Fin.addCases_right]
+  rfl
+
+/-- Retained wire signatures are unchanged. -/
+theorem retainedWireImage_signature
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+      (result.retainedWireImage sourceWire retained)).sig =
+      (source.val.wires sourceWire).sig := by
+  unfold retainedWireImage sourceRemovedWires
+  rw [Internal.checkedWire_signature_transport result.generated]
+  unfold cutWrapCandidate cutWrapBase
+  simp only [Fin.addCases_left]
+  change
+    (Internal.batchWireTable result.plan.removal
+      (Internal.retainedWireIndex source [wire] sourceWire _)).sig = _
+  rw [Internal.batchWireTable_signature,
+    Internal.sourceRetainedWire_retainedWireIndex]
+
+/-- Retained wire scopes are transported to the exact retained-region image. -/
+theorem retainedWireImage_scope
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+      (result.retainedWireImage sourceWire retained)).scope =
+      result.targetRegion (source.val.wires sourceWire).scope := by
+  unfold retainedWireImage sourceRemovedWires targetRegion
+  rw [Internal.checkedWire_scope_transport result.generated]
+  unfold cutWrapCandidate cutWrapBase
+  simp only [Fin.addCases_left]
+  change Internal.checkedRegion result.generated
+      (Fin.castAdd result.sites.sites.length
+        (Internal.batchWireTable result.plan.removal
+          (Internal.retainedWireIndex source [wire] sourceWire _)).scope) = _
+  simp only [Internal.batchWireTable_scope,
+    Internal.sourceRetainedWire_retainedWireIndex]
+  rfl
+
+/-- The generated acted wire remains at the exact retained image of its
+source scope. -/
+theorem targetWire_scope
+    (result : CutWrapResult source wire) :
+    (result.checked.val.wires result.targetWire).scope =
+      result.targetRegion (source.val.wires wire).scope := by
+  rw [result.targetWire_exact,
+    Internal.checkedWire_scope_transport result.generated]
+  have targetExact :
+      cutWrapCandidateWire result.signature result.plan =
+        Fin.natAdd (cutWrapBase result.plan).wireCount (0 : Fin 1) := by
+    apply Fin.ext
+    rfl
+  rw [targetExact]
+  unfold cutWrapCandidate targetRegion
+  simp only [Fin.addCases_right]
+  congr 1
+
+/-- Retained batch endpoints of one retained source-wire image. -/
+def retainedTargetEndpoints
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  let candidate := Internal.retainedWireIndex source [wire] sourceWire (by
+    unfold Internal.retainedWires
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin sourceWire, by
+      simpa [sourceRemovedWires] using decide_eq_true retained⟩)
+  (Internal.batchWireTable result.plan.removal candidate).endpoints.map
+    (fun endpoint => Internal.checkedEndpoint result.generated
+      { node := Fin.castAdd result.sites.sites.length endpoint.node
+        port := endpoint.port })
+
+/-- Generated argument attachments of one retained source-wire image. -/
+def targetArgumentEndpoints
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  let candidate := Internal.retainedWireIndex source [wire] sourceWire (by
+    unfold Internal.retainedWires
+    apply List.mem_filter.mpr
+    exact ⟨Data.Finite.mem_allFin sourceWire, by
+      simpa [sourceRemovedWires] using decide_eq_true retained⟩)
+  (retainedWireArgumentEndpoints (source := source)
+      [] (removedSiteNodes result.sites) [wire] result.sites.sites
+      (fun site =>
+        ({ node := cutWrapNode result.plan site, port := .head } :
+          CEndpoint ((cutWrapBase result.plan).nodeCount +
+            result.sites.sites.length))) candidate).map
+    (Internal.checkedEndpoint result.generated)
+
+/-- Exact ordered endpoint table for every retained target wire. -/
+theorem retainedWireImage_endpoints
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+      (result.retainedWireImage sourceWire retained)).endpoints =
+      result.retainedTargetEndpoints sourceWire retained ++
+        result.targetArgumentEndpoints sourceWire retained := by
+  unfold retainedWireImage sourceRemovedWires retainedTargetEndpoints
+    targetArgumentEndpoints
+  rw [Internal.checkedWire_endpoints_transport result.generated]
+  unfold cutWrapCandidate cutWrapBase
+  simp only [Fin.addCases_left, Internal.batchRemovalCandidate]
+  rw [List.map_append, List.map_map]
+  rfl
+
+/-- Exact ordered endpoint table for the generated acted wire. -/
+theorem targetWire_endpoints
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire) :
+    (result.checked.val.wires result.targetWire).endpoints =
+      (Data.Finite.allFin result.sites.sites.length).map (fun site =>
+        ({ node := result.targetNode site, port := .head } :
+          CEndpoint result.checked.val.nodeCount)) := by
+  rw [result.targetWire_exact,
+    Internal.checkedWire_endpoints_transport result.generated]
+  have targetExact :
+      cutWrapCandidateWire result.signature result.plan =
+        Fin.natAdd (cutWrapBase result.plan).wireCount (0 : Fin 1) := by
+    apply Fin.ext
+    rfl
+  rw [targetExact]
+  unfold cutWrapCandidate targetNode
+  simp only [Fin.addCases_right, List.map_map]
+  rfl
+
+/-- Target-to-source endpoint carrier induced by the exact neutral node
+origin; ports are preserved verbatim. -/
+def endpointOriginEquiv
+    (result : CutWrapResult source wire) :
+    Data.Finite.FiniteEquiv
+      (CEndpoint result.checked.val.nodeCount)
+      (CEndpoint source.val.nodeCount) where
+  toFun := fun endpoint =>
+    ⟨result.nodeOriginEquiv endpoint.node, endpoint.port⟩
+  invFun := fun endpoint =>
+    ⟨result.nodeOriginEquiv.symm endpoint.node, endpoint.port⟩
+  left_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        congr
+        exact result.nodeOriginEquiv.left_inv node
+  right_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        congr
+        exact result.nodeOriginEquiv.right_inv node
+
+/-- Construction-owned neutral endpoint table for the target image of every
+source wire. -/
+def originEndpoints
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId) :
+    List (CEndpoint source.val.nodeCount) :=
+  (result.checked.val.wires
+      (result.targetWireImage sourceWire)).endpoints.map
+    result.endpointOriginEquiv
+
+/-- The acted wire's neutral endpoint table is exactly its original ordered
+applied-site endpoint table. -/
+theorem originEndpoints_acted
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : CutWrapResult source wire) :
+    result.originEndpoints wire =
+      (source.val.wires wire).endpoints := by
+  unfold originEndpoints
+  rw [result.targetWireImage_acted, result.targetWire_endpoints,
+    List.map_map, ← result.sites.exhaustive]
+  calc
+    (Data.Finite.allFin result.sites.sites.length).map
+        (result.endpointOriginEquiv.toFun ∘ fun site =>
+          ({ node := result.targetNode site, port := .head } :
+            CEndpoint result.checked.val.nodeCount)) =
+      (Data.Finite.allFin result.sites.sites.length).map
+        (AppliedSite.endpoint ∘ result.sites.sites.get) := by
+          apply List.map_congr_left
+          intro site _member
+          unfold Function.comp AppliedSite.endpoint endpointOriginEquiv
+          change
+            ({ node := result.nodeOriginEquiv (result.targetNode site)
+               port := .head } : CEndpoint source.val.nodeCount) =
+              { node := (result.sites.sites.get site).node
+                port := .head }
+          rw [result.nodeOriginEquiv_targetNode]
+    _ = result.sites.sites.map AppliedSite.endpoint := by
+      rw [← List.map_map, ContentConstruction.map_get_allFin]
+
+/-- The neutral endpoint table of a retained wire decomposes into exact
+retained batch incidence followed by exact generated argument incidence. -/
+theorem originEndpoints_retained_decomposition
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.originEndpoints sourceWire =
+      (result.retainedTargetEndpoints sourceWire retained).map
+          result.endpointOriginEquiv ++
+        (result.targetArgumentEndpoints sourceWire retained).map
+          result.endpointOriginEquiv := by
+  unfold originEndpoints
+  rw [result.targetWireImage_eq_retainedWireImage sourceWire retained,
+    result.retainedWireImage_endpoints, List.map_append]
+
+/-- Bidirectional endpoint fiber between one target wire image and its exact
+construction-owned neutral endpoint table. -/
+structure EndpointFiberEquiv
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId) where
+  equivalence :
+    Data.Finite.FiniteEquiv
+      { endpoint // endpoint ∈
+        (result.checked.val.wires
+          (result.targetWireImage sourceWire)).endpoints }
+      { endpoint // endpoint ∈ result.originEndpoints sourceWire }
+  forward_exact : ∀ endpoint,
+    (equivalence endpoint).1 = result.endpointOriginEquiv endpoint.1
+  inverse_exact : ∀ endpoint,
+    (equivalence.symm endpoint).1 =
+      result.endpointOriginEquiv.symm endpoint.1
+
+/-- Total endpoint-fiber restriction for every source-wire origin.  Both
+directions are induced only by the checker-owned node-origin equivalence. -/
+def endpointFiberEquiv
+    (result : CutWrapResult source wire)
+    (sourceWire : source.val.WireId) :
+    EndpointFiberEquiv result sourceWire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨result.endpointOriginEquiv endpoint.1,
+          List.mem_map.mpr ⟨endpoint.1, endpoint.2, rfl⟩⟩
+      invFun := fun endpoint =>
+        ⟨result.endpointOriginEquiv.symm endpoint.1, by
+          rcases List.mem_map.mp endpoint.2 with
+            ⟨targetEndpoint, targetMember, exact⟩
+          have targetExact : targetEndpoint =
+              result.endpointOriginEquiv.symm endpoint.1 := by
+            apply result.endpointOriginEquiv.injective
+            rw [result.endpointOriginEquiv.apply_symm_apply]
+            exact exact
+          simpa only [targetExact] using targetMember⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact result.endpointOriginEquiv.left_inv endpoint.1
+      right_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact result.endpointOriginEquiv.right_inv endpoint.1 }
+  forward_exact := by intro; rfl
+  inverse_exact := by intro; rfl
 
 end CutWrapResult
 
