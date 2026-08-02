@@ -603,6 +603,94 @@ private def batchReconstructionNil
           using wire.2
       exact (result.retainedWire_iff wire.1).mpr retained)
 
+/-- Snoc carrier step: transport the existing reconstructed prefix through
+atom deletion and splice, then allocate the newly restored occurrence in the
+fragment suffix.  The sole separation premise says that no original carrier
+already represented by the prefix is the generated atom being consumed. -/
+private noncomputable def batchReconstructionSnoc
+    {source : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {sites : List (ConcreteWireQuantifier.RelationSeverSite source)}
+    {restored : List (ContentOccurrence source pattern)}
+    {current : CheckedDiagram definitions}
+    (state : BatchReconstructionState sites restored current)
+    (content : ContentOccurrence source pattern)
+    {joinSource : CheckedDiagram definitions}
+    {dying : joinSource.val.WireId}
+    (step : ConcreteWireQuantifier.RelationJoinStep joinSource dying pattern)
+    (priorExact : step.prior = current)
+    (representedNodeDifferent :
+      ∀ node :
+          { node : source.val.NodeId //
+            BatchCoveredNode sites restored node },
+        cast (congrArg (fun checked => checked.val.NodeId) priorExact.symm)
+            (state.nodeImage node) ≠
+          step.priorApplication) :
+    BatchReconstructionState sites (restored ++ [content]) step.checked := by
+  classical
+  subst current
+  exact
+    { regionImage := fun region =>
+        if old : BatchCoveredRegion sites restored region.1 then
+          step.checkedPriorRegion (state.regionImage ⟨region.1, old⟩)
+        else
+          have fresh : ∃ patternRegion,
+              patternRegion ≠ pattern.val.diagram.root ∧
+                content.occurrence.regionMap patternRegion = region.1 := by
+            rcases region.2 with retained | restoredAll
+            · exact False.elim (old (Or.inl retained))
+            · rcases restoredAll with
+                ⟨candidate, member, patternRegion, nonroot, mapped⟩
+              rcases List.mem_append.mp member with previous | final
+              · exact False.elim
+                  (old (Or.inr
+                    ⟨candidate, previous, patternRegion, nonroot, mapped⟩))
+              · have candidateExact : candidate = content := by
+                  simpa using final
+                subst candidate
+                exact ⟨patternRegion, nonroot, mapped⟩
+          step.checkedFragmentRegion fresh.choose
+      nodeImage := fun node =>
+        if old : BatchCoveredNode sites restored node.1 then
+          step.checkedPriorNode (state.nodeImage ⟨node.1, old⟩)
+            (representedNodeDifferent ⟨node.1, old⟩)
+        else
+          have fresh : ∃ patternNode,
+              content.occurrence.nodeMap patternNode = node.1 := by
+            rcases node.2 with retained | restoredAll
+            · exact False.elim (old (Or.inl retained))
+            · rcases restoredAll with
+                ⟨candidate, member, patternNode, mapped⟩
+              rcases List.mem_append.mp member with previous | final
+              · exact False.elim
+                  (old (Or.inr
+                    ⟨candidate, previous, patternNode, mapped⟩))
+              · have candidateExact : candidate = content := by
+                  simpa using final
+                subst candidate
+                exact ⟨patternNode, mapped⟩
+          step.checkedFragmentNode fresh.choose
+      wireImage := fun wire =>
+        if old : BatchCoveredWire sites restored wire.1 then
+          step.checkedPriorWire (state.wireImage ⟨wire.1, old⟩)
+        else
+          have fresh : ∃ patternWire,
+              patternWire ∉ pattern.val.boundary ∧
+                content.occurrence.wireMap patternWire = wire.1 := by
+            rcases wire.2 with retained | restoredAll
+            · exact False.elim (old (Or.inl retained))
+            · rcases restoredAll with
+                ⟨candidate, member, patternWire, internal, mapped⟩
+              rcases List.mem_append.mp member with previous | final
+              · exact False.elim
+                  (old (Or.inr
+                    ⟨candidate, previous, patternWire, internal, mapped⟩))
+              · have candidateExact : candidate = content := by
+                  simpa using final
+                subst candidate
+                exact ⟨patternWire, internal, mapped⟩
+          step.checkedFragmentWire fresh.choose }
+
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin
     (source : CheckedDiagram definitions)

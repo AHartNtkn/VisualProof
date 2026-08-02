@@ -361,8 +361,35 @@ def checkedPriorWire
     (congrArg ConcreteDiagram.wireCount step.generated).symm
     (step.attachment.hostWire
       (Internal.checkedWire step.baseGenerated
-        (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
+      (ConcreteDiagram.IdentityNormalizationCore.eraseNodeWire
           step.prior step.priorApplication wire)))
+
+/-- Allocate one fragment region in the checked splice target. -/
+def checkedFragmentRegion
+    (step : RelationJoinStep source dying content)
+    (region : content.val.diagram.RegionId) :
+    step.checked.val.RegionId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.regionCount step.generated).symm
+    (step.attachment.fragmentRegion region)
+
+/-- Allocate one fragment node in the checked splice target. -/
+def checkedFragmentNode
+    (step : RelationJoinStep source dying content)
+    (node : content.val.diagram.NodeId) :
+    step.checked.val.NodeId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.nodeCount step.generated).symm
+    (step.attachment.fragmentNode node)
+
+/-- Allocate one fragment wire in the checked splice target. -/
+def checkedFragmentWire
+    (step : RelationJoinStep source dying content)
+    (wire : content.val.diagram.WireId) :
+    step.checked.val.WireId :=
+  Fin.cast
+    (congrArg ConcreteDiagram.wireCount step.generated).symm
+    (step.attachment.fragmentWire wire)
 
 @[simp] theorem checkedPriorRegion_val
     (step : RelationJoinStep source dying content)
