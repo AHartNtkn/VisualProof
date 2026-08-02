@@ -256,6 +256,46 @@ noncomputable def dropConfluence
   · exact dropJoin_distinct leftActive rightActive leftNode rightNode
       leftEligible rightEligible same
 
+/-- The same-node collapse/collapse peak is the same construction after
+eligibility uniqueness.  Distinct-node collapse peaks require the explicit
+post-collapse priority transitions documented by `ClassConfluence.collapse`.
+-/
+def collapseJoin_same
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (leftActive rightActive : Active source .collapse)
+    (node : source.val.NodeId)
+    (leftEligible rightEligible : CollapseEligibility source node) :
+    Join
+      (PriorityStep.target (.collapse leftActive node leftEligible))
+      (PriorityStep.target (.collapse rightActive node rightEligible)) := by
+  have exactEligibility :=
+    IdentityNormalizationPriority.CollapseEligibility.unique
+      leftEligible rightEligible
+  subst rightEligible
+  exact .ofIso (checkedIsoRefl _)
+
+/-- The same oriented fusion/fusion peak is the same construction after
+eligibility uniqueness.  Reversed, one-node-overlap, and disjoint pairs need
+their own after-fusion transition receipts. -/
+def fusionJoin_same
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (leftActive rightActive : Active source .fusion)
+    (leftNode rightNode : source.val.NodeId)
+    (leftEligible rightEligible :
+      FusionEligibility source leftNode rightNode) :
+    Join
+      (PriorityStep.target
+        (.fusion leftActive leftNode rightNode leftEligible))
+      (PriorityStep.target
+        (.fusion rightActive leftNode rightNode rightEligible)) := by
+  have exactEligibility :=
+    IdentityNormalizationPriority.FusionEligibility.unique
+      leftEligible rightEligible
+  subst rightEligible
+  exact .ofIso (checkedIsoRefl _)
+
 /-- Two active priority witnesses at one source necessarily name the same
 class.  Consequently drop/collapse, drop/fusion, and collapse/fusion peaks do
 not occur in `ReductionStar`. -/
