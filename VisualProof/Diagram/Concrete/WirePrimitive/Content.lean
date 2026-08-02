@@ -1616,6 +1616,78 @@ structure ParallelSplitResult
 
 namespace ParallelSplitResult
 
+def targetArguments
+    (result : ParallelSplitResult source wire) : List Sig :=
+  result.signature
+
+def targetRegion
+    (result : ParallelSplitResult source wire)
+    (region : source.val.RegionId) : result.checked.val.RegionId :=
+  Internal.checkedRegion result.generated
+    (Internal.noRegionRemovalEquiv source region)
+
+def sourceRemovedNodes
+    (result : ParallelSplitResult source wire) : List source.val.NodeId :=
+  removedSiteNodes result.sites
+
+def sourceRemovedWires
+    (_result : ParallelSplitResult source wire) : List source.val.WireId :=
+  [wire]
+
+def retainedNodeCount
+    (result : ParallelSplitResult source wire) : Nat :=
+  (Internal.retainedNodes source result.sourceRemovedNodes).length
+
+def nodeAllocationCount
+    (result : ParallelSplitResult source wire) : Nat :=
+  result.retainedNodeCount +
+    (result.sites.sites.length + result.sites.sites.length)
+
+def retainedWireCount
+    (result : ParallelSplitResult source wire) : Nat :=
+  (Internal.retainedWires source result.sourceRemovedWires).length
+
+def wireAllocationCount
+    (result : ParallelSplitResult source wire) : Nat :=
+  result.retainedWireCount + 2
+
+def retainedNodeImage
+    (result : ParallelSplitResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (Fin.castAdd (result.sites.sites.length + result.sites.sites.length)
+      (Internal.retainedNodeIndex source result.sourceRemovedNodes node (by
+        unfold Internal.retainedNodes
+        exact List.mem_filter.mpr
+          ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩)))
+
+def firstNode
+    (result : ParallelSplitResult source wire)
+    (site : Fin result.sites.sites.length) : result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (parallelSplitFirstNode result.plan site)
+
+def secondNode
+    (result : ParallelSplitResult source wire)
+    (site : Fin result.sites.sites.length) : result.checked.val.NodeId :=
+  Internal.checkedNode result.generated
+    (parallelSplitSecondNode result.plan site)
+
+def retainedWireImage
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.checked.val.WireId :=
+  Internal.checkedWire result.generated
+    (Fin.castAdd 2
+      (Internal.retainedWireIndex source result.sourceRemovedWires sourceWire
+        (by
+          unfold Internal.retainedWires
+          exact List.mem_filter.mpr
+            ⟨Data.Finite.mem_allFin sourceWire, decide_eq_true retained⟩)))
+
 /-- Parallel splitting preserves the region carrier. -/
 def regionOriginEquiv
     (result : ParallelSplitResult source wire) :
@@ -1627,26 +1699,102 @@ def regionOriginEquiv
       ConcreteDiagram.regionsList, Data.Finite.allFin_eq_finRange,
       ContentConstruction.length_filter_true])
 
+@[simp] theorem regionOriginEquiv_targetRegion
+    (result : ParallelSplitResult source wire)
+    (region : source.val.RegionId) :
+    result.regionOriginEquiv (result.targetRegion region) = region := by
+  apply Fin.ext
+  unfold regionOriginEquiv targetRegion ContentConstruction.finEquivOfEq
+    Internal.checkedRegion
+  change (Internal.noRegionRemovalEquiv source region).val = region.val
+  have inverseExact :=
+    Internal.sourceRetainedRegion_noRegionRemovalEquiv source region
+  simpa [Internal.sourceRetainedRegion, Internal.retainedRegions_nil,
+    ConcreteDiagram.regionsList, Data.Finite.allFin_eq_finRange] using
+      congrArg Fin.val inverseExact
+
 /-- Split checking identifies its complete checked node carrier with retained
 nodes followed by the two ordered generated branches. -/
 def constructionNodeEquiv
     (result : ParallelSplitResult source wire) :
     Data.Finite.FiniteEquiv result.checked.val.NodeId
-      (Fin ((parallelSplitBase result.plan).nodeCount +
-        (result.sites.sites.length + result.sites.sites.length))) :=
+      (Fin result.nodeAllocationCount) :=
   ContentConstruction.finEquivOfEq (by
     rw [congrArg ConcreteDiagram.nodeCount result.generated]
     rfl)
+
+@[simp] theorem constructionNodeEquiv_retainedNodeImage
+    (result : ParallelSplitResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.constructionNodeEquiv (result.retainedNodeImage node retained) =
+      Fin.castAdd (result.sites.sites.length + result.sites.sites.length)
+        (Internal.retainedNodeIndex source result.sourceRemovedNodes node (by
+          unfold Internal.retainedNodes
+          exact List.mem_filter.mpr
+            ⟨Data.Finite.mem_allFin node, decide_eq_true retained⟩)) := by
+  apply Fin.ext
+  rfl
+
+@[simp] theorem constructionNodeEquiv_firstNode
+    (result : ParallelSplitResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.constructionNodeEquiv (result.firstNode site) =
+      Fin.natAdd result.retainedNodeCount
+        (Fin.castAdd result.sites.sites.length site) := by
+  apply Fin.ext
+  rfl
+
+@[simp] theorem constructionNodeEquiv_secondNode
+    (result : ParallelSplitResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.constructionNodeEquiv (result.secondNode site) =
+      Fin.natAdd result.retainedNodeCount
+        (Fin.natAdd result.sites.sites.length site) := by
+  apply Fin.ext
+  rfl
 
 /-- Split checking identifies its complete checked wire carrier with retained
 wires followed by the two ordered generated branches. -/
 def constructionWireEquiv
     (result : ParallelSplitResult source wire) :
     Data.Finite.FiniteEquiv result.checked.val.WireId
-      (Fin ((parallelSplitBase result.plan).wireCount + 2)) :=
+      (Fin result.wireAllocationCount) :=
   ContentConstruction.finEquivOfEq (by
     rw [congrArg ConcreteDiagram.wireCount result.generated]
     rfl)
+
+@[simp] theorem constructionWireEquiv_retainedWireImage
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    result.constructionWireEquiv
+        (result.retainedWireImage sourceWire retained) =
+      Fin.castAdd 2
+        (Internal.retainedWireIndex source result.sourceRemovedWires
+          sourceWire (by
+            unfold Internal.retainedWires
+            exact List.mem_filter.mpr
+              ⟨Data.Finite.mem_allFin sourceWire,
+                decide_eq_true retained⟩)) := by
+  apply Fin.ext
+  rfl
+
+@[simp] theorem constructionWireEquiv_firstWire
+    (result : ParallelSplitResult source wire) :
+    result.constructionWireEquiv result.firstWire =
+      Fin.natAdd result.retainedWireCount (0 : Fin 2) := by
+  rw [result.firstWire_exact]
+  apply Fin.ext
+  rfl
+
+@[simp] theorem constructionWireEquiv_secondWire
+    (result : ParallelSplitResult source wire) :
+    result.constructionWireEquiv result.secondWire =
+      Fin.natAdd result.retainedWireCount (1 : Fin 2) := by
+  rw [result.secondWire_exact]
+  apply Fin.ext
+  rfl
 
 /-- Retained nodes followed by either generated branch reconstruct the
 source node carrier. -/
@@ -1675,7 +1823,222 @@ def reconstructionWireEquiv
     simp [parallelSplitBase, Internal.batchRemovalCandidate,
       ContentConstruction.partitionOrder, Internal.retainedWires,
       ConcreteDiagram.wiresList, Data.Finite.allFin_eq_finRange])).trans
-    (ContentConstruction.partitionEquiv [wire] (by simp))
+      (ContentConstruction.partitionEquiv [wire] (by simp))
+
+theorem targetRoot_exact
+    (result : ParallelSplitResult source wire) :
+    result.checked.val.root = result.targetRegion source.val.root := by
+  unfold targetRegion
+  rw [Internal.checkedRoot_transport result.generated]
+  rfl
+
+theorem targetRegion_data
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire)
+    (region : source.val.RegionId) :
+    result.checked.val.regions (result.targetRegion region) =
+      (match source.val.regions region with
+      | .sheet => .sheet
+      | .cut parent => .cut (result.targetRegion parent) :
+        CRegion result.checked.val.regionCount) := by
+  unfold targetRegion
+  rw [Internal.checkedRegion_data_transport result.generated]
+  simp only [parallelSplitCandidate, parallelSplitBase,
+    Internal.batchRemovalCandidate]
+  rw [Internal.batchRegionTable_noRegions]
+  cases source.val.regions region <;> rfl
+
+theorem retainedNodeImage_data
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire)
+    (node : source.val.NodeId)
+    (retained : node ∉ result.sourceRemovedNodes) :
+    result.checked.val.nodes (result.retainedNodeImage node retained) =
+      (match source.val.nodes node with
+      | .atom region arguments =>
+          .atom (result.targetRegion region) arguments
+      | .ref region definition arguments =>
+          .ref (result.targetRegion region) definition arguments
+      | .identity region signature arity =>
+          .identity (result.targetRegion region) signature arity :
+        CNode result.checked.val.regionCount definitions.length) := by
+  unfold retainedNodeImage sourceRemovedNodes
+  rw [Internal.checkedNode_data_transport result.generated]
+  unfold parallelSplitCandidate parallelSplitBase
+  simp only [Fin.addCases_left, Internal.batchRemovalCandidate]
+  rw [Internal.batchNodeTable_noRegions,
+    Internal.sourceRetainedNode_retainedNodeIndex]
+  cases source.val.nodes node <;> rfl
+
+theorem firstNode_data
+    (result : ParallelSplitResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.nodes (result.firstNode site) =
+      .atom (result.targetRegion (result.sites.sites.get site).region)
+        result.targetArguments := by
+  unfold firstNode targetRegion targetArguments
+  rw [Internal.checkedNode_data_transport result.generated]
+  unfold parallelSplitCandidate parallelSplitFirstNode
+  simp only [Fin.addCases_right, Fin.addCases_left]
+  rfl
+
+theorem secondNode_data
+    (result : ParallelSplitResult source wire)
+    (site : Fin result.sites.sites.length) :
+    result.checked.val.nodes (result.secondNode site) =
+      .atom (result.targetRegion (result.sites.sites.get site).region)
+        result.targetArguments := by
+  unfold secondNode targetRegion targetArguments
+  rw [Internal.checkedNode_data_transport result.generated]
+  unfold parallelSplitCandidate parallelSplitSecondNode
+  simp only [Fin.addCases_right]
+  rfl
+
+theorem retainedWireImage_signature
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+      (result.retainedWireImage sourceWire retained)).sig =
+      (source.val.wires sourceWire).sig := by
+  unfold retainedWireImage sourceRemovedWires
+  rw [Internal.checkedWire_signature_transport result.generated]
+  unfold parallelSplitCandidate parallelSplitBase
+  simp only [Fin.addCases_left, Internal.batchRemovalCandidate]
+  rw [Internal.batchWireTable_signature,
+    Internal.sourceRetainedWire_retainedWireIndex]
+
+theorem retainedWireImage_scope
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+      (result.retainedWireImage sourceWire retained)).scope =
+      result.targetRegion (source.val.wires sourceWire).scope := by
+  unfold retainedWireImage sourceRemovedWires targetRegion
+  rw [Internal.checkedWire_scope_transport result.generated]
+  unfold parallelSplitCandidate parallelSplitBase
+  simp only [Fin.addCases_left, Internal.batchRemovalCandidate,
+    Internal.batchWireTable_scope,
+    Internal.sourceRetainedWire_retainedWireIndex]
+  rfl
+
+theorem firstWire_scope
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.firstWire).scope =
+      result.targetRegion (source.val.wires wire).scope := by
+  rw [result.firstWire_exact,
+    Internal.checkedWire_scope_transport result.generated]
+  have exact : parallelSplitCandidateWire result.signature result.plan
+      (0 : Fin 2) = Fin.natAdd (parallelSplitBase result.plan).wireCount
+        (0 : Fin 2) := by apply Fin.ext; rfl
+  rw [exact]
+  unfold parallelSplitCandidate targetRegion
+  simp only [Fin.addCases_right]
+  rfl
+
+theorem secondWire_scope
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.secondWire).scope =
+      result.targetRegion (source.val.wires wire).scope := by
+  rw [result.secondWire_exact,
+    Internal.checkedWire_scope_transport result.generated]
+  have exact : parallelSplitCandidateWire result.signature result.plan
+      (1 : Fin 2) = Fin.natAdd (parallelSplitBase result.plan).wireCount
+        (1 : Fin 2) := by apply Fin.ext; rfl
+  rw [exact]
+  unfold parallelSplitCandidate targetRegion
+  simp only [Fin.addCases_right]
+  rfl
+
+def retainedTargetEndpoints
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  let candidate := Internal.retainedWireIndex source [wire] sourceWire (by
+    unfold Internal.retainedWires
+    exact List.mem_filter.mpr ⟨Data.Finite.mem_allFin sourceWire, by
+      simpa [sourceRemovedWires] using decide_eq_true retained⟩)
+  (Internal.batchWireTable result.plan.removal candidate).endpoints.map
+    (fun endpoint => Internal.checkedEndpoint result.generated
+      { node := Fin.castAdd
+          (result.sites.sites.length + result.sites.sites.length)
+          endpoint.node
+        port := endpoint.port })
+
+def targetArgumentEndpoints
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    List (CEndpoint result.checked.val.nodeCount) :=
+  let candidate := Internal.retainedWireIndex source [wire] sourceWire (by
+    unfold Internal.retainedWires
+    exact List.mem_filter.mpr ⟨Data.Finite.mem_allFin sourceWire, by
+      simpa [sourceRemovedWires] using decide_eq_true retained⟩)
+  (retainedWireDoubleArgumentEndpoints (source := source)
+      [] (removedSiteNodes result.sites) [wire] result.sites.sites
+      (parallelSplitFirstNode result.plan)
+      (parallelSplitSecondNode result.plan) candidate).map
+    (Internal.checkedEndpoint result.generated)
+
+theorem retainedWireImage_endpoints
+    (result : ParallelSplitResult source wire)
+    (sourceWire : source.val.WireId)
+    (retained : sourceWire ∉ result.sourceRemovedWires) :
+    (result.checked.val.wires
+      (result.retainedWireImage sourceWire retained)).endpoints =
+      result.retainedTargetEndpoints sourceWire retained ++
+        result.targetArgumentEndpoints sourceWire retained := by
+  unfold retainedWireImage sourceRemovedWires retainedTargetEndpoints
+    targetArgumentEndpoints
+  rw [Internal.checkedWire_endpoints_transport result.generated]
+  unfold parallelSplitCandidate parallelSplitBase
+  simp only [Fin.addCases_left, Internal.batchRemovalCandidate]
+  rw [List.map_append, List.map_map]
+  rfl
+
+theorem firstWire_endpoints
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.firstWire).endpoints =
+      (Data.Finite.allFin result.sites.sites.length).map (fun site =>
+        ({ node := result.firstNode site, port := .head } :
+          CEndpoint result.checked.val.nodeCount)) := by
+  rw [result.firstWire_exact,
+    Internal.checkedWire_endpoints_transport result.generated]
+  have exact : parallelSplitCandidateWire result.signature result.plan
+      (0 : Fin 2) = Fin.natAdd (parallelSplitBase result.plan).wireCount
+        (0 : Fin 2) := by apply Fin.ext; rfl
+  rw [exact]
+  unfold parallelSplitCandidate firstNode
+  simp only [Fin.addCases_right, List.map_map]
+  rfl
+
+theorem secondWire_endpoints
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (result : ParallelSplitResult source wire) :
+    (result.checked.val.wires result.secondWire).endpoints =
+      (Data.Finite.allFin result.sites.sites.length).map (fun site =>
+        ({ node := result.secondNode site, port := .head } :
+          CEndpoint result.checked.val.nodeCount)) := by
+  rw [result.secondWire_exact,
+    Internal.checkedWire_endpoints_transport result.generated]
+  have exact : parallelSplitCandidateWire result.signature result.plan
+      (1 : Fin 2) = Fin.natAdd (parallelSplitBase result.plan).wireCount
+        (1 : Fin 2) := by apply Fin.ext; rfl
+  rw [exact]
+  unfold parallelSplitCandidate secondNode
+  simp only [Fin.addCases_right, List.map_map]
+  rfl
 
 end ParallelSplitResult
 
