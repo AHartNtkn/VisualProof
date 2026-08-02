@@ -359,6 +359,12 @@ private structure BatchReconstructionState
     { wire : source.val.WireId //
         BatchCoveredWire sites restored wire } →
       current.val.WireId
+  pendingApplications : List current.val.NodeId
+  representedNodesAvoidPending :
+    ∀ node :
+        { node : source.val.NodeId //
+          BatchCoveredNode sites restored node },
+      nodeImage node ∉ pendingApplications
 
 private def formalBoundaryValid
     {source : CheckedDiagram definitions}
@@ -602,6 +608,24 @@ private def batchReconstructionNil
         simpa [BatchCoveredWire, restoredWire, retainedBySitesWire]
           using wire.2
       exact (result.retainedWire_iff wire.1).mpr retained)
+  pendingApplications := result.atoms
+  representedNodesAvoidPending := by
+    intro node pending
+    have retained :
+        node.1 ∉
+          sites.flatMap
+            ConcreteWireQuantifier.RelationSeverSite.removedNodes := by
+      simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+        using node.2
+    have retainedMember := (result.retainedNode_iff node.1).mpr retained
+    unfold ConcreteWireQuantifier.RelationSeverResult.atoms at pending
+    rcases List.mem_map.mp pending with ⟨site, _siteMember, atomExact⟩
+    have values := congrArg Fin.val atomExact
+    rw [result.atom_val] at values
+    rw [result.nodeImage_val node.1 retainedMember] at values
+    have imageBound :=
+      result.nodeImage_lt_retainedCount node.1 retainedMember
+    omega
 
 /-- Snoc carrier step: transport the existing reconstructed prefix through
 atom deletion and splice, then allocate the newly restored occurrence in the
@@ -619,13 +643,10 @@ private noncomputable def batchReconstructionSnoc
     {dying : joinSource.val.WireId}
     (step : ConcreteWireQuantifier.RelationJoinStep joinSource dying pattern)
     (priorExact : step.prior = current)
-    (representedNodeDifferent :
-      ∀ node :
-          { node : source.val.NodeId //
-            BatchCoveredNode sites restored node },
-        cast (congrArg (fun checked => checked.val.NodeId) priorExact.symm)
-            (state.nodeImage node) ≠
-          step.priorApplication) :
+    (currentApplication :
+      step.priorApplication ∈
+        cast (congrArg (fun checked => List checked.val.NodeId)
+          priorExact.symm) state.pendingApplications) :
     BatchReconstructionState sites (restored ++ [content]) step.checked := by
   classical
   subst current
@@ -653,7 +674,10 @@ private noncomputable def batchReconstructionSnoc
       nodeImage := fun node =>
         if old : BatchCoveredNode sites restored node.1 then
           step.checkedPriorNode (state.nodeImage ⟨node.1, old⟩)
-            (representedNodeDifferent ⟨node.1, old⟩)
+            (by
+              intro same
+              exact state.representedNodesAvoidPending ⟨node.1, old⟩
+                (by simpa [same] using currentApplication))
         else
           have fresh : ∃ patternNode,
               content.occurrence.nodeMap patternNode = node.1 := by
@@ -689,7 +713,57 @@ private noncomputable def batchReconstructionSnoc
                   simpa using final
                 subst candidate
                 exact ⟨patternWire, internal, mapped⟩
-          step.checkedFragmentWire fresh.choose }
+          step.checkedFragmentWire fresh.choose
+      pendingApplications :=
+        step.checkedRemainingNodes state.pendingApplications
+      representedNodesAvoidPending := by
+        intro node pending
+        unfold ConcreteWireQuantifier.RelationJoinStep.checkedRemainingNodes at pending
+        rw [List.mem_filterMap] at pending
+        rcases pending with ⟨prior, priorMember, emitted⟩
+        split at emitted
+        · rename_i priorDifferent
+          have mapped := Option.some.inj emitted
+          by_cases old : BatchCoveredNode sites restored node.1
+          · have representedDifferent :
+                state.nodeImage ⟨node.1, old⟩ ≠
+                  step.priorApplication := by
+              intro representedExact
+              exact state.representedNodesAvoidPending ⟨node.1, old⟩
+                (by simpa [representedExact] using currentApplication)
+            have priorExact : state.nodeImage ⟨node.1, old⟩ = prior :=
+              have mappedOld :
+                  step.checkedPriorNode prior priorDifferent =
+                    step.checkedPriorNode
+                      (state.nodeImage ⟨node.1, old⟩)
+                      representedDifferent := by
+                simpa only [dif_pos old] using mapped
+              step.checkedPriorNode_injective representedDifferent
+                priorDifferent mappedOld.symm
+            exact state.representedNodesAvoidPending ⟨node.1, old⟩
+              (priorExact.symm ▸ priorMember)
+          · have fresh : ∃ patternNode,
+                content.occurrence.nodeMap patternNode = node.1 := by
+              rcases node.2 with retained | restoredAll
+              · exact False.elim (old (Or.inl retained))
+              · rcases restoredAll with
+                  ⟨candidate, member, patternNode, occurrenceExact⟩
+                rcases List.mem_append.mp member with previous | final
+                · exact False.elim
+                    (old (Or.inr
+                      ⟨candidate, previous, patternNode,
+                        occurrenceExact⟩))
+                · have candidateExact : candidate = content := by
+                    simpa using final
+                  subst candidate
+                  exact ⟨patternNode, occurrenceExact⟩
+            have mappedFresh :
+                step.checkedPriorNode prior priorDifferent =
+                  step.checkedFragmentNode fresh.choose := by
+              simpa only [dif_neg old] using mapped
+            exact step.checkedFragmentNode_ne_checkedPriorNode
+              fresh.choose prior priorDifferent mappedFresh.symm
+        · contradiction }
 
 /-- Opaque accepted strongest relation-join transformation. -/
 structure AppliedMonolithicRelationJoin

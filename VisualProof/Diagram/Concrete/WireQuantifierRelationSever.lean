@@ -358,6 +358,16 @@ def relationWire
         node survives).val := by
   rfl
 
+theorem nodeImage_lt_retainedCount
+    (result : RelationSeverResult source scope sites)
+    (node : source.val.NodeId)
+    (survives :
+      node ∈ Internal.retainedNodes source (relationRemovedNodes sites)) :
+    (result.nodeImage node survives).val <
+      (Internal.retainedNodes source (relationRemovedNodes sites)).length :=
+  (Internal.retainedNodeIndex source (relationRemovedNodes sites)
+    node survives).isLt
+
 /-- Retained wires occupy the original dense-removal prefix in exact order. -/
 @[simp] theorem wireImage_val
     (result : RelationSeverResult source scope sites)

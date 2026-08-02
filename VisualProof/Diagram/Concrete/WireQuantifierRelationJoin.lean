@@ -444,6 +444,43 @@ theorem checkedPriorNode_injective
   rw [DenseList.get_index, DenseList.get_index] at values
   exact values
 
+theorem checkedFragmentNode_ne_checkedPriorNode
+    (step : RelationJoinStep source dying content)
+    (fragment : content.val.diagram.NodeId)
+    (prior : step.prior.val.NodeId)
+    (different : prior ≠ step.priorApplication) :
+    step.checkedFragmentNode fragment ≠
+      step.checkedPriorNode prior different := by
+  intro same
+  have values := congrArg Fin.val same
+  have baseCount :
+      step.base.val.nodeCount =
+        (ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+          step.prior.val [step.priorApplication]).length := by
+    rw [step.baseGenerated]
+  have priorBound :=
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+      step.prior step.priorApplication prior (by
+        simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+          ConcreteDiagram.nodesList, Data.Finite.mem_allFin,
+          different])).isLt
+  simp [checkedFragmentNode, checkedPriorNode, Internal.checkedNode,
+    ConcreteSpliceAttachment.fragmentNode,
+    ConcreteSpliceAttachment.hostNode] at values
+  omega
+
+/-- Transport every still-generated application except the atom consumed by
+this step into the checked splice target. -/
+def checkedRemainingNodes
+    (step : RelationJoinStep source dying content)
+    (nodes : List step.prior.val.NodeId) :
+    List step.checked.val.NodeId :=
+  nodes.filterMap fun node =>
+    if different : node ≠ step.priorApplication then
+      some (step.checkedPriorNode node different)
+    else
+      none
+
 theorem attachment_accepted
     (step : RelationJoinStep source dying content) :
     checkConcreteSpliceAttachment step.base step.site content
