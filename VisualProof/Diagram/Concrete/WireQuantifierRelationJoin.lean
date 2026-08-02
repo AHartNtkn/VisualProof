@@ -550,6 +550,23 @@ theorem checkedFragmentWire_ne_checkedPriorWire_of_internal
   rw [ConcreteSpliceAttachment.fragmentWire, dif_neg internal] at underlying
   exact step.attachment.hostWire_ne_freshWire _ _ underlying.symm
 
+/-- A relation splice whose ordered source attachments respect repeated
+boundary-source classes allocates no identity nodes. -/
+theorem identityRequests_eq_nil_of_sourceAttachments_coherent
+    (step : RelationJoinStep source dying content)
+    (coherent :
+      ∀ left right : Fin content.val.boundary.length,
+        content.val.boundary.get left = content.val.boundary.get right →
+          step.sourceAttachments.get
+              (Fin.cast step.sourceAttachmentArity.symm left) =
+            step.sourceAttachments.get
+              (Fin.cast step.sourceAttachmentArity.symm right)) :
+    step.attachment.identityRequests = [] := by
+  apply step.attachment.identityRequests_eq_nil_of_boundary_coherent
+  intro left right same
+  rw [step.targetExact, step.targetExact]
+  exact congrArg step.baseWireImage (coherent left right same)
+
 theorem checkedPriorNode_injective
     (step : RelationJoinStep source dying content)
     {left right : step.prior.val.NodeId}

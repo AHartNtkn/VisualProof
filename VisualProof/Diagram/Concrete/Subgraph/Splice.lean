@@ -546,6 +546,72 @@ theorem identityRequests_exact
       computedIdentityRequests base fragment attachment.target :=
   rfl
 
+/-- Positional attachment targets that agree whenever their boundary source
+wire agrees generate no identity requests. -/
+theorem identityRequests_eq_nil_of_boundary_coherent
+    (attachment : ConcreteSpliceAttachment base site fragment)
+    (coherent :
+      ∀ left right : Fin fragment.val.boundary.length,
+        fragment.val.boundary.get left =
+            fragment.val.boundary.get right →
+          attachment.target left = attachment.target right) :
+    attachment.identityRequests = [] := by
+  rw [attachment.identityRequests_exact]
+  apply List.eq_nil_iff_forall_not_mem.mpr
+  intro request member
+  unfold computedIdentityRequests at member
+  rw [List.mem_eraseDups, List.mem_filterMap] at member
+  rcases member with ⟨source, _, emitted⟩
+  let targets :=
+    concreteAttachmentTargets base fragment attachment.target source
+  have targetsSubsingleton :
+      ∀ left ∈ targets, ∀ right ∈ targets, left = right := by
+    intro left leftMember right rightMember
+    unfold targets concreteAttachmentTargets at leftMember rightMember
+    rw [List.mem_eraseDups, List.mem_filterMap] at leftMember rightMember
+    rcases leftMember with ⟨leftPosition, _, leftEmission⟩
+    rcases rightMember with ⟨rightPosition, _, rightEmission⟩
+    split at leftEmission
+    · rename_i leftSource
+      split at rightEmission
+      · rename_i rightSource
+        have leftTarget : attachment.target leftPosition = left :=
+          Option.some.inj leftEmission
+        have rightTarget : attachment.target rightPosition = right :=
+          Option.some.inj rightEmission
+        rw [← leftTarget, ← rightTarget]
+        exact coherent leftPosition rightPosition
+          (leftSource.trans rightSource.symm)
+      · contradiction
+    · contradiction
+  have targetsNodup : targets.Nodup := by
+    unfold targets concreteAttachmentTargets
+    exact Data.Finite.eraseDups_nodup _
+  have targetsLength : targets.length ≤ 1 := by
+    cases targetsEq : targets with
+    | nil => simp
+    | cons head tail =>
+        cases tailEq : tail with
+        | nil => simp
+        | cons next rest =>
+            rw [targetsEq, tailEq] at targetsNodup targetsSubsingleton
+            have different : head ≠ next := by
+              rw [List.nodup_cons] at targetsNodup
+              exact fun same => targetsNodup.1 (by
+                rw [same]
+                exact List.mem_cons_self)
+            exact False.elim
+              (different
+                (targetsSubsingleton head List.mem_cons_self next
+                  (List.mem_cons_of_mem _ List.mem_cons_self)))
+  change
+    (if 2 ≤ targets.length then
+      some { source := source, attachments := targets }
+    else none) = some request at emitted
+  split at emitted
+  · omega
+  · contradiction
+
 end ConcreteSpliceAttachment
 
 /-- Executably validate explicit target positions into a typed attachment. -/
