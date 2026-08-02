@@ -129,6 +129,25 @@ def target
     CheckedDiagram definitions :=
   applied.checked.checked
 
+/-- The exact concrete construction accepted by this opaque wrap receipt.
+Compiler factorization consumes its carrier-origin maps; it does not rerun the
+content checker. -/
+def constructionResult
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutWrap source wire) :
+    CutWrapResult source wire :=
+  applied.checked
+
+/-- The accepted positional/common-core evidence paired with the wrap
+construction. -/
+def constructionLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedCutWrap source wire) :
+    CutWrapResult.SiteLedger applied.constructionResult :=
+  applied.ledger
+
 /-- Receipt-owned wire on which the exact inverse absorb acts. -/
 def inverseWire
     {source : CheckedDiagram definitions}
@@ -199,6 +218,23 @@ def target
     (applied : AppliedParallelSplit source wire) :
     CheckedDiagram definitions :=
   applied.checked.checked
+
+/-- The exact concrete construction accepted by this opaque split receipt. -/
+def constructionResult
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedParallelSplit source wire) :
+    ParallelSplitResult source wire :=
+  applied.checked
+
+/-- The accepted positional/common-core evidence paired with the split
+construction. -/
+def constructionLedger
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    (applied : AppliedParallelSplit source wire) :
+    ParallelSplitResult.SiteLedger applied.constructionResult :=
+  applied.ledger
 
 /-- Receipt-owned first wire of the exact inverse fuse. -/
 def inverseLeft
@@ -282,6 +318,26 @@ def target
     (applied : AppliedEndsDelete source orientation wire) :
     CheckedDiagram definitions :=
   applied.checked.checked
+
+/-- The exact concrete construction accepted by this opaque all-ends
+deletion receipt. -/
+def constructionResult
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedEndsDelete source orientation wire) :
+    EndsDeleteResult source wire :=
+  applied.checked
+
+/-- The accepted common-core and deletion evidence paired with the all-ends
+construction. -/
+def constructionLedger
+    {source : CheckedDiagram definitions}
+    {orientation : Orientation}
+    {wire : source.val.WireId}
+    (applied : AppliedEndsDelete source orientation wire) :
+    EndsDeleteResult.SiteLedger applied.constructionResult :=
+  applied.ledger
 
 /-- Exact endpoint-free acted wire retained by all-ends deletion. -/
 def inverseWire
