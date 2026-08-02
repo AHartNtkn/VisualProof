@@ -550,6 +550,56 @@ theorem checkedPriorRegion_cut
   rw [baseData]
   rfl
 
+/-- A surviving prior node keeps its constructor and intrinsic payload; its
+sole region carrier follows `checkedPriorRegion`. -/
+theorem checkedPriorNode_data
+    (step : RelationJoinStep source dying content)
+    (node : step.prior.val.NodeId)
+    (different : node ≠ step.priorApplication) :
+    step.checked.val.nodes (step.checkedPriorNode node different) =
+      (step.prior.val.nodes node).relocate
+        (step.checkedPriorRegion (step.prior.val.nodes node).region) := by
+  unfold checkedPriorNode checkedPriorRegion
+  change step.checked.val.nodes
+      (Internal.checkedNode step.generated _) = _
+  rw [Internal.checkedNode_data_transport]
+  rw [ConcreteSpliceAttachment.diagram_node_hostNode]
+  have retained :
+      node ∈ ConcreteDiagram.IdentityNormalizationCore.retainedNodes
+        step.prior.val [step.priorApplication] := by
+    simp [ConcreteDiagram.IdentityNormalizationCore.retainedNodes,
+      ConcreteDiagram.nodesList, Data.Finite.mem_allFin, different]
+  have erased :=
+    ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex_data
+      step.prior step.priorApplication node retained
+  have baseData := Internal.checkedNode_data_transport step.baseGenerated
+    (ConcreteDiagram.IdentityNormalizationCore.eraseNodeIndex
+      step.prior step.priorApplication node retained)
+  unfold ConcreteSpliceAttachment.renameHostNode
+  rw [baseData, erased]
+  cases data : step.prior.val.nodes node <;>
+    simp [ConcreteSpliceAttachment.renameHostNode, CNode.relocate,
+      CNode.region, Internal.checkedNodeData, Internal.checkedRegion]
+
+/-- A fragment node keeps its exact constructor and payload under splice;
+its region carrier is the fragment region image. -/
+theorem checkedFragmentNode_data
+    (step : RelationJoinStep source dying content)
+    (node : content.val.diagram.NodeId) :
+    step.checked.val.nodes (step.checkedFragmentNode node) =
+      (content.val.diagram.nodes node).relocate
+        (step.checkedFragmentRegion
+          (content.val.diagram.nodes node).region) := by
+  unfold checkedFragmentNode checkedFragmentRegion
+  change step.checked.val.nodes
+      (Internal.checkedNode step.generated _) = _
+  rw [Internal.checkedNode_data_transport]
+  rw [ConcreteSpliceAttachment.diagram_node_fragmentNode]
+  unfold ConcreteSpliceAttachment.renameFragmentNode
+  cases data : content.val.diagram.nodes node <;>
+    simp [ConcreteSpliceAttachment.renameFragmentNode, CNode.relocate,
+      CNode.region, Internal.checkedNodeData, Internal.checkedRegion]
+
 /-- A non-root fragment cut is allocated freshly while retaining its exact
 fragment parent, including identification of a root parent with the splice
 site. -/
@@ -1744,6 +1794,14 @@ private structure RelationJoinFinalRemoval
               Data.Finite.mem_allFin]))
   allRegionImage_injective : Function.Injective allRegionImage
   allNodeImage : state.checked.val.NodeId → checked.val.NodeId
+  allNodeImageExact :
+    ∀ node,
+      allNodeImage node =
+        Internal.checkedNode generated
+          (Internal.retainedNodeIndex state.checked [] node (by
+            simp [Internal.retainedNodes,
+              ConcreteDiagram.nodesList,
+              Data.Finite.mem_allFin]))
   allNodeImage_injective : Function.Injective allNodeImage
   allWireImage :
     ∀ boundWire : state.checked.val.WireId,
@@ -1806,6 +1864,7 @@ private def removeRelationJoinWire
                     simp [Internal.retainedNodes,
                       ConcreteDiagram.nodesList,
                       Data.Finite.mem_allFin]))
+              allNodeImageExact := fun _ => rfl
               allNodeImage_injective := by
                 intro left right same
                 apply retainedNodeIndex_injective state.checked []
@@ -2032,6 +2091,53 @@ theorem plainBoundNodeImage_injective
     (result : RelationJoinResult source wire content parameters) :
     Function.Injective result.plainBoundNodeImage :=
   result.finalRemoval.allNodeImage_injective
+
+/-- Final exhausted-relation deletion preserves every node constructor and
+payload while transporting its sole region carrier. -/
+theorem plainBoundNodeImage_data
+    (result : RelationJoinResult source wire content parameters)
+    (node : result.boundFinal.val.NodeId) :
+    result.plainFinal.val.nodes (result.plainBoundNodeImage node) =
+      (result.boundFinal.val.nodes node).relocate
+        (result.plainBoundRegionImage
+          (result.boundFinal.val.nodes node).region) := by
+  unfold plainBoundNodeImage plainBoundRegionImage
+  rw [result.finalRemoval.allNodeImageExact,
+    result.finalRemoval.allRegionImageExact]
+  change result.plainFinal.val.nodes
+      (Internal.checkedNode result.finalRemoval.generated _) = _
+  rw [Internal.checkedNode_data_transport]
+  let target := Internal.retainedNodeIndex result.boundFinal [] node (by
+    simp [Internal.retainedNodes, ConcreteDiagram.nodesList,
+      Data.Finite.mem_allFin])
+  change Internal.checkedNodeData result.finalRemoval.generated
+      (Internal.batchNodeTable result.finalRemoval.plan target) = _
+  rw [Internal.batchNodeTable_retained_data]
+  have sourceAt :
+      Internal.sourceRetainedNode result.boundFinal [] target = node :=
+    DenseList.get_index _ _ _
+  have transported_congr :
+      ∀ (left right : result.boundFinal.val.NodeId)
+        (leftRegion : (result.boundFinal.val.nodes left).region ∈
+          Internal.retainedRegions result.boundFinal [])
+        (rightRegion : (result.boundFinal.val.nodes right).region ∈
+          Internal.retainedRegions result.boundFinal []),
+        left = right →
+          Internal.checkedNodeData result.finalRemoval.generated
+              ((result.boundFinal.val.nodes left).relocate
+                (Internal.retainedRegionIndex result.boundFinal []
+                  (result.boundFinal.val.nodes left).region leftRegion)) =
+            (result.boundFinal.val.nodes right).relocate
+              (Internal.checkedRegion result.finalRemoval.generated
+                (Internal.retainedRegionIndex result.boundFinal []
+                  (result.boundFinal.val.nodes right).region rightRegion)) := by
+    intro left right leftRegion rightRegion same
+    subst right
+    exact Internal.checkedNodeData_relocate _ _ _
+  exact transported_congr _ _
+    (result.finalRemoval.plan.nodeRegionRetained target)
+    (by simp [Internal.retainedRegions, ConcreteDiagram.regionsList,
+      Data.Finite.mem_allFin]) sourceAt
 
 /-- Exact final-deletion landing for every surviving post-splice wire. -/
 def plainBoundWireImage

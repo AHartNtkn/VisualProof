@@ -377,6 +377,78 @@ theorem nodeImage_lt_retainedCount
   (Internal.retainedNodeIndex source (relationRemovedNodes sites)
     node survives).isLt
 
+theorem nodeRegion_survives
+    (result : RelationSeverResult source scope sites)
+    (node : source.val.NodeId)
+    (survives :
+      node ∈ Internal.retainedNodes source (relationRemovedNodes sites)) :
+    (source.val.nodes node).region ∈
+      Internal.retainedRegions source (relationRemovedRegions sites) := by
+  have retained :=
+    result.plan.removal.nodeRegionRetained
+      (Internal.retainedNodeIndex source (relationRemovedNodes sites)
+        node survives)
+  unfold Internal.retainedNodeIndex at retained
+  change
+    (source.val.nodes
+      ((Internal.retainedNodes source (relationRemovedNodes sites)).get
+        (DenseList.index
+          (Internal.retainedNodes source (relationRemovedNodes sites))
+          node survives))).region ∈
+      Internal.retainedRegions source (relationRemovedRegions sites) at retained
+  rw [DenseList.get_index] at retained
+  exact retained
+
+@[simp] theorem nodeImage_data
+    (result : RelationSeverResult source scope sites)
+    (node : source.val.NodeId)
+    (survives :
+      node ∈ Internal.retainedNodes source (relationRemovedNodes sites)) :
+    result.checked.val.nodes (result.nodeImage node survives) =
+      (source.val.nodes node).relocate
+        (result.regionImage (source.val.nodes node).region
+          (result.nodeRegion_survives node survives)) := by
+  unfold nodeImage regionImage
+  rw [Internal.checkedNode_data_transport]
+  simp only [relationSeverCandidate, Fin.addCases_left]
+  let target := Internal.retainedNodeIndex source
+    (relationRemovedNodes sites) node survives
+  rw [Internal.batchNodeTable_retained_data]
+  have checkedData := Internal.checkedNodeData_relocate result.generated
+    (source.val.nodes
+      (Internal.sourceRetainedNode source (relationRemovedNodes sites) target))
+    (Internal.retainedRegionIndex source (relationRemovedRegions sites)
+      (source.val.nodes
+        (Internal.sourceRetainedNode source
+          (relationRemovedNodes sites) target)).region
+      (result.plan.removal.nodeRegionRetained target))
+  have sourceAt :
+      Internal.sourceRetainedNode source (relationRemovedNodes sites) target =
+        node := DenseList.get_index _ _ _
+  have transported_congr :
+      ∀ (left right : source.val.NodeId)
+        (leftRegion : (source.val.nodes left).region ∈
+          Internal.retainedRegions source (relationRemovedRegions sites))
+        (rightRegion : (source.val.nodes right).region ∈
+          Internal.retainedRegions source (relationRemovedRegions sites)),
+        left = right →
+          (source.val.nodes left).relocate
+              (Internal.checkedRegion result.generated
+                (Internal.retainedRegionIndex source
+                  (relationRemovedRegions sites)
+                  (source.val.nodes left).region leftRegion)) =
+            (source.val.nodes right).relocate
+              (Internal.checkedRegion result.generated
+                (Internal.retainedRegionIndex source
+                  (relationRemovedRegions sites)
+                  (source.val.nodes right).region rightRegion)) := by
+    intro left right leftRegion rightRegion same
+    subst right
+    rfl
+  exact checkedData.trans (transported_congr _ _
+    (result.plan.removal.nodeRegionRetained target)
+    (result.nodeRegion_survives node survives) sourceAt)
+
 /-- Retained wires occupy the original dense-removal prefix in exact order. -/
 @[simp] theorem wireImage_val
     (result : RelationSeverResult source scope sites)

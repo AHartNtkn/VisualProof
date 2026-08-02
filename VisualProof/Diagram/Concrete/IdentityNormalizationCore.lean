@@ -515,6 +515,36 @@ def eraseNodeIndex
     (retainedNodes source.val [removed]) candidate).get
       (Data.Finite.indexOf?_isSome_iff.mpr retained)
 
+/-- A retained node keeps its constructor and payload under singleton-node
+deletion; only its region carrier is transported. -/
+theorem eraseNodeIndex_data
+    (source : CheckedDiagram definitions)
+    (removed candidate : source.val.NodeId)
+    (retained : candidate ∈ retainedNodes source.val [removed]) :
+    (eraseNodeCandidate source removed).nodes
+        (eraseNodeIndex source removed candidate retained) =
+      (source.val.nodes candidate).relocate
+        (eraseNodeRegion source removed
+          (source.val.nodes candidate).region) := by
+  unfold eraseNodeCandidate eraseNodeIndex
+  let retainedNodesList := retainedNodes source.val [removed]
+  let hsome :
+      (Data.Finite.indexOf? retainedNodesList candidate).isSome = true :=
+    Data.Finite.indexOf?_isSome_iff.mpr retained
+  obtain ⟨found, foundExact⟩ := Option.isSome_iff_exists.mp hsome
+  have indexed :
+      retainedNodesList.get
+          ((Data.Finite.indexOf? retainedNodesList candidate).get hsome) =
+        candidate := by
+    rw [Option.get_of_eq_some hsome foundExact]
+    simpa only [List.get_eq_getElem] using
+      Data.Finite.indexOf?_sound foundExact
+  change source.val.nodes
+      (retainedNodesList.get
+        ((Data.Finite.indexOf? retainedNodesList candidate).get hsome)) = _
+  rw [indexed]
+  cases source.val.nodes candidate <;> rfl
+
 /-- Raw Rule 1 candidate. Its sole consumer is the preservation proof layer. -/
 def dropCandidate
     (source : CheckedDiagram definitions)

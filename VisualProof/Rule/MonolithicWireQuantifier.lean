@@ -825,6 +825,17 @@ private structure BatchReconstructionState
         BatchCoveredNode sites restored node } →
       current.val.NodeId
   nodeImage_injective : Function.Injective nodeImage
+  nodeRegionCovered :
+    ∀ node : { node : source.val.NodeId //
+        BatchCoveredNode sites restored node },
+      BatchCoveredRegion sites restored (source.val.nodes node.1).region
+  nodeTableExact :
+    ∀ node : { node : source.val.NodeId //
+        BatchCoveredNode sites restored node },
+      current.val.nodes (nodeImage node) =
+        (source.val.nodes node.1).relocate
+          (regionImage
+            ⟨(source.val.nodes node.1).region, nodeRegionCovered node⟩)
   wireImage :
     { wire : source.val.WireId //
         BatchCoveredWire sites restored wire } →
@@ -1185,6 +1196,20 @@ private def batchReconstructionNil
             using right.2))
     apply Fin.ext
     simpa using congrArg Fin.val same
+  nodeRegionCovered := by
+    intro node
+    apply Or.inl
+    have nodeRetained := (result.retainedNode_iff node.1).mpr (by
+      simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+        using node.2)
+    exact (result.retainedRegion_iff _).mp
+      (result.nodeRegion_survives node.1 nodeRetained)
+  nodeTableExact := by
+    intro node
+    have nodeRetained := (result.retainedNode_iff node.1).mpr (by
+      simpa [BatchCoveredNode, restoredNode, retainedBySitesNode]
+        using node.2)
+    exact result.nodeImage_data node.1 nodeRetained
   wireImage := fun wire =>
     result.wireImage wire.1 (by
       have retained :
@@ -2127,6 +2152,174 @@ private noncomputable def batchReconstructionSnoc
             apply Subtype.ext
             exact leftFresh.choose_spec.symm.trans
               (patternSame ▸ rightFresh.choose_spec)
+      nodeRegionCovered := by
+        intro node
+        by_cases old : BatchCoveredNode sites restored node.1
+        · exact coveredRegion_mono
+            (state.nodeRegionCovered ⟨node.1, old⟩)
+        · let fresh := newlyCoveredNode content node.1 node.2 old
+          have sourceData := content.occurrence.node_data fresh.choose
+          rw [fresh.choose_spec] at sourceData
+          have sourceRegionExact := congrArg CNode.region sourceData
+          simp only [CNode.region_relocate] at sourceRegionExact
+          rw [sourceRegionExact]
+          by_cases root :
+              (pattern.val.diagram.nodes fresh.choose).region =
+                pattern.val.diagram.root
+          · rw [root]
+            exact coveredRegion_mono rootCovered
+          · exact Or.inr
+              ⟨content, by simp,
+                (pattern.val.diagram.nodes fresh.choose).region, root, rfl⟩
+      nodeTableExact := by
+        intro node
+        by_cases old : BatchCoveredNode sites restored node.1
+        · have different :
+              state.nodeImage ⟨node.1, old⟩ ≠ step.priorApplication := by
+            intro same
+            exact state.representedNodesAvoidPending ⟨node.1, old⟩
+              (by simpa [same] using currentApplication)
+          have transported := step.checkedPriorNode_data
+            (state.nodeImage ⟨node.1, old⟩) different
+          have priorData := state.nodeTableExact ⟨node.1, old⟩
+          rw [priorData] at transported
+          have regionOld := state.nodeRegionCovered ⟨node.1, old⟩
+          simpa only [dif_pos old, dif_pos regionOld,
+            CNode.region_relocate, CNode.relocate_relocate] using transported
+        · let fresh := newlyCoveredNode content node.1 node.2 old
+          have sourceData := content.occurrence.node_data fresh.choose
+          rw [fresh.choose_spec] at sourceData
+          have sourceRegionExact := congrArg CNode.region sourceData
+          simp only [CNode.region_relocate] at sourceRegionExact
+          have fragmentData := step.checkedFragmentNode_data fresh.choose
+          rw [dif_neg old]
+          let allocatedRegion :
+              { region : source.val.RegionId //
+                BatchCoveredRegion sites (restored ++ [content]) region } →
+                step.checked.val.RegionId := fun region =>
+            if prior : BatchCoveredRegion sites restored region.1 then
+              step.checkedPriorRegion (state.regionImage ⟨region.1, prior⟩)
+            else
+              have new := newlyCoveredRegion content region.1 region.2 prior
+              step.checkedFragmentRegion new.choose
+          have sourceCovered :
+              BatchCoveredRegion sites (restored ++ [content])
+                (source.val.nodes node.1).region := by
+            have newData := content.occurrence.node_data fresh.choose
+            rw [fresh.choose_spec] at newData
+            have newRegion := congrArg CNode.region newData
+            simp only [CNode.region_relocate] at newRegion
+            rw [newRegion]
+            by_cases atRoot :
+                (pattern.val.diagram.nodes fresh.choose).region =
+                  pattern.val.diagram.root
+            · rw [atRoot]
+              exact coveredRegion_mono rootCovered
+            · exact Or.inr ⟨content, by simp,
+                (pattern.val.diagram.nodes fresh.choose).region,
+                atRoot, rfl⟩
+          let sourceCarrier :
+              { region : source.val.RegionId //
+                BatchCoveredRegion sites (restored ++ [content]) region } :=
+            ⟨(source.val.nodes node.1).region, sourceCovered⟩
+          change step.checked.val.nodes
+              (step.checkedFragmentNode fresh.choose) =
+            (source.val.nodes node.1).relocate
+              (allocatedRegion sourceCarrier)
+          by_cases root :
+              (pattern.val.diagram.nodes fresh.choose).region =
+                pattern.val.diagram.root
+          · have sourceRoot :
+                (source.val.nodes node.1).region =
+                  content.occurrence.regionMap pattern.val.diagram.root := by
+              simpa [root] using sourceRegionExact
+            have mappedImage :
+                allocatedRegion
+                    ⟨content.occurrence.regionMap pattern.val.diagram.root,
+                      coveredRegion_mono rootCovered⟩ =
+                  step.checkedFragmentRegion pattern.val.diagram.root := by
+              unfold allocatedRegion
+              rw [dif_pos rootCovered]
+              exact rootExact.symm
+            have sourceImage :
+                allocatedRegion sourceCarrier =
+                  step.checkedFragmentRegion pattern.val.diagram.root := by
+              exact (congrArg allocatedRegion
+                (Subtype.ext sourceRoot)).trans mappedImage
+            have relocatedSource := congrArg
+              (fun data => data.relocate (allocatedRegion sourceCarrier))
+              sourceData
+            calc
+              step.checked.val.nodes
+                    (step.checkedFragmentNode fresh.choose) =
+                  (pattern.val.diagram.nodes fresh.choose).relocate
+                    (step.checkedFragmentRegion
+                      (pattern.val.diagram.nodes fresh.choose).region) :=
+                fragmentData
+              _ = (pattern.val.diagram.nodes fresh.choose).relocate
+                    (step.checkedFragmentRegion pattern.val.diagram.root) := by
+                rw [root]
+              _ = (pattern.val.diagram.nodes fresh.choose).relocate
+                    (allocatedRegion sourceCarrier) :=
+                congrArg
+                  (fun region =>
+                    (pattern.val.diagram.nodes fresh.choose).relocate region)
+                  sourceImage.symm
+              _ = (source.val.nodes node.1).relocate
+                    (allocatedRegion sourceCarrier) := by
+                simpa only [CNode.relocate_relocate] using
+                  relocatedSource.symm
+          · have regionNew := freshRegionsNew
+              (pattern.val.diagram.nodes fresh.choose).region root
+            let regionFresh := newlyCoveredRegion content
+              (content.occurrence.regionMap
+                (pattern.val.diagram.nodes fresh.choose).region)
+              (Or.inr ⟨content, by simp,
+                (pattern.val.diagram.nodes fresh.choose).region, root, rfl⟩)
+              regionNew
+            have patternRegionExact :
+                regionFresh.choose =
+                  (pattern.val.diagram.nodes fresh.choose).region :=
+              content.occurrence.regionMap_injective
+                regionFresh.choose_spec.2
+            have mappedImage :
+                allocatedRegion
+                    ⟨content.occurrence.regionMap
+                        (pattern.val.diagram.nodes fresh.choose).region,
+                      Or.inr ⟨content, by simp,
+                        (pattern.val.diagram.nodes fresh.choose).region,
+                        root, rfl⟩⟩ =
+                  step.checkedFragmentRegion
+                    (pattern.val.diagram.nodes fresh.choose).region := by
+              unfold allocatedRegion
+              rw [dif_neg regionNew]
+              exact congrArg step.checkedFragmentRegion patternRegionExact
+            have sourceImage :
+                allocatedRegion sourceCarrier =
+                  step.checkedFragmentRegion
+                    (pattern.val.diagram.nodes fresh.choose).region := by
+              exact (congrArg allocatedRegion
+                (Subtype.ext sourceRegionExact)).trans mappedImage
+            have relocatedSource := congrArg
+              (fun data => data.relocate (allocatedRegion sourceCarrier))
+              sourceData
+            calc
+              step.checked.val.nodes
+                    (step.checkedFragmentNode fresh.choose) =
+                  (pattern.val.diagram.nodes fresh.choose).relocate
+                    (step.checkedFragmentRegion
+                      (pattern.val.diagram.nodes fresh.choose).region) :=
+                fragmentData
+              _ = (pattern.val.diagram.nodes fresh.choose).relocate
+                    (allocatedRegion sourceCarrier) :=
+                congrArg
+                  (fun region =>
+                    (pattern.val.diagram.nodes fresh.choose).relocate region)
+                  sourceImage.symm
+              _ = (source.val.nodes node.1).relocate
+                    (allocatedRegion sourceCarrier) := by
+                simpa only [CNode.relocate_relocate] using
+                  relocatedSource.symm
       wireImage := fun wire =>
         if old : BatchCoveredWire sites restored wire.1 then
           step.checkedPriorWire (state.wireImage ⟨wire.1, old⟩)
@@ -2739,6 +2932,21 @@ private theorem RelationSeverConcreteReceipt.completeNodeImage_injective
   exact Subtype.ext_iff.mp
     (receipt.completeCarrierState.nodeImage_injective same)
 
+private theorem RelationSeverConcreteReceipt.completeNodeImage_data
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (node : source.val.NodeId) :
+    receipt.inverse.boundFinal.val.nodes
+        (receipt.completeNodeImage node) =
+      (source.val.nodes node).relocate
+        (receipt.completeRegionImage (source.val.nodes node).region) := by
+  simpa [RelationSeverConcreteReceipt.completeNodeImage,
+    BatchReconstructionState.completeNodeImage,
+    RelationSeverConcreteReceipt.completeRegionImage,
+    BatchReconstructionState.completeRegionImage] using
+    receipt.completeCarrierState.nodeTableExact
+      ⟨node, receipt.extractions.entries.nodeCoverage node⟩
+
 private noncomputable def
     RelationSeverConcreteReceipt.completePlainRegionImage
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -2795,6 +3003,23 @@ private theorem
   intro left right same
   apply receipt.completeNodeImage_injective
   exact receipt.inverse.plainBoundNodeImage_injective same
+
+private theorem
+    RelationSeverConcreteReceipt.completePlainNodeImage_data
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (node : source.val.NodeId) :
+    receipt.inverse.plainFinal.val.nodes
+        (receipt.completePlainNodeImage node) =
+      (source.val.nodes node).relocate
+        (receipt.completePlainRegionImage
+          (source.val.nodes node).region) := by
+  have deleted := receipt.inverse.plainBoundNodeImage_data
+    (receipt.completeNodeImage node)
+  rw [receipt.completeNodeImage_data] at deleted
+  simpa [RelationSeverConcreteReceipt.completePlainNodeImage,
+    RelationSeverConcreteReceipt.completePlainRegionImage,
+    CNode.relocate_relocate, CNode.region_relocate] using deleted
 
 private theorem RelationSeverConcreteReceipt.completeWireImage_injective
     (receipt : RelationSeverConcreteReceipt source orientation scope pattern
@@ -3004,6 +3229,19 @@ private noncomputable def
         receipt.completePlainNodeImage
         receipt.completePlainNodeImage_injective
         receipt.constructionNodeCount_eq⟩
+
+private theorem RelationSeverConcreteReceipt.constructionNodeTable
+    (receipt : RelationSeverConcreteReceipt source orientation scope pattern
+      occurrences target)
+    (node : source.val.NodeId) :
+    receipt.inverse.plainFinal.val.nodes
+        (receipt.constructionNodeEquiv node) =
+      (source.val.nodes node).rename receipt.constructionRegionEquiv := by
+  change receipt.inverse.plainFinal.val.nodes
+      (receipt.completePlainNodeImage node) =
+    (source.val.nodes node).rename receipt.constructionRegionEquiv
+  rw [CNode.rename_eq_relocate]
+  exact receipt.completePlainNodeImage_data node
 
 private noncomputable def
     RelationSeverConcreteReceipt.constructionWireEquiv

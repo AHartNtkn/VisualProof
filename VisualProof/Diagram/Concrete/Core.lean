@@ -41,6 +41,38 @@ namespace CNode
 def region : CNode regionCount definitionCount → Fin regionCount
   | .atom region _ | .ref region _ _ | .identity region _ _ => region
 
+/-- Replace the sole region carrier of a concrete node while preserving its
+constructor and intrinsic payload. -/
+def relocate (target : Fin targetRegionCount) :
+    CNode regionCount definitionCount →
+      CNode targetRegionCount definitionCount
+  | .atom _ args => .atom target args
+  | .ref _ definition args => .ref target definition args
+  | .identity _ sig arity => .identity target sig arity
+
+theorem match_relocate
+    (node : CNode regionCount definitionCount)
+    (target : Fin targetRegionCount) :
+    (match node with
+      | .atom _ args => .atom target args
+      | .ref _ definition args => .ref target definition args
+      | .identity _ sig arity => .identity target sig arity) =
+      node.relocate target := by
+  cases node <;> rfl
+
+@[simp] theorem region_relocate
+    (node : CNode regionCount definitionCount)
+    (target : Fin targetRegionCount) :
+    (node.relocate target).region = target := by
+  cases node <;> rfl
+
+@[simp] theorem relocate_relocate
+    (node : CNode regionCount definitionCount)
+    (first : Fin firstRegionCount)
+    (second : Fin secondRegionCount) :
+    (node.relocate first).relocate second = node.relocate second := by
+  cases node <;> rfl
+
 end CNode
 
 /-- A wire owns its signature, lexical scope, and finite endpoint incidence. -/
@@ -191,6 +223,12 @@ def CNode.rename
   | .atom region args => .atom (regions region) args
   | .ref region definition args => .ref (regions region) definition args
   | .identity region sig arity => .identity (regions region) sig arity
+
+@[simp] theorem CNode.rename_eq_relocate
+    (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount))
+    (node : CNode leftCount definitionCount) :
+    node.rename regions = node.relocate (regions node.region) := by
+  cases node <;> rfl
 
 @[simp] theorem CNode.region_rename
     (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount))

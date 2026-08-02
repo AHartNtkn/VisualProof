@@ -508,6 +508,40 @@ def batchNodeTable
   | .ref _ definition arguments => .ref region definition arguments
   | .identity _ signature arity => .identity region signature arity
 
+/-- Exact retained-node payload and transported region in a batch table. -/
+theorem batchNodeTable_retained_data
+    {source : CheckedDiagram definitions}
+    {removedRegions : List source.val.RegionId}
+    {removedNodes : List source.val.NodeId}
+    {removedWires : List source.val.WireId}
+    (plan : BatchRemovalPlan source removedRegions removedNodes removedWires)
+    (target : Fin (retainedNodes source removedNodes).length) :
+    batchNodeTable plan target =
+      (source.val.nodes
+        (sourceRetainedNode source removedNodes target)).relocate
+        (retainedRegionIndex source removedRegions
+          (source.val.nodes
+            (sourceRetainedNode source removedNodes target)).region
+          (plan.nodeRegionRetained target)) := by
+  unfold batchNodeTable
+  dsimp only
+  let mapped := retainedRegionIndex source removedRegions
+    (source.val.nodes
+      (sourceRetainedNode source removedNodes target)).region
+    (plan.nodeRegionRetained target)
+  change
+    (match source.val.nodes
+        (sourceRetainedNode source removedNodes target) with
+      | .atom _ args => .atom mapped args
+      | .ref _ definition args => .ref mapped definition args
+      | .identity _ sig arity => .identity mapped sig arity) =
+      (source.val.nodes
+        (sourceRetainedNode source removedNodes target)).relocate mapped
+  clear_value mapped
+  cases nodeData :
+      source.val.nodes (sourceRetainedNode source removedNodes target) <;>
+    simp [nodeData, CNode.relocate]
+
 @[simp] theorem batchNodeTable_noRegions
     {source : CheckedDiagram definitions}
     {removedNodes : List source.val.NodeId}
@@ -2093,6 +2127,16 @@ def checkedNodeData
       .ref (checkedRegion generated region) definition args
   | .identity region sig arity =>
       .identity (checkedRegion generated region) sig arity
+
+theorem checkedNodeData_relocate
+    {checked : CheckedDiagram definitions}
+    {candidate : ConcreteDiagram definitions.length}
+    (generated : checked.val = candidate)
+    (node : CNode sourceRegionCount definitions.length)
+    (region : candidate.RegionId) :
+    checkedNodeData generated (node.relocate region) =
+      node.relocate (checkedRegion generated region) := by
+  cases node <;> rfl
 
 private def checkedRegionData
     {checked : CheckedDiagram definitions}

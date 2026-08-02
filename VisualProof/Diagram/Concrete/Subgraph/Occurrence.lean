@@ -493,6 +493,19 @@ theorem node_correspondence
         occurrence.regionMap node (occurrence.nodeMap node) :=
   occurrence.node_corresponds
 
+/-- Exact occurrence node table in single-region relocation form. -/
+theorem node_data
+    (occurrence : Occurrence pattern host)
+    (node : pattern.val.diagram.NodeId) :
+    host.val.nodes (occurrence.nodeMap node) =
+      (pattern.val.diagram.nodes node).relocate
+        (occurrence.regionMap
+          (pattern.val.diagram.nodes node).region) := by
+  have corresponds := occurrence.node_correspondence node
+  unfold OccurrenceNodeCorresponds at corresponds
+  cases data : pattern.val.diagram.nodes node <;>
+    simpa [data, CNode.relocate, CNode.region] using corresponds
+
 theorem wire_signature_preserved
     (occurrence : Occurrence pattern host) :
     ∀ wire,
