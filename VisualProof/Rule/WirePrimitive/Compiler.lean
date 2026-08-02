@@ -957,6 +957,12 @@ private structure IntrinsicExecutionResidual
   formals : List (PackedVar context)
   ambients : List (PackedVar context × source.val.WireId)
 
+/-- Executable projection of the plan-mandated structural/plumbing measure. -/
+private def IntrinsicExecutionResidual.measure
+    (residual : IntrinsicExecutionResidual source context) : Nat × Nat :=
+  (intrinsicRegionSize residual.body,
+    residual.formals.length + residual.ambients.length)
+
 private def IntrinsicCompilerResidual.execution
     (residual : IntrinsicCompilerResidual source context) :
     IntrinsicExecutionResidual source context where
@@ -965,6 +971,13 @@ private def IntrinsicCompilerResidual.execution
   formals := residual.formals
   ambients := residual.ambients.map fun binding =>
     (binding.value, binding.wire)
+
+@[simp]
+private theorem IntrinsicCompilerResidual.execution_measure
+    (residual : IntrinsicCompilerResidual source context) :
+    residual.execution.measure = residual.measure := by
+  simp [IntrinsicExecutionResidual.measure,
+    IntrinsicCompilerResidual.execution, IntrinsicCompilerResidual.measure]
 
 private def lowerPackedVar?
     (value : PackedVar (bound :: context)) : Option (PackedVar context) :=
@@ -1186,15 +1199,17 @@ private def compileIntrinsicResidual :
                 (combineParallel split.step left.program rightCompiled
                   remainingLength)
 termination_by source residual tracked orientation =>
-  intrinsicRegionSize residual.body
+  residual.measure
 decreasing_by
   all_goals
-    try simp_all [bodyExact, intrinsicRegionSize, intrinsicItemSeqSize,
-      intrinsicItemSize]
+    try simp_all [IntrinsicExecutionResidual.measure, bodyExact,
+      intrinsicRegionSize, intrinsicItemSeqSize, intrinsicItemSize]
   all_goals
-    have headPositive := intrinsicItemSize_positive head
-    have nextPositive := intrinsicItemSize_positive next
-    omega
+    try
+      have headPositive := intrinsicItemSize_positive head
+      have nextPositive := intrinsicItemSize_positive next
+      omega
+  all_goals omega
 
 private def compileResidual
     (residual : IntrinsicCompilerResidual source context)
