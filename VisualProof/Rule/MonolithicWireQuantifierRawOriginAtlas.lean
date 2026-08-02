@@ -760,6 +760,174 @@ def expectedWireData
     scope := expectedWireScope result wire
     endpoints := expectedWireEndpoints result wire }
 
+/-- Final-to-neutral endpoint carrier induced solely by the atlas's node
+origin equivalence; ports are preserved verbatim. -/
+def endpointOriginEquiv
+    (atlas : RelationJoinRawOriginAtlas result) :
+    Data.Finite.FiniteEquiv
+      (CEndpoint result.plainFinal.val.nodeCount)
+      (RelationJoinRawEndpoint (RelationJoinRawNodeOrigin result)) where
+  toFun := fun endpoint =>
+    { node := atlas.nodeEquiv endpoint.node
+      port := endpoint.port }
+  invFun := fun endpoint =>
+    { node := atlas.nodeEquiv.symm endpoint.node
+      port := endpoint.port }
+  left_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        congr
+        exact atlas.nodeEquiv.left_inv node
+  right_inv := by
+    intro endpoint
+    cases endpoint with
+    | mk node port =>
+        congr
+        exact atlas.nodeEquiv.right_inv node
+
+/-- Construction-derived reverse incidence at one node origin.  Positions
+and repeated incidences are retained because this filters the authoritative
+forward occurrence stream rather than deduplicating it. -/
+def expectedReverseIncidence
+    (result : RelationJoinResult source dying content parameters)
+    (node : RelationJoinRawNodeOrigin result) :
+    List (RelationJoinRawWireOrigin result × CPort) :=
+  (expectedEndpointOccurrences result).filterMap fun occurrence =>
+    if occurrence.2.node = node then
+      some (occurrence.1, occurrence.2.port)
+    else none
+
+theorem mem_expectedReverseIncidence
+    (result : RelationJoinResult source dying content parameters)
+    (node : RelationJoinRawNodeOrigin result)
+    (wire : RelationJoinRawWireOrigin result)
+    (port : CPort) :
+    (wire, port) ∈ expectedReverseIncidence result node ↔
+      (wire, { node := node, port := port }) ∈
+        expectedEndpointOccurrences result := by
+  constructor
+  · intro member
+    rcases List.mem_filterMap.mp member with
+      ⟨occurrence, occurrenceMember, emitted⟩
+    split at emitted
+    · rename_i nodeExact
+      have exact := Option.some.inj emitted
+      cases occurrence with
+      | mk occurrenceWire endpoint =>
+          simp only at exact
+          cases exact
+          cases endpoint with
+          | mk endpointNode endpointPort =>
+              have nodeExact' : endpointNode = node := nodeExact
+              cases nodeExact'
+              exact occurrenceMember
+    · cases emitted
+  · intro member
+    apply List.mem_filterMap.mpr
+    refine ⟨(wire, { node := node, port := port }), member, ?_⟩
+    simp
+
+/-- The raw root remains the retained source root. -/
+def expectedRoot
+    (result : RelationJoinResult source dying content parameters) :
+    RelationJoinRawRegionOrigin result :=
+  .inl source.val.root
+
+/-- Exact table obligations connecting the allocation-neutral expected model
+to the checked raw construction.  The right-hand sides are the independent
+source/content/request fold above; no final-table readback participates in
+their definition. -/
+structure Conformance
+    (atlas : RelationJoinRawOriginAtlas result) : Prop where
+  root_exact :
+    atlas.regionEquiv result.plainFinal.val.root =
+      expectedRoot result
+  region_exact : ∀ origin,
+    (match result.plainFinal.val.regions (atlas.regionEquiv.symm origin) with
+      | .sheet => RelationJoinRawRegionData.sheet
+      | .cut parent =>
+          RelationJoinRawRegionData.cut (atlas.regionEquiv parent)) =
+      expectedRegionData result origin
+  node_exact : ∀ origin,
+    (match result.plainFinal.val.nodes (atlas.nodeEquiv.symm origin) with
+      | .atom region args =>
+          RelationJoinRawNodeData.atom (atlas.regionEquiv region) args
+      | .ref region definition args =>
+          RelationJoinRawNodeData.ref (atlas.regionEquiv region)
+            definition args
+      | .identity region sig arity =>
+          RelationJoinRawNodeData.identity (atlas.regionEquiv region)
+            sig arity) = expectedNodeData result origin
+  wire_signature_exact : ∀ origin,
+    (result.plainFinal.val.wires (atlas.wireEquiv.symm origin)).sig =
+      expectedWireSignature result origin
+  wire_scope_exact : ∀ origin,
+    atlas.regionEquiv
+        (result.plainFinal.val.wires
+          (atlas.wireEquiv.symm origin)).scope =
+      expectedWireScope result origin
+  wire_endpoints_exact : ∀ origin,
+    (result.plainFinal.val.wires
+        (atlas.wireEquiv.symm origin)).endpoints.map
+          atlas.endpointOriginEquiv =
+      expectedWireEndpoints result origin
+
+/-- Bidirectional endpoint fiber over one independently specified wire row. -/
+structure EndpointFiberEquiv
+    (atlas : RelationJoinRawOriginAtlas result)
+    (wire : RelationJoinRawWireOrigin result) where
+  equivalence :
+    Data.Finite.FiniteEquiv
+      { endpoint // endpoint ∈
+        (result.plainFinal.val.wires
+          (atlas.wireEquiv.symm wire)).endpoints }
+      { endpoint // endpoint ∈ expectedWireEndpoints result wire }
+  forward_exact : ∀ endpoint,
+    (equivalence endpoint).1 = atlas.endpointOriginEquiv endpoint.1
+  inverse_exact : ∀ endpoint,
+    (equivalence.symm endpoint).1 =
+      atlas.endpointOriginEquiv.symm endpoint.1
+
+/-- Restrict the construction-owned endpoint carrier equivalence to one wire
+fiber using the proved ordered endpoint equation. -/
+def endpointFiberEquiv
+    (atlas : RelationJoinRawOriginAtlas result)
+    (conformance : Conformance atlas)
+    (wire : RelationJoinRawWireOrigin result) :
+    EndpointFiberEquiv atlas wire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨atlas.endpointOriginEquiv endpoint.1, by
+          rw [← conformance.wire_endpoints_exact wire]
+          exact List.mem_map.mpr ⟨endpoint.1, endpoint.2, rfl⟩⟩
+      invFun := fun endpoint =>
+        ⟨atlas.endpointOriginEquiv.symm endpoint.1, by
+          have mappedMember : endpoint.1 ∈
+              (result.plainFinal.val.wires
+                (atlas.wireEquiv.symm wire)).endpoints.map
+                  atlas.endpointOriginEquiv := by
+            rw [conformance.wire_endpoints_exact wire]
+            exact endpoint.2
+          rcases List.mem_map.mp mappedMember with
+            ⟨rawEndpoint, rawMember, exact⟩
+          have rawExact : rawEndpoint =
+              atlas.endpointOriginEquiv.symm endpoint.1 := by
+            apply atlas.endpointOriginEquiv.injective
+            rw [atlas.endpointOriginEquiv.apply_symm_apply]
+            exact exact
+          simpa only [rawExact] using rawMember⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact atlas.endpointOriginEquiv.left_inv endpoint.1
+      right_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact atlas.endpointOriginEquiv.right_inv endpoint.1 }
+  forward_exact := by intro; rfl
+  inverse_exact := by intro; rfl
+
 end RelationJoinRawOriginAtlas
 
 end Origins
