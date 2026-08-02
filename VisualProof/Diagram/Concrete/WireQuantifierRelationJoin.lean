@@ -20,6 +20,84 @@ def relationArgumentWires?
       else
         none
 
+theorem relationArgumentWires?_length
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (args : List Sig)
+    (start : Nat)
+    (wires : List source.val.WireId)
+    (accepted :
+      relationArgumentWires? source node args start = some wires) :
+    wires.length = args.length := by
+  induction args generalizing start wires with
+  | nil =>
+      simp [relationArgumentWires?] at accepted
+      subst wires
+      rfl
+  | cons expected rest induction =>
+      simp only [relationArgumentWires?] at accepted
+      change
+        (source.val.endpointOwner? ⟨node, .arg start⟩).bind
+            (fun wire =>
+              if (source.val.wires wire).sig = expected then
+                (relationArgumentWires? source node rest (start + 1)).bind
+                  (fun tail => some (wire :: tail))
+              else none) =
+          some wires at accepted
+      rw [Option.bind_eq_some_iff] at accepted
+      obtain ⟨wire, owner, accepted⟩ := accepted
+      split at accepted
+      · rw [Option.bind_eq_some_iff] at accepted
+        obtain ⟨tail, tailAccepted, accepted⟩ := accepted
+        simp only [Option.some.injEq] at accepted
+        subst wires
+        simp [induction (start := start + 1) tail tailAccepted]
+      · contradiction
+
+theorem relationArgumentWires?_owner
+    (source : CheckedDiagram definitions)
+    (node : source.val.NodeId)
+    (args : List Sig)
+    (start : Nat)
+    (wires : List source.val.WireId)
+    (accepted :
+      relationArgumentWires? source node args start = some wires)
+    (position : Fin args.length) :
+    source.val.endpointOwner?
+        ⟨node, .arg (start + position.val)⟩ =
+      some
+        (wires.get
+          (Fin.cast
+            (relationArgumentWires?_length source node args start wires
+              accepted).symm
+            position)) := by
+  induction args generalizing start wires with
+  | nil => exact Fin.elim0 position
+  | cons expected rest induction =>
+      simp only [relationArgumentWires?] at accepted
+      change
+        (source.val.endpointOwner? ⟨node, .arg start⟩).bind
+            (fun wire =>
+              if (source.val.wires wire).sig = expected then
+                (relationArgumentWires? source node rest (start + 1)).bind
+                  (fun tail => some (wire :: tail))
+              else none) =
+          some wires at accepted
+      rw [Option.bind_eq_some_iff] at accepted
+      obtain ⟨wire, owner, accepted⟩ := accepted
+      split at accepted
+      · rw [Option.bind_eq_some_iff] at accepted
+        obtain ⟨tail, tailAccepted, accepted⟩ := accepted
+        simp only [Option.some.injEq] at accepted
+        subst wires
+        refine Fin.cases ?_ (fun tailPosition => ?_) position
+        · simpa using owner
+        · have tailOwner :=
+            induction (start := start + 1) tail tailAccepted tailPosition
+          simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+            tailOwner
+      · simp at accepted
+
 private structure RelationJoinApplication
     (source : CheckedDiagram definitions)
     (args : List Sig) where
