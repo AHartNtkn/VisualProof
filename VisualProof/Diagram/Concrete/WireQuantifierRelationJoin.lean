@@ -235,6 +235,9 @@ structure RelationJoinStep
   relationArgs : List Sig
   prior : CheckedDiagram definitions
   priorApplication : prior.val.NodeId
+  priorNodeImage : source.val.NodeId → Option prior.val.NodeId
+  priorApplicationImage :
+    priorNodeImage application = some priorApplication
   priorRegionImage : source.val.RegionId → prior.val.RegionId
   priorRegionImageEncloses :
     ∀ outer inner,
@@ -884,6 +887,9 @@ private def spliceRelationApplication
                                         prior := state.checked
                                         priorApplication :=
                                           priorApplication
+                                        priorNodeImage := state.nodeImage
+                                        priorApplicationImage :=
+                                          priorApplicationAccepted
                                         priorRegionImage :=
                                           state.regionImage
                                         priorRegionImageEncloses :=
