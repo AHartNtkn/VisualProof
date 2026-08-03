@@ -236,6 +236,24 @@ structure ResolvedDefinitionBody
   compilation : OpenCompilation body
   boundarySignatures : checkedBoundarySigs body = args
 
+private def bodyBoundaryLength
+    {definitions : Definitions} {args : List Sig}
+    (body : ResolvedDefinitionBody definitions args) :
+    body.body.val.boundary.length = args.length := by
+  have exact := congrArg List.length body.boundarySignatures
+  simpa [checkedBoundarySigs] using exact
+
+private theorem removalWireIndex_congr
+    (occurrence : Occurrence pattern host)
+    (left right : host.val.WireId)
+    (leftRetained : left ∈ Removal.wires occurrence)
+    (rightRetained : right ∈ Removal.wires occurrence)
+    (same : left = right) :
+    Removal.wireIndex occurrence left leftRetained =
+      Removal.wireIndex occurrence right rightRetained := by
+  subst right
+  rfl
+
 namespace CheckedDefinitionData
 
 /-- Resolve a typed definition reference and weaken its concrete body through
@@ -372,6 +390,13 @@ structure AppliedUnfold
   private bodyCompilation : OpenCompilation body.body
   private attachment : ConcreteSpliceAttachment removed.complement
     removed.site body.body
+  private boundaryTargets :
+    ∀ position : Fin
+        (definitions.intrinsic.signatures.get definition).length,
+      attachment.target
+          (Fin.cast (bodyBoundaryLength body).symm position) =
+        reconstruction.target
+          (Fin.cast reference.boundaryLength.symm position)
   private bodyInsertion : InsertionCompilation bodyCompilation attachment
   private bodyInsertionAccepted :
     compileInsertion? bodyCompilation attachment = some bodyInsertion
@@ -450,6 +475,13 @@ structure AppliedFold
     compileOpen reference.fragment = some referenceCompilation
   private attachment : ConcreteSpliceAttachment removed.complement
     removed.site reference.fragment
+  private boundaryTargets :
+    ∀ position : Fin
+        (definitions.intrinsic.signatures.get input.definition).length,
+      attachment.target
+          (Fin.cast reference.boundaryLength.symm position) =
+        bodyReconstruction.target
+          (Fin.cast (bodyBoundaryLength input.body).symm position)
   private insertion : InsertionCompilation referenceCompilation attachment
   private insertionAccepted :
     compileInsertion? referenceCompilation attachment = some insertion
@@ -482,13 +514,6 @@ def tag
   .fold
 
 end AppliedFold
-
-private def bodyBoundaryLength
-    {definitions : Definitions} {args : List Sig}
-    (body : ResolvedDefinitionBody definitions args) :
-    body.body.val.boundary.length = args.length := by
-  have exact := congrArg List.length body.boundarySignatures
-  simpa [checkedBoundarySigs] using exact
 
 private theorem referenceBodyBoundaryLength
     {definitions : CheckedDefinitions}
@@ -630,7 +655,67 @@ def applyUnfold
                                                           reconstructionCompilation
                                                           reconstructionCompilationAccepted
                                                           body bodyCompilation
-                                                          attachment bodyInsertion
+                                                          attachment
+                                                          (by
+                                                            intro position
+                                                            have attachmentExact :=
+                                                              congrFun
+                                                                (checkConcreteSpliceAttachment_target
+                                                                  removed.complement
+                                                                  removed.site
+                                                                  body.body target
+                                                                  attachment
+                                                                  attachmentAccepted)
+                                                                (Fin.cast
+                                                                  (bodyBoundaryLength
+                                                                    body).symm
+                                                                  position)
+                                                            have reconstructionExact :=
+                                                              Reconstruction.attachment_target
+                                                                occurrence removed
+                                                                reconstruction
+                                                                reconstructionAccepted
+                                                                (Fin.cast
+                                                                  reference.boundaryLength.symm
+                                                                  position)
+                                                            rw [attachmentExact,
+                                                              reconstructionExact]
+                                                            have inputExact :=
+                                                              Occurrence.checkOccurrence_preserves_input
+                                                                occurrenceInput
+                                                                occurrence
+                                                                occurrenceAccepted
+                                                            have wireMapExact :=
+                                                              congrArg
+                                                                OccurrenceInput.wireMap
+                                                                inputExact
+                                                            have wireMapExact' :
+                                                                occurrence.wireMap =
+                                                                  occurrenceInput.wireMap :=
+                                                              wireMapExact
+                                                            have sourceWireExact :
+                                                                sourceAttachment
+                                                                    (Fin.cast
+                                                                      (bodyBoundaryLength
+                                                                        body).symm
+                                                                      position) =
+                                                                  Reconstruction.boundaryHostWire
+                                                                    occurrence
+                                                                    (Fin.cast
+                                                                      reference.boundaryLength.symm
+                                                                      position) := by
+                                                              unfold sourceAttachment
+                                                                Reconstruction.boundaryHostWire
+                                                              rw [wireMapExact']
+                                                              simp [occurrenceInput,
+                                                                referenceFragmentRaw,
+                                                                Data.Finite.allFin_eq_finRange]
+                                                            unfold target
+                                                            exact
+                                                              removalWireIndex_congr
+                                                                occurrence _ _ _ _
+                                                                sourceWireExact)
+                                                          bodyInsertion
                                                           bodyInsertionAccepted result
                                                           resultAccepted)
                                         else
@@ -700,6 +785,17 @@ def applyFold
                                       bodyReconstructionIsoAccepted reference
                                       referenceCompilation
                                       referenceCompilationAccepted attachment
+                                      (by
+                                        intro position
+                                        have exactTarget := congrFun
+                                          (checkConcreteSpliceAttachment_target
+                                            removed.complement removed.site
+                                            reference.fragment target attachment
+                                            attachmentAccepted)
+                                          (Fin.cast
+                                            reference.boundaryLength.symm
+                                            position)
+                                        simpa [target] using exactTarget)
                                       insertion insertionAccepted result
                                       resultAccepted)
 
