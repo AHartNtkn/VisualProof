@@ -54,10 +54,13 @@ def sourceIdentityAttachments :
 
 end IdentityRewriteKind
 
-/-- One checked eager rewrite with total signature-preserving wire transport. -/
+/-- One checked eager rewrite with distinct logical and external wire actions.
+The total `wireImage` is normalization semantics; `externalImage?` records only
+source identities that survive as distinct external identities. -/
 structure IdentityRewrite
     {definitions : List (List Sig)}
     (source : CheckedDiagram definitions) : Type where
+  private mk ::
   kind : IdentityRewriteKind source
   target : CheckedDiagram definitions
   target_generated :
@@ -72,6 +75,17 @@ structure IdentityRewrite
   wire_signature :
     ∀ wire,
       (target.val.wires (wireImage wire)).sig =
+        (source.val.wires wire).sig
+  externalImage? : source.val.WireId → Option target.val.WireId
+  externalImage_injective :
+    ∀ {left right mapped},
+      externalImage? left = some mapped →
+      externalImage? right = some mapped →
+      left = right
+  externalImage_signature :
+    ∀ {wire mapped},
+      externalImage? wire = some mapped →
+      (target.val.wires mapped).sig =
         (source.val.wires wire).sig
   nodeCount_lt : target.val.nodeCount < source.val.nodeCount
 
@@ -170,11 +184,15 @@ private def dropRewrite
   let target : CheckedDiagram definitions :=
     ⟨candidate, dropCandidate_wellFormed source node eligible⟩
   let transport := dropWireTransport source node eligible
+  let external := dropExternalWireTransport source node eligible
   { kind := .drop node eligible
     target := target
     target_generated := rfl
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
+    externalImage? := external.externalImage?
+    externalImage_injective := external.externalImage_injective
+    externalImage_signature := external.externalImage_signature
     nodeCount_lt := dropCandidate_nodeCount_lt source node eligible }
 
 /-- Rule 1: delete a physically one-wire identity as reflexive truth. -/
@@ -193,11 +211,15 @@ private def collapseRewrite
   let target : CheckedDiagram definitions :=
     ⟨candidate, collapseCandidate_wellFormed source node eligible⟩
   let transport := collapseWireTransport source node eligible
+  let external := collapseExternalWireTransport source node eligible
   { kind := .collapse node eligible
     target := target
     target_generated := rfl
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
+    externalImage? := external.externalImage?
+    externalImage_injective := external.externalImage_injective
+    externalImage_signature := external.externalImage_signature
     nodeCount_lt := collapseCandidate_nodeCount_lt source node eligible }
 
 /--
@@ -220,11 +242,15 @@ private def fusionRewrite
   let target : CheckedDiagram definitions :=
     ⟨candidate, fusionCandidate_wellFormed source left right eligible⟩
   let transport := fusionWireTransport source left right eligible
+  let external := fusionExternalWireTransport source left right eligible
   { kind := .fusion left right eligible
     target := target
     target_generated := rfl
     wireImage := transport.wireImage
     wire_signature := transport.wire_signature
+    externalImage? := external.externalImage?
+    externalImage_injective := external.externalImage_injective
+    externalImage_signature := external.externalImage_signature
     nodeCount_lt :=
       fusionCandidate_nodeCount_lt source left right eligible }
 
@@ -257,6 +283,53 @@ def wireImage :
       source.val.WireId → trace.target.val.WireId
   | .done _, wire => wire
   | .step first rest, wire => rest.wireImage (first.wireImage wire)
+
+/-- Compose only the external identities retained by every rewrite. -/
+def externalImage? :
+    (trace : IdentityNormalizationTrace definitions source) →
+      source.val.WireId → Option trace.target.val.WireId
+  | .done _, wire => some wire
+  | .step first rest, wire =>
+      (first.externalImage? wire).bind rest.externalImage?
+
+theorem externalImage_injective
+    (trace : IdentityNormalizationTrace definitions source) :
+    ∀ {left right mapped},
+      trace.externalImage? left = some mapped →
+      trace.externalImage? right = some mapped →
+      left = right := by
+  induction trace with
+  | done =>
+      intro left right mapped leftMapped rightMapped
+      exact Option.some.inj (leftMapped.trans rightMapped.symm)
+  | step first rest induction =>
+      intro left right mapped leftMapped rightMapped
+      obtain ⟨leftMiddle, leftFirst, leftRest⟩ :=
+        Option.bind_eq_some_iff.mp leftMapped
+      obtain ⟨rightMiddle, rightFirst, rightRest⟩ :=
+        Option.bind_eq_some_iff.mp rightMapped
+      have middleSame : leftMiddle = rightMiddle :=
+        induction leftRest rightRest
+      subst rightMiddle
+      exact first.externalImage_injective leftFirst rightFirst
+
+theorem externalImage_signature
+    (trace : IdentityNormalizationTrace definitions source)
+    {wire : source.val.WireId}
+    {mapped : trace.target.val.WireId}
+    (mappedExact : trace.externalImage? wire = some mapped) :
+    (trace.target.val.wires mapped).sig =
+      (source.val.wires wire).sig := by
+  induction trace with
+  | done =>
+      have exactMapped : mapped = wire := Option.some.inj mappedExact.symm
+      subst mapped
+      rfl
+  | step first rest induction =>
+      obtain ⟨middle, firstMapped, restMapped⟩ :=
+        Option.bind_eq_some_iff.mp mappedExact
+      exact (induction restMapped).trans
+        (first.externalImage_signature firstMapped)
 
 theorem wire_signature
     (trace : IdentityNormalizationTrace definitions source)
@@ -293,6 +366,35 @@ def wireImage
     (normalization : IdentityNormalization source) :
     source.val.WireId → normalization.target.val.WireId :=
   normalization.trace.wireImage
+
+/-- Final construction-owned image of externally surviving source identities. -/
+def externalImage?
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (normalization : IdentityNormalization source) :
+    source.val.WireId → Option normalization.target.val.WireId :=
+  normalization.trace.externalImage?
+
+theorem externalImage_injective
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (normalization : IdentityNormalization source) :
+    ∀ {left right mapped},
+      normalization.externalImage? left = some mapped →
+      normalization.externalImage? right = some mapped →
+      left = right :=
+  normalization.trace.externalImage_injective
+
+theorem externalImage_signature
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (normalization : IdentityNormalization source)
+    {wire : source.val.WireId}
+    {mapped : normalization.target.val.WireId}
+    (mappedExact : normalization.externalImage? wire = some mapped) :
+    (normalization.target.val.wires mapped).sig =
+      (source.val.wires wire).sig :=
+  normalization.trace.externalImage_signature mappedExact
 
 theorem wire_signature
     {definitions : List (List Sig)}
