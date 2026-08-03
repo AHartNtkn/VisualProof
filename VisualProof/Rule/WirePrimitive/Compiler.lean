@@ -109,6 +109,107 @@ def initialIntrinsicResidual
     (by simpa [checkedBoundarySigs] using monolithic.parameterSignatures)
     monolithic.live_not_parameter
 
+/-- The primitive compiler and raw splice trace enumerate the same accepted
+applications, although the former follows dying-wire endpoint order and the
+latter follows dense source-node order. -/
+private theorem sourceSiteNodes_perm_applications
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source wire content
+      parameters)
+    (sites : AllAppliedSites source wire) :
+    (sites.sites.map AppliedSite.node).Perm result.applications := by
+  have siteNodesNodup :
+      (sites.sites.map AppliedSite.node).Nodup := by
+    have nodeNodupOfEndpointNodup :
+        ∀ values : List (AppliedSite source wire),
+          (values.map AppliedSite.endpoint).Nodup →
+            (values.map AppliedSite.node).Nodup := by
+      intro values
+      induction values with
+    | nil => simp
+      | cons head tail induction =>
+          intro endpointNodup
+          rw [List.map_cons, List.nodup_cons] at endpointNodup
+          rw [List.map_cons, List.nodup_cons]
+          refine ⟨?_, induction endpointNodup.2⟩
+          intro member
+          rcases List.mem_map.mp member with
+            ⟨candidate, candidateMember, same⟩
+          apply endpointNodup.1
+          apply List.mem_map.mpr
+          refine ⟨candidate, candidateMember, ?_⟩
+          exact congrArg
+            (fun node : source.val.NodeId =>
+              (⟨node, .head⟩ : CEndpoint source.val.nodeCount))
+            same
+    exact nodeNodupOfEndpointNodup sites.sites sites.endpoints_nodup
+  have applicationNodesNodup : result.applications.Nodup := by
+    rw [result.applications_storage_order]
+    exact (Data.Finite.allFin_nodup _).filter _
+  apply Data.Finite.list_perm_of_nodup_mem_iff siteNodesNodup
+    applicationNodesNodup
+  intro node
+  constructor
+  · intro member
+    rcases List.mem_map.mp member with ⟨site, siteMember, rfl⟩
+    rw [result.applications_storage_order]
+    apply List.mem_filter.mpr
+    refine ⟨Data.Finite.mem_allFin site.node, ?_⟩
+    apply decide_eq_true
+    rw [← sites.exhaustive]
+    exact List.mem_map.mpr ⟨site, siteMember, rfl⟩
+  · intro member
+    rw [result.applications_storage_order] at member
+    have endpointMember :
+        (⟨node, .head⟩ : CEndpoint source.val.nodeCount) ∈
+          (source.val.wires wire).endpoints :=
+      of_decide_eq_true (List.mem_filter.mp member).2
+    rw [← sites.exhaustive] at endpointMember
+    rcases List.mem_map.mp endpointMember with
+      ⟨site, siteMember, endpointExact⟩
+    exact List.mem_map.mpr
+      ⟨site, siteMember, congrArg CEndpoint.node endpointExact⟩
+
+/-- Construction-owned conversion from primitive site positions to raw splice
+positions.  Equal nodes are matched directly; no graph isomorphism is searched
+for. -/
+private def sourceSiteStepPositions
+    {source : CheckedDiagram definitions}
+    {wire : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source wire content
+      parameters)
+    (sites : AllAppliedSites source wire) :
+    { equivalence : Data.Finite.FiniteEquiv
+        (Fin sites.sites.length) (Fin result.steps.length) //
+      ∀ position,
+        (result.steps.get (equivalence position)).application =
+          (sites.sites.get position).node } := by
+  let siteNodes := sites.sites.map AppliedSite.node
+  let stepNodes := result.steps.map
+    ConcreteWireQuantifier.RelationJoinStep.application
+  have permuted : siteNodes.Perm stepNodes :=
+    (sourceSiteNodes_perm_applications result sites).trans
+      (List.Perm.of_eq result.steps_application_order.symm)
+  let positions := Data.Finite.FiniteEquiv.ofListPermStable permuted
+  have siteLength : siteNodes.length = sites.sites.length := by
+    simp [siteNodes]
+  have stepLength : stepNodes.length = result.steps.length := by
+    simp [stepNodes]
+  let siteCast := Data.Finite.FiniteEquiv.finCast
+    siteLength.symm
+  let stepCast := Data.Finite.FiniteEquiv.finCast stepLength
+  refine ⟨siteCast.trans (positions.1.trans stepCast), ?_⟩
+  intro position
+  have exact := positions.2 (siteCast position)
+  simpa [siteNodes, stepNodes, siteCast, stepCast,
+    Data.Finite.FiniteEquiv.finCast, List.get_eq_getElem,
+    List.getElem_map] using exact
+
 private theorem rawSourceSites_exists
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
