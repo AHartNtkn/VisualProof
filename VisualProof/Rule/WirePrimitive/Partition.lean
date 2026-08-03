@@ -68,8 +68,7 @@ private structure CheckedJoinPolarity
 
 private structure WireSeverReceipt
     (source : CheckedDiagram definitions)
-    (input : WireSeverInput source)
-    (target : CheckedDiagram definitions) where
+    (input : WireSeverInput source) where
   polarity : CheckedSeverPolarity source input.orientation input.scope
   result :
     ConcreteWireQuantifier.WireSeverResult
@@ -77,12 +76,10 @@ private structure WireSeverReceipt
   accepted :
     ConcreteWireQuantifier.severWire
       source input.wire input.keep input.scope = .ok result
-  targetExact : result.checked = target
 
 private structure WireJoinReceipt
     (source : CheckedDiagram definitions)
-    (input : WireJoinInput source)
-    (target : CheckedDiagram definitions) where
+    (input : WireJoinInput source) where
   outer : source.val.WireId
   inner : source.val.WireId
   side :
@@ -98,23 +95,42 @@ private structure WireJoinReceipt
   result : ConcreteWireQuantifier.WireJoinResult source outer inner
   accepted :
     ConcreteWireQuantifier.joinWires source outer inner = .ok result
-  targetExact : result.checked = target
 
 /-- Opaque checker-owned receipt for one accepted wire partition. -/
 structure AppliedWireSever
     (source : CheckedDiagram definitions)
     (input : WireSeverInput source) where
   private mk ::
-  target : CheckedDiagram definitions
-  private checked : WireSeverReceipt source input target
+  private checked : WireSeverReceipt source input
 
 /-- Opaque checker-owned receipt for one accepted wire merge. -/
 structure AppliedWireJoin
     (source : CheckedDiagram definitions)
     (input : WireJoinInput source) where
   private mk ::
-  target : CheckedDiagram definitions
-  private checked : WireJoinReceipt source input target
+  private checked : WireJoinReceipt source input
+
+namespace AppliedWireSever
+
+/-- The raw target is owned uniquely by the accepted concrete sever result. -/
+def target
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (applied : AppliedWireSever source input) : CheckedDiagram definitions :=
+  applied.checked.result.checked
+
+end AppliedWireSever
+
+namespace AppliedWireJoin
+
+/-- The raw target is owned uniquely by the accepted concrete join result. -/
+def target
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input) : CheckedDiagram definitions :=
+  applied.checked.result.checked
+
+end AppliedWireJoin
 
 private def requireSeverPolarity
     (source : CheckedDiagram definitions)
@@ -194,11 +210,10 @@ def applyWireSever
         | .error error => exact .error (.concreteRejected error)
         | .ok result =>
             exact .ok
-              (AppliedWireSever.mk result.checked
+              (AppliedWireSever.mk
                 { polarity := polarity
                   result := result
-                  accepted := accepted
-                  targetExact := rfl })
+                  accepted := accepted })
 
 /-- Validate and apply one equal-signature comparable-scope wire merge. -/
 def applyWireJoin
@@ -223,15 +238,14 @@ def applyWireJoin
         | .error error => exact .error (.concreteRejected error)
         | .ok result =>
             exact .ok
-              (AppliedWireJoin.mk result.checked
+              (AppliedWireJoin.mk
                 { outer := input.left
                   inner := input.right
                   side := Or.inl ⟨rfl, rfl⟩
                   comparable := leftOuter
                   polarity := polarity
                   result := result
-                  accepted := accepted
-                  targetExact := rfl })
+                  accepted := accepted })
   else if rightOuter :
       source.val.Encloses (source.val.wires input.right).scope
         (source.val.wires input.left).scope then
@@ -245,17 +259,214 @@ def applyWireJoin
         | .error error => exact .error (.concreteRejected error)
         | .ok result =>
             exact .ok
-              (AppliedWireJoin.mk result.checked
+              (AppliedWireJoin.mk
                 { outer := input.right
                   inner := input.left
                   side := Or.inr ⟨rfl, rfl⟩
                   comparable := rightOuter
                   polarity := polarity
                   result := result
-                  accepted := accepted
-                  targetExact := rfl })
+                  accepted := accepted })
   else
     exact .error .incomparableScopes
+
+namespace AppliedWireSever
+
+/-- Exact raw target image of one source wire through an accepted sever.  The
+fresh split branch has no source preimage; every preexisting source wire uses
+the stable carrier retained by the checker-owned sever result. -/
+def rawWireImage
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (applied : AppliedWireSever source input)
+    (wire : source.val.WireId) : applied.target.val.WireId :=
+  applied.checked.result.wireImage wire
+
+/-- Stable sever images never identify distinct source wires. -/
+theorem rawWireImage_injective
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (applied : AppliedWireSever source input) :
+    Function.Injective applied.rawWireImage := by
+  obtain ⟨checked⟩ := applied
+  intro left right same
+  have imagesExact : checked.result.wireImage left =
+      checked.result.wireImage right := by
+    simpa [rawWireImage] using same
+  let sourceOf : checked.result.checked.val.WireId → source.val.WireId :=
+    fun mapped =>
+      if fresh : mapped = checked.result.freshWire then
+        input.wire
+      else
+        checked.result.sourceWireOfRetained mapped fresh
+  have sourcesExact := congrArg sourceOf imagesExact
+  simpa [sourceOf, checked.result.retained_ne_fresh] using sourcesExact
+
+/-- Every severed source wire retains its exact signature at its raw image. -/
+theorem rawWireImage_signature
+    {source : CheckedDiagram definitions}
+    {input : WireSeverInput source}
+    (applied : AppliedWireSever source input)
+    (wire : source.val.WireId) :
+    (applied.target.val.wires (applied.rawWireImage wire)).sig =
+      (source.val.wires wire).sig := by
+  obtain ⟨checked⟩ := applied
+  exact checked.result.wireImage_signature wire
+
+end AppliedWireSever
+
+namespace AppliedWireJoin
+
+/-- Logical raw image of an accepted join.  The checker-selected inner source
+coalesces at the checked outer target; every retained source follows the
+result's stable wire image. -/
+def rawLogicalImage?
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    (wire : source.val.WireId) : Option applied.target.val.WireId :=
+  if same : wire = applied.checked.inner then
+    some applied.checked.result.outerWire
+  else
+    some (applied.checked.result.wireImage wire same)
+
+/-- External identity image of an accepted join.  The checker-selected inner
+identity is consumed; every other source identity, including the stable outer
+one, follows the retained result image. -/
+def rawExternalImage?
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    (wire : source.val.WireId) : Option applied.target.val.WireId :=
+  if same : wire = applied.checked.inner then
+    none
+  else
+    some (applied.checked.result.wireImage wire same)
+
+/-- The logical join image is total, even for the coalesced inner source. -/
+theorem rawLogicalImage_total
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    (wire : source.val.WireId) :
+    ∃ mapped, applied.rawLogicalImage? wire = some mapped := by
+  obtain ⟨checked⟩ := applied
+  by_cases same : wire = checked.inner
+  · exact ⟨checked.result.outerWire, by
+      simp [rawLogicalImage?, same]⟩
+  · exact ⟨checked.result.wireImage wire same, by
+      simp [rawLogicalImage?, same]⟩
+
+/-- Every externally retained identity has exactly the same logical image. -/
+theorem rawLogicalImage_of_rawExternalImage
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    {wire : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (mappedExact : applied.rawExternalImage? wire = some mapped) :
+    applied.rawLogicalImage? wire = some mapped := by
+  obtain ⟨checked⟩ := applied
+  by_cases same : wire = checked.inner
+  · simp [rawExternalImage?, same] at mappedExact
+  · simpa [rawExternalImage?, rawLogicalImage?, same] using mappedExact
+
+/-- An externally consumed source is exactly the coalesced side: its logical
+image is shared with one distinct externally retained source.  This exposes
+the mapped/unmapped consequence needed by transport consumers without
+revealing which input wire the checker selected as inner or outer. -/
+theorem rawExternalImage_none_coalesces
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    {wire : source.val.WireId}
+    (unmapped : applied.rawExternalImage? wire = none) :
+    ∃ survivor mapped,
+      survivor ≠ wire ∧
+      applied.rawExternalImage? survivor = some mapped ∧
+      applied.rawLogicalImage? wire = some mapped ∧
+      applied.rawLogicalImage? survivor = some mapped := by
+  obtain ⟨checked⟩ := applied
+  by_cases same : wire = checked.inner
+  · subst wire
+    refine ⟨checked.outer, checked.result.outerWire,
+      checked.result.outer_ne_inner, ?_⟩
+    simp [rawExternalImage?, rawLogicalImage?,
+      checked.result.outer_ne_inner,
+      ConcreteWireQuantifier.WireJoinResult.outerWire]
+  · simp [rawExternalImage?, same] at unmapped
+
+/-- Logical coalescing preserves the source signature on both the selected
+inner source and every retained source. -/
+theorem rawLogicalImage_signature
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    {wire : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (mappedExact : applied.rawLogicalImage? wire = some mapped) :
+    (applied.target.val.wires mapped).sig =
+      (source.val.wires wire).sig := by
+  obtain ⟨checked⟩ := applied
+  by_cases same : wire = checked.inner
+  · subst wire
+    have targetExact : checked.result.outerWire = mapped := by
+      simpa [rawLogicalImage?] using mappedExact
+    subst mapped
+    exact (checked.result.wireImage_signature
+      checked.outer checked.result.outer_ne_inner).trans
+        checked.result.source_signatures_equal
+  · have targetExact : checked.result.wireImage wire same = mapped := by
+      simpa [rawLogicalImage?, same] using mappedExact
+    subst mapped
+    exact checked.result.wireImage_signature wire same
+
+/-- Retained join identities never collide in the raw target. -/
+theorem rawExternalImage_injective
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    {left right : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (leftMapped : applied.rawExternalImage? left = some mapped)
+    (rightMapped : applied.rawExternalImage? right = some mapped) :
+    left = right := by
+  obtain ⟨checked⟩ := applied
+  by_cases leftSurvives : left = checked.inner
+  · simp [rawExternalImage?, leftSurvives] at leftMapped
+  · by_cases rightSurvives : right = checked.inner
+    · simp [rawExternalImage?, rightSurvives] at rightMapped
+    · have imagesExact :
+        checked.result.wireImage left leftSurvives =
+          checked.result.wireImage right rightSurvives := by
+        have mappedSome :
+            some (checked.result.wireImage left leftSurvives) =
+              some (checked.result.wireImage right rightSurvives) := by
+          simpa [rawExternalImage?, leftSurvives, rightSurvives] using
+            leftMapped.trans rightMapped.symm
+        exact Option.some.inj mappedSome
+      have sourcesExact := congrArg checked.result.sourceWire imagesExact
+      simpa using sourcesExact
+
+/-- Every externally retained join identity preserves its exact signature. -/
+theorem rawExternalImage_signature
+    {source : CheckedDiagram definitions}
+    {input : WireJoinInput source}
+    (applied : AppliedWireJoin source input)
+    {wire : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (mappedExact : applied.rawExternalImage? wire = some mapped) :
+    (applied.target.val.wires mapped).sig =
+      (source.val.wires wire).sig := by
+  obtain ⟨checked⟩ := applied
+  by_cases survives : wire = checked.inner
+  · simp [rawExternalImage?, survives] at mappedExact
+  · have targetExact : checked.result.wireImage wire survives = mapped := by
+      simpa [rawExternalImage?, survives] using mappedExact
+    subst mapped
+    exact checked.result.wireImage_signature wire survives
+
+end AppliedWireJoin
 
 /-- Deterministic checked inverse of one accepted sever, owned by the sever
 receipt rather than rediscovered from the target graph. -/
@@ -306,15 +517,14 @@ def invertWireSever
               result.inverseJoin.checked_generated.symm
           let inverseApplied :
               AppliedWireJoin result.checked inverseInput :=
-            AppliedWireJoin.mk inverseResult.checked
+            AppliedWireJoin.mk
               { outer := left
                 inner := right
                 side := Or.inl ⟨rfl, rfl⟩
                 comparable := comparable
                 polarity := polarity
                 result := inverseResult
-                accepted := accepted
-                targetExact := rfl }
+                accepted := accepted }
           exact .ok
             { input := inverseInput
               applied := inverseApplied
@@ -350,9 +560,7 @@ def invertWireSeverTransported
     Except WirePartitionError
       (TransportedWireSeverInverse sever real targetIso orientation) := by
   let canonical := sever.checked.result
-  have realToCanonical : ConcreteIso real.val canonical.checked.val := by
-    rw [sever.checked.targetExact]
-    exact targetIso
+  have realToCanonical : ConcreteIso real.val canonical.checked.val := targetIso
   let left := realToCanonical.wires.symm
     (canonical.wireImage input.wire)
   let right := realToCanonical.wires.symm canonical.freshWire
@@ -434,15 +642,14 @@ def invertWireSeverTransported
       | .error error => exact .error (.concreteRejected error)
       | .ok actual =>
           let inverseApplied : AppliedWireJoin real inverseInput :=
-            AppliedWireJoin.mk actual.checked
+            AppliedWireJoin.mk
               { outer := left
                 inner := right
                 side := Or.inl ⟨rfl, rfl⟩
                 comparable := comparable
                 polarity := polarity
                 result := actual
-                accepted := accepted
-                targetExact := rfl }
+                accepted := accepted }
           match natural : actual.transportedIso? realToCanonical
               canonical.inverseJoin
               (by
@@ -490,9 +697,7 @@ def invertWireJoinTransported
     Except WirePartitionError
       (TransportedWireJoinInverse join real targetIso orientation) := by
   let canonical := join.checked.result
-  have realToCanonical : ConcreteIso real.val canonical.checked.val := by
-    rw [join.checked.targetExact]
-    exact targetIso
+  have realToCanonical : ConcreteIso real.val canonical.checked.val := targetIso
   let canonicalKeep :=
     (source.val.wires join.checked.outer).endpoints.map
       canonical.endpointImage
@@ -617,9 +822,7 @@ def invertWireJoinTransported
             { input := inverseInput
               orientationExact := rfl
               applied := inverseApplied
-              targetIso := by
-                rw [← inverseApplied.checked.targetExact]
-                exact sourceIso }
+              targetIso := sourceIso }
 
 /-- Generic signature-indexed wire partition is sound over every premodel. -/
 theorem wire_sever_sound
@@ -635,7 +838,6 @@ theorem wire_sever_sound
   let checked := applied.checked
   have sound :=
     checked.result.denotes checked.polarity.compiled pre definitionEnv
-  rw [checked.targetExact] at sound
   cases orientation with
   | forward =>
       have even :
@@ -665,7 +867,6 @@ theorem wire_join_sound
   have sound :=
     checked.result.denotes checked.comparable checked.polarity.compiled
       pre definitionEnv
-  rw [checked.targetExact] at sound
   cases orientation with
   | forward =>
       have odd :

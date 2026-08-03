@@ -115,6 +115,26 @@ private def nestedScopedApplied :
   (applyWireSever nestedScopedSource nestedScopedSever).toOption.get
     (by native_decide)
 
+/-! The accepted sever owns a total, injective, signature-preserving raw
+source carrier. -/
+
+example :
+    nestedScopedApplied.rawWireImage (idx 0) = idx 0 := by
+  native_decide
+
+example (wire : nestedScopedSource.val.WireId) :
+    ∃ mapped, nestedScopedApplied.rawWireImage wire = mapped :=
+  ⟨nestedScopedApplied.rawWireImage wire, rfl⟩
+
+example : Function.Injective nestedScopedApplied.rawWireImage :=
+  nestedScopedApplied.rawWireImage_injective
+
+example (wire : nestedScopedSource.val.WireId) :
+    (nestedScopedApplied.target.val.wires
+      (nestedScopedApplied.rawWireImage wire)).sig =
+      (nestedScopedSource.val.wires wire).sig :=
+  nestedScopedApplied.rawWireImage_signature wire
+
 example :
     ((nestedScopedApplied.target.val.wires (idx 1)).sig,
       (nestedScopedApplied.target.val.wires (idx 1)).scope.val,
@@ -290,6 +310,11 @@ private def nonHeadJoin : WireJoinInput nonHeadSource where
   left := idx 0
   right := idx 1
 
+private def nonHeadApplied :
+    AppliedWireJoin nonHeadSource nonHeadJoin :=
+  (applyWireJoin nonHeadSource nonHeadJoin).toOption.get
+    (by native_decide)
+
 example :
     (applyWireJoin nonHeadSource nonHeadJoin).toOption.map
       (fun applied =>
@@ -301,6 +326,59 @@ example :
         (2, some
           [(0, .identity 0), (0, .identity 1), (1, .arg 0)]) := by
   native_decide
+
+/-!
+The accepted three-wire join makes the distinction between logical and
+external images load-bearing.  Source 1 is the checker-selected inner wire:
+it coalesces logically with retained source 0 but has no external identity.
+The unrelated source 2 remains distinct at target 1.
+-/
+
+example :
+    (nonHeadApplied.rawLogicalImage? (idx 0),
+      nonHeadApplied.rawLogicalImage? (idx 1),
+      nonHeadApplied.rawLogicalImage? (idx 2)) =
+      (some (idx 0), some (idx 0), some (idx 1)) := by
+  native_decide
+
+example :
+    (nonHeadApplied.rawExternalImage? (idx 0),
+      nonHeadApplied.rawExternalImage? (idx 1),
+      nonHeadApplied.rawExternalImage? (idx 2)) =
+      (some (idx 0), none, some (idx 1)) := by
+  native_decide
+
+example :
+    ∃ survivor mapped,
+      survivor ≠ (idx 1 : nonHeadSource.val.WireId) ∧
+      nonHeadApplied.rawExternalImage? survivor = some mapped ∧
+      nonHeadApplied.rawLogicalImage? (idx 1) = some mapped ∧
+      nonHeadApplied.rawLogicalImage? survivor = some mapped :=
+  nonHeadApplied.rawExternalImage_none_coalesces (by native_decide)
+
+example
+    {left right : nonHeadSource.val.WireId}
+    {mapped : nonHeadApplied.target.val.WireId}
+    (leftMapped : nonHeadApplied.rawExternalImage? left = some mapped)
+    (rightMapped : nonHeadApplied.rawExternalImage? right = some mapped) :
+    left = right :=
+  nonHeadApplied.rawExternalImage_injective leftMapped rightMapped
+
+example
+    {wire : nonHeadSource.val.WireId}
+    {mapped : nonHeadApplied.target.val.WireId}
+    (mappedExact : nonHeadApplied.rawLogicalImage? wire = some mapped) :
+    (nonHeadApplied.target.val.wires mapped).sig =
+      (nonHeadSource.val.wires wire).sig :=
+  nonHeadApplied.rawLogicalImage_signature mappedExact
+
+example
+    {wire : nonHeadSource.val.WireId}
+    {mapped : nonHeadApplied.target.val.WireId}
+    (mappedExact : nonHeadApplied.rawExternalImage? wire = some mapped) :
+    (nonHeadApplied.target.val.wires mapped).sig =
+      (nonHeadSource.val.wires wire).sig :=
+  nonHeadApplied.rawExternalImage_signature mappedExact
 
 end PartitionFixtures
 
