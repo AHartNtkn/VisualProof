@@ -47,5 +47,6 @@ import VisualProof.Rule.WirePrimitive.ContentFixtures
 import VisualProof.Rule.WirePrimitive.ArgumentsFixtures
 import VisualProof.Rule.WirePrimitive.LeavesFixtures
 import VisualProof.Rule.WirePrimitive.CompilerFixtures
+import VisualProof.Rule.WirePrimitive.DerivedFixtures
 import VisualProof.Rule.MonolithicWireQuantifier
 import VisualProof.Rule.MonolithicWireQuantifierFixtures

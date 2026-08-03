@@ -9,6 +9,7 @@ import VisualProof.Rule.WirePrimitive.ArgumentsDuplicateTransport
 import VisualProof.Rule.WirePrimitive.Leaves
 import VisualProof.Rule.WirePrimitive.VacuityTransport
 import VisualProof.Rule.WirePrimitive.Program
+import VisualProof.Rule.WirePrimitive.Derived
 
 /-!
 The sole public facade for primitive wire transformations.
