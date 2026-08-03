@@ -52,6 +52,7 @@ describe('parseFormula', () => {
     if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
     expect(Object.isFrozen(formula.binders)).toBe(true)
     expect(Object.isFrozen(formula.binders[0]!)).toBe(true)
+    if (formula.body.kind !== 'quantifier') throw new Error('expected typed quantifier')
     const grouped = formula.body.body
     if (grouped.kind !== 'quantifier' || grouped.body.kind !== 'and') throw new Error('expected grouped conjunction')
     if (grouped.body.left.kind !== 'atom') throw new Error('expected atom')
