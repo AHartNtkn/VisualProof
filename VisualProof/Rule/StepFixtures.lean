@@ -1,0 +1,34 @@
+import VisualProof.Rule.Definition
+import VisualProof.Diagram.Concrete.Subgraph.SpliceExamples
+
+namespace VisualProof
+
+open ConcreteSpliceExamples
+
+private def firstDefinitions : CheckedDefinitions :=
+  (CheckedDefinitions.nil.snoc oneStub).toOption.get (by native_decide)
+
+private def firstBody :
+    ResolvedDefinitionBody firstDefinitions.intrinsic [.iota] :=
+  (firstDefinitions.resolveBody (.here :
+      DefVar firstDefinitions.intrinsic.signatures [.iota])).toOption.get
+    (by native_decide)
+
+example : checkedBoundarySigs firstBody.body = [.iota] :=
+  firstBody.boundarySignatures
+
+private def secondDefinitions : CheckedDefinitions :=
+  (firstDefinitions.snoc firstBody.body).toOption.get (by native_decide)
+
+private def olderBody :
+    ResolvedDefinitionBody secondDefinitions.intrinsic [.iota] :=
+  (secondDefinitions.resolveBody (.there .here :
+      DefVar secondDefinitions.intrinsic.signatures [.iota])).toOption.get
+    (by native_decide)
+
+/-- An earlier concrete definition remains resolvable after a later snoc and
+retains its exact ordered boundary signature. -/
+example : checkedBoundarySigs olderBody.body = [.iota] :=
+  olderBody.boundarySignatures
+
+end VisualProof

@@ -22,6 +22,8 @@ import VisualProof.Rule.Tag
 import VisualProof.Rule.Structural
 import VisualProof.Rule.StructuralFixtures
 import VisualProof.Rule.StructuralAudit
+import VisualProof.Rule.Definition
+import VisualProof.Rule.StepFixtures
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRaw
