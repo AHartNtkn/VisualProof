@@ -1712,6 +1712,77 @@ theorem sound
   rw [← checked.insertedExact]
   exact reconstructedInserted.mp reconstructedDenotes
 
+/-- The checker-owned complement iteration also supplies the reverse
+direction, so ordinary deiteration is an equivalence independently of replay
+orientation. -/
+theorem equivalence
+    {definitions : List (List Sig)}
+    {sourceDiagram : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {innerSelection : CheckedSelection sourceDiagram}
+    {inner : Occurrence pattern sourceDiagram}
+    {justifierSelection : CheckedSelection sourceDiagram}
+    {justifier : Occurrence pattern sourceDiagram}
+    {input :
+      OrdinaryDeiterationInput innerSelection inner
+        justifierSelection justifier}
+    (checked : CheckedOrdinaryDeiteration input)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions) :
+    denoteChecked pre definitionEnv checked.source ↔
+      denoteChecked pre definitionEnv checked.target := by
+  constructor
+  · exact checked.sound pre definitionEnv
+  · intro targetDenotes
+    let raw : CheckedDiagram definitions :=
+      ⟨checked.reconstruction.diagram,
+        checked.reconstructionCompilation.generated_wellFormed⟩
+    have rawSource :
+        denoteChecked pre definitionEnv raw ↔
+          denoteChecked pre definitionEnv sourceDiagram :=
+      iso_denotation checked.reconstructionIso pre definitionEnv
+    have rawInserted :
+        denoteChecked pre definitionEnv raw ↔
+          denoteRegion pre definitionEnv Env.empty
+            checked.reconstructionCompilation.inserted :=
+      checked.reconstructionCompilation.generated_checked_denotes_inserted
+        pre definitionEnv
+    obtain
+        ⟨reconstructionCompiled, reconstructionCompiledAccepted,
+          reconstructedInserted⟩ :=
+      denote_splice checked.innerExtraction.compilation
+        checked.reconstruction checked.reconstructed
+        checked.reconstructedAccepted pre definitionEnv
+    have sameReconstructionCompilation :
+        reconstructionCompiled = checked.reconstructionCompilation :=
+      Option.some.inj
+        (reconstructionCompiledAccepted.symm.trans
+          checked.reconstructionCompilationAccepted)
+    subst reconstructionCompiled
+    obtain ⟨compiled, compiledAccepted, resultInserted⟩ :=
+      denote_splice checked.iteration.extraction.compilation
+        checked.iteration.destinationAttachment checked.iteration.result
+        checked.iteration.resultAccepted pre definitionEnv
+    have sameCompilation :
+        compiled = checked.iteration.destinationInsertion :=
+      Option.some.inj
+        (compiledAccepted.symm.trans
+          checked.iteration.destinationInsertionAccepted)
+    subst compiled
+    have complementIteration :
+        denoteChecked pre definitionEnv checked.removed.complement ↔
+          denoteChecked pre definitionEnv checked.iteration.result.checked :=
+      checked.iteration.equivalence pre definitionEnv
+    have iterationResult :
+        denoteChecked pre definitionEnv checked.iteration.result.checked :=
+      complementIteration.mp targetDenotes
+    have reconstructionInserted :
+        denoteRegion pre definitionEnv Env.empty
+          checked.reconstructionCompilation.inserted := by
+      rw [checked.insertedExact]
+      exact resultInserted.mp iterationResult
+    exact rawSource.mp (rawInserted.mpr reconstructionInserted)
+
 end CheckedOrdinaryDeiteration
 
 end StructuralCore

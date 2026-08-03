@@ -5,6 +5,8 @@ import VisualProof.Rule.WirePrimitive.Program
 
 namespace VisualProof
 
+universe u
+
 /-!
 # Proof-step receipts
 
@@ -401,10 +403,10 @@ inductive ProofStep
       (checked : StructuralCore.CheckedDoubleCut input)
       (receipt : StepReceipt source checked.plain) : ProofStep definitions orientation source
   | theorem {source}
-      (input : TheoremApplication
+      (input : TheoremApplication.{u}
         (definitions := definitions.intrinsic.signatures) source)
       (orientationExact : input.orientation = orientation)
-      (applied : AppliedTheorem source input)
+      (applied : AppliedTheorem.{u} source input)
       (receipt : StepReceipt source applied.target) : ProofStep definitions orientation source
   | vacuousIntro {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)

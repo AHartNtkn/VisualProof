@@ -7,6 +7,8 @@ import VisualProof.Theory.Semantics
 
 namespace VisualProof
 
+universe u
+
 /-- One already checked theorem statement with an exact ordered signature
 interface.  Proof replay supplies validity in the chronological theorem layer;
 rule application only consumes this statement and its exact occurrence. -/
@@ -16,6 +18,17 @@ structure RuleTheorem (definitions : List (List Sig)) where
   right : CheckedOpenDiagram definitions
   leftBoundary : checkedBoundarySigs left = arguments
   rightBoundary : checkedBoundarySigs right = arguments
+  leftCompilation : OpenCompilation left
+  leftCompilationAccepted : compileOpen left = some leftCompilation
+  rightCompilation : OpenCompilation right
+  rightCompilationAccepted : compileOpen right = some rightCompilation
+  valid : ∀ (model : Model.{u})
+      (definitionEnv : DefinitionEnv model.toPreModel definitions)
+      (values : BoundaryEnv model.toPreModel arguments),
+    denoteOpen model.toPreModel definitionEnv
+        (leftBoundary ▸ leftCompilation.openDiagram) values ↔
+      denoteOpen model.toPreModel definitionEnv
+        (rightBoundary ▸ rightCompilation.openDiagram) values
 
 inductive TheoremDirection
   | forward
@@ -26,12 +39,12 @@ inductive TheoremDirection
 inductive TheoremApplication
     (source : CheckedDiagram definitions) : Type
   | forward
-      (statement : RuleTheorem definitions)
+      (statement : RuleTheorem.{u} definitions)
       (orientation : Orientation)
       (occurrence : Occurrence statement.left source) :
       TheoremApplication (definitions := definitions) source
   | reverse
-      (statement : RuleTheorem definitions)
+      (statement : RuleTheorem.{u} definitions)
       (orientation : Orientation)
       (occurrence : Occurrence statement.right source) :
       TheoremApplication (definitions := definitions) source
@@ -40,7 +53,7 @@ namespace TheoremApplication
 
 def statement {definitions : List (List Sig)} {source : CheckedDiagram definitions} :
     TheoremApplication (definitions := definitions) source →
-      RuleTheorem definitions
+      RuleTheorem.{u} definitions
   | .forward statement _ _ => statement
   | .reverse statement _ _ => statement
 
