@@ -25,36 +25,33 @@ theorem arbitrary_insertion_derives :
     (insertion_primitive_program forwardInsertion).isOk = true := by
   native_decide
 
-private def parallelNullaryRaw : OpenConcreteDiagram 0 where
+private def nullaryRaw : OpenConcreteDiagram 0 where
   diagram :=
     { regionCount := 1
-      nodeCount := 2
-      wireCount := 2
+      nodeCount := 1
+      wireCount := 1
       root := 0
       regions := fun _ => .sheet
       nodes := fun _ => .atom 0 []
-      wires
-        | ⟨0, _⟩ =>
-            { sig := .rel [], scope := 0, endpoints := [⟨0, .head⟩] }
-        | ⟨1, _⟩ =>
-            { sig := .rel [], scope := 0, endpoints := [⟨1, .head⟩] } }
+      wires := fun _ =>
+        { sig := .rel [], scope := 0, endpoints := [⟨0, .head⟩] } }
   boundary := []
 
-private theorem parallelNullaryRaw_wellFormed :
-    parallelNullaryRaw.WellFormed [] := by
+private theorem nullaryRaw_wellFormed :
+    nullaryRaw.WellFormed [] := by
   constructor <;> native_decide
 
-private def parallelNullary : CheckedOpenDiagram [] :=
-  ⟨parallelNullaryRaw, parallelNullaryRaw_wellFormed⟩
+private def nullary : CheckedOpenDiagram [] :=
+  ⟨nullaryRaw, nullaryRaw_wellFormed⟩
 
 private def arbitraryForwardInput :
-    StructuralInsertionInput host parallelNullary where
+    StructuralInsertionInput host nullary where
   orientation := .forward
   site := leftRegion
   target := Fin.elim0
 
 private def arbitraryBackwardInput :
-    StructuralInsertionInput host parallelNullary where
+    StructuralInsertionInput host nullary where
   orientation := .backward
   site := anchor
   target := Fin.elim0
