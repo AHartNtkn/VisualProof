@@ -37,6 +37,12 @@ theorem sound
   | identityInsert input orientationExact checked _ =>
       subst orientationExact
       exact checked.sound model.toPreModel definitionEnv
+  | atomSpawn input orientationExact checked _ =>
+      subst orientationExact
+      exact checked.sound model.toPreModel definitionEnv
+  | refSpawn input orientationExact checked _ =>
+      subst orientationExact
+      exact checked.sound model.toPreModel definitionEnv
   | erasure input orientationExact checked sourceIso _ =>
       have sourceEquivalent :=
         iso_denotation sourceIso model.toPreModel definitionEnv

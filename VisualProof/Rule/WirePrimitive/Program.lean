@@ -51,6 +51,22 @@ inductive CompiledPrimitiveStep
       (checked : StructuralCore.StructuralInsertionReceipt input)
       (tagExact : checked.tag = .identityInsert) :
       CompiledPrimitiveStep orientation source
+  | atomSpawn
+      {source : CheckedDiagram definitions}
+      {fragment : CheckedOpenDiagram definitions}
+      (input : StructuralCore.StructuralInsertionInput source fragment)
+      (orientationExact : input.orientation = orientation)
+      (checked : StructuralCore.StructuralInsertionReceipt input)
+      (tagExact : checked.tag = .atomSpawn) :
+      CompiledPrimitiveStep orientation source
+  | refSpawn
+      {source : CheckedDiagram definitions}
+      {fragment : CheckedOpenDiagram definitions}
+      (input : StructuralCore.StructuralInsertionInput source fragment)
+      (orientationExact : input.orientation = orientation)
+      (checked : StructuralCore.StructuralInsertionReceipt input)
+      (tagExact : checked.tag = .refSpawn) :
+      CompiledPrimitiveStep orientation source
   | erasure
       {source : CheckedDiagram definitions}
       {base : CheckedDiagram definitions}
@@ -201,6 +217,8 @@ def target :
   | _, .wireSever _ _ applied => applied.target
   | _, .wireJoin _ _ applied => applied.target
   | _, .identityInsert _ _ checked _ => checked.target
+  | _, .atomSpawn _ _ checked _ => checked.target
+  | _, .refSpawn _ _ checked _ => checked.target
   | _, .erasure _ _ checked _ _ => checked.target
   | _, .cutWrap _ applied => applied.target
   | _, .cutAbsorb _ applied => applied.target
@@ -231,6 +249,8 @@ def tag :
   | _, .wireSever .. => .wireSever
   | _, .wireJoin .. => .wireJoin
   | _, .identityInsert .. => .identityInsert
+  | _, .atomSpawn .. => .atomSpawn
+  | _, .refSpawn .. => .refSpawn
   | _, .erasure .. => .erasure
   | _, .cutWrap .. => .cutWrap
   | _, .cutAbsorb .. => .cutAbsorb
