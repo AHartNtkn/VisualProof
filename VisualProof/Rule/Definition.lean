@@ -1,7 +1,66 @@
 import VisualProof.Diagram.Concrete.OpenCompilation
+import VisualProof.Diagram.Concrete.Subgraph.Extract
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationInsertion
+import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
+import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Rule.Tag
 import VisualProof.Theory.Semantics
 
 namespace VisualProof
+
+/-- Canonical concrete syntax for one folded reference. Each ordered argument
+position has its own fragment boundary wire; host attachment may alias them. -/
+def referenceFragmentRaw
+    (definitions : List (List Sig))
+    (definition : Fin definitions.length) :
+    OpenConcreteDiagram definitions.length where
+  diagram :=
+    { regionCount := 1
+      nodeCount := 1
+      wireCount := (definitions.get definition).length
+      root := ⟨0, by omega⟩
+      regions := fun _ => .sheet
+      nodes := fun _ =>
+        .ref ⟨0, by omega⟩ definition (definitions.get definition)
+      wires := fun wire =>
+        { sig := (definitions.get definition).get wire
+          scope := ⟨0, by omega⟩
+          endpoints := [⟨⟨0, by omega⟩, .arg wire.val⟩] } }
+  boundary := Data.Finite.allFin (definitions.get definition).length
+
+/-- Checked canonical folded-reference fragment. -/
+structure CheckedReferenceFragment
+    (definitions : List (List Sig))
+    (definition : Fin definitions.length) where
+  fragment : CheckedOpenDiagram definitions
+  generated : fragment.val = referenceFragmentRaw definitions definition
+  boundaryLength :
+    fragment.val.boundary.length = (definitions.get definition).length
+
+/-- Validate canonical folded-reference syntax through the ordinary concrete
+checker. This is the exact pattern consumed by unfold and produced by fold. -/
+def checkReferenceFragment
+    (definitions : List (List Sig))
+    (definition : Fin definitions.length) :
+    Except WFError (CheckedReferenceFragment definitions definition) := by
+  let raw := referenceFragmentRaw definitions definition
+  match accepted : ConcreteDiagram.checkWellFormed definitions raw.diagram with
+  | .error error => exact .error error
+  | .ok checked =>
+      have generatedDiagram : checked.val = raw.diagram :=
+        ConcreteDiagram.checkWellFormed_preserves_input accepted
+      let fragment : CheckedOpenDiagram definitions :=
+        ⟨raw,
+          { diagram := generatedDiagram ▸ checked.property
+            boundary_root_scoped := by
+              simp [raw, referenceFragmentRaw,
+                Data.Finite.allFin_eq_finRange] }⟩
+      exact .ok
+        { fragment := fragment
+          generated := rfl
+          boundaryLength := by
+            simp [fragment, raw, referenceFragmentRaw,
+              Data.Finite.allFin_eq_finRange] }
 
 namespace ConcreteDefinitionWeakening
 
@@ -172,5 +231,255 @@ def resolveBody (definitions : CheckedDefinitions)
   definitions.data.resolveBody reference
 
 end CheckedDefinitions
+
+/-- Stable refusal outcomes of the concrete unfold checker. -/
+inductive DefinitionRuleError
+  | selectedNodeNotReference
+  | referenceFragmentRejected (error : WFError)
+  | argumentOwnerMissing
+  | referenceOccurrenceRejected (error : OccurrenceError)
+  | referenceRemovalRejected (error : WFError)
+  | referenceCompilationRejected
+  | reconstructionRejected
+  | reconstructionIsoRejected
+  | reconstructionCompilationRejected
+  | bodyRejected (error : DefinitionBodyError)
+  | bodyCompilationRejected
+  | attachmentWireRemoved
+  | bodyAttachmentRejected
+  | bodyInsertionCompilationRejected
+  | bodySpliceRejected (error : WFError)
+  deriving Repr, DecidableEq
+
+/-- Durable unfold input: the exact folded reference node to replace. -/
+structure UnfoldInput
+    (definitions : CheckedDefinitions)
+    (source : CheckedDiagram definitions.intrinsic.signatures) where
+  node : source.val.NodeId
+
+/-- Opaque receipt for exact concrete replacement of one folded reference by
+its chronologically stored definition body. -/
+structure AppliedUnfold
+    (definitions : CheckedDefinitions)
+    (source : CheckedDiagram definitions.intrinsic.signatures)
+    (input : UnfoldInput definitions source) where
+  private mk ::
+  private definition : Fin definitions.intrinsic.signatures.length
+  private region : source.val.RegionId
+  private arguments : List Sig
+  private sourceNode :
+    source.val.nodes input.node = .ref region definition arguments
+  private reference :
+    CheckedReferenceFragment definitions.intrinsic.signatures definition
+  private occurrence : Occurrence reference.fragment source
+  private removed : RemovalResult occurrence
+  private referenceCompilation : OpenCompilation reference.fragment
+  private referenceCompilationAccepted :
+    compileOpen reference.fragment = some referenceCompilation
+  private reconstruction : ConcreteSpliceAttachment removed.complement
+    removed.site reference.fragment
+  private reconstructionAccepted :
+    reconstructionAttachment? occurrence removed = some reconstruction
+  private reconstructionIso : ConcreteIso reconstruction.diagram source.val
+  private reconstructionIsoAccepted :
+    Reconstruction.extract_splice_iso? occurrence removed reconstruction
+      reconstructionAccepted = some reconstructionIso
+  private reconstructionCompilation :
+    InsertionCompilation referenceCompilation reconstruction
+  private reconstructionCompilationAccepted :
+    compileInsertion? referenceCompilation reconstruction =
+      some reconstructionCompilation
+  private body : ResolvedDefinitionBody definitions.intrinsic
+    (definitions.intrinsic.signatures.get definition)
+  private bodyCompilation : OpenCompilation body.body
+  private bodyCompilationAccepted :
+    compileOpen body.body = some bodyCompilation
+  private attachment : ConcreteSpliceAttachment removed.complement
+    removed.site body.body
+  private bodyInsertion : InsertionCompilation bodyCompilation attachment
+  private bodyInsertionAccepted :
+    compileInsertion? bodyCompilation attachment = some bodyInsertion
+  private result : ConcreteSpliceResult attachment
+  private resultAccepted : splice attachment = .ok result
+
+namespace AppliedUnfold
+
+def source
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (_applied : AppliedUnfold definitions source input) :
+    CheckedDiagram definitions.intrinsic.signatures :=
+  source
+
+/-- The checked splice result. Splice normalization, if any, belongs to the
+splice owner and is not part of compiler adequacy. -/
+def target
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input) :
+    CheckedDiagram definitions.intrinsic.signatures :=
+  applied.result.checked
+
+def tag
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (_applied : AppliedUnfold definitions source input) : StepTag :=
+  .unfold
+
+end AppliedUnfold
+
+private def bodyBoundaryLength
+    {definitions : Definitions} {args : List Sig}
+    (body : ResolvedDefinitionBody definitions args) :
+    body.body.val.boundary.length = args.length := by
+  have exact := congrArg List.length body.boundarySignatures
+  simpa [checkedBoundarySigs] using exact
+
+/-- Deterministically unfold one folded reference. The checker never searches
+for an isomorphic graph and accepts no semantic premise. -/
+def applyUnfold
+    (definitions : CheckedDefinitions)
+    (source : CheckedDiagram definitions.intrinsic.signatures)
+    (input : UnfoldInput definitions source) :
+    Except DefinitionRuleError (AppliedUnfold definitions source input) := by
+  match sourceNode : source.val.nodes input.node with
+  | .atom .. | .identity .. =>
+      exact .error .selectedNodeNotReference
+  | .ref region definition arguments =>
+      match referenceAccepted :
+          checkReferenceFragment definitions.intrinsic.signatures definition with
+      | .error error =>
+          exact .error (.referenceFragmentRejected error)
+      | .ok reference =>
+          let storedArgs := definitions.intrinsic.signatures.get definition
+          have referenceWireCount :
+              reference.fragment.val.diagram.wireCount = storedArgs.length := by
+            rw [reference.generated]
+            rfl
+          let argumentOwner? (position : Fin storedArgs.length) :=
+            source.val.endpointOwner?
+              ⟨input.node, .arg position.val⟩
+          if owners : ∀ position, (argumentOwner? position).isSome = true then
+            let argumentOwner (position : Fin storedArgs.length) :
+                source.val.WireId :=
+              (argumentOwner? position).get (owners position)
+            let occurrenceInput :
+                OccurrenceInput reference.fragment source :=
+              { region := region
+                regionMap := fun _ => region
+                nodeMap := fun _ => input.node
+                wireMap := fun wire =>
+                  argumentOwner (Fin.cast referenceWireCount wire) }
+            match occurrenceAccepted : checkOccurrence occurrenceInput with
+            | .error error =>
+                exact .error (.referenceOccurrenceRejected error)
+            | .ok occurrence =>
+                match removalAccepted : remove occurrence with
+                | .error error =>
+                    exact .error (.referenceRemovalRejected error)
+                | .ok removed =>
+                    match referenceCompilationAccepted :
+                        compileOpen reference.fragment with
+                    | none =>
+                        exact .error .referenceCompilationRejected
+                    | some referenceCompilation =>
+                        match reconstructionAccepted :
+                            reconstructionAttachment? occurrence removed with
+                        | none =>
+                            exact .error .reconstructionRejected
+                        | some reconstruction =>
+                            match reconstructionIsoAccepted :
+                                Reconstruction.extract_splice_iso? occurrence
+                                  removed reconstruction
+                                  reconstructionAccepted with
+                            | none =>
+                                exact .error .reconstructionIsoRejected
+                            | some reconstructionIso =>
+                                match reconstructionCompilationAccepted :
+                                    compileInsertion? referenceCompilation
+                                      reconstruction with
+                                | none =>
+                                    exact .error
+                                      .reconstructionCompilationRejected
+                                | some reconstructionCompilation =>
+                                    let referenceVar :=
+                                      ConcreteElaboration.Internal.definitionVarAt
+                                        definitions.intrinsic.signatures definition
+                                    match bodyAccepted :
+                                        definitions.resolveBody referenceVar with
+                                    | .error error =>
+                                        exact .error (.bodyRejected error)
+                                    | .ok body =>
+                                        match bodyCompilationAccepted :
+                                            compileOpen body.body with
+                                        | none =>
+                                            exact .error .bodyCompilationRejected
+                                        | some bodyCompilation =>
+                                            let sourceAttachment
+                                                (position : Fin
+                                                  body.body.val.boundary.length) :
+                                                source.val.WireId :=
+                                              argumentOwner
+                                                (Fin.cast
+                                                  (bodyBoundaryLength body)
+                                                  position)
+                                            if retained : ∀ position,
+                                                sourceAttachment position ∈
+                                                  Removal.wires occurrence then
+                                              let target
+                                                  (position : Fin
+                                                    body.body.val.boundary.length) :
+                                                  removed.complement.val.WireId :=
+                                                Removal.wireIndex occurrence
+                                                  (sourceAttachment position)
+                                                  (retained position)
+                                              match attachmentAccepted :
+                                                  checkConcreteSpliceAttachment
+                                                    removed.complement removed.site
+                                                    body.body target with
+                                              | none =>
+                                                  exact .error
+                                                    .bodyAttachmentRejected
+                                              | some attachment =>
+                                                  match bodyInsertionAccepted :
+                                                      compileInsertion?
+                                                        bodyCompilation attachment with
+                                                  | none =>
+                                                      exact .error
+                                                        .bodyInsertionCompilationRejected
+                                                  | some bodyInsertion =>
+                                                      match resultAccepted :
+                                                          splice attachment with
+                                                      | .error error =>
+                                                          exact .error
+                                                            (.bodySpliceRejected error)
+                                                      | .ok result =>
+                                                          exact .ok
+                                                            (AppliedUnfold.mk
+                                                              definition region
+                                                              arguments sourceNode
+                                                              reference occurrence
+                                                              removed
+                                                              referenceCompilation
+                                                              referenceCompilationAccepted
+                                                              reconstruction
+                                                              reconstructionAccepted
+                                                              reconstructionIso
+                                                              reconstructionIsoAccepted
+                                                              reconstructionCompilation
+                                                              reconstructionCompilationAccepted
+                                                              body bodyCompilation
+                                                              bodyCompilationAccepted
+                                                              attachment bodyInsertion
+                                                              bodyInsertionAccepted result
+                                                              resultAccepted)
+                                            else
+                                              exact .error
+                                                .attachmentWireRemoved
+          else
+            exact .error .argumentOwnerMissing
 
 end VisualProof

@@ -17,6 +17,30 @@ private def firstBody :
 example : checkedBoundarySigs firstBody.body = [.iota] :=
   firstBody.boundarySignatures
 
+private def firstReference :
+    CheckedReferenceFragment firstDefinitions.intrinsic.signatures
+      ⟨0, by native_decide⟩ :=
+  (checkReferenceFragment firstDefinitions.intrinsic.signatures
+      ⟨0, by native_decide⟩).toOption.get (by native_decide)
+
+example :
+    checkedBoundarySigs firstReference.fragment = [.iota] := by
+  native_decide
+
+private def foldedSource :
+    CheckedDiagram firstDefinitions.intrinsic.signatures :=
+  ⟨firstReference.fragment.val.diagram,
+    firstReference.fragment.property.diagram⟩
+
+private def unfoldInput : UnfoldInput firstDefinitions foldedSource where
+  node := ⟨0, by native_decide⟩
+
+private def unfolded : AppliedUnfold firstDefinitions foldedSource unfoldInput :=
+  (applyUnfold firstDefinitions foldedSource unfoldInput).toOption.get
+    (by native_decide)
+
+example : unfolded.tag = .unfold := rfl
+
 private def secondDefinitions : CheckedDefinitions :=
   (firstDefinitions.snoc firstBody.body).toOption.get (by native_decide)
 
