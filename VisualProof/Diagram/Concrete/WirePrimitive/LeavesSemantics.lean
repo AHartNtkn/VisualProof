@@ -425,6 +425,50 @@ private def abstractLeafItems
 
 end
 
+mutual
+
+/-- Abstract the acted relation applications together with any retained leaf
+of the same semantic kind. Retained matching leaves must be holes on both
+sides so a construction-owned replacement is not confused with surrounding
+equal content. -/
+private def abstractAppliedOrLeaf
+    (kind : LeafKind definitions sourceArguments)
+    (head : Var context (.rel sourceArguments)) :
+    Region definitions context →
+      UniformIntrinsicRegion definitions sourceArguments context
+  | .mk items => abstractAppliedOrLeafItems kind head items
+
+private def abstractAppliedOrLeafItems
+    (kind : LeafKind definitions sourceArguments)
+    (head : Var context (.rel sourceArguments)) :
+    ItemSeq definitions context →
+      UniformIntrinsicRegion definitions sourceArguments context
+  | .nil => .mk .nil ⟨[]⟩
+  | .cons item tail =>
+      let rest := abstractAppliedOrLeafItems kind head tail
+      match item with
+      | .atom atomHead values =>
+          match UniformIntrinsicRegion.matchedHeadArguments?
+              head atomHead values with
+          | some applied => prependHole applied rest
+          | none =>
+              match matchLeaf? kind item with
+              | some leaf => prependHole leaf rest
+              | none => prependOrdinary (.leaf item) rest
+      | .named .. | .identity .. =>
+          match matchLeaf? kind item with
+          | some leaf => prependHole leaf rest
+          | none => prependOrdinary (.leaf item) rest
+      | .cut body =>
+          prependOrdinary
+            (.cut (abstractAppliedOrLeaf kind head body)) rest
+      | .bind signature body =>
+          prependOrdinary
+            (.bind signature
+              (abstractAppliedOrLeaf kind (.there head) body)) rest
+
+end
+
 private theorem abstractLeafItems_cons_some
     (kind : LeafKind definitions sourceArguments)
     (item : Item definitions context)
@@ -664,6 +708,160 @@ private theorem abstractLeafItems_denotes
               rw [abstractLeafItems_cons_bind kind signature body tail]
               rw [denoteItemSeq, prependOrdinary_denotes]
               exact and_congr (exists_congr bodyLaw) tailLaw
+
+end
+
+mutual
+
+/-- The source-side leaf abstraction remains denotationally exact when
+retained leaves of the target kind are promoted to the same hole predicate.
+This is the collision case exercised by raw identity-request prefixes. -/
+private theorem abstractAppliedOrLeaf_denotes
+    (kind : LeafKind definitions sourceArguments)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (fixedHead : pre.Domain (.rel sourceArguments))
+    (bridge :
+      ∀ {nested : List Sig} (nestedEnv : Env pre nested)
+        (values : Vars nested sourceArguments),
+        pre.apply fixedHead (Vars.denote nestedEnv values) ↔
+          kind.sourceSite pre definitionEnv
+            (Vars.denote nestedEnv values))
+    (env : Env pre context)
+    (head : Var context (.rel sourceArguments))
+    (headExact : env _ head = fixedHead)
+    (body : Region definitions context) :
+    denoteRegion pre definitionEnv env body ↔
+      (abstractAppliedOrLeaf kind head body).denote pre definitionEnv env
+        (pre.apply fixedHead) := by
+  cases body with
+  | mk items =>
+      exact abstractAppliedOrLeafItems_denotes kind pre definitionEnv
+        fixedHead bridge env head headExact items
+
+private theorem abstractAppliedOrLeafItems_denotes
+    (kind : LeafKind definitions sourceArguments)
+    (pre : PreModel.{u})
+    (definitionEnv : DefinitionEnv pre definitions)
+    (fixedHead : pre.Domain (.rel sourceArguments))
+    (bridge :
+      ∀ {nested : List Sig} (nestedEnv : Env pre nested)
+        (values : Vars nested sourceArguments),
+        pre.apply fixedHead (Vars.denote nestedEnv values) ↔
+          kind.sourceSite pre definitionEnv
+            (Vars.denote nestedEnv values))
+    (env : Env pre context)
+    (head : Var context (.rel sourceArguments))
+    (headExact : env _ head = fixedHead)
+    (items : ItemSeq definitions context) :
+    denoteItemSeq pre definitionEnv env items ↔
+      (abstractAppliedOrLeafItems kind head items).denote pre definitionEnv env
+        (pre.apply fixedHead) := by
+  cases items with
+  | nil =>
+      simp only [denoteItemSeq, abstractAppliedOrLeafItems,
+        UniformIntrinsicRegion.denote,
+        UniformIntrinsicRegion.UniformIntrinsicItemSeq.denote]
+      constructor
+      · intro _
+        refine ⟨True.intro, ?_⟩
+        intro value member
+        simp at member
+      · intro _
+        trivial
+  | cons item tail =>
+      have tailLaw :=
+        abstractAppliedOrLeafItems_denotes kind pre definitionEnv
+          fixedHead bridge env head headExact tail
+      cases item with
+      | atom atomHead values =>
+          cases applied :
+              UniformIntrinsicRegion.matchedHeadArguments?
+                head atomHead values with
+          | some appliedValues =>
+              have itemLaw :
+                  denoteItem pre definitionEnv env (.atom atomHead values) ↔
+                    pre.apply fixedHead
+                      (Vars.denote env appliedValues) := by
+                unfold UniformIntrinsicRegion.matchedHeadArguments? at applied
+                split at applied
+                next signatures =>
+                  cases signatures
+                  split at applied
+                  next equal =>
+                    cases equal
+                    cases Option.some.inj applied
+                    simp only [denoteItem, headExact]
+                  next rejected => contradiction
+                next rejected => contradiction
+              simp only [abstractAppliedOrLeafItems, applied, denoteItemSeq,
+                prependHole_denotes]
+              exact and_congr itemLaw tailLaw
+          | none =>
+              cases leafMatched :
+                  matchLeaf? kind (.atom atomHead values) with
+              | some leafValues =>
+                  have itemLaw :=
+                    (matchLeaf_denotes kind pre definitionEnv env
+                      (.atom atomHead values) leafValues leafMatched).trans
+                      (bridge env leafValues).symm
+                  simp only [abstractAppliedOrLeafItems, applied, leafMatched,
+                    denoteItemSeq, prependHole_denotes]
+                  exact and_congr itemLaw tailLaw
+              | none =>
+                  simp only [abstractAppliedOrLeafItems, applied, leafMatched,
+                    denoteItemSeq, prependOrdinary_denotes]
+                  exact and_congr Iff.rfl tailLaw
+      | named definition values =>
+          cases leafMatched :
+              matchLeaf? kind (.named definition values) with
+          | some leafValues =>
+              have itemLaw :=
+                (matchLeaf_denotes kind pre definitionEnv env
+                  (.named definition values) leafValues leafMatched).trans
+                  (bridge env leafValues).symm
+              simp only [abstractAppliedOrLeafItems, leafMatched,
+                denoteItemSeq, prependHole_denotes]
+              exact and_congr itemLaw tailLaw
+          | none =>
+              simp only [abstractAppliedOrLeafItems, leafMatched,
+                denoteItemSeq, prependOrdinary_denotes]
+              exact and_congr Iff.rfl tailLaw
+      | identity signature ports atLeastTwo =>
+          cases leafMatched :
+              matchLeaf? kind (.identity signature ports atLeastTwo) with
+          | some leafValues =>
+              have itemLaw :=
+                (matchLeaf_denotes kind pre definitionEnv env
+                  (.identity signature ports atLeastTwo) leafValues
+                  leafMatched).trans (bridge env leafValues).symm
+              simp only [abstractAppliedOrLeafItems, leafMatched,
+                denoteItemSeq, prependHole_denotes]
+              exact and_congr itemLaw tailLaw
+          | none =>
+              simp only [abstractAppliedOrLeafItems, leafMatched,
+                denoteItemSeq, prependOrdinary_denotes]
+              exact and_congr Iff.rfl tailLaw
+      | cut body =>
+          have bodyLaw :=
+            abstractAppliedOrLeaf_denotes kind pre definitionEnv fixedHead
+              bridge env head headExact body
+          simp only [abstractAppliedOrLeafItems, denoteItemSeq,
+            prependOrdinary_denotes]
+          exact and_congr (not_congr bodyLaw) tailLaw
+      | bind signature body =>
+          have bodyLaw :
+              ∀ value : pre.Domain signature,
+                denoteRegion pre definitionEnv (env.extend value) body ↔
+                  (abstractAppliedOrLeaf kind (.there head) body).denote pre
+                    definitionEnv (env.extend value) (pre.apply fixedHead) := by
+            intro value
+            apply abstractAppliedOrLeaf_denotes kind pre definitionEnv
+              fixedHead bridge (env.extend value) (.there head)
+            simpa using headExact
+          simp only [abstractAppliedOrLeafItems, denoteItemSeq,
+            prependOrdinary_denotes]
+          exact and_congr (exists_congr bodyLaw) tailLaw
 
 end
 
@@ -912,7 +1110,7 @@ structure LeafFactorization
   private accepted :
     ArgumentsSemantics.checkPairedArgumentShape
       TypedArguments.sameVars
-      (UniformIntrinsicRegion.abstractApplied
+      (abstractAppliedOrLeaf kind
         (.here :
           Var
             ((.rel sourceArguments) ::
@@ -949,13 +1147,11 @@ def checkLeafFactorization
   if removalsExact :
       commonCore.sourceRemovedWires = result.sourceRemovedWires then
     let sourceScope ←
-      compileSite? source
-        (source.val.wires wire).scope
+      compileSite? source (source.val.wires wire).scope
     let targetScope ←
       compileSite? result.checked result.targetScope
     let context ←
-      ContentAlignment.checkSiteContextFactorization
-        sourceScope targetScope
+      ContentAlignment.checkSiteContextFactorization sourceScope targetScope
     have sourceHeadRemoved :
         wire ∈ commonCore.sourceRemovedWires := by
       rw [removalsExact]
@@ -984,20 +1180,23 @@ def checkLeafFactorization
         context.siteOuter context.sourceOuterEmbedding
         (fun {_} value => .there (context.targetOuterEmbedding value))
         (alignment.sourceRenaming sourceSignature)
+    let sourceAbstract :=
+      abstractAppliedOrLeaf kind
+        (.here :
+          Var
+            ((.rel sourceArguments) ::
+              targetScope.frame.visible.sigs)
+            (.rel sourceArguments))
+        (sourceScope.frame.siteBody.renameWires
+          (alignment.sourceRenaming sourceSignature))
+    let targetAbstract :=
+      abstractLeaf kind
+        (targetScope.frame.siteBody.renameWires
+          (weakenHead (signature := .rel sourceArguments)))
     if accepted :
         ArgumentsSemantics.checkPairedArgumentShape
           TypedArguments.sameVars
-          (UniformIntrinsicRegion.abstractApplied
-            (.here :
-              Var
-                ((.rel sourceArguments) ::
-                  targetScope.frame.visible.sigs)
-                (.rel sourceArguments))
-            (sourceScope.frame.siteBody.renameWires
-              (alignment.sourceRenaming sourceSignature)))
-          (abstractLeaf kind
-            (targetScope.frame.siteBody.renameWires
-              (weakenHead (signature := .rel sourceArguments)))) =
+          sourceAbstract targetAbstract =
         true then
       pure
         ⟨commonCore, removalsExact, sourceScope, targetScope, context,
@@ -1005,6 +1204,15 @@ def checkLeafFactorization
           sourceOuter, accepted⟩
     else none
   else none
+
+private theorem sameVars_self
+    (values : Vars context arguments) :
+    TypedArguments.sameVars values values = true := by
+  unfold TypedArguments.sameVars
+  split
+  · rfl
+  · rename_i different _
+    exact (different rfl).elim
 
 namespace LeafFactorization
 
@@ -1073,14 +1281,21 @@ theorem denotes
   exact
     (denoteRegion_renameWires pre definitionEnv env sourceRenaming
       factorization.sourceScope.frame.siteBody).symm.trans
-      ((UniformIntrinsicRegion.abstractApplied_denotes pre definitionEnv
+      ((abstractAppliedOrLeaf_denotes kind pre definitionEnv
+        (env _ (.here :
+          Var
+            ((.rel sourceArguments) ::
+              factorization.targetScope.frame.visible.sigs)
+            (.rel sourceArguments)))
+        (fun nestedEnv values =>
+          pointwise nestedEnv values values (sameVars_self values))
         env
         (.here :
           Var
             ((.rel sourceArguments) ::
               factorization.targetScope.frame.visible.sigs)
             (.rel sourceArguments))
-        sourceBody).trans
+        rfl sourceBody).trans
         (paired.trans
           ((abstractLeaf_denotes kind pre definitionEnv env targetBody).symm.trans
             (denoteRegion_renameWires pre definitionEnv env
