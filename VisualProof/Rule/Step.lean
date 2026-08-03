@@ -274,6 +274,27 @@ def transportBoundary (transport : RootInterfaceTransport source target) :
       let mappedRest ← transportBoundary transport rest
       pure (mapped :: mappedRest)
 
+/-- Compose two root-visible transports in execution order. -/
+def compose
+    (first : RootInterfaceTransport source middle)
+    (second : RootInterfaceTransport middle target) :
+    RootInterfaceTransport source target where
+  image? wire := first.image? wire >>= second.image?
+  target_root := by
+    intro wire mapped accepted
+    cases firstExact : first.image? wire with
+    | none => simp [firstExact] at accepted
+    | some middleWire =>
+        exact second.target_root (by simpa [firstExact] using accepted)
+  signature := by
+    intro wire mapped accepted
+    cases firstExact : first.image? wire with
+    | none => simp [firstExact] at accepted
+    | some middleWire =>
+        have secondExact : second.image? middleWire = some mapped := by
+          simpa [firstExact] using accepted
+        exact (second.signature secondExact).trans (first.signature firstExact)
+
 end RootInterfaceTransport
 
 /-- Dense allocation deltas owned by one rule execution before normalization. -/
@@ -405,9 +426,9 @@ inductive ProofStep
       (receipt : StepReceipt source checked.plain) : ProofStep definitions orientation source
   | theorem {source}
       (input : TheoremApplication.{u}
-        (definitions := definitions.intrinsic.signatures) source)
+        (definitions := definitions.intrinsic) source)
       (orientationExact : input.orientation = orientation)
-      (applied : AppliedTheorem.{u} source input)
+      (applied : AppliedTheorem.{u} definitions.intrinsic source input)
       (receipt : StepReceipt source applied.target) : ProofStep definitions orientation source
   | vacuousIntro {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)

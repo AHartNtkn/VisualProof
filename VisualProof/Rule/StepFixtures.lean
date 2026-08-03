@@ -253,9 +253,9 @@ example {source plain : CheckedDiagram definitions.intrinsic.signatures}
 
 example {source : CheckedDiagram definitions.intrinsic.signatures}
     (input : TheoremApplication
-      (definitions := definitions.intrinsic.signatures) source)
+      (definitions := definitions.intrinsic) source)
     (orientationExact : input.orientation = orientation)
-    (applied : AppliedTheorem source input) :
+    (applied : AppliedTheorem definitions.intrinsic source input) :
     (ProofStep.theorem (definitions := definitions) input orientationExact
       applied (fixtureReceipt source applied.target)).tag = .theorem := rfl
 

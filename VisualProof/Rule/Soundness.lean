@@ -1120,9 +1120,15 @@ private theorem denoteOpen_cast_boundary
   cases same
   rfl
 
-private theorem theorem_application_open_equiv
-    {definitions : List (List Sig)}
-    {source : CheckedDiagram definitions}
+private def TheoremSideEntails
+    (direction : TheoremDirection) (source target : Prop) : Prop :=
+  match direction with
+  | .forward => source → target
+  | .reverse => target → source
+
+private theorem theorem_application_open_sound
+    {definitions : Definitions}
+    {source : CheckedDiagram definitions.signatures}
     (input : TheoremApplication.{u} (definitions := definitions) source)
     (sourceCompilation : OpenCompilation input.sourceFragment)
     (sourceCompilationAccepted :
@@ -1133,15 +1139,17 @@ private theorem theorem_application_open_equiv
     (sourceAttachment : SpliceAttachment sourceCompilation.openDiagram target)
     (targetAttachment : SpliceAttachment targetCompilation.openDiagram target)
     (model : Model.{u})
-    (definitionEnv : DefinitionEnv model.toPreModel definitions)
+    (definitionEnv : DefinitionEnv model.toPreModel definitions.signatures)
+    (lawful : DefinitionLawful model.toPreModel definitions definitionEnv)
     (env : Env model.toPreModel target)
     (argumentValues :
       input.sourceBoundary ▸ Vars.denote env sourceAttachment.positions =
         input.targetBoundary ▸ Vars.denote env targetAttachment.positions) :
-    denoteOpen model.toPreModel definitionEnv sourceCompilation.openDiagram
-        (Vars.denote env sourceAttachment.positions) ↔
-    denoteOpen model.toPreModel definitionEnv targetCompilation.openDiagram
-        (Vars.denote env targetAttachment.positions) := by
+    TheoremSideEntails input.direction
+      (denoteOpen model.toPreModel definitionEnv sourceCompilation.openDiagram
+        (Vars.denote env sourceAttachment.positions))
+      (denoteOpen model.toPreModel definitionEnv targetCompilation.openDiagram
+        (Vars.denote env targetAttachment.positions)) := by
   cases input with
   | forward statement orientation occurrence =>
       have sourceExact : sourceCompilation = statement.leftCompilation :=
@@ -1178,7 +1186,7 @@ private theorem theorem_application_open_equiv
         exact denoteOpen_cast_boundary statement.rightBoundary
           statement.rightCompilation.openDiagram model.toPreModel definitionEnv
           (Vars.denote env targetAttachment.positions)
-      have valid := statement.valid model definitionEnv
+      have valid := statement.valid model definitionEnv lawful
         (statement.leftBoundary ▸
           Vars.denote env sourceAttachment.positions)
       have targetValues :
@@ -1197,7 +1205,8 @@ private theorem theorem_application_open_equiv
             (statement.rightBoundary ▸
               statement.rightCompilation.openDiagram))
           argumentValues)
-      exact sourceCast.trans (valid.trans (targetValues.trans targetCast.symm))
+      intro sourceHolds
+      exact targetCast.mpr (targetValues.mp (valid (sourceCast.mp sourceHolds)))
   | reverse statement orientation occurrence =>
       have sourceExact : sourceCompilation = statement.rightCompilation :=
         Option.some.inj
@@ -1249,10 +1258,86 @@ private theorem theorem_application_open_equiv
             (statement.rightBoundary ▸
               statement.rightCompilation.openDiagram))
           argumentValues)
-      have valid := (statement.valid model definitionEnv
+      have valid := statement.valid model definitionEnv lawful
         (statement.leftBoundary ▸
-          Vars.denote env targetAttachment.positions)).symm
-      exact sourceCast.trans (sourceValues.trans (valid.trans targetCast.symm))
+          Vars.denote env targetAttachment.positions)
+      intro targetHolds
+      exact sourceCast.mpr
+        (sourceValues.mpr (valid (targetCast.mp targetHolds)))
+
+private theorem insertion_denotation_theorem_sound
+    {definitions : List (List Sig)}
+    {base : CheckedDiagram definitions}
+    {site : base.val.RegionId}
+    {leftFragment rightFragment : CheckedOpenDiagram definitions}
+    {leftCompiled : OpenCompilation leftFragment}
+    {rightCompiled : OpenCompilation rightFragment}
+    {leftAttachment : ConcreteSpliceAttachment base site leftFragment}
+    {rightAttachment : ConcreteSpliceAttachment base site rightFragment}
+    (left : InsertionCompilation leftCompiled leftAttachment)
+    (right : InsertionCompilation rightCompiled rightAttachment)
+    (common : SiteCompilation base site)
+    (orientation : Orientation)
+    (direction : TheoremDirection)
+    (parity : match orientation, direction with
+      | .forward, .forward | .backward, .reverse =>
+          common.frame.context.cutDepth % 2 = 0
+      | .forward, .reverse | .backward, .forward =>
+          common.frame.context.cutDepth % 2 = 1)
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre definitions)
+    (openSound : ∀ env : Env pre common.frame.visible.sigs,
+      TheoremSideEntails direction
+        (denoteOpen pre definitionEnv leftCompiled.openDiagram
+          (Vars.denote env (left.intrinsicAttachmentAt common).positions))
+        (denoteOpen pre definitionEnv rightCompiled.openDiagram
+          (Vars.denote env (right.intrinsicAttachmentAt common).positions))) :
+    Directed orientation
+      (denoteRegion pre definitionEnv Env.empty (left.insertedAt common))
+      (denoteRegion pre definitionEnv Env.empty (right.insertedAt common)) := by
+  let leftBody := Region.conjoin common.frame.siteBody
+    (intrinsicSplice leftCompiled.openDiagram
+      (left.intrinsicAttachmentAt common))
+  let rightBody := Region.conjoin common.frame.siteBody
+    (intrinsicSplice rightCompiled.openDiagram
+      (right.intrinsicAttachmentAt common))
+  rw [InsertionCompilation.insertedAt, InsertionCompilation.insertedAt]
+  change Directed orientation
+    (denoteRegion pre definitionEnv Env.empty
+      (common.frame.context.fill leftBody))
+    (denoteRegion pre definitionEnv Env.empty
+      (common.frame.context.fill rightBody))
+  cases direction with
+  | forward =>
+      have localSound : ∀ env : Env pre common.frame.visible.sigs,
+          denoteRegion pre definitionEnv env leftBody →
+            denoteRegion pre definitionEnv env rightBody := by
+        intro env holds
+        simp only [leftBody, rightBody, Region.denote_conjoin,
+          denote_intrinsicSplice] at holds ⊢
+        exact ⟨holds.1, openSound env holds.2⟩
+      cases orientation with
+      | forward =>
+          exact context_mono common.frame.context pre definitionEnv
+            leftBody rightBody parity localSound Env.empty
+      | backward =>
+          exact context_anti common.frame.context pre definitionEnv
+            leftBody rightBody parity localSound Env.empty
+  | reverse =>
+      have localSound : ∀ env : Env pre common.frame.visible.sigs,
+          denoteRegion pre definitionEnv env rightBody →
+            denoteRegion pre definitionEnv env leftBody := by
+        intro env holds
+        simp only [leftBody, rightBody, Region.denote_conjoin,
+          denote_intrinsicSplice] at holds ⊢
+        exact ⟨holds.1, openSound env holds.2⟩
+      cases orientation with
+      | forward =>
+          exact context_anti common.frame.context pre definitionEnv
+            rightBody leftBody parity localSound Env.empty
+      | backward =>
+          exact context_mono common.frame.context pre definitionEnv
+            rightBody leftBody parity localSound Env.empty
 
 private theorem directed_of_iff (orientation : Orientation)
     {source target : Prop} (equivalent : source ↔ target) :
@@ -1264,26 +1349,28 @@ private theorem directed_of_iff (orientation : Orientation)
 /-- A checked pinned theorem replacement has the replay direction certified by
 the cited theorem, including repeated ordered boundary attachments. -/
 theorem theorem_application_sound
-    {definitions : List (List Sig)}
-    (source : CheckedDiagram definitions)
+    {definitions : Definitions}
+    (source : CheckedDiagram definitions.signatures)
     (input : TheoremApplication.{u} (definitions := definitions) source)
-    (applied : AppliedTheorem.{u} source input)
+    (applied : AppliedTheorem.{u} definitions source input)
     (model : Model.{u})
-    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    (definitionEnv : DefinitionEnv model.toPreModel definitions.signatures)
+    (lawful : DefinitionLawful model.toPreModel definitions definitionEnv) :
     Directed input.orientation
       (denoteChecked model.toPreModel definitionEnv source)
       (denoteChecked model.toPreModel definitionEnv applied.target) := by
+  have appliedParity := applied.siteDepth_parity
   induction applied using AppliedTheorem.rec
-  rename_i siteCompilation legal sourceCompilation sourceCompilationAccepted
-    targetCompilation targetCompilationAccepted removed removedAccepted
+  rename_i sourceCompilation sourceCompilationAccepted targetCompilation
+    targetCompilationAccepted removed removedAccepted
     reconstruction reconstructionAccepted reconstructionIso
     reconstructionIsoAccepted reconstructionCompilation
-    reconstructionCompilationAccepted attachment boundaryTargets insertion
-    insertionAccepted result resultAccepted
+    reconstructionCompilationAccepted legal attachment boundaryTargets
+    insertion insertionAccepted result resultAccepted
   change Directed input.orientation
     (denoteChecked model.toPreModel definitionEnv source)
     (denoteChecked model.toPreModel definitionEnv result.checked)
-  let reconstructionChecked : CheckedDiagram definitions :=
+  let reconstructionChecked : CheckedDiagram definitions.signatures :=
     ⟨reconstruction.diagram, reconstructionCompilation.generated_wellFormed⟩
   have sourceInserted :
       denoteChecked model.toPreModel definitionEnv source ↔
@@ -1316,25 +1403,39 @@ theorem theorem_application_sound
   let common := reconstructionCompilation.site
   have positions := insertion_positions_eq reconstructionCompilation insertion
     common signatures boundaryLength targets
-  have replacementEquivalent :
-      denoteRegion model.toPreModel definitionEnv Env.empty
-          reconstructionCompilation.inserted ↔
-        denoteRegion model.toPreModel definitionEnv Env.empty
-          insertion.inserted := by
+  have commonParity : match input.orientation, input.direction with
+      | .forward, .forward | .backward, .reverse =>
+          common.frame.context.cutDepth % 2 = 0
+      | .forward, .reverse | .backward, .forward =>
+          common.frame.context.cutDepth % 2 = 1 := by
+    simpa [AppliedTheorem.siteDepth] using appliedParity
+  have replacementSound : Directed input.orientation
+      (denoteRegion model.toPreModel definitionEnv Env.empty
+        reconstructionCompilation.inserted)
+      (denoteRegion model.toPreModel definitionEnv Env.empty
+        insertion.inserted) := by
     rw [reconstructionCompilation.inserted_eq_insertedAt common,
       insertion.inserted_eq_insertedAt common]
-    apply insertion_denotation_equiv
-    intro env
-    exact theorem_application_open_equiv input sourceCompilation
-      sourceCompilationAccepted targetCompilation targetCompilationAccepted
-      (reconstructionCompilation.intrinsicAttachmentAt common)
-      (insertion.intrinsicAttachmentAt common) model definitionEnv env
-      (boundary_argument_values_eq signatures input.sourceBoundary
-        input.targetBoundary
-        (reconstructionCompilation.intrinsicAttachmentAt common).positions
-        (insertion.intrinsicAttachmentAt common).positions positions env)
-  exact directed_of_iff input.orientation
-    (sourceInserted.trans (replacementEquivalent.trans targetInserted.symm))
+    exact insertion_denotation_theorem_sound reconstructionCompilation insertion
+      common input.orientation input.direction commonParity model.toPreModel
+      definitionEnv (fun env =>
+        theorem_application_open_sound input sourceCompilation
+          sourceCompilationAccepted targetCompilation targetCompilationAccepted
+          (reconstructionCompilation.intrinsicAttachmentAt common)
+          (insertion.intrinsicAttachmentAt common) model definitionEnv lawful env
+          (boundary_argument_values_eq signatures input.sourceBoundary
+            input.targetBoundary
+            (reconstructionCompilation.intrinsicAttachmentAt common).positions
+            (insertion.intrinsicAttachmentAt common).positions positions env))
+  cases orientation : input.orientation with
+  | forward =>
+      simp only [orientation, Directed] at replacementSound ⊢
+      exact fun sourceHolds =>
+        targetInserted.mpr (replacementSound (sourceInserted.mp sourceHolds))
+  | backward =>
+      simp only [orientation, Directed] at replacementSound ⊢
+      exact fun targetHolds =>
+        sourceInserted.mpr (replacementSound (targetInserted.mp targetHolds))
 
 private theorem directed_trans_equiv (orientation : Orientation)
     {source rawTarget target : Prop}
@@ -1394,6 +1495,7 @@ theorem applyStep_sound
           (denoteChecked model.toPreModel definitionEnv applied.target)
         cases orientationExact
         exact theorem_application_sound source input applied model definitionEnv
+          lawful
     | vacuousIntro primitive tagExact receipt =>
         exact primitive.sound model definitionEnv
     | vacuousElim primitive tagExact receipt =>
