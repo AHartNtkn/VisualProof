@@ -242,10 +242,13 @@ export class SpawnCascade {
     const menu = this.#document.createElement('div')
     menu.className = 'vpa-spawn-cascade'
     menu.setAttribute('role', 'menu')
-    menu.style.cssText = `position:fixed;left:${snapshot.screen.x}px;top:${snapshot.screen.y}px;z-index:31;width:240px;max-height:320px;overflow:auto;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui,sans-serif`
+    const viewport = this.#document.defaultView
+    const maxLeft = Math.max(0, (viewport?.innerWidth ?? snapshot.screen.x + 240) - 240)
+    const maxTop = Math.max(0, (viewport?.innerHeight ?? snapshot.screen.y + 320) - 320)
+    menu.style.left = `${Math.max(0, Math.min(snapshot.screen.x, maxLeft))}px`
+    menu.style.top = `${Math.max(0, Math.min(snapshot.screen.y, maxTop))}px`
     const backdrop = this.#document.createElement('div')
     backdrop.className = 'vpa-spawn-backdrop'
-    backdrop.style.cssText = 'position:fixed;inset:0;z-index:30;background:transparent'
     backdrop.addEventListener('pointerdown', () => this.close())
 
     const search = this.#document.createElement('input')
@@ -254,7 +257,6 @@ export class SpawnCascade {
     search.autocomplete = 'off'
     search.placeholder = `search references → '${snapshot.region}'`
     search.setAttribute('aria-label', 'Search relation references to spawn')
-    search.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:0;border-bottom:1px solid #e7e5e4'
     const listing = this.#document.createElement('div')
     listing.className = 'vpa-spawn-listing'
     menu.append(search, listing)
@@ -273,7 +275,6 @@ export class SpawnCascade {
       const item = this.#document.createElement(pick === null ? 'div' : 'button')
       item.className = pick === null ? 'vpa-spawn-heading' : 'vpa-spawn-row'
       item.textContent = hint === '' ? label : `${label} ${hint}`
-      item.style.cssText = 'display:block;width:100%;box-sizing:border-box;padding:6px 10px;border:0;background:#fff;text-align:left'
       if (pick !== null) item.addEventListener('click', pick)
       return item
     }

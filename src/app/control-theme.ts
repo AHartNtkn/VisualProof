@@ -24,6 +24,8 @@ export function applyControlTheme(document: Document, theme: Theme): void {
   const root = document.documentElement
   root.dataset.colorMode = theme.mode
   root.style.colorScheme = theme.mode
-  for (const [key, property] of CONTROL_THEME_PROPERTIES) root.style.setProperty(property, theme.controls[key])
+  for (const [key, property] of CONTROL_THEME_PROPERTIES) {
+    root.style.setProperty(property, theme.controls[key])
+  }
   root.style.setProperty('--vpa-formula-error', theme.interaction.refusal)
 }

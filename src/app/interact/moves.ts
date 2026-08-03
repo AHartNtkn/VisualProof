@@ -461,12 +461,12 @@ export class ProofMoveController {
     const menu = this.#document.createElement('div')
     menu.className = 'vpa-proof-menu'
     menu.setAttribute('role', 'menu')
-    menu.style.cssText = `position:fixed;left:${sample.client.x + 10}px;top:${sample.client.y + 10}px;z-index:31;width:270px;max-height:380px;overflow:auto;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui`
+    menu.style.left = `${sample.client.x + 10}px`
+    menu.style.top = `${sample.client.y + 10}px`
     const row = (label: string, run: (() => void) | null): void => {
       const element = this.#document.createElement(run === null ? 'div' : 'button')
       element.textContent = label
       element.className = run === null ? 'vpa-proof-heading' : 'vpa-proof-action'
-      element.style.cssText = `display:block;width:100%;box-sizing:border-box;padding:6px 10px;border:0;background:#fff;text-align:left;${run === null ? 'color:#78716c;font-size:10px;text-transform:uppercase' : 'cursor:pointer'}`
       if (run !== null) {
         element.addEventListener('click', () => {
           try {
@@ -611,8 +611,9 @@ export class ProofMoveController {
   #promptSig(client: Vec2, apply: (sig: Sig) => void): void {
     this.#closePrompt()
     const box = this.#document.createElement('div')
-    box.className = 'vpa-arity-prompt'
-    box.style.cssText = `position:fixed;left:${client.x + 10}px;top:${client.y + 10}px;z-index:31;padding:8px;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui`
+    box.className = 'vpa-proof-prompt'
+    box.style.left = `${client.x + 10}px`
+    box.style.top = `${client.y + 10}px`
     const input = this.#document.createElement('input')
     input.type = 'text'
     input.placeholder = 'arity (blank = individual)'

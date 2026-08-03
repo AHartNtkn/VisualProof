@@ -265,7 +265,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
     canvas.ownerDocument.body.style.background = theme.canvas
-    chrome.dataset.colorMode = theme.mode
     applyControlTheme(canvas.ownerDocument, theme)
   }
   applyThemeBackdrop()
