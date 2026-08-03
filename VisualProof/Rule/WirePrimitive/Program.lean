@@ -1,4 +1,5 @@
 import VisualProof.Rule.Orientation
+import VisualProof.Rule.Structural
 import VisualProof.Rule.Vacuous
 import VisualProof.Rule.WirePrimitive.VacuityTransport
 import VisualProof.Rule.WirePrimitive.Partition
@@ -42,6 +43,22 @@ inductive CompiledPrimitiveStep
       (orientationExact : input.orientation = orientation)
       (applied : AppliedWireJoin source input) :
       CompiledPrimitiveStep orientation source
+  | identityInsert
+      {source : CheckedDiagram definitions}
+      {fragment : CheckedOpenDiagram definitions}
+      (input : StructuralCore.StructuralInsertionInput source fragment)
+      (orientationExact : input.orientation = orientation)
+      (checked : StructuralCore.StructuralInsertionReceipt input)
+      (tagExact : checked.tag = .identityInsert) :
+      CompiledPrimitiveStep orientation source
+  | erasure
+      {base : CheckedDiagram definitions}
+      {fragment : CheckedOpenDiagram definitions}
+      (input : StructuralCore.StructuralErasureInput base fragment)
+      (orientationExact : input.orientation = orientation)
+      (checked : StructuralCore.StructuralErasureReceipt input)
+      (tagExact : checked.insertedTag = .identityInsert) :
+      CompiledPrimitiveStep orientation checked.source
   | cutWrap
       {source : CheckedDiagram definitions}
       (wire : source.val.WireId)
@@ -181,6 +198,8 @@ def target :
         CheckedDiagram definitions
   | _, .wireSever _ _ applied => applied.target
   | _, .wireJoin _ _ applied => applied.target
+  | _, .identityInsert _ _ checked _ => checked.target
+  | _, .erasure _ _ checked _ => checked.target
   | _, .cutWrap _ applied => applied.target
   | _, .cutAbsorb _ applied => applied.target
   | _, .parallelSplit _ applied => applied.target
@@ -209,6 +228,8 @@ def tag :
       CompiledPrimitiveStep orientation source → StepTag
   | _, .wireSever .. => .wireSever
   | _, .wireJoin .. => .wireJoin
+  | _, .identityInsert .. => .identityInsert
+  | _, .erasure .. => .erasure
   | _, .cutWrap .. => .cutWrap
   | _, .cutAbsorb .. => .cutAbsorb
   | _, .parallelSplit .. => .parallelSplit

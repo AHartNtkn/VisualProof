@@ -24,6 +24,8 @@ inductive CompilerError
   | leafRejected (error : Leaves.WireLeafError)
   | partitionRejected (error : Partition.WirePartitionError)
   | vacuousRejected (error : StructuralCore.VacuousError)
+  | identityFragmentRejected (error : WFError)
+  | structuralRejected (error : StructuralCore.StructuralError)
   | redundancyMismatch
   deriving Repr, DecidableEq
 
@@ -961,7 +963,8 @@ private structure PlumbingPlan
 
 private def materializePlan
     (context : List Sig)
-    (initial target : List (PackedVar context)) :
+    (initial : PlumbingPlan context)
+    (target : List (PackedVar context)) :
     PlumbingPlan context :=
   target.foldl
     (fun plan stub =>
@@ -971,6 +974,23 @@ private def materializePlan
         { positions := plan.positions ++ [stub]
           operations :=
             plan.operations ++ [.extend stub plan.positions.length] })
+    initial
+
+/-- Keep the first concrete position for each intrinsic boundary class.  Raw
+identity-request insertion preserves every discarded concrete attachment;
+the live content wire thereafter uses the canonical first representative. -/
+private def dropDuplicatePlan
+    (initial : List (PackedVar context)) : PlumbingPlan context :=
+  (List.range initial.length).reverse.foldl
+    (fun plan position =>
+      match plan.positions[position]? with
+      | none => plan
+      | some stub =>
+          if stub ∈ plan.positions.take position then
+            { positions := eraseAt position plan.positions
+              operations := plan.operations ++ [.drop position] }
+          else
+            plan)
     { positions := initial, operations := [] }
 
 private def dropUnusedPlan
@@ -1066,7 +1086,8 @@ private def planPlumbing
     (context : List Sig)
     (initial target : List (PackedVar context)) :
     Option (List (PlumbingOp context)) := do
-  let materialized := materializePlan context initial target
+  let representatives := dropDuplicatePlan initial
+  let materialized := materializePlan context representatives target
   let dropped := dropUnusedPlan target materialized
   let arranged ← arrangePlan target dropped
   if arranged.positions = target then
@@ -2143,6 +2164,111 @@ private def constructionIso
 
 end RawJoinConstructionConformance
 
+/-- One raw splice identity obligation expressed in stable source carriers. -/
+private structure RawIdentityInsertionPlan
+    (source : CheckedDiagram definitions) where
+  site : source.val.RegionId
+  signature : Sig
+  attachments : List source.val.WireId
+
+/-- The raw requests, in the monolithic construction's chronological order. -/
+private def rawIdentityInsertionPlans
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters) :
+    List (RawIdentityInsertionPlan source) :=
+  result.steps.flatMap fun step =>
+    (Data.Finite.allFin step.attachment.identityRequests.length).map
+      fun request =>
+        let requestData := step.attachment.identityRequests.get request
+        { site := step.sourceRegion
+          signature := requestData.sig
+          attachments :=
+            (Data.Finite.allFin requestData.attachments.length).map
+              (step.identityRequestSourceWire request) }
+
+/-- A raw-identity prefix preserves the original region and wire carriers. -/
+private structure RawIdentityInsertionRun
+    (orientation : Orientation)
+    (origin current : CheckedDiagram definitions) where
+  program : PrimitiveProgram orientation current
+  regionCountExact : program.target.val.regionCount = origin.val.regionCount
+  wireCountExact : program.target.val.wireCount = origin.val.wireCount
+
+/-- Execute exactly the accepted raw identity requests.  The canonical
+identity fragment has no internal regions or wires, so only nodes are added. -/
+private def executeRawIdentityInsertions
+    (origin : CheckedDiagram definitions) :
+    (plans : List (RawIdentityInsertionPlan origin)) →
+    (current : CheckedDiagram definitions) →
+    (currentRegionCount :
+      current.val.regionCount = origin.val.regionCount) →
+    (currentWireCount :
+      current.val.wireCount = origin.val.wireCount) →
+    (orientation : Orientation) →
+    Except CompilerError
+      (RawIdentityInsertionRun orientation origin current)
+  | [], current, regionExact, wireExact, _ =>
+      .ok
+        { program := .nil current
+          regionCountExact := regionExact
+          wireCountExact := wireExact }
+  | plan :: rest, current, regionExact, wireExact, orientation => do
+      let fragment ←
+        (StructuralCore.checkIdentityFragment definitions plan.signature
+          plan.attachments.length).mapError .identityFragmentRejected
+      let site : current.val.RegionId :=
+        Fin.cast regionExact.symm plan.site
+      let input : StructuralCore.StructuralInsertionInput current
+          fragment.fragment :=
+        { orientation := orientation
+          site := site
+          target := fun position =>
+            let sourcePosition : Fin plan.attachments.length :=
+              Fin.cast fragment.boundary_length position
+            Fin.cast wireExact.symm
+              (plan.attachments.get sourcePosition) }
+      let checked ←
+        (StructuralCore.checkStructuralInsertion input).mapError
+          .structuralRejected
+      if tagExact : checked.tag = .identityInsert then
+        let step : CompiledPrimitiveStep orientation current :=
+          .identityInsert input rfl checked tagExact
+        if nextRegionExact :
+            step.target.val.regionCount = origin.val.regionCount then
+          if nextWireExact :
+              step.target.val.wireCount = origin.val.wireCount then
+            let tail ←
+              executeRawIdentityInsertions origin rest step.target
+                nextRegionExact nextWireExact orientation
+            pure
+              { program := .cons step tail.program
+                regionCountExact := tail.regionCountExact
+                wireCountExact := tail.wireCountExact }
+          else
+            throw .allocationMismatch
+        else
+          throw .allocationMismatch
+      else
+        throw .malformedResidual
+
+/-- Prefix the content compiler by the raw identity obligations already
+computed and checked by the accepted monolithic construction. -/
+private def compileRawIdentityPrefix
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (orientation : Orientation) :
+    Except CompilerError (RawIdentityInsertionRun orientation source source) :=
+  executeRawIdentityInsertions source (rawIdentityInsertionPlans result)
+    source rfl rfl orientation
+
 /-- The primitive construction of a raw accepted relation join. -/
 private structure RawRelationJoinCompilation
     (orientation : Orientation)
@@ -2155,11 +2281,26 @@ private structure RawRelationJoinCompilation
 private def compileRawRelationJoinResidual
     (source : CheckedDiagram definitions)
     (rawTarget : CheckedDiagram definitions)
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
     (residual : IntrinsicCompilerResidual source context)
     (orientation : Orientation) :
     Except CompilerError
       (RawRelationJoinCompilation orientation source rawTarget) := do
-  let compiled ← compileResidual residual [] orientation
+  let identityPrefix ← compileRawIdentityPrefix result orientation
+  let execution : IntrinsicExecutionResidual identityPrefix.program.target context :=
+    { body := residual.body
+      wire := Fin.cast identityPrefix.wireCountExact.symm residual.wire
+      formals := residual.formals
+      ambients := residual.ambients.map fun binding =>
+        (binding.value,
+          Fin.cast identityPrefix.wireCountExact.symm binding.wire) }
+  let compiled ←
+    compileIntrinsicResidual identityPrefix.program.target execution []
+      orientation
   have trackedEmpty : compiled.tracked = [] :=
     List.eq_nil_of_length_eq_zero compiled.trackedLength
   let constructionLanding ←
@@ -2167,11 +2308,16 @@ private def compileRawRelationJoinResidual
       ConcreteIsoSearch.findConcreteIso?
         compiled.construction.1.val rawTarget.val
   let compiled := compiled.retarget rawTarget constructionLanding
+  let program := identityPrefix.program.append compiled.program
   pure
-    { program := compiled.program
-      remainingTracked := compiled.tracked
-      trackedEmpty := trackedEmpty
-      constructionIso := compiled.construction.2 }
+    { program := program
+      remainingTracked := []
+      trackedEmpty := rfl
+      constructionIso := by
+        rw [show program.target = compiled.program.target by
+          exact PrimitiveProgram.target_append identityPrefix.program
+            compiled.program]
+        exact compiled.construction.2 }
 
 /-- A successful join compilation and its independently checked redundancy. -/
 structure CompiledRelationJoin
@@ -2279,8 +2425,8 @@ private def compileAppliedRelationJoin
       parameterSignatures := monolithic.parameterSignatures }
   let residual := initialIntrinsicResidual monolithic
   let compiled ←
-    compileRawRelationJoinResidual source monolithic.plainFinal residual
-      input.orientation
+    compileRawRelationJoinResidual source monolithic.plainFinal
+      monolithic.concreteResult residual input.orientation
   pure
     { monolithic := monolithic
       arguments := arguments
@@ -2324,7 +2470,8 @@ def compileRelationSever
       receipt.inverseChecked receipt.inverse
   let planned ←
     compileRawRelationJoinResidual receipt.result.checked
-      receipt.inverse.plainFinal residual inverseInput.orientation
+      receipt.inverse.plainFinal receipt.inverse residual
+      inverseInput.orientation
   let reconstruction ←
     requireOption .redundancyMismatch <|
       ConcreteIsoSearch.findConcreteIso?

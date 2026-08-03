@@ -34,6 +34,15 @@ theorem sound
   | wireJoin input orientationExact applied =>
       subst orientationExact
       exact wire_join_sound input applied model.toPreModel definitionEnv
+  | identityInsert input orientationExact checked _ =>
+      subst orientationExact
+      exact checked.sound model.toPreModel definitionEnv
+  | erasure input orientationExact checked _ =>
+      change Directed orientation
+        (denoteChecked model.toPreModel definitionEnv checked.source)
+        (denoteChecked model.toPreModel definitionEnv checked.target)
+      rw [← orientationExact]
+      exact checked.sound model.toPreModel definitionEnv
   | cutWrap wire applied =>
       exact equivalenceDirected orientation <|
         cut_wrap_sound wire applied model definitionEnv
