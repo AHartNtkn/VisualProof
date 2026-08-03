@@ -4,7 +4,7 @@ import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { parseFormula } from '../../src/formula/parse'
 import { FormulaError, type Formula } from '../../src/formula/syntax'
 
-const EXAMPLE_SOURCE = '∀ Z : i → o. ∀ S : i → i → o. ∀ n m. Z(n) ∧ S(n, m)'
+const EXAMPLE_SOURCE = '∀ Z : i → o. ∀ S : i → i → o. (∃ z. Z(z)) ⇒ (∀ z. Z(z) ⇒ (∀ P : i → o. ((∀ n. Z(n) ⇒ P(n)) & (∀ n m. (P(n) & S(n, m)) ⇒ P(m))) ⇒ P(z)))'
 
 function expectQuantifier(formula: Formula, quantifier: 'exists' | 'forall', name: string): Extract<Formula, { kind: 'quantifier' }> {
   expect(formula.kind).toBe('quantifier')
@@ -23,10 +23,20 @@ describe('parseFormula', () => {
     const second = expectQuantifier(outer.body, 'forall', 'S')
     expect(second.binders[0]!.sig).toEqual(relSig([IOTA, IOTA]))
 
-    expect(second.body.kind).toBe('quantifier')
-    if (second.body.kind !== 'quantifier') throw new Error('expected grouped quantifier')
-    expect(second.body.binders.map((binder) => binder.name)).toEqual(['n', 'm'])
-    expect(second.body.binders.map((binder) => binder.sig)).toEqual([IOTA, IOTA])
+    expect(second.body.kind).toBe('implies')
+    if (second.body.kind !== 'implies') throw new Error('expected outer implication')
+    const universalZ = expectQuantifier(second.body.right, 'forall', 'z')
+    expect(universalZ.body.kind).toBe('implies')
+    if (universalZ.body.kind !== 'implies') throw new Error('expected nested implication')
+    const predicate = expectQuantifier(universalZ.body.right, 'forall', 'P')
+    expect(predicate.body.kind).toBe('implies')
+    if (predicate.body.kind !== 'implies' || predicate.body.left.kind !== 'and') throw new Error('expected induction conjunction')
+    const step = predicate.body.left.right
+    expect(step.kind).toBe('quantifier')
+    if (step.kind !== 'quantifier') throw new Error('expected grouped quantifier')
+    expect(step.quantifier).toBe('forall')
+    expect(step.binders.map((binder) => binder.name)).toEqual(['n', 'm'])
+    expect(step.binders.map((binder) => binder.sig)).toEqual([IOTA, IOTA])
   })
 
   it('makes implication right-associative and conjunction tighter', () => {
@@ -52,12 +62,11 @@ describe('parseFormula', () => {
     if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
     expect(Object.isFrozen(formula.binders)).toBe(true)
     expect(Object.isFrozen(formula.binders[0]!)).toBe(true)
-    if (formula.body.kind !== 'quantifier') throw new Error('expected typed quantifier')
-    const grouped = formula.body.body
-    if (grouped.kind !== 'quantifier' || grouped.body.kind !== 'and') throw new Error('expected grouped conjunction')
-    if (grouped.body.left.kind !== 'atom') throw new Error('expected atom')
-    expect(Object.isFrozen(grouped.body.left.args)).toBe(true)
-    expect(Object.isFrozen(grouped.body.left.span)).toBe(true)
+    if (formula.body.kind !== 'quantifier' || formula.body.body.kind !== 'implies') throw new Error('expected typed implication')
+    const existentialZ = formula.body.body.left
+    if (existentialZ.kind !== 'quantifier' || existentialZ.body.kind !== 'atom') throw new Error('expected existential atom')
+    expect(Object.isFrozen(existentialZ.body.args)).toBe(true)
+    expect(Object.isFrozen(existentialZ.body.span)).toBe(true)
   })
 
   it('validates argument signatures and permits nested lexical shadowing', () => {
