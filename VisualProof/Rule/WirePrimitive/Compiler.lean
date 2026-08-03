@@ -2164,12 +2164,79 @@ private def constructionIso
 
 end RawJoinConstructionConformance
 
-/-- One raw splice identity obligation expressed in stable source carriers. -/
+/-- One raw splice identity obligation, retaining its exact terminal origin. -/
 private structure RawIdentityInsertionPlan
-    (source : CheckedDiagram definitions) where
-  site : source.val.RegionId
-  signature : Sig
-  attachments : List source.val.WireId
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters) where
+  occurrence : Fin result.steps.length
+  request : Fin
+    ((result.steps.get occurrence).attachment.identityRequests.length)
+
+private def RawIdentityInsertionPlan.step
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (plan : RawIdentityInsertionPlan result) :=
+  result.steps.get plan.occurrence
+
+private def RawIdentityInsertionPlan.requestData
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (plan : RawIdentityInsertionPlan result) :=
+  plan.step.attachment.identityRequests.get plan.request
+
+private def RawIdentityInsertionPlan.site
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (plan : RawIdentityInsertionPlan result) : source.val.RegionId :=
+  plan.step.sourceRegion
+
+private def RawIdentityInsertionPlan.signature
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (plan : RawIdentityInsertionPlan result) : Sig :=
+  plan.requestData.sig
+
+private def RawIdentityInsertionPlan.attachments
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (plan : RawIdentityInsertionPlan result) : List source.val.WireId :=
+  (Data.Finite.allFin plan.requestData.attachments.length).map
+    (plan.step.identityRequestSourceWire plan.request)
+
+private def RawIdentityInsertionPlan.finalOrigin
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (plan : RawIdentityInsertionPlan result) :
+    ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result :=
+  ⟨.inr ⟨plan.occurrence, .inr plan.request⟩, trivial⟩
 
 /-- The raw requests, in the monolithic construction's chronological order. -/
 private def rawIdentityInsertionPlans
@@ -2179,43 +2246,66 @@ private def rawIdentityInsertionPlans
     {parameters : List source.val.WireId}
     (result : ConcreteWireQuantifier.RelationJoinResult source dying content
       parameters) :
-    List (RawIdentityInsertionPlan source) :=
-  result.steps.flatMap fun step =>
-    (Data.Finite.allFin step.attachment.identityRequests.length).map
-      fun request =>
-        let requestData := step.attachment.identityRequests.get request
-        { site := step.sourceRegion
-          signature := requestData.sig
-          attachments :=
-            (Data.Finite.allFin requestData.attachments.length).map
-              (step.identityRequestSourceWire request) }
+    List (RawIdentityInsertionPlan result) :=
+  (Data.Finite.allFin result.steps.length).flatMap fun occurrence =>
+    (Data.Finite.allFin
+      ((result.steps.get occurrence).attachment.identityRequests.length)).map
+        fun request => ⟨occurrence, request⟩
 
 /-- A raw-identity prefix preserves the original region and wire carriers. -/
 private structure RawIdentityInsertionRun
     (orientation : Orientation)
-    (origin current : CheckedDiagram definitions) where
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (plans : List (RawIdentityInsertionPlan result))
+    (current : CheckedDiagram definitions) where
   program : PrimitiveProgram orientation current
-  regionCountExact : program.target.val.regionCount = origin.val.regionCount
-  wireCountExact : program.target.val.wireCount = origin.val.wireCount
+  regionCountExact : program.target.val.regionCount = source.val.regionCount
+  wireCountExact : program.target.val.wireCount = source.val.wireCount
+  sourceNodeImage : current.val.NodeId → program.target.val.NodeId
+  sourceNodeImage_injective : Function.Injective sourceNodeImage
+  requestNodes : List
+    (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result ×
+      program.target.val.NodeId)
+  requestOriginsExact : requestNodes.map Prod.fst = plans.map
+    RawIdentityInsertionPlan.finalOrigin
+  requestNodeTargetsNodup : (requestNodes.map Prod.snd).Nodup
+  sourceNodeImage_not_request : ∀ node request,
+    request ∈ requestNodes → sourceNodeImage node ≠ request.2
 
 /-- Execute exactly the accepted raw identity requests.  The canonical
 identity fragment has no internal regions or wires, so only nodes are added. -/
 private def executeRawIdentityInsertions
-    (origin : CheckedDiagram definitions) :
-    (plans : List (RawIdentityInsertionPlan origin)) →
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters) :
+    (plans : List (RawIdentityInsertionPlan result)) →
     (current : CheckedDiagram definitions) →
     (currentRegionCount :
-      current.val.regionCount = origin.val.regionCount) →
+      current.val.regionCount = source.val.regionCount) →
     (currentWireCount :
-      current.val.wireCount = origin.val.wireCount) →
+      current.val.wireCount = source.val.wireCount) →
     (orientation : Orientation) →
     Except CompilerError
-      (RawIdentityInsertionRun orientation origin current)
+      (RawIdentityInsertionRun orientation result plans current)
   | [], current, regionExact, wireExact, _ =>
       .ok
         { program := .nil current
           regionCountExact := regionExact
-          wireCountExact := wireExact }
+          wireCountExact := wireExact
+          sourceNodeImage := id
+          sourceNodeImage_injective := fun _ _ => id
+          requestNodes := []
+          requestOriginsExact := rfl
+          requestNodeTargetsNodup := by simp
+          sourceNodeImage_not_request := by simp }
   | plan :: rest, current, regionExact, wireExact, orientation => do
       let fragment ←
         (StructuralCore.checkIdentityFragment definitions plan.signature
@@ -2238,16 +2328,56 @@ private def executeRawIdentityInsertions
         let step : CompiledPrimitiveStep orientation current :=
           .identityInsert input rfl checked tagExact
         if nextRegionExact :
-            step.target.val.regionCount = origin.val.regionCount then
+            step.target.val.regionCount = source.val.regionCount then
           if nextWireExact :
-              step.target.val.wireCount = origin.val.wireCount then
+              step.target.val.wireCount = source.val.wireCount then
             let tail ←
-              executeRawIdentityInsertions origin rest step.target
+              executeRawIdentityInsertions result rest step.target
                 nextRegionExact nextWireExact orientation
+            let insertedNode : fragment.fragment.val.diagram.NodeId :=
+              ⟨0, by
+                rw [congrArg
+                  (fun opened : OpenConcreteDiagram definitions.length =>
+                    opened.diagram.nodeCount) fragment.generated]
+                simp [StructuralCore.identityFragmentRaw]⟩
             pure
               { program := .cons step tail.program
                 regionCountExact := tail.regionCountExact
-                wireCountExact := tail.wireCountExact }
+                wireCountExact := tail.wireCountExact
+                sourceNodeImage := fun node =>
+                  tail.sourceNodeImage (checked.rawHostNode node)
+                sourceNodeImage_injective :=
+                  tail.sourceNodeImage_injective.comp
+                    checked.rawHostNode_injective
+                requestNodes :=
+                  (plan.finalOrigin,
+                    tail.sourceNodeImage
+                      (checked.rawFragmentNode insertedNode)) ::
+                    tail.requestNodes
+                requestOriginsExact := by
+                  simp only [List.map_cons]
+                  exact congrArg (List.cons plan.finalOrigin)
+                    tail.requestOriginsExact
+                requestNodeTargetsNodup := by
+                  rw [List.map_cons, List.nodup_cons]
+                  refine ⟨?_, tail.requestNodeTargetsNodup⟩
+                  intro member
+                  rcases List.mem_map.mp member with
+                    ⟨requestNode, requestMember, targetExact⟩
+                  exact tail.sourceNodeImage_not_request
+                    (checked.rawFragmentNode insertedNode) requestNode
+                    requestMember targetExact.symm
+                sourceNodeImage_not_request := by
+                  intro node request requestMember
+                  rw [List.mem_cons] at requestMember
+                  rcases requestMember with same | tailMember
+                  · subst request
+                    intro targetSame
+                    apply checked.rawHostNode_ne_rawFragmentNode node
+                      insertedNode
+                    exact tail.sourceNodeImage_injective targetSame
+                  · exact tail.sourceNodeImage_not_request
+                      (checked.rawHostNode node) request tailMember }
           else
             throw .allocationMismatch
         else
@@ -2265,8 +2395,9 @@ private def compileRawIdentityPrefix
     (result : ConcreteWireQuantifier.RelationJoinResult source dying content
       parameters)
     (orientation : Orientation) :
-    Except CompilerError (RawIdentityInsertionRun orientation source source) :=
-  executeRawIdentityInsertions source (rawIdentityInsertionPlans result)
+    Except CompilerError (RawIdentityInsertionRun orientation result
+      (rawIdentityInsertionPlans result) source) :=
+  executeRawIdentityInsertions result (rawIdentityInsertionPlans result)
     source rfl rfl orientation
 
 /-- The primitive construction of a raw accepted relation join. -/

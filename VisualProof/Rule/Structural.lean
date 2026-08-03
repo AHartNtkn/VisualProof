@@ -227,6 +227,63 @@ def rawTarget
     CheckedDiagram definitions :=
   checked.result.raw
 
+/-- Exact raw image of one pre-insertion region. -/
+def rawHostRegion
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (region : base.val.RegionId) : checked.target.val.RegionId :=
+  checked.attachment.hostRegion region
+
+/-- Exact raw image of one pre-insertion node. -/
+def rawHostNode
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (node : base.val.NodeId) : checked.target.val.NodeId :=
+  checked.attachment.hostNode node
+
+/-- Exact raw image of one pre-insertion wire. -/
+def rawHostWire
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (wire : base.val.WireId) : checked.target.val.WireId :=
+  checked.attachment.hostWire wire
+
+/-- Exact raw image of one inserted fragment node. -/
+def rawFragmentNode
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (node : fragment.val.diagram.NodeId) : checked.target.val.NodeId :=
+  checked.attachment.fragmentNode node
+
+theorem rawHostNode_injective
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    Function.Injective checked.rawHostNode := by
+  intro left right same
+  apply Fin.ext
+  simpa [rawHostNode, ConcreteSpliceAttachment.hostNode] using
+    congrArg Fin.val same
+
+theorem rawHostNode_ne_rawFragmentNode
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (host : base.val.NodeId)
+    (inserted : fragment.val.diagram.NodeId) :
+    checked.rawHostNode host ≠ checked.rawFragmentNode inserted :=
+  checked.attachment.hostNode_ne_fragmentNode host inserted
+
 /--
 A checked splice into a negative context is sound in the insertion direction.
 This is the direct negative-splice theorem used by backward erasure; it does
