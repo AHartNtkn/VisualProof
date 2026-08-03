@@ -5,7 +5,6 @@ import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsDuplicateTransport
 import VisualProof.Rule.MonolithicWireQuantifierRaw
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawEndpointTerminalConformance
-import VisualProof.Diagram.Concrete.IsomorphismSearch
 
 namespace VisualProof
 
@@ -26,7 +25,6 @@ inductive CompilerError
   | vacuousRejected (error : StructuralCore.VacuousError)
   | identityFragmentRejected (error : WFError)
   | structuralRejected (error : StructuralCore.StructuralError)
-  | redundancyMismatch
   deriving Repr, DecidableEq
 
 private def requireOption
@@ -1521,6 +1519,22 @@ private def invertStep
         { step := .wireSever inverse.input inverse.orientationExact
             inverse.applied
           constructionIso := inverse.targetIso }
+  | .identityInsert input _ checked tagExact => do
+      let inverseInput := checked.inverseErasureInput
+      if orientationExact : inverseInput.orientation = orientation then
+        let inverseChecked :=
+          StructuralCore.StructuralErasureReceipt.ofInsertion checked
+        let inverseStep : CompiledPrimitiveStep orientation real :=
+          .erasure inverseInput orientationExact inverseChecked
+            (by simpa [inverseChecked] using targetIso)
+            (by simpa [inverseChecked] using tagExact)
+        pure
+          { step := inverseStep
+            constructionIso := by
+              simpa [inverseStep, inverseChecked] using
+                (Vacuity.identityIso planned.val planned.property) }
+      else
+        throw .malformedResidual
   | .arityShift _ _ applied => do
       let inverseWire := targetIso.wires.symm applied.targetWire
       let wireExact := targetIso.wires.right_inv applied.targetWire
@@ -2965,10 +2979,8 @@ def compileRelationSever
   let planned ←
     compileRawRelationJoinResidual receipt.result.checked
       receipt.inverse residual inverseInput.orientation
-  let reconstruction ←
-    requireOption .redundancyMismatch <|
-      ConcreteIsoSearch.findConcreteIso?
-        planned.program.target.val source.val
+  let reconstruction :=
+    planned.constructionIso.trans monolithic.reconstructionIso
   let reversed ←
     reversePrimitiveProgram planned.program source reconstruction
       input.orientation

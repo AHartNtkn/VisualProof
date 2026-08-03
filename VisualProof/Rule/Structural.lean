@@ -471,6 +471,24 @@ private def asOppositeInsertion
 
 end StructuralErasureInput
 
+namespace StructuralInsertionReceipt
+
+/-- The exact opposite-orientation erasure input for this accepted insertion. -/
+def inverseErasureInput
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (_checked : StructuralInsertionReceipt input) :
+    StructuralErasureInput base fragment where
+  orientation :=
+    match input.orientation with
+    | .forward => .backward
+    | .backward => .forward
+  site := input.site
+  target := input.target
+
+end StructuralInsertionReceipt
+
 /-- Opaque receipt for erasure at the orientation-flipped legal polarity. -/
 structure StructuralErasureReceipt
     {base : CheckedDiagram definitions}
@@ -498,6 +516,21 @@ def checkStructuralErasure
       exact .error error
 
 namespace StructuralErasureReceipt
+
+/-- Read an accepted insertion as its exact opposite-orientation erasure. -/
+def ofInsertion
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    StructuralErasureReceipt checked.inverseErasureInput := by
+  refine StructuralErasureReceipt.mk ?_
+  have exactInput :
+      checked.inverseErasureInput.asOppositeInsertion = input := by
+    cases input with
+    | mk orientation site target => cases orientation <;> rfl
+  rw [exactInput]
+  exact checked
 
 /-- The structural constructor removed by this erasure. -/
 def insertedTag
@@ -531,6 +564,33 @@ def target
     (checked : StructuralErasureReceipt input) :
     CheckedDiagram definitions :=
   checked.inserted.source
+
+@[simp] theorem ofInsertion_source
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    (ofInsertion checked).source = checked.target := by
+  cases input with
+  | mk orientation site target => cases orientation <;> rfl
+
+@[simp] theorem ofInsertion_target
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    (ofInsertion checked).target = checked.source := by
+  cases input with
+  | mk orientation site target => cases orientation <;> rfl
+
+@[simp] theorem ofInsertion_insertedTag
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    (ofInsertion checked).insertedTag = checked.tag := by
+  cases input with
+  | mk orientation site target => cases orientation <;> rfl
 
 /--
 Erasure is the checked opposite-orientation reading of the same splice.

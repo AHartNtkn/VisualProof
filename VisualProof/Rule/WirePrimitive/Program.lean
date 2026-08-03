@@ -52,13 +52,15 @@ inductive CompiledPrimitiveStep
       (tagExact : checked.tag = .identityInsert) :
       CompiledPrimitiveStep orientation source
   | erasure
+      {source : CheckedDiagram definitions}
       {base : CheckedDiagram definitions}
       {fragment : CheckedOpenDiagram definitions}
       (input : StructuralCore.StructuralErasureInput base fragment)
       (orientationExact : input.orientation = orientation)
       (checked : StructuralCore.StructuralErasureReceipt input)
+      (sourceIso : ConcreteIso source.val checked.source.val)
       (tagExact : checked.insertedTag = .identityInsert) :
-      CompiledPrimitiveStep orientation checked.source
+      CompiledPrimitiveStep orientation source
   | cutWrap
       {source : CheckedDiagram definitions}
       (wire : source.val.WireId)
@@ -199,7 +201,7 @@ def target :
   | _, .wireSever _ _ applied => applied.target
   | _, .wireJoin _ _ applied => applied.target
   | _, .identityInsert _ _ checked _ => checked.target
-  | _, .erasure _ _ checked _ => checked.target
+  | _, .erasure _ _ checked _ _ => checked.target
   | _, .cutWrap _ applied => applied.target
   | _, .cutAbsorb _ applied => applied.target
   | _, .parallelSplit _ applied => applied.target

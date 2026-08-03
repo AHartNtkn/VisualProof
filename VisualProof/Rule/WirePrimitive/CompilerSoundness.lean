@@ -37,12 +37,16 @@ theorem sound
   | identityInsert input orientationExact checked _ =>
       subst orientationExact
       exact checked.sound model.toPreModel definitionEnv
-  | erasure input orientationExact checked _ =>
-      change Directed orientation
-        (denoteChecked model.toPreModel definitionEnv checked.source)
-        (denoteChecked model.toPreModel definitionEnv checked.target)
-      rw [← orientationExact]
-      exact checked.sound model.toPreModel definitionEnv
+  | erasure input orientationExact checked sourceIso _ =>
+      have sourceEquivalent :=
+        iso_denotation sourceIso model.toPreModel definitionEnv
+      have erasureSound := checked.sound model.toPreModel definitionEnv
+      rw [orientationExact] at erasureSound
+      cases orientation <;> simp only [Directed] at *
+      · exact fun sourceHolds =>
+          erasureSound (sourceEquivalent.mp sourceHolds)
+      · exact fun targetHolds =>
+          sourceEquivalent.mpr (erasureSound targetHolds)
   | cutWrap wire applied =>
       exact equivalenceDirected orientation <|
         cut_wrap_sound wire applied model definitionEnv
