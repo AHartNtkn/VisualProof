@@ -36,6 +36,8 @@ structure CheckedReferenceFragment
   generated : fragment.val = referenceFragmentRaw definitions definition
   boundaryLength :
     fragment.val.boundary.length = (definitions.get definition).length
+  boundarySignatures :
+    checkedBoundarySigs fragment = definitions.get definition
 
 /-- Validate canonical folded-reference syntax through the ordinary concrete
 checker. This is the exact pattern consumed by unfold and produced by fold. -/
@@ -60,7 +62,18 @@ def checkReferenceFragment
           generated := rfl
           boundaryLength := by
             simp [fragment, raw, referenceFragmentRaw,
-              Data.Finite.allFin_eq_finRange] }
+              Data.Finite.allFin_eq_finRange]
+          boundarySignatures := by
+            change
+              (Data.Finite.allFin
+                (definitions.get definition).length).map
+                  (definitions.get definition).get =
+                definitions.get definition
+            rw [Data.Finite.allFin_eq_finRange]
+            unfold List.finRange
+            rw [List.map_ofFn]
+            simpa only [Function.comp_apply, List.get_eq_getElem] using
+              (List.ofFn_getElem (xs := definitions.get definition)) }
 
 namespace ConcreteDefinitionWeakening
 
@@ -383,12 +396,98 @@ def tag
 
 end AppliedUnfold
 
+/-- Durable fold input: one exact occurrence of the checker-resolved stored
+body.  The concrete definition index selects both the chronological body and
+the canonical folded reference. -/
+structure FoldInput
+    (definitions : CheckedDefinitions)
+    (source : CheckedDiagram definitions.intrinsic.signatures) where
+  definition : Fin definitions.intrinsic.signatures.length
+  body : ResolvedDefinitionBody definitions.intrinsic
+    (definitions.intrinsic.signatures.get definition)
+  bodyAccepted :
+    definitions.resolveBody
+        (ConcreteElaboration.Internal.definitionVarAt
+          definitions.intrinsic.signatures definition) =
+      .ok body
+  occurrence : Occurrence body.body source
+
+/-- Opaque receipt for exact concrete replacement of one stored-body
+occurrence by its canonical folded reference. -/
+structure AppliedFold
+    (definitions : CheckedDefinitions)
+    (source : CheckedDiagram definitions.intrinsic.signatures)
+    (input : FoldInput definitions source) where
+  private mk ::
+  private removed : RemovalResult input.occurrence
+  private removedAccepted : remove input.occurrence = .ok removed
+  private bodyReconstruction : ConcreteSpliceAttachment removed.complement
+    removed.site input.body.body
+  private bodyReconstructionAccepted :
+    reconstructionAttachment? input.occurrence removed =
+      some bodyReconstruction
+  private bodyReconstructionIso :
+    ConcreteIso bodyReconstruction.diagram source.val
+  private bodyReconstructionIsoAccepted :
+    Reconstruction.extract_splice_iso? input.occurrence removed
+        bodyReconstruction bodyReconstructionAccepted =
+      some bodyReconstructionIso
+  private reference : CheckedReferenceFragment
+    definitions.intrinsic.signatures input.definition
+  private referenceCompilation : OpenCompilation reference.fragment
+  private referenceCompilationAccepted :
+    compileOpen reference.fragment = some referenceCompilation
+  private attachment : ConcreteSpliceAttachment removed.complement
+    removed.site reference.fragment
+  private insertion : InsertionCompilation referenceCompilation attachment
+  private insertionAccepted :
+    compileInsertion? referenceCompilation attachment = some insertion
+  private result : ConcreteSpliceResult attachment
+  private resultAccepted : splice attachment = .ok result
+
+namespace AppliedFold
+
+def source
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (_applied : AppliedFold definitions source input) :
+    CheckedDiagram definitions.intrinsic.signatures :=
+  source
+
+def target
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input) :
+    CheckedDiagram definitions.intrinsic.signatures :=
+  applied.result.checked
+
+def tag
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (_applied : AppliedFold definitions source input) : StepTag :=
+  .fold
+
+end AppliedFold
+
 private def bodyBoundaryLength
     {definitions : Definitions} {args : List Sig}
     (body : ResolvedDefinitionBody definitions args) :
     body.body.val.boundary.length = args.length := by
   have exact := congrArg List.length body.boundarySignatures
   simpa [checkedBoundarySigs] using exact
+
+private theorem referenceBodyBoundaryLength
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    (input : FoldInput definitions source)
+    (reference : CheckedReferenceFragment
+      definitions.intrinsic.signatures input.definition) :
+    reference.fragment.val.boundary.length =
+      input.body.body.val.boundary.length := by
+  exact reference.boundaryLength.trans (bodyBoundaryLength input.body).symm
 
 /-- Deterministically unfold one folded reference. The checker never searches
 for an isomorphic graph and accepts no semantic premise. -/
@@ -528,5 +627,69 @@ def applyUnfold
                                             .attachmentWireRemoved
           else
             exact .error .argumentOwnerMissing
+
+/-- Deterministically fold one exact occurrence of a chronologically stored
+body.  The checker removes that occurrence and inserts the canonical reference
+at the same ordered boundary tuple; it performs no graph search. -/
+def applyFold
+    (definitions : CheckedDefinitions)
+    (source : CheckedDiagram definitions.intrinsic.signatures)
+    (input : FoldInput definitions source) :
+    Except DefinitionRuleError (AppliedFold definitions source input) := by
+  match removedAccepted : remove input.occurrence with
+  | .error error =>
+      exact .error (.referenceRemovalRejected error)
+  | .ok removed =>
+      match bodyReconstructionAccepted :
+          reconstructionAttachment? input.occurrence removed with
+      | none => exact .error .reconstructionRejected
+      | some bodyReconstruction =>
+          match bodyReconstructionIsoAccepted :
+              Reconstruction.extract_splice_iso? input.occurrence removed
+                bodyReconstruction bodyReconstructionAccepted with
+          | none => exact .error .reconstructionIsoRejected
+          | some bodyReconstructionIso =>
+              match referenceAccepted :
+                  checkReferenceFragment definitions.intrinsic.signatures
+                    input.definition with
+              | .error error =>
+                  exact .error (.referenceFragmentRejected error)
+              | .ok reference =>
+                  match referenceCompilationAccepted :
+                      compileOpen reference.fragment with
+                  | none => exact .error .referenceCompilationRejected
+                  | some referenceCompilation =>
+                      let target
+                          (position : Fin
+                            reference.fragment.val.boundary.length) :
+                          removed.complement.val.WireId :=
+                        bodyReconstruction.target
+                          (Fin.cast
+                            (referenceBodyBoundaryLength input reference)
+                            position)
+                      match attachmentAccepted :
+                          checkConcreteSpliceAttachment removed.complement
+                            removed.site reference.fragment target with
+                      | none => exact .error .bodyAttachmentRejected
+                      | some attachment =>
+                          match insertionAccepted :
+                              compileInsertion? referenceCompilation attachment with
+                          | none =>
+                              exact .error .bodyInsertionCompilationRejected
+                          | some insertion =>
+                              match resultAccepted : splice attachment with
+                              | .error error =>
+                                  exact .error (.bodySpliceRejected error)
+                              | .ok result =>
+                                  exact .ok
+                                    (AppliedFold.mk removed removedAccepted
+                                      bodyReconstruction
+                                      bodyReconstructionAccepted
+                                      bodyReconstructionIso
+                                      bodyReconstructionIsoAccepted reference
+                                      referenceCompilation
+                                      referenceCompilationAccepted attachment
+                                      insertion insertionAccepted result
+                                      resultAccepted)
 
 end VisualProof
