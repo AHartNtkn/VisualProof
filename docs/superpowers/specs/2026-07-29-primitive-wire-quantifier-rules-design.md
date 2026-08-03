@@ -249,13 +249,16 @@ therefore a corollary of the join redundancy theorem plus the soundness of
 the two auxiliary steps; the same derivation shows ref-spawn plus unfold is
 conservative (definitions stay macros). The negative-splice soundness lemma
 is still independently required: it grounds the backward erasure gate (one
-rule, two readings, per the flipped-polarity law). One further small
-derivability lemma (2026-07-30): every per-site argument-extend (the
-kernel form, attachments chosen per end) equals a uniform extend followed
-by per-site sever and join at the new position — the witness ignores the
-position, so the choices are free. This licenses the gesture layer's
-uniform-only surface and would license narrowing the kernel input to the
-uniform form if ever wanted. An earlier version of
+rule, two readings, per the flipped-polarity law). Per-site argument extension
+remains a direct member of the authoritative 34-step kernel (2026-08-03
+correction). Uniform scope-visible attachments are an equivalence; differing
+attachments retain the sever-family gate. The earlier claim that every
+per-site extension equals uniform extension plus ordinary sever/join plumbing
+is false: on an accepted forward even-scope extension, sever can isolate the
+new-position endpoint but the necessary merge is rejected because ordinary
+forward join requires an odd inner scope. The gesture layer may expose the
+uniform drag, while durable replay retains explicit per-site payloads. An
+earlier version of
 this note claimed opposite-parity content is forward-underivable and
 proposed an admissibility-style theorem; that analysis covered only the
 spawn-and-cut fragment and omitted the join family — retracted.
@@ -324,7 +327,7 @@ intro, which reuse the existing arity prompt.
 | argument port → beside itself | duplicate |
 | argument port → its own end's center | apply-formal |
 | end node → one of its own argument ports | identity leaf |
-| wire strand → an end of another wire | extend (uniform parameter; struck 2026-07-30: a one-commit per-site gesture re-bundles local acts — the new position is born semantically inert, and each site's attachment is an ordinary local join afterward) |
+| wire strand → an end of another wire | extend (uniform gesture; durable replay also accepts explicit per-site attachments through the independently gated direct rule) |
 | lasso around one end | cut-wrap |
 | cut boundary → the end it encloses | cut-absorb |
 | Delete on a wire | delete-all-ends; on an endpoint-free wire, vacuous elim |

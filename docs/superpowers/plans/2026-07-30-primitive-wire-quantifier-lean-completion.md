@@ -51,7 +51,7 @@ Where the original primitive design and the completed TypeScript plan differ,
 the merged durable TypeScript API controls cross-language correspondence. The
 design still controls the semantic obligations: uniform all-end action,
 pointwise witnesses, compiler redundancy, insertion/ref conservativity, and
-the derived per-site extension theorem.
+the retained direct per-site extension gate.
 
 ## Exact durable step inventory
 
@@ -702,7 +702,7 @@ checkers.
 
 ---
 
-### Task 10: Prove insertion, ref, and per-site extension derivability
+### Task 10: Prove insertion/ref conservativity and pin per-site extension
 
 **Files:**
 
@@ -716,30 +716,33 @@ checkers.
 - `insertion_primitive_program`.
 - `insertion_redundant`.
 - `ref_spawn_unfold_conservative`.
-- `per_site_extend_program`.
-- `per_site_extend_derived`.
 
-- [ ] **Step 1: Add RED derivation fixtures.** Include arbitrary open content
-  in a negative region, nullary content, a folded reference body, uniform
-  extension, two-site differing extension attachments, and both replay
-  orientations.
-- [ ] **Step 2: Derive insertion.** Compose vacuous introduction of a
+- [x] **Step 1: Add RED derivation fixtures.** Include arbitrary open content
+  in a negative region, nullary content, a folded reference body, and both
+  replay orientations. Reuse the authoritative Task 7 argument fixtures for
+  uniform extension and two-site differing attachments; do not duplicate that
+  corpus here.
+- [x] **Step 2: Derive insertion.** Compose vacuous introduction of a
   `rel []` wire, negative-gated atom spawn, and compiled relation join
   grounding to the inserted content. Prove the raw result is checked-concretely
   isomorphic to raw structural insertion with exact ordered boundary transport;
   identity normalization is outside this theorem and its proof.
-- [ ] **Step 3: Derive ref conservativity.** Show ref spawn followed by unfold
-  is the insertion program for its stored definition body. Definitions remain
+- [x] **Step 3: Derive ref conservativity.** Prove the folded named item is
+  exactly its stored definition body under a lawful definition environment.
+  Task 11's checked unfold theorem consumes this law. Definitions remain
   macros and acquire no spawn-anywhere semantic authority.
-- [ ] **Step 4: Derive per-site extension.** Show a per-site `argExtend`
-  equals uniform inert extension plus the local sever/join plumbing at the new
-  position. The proof must preserve the merged kernel's direct checked
-  per-site rule while demonstrating that the gesture layer need expose only
-  uniform extension plus ordinary local joins.
-- [ ] **Step 5: Pin the independent negative-splice theorem.** The insertion
+- [x] **Step 4: Pin direct per-site extension.** Preserve the authoritative
+  34-step kernel's explicit per-site `argExtend`: uniform scope-visible
+  attachments are ungated, while differing attachments retain the
+  sever-family polarity gate. The gesture layer exposes the uniform drag, but
+  durable replay accepts explicit per-site payloads. The canonical two-site
+  fixture must exercise both orientations. Do not claim an ordinary
+  sever/join derivation: the required join has the opposite checked polarity
+  on an accepted even-scope extension case.
+- [x] **Step 5: Pin the independent negative-splice theorem.** The insertion
   corollary may use it, but must not replace it; backward erasure soundness
   continues to cite the direct negative-splice proof.
-- [ ] **Step 6: Run GREEN and commit.**
+- [x] **Step 6: Run GREEN and commit.**
 
   ```bash
   lake build
@@ -749,6 +752,15 @@ checkers.
     VisualProof/Rule/WirePrimitive/DerivedFixtures.lean
   git commit -m "feat: prove primitive derivability corollaries"
   ```
+
+  Arbitrary and nullary insertion execute through vacuity, atom spawn, and
+  constructive join in both orientations. `InsertionPrimitiveLanding` exposes
+  exact ordered raw boundary transport, including aliases; folded references
+  reduce to their stored bodies; backward erasure still cites the independent
+  negative-splice theorem. The authoritative Task 7 fixtures pin uniform and
+  differing-attachment `argExtend` behavior. Focused derivation/argument
+  fixtures, full `lake build` (190 jobs), `formal:size`, placeholder scans,
+  obsolete-claim scans, and diff hygiene pass.
 
 ---
 
@@ -1002,7 +1014,7 @@ checkers.
 | Compiler terminates structurally | well-founded residual measure |
 | Monolithic rule redundant | `compiled_join_redundant`, `compiled_sever_redundant` |
 | Insertion/ref remain conservative | `insertion_redundant`, `ref_spawn_unfold_conservative` |
-| Per-site extend is derived | `per_site_extend_derived` |
+| Per-site extend retained with exact gate | `applyArgExtend`, canonical uniform/differing-attachment fixtures |
 | Definitions/citation sound | fold/unfold and theorem-application theorems |
 | All 34 steps sound | exhaustive `applyStep_sound` |
 | Forward/backward replay sound | `replay_sound`, `backward_replay_sound` |

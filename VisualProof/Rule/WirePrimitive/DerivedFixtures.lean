@@ -9,6 +9,9 @@ open ConcreteSpliceExamples SelectionFixtures StructuralCore
 #check insertion_primitive_program
 #check insertion_redundant
 #check ref_spawn_unfold_conservative
+#check AcceptedRawInsertion.boundaryTarget
+#check InsertionPrimitiveLanding.transportBoundary_exact
+#check StructuralInsertionReceipt.negative_splice_sound
 
 private def forwardInsertionInput :
     StructuralInsertionInput host oneStub where
@@ -24,6 +27,11 @@ private def forwardInsertion :
 theorem arbitrary_insertion_derives :
     (insertion_primitive_program forwardInsertion).isOk = true := by
   native_decide
+
+example (landing : InsertionPrimitiveLanding forwardInsertion) :
+    landing.transportBoundary landing.programBoundary =
+      forwardInsertion.targetBoundary :=
+  landing.transportBoundary_exact
 
 private def nullaryRaw : OpenConcreteDiagram 0 where
   diagram :=

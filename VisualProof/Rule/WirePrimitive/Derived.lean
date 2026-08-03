@@ -35,6 +35,26 @@ def target
     (checked : AcceptedRawInsertion input) : CheckedDiagram definitions :=
   checked.result.raw
 
+/-- Exact raw image of one ordered fragment-boundary attachment. -/
+def boundaryTarget
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : AcceptedRawInsertion input)
+    (position : Fin fragment.val.boundary.length) :
+    checked.target.val.WireId :=
+  checked.attachment.hostWire (input.target position)
+
+/-- Ordered raw attachment interface of the inserted fragment. -/
+def targetBoundary
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : AcceptedRawInsertion input) :
+    List checked.target.val.WireId :=
+  (Data.Finite.allFin fragment.val.boundary.length).map
+    checked.boundaryTarget
+
 end AcceptedRawInsertion
 
 /-- Check the arbitrary raw splice and the insertion polarity, without a tag. -/
@@ -162,6 +182,67 @@ structure InsertionPrimitiveLanding
     (checked : AcceptedRawInsertion input) where
   program : PrimitiveProgram input.orientation base
   constructionIso : ConcreteIso program.target.val checked.target.val
+
+namespace InsertionPrimitiveLanding
+
+/-- Program-side representative of one ordered insertion-boundary position. -/
+def programBoundaryAt
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    {checked : AcceptedRawInsertion input}
+    (landing : InsertionPrimitiveLanding checked)
+    (position : Fin fragment.val.boundary.length) :
+    landing.program.target.val.WireId :=
+  landing.constructionIso.wires.symm (checked.boundaryTarget position)
+
+/-- Ordered program-side insertion boundary before final raw transport. -/
+def programBoundary
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    {checked : AcceptedRawInsertion input}
+    (landing : InsertionPrimitiveLanding checked) :
+    List landing.program.target.val.WireId :=
+  (Data.Finite.allFin fragment.val.boundary.length).map
+    landing.programBoundaryAt
+
+/-- Transport an ordered program-target interface to the raw splice target. -/
+def transportBoundary
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    {checked : AcceptedRawInsertion input}
+    (landing : InsertionPrimitiveLanding checked)
+    (boundary : List landing.program.target.val.WireId) :
+    List checked.target.val.WireId :=
+  boundary.map landing.constructionIso.wires
+
+/-- Every ordered insertion-boundary position has its exact raw image. -/
+@[simp] theorem transportBoundaryAt_exact
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    {checked : AcceptedRawInsertion input}
+    (landing : InsertionPrimitiveLanding checked)
+    (position : Fin fragment.val.boundary.length) :
+    landing.constructionIso.wires (landing.programBoundaryAt position) =
+      checked.boundaryTarget position :=
+  landing.constructionIso.wires.apply_symm_apply _
+
+/-- The complete ordered boundary is preserved, including repeated aliases. -/
+theorem transportBoundary_exact
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    {checked : AcceptedRawInsertion input}
+    (landing : InsertionPrimitiveLanding checked) :
+    landing.transportBoundary landing.programBoundary =
+      checked.targetBoundary := by
+  simp [transportBoundary, programBoundary,
+    AcceptedRawInsertion.targetBoundary]
+
+end InsertionPrimitiveLanding
 
 /--
 Construct arbitrary raw structural insertion as vacuous nullary relation
