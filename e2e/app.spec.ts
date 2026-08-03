@@ -95,6 +95,19 @@ test('formula entry creates a diagram, rejects malformed source, and preserves E
   })
 
   await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  const source = form.getByLabel('Formula to diagram')
+  await source.fill('')
+  await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
+
+  await expect(form.locator('.vpa-formula-error')).toContainText(/line 1, column \d+/)
+  await expect(source).toHaveAttribute('aria-invalid', 'true')
+  await expect(form).toBeVisible()
+  expect(await diagramSummary()).toEqual({
+    cutRegions: 22,
+    atoms: 8,
+    wires: 8,
+  })
+
   await form.getByLabel('Formula to diagram').fill('∀ x. Missing(x)')
   await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
 

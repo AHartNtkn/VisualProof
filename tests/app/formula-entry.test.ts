@@ -108,4 +108,17 @@ describe('mountFormulaEntry', () => {
     expect(error.textContent).toBe('')
     expect(textarea.getAttribute('aria-invalid')).toBeNull()
   })
+
+  it('routes empty source through the formula parser rather than committing', () => {
+    const commit = vi.fn<(diagram: Diagram) => void>()
+    const { entry, textarea, form, error } = mounted(commit)
+
+    entry.open()
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+
+    expect(error.textContent).toMatch(/line 1, column \d+/u)
+    expect(textarea.getAttribute('aria-invalid')).toBe('true')
+    expect(entry.root.hidden).toBe(false)
+    expect(commit).not.toHaveBeenCalled()
+  })
 })

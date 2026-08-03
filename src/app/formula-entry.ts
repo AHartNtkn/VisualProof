@@ -27,7 +27,6 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
   const textarea = document.createElement('textarea')
   textarea.id = 'formula-entry-source'
   textarea.setAttribute('aria-label', 'Formula to diagram')
-  textarea.required = true
   const error = document.createElement('output')
   error.className = 'vpa-formula-error'
   error.setAttribute('role', 'alert')
