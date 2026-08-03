@@ -675,7 +675,7 @@ checkers.
   with exact boundary transport and no normalization dependency. Derive monolithic
   soundness again as a corollary and prove primitive-set completeness for
   every checked monolithic input.
-- [ ] **Step 7: Run GREEN and commit.**
+- [x] **Step 7: Run GREEN and commit.**
 
   ```bash
   lake build
@@ -690,14 +690,15 @@ checkers.
   ```
 
   Constructive join and sever redundancy landed through commits `52fb5cd`
-  and `573b4aa`. The origin-aware elaboration integration repair `9026244`
-  restores the three stale normalization-semantics consumers without changing
-  their statements or behavior. Direct elaboration of the compiler, soundness,
-  and executable fixtures (151 jobs) plus `formal:size` passes. The aggregate
-  `lake build` portion remains pending because the already-landed Task 10
-  `DerivedFixtures.lean` whole-compiler `native_decide` evaluation consumed
-  more than 20 CPU-minutes without completing. No constructive join or sever
-  theorem is missing; Task 10 is active to replace that unbounded fixture gate.
+  and `573b4aa`. Commit `95dd95a` supplies the minimum terminal leaf
+  factorization needed when construction-owned identity leaves collide with
+  retained leaves of the same kind. Both compiler searches and
+  `redundancyMismatch` are absent; join constructs a direct raw
+  `ConcreteIso` to `plainFinal`, and sever is derived by reverse execution and
+  reconstruction. Commit `e4044e6` bounds the already-landed Task 10 nullary
+  fixture without reducing its two-orientation coverage. Focused compiler,
+  soundness, and fixture builds, full `lake build` (190 jobs), `formal:size`,
+  and diff hygiene pass. Raw adequacy has no identity-normalization dependency.
 
 ---
 
