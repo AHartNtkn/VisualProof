@@ -2,7 +2,7 @@ import VisualProof.Rule.Tag
 import VisualProof.Rule.Orientation
 import VisualProof.Rule.IntrinsicRegionEquality
 import VisualProof.Rule.Vacuous
-import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturality
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
 
 namespace VisualProof
@@ -141,8 +141,8 @@ structure StructuralInsertionReceipt
     InsertionLegal input.orientation siteCompiled.frame.context.cutDepth
   private attachment :
     ConcreteSpliceAttachment base input.site fragment
-  private result : ConcreteSpliceResult attachment
-  private resultAccepted : splice attachment = .ok result
+  private result : RawConcreteSpliceResult attachment
+  private resultAccepted : spliceRaw attachment = .ok result
 
 /--
 Compile the fragment and site, enforce actual cut parity, validate the ordered
@@ -173,7 +173,7 @@ def checkStructuralInsertion
                       input.target with
                 | none => exact .error .attachmentRejected
                 | some attachment =>
-                    match resultAccepted : splice attachment with
+                    match resultAccepted : spliceRaw attachment with
                     | .error error =>
                         exact .error (.spliceRejected error)
                     | .ok result =>
@@ -216,7 +216,7 @@ def target
     {input : StructuralInsertionInput base fragment}
     (checked : StructuralInsertionReceipt input) :
     CheckedDiagram definitions :=
-  checked.result.raw
+  checked.result.checked
 
 /-- The exact checked splice candidate produced by the primitive. -/
 def rawTarget
@@ -225,7 +225,7 @@ def rawTarget
     {input : StructuralInsertionInput base fragment}
     (checked : StructuralInsertionReceipt input) :
     CheckedDiagram definitions :=
-  checked.result.raw
+  checked.result.checked
 
 /-- Exact raw image of one pre-insertion region. -/
 def rawHostRegion
@@ -301,12 +301,11 @@ theorem negative_splice_sound
       denoteChecked pre definitionEnv checked.target := by
   obtain ⟨compiled, _compiledAccepted⟩ :=
     compileInsertion_complete_of_raw_splice checked.fragmentCompiled
-      checked.attachment checked.result.rawResult
-      (splice_success_raw checked.resultAccepted)
+      checked.attachment checked.result checked.resultAccepted
   have targetDenotes :
       denoteChecked pre definitionEnv checked.target ↔
         denoteRegion pre definitionEnv Env.empty compiled.inserted := by
-    simpa [StructuralInsertionReceipt.target, ConcreteSpliceResult.raw,
+    simpa [StructuralInsertionReceipt.target,
       RawConcreteSpliceResult.checked] using
       compiled.generated_checked_denotes_inserted pre definitionEnv
   have sameSite :=
@@ -375,12 +374,11 @@ theorem sound
       (denoteChecked pre definitionEnv checked.target) := by
   obtain ⟨compiled, _compiledAccepted⟩ :=
     compileInsertion_complete_of_raw_splice checked.fragmentCompiled
-      checked.attachment checked.result.rawResult
-      (splice_success_raw checked.resultAccepted)
+      checked.attachment checked.result checked.resultAccepted
   have targetDenotes :
       denoteChecked pre definitionEnv checked.target ↔
         denoteRegion pre definitionEnv Env.empty compiled.inserted := by
-    simpa [StructuralInsertionReceipt.target, ConcreteSpliceResult.raw,
+    simpa [StructuralInsertionReceipt.target,
       RawConcreteSpliceResult.checked] using
       compiled.generated_checked_denotes_inserted pre definitionEnv
   have sameSite :=
@@ -1006,9 +1004,9 @@ structure CheckedOrdinaryIteration
         anchorInsertion) = true
   private destinationAttachment :
     ConcreteSpliceAttachment host input.destination pattern
-  private result : ConcreteSpliceResult destinationAttachment
+  private result : RawConcreteSpliceResult destinationAttachment
   private resultAccepted :
-    splice destinationAttachment = .ok result
+    spliceRaw destinationAttachment = .ok result
   private destinationInsertion :
     InsertionCompilation extraction.compilation destinationAttachment
   private destinationInsertionAccepted :
@@ -1065,7 +1063,7 @@ def checkOrdinaryIteration
                   | none => exact .error .attachmentRejected
                   | some anchorAttachment =>
                       match anchorResultAccepted :
-                          splice anchorAttachment with
+                          spliceRaw anchorAttachment with
                       | .error error =>
                           exact .error (.spliceRejected error)
                       | .ok _anchorResult =>
@@ -1090,7 +1088,7 @@ def checkOrdinaryIteration
                                     exact .error .attachmentRejected
                                 | some destinationAttachment =>
                                     match resultAccepted :
-                                        splice destinationAttachment with
+                                        spliceRaw destinationAttachment with
                                     | .error error =>
                                         exact .error
                                           (.spliceRejected error)
@@ -1242,16 +1240,13 @@ theorem equivalence
       context_equiv checked.anchorCompiled.frame.context pre definitionEnv
         checked.anchorCompiled.frame.siteBody copied localEquivalent
         Env.empty
-  obtain ⟨compiled, compiledAccepted, resultDenotes⟩ :=
-    denote_splice checked.extraction.compilation
-      checked.destinationAttachment checked.result checked.resultAccepted
-      pre definitionEnv
-  have sameCompilation :
-      compiled = checked.destinationInsertion :=
-    Option.some.inj
-      (compiledAccepted.symm.trans
-        checked.destinationInsertionAccepted)
-  subst compiled
+  have resultDenotes :
+      denoteChecked pre definitionEnv checked.result.checked ↔
+        denoteRegion pre definitionEnv Env.empty
+          checked.destinationInsertion.inserted := by
+    simpa [RawConcreteSpliceResult.checked] using
+      checked.destinationInsertion.generated_checked_denotes_inserted
+        pre definitionEnv
   exact framed.trans
     ((Iff.of_eq (congrArg
       (denoteRegion pre definitionEnv Env.empty) checked.targetExact.symm)).trans
@@ -1448,9 +1443,9 @@ structure CheckedOrdinaryDeiteration
   private reconstructionIsoAccepted :
     Reconstruction.extract_splice_iso? inner removed reconstruction
       reconstructionAccepted = some reconstructionIso
-  private reconstructed : ConcreteSpliceResult reconstruction
+  private reconstructed : RawConcreteSpliceResult reconstruction
   private reconstructedAccepted :
-    splice reconstruction = .ok reconstructed
+    spliceRaw reconstruction = .ok reconstructed
   private reconstructionCompilation :
     InsertionCompilation innerExtraction.compilation reconstruction
   private reconstructionCompilationAccepted :
@@ -1525,7 +1520,7 @@ def checkOrdinaryDeiteration
                             | none => exact .error .reconstructionIsoRejected
                             | some reconstructionIso =>
                               match reconstructedAccepted :
-                                  splice reconstruction with
+                                  spliceRaw reconstruction with
                               | .error error =>
                                   exact .error (.spliceRejected error)
                               | .ok reconstructed =>
@@ -1676,28 +1671,20 @@ theorem sound
     exact
       checked.reconstructionCompilation.generated_checked_denotes_inserted
         pre definitionEnv
-  obtain
-      ⟨reconstructionCompiled, reconstructionCompiledAccepted,
-        reconstructedInserted⟩ :=
-    denote_splice checked.innerExtraction.compilation
-      checked.reconstruction checked.reconstructed
-      checked.reconstructedAccepted pre definitionEnv
-  have sameReconstructionCompilation :
-      reconstructionCompiled = checked.reconstructionCompilation :=
-    Option.some.inj
-      (reconstructionCompiledAccepted.symm.trans
-        checked.reconstructionCompilationAccepted)
-  subst reconstructionCompiled
-  obtain ⟨compiled, compiledAccepted, resultInserted⟩ :=
-    denote_splice checked.iteration.extraction.compilation
-      checked.iteration.destinationAttachment checked.iteration.result
-      checked.iteration.resultAccepted pre definitionEnv
-  have sameCompilation :
-      compiled = checked.iteration.destinationInsertion :=
-    Option.some.inj
-      (compiledAccepted.symm.trans
-        checked.iteration.destinationInsertionAccepted)
-  subst compiled
+  have reconstructedInserted :
+      denoteChecked pre definitionEnv checked.reconstructed.checked ↔
+        denoteRegion pre definitionEnv Env.empty
+          checked.reconstructionCompilation.inserted := by
+    simpa [RawConcreteSpliceResult.checked] using
+      checked.reconstructionCompilation.generated_checked_denotes_inserted
+        pre definitionEnv
+  have resultInserted :
+      denoteChecked pre definitionEnv checked.iteration.result.checked ↔
+        denoteRegion pre definitionEnv Env.empty
+          checked.iteration.destinationInsertion.inserted := by
+    simpa [RawConcreteSpliceResult.checked] using
+      checked.iteration.destinationInsertion.generated_checked_denotes_inserted
+        pre definitionEnv
   have complementIteration :
       denoteChecked pre definitionEnv checked.removed.complement ↔
         denoteChecked pre definitionEnv checked.iteration.result.checked :=
@@ -1747,28 +1734,20 @@ theorem equivalence
             checked.reconstructionCompilation.inserted :=
       checked.reconstructionCompilation.generated_checked_denotes_inserted
         pre definitionEnv
-    obtain
-        ⟨reconstructionCompiled, reconstructionCompiledAccepted,
-          reconstructedInserted⟩ :=
-      denote_splice checked.innerExtraction.compilation
-        checked.reconstruction checked.reconstructed
-        checked.reconstructedAccepted pre definitionEnv
-    have sameReconstructionCompilation :
-        reconstructionCompiled = checked.reconstructionCompilation :=
-      Option.some.inj
-        (reconstructionCompiledAccepted.symm.trans
-          checked.reconstructionCompilationAccepted)
-    subst reconstructionCompiled
-    obtain ⟨compiled, compiledAccepted, resultInserted⟩ :=
-      denote_splice checked.iteration.extraction.compilation
-        checked.iteration.destinationAttachment checked.iteration.result
-        checked.iteration.resultAccepted pre definitionEnv
-    have sameCompilation :
-        compiled = checked.iteration.destinationInsertion :=
-      Option.some.inj
-        (compiledAccepted.symm.trans
-          checked.iteration.destinationInsertionAccepted)
-    subst compiled
+    have reconstructedInserted :
+        denoteChecked pre definitionEnv checked.reconstructed.checked ↔
+          denoteRegion pre definitionEnv Env.empty
+            checked.reconstructionCompilation.inserted := by
+      simpa [RawConcreteSpliceResult.checked] using
+        checked.reconstructionCompilation.generated_checked_denotes_inserted
+          pre definitionEnv
+    have resultInserted :
+        denoteChecked pre definitionEnv checked.iteration.result.checked ↔
+          denoteRegion pre definitionEnv Env.empty
+            checked.iteration.destinationInsertion.inserted := by
+      simpa [RawConcreteSpliceResult.checked] using
+        checked.iteration.destinationInsertion.generated_checked_denotes_inserted
+          pre definitionEnv
     have complementIteration :
         denoteChecked pre definitionEnv checked.removed.complement ↔
           denoteChecked pre definitionEnv checked.iteration.result.checked :=

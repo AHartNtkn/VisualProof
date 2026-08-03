@@ -2,7 +2,7 @@ import VisualProof.Diagram.Concrete.OpenCompilation
 import VisualProof.Diagram.Concrete.Subgraph.Extract
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationInsertion
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
-import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 import VisualProof.Rule.Tag
 import VisualProof.Theory.Semantics
 
@@ -404,8 +404,8 @@ structure AppliedUnfold
   private bodyInsertion : InsertionCompilation body.compilation attachment
   private bodyInsertionAccepted :
     compileInsertion? body.compilation attachment = some bodyInsertion
-  private result : ConcreteSpliceResult attachment
-  private resultAccepted : splice attachment = .ok result
+  private result : RawConcreteSpliceResult attachment
+  private resultAccepted : spliceRaw attachment = .ok result
 
 namespace AppliedUnfold
 
@@ -494,8 +494,8 @@ structure AppliedFold
   private insertion : InsertionCompilation referenceCompilation attachment
   private insertionAccepted :
     compileInsertion? referenceCompilation attachment = some insertion
-  private result : ConcreteSpliceResult attachment
-  private resultAccepted : splice attachment = .ok result
+  private result : RawConcreteSpliceResult attachment
+  private resultAccepted : spliceRaw attachment = .ok result
 
 namespace AppliedFold
 
@@ -644,7 +644,7 @@ def applyUnfold
                                                     .bodyInsertionCompilationRejected
                                               | some bodyInsertion =>
                                                   match resultAccepted :
-                                                      splice attachment with
+                                                      spliceRaw attachment with
                                                   | .error error =>
                                                       exact .error
                                                         (.bodySpliceRejected error)
@@ -788,7 +788,7 @@ def applyFold
                                   exact .error
                                     .bodyInsertionCompilationRejected
                               | some insertion =>
-                                  match resultAccepted : splice attachment with
+                                  match resultAccepted : spliceRaw attachment with
                                   | .error error =>
                                       exact .error (.bodySpliceRejected error)
                                   | .ok result =>

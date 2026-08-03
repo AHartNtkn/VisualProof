@@ -784,29 +784,29 @@ checkers.
 - Step receipts expose normalized result, allocation/provenance, total wire
   transport, root interface transport, and ordered boundary transport.
 
-- [ ] **Step 1: Add one RED fixture per tag.** Each fixture constructs a
+- [x] **Step 1: Add one RED fixture per tag.** Each fixture constructs a
   checker-accepted payload, applies it in its legal orientation, and checks
   its `StepTag`. Add compile-failing exhaustiveness theorems so a missing or
   duplicate constructor cannot pass.
-- [ ] **Step 2: Prove ref spawn and fold/unfold.** Use
+- [x] **Step 2: Prove ref spawn and fold/unfold.** Use
   `Definitions.lookup_iff_body` and splice denotation. Fold/unfold are
   equivalences; ref spawn uses structural insertion gates.
-- [ ] **Step 3: Prove theorem application.** A prior checked theorem can be
+- [x] **Step 3: Prove theorem application.** A prior checked theorem can be
   cited at an exact pinned occurrence, LHS→RHS in positive context and
   RHS→LHS in negative context, flipped by replay orientation. Preserve
   ordered aliased boundaries.
-- [ ] **Step 4: Define the exact checked sum.** Each constructor contains the
+- [x] **Step 4: Define the exact checked sum.** Each constructor contains the
   owning module's checked receipt or enough raw input for `applyStep` to
   construct that receipt. There is no relation-content constructor and no
   identity-retarget field.
-- [ ] **Step 5: Define receipts and transport.** Match the merged TypeScript
+- [x] **Step 5: Define receipts and transport.** Match the merged TypeScript
   distinction among provenance, every-scope transport, and root interface
   transport. Normalization transport composes after the primitive result;
   repeated ordered boundary aliases remain repeated.
-- [ ] **Step 6: Prove `applyStep_sound`.** Use exactly 34 exhaustive cases,
+- [x] **Step 6: Prove `applyStep_sound`.** Use exactly 34 exhaustive cases,
   delegating each case to its owning theorem. No default case and no premise
   that already assumes the desired directed entailment.
-- [ ] **Step 7: Run GREEN and commit.**
+- [x] **Step 7: Run GREEN and commit.**
 
   ```bash
   lake build
@@ -816,6 +816,19 @@ checkers.
     VisualProof/Rule/Soundness.lean VisualProof/Rule/StepFixtures.lean
   git commit -m "feat: prove all 34 Lean proof steps sound"
   ```
+
+  Definition unfolding/folding and pinned prior-theorem replacement now retain
+  their exact checked reconstruction, ordered boundary, and raw insertion
+  receipts; their soundness theorems prove replacement independently of
+  identity normalization. `ProofStep` is the exact 34-constructor checked sum,
+  and `applyStep_sound` has 34 explicit branches that delegate raw soundness to
+  the owning theorem and compose canonical normalization only at the outer
+  step boundary. Tag wiring, length, no-duplication, and exhaustiveness compile.
+  Structural, definition, theorem, and derived insertion receipts were migrated
+  from normalized splice results to raw splice results so the raw primitive
+  compiler adequacy import closure contains no identity-normalization module.
+  Focused Lean checks, full `lake build` (193 jobs), `formal:size`, placeholder
+  scans, diff hygiene, and the Lean semantics architecture gate pass.
 
 ---
 

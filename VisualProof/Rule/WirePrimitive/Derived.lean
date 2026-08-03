@@ -1,4 +1,5 @@
 import VisualProof.Rule.WirePrimitive.CompilerSoundness
+import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 import VisualProof.Theory.Semantics
 
 namespace VisualProof
@@ -22,8 +23,8 @@ structure AcceptedRawInsertion
     (input : StructuralInsertionInput base fragment) where
   private mk ::
   private attachment : ConcreteSpliceAttachment base input.site fragment
-  private result : ConcreteSpliceResult attachment
-  private accepted : splice attachment = .ok result
+  private result : RawConcreteSpliceResult attachment
+  private accepted : spliceRaw attachment = .ok result
 
 namespace AcceptedRawInsertion
 
@@ -33,7 +34,7 @@ def target
     {fragment : CheckedOpenDiagram definitions}
     {input : StructuralInsertionInput base fragment}
     (checked : AcceptedRawInsertion input) : CheckedDiagram definitions :=
-  checked.result.raw
+  checked.result.checked
 
 /-- Exact raw image of one ordered fragment-boundary attachment. -/
 def boundaryTarget
@@ -74,7 +75,7 @@ def checkRawInsertion
         match checkConcreteSpliceAttachment base input.site fragment input.target with
         | none => exact .error .attachmentRejected
         | some attachment =>
-            match accepted : splice attachment with
+            match accepted : spliceRaw attachment with
             | .error error => exact .error (.spliceRejected error)
             | .ok result =>
                 exact .ok (AcceptedRawInsertion.mk attachment result accepted)

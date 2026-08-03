@@ -24,6 +24,9 @@ import VisualProof.Rule.StructuralFixtures
 import VisualProof.Rule.StructuralAudit
 import VisualProof.Rule.Definition
 import VisualProof.Rule.DefinitionSemantics
+import VisualProof.Rule.Theorem
+import VisualProof.Rule.Step
+import VisualProof.Rule.Soundness
 import VisualProof.Rule.StepFixtures
 import VisualProof.Diagram.Concrete.WireQuantifierBatchRemoval
 import VisualProof.Diagram.Concrete.WireQuantifierRelationSever

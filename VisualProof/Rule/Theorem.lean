@@ -1,6 +1,6 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationInsertion
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
-import VisualProof.Diagram.Concrete.Subgraph.Splice
+import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 import VisualProof.Rule.Orientation
 import VisualProof.Rule.Tag
 import VisualProof.Theory.Semantics
@@ -178,8 +178,8 @@ structure AppliedTheorem
   private insertion : InsertionCompilation targetCompilation attachment
   private insertionAccepted :
     compileInsertion? targetCompilation attachment = some insertion
-  private result : ConcreteSpliceResult attachment
-  private resultAccepted : splice attachment = .ok result
+  private result : RawConcreteSpliceResult attachment
+  private resultAccepted : spliceRaw attachment = .ok result
 
 namespace AppliedTheorem
 
@@ -259,7 +259,7 @@ def applyTheorem
                                         exact .error
                                           .targetInsertionCompilationRejected
                                     | some insertion =>
-                                        match resultAccepted : splice attachment with
+                                        match resultAccepted : spliceRaw attachment with
                                         | .error error =>
                                             exact .error
                                               (.targetSpliceRejected error)

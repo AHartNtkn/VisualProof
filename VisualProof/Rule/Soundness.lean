@@ -3,7 +3,8 @@ import VisualProof.Rule.Theorem
 import VisualProof.Rule.Step
 import VisualProof.Rule.Structural
 import VisualProof.Rule.WirePrimitive.CompilerSoundness
-import VisualProof.Diagram.Concrete.Subgraph.FactorizationSemantics
+import VisualProof.Diagram.Concrete.Subgraph.FactorizationNaturality
+import VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
 import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinApplicationSemantics
 
 namespace VisualProof
@@ -949,7 +950,7 @@ private theorem boundary_argument_values_eq
 
 /-- Replacing one checked canonical reference by its resolved stored body
 preserves denotation under every lawful interpretation of the definitions. -/
-theorem applyUnfold_sound
+theorem unfold_sound
     (definitions : CheckedDefinitions)
     (source : CheckedDiagram definitions.intrinsic.signatures)
     (input : UnfoldInput definitions source)
@@ -981,13 +982,13 @@ theorem applyUnfold_sound
       reconstructionIso model.toPreModel definitionEnv).symm.trans
         (reconstructionCompilation.generated_checked_denotes_inserted
           model.toPreModel definitionEnv)
-  obtain ⟨resultCompilation, resultCompilationAccepted, targetInserted⟩ :=
-    denote_splice body.compilation attachment result resultAccepted
+  have targetInserted :
+      denoteChecked model.toPreModel definitionEnv result.checked ↔
+        denoteRegion model.toPreModel definitionEnv Env.empty
+          bodyInsertion.inserted := by
+    rw [spliceRaw_success_checked resultAccepted]
+    exact bodyInsertion.generated_checked_denotes_inserted
       model.toPreModel definitionEnv
-  have resultCompilationExact : resultCompilation = bodyInsertion :=
-    Option.some.inj
-      (resultCompilationAccepted.symm.trans bodyInsertionAccepted)
-  subst resultCompilation
   have signatures : checkedBoundarySigs reference.fragment =
       checkedBoundarySigs body.body :=
     reference.boundarySignatures.trans body.boundarySignatures.symm
@@ -1026,7 +1027,7 @@ theorem applyUnfold_sound
 
 /-- Replacing one checked stored-body occurrence by its canonical reference
 preserves denotation under every lawful interpretation of the definitions. -/
-theorem applyFold_sound
+theorem fold_sound
     (definitions : CheckedDefinitions)
     (source : CheckedDiagram definitions.intrinsic.signatures)
     (input : FoldInput definitions source)
@@ -1059,13 +1060,13 @@ theorem applyFold_sound
       bodyReconstructionIso model.toPreModel definitionEnv).symm.trans
         (bodyReconstructionCompilation.generated_checked_denotes_inserted
           model.toPreModel definitionEnv)
-  obtain ⟨resultCompilation, resultCompilationAccepted, targetInserted⟩ :=
-    denote_splice referenceCompilation attachment result resultAccepted
+  have targetInserted :
+      denoteChecked model.toPreModel definitionEnv result.checked ↔
+        denoteRegion model.toPreModel definitionEnv Env.empty
+          insertion.inserted := by
+    rw [spliceRaw_success_checked resultAccepted]
+    exact insertion.generated_checked_denotes_inserted
       model.toPreModel definitionEnv
-  have resultCompilationExact : resultCompilation = insertion :=
-    Option.some.inj
-      (resultCompilationAccepted.symm.trans insertionAccepted)
-  subst resultCompilation
   have signatures : checkedBoundarySigs input.body.body =
       checkedBoundarySigs reference.fragment :=
     input.body.boundarySignatures.trans reference.boundarySignatures.symm
@@ -1292,13 +1293,13 @@ theorem theorem_application_sound
       reconstructionIso model.toPreModel definitionEnv).symm.trans
         (reconstructionCompilation.generated_checked_denotes_inserted
           model.toPreModel definitionEnv)
-  obtain ⟨resultCompilation, resultCompilationAccepted, targetInserted⟩ :=
-    denote_splice targetCompilation attachment result resultAccepted
+  have targetInserted :
+      denoteChecked model.toPreModel definitionEnv result.checked ↔
+        denoteRegion model.toPreModel definitionEnv Env.empty
+          insertion.inserted := by
+    rw [spliceRaw_success_checked resultAccepted]
+    exact insertion.generated_checked_denotes_inserted
       model.toPreModel definitionEnv
-  have resultCompilationExact : resultCompilation = insertion :=
-    Option.some.inj
-      (resultCompilationAccepted.symm.trans insertionAccepted)
-  subst resultCompilation
   have signatures : checkedBoundarySigs input.sourceFragment =
       checkedBoundarySigs input.targetFragment :=
     input.sourceBoundary.trans input.targetBoundary.symm
@@ -1334,3 +1335,118 @@ theorem theorem_application_sound
         (insertion.intrinsicAttachmentAt common).positions positions env)
   exact directed_of_iff input.orientation
     (sourceInserted.trans (replacementEquivalent.trans targetInserted.symm))
+
+private theorem directed_trans_equiv (orientation : Orientation)
+    {source rawTarget target : Prop}
+    (rawSound : Directed orientation source rawTarget)
+    (normalized : rawTarget ↔ target) :
+    Directed orientation source target := by
+  cases orientation with
+  | forward => exact fun sourceHolds => normalized.mp (rawSound sourceHolds)
+  | backward => exact fun targetHolds => rawSound (normalized.mpr targetHolds)
+
+/-- Every constructor of the exact 34-step language delegates raw semantics to
+its owning theorem, then composes the independent deterministic normalization. -/
+theorem applyStep_sound
+    (definitions : CheckedDefinitions)
+    {orientation : Orientation}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    (step : ProofStep.{u} definitions orientation source)
+    (model : Model.{u})
+    (definitionEnv : DefinitionEnv model.toPreModel
+      definitions.intrinsic.signatures)
+    (lawful : DefinitionLawful model.toPreModel definitions.intrinsic
+      definitionEnv) :
+    Directed orientation
+      (denoteChecked model.toPreModel definitionEnv source)
+      (denoteChecked model.toPreModel definitionEnv (applyStep step).result) := by
+  have rawSound : Directed orientation
+      (denoteChecked model.toPreModel definitionEnv source)
+      (denoteChecked model.toPreModel definitionEnv step.rawTarget) := by
+    cases step with
+    | refSpawn primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | atomSpawn primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | identityInsert primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | wireJoin primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | erasure primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | wireSever primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | iteration input checked receipt =>
+        exact directed_of_iff orientation
+          (checked.equivalence model.toPreModel definitionEnv)
+    | deiteration input checked receipt =>
+        exact directed_of_iff orientation
+          (checked.equivalence model.toPreModel definitionEnv)
+    | doubleCutIntro input checked receipt =>
+        exact directed_of_iff orientation
+          (checked.equivalence model.toPreModel definitionEnv)
+    | doubleCutElim input checked receipt =>
+        exact directed_of_iff orientation
+          (checked.equivalence model.toPreModel definitionEnv).symm
+    | «theorem» input orientationExact applied receipt =>
+        change Directed orientation
+          (denoteChecked model.toPreModel definitionEnv source)
+          (denoteChecked model.toPreModel definitionEnv applied.target)
+        cases orientationExact
+        exact theorem_application_sound source input applied model definitionEnv
+    | vacuousIntro primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | vacuousElim primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | unfold input applied receipt =>
+        exact directed_of_iff orientation
+          (unfold_sound definitions source input applied model
+            definitionEnv lawful)
+    | fold input applied receipt =>
+        exact directed_of_iff orientation
+          (fold_sound definitions source input applied model
+            definitionEnv lawful)
+    | cutWrap primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | cutAbsorb primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | parallelSplit primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | parallelFuse primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | endsDelete primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | endsSpawn primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | arityShift primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | arityUnshift primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | argPermute primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | argDuplicate primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | argContract primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | argDrop primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | argExtend primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | applyFormal primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | abstractFormal primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | identityLeaf primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | identityAbstract primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | refLeaf primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+    | refAbstract primitive tagExact receipt =>
+        exact primitive.sound model definitionEnv
+  have normalized :
+      denoteChecked model.toPreModel definitionEnv step.rawTarget ↔
+        denoteChecked model.toPreModel definitionEnv (applyStep step).result := by
+    exact (ConcreteDiagram.normalizeIdentities_sound step.rawTarget
+      model.toPreModel definitionEnv).symm
+  exact directed_trans_equiv orientation rawSound normalized

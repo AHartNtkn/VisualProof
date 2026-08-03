@@ -289,8 +289,8 @@ Identity normalization is sequenced after that transition and is never a
 premise of the raw rule's soundness theorem. -/
 structure StepReceipt
     (source rawTarget : CheckedDiagram definitions) where
-  normalization : ConcreteDiagram.IdentityNormalization rawTarget
-  provenance : WireProvenance source.val normalization.target.val
+  provenance : WireProvenance source.val
+    (ConcreteDiagram.normalizeIdentities rawTarget).target.val
   rawTransport : WireTransport source.val rawTarget.val
 
 namespace StepReceipt
@@ -300,7 +300,7 @@ def result
     {source rawTarget : CheckedDiagram definitions}
     (receipt : StepReceipt source rawTarget) :
     CheckedDiagram definitions :=
-  receipt.normalization.target
+  (ConcreteDiagram.normalizeIdentities rawTarget).target
 
 def allocation
     {definitions : List (List Sig)}
@@ -314,7 +314,8 @@ def transport
     {source rawTarget : CheckedDiagram definitions}
     (receipt : StepReceipt source rawTarget) :
     WireTransport source.val receipt.result.val :=
-  receipt.rawTransport.normalize receipt.normalization
+  receipt.rawTransport.normalize
+    (ConcreteDiagram.normalizeIdentities rawTarget)
 
 def interface
     {definitions : List (List Sig)}
