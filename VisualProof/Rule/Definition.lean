@@ -99,10 +99,31 @@ inductive DefinitionBodyError
 
 /-- A rechecked concrete body after one chronological definition snoc. -/
 structure WeakenedDefinitionBody
-    (newArgs : List Sig) (source : CheckedOpenDiagram definitions) where
-  body : CheckedOpenDiagram (newArgs :: definitions)
-  generated : body.val =
-    ConcreteDefinitionWeakening.openDiagram (newArgs := newArgs) source.val
+    (newArgs : List Sig) (source : CheckedOpenDiagram definitions) : Type where
+  private mk ::
+  wellFormed :
+    (ConcreteDefinitionWeakening.openDiagram
+      (newArgs := newArgs) source.val).WellFormed (newArgs :: definitions)
+
+namespace WeakenedDefinitionBody
+
+/-- The uniquely generated weakened body; only its well-formedness is checked. -/
+def body
+    {newArgs : List Sig} {source : CheckedOpenDiagram definitions}
+    (weakened : WeakenedDefinitionBody newArgs source) :
+    CheckedOpenDiagram (newArgs :: definitions) :=
+  ⟨ConcreteDefinitionWeakening.openDiagram
+    (newArgs := newArgs) source.val, weakened.wellFormed⟩
+
+@[simp] theorem generated
+    {newArgs : List Sig} {source : CheckedOpenDiagram definitions}
+    (weakened : WeakenedDefinitionBody newArgs source) :
+    weakened.body.val =
+      ConcreteDefinitionWeakening.openDiagram
+        (newArgs := newArgs) source.val :=
+  rfl
+
+end WeakenedDefinitionBody
 
 /-- Recheck the weakened body with the ordinary concrete well-formedness
 authority. Only definition indices change; boundary order and aliases do not. -/
@@ -117,14 +138,12 @@ def weakenDefinitionBody
   | .ok checked =>
       have generatedDiagram : checked.val = raw.diagram :=
         ConcreteDiagram.checkWellFormed_preserves_input accepted
-      let body : CheckedOpenDiagram (newArgs :: definitions) :=
-        ⟨raw,
-          { diagram := generatedDiagram ▸ checked.property
-            boundary_root_scoped := by
-              simpa [raw, ConcreteDefinitionWeakening.openDiagram,
-                ConcreteDefinitionWeakening.diagram] using
-                source.property.boundary_root_scoped }⟩
-      exact .ok ⟨body, rfl⟩
+      exact .ok ⟨
+        { diagram := generatedDiagram ▸ checked.property
+          boundary_root_scoped := by
+            simpa [raw, ConcreteDefinitionWeakening.openDiagram,
+              ConcreteDefinitionWeakening.diagram] using
+              source.property.boundary_root_scoped }⟩
 
 @[simp] theorem weakened_checkedBoundarySigs
     {newArgs : List Sig} {source : CheckedOpenDiagram definitions}
@@ -190,6 +209,7 @@ context, with its exact ordered signature retained in the type. -/
 structure ResolvedDefinitionBody
     (definitions : Definitions) (args : List Sig) where
   body : CheckedOpenDiagram definitions.signatures
+  compilation : OpenCompilation body
   boundarySignatures : checkedBoundarySigs body = args
 
 namespace CheckedDefinitionData
@@ -204,19 +224,55 @@ def resolveBody :
   | _, .nil, reference => nomatch reference
   | _, @CheckedDefinitionData.snoc prior _ body compiled, .here => do
       let weakened ← weakenDefinitionBody (checkedBoundarySigs body) body
+      let compilation ← weakened.compile?
       pure
         { body := weakened.body
+          compilation := compilation
           boundarySignatures := weakened_checkedBoundarySigs weakened }
   | _, @CheckedDefinitionData.snoc prior priorData body compiled,
       .there earlier => do
       let resolved ← resolveBody priorData earlier
       let weakened ←
         weakenDefinitionBody (checkedBoundarySigs body) resolved.body
+      let compilation ← weakened.compile?
       pure
         { body := weakened.body
+          compilation := compilation
           boundarySignatures :=
             (weakened_checkedBoundarySigs weakened).trans
               resolved.boundarySignatures }
+
+theorem resolveBody_here_eq
+    {prior : Definitions}
+    (priorData : CheckedDefinitionData prior)
+    {body : CheckedOpenDiagram prior.signatures}
+    (compiled : OpenCompilation body) :
+    resolveBody (.snoc priorData compiled) (DefVar.here) = (do
+      let weakened ← weakenDefinitionBody (checkedBoundarySigs body) body
+      let compilation ← weakened.compile?
+      pure
+        { body := weakened.body
+          compilation := compilation
+          boundarySignatures := weakened_checkedBoundarySigs weakened }) := by
+  rfl
+
+theorem resolveBody_there_eq
+    {prior : Definitions}
+    (priorData : CheckedDefinitionData prior)
+    {body : CheckedOpenDiagram prior.signatures}
+    (compiled : OpenCompilation body)
+    (earlier : DefVar prior.signatures args) :
+    resolveBody (.snoc priorData compiled) (.there earlier) = (do
+      let resolved ← resolveBody priorData earlier
+      let weakened ← weakenDefinitionBody (checkedBoundarySigs body) resolved.body
+      let compilation ← weakened.compile?
+      pure
+        { body := weakened.body
+          compilation := compilation
+          boundarySignatures :=
+            (weakened_checkedBoundarySigs weakened).trans
+              resolved.boundarySignatures }) := by
+  rfl
 
 end CheckedDefinitionData
 
@@ -243,7 +299,6 @@ inductive DefinitionRuleError
   | reconstructionIsoRejected
   | reconstructionCompilationRejected
   | bodyRejected (error : DefinitionBodyError)
-  | bodyCompilationRejected
   | attachmentWireRemoved
   | bodyAttachmentRejected
   | bodyInsertionCompilationRejected
@@ -291,8 +346,6 @@ structure AppliedUnfold
   private body : ResolvedDefinitionBody definitions.intrinsic
     (definitions.intrinsic.signatures.get definition)
   private bodyCompilation : OpenCompilation body.body
-  private bodyCompilationAccepted :
-    compileOpen body.body = some bodyCompilation
   private attachment : ConcreteSpliceAttachment removed.complement
     removed.site body.body
   private bodyInsertion : InsertionCompilation bodyCompilation attachment
@@ -412,72 +465,67 @@ def applyUnfold
                                     | .error error =>
                                         exact .error (.bodyRejected error)
                                     | .ok body =>
-                                        match bodyCompilationAccepted :
-                                            compileOpen body.body with
-                                        | none =>
-                                            exact .error .bodyCompilationRejected
-                                        | some bodyCompilation =>
-                                            let sourceAttachment
-                                                (position : Fin
-                                                  body.body.val.boundary.length) :
-                                                source.val.WireId :=
-                                              argumentOwner
-                                                (Fin.cast
-                                                  (bodyBoundaryLength body)
-                                                  position)
-                                            if retained : ∀ position,
-                                                sourceAttachment position ∈
-                                                  Removal.wires occurrence then
-                                              let target
-                                                  (position : Fin
-                                                    body.body.val.boundary.length) :
-                                                  removed.complement.val.WireId :=
-                                                Removal.wireIndex occurrence
-                                                  (sourceAttachment position)
-                                                  (retained position)
-                                              match attachmentAccepted :
-                                                  checkConcreteSpliceAttachment
-                                                    removed.complement removed.site
-                                                    body.body target with
+                                        let bodyCompilation := body.compilation
+                                        let sourceAttachment
+                                            (position : Fin
+                                              body.body.val.boundary.length) :
+                                            source.val.WireId :=
+                                          argumentOwner
+                                            (Fin.cast
+                                              (bodyBoundaryLength body)
+                                              position)
+                                        if retained : ∀ position,
+                                            sourceAttachment position ∈
+                                              Removal.wires occurrence then
+                                          let target
+                                              (position : Fin
+                                                body.body.val.boundary.length) :
+                                              removed.complement.val.WireId :=
+                                            Removal.wireIndex occurrence
+                                              (sourceAttachment position)
+                                              (retained position)
+                                          match attachmentAccepted :
+                                              checkConcreteSpliceAttachment
+                                                removed.complement removed.site
+                                                body.body target with
+                                          | none =>
+                                              exact .error
+                                                .bodyAttachmentRejected
+                                          | some attachment =>
+                                              match bodyInsertionAccepted :
+                                                  compileInsertion?
+                                                    bodyCompilation attachment with
                                               | none =>
                                                   exact .error
-                                                    .bodyAttachmentRejected
-                                              | some attachment =>
-                                                  match bodyInsertionAccepted :
-                                                      compileInsertion?
-                                                        bodyCompilation attachment with
-                                                  | none =>
+                                                    .bodyInsertionCompilationRejected
+                                              | some bodyInsertion =>
+                                                  match resultAccepted :
+                                                      splice attachment with
+                                                  | .error error =>
                                                       exact .error
-                                                        .bodyInsertionCompilationRejected
-                                                  | some bodyInsertion =>
-                                                      match resultAccepted :
-                                                          splice attachment with
-                                                      | .error error =>
-                                                          exact .error
-                                                            (.bodySpliceRejected error)
-                                                      | .ok result =>
-                                                          exact .ok
-                                                            (AppliedUnfold.mk
-                                                              definition region
-                                                              arguments sourceNode
-                                                              reference occurrence
-                                                              removed
-                                                              referenceCompilation
-                                                              referenceCompilationAccepted
-                                                              reconstruction
-                                                              reconstructionAccepted
-                                                              reconstructionIso
-                                                              reconstructionIsoAccepted
-                                                              reconstructionCompilation
-                                                              reconstructionCompilationAccepted
-                                                              body bodyCompilation
-                                                              bodyCompilationAccepted
-                                                              attachment bodyInsertion
-                                                              bodyInsertionAccepted result
-                                                              resultAccepted)
-                                            else
-                                              exact .error
-                                                .attachmentWireRemoved
+                                                        (.bodySpliceRejected error)
+                                                  | .ok result =>
+                                                      exact .ok
+                                                        (AppliedUnfold.mk
+                                                          definition region
+                                                          arguments sourceNode
+                                                          reference occurrence
+                                                          removed
+                                                          referenceCompilation
+                                                          referenceCompilationAccepted
+                                                          reconstruction
+                                                          reconstructionAccepted
+                                                          reconstructionIso
+                                                          reconstructionIsoAccepted
+                                                          reconstructionCompilation
+                                                          reconstructionCompilationAccepted
+                                                          body bodyCompilation
+                                                          attachment bodyInsertion
+                                                          bodyInsertionAccepted result
+                                                          resultAccepted)
+                                        else
+                                          exact .error
+                                            .attachmentWireRemoved
           else
             exact .error .argumentOwnerMissing
 

@@ -10,16 +10,15 @@ def checkedBoundarySigs
     (checked.val.diagram.wires wire).sig
 
 private def resolveExtractedWireIn?
-    (diagram : ConcreteDiagram definitionCount) :
-    (classes : List diagram.WireId) → (wire : diagram.WireId) →
-      Option (Var (classes.map fun id => (diagram.wires id).sig)
-        (diagram.wires wire).sig)
+    (signature : Fin wireCount → Sig) :
+    (classes : List (Fin wireCount)) → (wire : Fin wireCount) →
+      Option (Var (classes.map signature) (signature wire))
   | [], _ => none
   | head :: tail, wire =>
       if equality : wire = head then
         equality ▸ some .here
       else
-        (resolveExtractedWireIn? diagram tail wire).map .there
+        (resolveExtractedWireIn? signature tail wire).map .there
 
 namespace ExtractedBoundaryCompiler
 
@@ -128,7 +127,8 @@ private theorem resolve_origin
       (classes.map fun id => (diagram.wires id).sig)
       (diagram.wires wire).sig)
     (compiled :
-      resolveExtractedWireIn? diagram classes wire = some value) :
+      resolveExtractedWireIn? (fun id => (diagram.wires id).sig)
+        classes wire = some value) :
     wireOfVar diagram value = wire := by
   induction classes with
   | nil =>
@@ -146,7 +146,8 @@ private theorem resolve_origin
         subst value
         rfl
       · cases recursive :
-            resolveExtractedWireIn? diagram tail wire with
+            resolveExtractedWireIn?
+              (fun id => (diagram.wires id).sig) tail wire with
         | none =>
             simp [recursive] at compiled
         | some tailValue =>
@@ -158,26 +159,24 @@ private theorem resolve_origin
 end ExtractedBoundaryCompiler
 
 private def compileExtractedBoundaryFor?
-    {definitions : List (List Sig)}
-    (checked : CheckedOpenDiagram definitions) :
-    (boundary : List checked.val.diagram.WireId) →
-      Option (Vars
-        (ConcreteElaboration.openBoundaryClassSigs checked.val)
-        (boundary.map fun wire =>
-          (checked.val.diagram.wires wire).sig))
+    (signature : Fin wireCount → Sig)
+    (classes : List (Fin wireCount)) :
+    (boundary : List (Fin wireCount)) →
+      Option (Vars (classes.map signature) (boundary.map signature))
   | [] => some .nil
   | wire :: tail => do
-      let head ← resolveExtractedWireIn? checked.val.diagram
-        (ConcreteElaboration.openBoundaryWires checked.val)
-        wire
-      let rest ← compileExtractedBoundaryFor? checked tail
+      let head ← resolveExtractedWireIn? signature classes wire
+      let rest ← compileExtractedBoundaryFor? signature classes tail
       pure (.cons head rest)
 
 private theorem compileExtractedBoundaryFor?_origins
     {definitions : List (List Sig)}
     (checked : CheckedOpenDiagram definitions) :
     ∀ boundary positions,
-      compileExtractedBoundaryFor? checked boundary = some positions →
+      compileExtractedBoundaryFor?
+          (fun wire => (checked.val.diagram.wires wire).sig)
+          (ConcreteElaboration.openBoundaryWires checked.val) boundary =
+        some positions →
         positions.entries.map
             (ExtractedBoundaryCompiler.wireOfPacked checked.val.diagram
               (ConcreteElaboration.openBoundaryWires checked.val)) =
@@ -193,13 +192,16 @@ private theorem compileExtractedBoundaryFor?_origins
       intro positions compiled
       unfold compileExtractedBoundaryFor? at compiled
       cases headEquation :
-          resolveExtractedWireIn? checked.val.diagram
+          resolveExtractedWireIn?
+            (fun source => (checked.val.diagram.wires source).sig)
             (ConcreteElaboration.openBoundaryWires checked.val) wire with
       | none =>
           simp [headEquation] at compiled
       | some head =>
           cases tailEquation :
-              compileExtractedBoundaryFor? checked tail with
+              compileExtractedBoundaryFor?
+                (fun source => (checked.val.diagram.wires source).sig)
+                (ConcreteElaboration.openBoundaryWires checked.val) tail with
           | none =>
               simp [headEquation, tailEquation] at compiled
           | some rest =>
@@ -231,10 +233,13 @@ private theorem compileExtractedBoundaryFor?_origins
 def compileExtractedBoundary?
     {definitions : List (List Sig)}
     (checked : CheckedOpenDiagram definitions) :
-    Option (Vars
+  Option (Vars
       (ConcreteElaboration.openBoundaryClassSigs checked.val)
       (checkedBoundarySigs checked)) :=
-  compileExtractedBoundaryFor? checked checked.val.boundary
+  compileExtractedBoundaryFor?
+    (fun wire => (checked.val.diagram.wires wire).sig)
+    (ConcreteElaboration.openBoundaryWires checked.val)
+    checked.val.boundary
 
 theorem compileExtractedBoundary?_origins
     {definitions : List (List Sig)}

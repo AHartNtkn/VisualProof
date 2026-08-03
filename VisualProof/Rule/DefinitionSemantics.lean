@@ -509,5 +509,195 @@ theorem compileOpenRoot?_weaken
           simp only [Option.map_some, Option.bind_some]
           exact congrArg some finalLaw
 
+/-- A checked weakening compiles to the source body with every stored
+definition reference shifted through the new chronological entry. -/
+theorem compiled_body_eq
+    {definitions : List (List Sig)} {newArgs : List Sig}
+    {source : CheckedOpenDiagram definitions}
+    (weakened : WeakenedDefinitionBody newArgs source)
+    (sourceCompiled : OpenCompilation source)
+    (targetCompiled : OpenCompilation weakened.body) :
+    targetCompiled.body = sourceCompiled.body.renameDefinitions
+      (embedding (definitions := definitions) newArgs) := by
+  have naturality := compileOpenRoot?_weaken
+    (newArgs := newArgs) source.val
+  have targetGenerated :
+      ConcreteElaboration.compileOpenRoot? (newArgs :: definitions)
+          (openDiagram (newArgs := newArgs) source.val) =
+        some targetCompiled.body := by
+    simpa [WeakenedDefinitionBody.body] using
+      targetCompiled.body_generated
+  rw [sourceCompiled.body_generated] at naturality
+  rw [targetGenerated] at naturality
+  simpa using Option.some.inj naturality
+
+/-- Definition weakening does not alter ordered boundary variables. -/
+theorem compiled_boundary_eq
+    {definitions : List (List Sig)} {newArgs : List Sig}
+    {source : CheckedOpenDiagram definitions}
+    (weakened : WeakenedDefinitionBody newArgs source)
+    (sourceCompiled : OpenCompilation source)
+    (targetCompiled : OpenCompilation weakened.body) :
+    targetCompiled.boundary = sourceCompiled.boundary := by
+  have targetGenerated :
+      compileExtractedBoundary? weakened.body =
+        some targetCompiled.boundary :=
+    targetCompiled.boundary_generated
+  have sourceGenerated :
+      compileExtractedBoundary? source =
+        some sourceCompiled.boundary :=
+    sourceCompiled.boundary_generated
+  have compilerExact :
+      compileExtractedBoundary? weakened.body =
+        compileExtractedBoundary? source := by
+    simp [compileExtractedBoundary?, WeakenedDefinitionBody.body,
+      ConcreteDefinitionWeakening.openDiagram,
+      ConcreteDefinitionWeakening.diagram,
+      ConcreteElaboration.openBoundaryWires]
+  exact Option.some.inj
+    (targetGenerated.symm.trans (compilerExact.trans sourceGenerated))
+
+/-- The compiled weakened open body denotes exactly the original compiled
+body under the prior definition environment. -/
+theorem compiled_open_denotes_iff
+    {definitions : List (List Sig)} {newArgs : List Sig}
+    {source : CheckedOpenDiagram definitions}
+    (weakened : WeakenedDefinitionBody newArgs source)
+    (sourceCompiled : OpenCompilation source)
+    (targetCompiled : OpenCompilation weakened.body)
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre (newArgs :: definitions))
+    (values : BoundaryEnv pre (checkedBoundarySigs source)) :
+    denoteOpen pre definitionEnv targetCompiled.openDiagram values ↔
+      denoteOpen pre (DefinitionEnv.tail definitionEnv)
+        sourceCompiled.openDiagram values := by
+  unfold denoteOpen OpenCompilation.openDiagram
+  have compiledBoundary :=
+    compiled_boundary_eq weakened sourceCompiled targetCompiled
+  constructor
+  · rintro ⟨env, boundaryValues, bodyDenotes⟩
+    refine ⟨env, ?_, ?_⟩
+    change Vars.denote env sourceCompiled.boundary = values
+    simpa [← compiledBoundary] using boundaryValues
+    rw [compiled_body_eq weakened sourceCompiled targetCompiled] at bodyDenotes
+    exact (denoteRegion_renameDefinitions pre definitionEnv
+      (embedding (definitions := definitions) newArgs) env
+      sourceCompiled.body).mp bodyDenotes
+  · rintro ⟨env, boundaryValues, bodyDenotes⟩
+    refine ⟨env, ?_, ?_⟩
+    change Vars.denote env targetCompiled.boundary = values
+    simpa [compiledBoundary] using boundaryValues
+    rw [compiled_body_eq weakened sourceCompiled targetCompiled]
+    exact (denoteRegion_renameDefinitions pre definitionEnv
+      (embedding (definitions := definitions) newArgs) env
+      sourceCompiled.body).mpr bodyDenotes
+
 end ConcreteDefinitionWeakening
+
+namespace CheckedDefinitionData
+
+/-- Resolving a checked stored body preserves the intrinsic meaning of its
+typed definition reference in the complete current definition context. -/
+theorem resolved_denotes_definitionBody
+    {definitions : Definitions}
+    (data : CheckedDefinitionData definitions)
+    (reference : DefVar definitions.signatures args)
+    (resolved : ResolvedDefinitionBody definitions args)
+    (accepted : data.resolveBody reference = Except.ok resolved)
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre definitions.signatures)
+    (values : BoundaryEnv pre (checkedBoundarySigs resolved.body)) :
+    denoteOpen pre definitionEnv resolved.compilation.openDiagram values ↔
+      definitions.definitionBody pre definitionEnv reference
+        (resolved.boundarySignatures ▸ values) := by
+  induction data with
+  | nil =>
+      nomatch reference
+  | @snoc prior priorData latestBody latestCompiled induction =>
+      cases reference with
+      | here =>
+          rw [resolveBody_here_eq] at accepted
+          cases weakenedAccepted :
+              weakenDefinitionBody (checkedBoundarySigs latestBody)
+                latestBody with
+          | error error =>
+              rw [weakenedAccepted] at accepted
+              dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                Except.bind, Except.pure, Except.map] at accepted
+              contradiction
+          | ok weakened =>
+              cases compilationAccepted : weakened.compile? with
+              | error error =>
+                  rw [weakenedAccepted] at accepted
+                  dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                    Except.bind, Except.pure, Except.map] at accepted
+                  rw [compilationAccepted] at accepted
+                  dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                    Except.bind, Except.pure, Except.map] at accepted
+                  contradiction
+              | ok compilation =>
+                  rw [weakenedAccepted] at accepted
+                  dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                    Except.bind, Except.pure, Except.map] at accepted
+                  rw [compilationAccepted] at accepted
+                  dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                    Except.bind, Except.pure, Except.map] at accepted
+                  cases accepted
+                  simpa [Definitions.definitionBody,
+                    DefinitionData.bodyMeaning] using
+                    ConcreteDefinitionWeakening.compiled_open_denotes_iff
+                      weakened latestCompiled compilation pre definitionEnv
+                      values
+      | there earlier =>
+          rw [resolveBody_there_eq] at accepted
+          cases earlierAccepted : priorData.resolveBody earlier with
+          | error error =>
+              rw [earlierAccepted] at accepted
+              dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                Except.bind, Except.pure, Except.map] at accepted
+              contradiction
+          | ok earlierBody =>
+              cases weakenedAccepted :
+                  weakenDefinitionBody (checkedBoundarySigs latestBody)
+                    earlierBody.body with
+              | error error =>
+                  rw [earlierAccepted] at accepted
+                  dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                    Except.bind, Except.pure, Except.map] at accepted
+                  rw [weakenedAccepted] at accepted
+                  dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                    Except.bind, Except.pure, Except.map] at accepted
+                  contradiction
+              | ok weakened =>
+                  cases compilationAccepted : weakened.compile? with
+                  | error error =>
+                      rw [earlierAccepted] at accepted
+                      dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                        Except.bind, Except.pure, Except.map] at accepted
+                      rw [weakenedAccepted] at accepted
+                      dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                        Except.bind, Except.pure, Except.map] at accepted
+                      rw [compilationAccepted] at accepted
+                      dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                        Except.bind, Except.pure, Except.map] at accepted
+                      contradiction
+                  | ok compilation =>
+                      rw [earlierAccepted] at accepted
+                      dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                        Except.bind, Except.pure, Except.map] at accepted
+                      rw [weakenedAccepted] at accepted
+                      dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                        Except.bind, Except.pure, Except.map] at accepted
+                      rw [compilationAccepted] at accepted
+                      dsimp [Bind.bind, Monad.toBind, Except.instMonad,
+                        Except.bind, Except.pure, Except.map] at accepted
+                      cases accepted
+                      simpa [Definitions.definitionBody] using
+                        (ConcreteDefinitionWeakening.compiled_open_denotes_iff
+                          weakened earlierBody.compilation compilation pre
+                          definitionEnv values).trans
+                          (induction earlier earlierBody earlierAccepted
+                            (DefinitionEnv.tail definitionEnv) values)
+
+end CheckedDefinitionData
 end VisualProof
