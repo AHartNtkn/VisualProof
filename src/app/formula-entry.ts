@@ -3,8 +3,9 @@ import type { Diagram } from '../kernel/diagram/diagram'
 
 export type MountedFormulaEntry = {
   readonly root: HTMLElement
-  open(): void
+  open(opener: HTMLElement): void
   close(): void
+  deactivate(): void
   dispose(): void
 }
 
@@ -33,6 +34,7 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
   const actions = document.createElement('div')
   actions.className = 'vpa-formula-actions'
   const create = document.createElement('button')
+  create.className = 'vpa-control-primary'
   create.type = 'submit'
   create.textContent = 'Create diagram'
   const cancel = document.createElement('button')
@@ -47,11 +49,25 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
     error.textContent = ''
     textarea.removeAttribute('aria-invalid')
   }
-  const close = (): void => {
+  let opener: HTMLElement | null = null
+  const hide = (restoreFocus: boolean): void => {
     root.hidden = true
     clearError()
+    const focusTarget = opener
+    opener = null
+    if (restoreFocus && focusTarget !== null && focusTarget.isConnected && !focusTarget.hidden && !focusTarget.matches(':disabled')) {
+      focusTarget.focus()
+    }
   }
-  const open = (): void => {
+  const close = (): void => {
+    hide(true)
+  }
+  const deactivate = (): void => {
+    hide(false)
+  }
+  const open = (nextOpener: HTMLElement): void => {
+    if (disposed) return
+    opener = nextOpener
     root.hidden = false
     textarea.focus()
   }
@@ -83,6 +99,7 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
     root,
     open,
     close,
+    deactivate,
     dispose: (): void => {
       if (disposed) return
       disposed = true
@@ -90,6 +107,7 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
       cancel.removeEventListener('click', onCancel)
       root.removeEventListener('keydown', onKeyDown)
       form.removeEventListener('submit', onSubmit)
+      opener = null
       root.remove()
     },
   }

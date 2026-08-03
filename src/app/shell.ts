@@ -57,6 +57,7 @@ import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
 import { theoremActionCountLabel } from './shell-label'
 import { mountFormulaEntry } from './formula-entry'
+import { applyControlTheme } from './control-theme'
 
 export { theoremActionCountLabel } from './shell-label'
 
@@ -264,7 +265,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
     canvas.ownerDocument.body.style.background = theme.canvas
-    chrome.dataset.colorMode = theme.name.startsWith('Dark') ? 'dark' : 'light'
+    chrome.dataset.colorMode = theme.mode
+    applyControlTheme(canvas.ownerDocument, theme)
   }
   applyThemeBackdrop()
   // There is NO pan: the camera is a fit — centered on the sheet circle with
@@ -968,7 +970,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     compass.setMode(mode === 'edit' ? 'Edit' : mode === 'replay' ? 'Replay' : `Prove ${proofDirection() ?? ''}`.trim())
     formulaBtn.hidden = mode !== 'edit'
-    if (mode !== 'edit') formulaEntry.close()
+    if (mode !== 'edit') formulaEntry.deactivate()
     backwardBtn.hidden = mode !== 'edit'
     forwardBtn.hidden = mode !== 'edit'
     dualBtn.hidden = mode !== 'edit'
@@ -1329,7 +1331,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const backwardBtn = button('Prove backward', () => beginTrack('backward'))
   const forwardBtn = button('Prove forward', () => beginTrack('forward'))
   const dualBtn = button('Prove fixed sides', beginDual)
-  const formulaBtn = button('Formula…', () => formulaEntry.open())
+  let formulaBtn!: HTMLButtonElement
+  formulaBtn = button('Formula…', () => formulaEntry.open(formulaBtn))
   const leaveBtn = button('Return to editing', leaveProof)
   // Theme toggle: view-only, persists for the session; paint reads `theme`
   // every frame, so flipping it re-styles the next frame with no rebuild.
@@ -1693,7 +1696,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     spawnCascade.dispose()
     proofSpawn.dispose()
     proofMoves.dispose()
-    formulaEntry.close()
+    formulaEntry.deactivate()
     formulaEntry.dispose()
     mainMotion.dispose()
     fixedWorkspace?.dispose()

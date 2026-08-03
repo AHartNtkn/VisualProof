@@ -1,5 +1,19 @@
 import { expect, test } from './zero-signature-fixture'
 
+function contrast(color: string, background: string): number {
+  const luminance = (value: string): number => {
+    const channels = value.match(/\d+(?:\.\d+)?/gu)?.map(Number)
+    if (channels === undefined || channels.length < 3) throw new Error(`Expected rgb color, received ${value}`)
+    const [red, green, blue] = channels.slice(0, 3).map((channel) => {
+      const normalized = channel / 255
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!
+  }
+  const [a, b] = [luminance(color), luminance(background)]
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
 declare global {
   interface Window {
     __vpaDebug?: {
@@ -74,12 +88,14 @@ test('formula entry creates a diagram, rejects malformed source, and preserves E
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
 
   await page.getByRole('button', { name: /Mode: Edit/ }).click()
-  await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  const formulaButton = page.getByRole('button', { name: 'Formula…', exact: true })
+  await formulaButton.click()
   const form = page.getByRole('dialog')
   await form.getByLabel('Formula to diagram').fill('∀ Z : i → o. ∀ S : i → i → o. (∃ z. Z(z)) ⇒ (∀ z. Z(z) ⇒ (∀ P : i → o. ((∀ n. Z(n) ⇒ P(n)) & (∀ n m. (P(n) & S(n, m)) ⇒ P(m))) ⇒ P(z)))')
   await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
 
   await expect(form).toBeHidden()
+  await expect(formulaButton).toBeFocused()
   const diagramSummary = () => page.evaluate(() => {
     const diagram = window.__vpaDebug!.diagram()
     return {
@@ -94,7 +110,17 @@ test('formula entry creates a diagram, rejects malformed source, and preserves E
     wires: 8,
   })
 
-  await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  await formulaButton.click()
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(form).toBeHidden()
+  await expect(formulaButton).toBeFocused()
+
+  await formulaButton.click()
+  await page.keyboard.press('Escape')
+  await expect(form).toBeHidden()
+  await expect(formulaButton).toBeFocused()
+
+  await formulaButton.click()
   const source = form.getByLabel('Formula to diagram')
   await source.fill('')
   await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
@@ -125,6 +151,44 @@ test('formula entry creates a diagram, rejects malformed source, and preserves E
     atoms: 0,
     wires: 0,
   })
+})
+
+test('formula entry uses explicit readable Dark control colors', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  await page.getByRole('button', { name: /^Theme:/u }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark')
+  await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  const form = page.getByRole('dialog')
+  await form.getByLabel('Formula to diagram').fill('∀ x. Missing(x)')
+  await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
+
+  const colors = await form.evaluate((dialog) => {
+    const colorOf = (selector: string, property: 'color' | 'backgroundColor'): string => {
+      const element = dialog.querySelector(selector)
+      if (element === null) throw new Error(`Missing ${selector}`)
+      return getComputedStyle(element)[property]
+    }
+    return {
+      panel: getComputedStyle(dialog).backgroundColor,
+      label: colorOf('label', 'color'),
+      buttonForeground: colorOf('button[type="submit"]', 'color'),
+      buttonBackground: colorOf('button[type="submit"]', 'backgroundColor'),
+      error: colorOf('.vpa-formula-error', 'color'),
+    }
+  })
+
+  expect(colors).toEqual({
+    panel: 'rgb(31, 36, 42)',
+    label: 'rgb(184, 176, 165)',
+    buttonForeground: 'rgb(26, 22, 17)',
+    buttonBackground: 'rgb(240, 164, 58)',
+    error: 'rgb(251, 113, 133)',
+  })
+  expect(contrast(colors.label, colors.panel)).toBeGreaterThanOrEqual(4.5)
+  expect(contrast(colors.buttonForeground, colors.buttonBackground)).toBeGreaterThanOrEqual(4.5)
+  expect(contrast(colors.error, colors.panel)).toBeGreaterThanOrEqual(4.5)
 })
 
 test('the committed Frege theory loads through the ordinary library path', async ({ page, theoryFiles }) => {

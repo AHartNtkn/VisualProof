@@ -15,6 +15,8 @@ class TestElement extends EventTarget {
   id = ''
   htmlFor = ''
   required = false
+  isConnected = true
+  focusCalls = 0
 
   constructor(ownerDocument: TestDocument, readonly tagName: string) {
     super()
@@ -35,7 +37,12 @@ class TestElement extends EventTarget {
     this.parentElement = null
   }
 
-  focus(): void {}
+  focus(): void {
+    this.focusCalls += 1
+    this.ownerDocument.activeElement = this
+  }
+
+  matches(selector: string): boolean { return selector === ':disabled' && this.required }
 
   setAttribute(name: string, value: string): void { this.attributes.set(name, value) }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null }
@@ -55,6 +62,8 @@ class TestElement extends EventTarget {
 }
 
 class TestDocument {
+  activeElement: TestElement | null = null
+
   createElement(tagName: string): TestElement { return new TestElement(this, tagName) }
 }
 
@@ -69,32 +78,71 @@ afterEach(() => { vi.unstubAllGlobals() })
 
 function mounted(commit: (diagram: Diagram) => void) {
   const host = documentDouble.createElement('main')
+  const opener = documentDouble.createElement('button')
+  host.append(opener)
   const entry = mountFormulaEntry(host as unknown as HTMLElement, commit)
   const textarea = entry.root.querySelector('textarea') as unknown as TestElement
   const form = entry.root.querySelector('form') as unknown as TestElement
   const error = entry.root.querySelector('.vpa-formula-error') as unknown as TestElement
-  return { entry, textarea, form, error }
+  const actions = entry.root.querySelector('.vpa-formula-actions') as unknown as TestElement
+  const cancel = actions.children[1] as TestElement
+  return { entry, opener, textarea, form, error, cancel }
 }
 
 describe('mountFormulaEntry', () => {
   it('commits a validated diagram and closes after a successful formula submission', () => {
     const commits: Diagram[] = []
-    const { entry, textarea, form } = mounted((diagram) => { commits.push(diagram) })
+    const { entry, opener, textarea, form } = mounted((diagram) => { commits.push(diagram) })
 
-    entry.open()
+    entry.open(opener as unknown as HTMLElement)
+    expect(documentDouble.activeElement).toBe(textarea)
     textarea.value = '∀ P : i → o. ∀ x : i. P(x)'
     form.dispatchEvent(new Event('submit', { cancelable: true }))
 
     expect(commits).toHaveLength(1)
     expect(Object.values(commits[0]!.nodes).filter((node) => node.kind === 'atom')).toHaveLength(1)
     expect(entry.root.hidden).toBe(true)
+    expect(documentDouble.activeElement).toBe(opener)
+  })
+
+  it.each([
+    ['Cancel', ({ cancel }: ReturnType<typeof mounted>) => cancel.dispatchEvent(new Event('click'))],
+    ['Escape', ({ entry }: ReturnType<typeof mounted>) => {
+      const event = new Event('keydown', { cancelable: true })
+      Object.defineProperty(event, 'key', { value: 'Escape' })
+      entry.root.dispatchEvent(event)
+    }],
+  ])('returns focus to the opener after %s', (_path, close) => {
+    const { entry, opener, textarea, ...mountedEntry } = mounted(vi.fn<(diagram: Diagram) => void>())
+
+    entry.open(opener as unknown as HTMLElement)
+    expect(documentDouble.activeElement).toBe(textarea)
+    close({ entry, opener, textarea, ...mountedEntry })
+
+    expect(entry.root.hidden).toBe(true)
+    expect(documentDouble.activeElement).toBe(opener)
+  })
+
+  it('does not resurrect opener focus on mode deactivation or disposal', () => {
+    const { entry, opener, textarea } = mounted(vi.fn<(diagram: Diagram) => void>())
+
+    entry.open(opener as unknown as HTMLElement)
+    entry.deactivate()
+
+    expect(opener.focusCalls).toBe(0)
+    expect(documentDouble.activeElement).toBe(textarea)
+
+    entry.open(opener as unknown as HTMLElement)
+    entry.dispose()
+
+    expect(opener.focusCalls).toBe(0)
   })
 
   it('keeps an invalid formula open, reports its location, and clears the field error on input', () => {
     const commit = vi.fn<(diagram: Diagram) => void>()
-    const { entry, textarea, form, error } = mounted(commit)
+    const { entry, opener, textarea, form, error } = mounted(commit)
 
-    entry.open()
+    entry.open(opener as unknown as HTMLElement)
     textarea.value = '∀ x. Missing(x)'
     form.dispatchEvent(new Event('submit', { cancelable: true }))
 
@@ -111,9 +159,9 @@ describe('mountFormulaEntry', () => {
 
   it('routes empty source through the formula parser rather than committing', () => {
     const commit = vi.fn<(diagram: Diagram) => void>()
-    const { entry, textarea, form, error } = mounted(commit)
+    const { entry, opener, textarea, form, error } = mounted(commit)
 
-    entry.open()
+    entry.open(opener as unknown as HTMLElement)
     form.dispatchEvent(new Event('submit', { cancelable: true }))
 
     expect(error.textContent).toMatch(/line 1, column \d+/u)
