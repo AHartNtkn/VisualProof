@@ -72,7 +72,7 @@ def node : CNode regionCount definitions.length →
   | .identity region sig arity => .identity region sig arity
 
 /-- The same concrete carrier in a definition context extended at its head. -/
-def diagram (source : ConcreteDiagram definitions.length) :
+abbrev diagram (source : ConcreteDiagram definitions.length) :
     ConcreteDiagram (newArgs :: definitions).length where
   regionCount := source.regionCount
   nodeCount := source.nodeCount
@@ -83,7 +83,7 @@ def diagram (source : ConcreteDiagram definitions.length) :
   wires := source.wires
 
 /-- Preserve the ordered boundary while weakening every reference in the body. -/
-def openDiagram (source : OpenConcreteDiagram definitions.length) :
+abbrev openDiagram (source : OpenConcreteDiagram definitions.length) :
     OpenConcreteDiagram (newArgs :: definitions).length where
   diagram := diagram source.diagram
   boundary := source.boundary
@@ -132,7 +132,6 @@ def weakenDefinitionBody
     checkedBoundarySigs weakened.body = checkedBoundarySigs source := by
   simp only [checkedBoundarySigs]
   rw [weakened.generated]
-  rfl
 
 namespace WeakenedDefinitionBody
 

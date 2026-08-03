@@ -476,6 +476,35 @@ def finishRegion (diagram : ConcreteDiagram definitionCount)
     Region definitions context.sigs :=
   finishRegionFor diagram context.ids (diagram.wiresAt region) body
 
+/-- Shifting named-definition references commutes with discharging a region's
+local wire binders. -/
+theorem finishRegion_renameDefinitions
+    (rho : DefinitionRenaming sourceDefinitions targetDefinitions)
+    (diagram : ConcreteDiagram definitionCount)
+    (context : WireContext diagram) (region : diagram.RegionId)
+    (body : Region sourceDefinitions (context.extend region).sigs) :
+    finishRegion diagram context region (body.renameDefinitions rho) =
+      (finishRegion diagram context region body).renameDefinitions rho := by
+  cases context with
+  | mk outerIds =>
+      unfold finishRegion
+      have finisher : ∀ (localIds : List diagram.WireId)
+          (localBody : Region sourceDefinitions
+            ((localIds ++ outerIds).map fun wire => (diagram.wires wire).sig)),
+          finishRegionFor diagram outerIds localIds
+              (localBody.renameDefinitions rho) =
+            (finishRegionFor diagram outerIds localIds
+              localBody).renameDefinitions rho := by
+        intro localIds
+        induction localIds with
+        | nil => intro localBody; rfl
+        | cons head tail induction =>
+            intro localBody
+            simp only [finishRegionFor]
+            exact induction
+              (.mk (.cons (.bind (diagram.wires head).sig localBody) .nil))
+      exact finisher (diagram.wiresAt region) body
+
 private theorem cast_bound_region
     (head : Sig)
     (same : sourceTail = targetTail)
@@ -765,6 +794,82 @@ def openRootLocalWires
     List openDiagram.diagram.WireId :=
   (openDiagram.diagram.wiresAt openDiagram.diagram.root).filter fun wire =>
     !decide (wire ∈ openBoundaryWires openDiagram)
+
+/-- Shifting named-definition references commutes with the open root's local
+wire binders. -/
+theorem finishOpenRoot_renameDefinitions
+    (rho : DefinitionRenaming sourceDefinitions targetDefinitions)
+    (openDiagram : OpenConcreteDiagram definitionCount)
+    (body : Region sourceDefinitions
+      ((openRootLocalWires openDiagram ++ openBoundaryWires openDiagram).map
+        fun wire => (openDiagram.diagram.wires wire).sig)) :
+    finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+        (openRootLocalWires openDiagram) (body.renameDefinitions rho) =
+      (finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+        (openRootLocalWires openDiagram) body).renameDefinitions rho := by
+  have finisher : ∀ (localIds : List openDiagram.diagram.WireId)
+      (localBody : Region sourceDefinitions
+        ((localIds ++ openBoundaryWires openDiagram).map
+          fun wire => (openDiagram.diagram.wires wire).sig)),
+      finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+          localIds (localBody.renameDefinitions rho) =
+        (finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+          localIds localBody).renameDefinitions rho := by
+    intro localIds
+    induction localIds with
+    | nil => intro localBody; rfl
+    | cons head tail induction =>
+        intro localBody
+        simp only [finishRegionFor]
+        exact induction
+          (.mk (.cons
+            (.bind (openDiagram.diagram.wires head).sig localBody) .nil))
+  exact finisher (openRootLocalWires openDiagram) body
+
+/-- Open-root finishing commutes with definition shifting across the node and
+child blocks produced separately by the compiler. -/
+theorem finishOpenRoot_append_renameDefinitions
+    (rho : DefinitionRenaming sourceDefinitions targetDefinitions)
+    (openDiagram : OpenConcreteDiagram definitionCount)
+    (nodes children : ItemSeq sourceDefinitions
+      ((openRootLocalWires openDiagram ++ openBoundaryWires openDiagram).map
+        fun wire => (openDiagram.diagram.wires wire).sig)) :
+    finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+        (openRootLocalWires openDiagram)
+        (.mk ((nodes.renameDefinitions rho).append
+          (children.renameDefinitions rho))) =
+      (finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+        (openRootLocalWires openDiagram)
+        (.mk (nodes.append children))).renameDefinitions rho := by
+  let rec appendLaw
+      (left : ItemSeq sourceDefinitions
+        ((openRootLocalWires openDiagram ++ openBoundaryWires openDiagram).map
+          fun wire => (openDiagram.diagram.wires wire).sig)) :
+      (left.append children).renameDefinitions rho =
+        (left.renameDefinitions rho).append
+          (children.renameDefinitions rho) :=
+    match left with
+    | .nil => rfl
+    | .cons head tail => congrArg (ItemSeq.cons (head.renameDefinitions rho))
+        (appendLaw tail)
+  rw [← appendLaw nodes]
+  exact finishOpenRoot_renameDefinitions rho openDiagram
+    (.mk (nodes.append children))
+
+/-- The open-root binder discharge is exactly the signature-only finisher. -/
+theorem finishOpenRoot_eq_signatures
+    (openDiagram : OpenConcreteDiagram definitionCount)
+    (body : Region definitions
+      ((openRootLocalWires openDiagram ++ openBoundaryWires openDiagram).map
+        fun wire => (openDiagram.diagram.wires wire).sig)) :
+    finishRegionFor openDiagram.diagram (openBoundaryWires openDiagram)
+        (openRootLocalWires openDiagram) body =
+      finishRegionSignatures (openBoundaryClassSigs openDiagram)
+        ((openRootLocalWires openDiagram).map
+          fun wire => (openDiagram.diagram.wires wire).sig)
+        (List.map_append ▸ body) := by
+  rw [finishRegionFor_eq_signatures]
+  rfl
 
 /--
 Compile an open root with boundary classes already visible. Root-local wires
