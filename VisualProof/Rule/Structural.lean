@@ -682,6 +682,13 @@ structure CheckedDoubleCut
     elaborate doubled =
       siteCompiled.frame.context.fill
         (doubleCut siteCompiled.frame.siteBody)
+  private wireCountExact :
+    plain.val.wireCount = doubled.val.wireCount
+  private wireSignaturesExact :
+    ∀ wire : plain.val.WireId,
+      (doubled.val.wires
+        (Data.Finite.FiniteEquiv.finCast wireCountExact wire)).sig =
+      (plain.val.wires wire).sig
 
 /-- Executably validate the exact compiler-level double-cut transformation. -/
 def checkDoubleCut
@@ -695,9 +702,22 @@ def checkDoubleCut
           intrinsicRegionsEqual (elaborate doubled)
               (siteCompiled.frame.context.fill
                 (doubleCut siteCompiled.frame.siteBody)) = true then
-        exact .ok
-          (CheckedDoubleCut.mk siteCompiled
-            (intrinsicRegionsEqual_sound exact))
+        if wireCountExact :
+            plain.val.wireCount = doubled.val.wireCount then
+          let wireEquiv :=
+            Data.Finite.FiniteEquiv.finCast wireCountExact
+          if wireSignaturesExact :
+              ∀ wire : plain.val.WireId,
+                (doubled.val.wires (wireEquiv wire)).sig =
+                  (plain.val.wires wire).sig then
+            exact .ok
+              (CheckedDoubleCut.mk siteCompiled
+                (intrinsicRegionsEqual_sound exact) wireCountExact
+                wireSignaturesExact)
+          else
+            exact .error .targetMismatch
+        else
+          exact .error .targetMismatch
       else
         exact .error .targetMismatch
 
@@ -716,6 +736,45 @@ def doubled
     (_checked : CheckedDoubleCut input) :
     CheckedDiagram definitions :=
   doubledDiagram
+
+/-- Stable positional wire identity validated by `checkDoubleCut`. -/
+def wireEquiv
+    {plainDiagram doubledDiagram : CheckedDiagram definitions}
+    {input : DoubleCutInput plainDiagram doubledDiagram}
+    (checked : CheckedDoubleCut input) :
+    Data.Finite.FiniteEquiv
+      plainDiagram.val.WireId doubledDiagram.val.WireId :=
+  Data.Finite.FiniteEquiv.finCast checked.wireCountExact
+
+/-- The checker-owned positional wire identity is injective. -/
+theorem wireEquiv_injective
+    {plainDiagram doubledDiagram : CheckedDiagram definitions}
+    {input : DoubleCutInput plainDiagram doubledDiagram}
+    (checked : CheckedDoubleCut input) :
+    Function.Injective checked.wireEquiv :=
+  checked.wireEquiv.injective
+
+/-- Stable wire positions retain their exact signatures through double cut. -/
+theorem wireEquiv_signature
+    {plainDiagram doubledDiagram : CheckedDiagram definitions}
+    {input : DoubleCutInput plainDiagram doubledDiagram}
+    (checked : CheckedDoubleCut input)
+    (wire : plainDiagram.val.WireId) :
+    (doubledDiagram.val.wires (checked.wireEquiv wire)).sig =
+      (plainDiagram.val.wires wire).sig :=
+  checked.wireSignaturesExact wire
+
+/-- The inverse positional identity also retains every wire signature. -/
+theorem wireEquiv_symm_signature
+    {plainDiagram doubledDiagram : CheckedDiagram definitions}
+    {input : DoubleCutInput plainDiagram doubledDiagram}
+    (checked : CheckedDoubleCut input)
+    (wire : doubledDiagram.val.WireId) :
+    (plainDiagram.val.wires (checked.wireEquiv.symm wire)).sig =
+      (doubledDiagram.val.wires wire).sig := by
+  have forward := checked.wireEquiv_signature (checked.wireEquiv.symm wire)
+  rw [Data.Finite.FiniteEquiv.apply_symm_apply] at forward
+  exact forward.symm
 
 def introTag
     {plainDiagram doubledDiagram : CheckedDiagram definitions}

@@ -151,6 +151,151 @@ theorem double_cut_receipt :
     (checkDoubleCut doubleCutInput).toOption.isSome = true := by
   native_decide
 
+private def doubleCutChecked : CheckedDoubleCut doubleCutInput :=
+  (checkDoubleCut doubleCutInput).toOption.get (by native_decide)
+
+/-- The canonical receipt owns a total, injective positional wire carrier. -/
+example : Function.Injective doubleCutChecked.wireEquiv :=
+  doubleCutChecked.wireEquiv_injective
+
+/-- Every canonical wire retains its signature under the checked carrier. -/
+example (wire : host.val.WireId) :
+    (doubled.val.wires (doubleCutChecked.wireEquiv wire)).sig =
+      (host.val.wires wire).sig :=
+  doubleCutChecked.wireEquiv_signature wire
+
+/-!
+An intrinsically identical endpoint obtained by renaming two concrete wires is
+not a valid stable-ID double-cut target when those positions have different
+signatures.  Intrinsic equality alone therefore cannot admit it.
+-/
+
+private def mixedPlainRaw : ConcreteDiagram 0 where
+  regionCount := 3
+  nodeCount := 3
+  wireCount := 3
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 0
+    | ⟨2, _⟩ => .cut 0
+  nodes
+    | ⟨0, _⟩ => .identity 0 (.rel []) 2
+    | ⟨1, _⟩ => .identity 1 .iota 2
+    | ⟨2, _⟩ => .identity 2 .iota 2
+  wires
+    | ⟨0, _⟩ =>
+        { sig := .rel []
+          scope := 0
+          endpoints := [⟨0, .identity 0⟩, ⟨0, .identity 1⟩] }
+    | ⟨1, _⟩ =>
+        { sig := .iota
+          scope := 1
+          endpoints := [⟨1, .identity 0⟩, ⟨1, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := .iota
+          scope := 2
+          endpoints := [⟨2, .identity 0⟩, ⟨2, .identity 1⟩] }
+
+private theorem mixedPlainRaw_wellFormed : mixedPlainRaw.WellFormed [] := by
+  native_decide
+
+private def mixedPlain : CheckedDiagram [] :=
+  ⟨mixedPlainRaw, mixedPlainRaw_wellFormed⟩
+
+private def mixedDoubledRaw : ConcreteDiagram 0 where
+  regionCount := 5
+  nodeCount := 3
+  wireCount := 3
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 4
+    | ⟨2, _⟩ => .cut 4
+    | ⟨3, _⟩ => .cut 0
+    | ⟨4, _⟩ => .cut 3
+  nodes
+    | ⟨0, _⟩ => .identity 4 (.rel []) 2
+    | ⟨1, _⟩ => .identity 1 .iota 2
+    | ⟨2, _⟩ => .identity 2 .iota 2
+  wires
+    | ⟨0, _⟩ =>
+        { sig := .rel []
+          scope := 0
+          endpoints := [⟨0, .identity 0⟩, ⟨0, .identity 1⟩] }
+    | ⟨1, _⟩ =>
+        { sig := .iota
+          scope := 1
+          endpoints := [⟨1, .identity 0⟩, ⟨1, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := .iota
+          scope := 2
+          endpoints := [⟨2, .identity 0⟩, ⟨2, .identity 1⟩] }
+
+private theorem mixedDoubledRaw_wellFormed :
+    mixedDoubledRaw.WellFormed [] := by
+  native_decide
+
+private def mixedDoubled : CheckedDiagram [] :=
+  ⟨mixedDoubledRaw, mixedDoubledRaw_wellFormed⟩
+
+private def renamedMixedDoubledRaw : ConcreteDiagram 0 where
+  regionCount := 5
+  nodeCount := 3
+  wireCount := 3
+  root := 0
+  regions
+    | ⟨0, _⟩ => .sheet
+    | ⟨1, _⟩ => .cut 4
+    | ⟨2, _⟩ => .cut 4
+    | ⟨3, _⟩ => .cut 0
+    | ⟨4, _⟩ => .cut 3
+  nodes
+    | ⟨0, _⟩ => .identity 4 (.rel []) 2
+    | ⟨1, _⟩ => .identity 1 .iota 2
+    | ⟨2, _⟩ => .identity 2 .iota 2
+  wires
+    | ⟨0, _⟩ =>
+        { sig := .iota
+          scope := 1
+          endpoints := [⟨1, .identity 0⟩, ⟨1, .identity 1⟩] }
+    | ⟨1, _⟩ =>
+        { sig := .rel []
+          scope := 0
+          endpoints := [⟨0, .identity 0⟩, ⟨0, .identity 1⟩] }
+    | ⟨2, _⟩ =>
+        { sig := .iota
+          scope := 2
+          endpoints := [⟨2, .identity 0⟩, ⟨2, .identity 1⟩] }
+
+private theorem renamedMixedDoubledRaw_wellFormed :
+    renamedMixedDoubledRaw.WellFormed [] := by
+  native_decide
+
+private def renamedMixedDoubled : CheckedDiagram [] :=
+  ⟨renamedMixedDoubledRaw, renamedMixedDoubledRaw_wellFormed⟩
+
+private def mixedDoubleCutInput : DoubleCutInput mixedPlain mixedDoubled where
+  site := ⟨0, by decide⟩
+
+private def renamedMixedDoubleCutInput :
+    DoubleCutInput mixedPlain renamedMixedDoubled where
+  site := ⟨0, by decide⟩
+
+example :
+    (checkDoubleCut mixedDoubleCutInput).toOption.isSome = true := by
+  native_decide
+
+example :
+    intrinsicRegionsEqual (elaborate renamedMixedDoubled)
+      (elaborate mixedDoubled) = true := by
+  native_decide
+
+example :
+    structuralError? (checkDoubleCut renamedMixedDoubleCutInput) =
+      some .targetMismatch := by
+  native_decide
+
 private def vacuousRaw : ConcreteDiagram 0 where
   regionCount := 3
   nodeCount := 3
