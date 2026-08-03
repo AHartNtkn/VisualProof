@@ -157,12 +157,15 @@ test('formula entry uses explicit readable Dark control colors', async ({ page }
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
 
+  await page.getByRole('button', { name: 'Utilities', exact: true }).click()
   await page.getByRole('button', { name: /^Theme:/u }).click()
   await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark')
+  await page.getByRole('button', { name: 'Mode: Edit', exact: true }).click()
   await page.getByRole('button', { name: 'Formula…', exact: true }).click()
   const form = page.getByRole('dialog')
   await form.getByLabel('Formula to diagram').fill('∀ x. Missing(x)')
   await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
+  await page.mouse.move(0, 0)
 
   const colors = await form.evaluate((dialog) => {
     const colorOf = (selector: string, property: 'color' | 'backgroundColor'): string => {
