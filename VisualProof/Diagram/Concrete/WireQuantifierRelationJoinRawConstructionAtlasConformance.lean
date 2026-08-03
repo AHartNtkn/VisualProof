@@ -13,12 +13,14 @@ variable {content : CheckedOpenDiagram definitions}
 inductive AtlasRegionData (Region : Type)
   | sheet
   | cut (parent : Region)
+  deriving Repr, DecidableEq
 
 /-- Allocation-neutral node payload carried by one exact atlas row. -/
 inductive AtlasNodeData (Region : Type) (definitionCount : Nat)
   | atom (region : Region) (args : List Sig)
   | ref (region : Region) (definition : Fin definitionCount) (args : List Sig)
   | identity (region : Region) (sig : Sig) (arity : Nat)
+  deriving Repr, DecidableEq
 
 /-- The prefix origin of a content region at one accepted occurrence.  The
 content root is identified with the occurrence's source region. -/

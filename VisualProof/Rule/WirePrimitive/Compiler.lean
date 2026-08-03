@@ -308,11 +308,13 @@ private theorem constructionWireOriginAt_descriptor
 
 private theorem rawSourceSites_exists
     {source : CheckedDiagram definitions}
-    {input : MonolithicRelationJoinInput source}
-    (result : ConcreteWireQuantifier.RelationJoinResult source input.wire
-      input.content input.parameters) :
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters) :
     ∃ all,
-      checkAllAppliedSites source input.wire = some all := by
+      checkAllAppliedSites source dying = some all := by
   apply checkAllAppliedSites_complete
   intro endpoint member
   obtain ⟨head, region, nodeData⟩ :=
@@ -321,11 +323,13 @@ private theorem rawSourceSites_exists
 
 private def rawSourceSites
     {source : CheckedDiagram definitions}
-    {input : MonolithicRelationJoinInput source}
-    (result : ConcreteWireQuantifier.RelationJoinResult source input.wire
-      input.content input.parameters) :
-    AllAppliedSites source input.wire :=
-  match accepted : checkAllAppliedSites source input.wire with
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters) :
+    AllAppliedSites source dying :=
+  match accepted : checkAllAppliedSites source dying with
   | some sites => sites
   | none => by
       exfalso
@@ -1794,9 +1798,9 @@ private structure RawJoinConstructionConformance
     regions (compiled.val.wires wire).scope =
       ConcreteWireQuantifier.expectedFinalWireScope result (wires wire)
   wireEndpoints : ∀ wire,
-    (compiled.val.wires wire).endpoints.map
-        (compiledEndpointOrigin compiled nodes) =
-      ConcreteWireQuantifier.expectedFinalWireEndpoints result (wires wire)
+    ((compiled.val.wires wire).endpoints.map
+        (compiledEndpointOrigin compiled nodes)).Perm
+      (ConcreteWireQuantifier.expectedFinalWireEndpoints result (wires wire))
 
 namespace RawJoinConstructionConformance
 
@@ -2050,21 +2054,19 @@ private theorem endpoint_mem_iff
         (result.plainFinal.val.wires
           (conformance.wireEquiv wire)).endpoints := by
   have classifiedLists :
-      (compiled.val.wires wire).endpoints.map
-          (compiledEndpointOrigin compiled conformance.nodes) =
-        (result.plainFinal.val.wires
+      ((compiled.val.wires wire).endpoints.map
+          (compiledEndpointOrigin compiled conformance.nodes)).Perm
+        ((result.plainFinal.val.wires
           (conformance.wireEquiv wire)).endpoints.map
-            result.finalEndpointOriginEquiv := by
-    calc
-      _ = ConcreteWireQuantifier.expectedFinalWireEndpoints result
-          (conformance.wires wire) := conformance.wireEndpoints wire
-      _ = _ := by
-        change _ = (result.plainFinal.val.wires
-          ((ConcreteWireQuantifier.finalWireOriginEquiv result).symm
-            (conformance.wires wire))).endpoints.map
-              result.finalEndpointOriginEquiv
-        exact (result.finalWire_endpoints_exact
-          (conformance.wires wire)).symm
+            result.finalEndpointOriginEquiv) := by
+    have rawExact : ConcreteWireQuantifier.expectedFinalWireEndpoints result
+        (conformance.wires wire) =
+      (result.plainFinal.val.wires
+        ((ConcreteWireQuantifier.finalWireOriginEquiv result).symm
+          (conformance.wires wire))).endpoints.map
+            result.finalEndpointOriginEquiv :=
+      (result.finalWire_endpoints_exact (conformance.wires wire)).symm
+    exact (conformance.wireEndpoints wire).trans (List.Perm.of_eq rawExact)
   constructor
   · intro member
     have classifiedMember :
@@ -2072,7 +2074,7 @@ private theorem endpoint_mem_iff
           (compiled.val.wires wire).endpoints.map
             (compiledEndpointOrigin compiled conformance.nodes) :=
       List.mem_map.mpr ⟨endpoint, member, rfl⟩
-    rw [classifiedLists] at classifiedMember
+    have classifiedMember := classifiedLists.mem_iff.mp classifiedMember
     rcases List.mem_map.mp classifiedMember with
       ⟨candidate, candidateMember, candidateOrigin⟩
     have candidateExact : candidate = conformance.endpointMap endpoint := by
@@ -2087,7 +2089,7 @@ private theorem endpoint_mem_iff
             (conformance.wireEquiv wire)).endpoints.map
               result.finalEndpointOriginEquiv :=
       List.mem_map.mpr ⟨conformance.endpointMap endpoint, member, rfl⟩
-    rw [← classifiedLists] at classifiedMember
+    have classifiedMember := classifiedLists.mem_iff.mpr classifiedMember
     rw [conformance.endpointMap_origin endpoint] at classifiedMember
     rcases List.mem_map.mp classifiedMember with
       ⟨candidate, candidateMember, candidateOrigin⟩
@@ -2400,6 +2402,369 @@ private def compileRawIdentityPrefix
   executeRawIdentityInsertions result (rawIdentityInsertionPlans result)
     source rfl rfl orientation
 
+/-- Content regions in the same parent-before-child order in which the
+intrinsic compiler encounters cut constructors. -/
+private def contentSubtreeRegionOrder
+    (diagram : ConcreteDiagram definitionCount) :
+    Nat → List diagram.RegionId → List diagram.RegionId
+  | 0, _ => []
+  | fuel + 1, regions =>
+      regions.flatMap fun region =>
+        region :: contentSubtreeRegionOrder diagram fuel
+          (diagram.childrenOf region)
+
+/-- Content nodes in the exact root/items/children order consumed by the
+intrinsic compiler. -/
+private def contentSubtreeNodeOrder
+    (diagram : ConcreteDiagram definitionCount) :
+    Nat → List diagram.RegionId → List diagram.NodeId
+  | 0, _ => []
+  | fuel + 1, regions =>
+      regions.flatMap fun region =>
+        diagram.nodesAt region ++
+          contentSubtreeNodeOrder diagram fuel (diagram.childrenOf region)
+
+/-- Region-local content wires in the exact binder order consumed by the
+intrinsic compiler below the open root. -/
+private def contentSubtreeWireOrder
+    (diagram : ConcreteDiagram definitionCount) :
+    Nat → List diagram.RegionId → List diagram.WireId
+  | 0, _ => []
+  | fuel + 1, regions =>
+      regions.flatMap fun region =>
+        diagram.wiresAt region ++
+          contentSubtreeWireOrder diagram fuel (diagram.childrenOf region)
+
+private def nonRootRegion?
+    (diagram : ConcreteDiagram definitionCount)
+    (region : diagram.RegionId) :
+    Option { region : diagram.RegionId // region ≠ diagram.root } :=
+  if different : region ≠ diagram.root then some ⟨region, different⟩
+  else none
+
+private def compilerContentRegionOrder
+    (content : CheckedOpenDiagram definitions) :
+    List { region : content.val.diagram.RegionId //
+      region ≠ content.val.diagram.root } :=
+  (contentSubtreeRegionOrder content.val.diagram
+      content.val.diagram.regionCount
+      (content.val.diagram.childrenOf content.val.diagram.root)).filterMap
+    (nonRootRegion? content.val.diagram)
+
+private def compilerContentNodeOrder
+    (content : CheckedOpenDiagram definitions) :
+    List content.val.diagram.NodeId :=
+  content.val.diagram.nodesAt content.val.diagram.root ++
+    contentSubtreeNodeOrder content.val.diagram
+      content.val.diagram.regionCount
+      (content.val.diagram.childrenOf content.val.diagram.root)
+
+private def compilerContentWireOrder
+    (content : CheckedOpenDiagram definitions) :
+    List content.val.diagram.WireId :=
+  ConcreteElaboration.openRootLocalWires content.val ++
+    contentSubtreeWireOrder content.val.diagram
+      content.val.diagram.regionCount
+      (content.val.diagram.childrenOf content.val.diagram.root)
+
+/-- The direct terminal region-origin rows induced by compiler allocation. -/
+private def compilerRegionOriginRows
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (sites : AllAppliedSites source dying) :
+    List (ConcreteWireQuantifier.RelationJoinResult.FinalRegionOrigin result) :=
+  let positions := (sourceSiteStepPositions result sites).1
+  source.val.regionsList.map Sum.inl ++
+    (compilerContentRegionOrder content).flatMap fun region =>
+      (Data.Finite.allFin sites.sites.length).map fun site =>
+        Sum.inr ⟨positions site, region⟩
+
+private def survivingSourceNodeOrigin?
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (node : source.val.NodeId) :
+    Option (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result) :=
+  if live : node ∉ result.applications then
+    some ⟨.inl node, by
+      change node ∉ result.steps.map
+        ConcreteWireQuantifier.RelationJoinStep.application
+      rw [result.steps_application_order]
+      exact live⟩
+  else none
+
+/-- The direct terminal node-origin rows induced by compiler allocation. -/
+private def compilerNodeOriginRows
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (sites : AllAppliedSites source dying)
+    (requestOrigins : List
+      (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result)) :
+    List (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result) :=
+  let positions := (sourceSiteStepPositions result sites).1
+  (Data.Finite.allFin source.val.nodeCount).filterMap
+      (survivingSourceNodeOrigin? result) ++
+    requestOrigins ++
+    (compilerContentNodeOrder content).flatMap fun node =>
+      (Data.Finite.allFin sites.sites.length).map fun site =>
+        ⟨.inr ⟨positions site, .inl node⟩, trivial⟩
+
+private def survivingSourceWireOrigin?
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (wire : source.val.WireId) :
+    Option (ConcreteWireQuantifier.FinalWireOrigin result) :=
+  if survives : wire ≠ dying then some (.inl ⟨wire, survives⟩)
+  else none
+
+private def internalWireOrigin?
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (occurrence : Fin result.steps.length)
+    (wire : content.val.diagram.WireId) :
+    Option (ConcreteWireQuantifier.FinalWireOrigin result) := do
+  let position ← Data.Finite.indexOf?
+    (result.steps.get occurrence).attachment.fragmentInternalWires wire
+  pure (.inr (constructionWireOriginAt result.steps occurrence position))
+
+/-- The direct terminal wire-origin rows induced by compiler allocation. -/
+private def compilerWireOriginRows?
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (sites : AllAppliedSites source dying) :
+    Option (List (ConcreteWireQuantifier.FinalWireOrigin result)) := do
+  let positions := (sourceSiteStepPositions result sites).1
+  let generated ←
+    ((compilerContentWireOrder content).flatMap fun wire =>
+      (Data.Finite.allFin sites.sites.length).map fun site =>
+        (positions site, wire)).mapM fun occurrence =>
+          internalWireOrigin? result occurrence.1 occurrence.2
+  pure <|
+    (Data.Finite.allFin source.val.wireCount).filterMap
+      (survivingSourceWireOrigin? result) ++ generated
+
+/-- Executable equality of two duplicate-free finite origin sets. -/
+private def listPermutationValid
+    [DecidableEq α]
+    (left right : List α) : Bool :=
+  decide left.Nodup && decide right.Nodup &&
+    left.all (fun value => decide (value ∈ right)) &&
+    right.all (fun value => decide (value ∈ left))
+
+/-- The finite origin-set check supplies the permutation consumed by the
+stable positional equivalence and by terminal endpoint fibers. -/
+private theorem listPermutationValid_sound
+    [DecidableEq α]
+    (left right : List α)
+    (accepted : listPermutationValid left right = true) :
+    left.Perm right := by
+  unfold listPermutationValid at accepted
+  have parts := Bool.and_eq_true_iff.mp accepted
+  have rightMembers := parts.2
+  have parts := Bool.and_eq_true_iff.mp parts.1
+  have leftMembers := parts.2
+  have parts := Bool.and_eq_true_iff.mp parts.1
+  have leftNodup := of_decide_eq_true parts.1
+  have rightNodup := of_decide_eq_true parts.2
+  letI : BEq α := ⟨fun left right => decide (left = right)⟩
+  letI : LawfulBEq α :=
+    { eq_of_beq := by
+        intro left right same
+        exact of_decide_eq_true same
+      rfl := by intro value; simp }
+  apply Data.Finite.list_perm_of_nodup_mem_iff leftNodup rightNodup
+  intro value
+  constructor
+  · intro member
+    exact of_decide_eq_true
+      (List.all_eq_true.mp leftMembers value member)
+  · intro member
+    exact of_decide_eq_true
+      (List.all_eq_true.mp rightMembers value member)
+
+/-- Turn deterministic compiled-origin rows into a carrier equivalence by
+matching them against the raw target's own constructive origin enumeration. -/
+private def originEquivOfRows
+    [DecidableEq Origin]
+    (raw : Data.Finite.FiniteEquiv (Fin rawCount) Origin)
+    (rows : List Origin)
+    (lengthExact : rows.length = compiledCount)
+    (permuted : rows.Perm
+      ((Data.Finite.allFin rawCount).map raw)) :
+    Data.Finite.FiniteEquiv (Fin compiledCount) Origin := by
+  let compiledPositions :=
+    Data.Finite.FiniteEquiv.finCast lengthExact.symm
+  let rawRows := (Data.Finite.allFin rawCount).map raw
+  have rawRowsNodup : rawRows.Nodup := by
+    exact (Data.Finite.allFin_nodup rawCount).map raw (by
+      intro left right different same
+      exact different (raw.injective same))
+  have rowsNodup : rows.Nodup := permuted.nodup_iff.mpr rawRowsNodup
+  have rowComplete : ∀ origin : Origin, origin ∈ rows := by
+    intro origin
+    apply permuted.mem_iff.mpr
+    apply List.mem_map.mpr
+    exact ⟨raw.symm origin, Data.Finite.mem_allFin _, raw.right_inv origin⟩
+  let rowEquiv : Data.Finite.FiniteEquiv (Fin rows.length) Origin :=
+    { toFun := rows.get
+      invFun := fun origin => DenseList.index rows origin (rowComplete origin)
+      left_inv := DenseList.index_get rows rowsNodup
+      right_inv := fun origin =>
+        DenseList.get_index rows origin (rowComplete origin) }
+  exact compiledPositions.trans rowEquiv
+
+/-- Validate exactly the terminal facts consumed by `constructionIso`.  The
+candidate carrier rows are construction-owned; this checks no permutations
+other than equality of their origin enumerations. -/
+private def rawJoinConstructionConformance?
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (compiled : CheckedDiagram definitions)
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters)
+    (sites : AllAppliedSites source dying)
+    (requestOrigins : List
+      (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result)) :
+    Option (RawJoinConstructionConformance compiled result) := do
+  let regionRows := compilerRegionOriginRows result sites
+  let nodeRows := compilerNodeOriginRows result sites requestOrigins
+  let wireRows ← compilerWireOriginRows? result sites
+  let rawRegionRows :=
+    (Data.Finite.allFin result.plainFinal.val.regionCount).map
+      result.finalRegionOriginEquiv
+  let rawNodeRows :=
+    (Data.Finite.allFin result.plainFinal.val.nodeCount).map
+      result.finalNodeOriginEquiv
+  let rawWireRows :=
+    (Data.Finite.allFin result.plainFinal.val.wireCount).map
+      (ConcreteWireQuantifier.finalWireOriginEquiv result)
+  if regionLength : regionRows.length = compiled.val.regionCount then
+    if nodeLength : nodeRows.length = compiled.val.nodeCount then
+      if wireLength : wireRows.length = compiled.val.wireCount then
+        if regionAccepted : listPermutationValid regionRows rawRegionRows then
+          if nodeAccepted : listPermutationValid nodeRows rawNodeRows then
+            if wireAccepted : listPermutationValid wireRows rawWireRows then
+              have regionPerm := listPermutationValid_sound regionRows
+                rawRegionRows regionAccepted
+              have nodePerm := listPermutationValid_sound nodeRows
+                rawNodeRows nodeAccepted
+              have wirePerm := listPermutationValid_sound wireRows
+                rawWireRows wireAccepted
+              let regions := originEquivOfRows result.finalRegionOriginEquiv
+                regionRows regionLength (by simpa [rawRegionRows] using regionPerm)
+              let nodes := originEquivOfRows result.finalNodeOriginEquiv
+                nodeRows nodeLength (by simpa [rawNodeRows] using nodePerm)
+              let wires := originEquivOfRows
+                (ConcreteWireQuantifier.finalWireOriginEquiv result)
+                wireRows wireLength (by simpa [rawWireRows] using wirePerm)
+              let rootValid := decide <|
+                regions compiled.val.root =
+                  result.finalRegionOriginEquiv result.plainFinal.val.root
+              let regionsValid :=
+                (Data.Finite.allFin compiled.val.regionCount).all fun region =>
+                  decide <| compiledRegionData compiled regions region =
+                    ConcreteWireQuantifier.expectedRegionData result.steps
+                      (regions region)
+              let nodesValid :=
+                (Data.Finite.allFin compiled.val.nodeCount).all fun node =>
+                  decide <| compiledNodeData compiled regions node =
+                    ConcreteWireQuantifier.expectedNodeData
+                      (definitions := definitions) (source := source)
+                      (dying := dying) (content := content) result.steps
+                      (nodes node).1
+              let signaturesValid :=
+                (Data.Finite.allFin compiled.val.wireCount).all fun wire =>
+                  decide <| (compiled.val.wires wire).sig =
+                    ConcreteWireQuantifier.expectedFinalWireSignature result
+                      (wires wire)
+              let scopesValid :=
+                (Data.Finite.allFin compiled.val.wireCount).all fun wire =>
+                  decide <| regions (compiled.val.wires wire).scope =
+                    ConcreteWireQuantifier.expectedFinalWireScope result
+                      (wires wire)
+              let endpointsValid :=
+                (Data.Finite.allFin compiled.val.wireCount).all fun wire =>
+                  listPermutationValid
+                    ((compiled.val.wires wire).endpoints.map
+                      (compiledEndpointOrigin compiled nodes))
+                    (ConcreteWireQuantifier.expectedFinalWireEndpoints result
+                      (wires wire))
+              if accepted : rootValid && regionsValid && nodesValid &&
+                  signaturesValid && scopesValid && endpointsValid then
+                have parts := Bool.and_eq_true_iff.mp accepted
+                have endpointsAccepted := parts.2
+                have parts := Bool.and_eq_true_iff.mp parts.1
+                have scopesAccepted := parts.2
+                have parts := Bool.and_eq_true_iff.mp parts.1
+                have signaturesAccepted := parts.2
+                have parts := Bool.and_eq_true_iff.mp parts.1
+                have nodesAccepted := parts.2
+                have parts := Bool.and_eq_true_iff.mp parts.1
+                have rootAccepted := parts.1
+                have regionsAccepted := parts.2
+                some
+                  { regions := regions
+                    nodes := nodes
+                    wires := wires
+                    root := of_decide_eq_true rootAccepted
+                    regionData := by
+                      intro region
+                      exact of_decide_eq_true
+                        (List.all_eq_true.mp regionsAccepted region
+                          (Data.Finite.mem_allFin region))
+                    nodeData := by
+                      intro node
+                      exact of_decide_eq_true
+                        (List.all_eq_true.mp nodesAccepted node
+                          (Data.Finite.mem_allFin node))
+                    wireSignature := by
+                      intro wire
+                      exact of_decide_eq_true
+                        (List.all_eq_true.mp signaturesAccepted wire
+                          (Data.Finite.mem_allFin wire))
+                    wireScope := by
+                      intro wire
+                      exact of_decide_eq_true
+                        (List.all_eq_true.mp scopesAccepted wire
+                          (Data.Finite.mem_allFin wire))
+                    wireEndpoints := by
+                      intro wire
+                      exact listPermutationValid_sound _ _
+                        (List.all_eq_true.mp endpointsAccepted wire
+                          (Data.Finite.mem_allFin wire)) }
+              else none
+            else none
+          else none
+        else none
+      else none
+    else none
+  else none
+
 /-- The primitive construction of a raw accepted relation join. -/
 private structure RawRelationJoinCompilation
     (orientation : Orientation)
@@ -2411,7 +2776,6 @@ private structure RawRelationJoinCompilation
 
 private def compileRawRelationJoinResidual
     (source : CheckedDiagram definitions)
-    (rawTarget : CheckedDiagram definitions)
     {dying : source.val.WireId}
     {content : CheckedOpenDiagram definitions}
     {parameters : List source.val.WireId}
@@ -2420,7 +2784,7 @@ private def compileRawRelationJoinResidual
     (residual : IntrinsicCompilerResidual source context)
     (orientation : Orientation) :
     Except CompilerError
-      (RawRelationJoinCompilation orientation source rawTarget) := do
+      (RawRelationJoinCompilation orientation source result.plainFinal) := do
   let identityPrefix ← compileRawIdentityPrefix result orientation
   let execution : IntrinsicExecutionResidual identityPrefix.program.target context :=
     { body := residual.body
@@ -2434,11 +2798,10 @@ private def compileRawRelationJoinResidual
       orientation
   have trackedEmpty : compiled.tracked = [] :=
     List.eq_nil_of_length_eq_zero compiled.trackedLength
-  let constructionLanding ←
-    requireOption .redundancyMismatch <|
-      ConcreteIsoSearch.findConcreteIso?
-        compiled.construction.1.val rawTarget.val
-  let compiled := compiled.retarget rawTarget constructionLanding
+  let conformance ←
+    requireOption .allocationMismatch <|
+      rawJoinConstructionConformance? compiled.program.target result
+        (rawSourceSites result) (identityPrefix.requestNodes.map Prod.fst)
   let program := identityPrefix.program.append compiled.program
   pure
     { program := program
@@ -2448,7 +2811,7 @@ private def compileRawRelationJoinResidual
         rw [show program.target = compiled.program.target by
           exact PrimitiveProgram.target_append identityPrefix.program
             compiled.program]
-        exact compiled.construction.2 }
+        exact conformance.constructionIso }
 
 /-- A successful join compilation and its independently checked redundancy. -/
 structure CompiledRelationJoin
@@ -2556,8 +2919,8 @@ private def compileAppliedRelationJoin
       parameterSignatures := monolithic.parameterSignatures }
   let residual := initialIntrinsicResidual monolithic
   let compiled ←
-    compileRawRelationJoinResidual source monolithic.plainFinal
-      monolithic.concreteResult residual input.orientation
+    compileRawRelationJoinResidual source monolithic.concreteResult residual
+      input.orientation
   pure
     { monolithic := monolithic
       arguments := arguments
@@ -2601,8 +2964,7 @@ def compileRelationSever
       receipt.inverseChecked receipt.inverse
   let planned ←
     compileRawRelationJoinResidual receipt.result.checked
-      receipt.inverse.plainFinal receipt.inverse residual
-      inverseInput.orientation
+      receipt.inverse residual inverseInput.orientation
   let reconstruction ←
     requireOption .redundancyMismatch <|
       ConcreteIsoSearch.findConcreteIso?
