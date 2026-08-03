@@ -121,3 +121,169 @@ bidirectional, injective, and signature-preserving; no caller evidence,
 isomorphism search, compatibility wrapper, fallback, compiler-adequacy edit,
 or change to the other 32 cases was introduced. The protected dirty files and
 the preserved `OpenIsomorphism.lean` draft were not touched.
+
+## Receipt migration resume — BLOCKED on normalization provenance
+
+The double-cut prerequisite from `e2b2eae` was verified at current HEAD, but
+the resumed all-34 receipt migration reached the next owner prerequisite before
+any repository source edit.
+
+`ConcreteDiagram.IdentityRewrite` in
+`VisualProof/Diagram/Concrete/IdentityNormalization.lean:43-59` stores the
+exact rewrite kind and target plus only one wire action:
+
+- total `wireImage : source.val.WireId → target.val.WireId`; and
+- its signature-preservation theorem.
+
+`IdentityNormalizationTrace.wireImage` and
+`IdentityNormalization.wireImage` (`IdentityNormalization.lean:247-303`)
+compose and expose only that logical action. No partial external-identity image
+or injectivity theorem exists.
+
+This is materially insufficient in the collapse branch.
+`collapseWireTransport` in
+`VisualProof/Diagram/Concrete/IdentityNormalizationTransport.lean:162-181`
+maps every absorbed incident wire to `eligible.survivor`. The logical action is
+therefore intentionally coalescing and cannot be used as the injective external
+provenance composed after a raw proof step.
+
+The precise missing normalization-owner interface is:
+
+```lean
+IdentityRewrite.externalImage? :
+  source.val.WireId → Option rewrite.target.val.WireId
+
+IdentityRewrite.externalImage_injective :
+  ∀ {left right mapped},
+    rewrite.externalImage? left = some mapped →
+    rewrite.externalImage? right = some mapped →
+    left = right
+
+IdentityRewrite.externalImage_signature :
+  ∀ {wire mapped},
+    rewrite.externalImage? wire = some mapped →
+    (rewrite.target.val.wires mapped).sig = (source.val.wires wire).sig
+```
+
+with corresponding composition and laws on `IdentityNormalizationTrace` and
+`IdentityNormalization`. The owner semantics must be construction-derived:
+
+- drop and fusion retain every source wire through their exact positional
+  carrier;
+- collapse retains the designated `eligible.survivor` and every wire outside
+  `eligible.second :: eligible.rest`; and
+- each absorbed collapse wire maps to `none` in external provenance even
+  though logical `wireImage` maps it to the survivor.
+
+Until this distinction exists, sealing `StepReceipt` would require either
+using a coalescing logical map as provenance or inventing an all-`none`, search,
+or caller-supplied fallback. All are prohibited by the controlling contract.
+The migration therefore stopped without partial constructor changes.
+
+No repository source was edited, no validation was rerun because behavior did
+not change, and no commit was created. The two protected dirty files and the
+untracked `VisualProof/Diagram/Concrete/OpenIsomorphism.lean` draft remain
+untouched. Foundation evidence:
+`/tmp/task-11-receipt-migration-foundation-20260803.md`.
+
+## Normalization external provenance slice
+
+**Status:** COMPLETE — eager identity normalization now owns an injective,
+signature-preserving partial external identity map independently of its total
+logical wire image.
+
+**Foundation record:**
+`/tmp/vpa-task11-normalization-provenance-foundation-20260803.md`
+
+**API and ownership:** `IdentityRewrite` construction is sealed and exposes
+`externalImage?`, `externalImage_injective`, and
+`externalImage_signature`. Drop and fusion derive total external images from
+their stable dense positions. Collapse derives its partial image from the
+canonical `retainedWires` index: the survivor and all nonabsorbed source wires
+remain, while every member of `eligible.second :: eligible.rest` maps to
+`none`; the unchanged logical `wireImage` still coalesces absorbed wires at the
+survivor. `IdentityNormalizationTrace` composes the partial maps with
+`Option.bind` and proves injectivity and signature preservation; the final
+`IdentityNormalization` exposes the same map and laws without importing the
+higher-level Step module.
+
+**Fixture evidence:**
+`VisualProof/Diagram/Concrete/IdentityNormalizationFixtures.lean` proves drop
+and fusion totality, exact positional images, collapse survivor/nonabsorbed
+retention, absorbed rejection alongside the distinct logical coalescing image,
+per-rewrite injectivity/signature preservation, and a two-step eager
+drop-then-collapse composition with final injectivity and signatures.
+
+**Validation:** `lake build
+VisualProof.Diagram.Concrete.IdentityNormalizationSemantics
+VisualProof.Diagram.Concrete.IdentityNormalizationFixtures
+VisualProof.Rule.StepFixtures`, full `lake build` (194 jobs), `npm run
+formal:size`, the focused `tests/architecture/lean-semantics.test.ts` closure
+gate (3 tests), and `git diff --check` all passed. The compiler adequacy import
+closure remains normalization-free.
+
+**Commit:** `fac8e7d` (`feat: track normalization external provenance`)
+
+**Self-review:** logical normalization semantics and their total `wireImage`
+were not changed. External provenance is construction-derived rather than
+caller-supplied; collapse never maps an absorbed distinct identity to its
+survivor, while repeated uses of one surviving source identity remain
+representable by consumers. No Step dependency, graph search, parallel graph
+model, fallback, compiler-adequacy edit, protected-file edit, or modification
+of the preserved `OpenIsomorphism.lean` draft was introduced.
+
+## Receipt migration resume — BLOCKED on structural insertion carrier laws
+
+The normalization prerequisite from `fac8e7d` was verified at current HEAD.
+The restarted constructor-order audit then stopped at the first exact
+`ProofStep` constructor, `refSpawn`, before any Lean source edit.
+
+`WirePrimitive.CompiledPrimitiveStep.refSpawn` retains a checked
+`StructuralInsertionReceipt`. That receipt correctly owns the concrete splice
+and exposes the exact source-to-raw-target carrier:
+
+```lean
+StructuralInsertionReceipt.rawHostWire :
+  base.val.WireId -> checked.target.val.WireId
+```
+
+However, its public API exposes no injectivity or signature-preservation law
+for that carrier. `Structural.lean:268-281` exposes only the corresponding node
+injectivity theorem. The necessary evidence exists below the private receipt
+boundary as:
+
+```lean
+ConcreteSpliceAttachment.hostWire_injective
+ConcreteSpliceAttachment.diagram_wire_hostWire
+```
+
+in `VisualProof/Diagram/Concrete/Subgraph/SpliceRaw.lean:822-827` and
+`:1091-1097`, but `Step.lean` cannot access the receipt's private attachment.
+
+The precise missing owner interface is:
+
+```lean
+StructuralInsertionReceipt.rawHostWire_injective
+    (checked : StructuralInsertionReceipt input) :
+    Function.Injective checked.rawHostWire
+
+StructuralInsertionReceipt.rawHostWire_signature
+    (checked : StructuralInsertionReceipt input)
+    (wire : base.val.WireId) :
+    (checked.target.val.wires (checked.rawHostWire wire)).sig =
+      (base.val.wires wire).sig
+```
+
+These theorems must be proved inside the structural owner from the retained
+attachment. Re-proving them from representation details in `Step.lean`,
+accepting them as caller premises, or replacing the carrier with all-`none`
+provenance would violate receipt ownership. The same completed owner interface
+will serve `atomSpawn` and `identityInsert`, but the audit intentionally did not
+skip ahead past the first missing theorem.
+
+Per the repair contract, no partial receipt migration was made. No behavior
+changed, so validation was not rerun and no Lean source commit was created.
+The protected dirty files and the preserved untracked
+`VisualProof/Diagram/Concrete/OpenIsomorphism.lean` draft remain untouched.
+Foundation evidence:
+`/tmp/task-11-receipt-migration-foundation-20260803-r2.md`.
