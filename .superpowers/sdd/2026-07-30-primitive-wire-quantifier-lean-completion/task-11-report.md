@@ -287,3 +287,33 @@ The protected dirty files and the preserved untracked
 `VisualProof/Diagram/Concrete/OpenIsomorphism.lean` draft remain untouched.
 Foundation evidence:
 `/tmp/task-11-receipt-migration-foundation-20260803-r2.md`.
+
+## Insertion carrier slice
+
+**Status:** COMPLETE — `StructuralInsertionReceipt` now publicly owns the
+minimal checker-derived raw host-wire carrier laws needed by the `refSpawn`
+receipt route.
+
+**Foundation record:**
+`/tmp/vpa-task11-insertion-carrier-20260803-foundation.md`
+
+**API and ownership:** `StructuralInsertionReceipt.rawHostWire_injective`
+projects the private accepted `ConcreteSpliceAttachment.hostWire_injective`.
+`StructuralInsertionReceipt.rawHostWire_signature` projects the attachment's
+generated target wire-table law, `diagram_wire_hostWire`. The concrete
+attachment remains private; no search, alternative carrier, fallback, or
+insertion redesign was introduced.
+
+**Fixture evidence:** `StructuralFixtures` proves, for the existing accepted
+insertion, both injectivity of `rawHostWire` and pointwise signature
+preservation from base wire to raw target wire.
+
+**Validation:** `lake build VisualProof.Rule.StructuralFixtures
+VisualProof.Rule.StepFixtures`, full `lake build` (194 jobs), `npm run
+formal:size`, and `git diff --check` passed. Existing lint warnings only.
+
+**Source commit:** `784bb84` (`feat: expose structural insertion wire carrier
+laws`)
+
+**Concerns:** None for this slice. The broader `StepReceipt` authority
+migration remains deliberately unimplemented.
