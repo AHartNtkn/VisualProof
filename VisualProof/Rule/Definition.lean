@@ -2,6 +2,7 @@ import VisualProof.Diagram.Concrete.OpenCompilation
 import VisualProof.Diagram.Concrete.Subgraph.Extract
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationInsertion
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
+import VisualProof.Diagram.Concrete.Subgraph.RemovalSpliceWireImage
 import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 import VisualProof.Rule.Tag
 import VisualProof.Theory.Semantics
@@ -427,6 +428,103 @@ def target
     CheckedDiagram definitions.intrinsic.signatures :=
   applied.result.checked
 
+/-- Whether the unfold owner retained one source identity through removal of
+the folded-reference occurrence. -/
+def rawWireRetained
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    (wire : source.val.WireId) : Prop :=
+  wire ∈ Removal.wires applied.occurrence
+
+instance rawWireRetainedDecidable
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    (wire : source.val.WireId) :
+    Decidable (applied.rawWireRetained wire) := by
+  unfold rawWireRetained
+  infer_instance
+
+/-- Exact raw target identity of one retained source wire, composed inside the
+opaque unfold owner from its removal index and accepted body attachment. -/
+def rawRetainedWire
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    (wire : source.val.WireId)
+    (retained : applied.rawWireRetained wire) :
+    applied.target.val.WireId :=
+  applied.attachment.hostWire
+    (Removal.wireIndex applied.occurrence wire retained)
+
+/-- Partial raw source-wire image through the accepted unfold replacement. -/
+def rawWireImage?
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    (wire : source.val.WireId) : Option applied.target.val.WireId :=
+  Reconstruction.removalSpliceWireImage?
+    applied.occurrence applied.removed applied.attachment wire
+
+/-- Every retained unfold-source wire has its exact owner-derived image. -/
+theorem rawWireImage_of_mem
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    (wire : source.val.WireId)
+    (retained : applied.rawWireRetained wire) :
+    applied.rawWireImage? wire =
+      some (applied.rawRetainedWire wire retained) := by
+  exact Reconstruction.removalSpliceWireImage_of_mem
+    applied.occurrence applied.removed applied.attachment wire retained
+
+/-- A wire removed with the folded-reference occurrence has no target identity. -/
+theorem rawWireImage_eq_none_of_not_mem
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    (wire : source.val.WireId)
+    (removed : ¬ applied.rawWireRetained wire) :
+    applied.rawWireImage? wire = none := by
+  exact Reconstruction.removalSpliceWireImage_eq_none_of_not_mem
+    applied.occurrence applied.removed applied.attachment wire removed
+
+/-- Unfolding never identifies two surviving source wires. -/
+theorem rawWireImage_injective
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    {left right : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (leftMapped : applied.rawWireImage? left = some mapped)
+    (rightMapped : applied.rawWireImage? right = some mapped) :
+    left = right := by
+  exact Reconstruction.removalSpliceWireImage_injective
+    applied.occurrence applied.removed applied.attachment
+      leftMapped rightMapped
+
+/-- Every surviving unfold-source wire retains its exact signature. -/
+theorem rawWireImage_signature
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : UnfoldInput definitions source}
+    (applied : AppliedUnfold definitions source input)
+    {wire : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (mappedExact : applied.rawWireImage? wire = some mapped) :
+    (applied.target.val.wires mapped).sig =
+      (source.val.wires wire).sig := by
+  exact Reconstruction.removalSpliceWireImage_signature
+    applied.occurrence applied.removed applied.attachment mappedExact
+
 def tag
     {definitions : CheckedDefinitions}
     {source : CheckedDiagram definitions.intrinsic.signatures}
@@ -514,6 +612,103 @@ def target
     (applied : AppliedFold definitions source input) :
     CheckedDiagram definitions.intrinsic.signatures :=
   applied.result.checked
+
+/-- Whether the fold owner retained one source identity through removal of the
+stored-body occurrence. -/
+def rawWireRetained
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (_applied : AppliedFold definitions source input)
+    (wire : source.val.WireId) : Prop :=
+  wire ∈ Removal.wires input.occurrence
+
+instance rawWireRetainedDecidable
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    (wire : source.val.WireId) :
+    Decidable (applied.rawWireRetained wire) := by
+  unfold rawWireRetained
+  infer_instance
+
+/-- Exact raw target identity of one retained source wire, composed inside the
+opaque fold owner from its removal index and accepted reference attachment. -/
+def rawRetainedWire
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    (wire : source.val.WireId)
+    (retained : applied.rawWireRetained wire) :
+    applied.target.val.WireId :=
+  applied.attachment.hostWire
+    (Removal.wireIndex input.occurrence wire retained)
+
+/-- Partial raw source-wire image through the accepted fold replacement. -/
+def rawWireImage?
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    (wire : source.val.WireId) : Option applied.target.val.WireId :=
+  Reconstruction.removalSpliceWireImage?
+    input.occurrence applied.removed applied.attachment wire
+
+/-- Every retained fold-source wire has its exact owner-derived image. -/
+theorem rawWireImage_of_mem
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    (wire : source.val.WireId)
+    (retained : applied.rawWireRetained wire) :
+    applied.rawWireImage? wire =
+      some (applied.rawRetainedWire wire retained) := by
+  exact Reconstruction.removalSpliceWireImage_of_mem
+    input.occurrence applied.removed applied.attachment wire retained
+
+/-- A wire removed with the stored-body occurrence has no target identity. -/
+theorem rawWireImage_eq_none_of_not_mem
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    (wire : source.val.WireId)
+    (removed : ¬ applied.rawWireRetained wire) :
+    applied.rawWireImage? wire = none := by
+  exact Reconstruction.removalSpliceWireImage_eq_none_of_not_mem
+    input.occurrence applied.removed applied.attachment wire removed
+
+/-- Folding never identifies two surviving source wires. -/
+theorem rawWireImage_injective
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    {left right : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (leftMapped : applied.rawWireImage? left = some mapped)
+    (rightMapped : applied.rawWireImage? right = some mapped) :
+    left = right := by
+  exact Reconstruction.removalSpliceWireImage_injective
+    input.occurrence applied.removed applied.attachment
+      leftMapped rightMapped
+
+/-- Every surviving fold-source wire retains its exact signature. -/
+theorem rawWireImage_signature
+    {definitions : CheckedDefinitions}
+    {source : CheckedDiagram definitions.intrinsic.signatures}
+    {input : FoldInput definitions source}
+    (applied : AppliedFold definitions source input)
+    {wire : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (mappedExact : applied.rawWireImage? wire = some mapped) :
+    (applied.target.val.wires mapped).sig =
+      (source.val.wires wire).sig := by
+  exact Reconstruction.removalSpliceWireImage_signature
+    input.occurrence applied.removed applied.attachment mappedExact
 
 def tag
     {definitions : CheckedDefinitions}

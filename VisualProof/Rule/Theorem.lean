@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.Subgraph.FactorizationInsertion
 import VisualProof.Diagram.Concrete.Subgraph.Reconstruction
+import VisualProof.Diagram.Concrete.Subgraph.RemovalSpliceWireImage
 import VisualProof.Diagram.Concrete.Subgraph.SpliceRaw
 import VisualProof.Rule.Orientation
 import VisualProof.Rule.Tag
@@ -240,6 +241,96 @@ def target
     (applied : AppliedTheorem definitions source input) :
     CheckedDiagram definitions.signatures :=
   applied.result.checked
+
+/-- Whether the theorem owner retained one source identity through occurrence
+removal.  This classification does not expose either private receipt. -/
+def rawWireRetained
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (_applied : AppliedTheorem definitions source input)
+    (wire : source.val.WireId) : Prop :=
+  wire ∈ Removal.wires input.occurrence
+
+instance rawWireRetainedDecidable
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    (wire : source.val.WireId) :
+    Decidable (applied.rawWireRetained wire) := by
+  unfold rawWireRetained
+  infer_instance
+
+/-- Exact raw target identity of one retained source wire.  The owner composes
+its private occurrence-removal index with its private accepted replacement
+attachment; neither receipt is exposed. -/
+def rawRetainedWire
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    (wire : source.val.WireId)
+    (retained : applied.rawWireRetained wire) :
+    applied.target.val.WireId :=
+  applied.attachment.hostWire
+    (Removal.wireIndex input.occurrence wire retained)
+
+/-- Partial raw source-wire image through the accepted theorem replacement. -/
+def rawWireImage?
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    (wire : source.val.WireId) : Option applied.target.val.WireId :=
+  Reconstruction.removalSpliceWireImage?
+    input.occurrence applied.removed applied.attachment wire
+
+/-- Every retained theorem-source wire has its exact owner-derived image. -/
+theorem rawWireImage_of_mem
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    (wire : source.val.WireId)
+    (retained : applied.rawWireRetained wire) :
+    applied.rawWireImage? wire =
+      some (applied.rawRetainedWire wire retained) := by
+  exact Reconstruction.removalSpliceWireImage_of_mem
+    input.occurrence applied.removed applied.attachment wire retained
+
+/-- A wire removed with the cited theorem occurrence has no target identity. -/
+theorem rawWireImage_eq_none_of_not_mem
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    (wire : source.val.WireId)
+    (removed : ¬ applied.rawWireRetained wire) :
+    applied.rawWireImage? wire = none := by
+  exact Reconstruction.removalSpliceWireImage_eq_none_of_not_mem
+    input.occurrence applied.removed applied.attachment wire removed
+
+/-- The theorem replacement never identifies two surviving source wires. -/
+theorem rawWireImage_injective
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    {left right : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (leftMapped : applied.rawWireImage? left = some mapped)
+    (rightMapped : applied.rawWireImage? right = some mapped) :
+    left = right := by
+  exact Reconstruction.removalSpliceWireImage_injective
+    input.occurrence applied.removed applied.attachment
+      leftMapped rightMapped
+
+/-- Every surviving theorem-source wire retains its exact signature. -/
+theorem rawWireImage_signature
+    {source : CheckedDiagram definitions.signatures}
+    {input : TheoremApplication (definitions := definitions) source}
+    (applied : AppliedTheorem definitions source input)
+    {wire : source.val.WireId}
+    {mapped : applied.target.val.WireId}
+    (mappedExact : applied.rawWireImage? wire = some mapped) :
+    (applied.target.val.wires mapped).sig =
+      (source.val.wires wire).sig := by
+  exact Reconstruction.removalSpliceWireImage_signature
+    input.occurrence applied.removed applied.attachment mappedExact
 
 def tag
     {source : CheckedDiagram definitions.signatures}

@@ -41,6 +41,255 @@ private def unfolded : AppliedUnfold firstDefinitions foldedSource unfoldInput :
 
 example : unfolded.tag = .unfold := rfl
 
+/-! Replacement carrier fixtures use an occurrence with both a repeated
+boundary survivor and genuinely internal removed wires. -/
+
+private structure MainPatternCompilationReceipt where
+  compilation : OpenCompilation OccurrenceFixtures.mainPattern
+  accepted : compileOpen OccurrenceFixtures.mainPattern = some compilation
+
+private def mainPatternCompilationReceipt :
+    MainPatternCompilationReceipt := by
+  match accepted : compileOpen OccurrenceFixtures.mainPattern with
+  | none =>
+      have present :
+          (compileOpen OccurrenceFixtures.mainPattern).isSome = true := by
+        native_decide
+      rw [accepted] at present
+      contradiction
+  | some compilation => exact ⟨compilation, accepted⟩
+
+private def replacementRuleTheorem : RuleTheorem.{0} Definitions.nil where
+  arguments := checkedBoundarySigs OccurrenceFixtures.mainPattern
+  left := OccurrenceFixtures.mainPattern
+  right := OccurrenceFixtures.mainPattern
+  leftBoundary := rfl
+  rightBoundary := rfl
+  leftCompilation := mainPatternCompilationReceipt.compilation
+  leftCompilationAccepted := mainPatternCompilationReceipt.accepted
+  rightCompilation := mainPatternCompilationReceipt.compilation
+  rightCompilationAccepted := mainPatternCompilationReceipt.accepted
+  valid := by
+    intro _model _definitionEnv _lawful _values sourceDenotes
+    exact sourceDenotes
+
+private def replacementTheoremInput :
+    TheoremApplication (definitions := Definitions.nil)
+      OccurrenceFixtures.mainHost :=
+  .forward replacementRuleTheorem .forward OccurrenceFixtures.mainOccurrence
+
+private def replacementTheoremApplied :
+    AppliedTheorem Definitions.nil OccurrenceFixtures.mainHost
+      replacementTheoremInput :=
+  (applyTheorem Definitions.nil OccurrenceFixtures.mainHost
+    replacementTheoremInput).toOption.get (by native_decide)
+
+private theorem theoremBoundaryRetained :
+    replacementTheoremApplied.rawWireRetained
+      OccurrenceFixtures.mainBoundaryWire := by
+  native_decide
+
+private theorem theoremInternalRemoved :
+    ¬ replacementTheoremApplied.rawWireRetained
+      OccurrenceFixtures.mainChildWire := by
+  native_decide
+
+/-- Accepted theorem replacement maps its repeated boundary survivor. -/
+example :
+    replacementTheoremApplied.rawWireImage?
+        OccurrenceFixtures.mainBoundaryWire =
+      some (replacementTheoremApplied.rawRetainedWire
+        OccurrenceFixtures.mainBoundaryWire theoremBoundaryRetained) :=
+  replacementTheoremApplied.rawWireImage_of_mem
+    OccurrenceFixtures.mainBoundaryWire theoremBoundaryRetained
+
+/-- The same accepted theorem replacement rejects an internal removed wire. -/
+example :
+    replacementTheoremApplied.rawWireImage?
+      OccurrenceFixtures.mainChildWire = none :=
+  replacementTheoremApplied.rawWireImage_eq_none_of_not_mem
+    OccurrenceFixtures.mainChildWire theoremInternalRemoved
+
+/-- The accepted theorem carrier is injective on every successful image. -/
+example {left right : OccurrenceFixtures.mainHost.val.WireId}
+    {mapped : replacementTheoremApplied.target.val.WireId}
+    (leftMapped : replacementTheoremApplied.rawWireImage? left = some mapped)
+    (rightMapped : replacementTheoremApplied.rawWireImage? right = some mapped) :
+    left = right :=
+  replacementTheoremApplied.rawWireImage_injective leftMapped rightMapped
+
+/-- The accepted theorem carrier preserves the retained boundary signature. -/
+example :
+    (replacementTheoremApplied.target.val.wires
+      (replacementTheoremApplied.rawRetainedWire
+        OccurrenceFixtures.mainBoundaryWire theoremBoundaryRetained)).sig =
+      (OccurrenceFixtures.mainHost.val.wires
+        OccurrenceFixtures.mainBoundaryWire).sig :=
+  replacementTheoremApplied.rawWireImage_signature
+    (replacementTheoremApplied.rawWireImage_of_mem
+      OccurrenceFixtures.mainBoundaryWire theoremBoundaryRetained)
+
+private def replacementDefinitions : CheckedDefinitions :=
+  (CheckedDefinitions.nil.snoc
+    OccurrenceFixtures.mainPattern).toOption.get (by native_decide)
+
+private structure ReplacementBodyReceipt where
+  body : ResolvedDefinitionBody replacementDefinitions.intrinsic
+    (checkedBoundarySigs OccurrenceFixtures.mainPattern)
+  accepted : replacementDefinitions.resolveBody
+      (.here : DefVar replacementDefinitions.intrinsic.signatures
+        (checkedBoundarySigs OccurrenceFixtures.mainPattern)) = .ok body
+
+private def replacementBodyReceipt : ReplacementBodyReceipt := by
+  match accepted : replacementDefinitions.resolveBody
+      (.here : DefVar replacementDefinitions.intrinsic.signatures
+        (checkedBoundarySigs OccurrenceFixtures.mainPattern)) with
+  | .error _ =>
+      have present :
+          (replacementDefinitions.resolveBody
+            (.here : DefVar replacementDefinitions.intrinsic.signatures
+              (checkedBoundarySigs OccurrenceFixtures.mainPattern))).toOption.isSome =
+            true := by
+        native_decide
+      rw [accepted] at present
+      change false = true at present
+      contradiction
+  | .ok body => exact ⟨body, accepted⟩
+
+private def replacementBody := replacementBodyReceipt.body
+
+private def replacementReference :
+    CheckedReferenceFragment replacementDefinitions.intrinsic.signatures
+      ⟨0, by native_decide⟩ :=
+  (checkReferenceFragment replacementDefinitions.intrinsic.signatures
+    ⟨0, by native_decide⟩).toOption.get (by native_decide)
+
+private def replacementFoldedSource :
+    CheckedDiagram replacementDefinitions.intrinsic.signatures :=
+  ⟨replacementReference.fragment.val.diagram,
+    replacementReference.fragment.property.diagram⟩
+
+private def replacementUnfoldInput :
+    UnfoldInput replacementDefinitions replacementFoldedSource where
+  node := ⟨0, by native_decide⟩
+
+private def replacementUnfolded :
+    AppliedUnfold replacementDefinitions replacementFoldedSource
+      replacementUnfoldInput :=
+  (applyUnfold replacementDefinitions replacementFoldedSource
+    replacementUnfoldInput).toOption.get (by native_decide)
+
+private def unfoldBoundaryWire : replacementFoldedSource.val.WireId :=
+  ⟨0, by native_decide⟩
+
+private theorem unfoldBoundaryRetained :
+    replacementUnfolded.rawWireRetained unfoldBoundaryWire := by
+  native_decide
+
+/-- Accepted unfolding maps its retained reference boundary exactly. -/
+example : replacementUnfolded.rawWireImage? unfoldBoundaryWire =
+    some (replacementUnfolded.rawRetainedWire
+      unfoldBoundaryWire unfoldBoundaryRetained) :=
+  replacementUnfolded.rawWireImage_of_mem
+    unfoldBoundaryWire unfoldBoundaryRetained
+
+/-- Every source identity in this canonical folded reference is retained, so
+there is no removed source wire to exercise in the unfold direction. -/
+example : ∀ wire : replacementFoldedSource.val.WireId,
+    replacementUnfolded.rawWireRetained wire := by
+  native_decide
+
+/-- The accepted unfold carrier is injective on every successful image. -/
+example {left right : replacementFoldedSource.val.WireId}
+    {mapped : replacementUnfolded.target.val.WireId}
+    (leftMapped : replacementUnfolded.rawWireImage? left = some mapped)
+    (rightMapped : replacementUnfolded.rawWireImage? right = some mapped) :
+    left = right :=
+  replacementUnfolded.rawWireImage_injective leftMapped rightMapped
+
+/-- The accepted unfold carrier preserves its retained boundary signature. -/
+example :
+    (replacementUnfolded.target.val.wires
+      (replacementUnfolded.rawRetainedWire
+        unfoldBoundaryWire unfoldBoundaryRetained)).sig =
+      (replacementFoldedSource.val.wires unfoldBoundaryWire).sig :=
+  replacementUnfolded.rawWireImage_signature
+    (replacementUnfolded.rawWireImage_of_mem
+      unfoldBoundaryWire unfoldBoundaryRetained)
+
+private def replacementBodySource :
+    CheckedDiagram replacementDefinitions.intrinsic.signatures :=
+  ⟨replacementBody.body.val.diagram, replacementBody.body.property.diagram⟩
+
+private def replacementBodyOccurrenceInput :
+    OccurrenceInput replacementBody.body replacementBodySource where
+  region := replacementBodySource.val.root
+  regionMap := fun region => region
+  nodeMap := fun node => node
+  wireMap := fun wire => wire
+
+private def replacementBodyOccurrence :
+    Occurrence replacementBody.body replacementBodySource :=
+  (checkOccurrence replacementBodyOccurrenceInput).toOption.get
+    (by native_decide)
+
+private def replacementFoldInput :
+    FoldInput replacementDefinitions replacementBodySource where
+  definition := ⟨0, by native_decide⟩
+  body := replacementBody
+  bodyAccepted := replacementBodyReceipt.accepted
+  occurrence := replacementBodyOccurrence
+
+private def replacementFolded :
+    AppliedFold replacementDefinitions replacementBodySource
+      replacementFoldInput :=
+  (applyFold replacementDefinitions replacementBodySource
+    replacementFoldInput).toOption.get (by native_decide)
+
+private def foldBoundaryWire : replacementBodySource.val.WireId :=
+  ⟨0, by native_decide⟩
+
+private def foldInternalWire : replacementBodySource.val.WireId :=
+  ⟨2, by native_decide⟩
+
+private theorem foldBoundaryRetained :
+    replacementFolded.rawWireRetained foldBoundaryWire := by
+  native_decide
+
+private theorem foldInternalRemoved :
+    ¬ replacementFolded.rawWireRetained foldInternalWire := by
+  native_decide
+
+/-- Accepted folding maps its retained body boundary exactly. -/
+example : replacementFolded.rawWireImage? foldBoundaryWire =
+    some (replacementFolded.rawRetainedWire
+      foldBoundaryWire foldBoundaryRetained) :=
+  replacementFolded.rawWireImage_of_mem
+    foldBoundaryWire foldBoundaryRetained
+
+/-- The same accepted fold rejects a genuinely internal body wire. -/
+example : replacementFolded.rawWireImage? foldInternalWire = none :=
+  replacementFolded.rawWireImage_eq_none_of_not_mem
+    foldInternalWire foldInternalRemoved
+
+/-- The accepted fold carrier is injective on every successful image. -/
+example {left right : replacementBodySource.val.WireId}
+    {mapped : replacementFolded.target.val.WireId}
+    (leftMapped : replacementFolded.rawWireImage? left = some mapped)
+    (rightMapped : replacementFolded.rawWireImage? right = some mapped) :
+    left = right :=
+  replacementFolded.rawWireImage_injective leftMapped rightMapped
+
+/-- The accepted fold carrier preserves its retained boundary signature. -/
+example :
+    (replacementFolded.target.val.wires
+      (replacementFolded.rawRetainedWire
+        foldBoundaryWire foldBoundaryRetained)).sig =
+      (replacementBodySource.val.wires foldBoundaryWire).sig :=
+  replacementFolded.rawWireImage_signature
+    (replacementFolded.rawWireImage_of_mem
+      foldBoundaryWire foldBoundaryRetained)
+
 private def fixtureReceipt
     (source rawTarget : CheckedDiagram definitions) :
     StepReceipt source rawTarget where
