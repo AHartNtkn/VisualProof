@@ -101,6 +101,18 @@ example (checked : StructuralInsertionReceipt insertionInput)
       (denoteChecked pre definitionEnv checked.target) :=
   checked.sound pre definitionEnv
 
+/-- An accepted insertion owns an injective raw host-wire carrier. -/
+example (checked : StructuralInsertionReceipt insertionInput) :
+    Function.Injective checked.rawHostWire :=
+  checked.rawHostWire_injective
+
+/-- An accepted insertion preserves signatures along its raw host-wire carrier. -/
+example (checked : StructuralInsertionReceipt insertionInput)
+    (wire : host.val.WireId) :
+    (checked.target.val.wires (checked.rawHostWire wire)).sig =
+      (host.val.wires wire).sig :=
+  checked.rawHostWire_signature wire
+
 /-- Backward erasure in a negative region has the flipped semantic direction. -/
 example (checked : StructuralErasureReceipt backwardNegativeErasureInput)
     (pre : PreModel) (definitionEnv : DefinitionEnv pre []) :

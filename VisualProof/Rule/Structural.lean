@@ -254,6 +254,27 @@ def rawHostWire
     (wire : base.val.WireId) : checked.target.val.WireId :=
   checked.attachment.hostWire wire
 
+/-- The checker-derived raw host-wire carrier never coalesces base wires. -/
+theorem rawHostWire_injective
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input) :
+    Function.Injective checked.rawHostWire :=
+  checked.attachment.hostWire_injective
+
+/-- The checker-derived raw host-wire carrier preserves each base signature. -/
+theorem rawHostWire_signature
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralInsertionInput base fragment}
+    (checked : StructuralInsertionReceipt input)
+    (wire : base.val.WireId) :
+    (checked.target.val.wires (checked.rawHostWire wire)).sig =
+      (base.val.wires wire).sig := by
+  simpa [target, rawHostWire, RawConcreteSpliceResult.checked] using
+    checked.attachment.diagram_wire_hostWire wire
+
 /-- Exact raw image of one inserted fragment node. -/
 def rawFragmentNode
     {base : CheckedDiagram definitions}
