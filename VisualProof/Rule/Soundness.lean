@@ -1106,3 +1106,231 @@ theorem applyFold_sound
         (bodyReconstructionCompilation.intrinsicAttachmentAt common).positions
         (insertion.intrinsicAttachmentAt common).positions positions env).symm).symm
   exact sourceInserted.trans (replacementEquivalent.trans targetInserted.symm)
+
+private theorem denoteOpen_cast_boundary
+    {definitions : List (List Sig)} {left right : List Sig}
+    (same : left = right)
+    (diagram : OpenDiagram definitions left)
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre definitions)
+    (values : BoundaryEnv pre left) :
+    denoteOpen pre definitionEnv diagram values ↔
+      denoteOpen pre definitionEnv (same ▸ diagram) (same ▸ values) := by
+  cases same
+  rfl
+
+private theorem theorem_application_open_equiv
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    (input : TheoremApplication.{u} (definitions := definitions) source)
+    (sourceCompilation : OpenCompilation input.sourceFragment)
+    (sourceCompilationAccepted :
+      compileOpen input.sourceFragment = some sourceCompilation)
+    (targetCompilation : OpenCompilation input.targetFragment)
+    (targetCompilationAccepted :
+      compileOpen input.targetFragment = some targetCompilation)
+    (sourceAttachment : SpliceAttachment sourceCompilation.openDiagram target)
+    (targetAttachment : SpliceAttachment targetCompilation.openDiagram target)
+    (model : Model.{u})
+    (definitionEnv : DefinitionEnv model.toPreModel definitions)
+    (env : Env model.toPreModel target)
+    (argumentValues :
+      input.sourceBoundary ▸ Vars.denote env sourceAttachment.positions =
+        input.targetBoundary ▸ Vars.denote env targetAttachment.positions) :
+    denoteOpen model.toPreModel definitionEnv sourceCompilation.openDiagram
+        (Vars.denote env sourceAttachment.positions) ↔
+    denoteOpen model.toPreModel definitionEnv targetCompilation.openDiagram
+        (Vars.denote env targetAttachment.positions) := by
+  cases input with
+  | forward statement orientation occurrence =>
+      have sourceExact : sourceCompilation = statement.leftCompilation :=
+        Option.some.inj
+          (sourceCompilationAccepted.symm.trans
+            statement.leftCompilationAccepted)
+      have targetExact : targetCompilation = statement.rightCompilation :=
+        Option.some.inj
+          (targetCompilationAccepted.symm.trans
+            statement.rightCompilationAccepted)
+      subst sourceCompilation
+      subst targetCompilation
+      have sourceCast :
+          denoteOpen model.toPreModel definitionEnv
+              statement.leftCompilation.openDiagram
+              (Vars.denote env sourceAttachment.positions) ↔
+            denoteOpen model.toPreModel definitionEnv
+              (statement.leftBoundary ▸
+                statement.leftCompilation.openDiagram)
+              (statement.leftBoundary ▸
+                Vars.denote env sourceAttachment.positions) := by
+        exact denoteOpen_cast_boundary statement.leftBoundary
+          statement.leftCompilation.openDiagram model.toPreModel definitionEnv
+          (Vars.denote env sourceAttachment.positions)
+      have targetCast :
+          denoteOpen model.toPreModel definitionEnv
+              statement.rightCompilation.openDiagram
+              (Vars.denote env targetAttachment.positions) ↔
+            denoteOpen model.toPreModel definitionEnv
+              (statement.rightBoundary ▸
+                statement.rightCompilation.openDiagram)
+              (statement.rightBoundary ▸
+                Vars.denote env targetAttachment.positions) := by
+        exact denoteOpen_cast_boundary statement.rightBoundary
+          statement.rightCompilation.openDiagram model.toPreModel definitionEnv
+          (Vars.denote env targetAttachment.positions)
+      have valid := statement.valid model definitionEnv
+        (statement.leftBoundary ▸
+          Vars.denote env sourceAttachment.positions)
+      have targetValues :
+          denoteOpen model.toPreModel definitionEnv
+              (statement.rightBoundary ▸
+                statement.rightCompilation.openDiagram)
+              (statement.leftBoundary ▸
+                Vars.denote env sourceAttachment.positions) ↔
+            denoteOpen model.toPreModel definitionEnv
+              (statement.rightBoundary ▸
+                statement.rightCompilation.openDiagram)
+              (statement.rightBoundary ▸
+                Vars.denote env targetAttachment.positions) :=
+        iff_of_eq (congrArg
+          (denoteOpen model.toPreModel definitionEnv
+            (statement.rightBoundary ▸
+              statement.rightCompilation.openDiagram))
+          argumentValues)
+      exact sourceCast.trans (valid.trans (targetValues.trans targetCast.symm))
+  | reverse statement orientation occurrence =>
+      have sourceExact : sourceCompilation = statement.rightCompilation :=
+        Option.some.inj
+          (sourceCompilationAccepted.symm.trans
+            statement.rightCompilationAccepted)
+      have targetExact : targetCompilation = statement.leftCompilation :=
+        Option.some.inj
+          (targetCompilationAccepted.symm.trans
+            statement.leftCompilationAccepted)
+      subst sourceCompilation
+      subst targetCompilation
+      have sourceCast :
+          denoteOpen model.toPreModel definitionEnv
+              statement.rightCompilation.openDiagram
+              (Vars.denote env sourceAttachment.positions) ↔
+            denoteOpen model.toPreModel definitionEnv
+              (statement.rightBoundary ▸
+                statement.rightCompilation.openDiagram)
+              (statement.rightBoundary ▸
+                Vars.denote env sourceAttachment.positions) := by
+        exact denoteOpen_cast_boundary statement.rightBoundary
+          statement.rightCompilation.openDiagram model.toPreModel definitionEnv
+          (Vars.denote env sourceAttachment.positions)
+      have targetCast :
+          denoteOpen model.toPreModel definitionEnv
+              statement.leftCompilation.openDiagram
+              (Vars.denote env targetAttachment.positions) ↔
+            denoteOpen model.toPreModel definitionEnv
+              (statement.leftBoundary ▸
+                statement.leftCompilation.openDiagram)
+              (statement.leftBoundary ▸
+                Vars.denote env targetAttachment.positions) := by
+        exact denoteOpen_cast_boundary statement.leftBoundary
+          statement.leftCompilation.openDiagram model.toPreModel definitionEnv
+          (Vars.denote env targetAttachment.positions)
+      have sourceValues :
+          denoteOpen model.toPreModel definitionEnv
+              (statement.rightBoundary ▸
+                statement.rightCompilation.openDiagram)
+              (statement.rightBoundary ▸
+                Vars.denote env sourceAttachment.positions) ↔
+            denoteOpen model.toPreModel definitionEnv
+              (statement.rightBoundary ▸
+                statement.rightCompilation.openDiagram)
+              (statement.leftBoundary ▸
+                Vars.denote env targetAttachment.positions) :=
+        iff_of_eq (congrArg
+          (denoteOpen model.toPreModel definitionEnv
+            (statement.rightBoundary ▸
+              statement.rightCompilation.openDiagram))
+          argumentValues)
+      have valid := (statement.valid model definitionEnv
+        (statement.leftBoundary ▸
+          Vars.denote env targetAttachment.positions)).symm
+      exact sourceCast.trans (sourceValues.trans (valid.trans targetCast.symm))
+
+private theorem directed_of_iff (orientation : Orientation)
+    {source target : Prop} (equivalent : source ↔ target) :
+    Directed orientation source target := by
+  cases orientation with
+  | forward => exact equivalent.mp
+  | backward => exact equivalent.mpr
+
+/-- A checked pinned theorem replacement has the replay direction certified by
+the cited theorem, including repeated ordered boundary attachments. -/
+theorem theorem_application_sound
+    {definitions : List (List Sig)}
+    (source : CheckedDiagram definitions)
+    (input : TheoremApplication.{u} (definitions := definitions) source)
+    (applied : AppliedTheorem.{u} source input)
+    (model : Model.{u})
+    (definitionEnv : DefinitionEnv model.toPreModel definitions) :
+    Directed input.orientation
+      (denoteChecked model.toPreModel definitionEnv source)
+      (denoteChecked model.toPreModel definitionEnv applied.target) := by
+  induction applied using AppliedTheorem.rec
+  rename_i siteCompilation legal sourceCompilation sourceCompilationAccepted
+    targetCompilation targetCompilationAccepted removed removedAccepted
+    reconstruction reconstructionAccepted reconstructionIso
+    reconstructionIsoAccepted reconstructionCompilation
+    reconstructionCompilationAccepted attachment boundaryTargets insertion
+    insertionAccepted result resultAccepted
+  change Directed input.orientation
+    (denoteChecked model.toPreModel definitionEnv source)
+    (denoteChecked model.toPreModel definitionEnv result.checked)
+  let reconstructionChecked : CheckedDiagram definitions :=
+    ⟨reconstruction.diagram, reconstructionCompilation.generated_wellFormed⟩
+  have sourceInserted :
+      denoteChecked model.toPreModel definitionEnv source ↔
+        denoteRegion model.toPreModel definitionEnv Env.empty
+          reconstructionCompilation.inserted :=
+    (iso_denotation (left := reconstructionChecked) (right := source)
+      reconstructionIso model.toPreModel definitionEnv).symm.trans
+        (reconstructionCompilation.generated_checked_denotes_inserted
+          model.toPreModel definitionEnv)
+  obtain ⟨resultCompilation, resultCompilationAccepted, targetInserted⟩ :=
+    denote_splice targetCompilation attachment result resultAccepted
+      model.toPreModel definitionEnv
+  have resultCompilationExact : resultCompilation = insertion :=
+    Option.some.inj
+      (resultCompilationAccepted.symm.trans insertionAccepted)
+  subst resultCompilation
+  have signatures : checkedBoundarySigs input.sourceFragment =
+      checkedBoundarySigs input.targetFragment :=
+    input.sourceBoundary.trans input.targetBoundary.symm
+  have boundaryLength : input.sourceFragment.val.boundary.length =
+      input.targetFragment.val.boundary.length :=
+    input.boundaryLength.symm
+  have targets : ∀ position : Fin input.sourceFragment.val.boundary.length,
+      reconstruction.target position =
+        attachment.target (Fin.cast boundaryLength position) := by
+    intro position
+    have exactTarget :=
+      (boundaryTargets (Fin.cast input.boundaryLength.symm position)).symm
+    simpa only [Fin.cast_cast] using exactTarget
+  let common := reconstructionCompilation.site
+  have positions := insertion_positions_eq reconstructionCompilation insertion
+    common signatures boundaryLength targets
+  have replacementEquivalent :
+      denoteRegion model.toPreModel definitionEnv Env.empty
+          reconstructionCompilation.inserted ↔
+        denoteRegion model.toPreModel definitionEnv Env.empty
+          insertion.inserted := by
+    rw [reconstructionCompilation.inserted_eq_insertedAt common,
+      insertion.inserted_eq_insertedAt common]
+    apply insertion_denotation_equiv
+    intro env
+    exact theorem_application_open_equiv input sourceCompilation
+      sourceCompilationAccepted targetCompilation targetCompilationAccepted
+      (reconstructionCompilation.intrinsicAttachmentAt common)
+      (insertion.intrinsicAttachmentAt common) model definitionEnv env
+      (boundary_argument_values_eq signatures input.sourceBoundary
+        input.targetBoundary
+        (reconstructionCompilation.intrinsicAttachmentAt common).positions
+        (insertion.intrinsicAttachmentAt common).positions positions env)
+  exact directed_of_iff input.orientation
+    (sourceInserted.trans (replacementEquivalent.trans targetInserted.symm))

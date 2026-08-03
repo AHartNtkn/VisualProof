@@ -171,6 +171,10 @@ structure AppliedTheorem
       some reconstructionCompilation
   private attachment : ConcreteSpliceAttachment removed.complement
     removed.site input.targetFragment
+  private boundaryTargets :
+    ∀ position : Fin input.targetFragment.val.boundary.length,
+      attachment.target position =
+        reconstruction.target (Fin.cast input.boundaryLength position)
   private insertion : InsertionCompilation targetCompilation attachment
   private insertionAccepted :
     compileInsertion? targetCompilation attachment = some insertion
@@ -272,7 +276,19 @@ def applyTheorem
                                                 reconstructionIsoAccepted
                                                 reconstructionCompilation
                                                 reconstructionCompilationAccepted
-                                                attachment insertion
+                                                attachment
+                                                (by
+                                                  intro position
+                                                  have exactTarget := congrFun
+                                                    (checkConcreteSpliceAttachment_target
+                                                      removed.complement
+                                                      removed.site
+                                                      input.targetFragment target
+                                                      attachment
+                                                      attachmentAccepted)
+                                                    position
+                                                  simpa [target] using exactTarget)
+                                                insertion
                                                 insertionAccepted result
                                                 resultAccepted)
       else
