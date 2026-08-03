@@ -483,8 +483,24 @@ private theorem compileNodes?_cons_eq_singleton_bind
         let tailItems ←
           ConcreteElaboration.compileNodes? definitions diagram context nodes
         pure (headItems.append tailItems)) := by
-  simp [ConcreteElaboration.compileNodes?, ItemSeq.append,
-    Option.bind_assoc]
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context
+    (node :: nodes)]
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context
+    [node]]
+  simp only
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context []]
+  cases headCompiled :
+      ConcreteElaboration.Internal.compileNode? definitions diagram context
+        node with
+  | none =>
+      simp
+  | some head =>
+      cases tailCompiled :
+          ConcreteElaboration.compileNodes? definitions diagram context nodes with
+      | none =>
+          simp
+      | some tail =>
+          simp [ItemSeq.append]
 
 private theorem compileNodes?_cons_split
     (definitions : List (List Sig))
@@ -597,9 +613,9 @@ private theorem survivingNodes_natural
           (ItemSeq.nil : ItemSeq definitions context.sigs) =
             sourceItems :=
         Option.some.inj (by
-          simpa [ConcreteElaboration.compileNodes?] using sourceCompiled)
+          simpa [ConcreteElaboration.compileNodes?_equation] using sourceCompiled)
       subst sourceItems
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?], rfl⟩
+      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?_equation], rfl⟩
   | cons target tail induction =>
       intro sourceItems sourceCompiled
       obtain ⟨sourceHead, sourceTail, headCompiled, tailCompiled,
@@ -970,7 +986,8 @@ private theorem dropNode_filter_denotation
       denoteItemSeq pre definitionEnv env fullItems := by
   induction nodes generalizing fullItems filteredItems with
   | nil =>
-      simp [ConcreteElaboration.compileNodes?] at fullCompiled filteredCompiled
+      simp [ConcreteElaboration.compileNodes?_equation] at fullCompiled
+      simp [ConcreteElaboration.compileNodes?_equation] at filteredCompiled
       subst fullItems
       subst filteredItems
       rfl
@@ -1027,7 +1044,7 @@ private theorem compileNodes?_filter_drop
   induction nodes with
   | nil =>
       intro items compiled
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?]⟩
+      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?_equation]⟩
   | cons head tail induction =>
       intro items compiled
       obtain ⟨headItems, tailItems, headCompiled, tailCompiled, _⟩ :=
@@ -1481,9 +1498,9 @@ private theorem survivingNodes_natural_extended
             ItemSeq definitions (context.extend region).sigs) =
             sourceItems :=
         Option.some.inj (by
-          simpa [ConcreteElaboration.compileNodes?] using sourceCompiled)
+          simpa [ConcreteElaboration.compileNodes?_equation] using sourceCompiled)
       subst sourceItems
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?], rfl⟩
+      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?_equation], rfl⟩
   | cons target tail induction =>
       intro sourceItems sourceCompiled
       obtain ⟨sourceHead, sourceTail, headCompiled, tailCompiled,
@@ -1811,14 +1828,15 @@ private theorem compileRegion_denotation
   | zero =>
       intro context region sourceAbove candidateContext contextEquality
         targetAbove targetEnv sourceBody targetBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simpa using sourceCompiled
   | succ fuel induction =>
       intro context region sourceAbove candidateContext contextEquality
         targetAbove targetEnv sourceBody targetBody sourceCompiled
         targetCompiled
       subst candidateContext
       simp only [contextRenamingInto_self]
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
+      simp only [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      simp only [ConcreteElaboration.compileRegion?_succ] at targetCompiled
       cases sourceNodesEq :
           ConcreteElaboration.compileNodes? definitions source.val
             (context.extend region) (source.val.nodesAt region) with

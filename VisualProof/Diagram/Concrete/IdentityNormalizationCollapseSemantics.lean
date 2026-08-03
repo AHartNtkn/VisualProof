@@ -809,12 +809,12 @@ private theorem compileNodes_cons_components
       ConcreteElaboration.compileNodes? definitions diagram context tail =
           some rest ∧
       items = .cons head rest := by
-  simp only [ConcreteElaboration.compileNodes?] at compiled
+  rw [ConcreteElaboration.compileNodes?_equation] at compiled
   obtain ⟨head, rest, headEquation, restEquation, itemsEquation⟩ :=
     option_bind₂_eq_some compiled
   subst items
   refine ⟨head, rest, ?_, restEquation, rfl⟩
-  simp only [ConcreteElaboration.compileNodes?]
+  simp only [ConcreteElaboration.compileNodes?_equation]
   rw [headEquation]
   rfl
 
@@ -839,7 +839,7 @@ private theorem denote_compileNodes_iff_singletons
           denoteItem pre definitionEnv env item := by
   induction nodes generalizing items with
   | nil =>
-      simp only [ConcreteElaboration.compileNodes?] at compiled
+      simp only [ConcreteElaboration.compileNodes?_equation] at compiled
       have itemsEmpty : items = .nil := Option.some.inj compiled.symm
       subst items
       simp
@@ -1987,12 +1987,13 @@ private theorem compileRegion_equiv
       intro sourceContext targetContext related region _sourceAbove _targetAbove
         sourceEnv targetEnv _outerRelated _sourceOnePoint sourceBody targetBody
         sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simpa using sourceCompiled
   | succ fuel induction =>
       intro sourceContext targetContext related region _sourceAbove _targetAbove
         sourceEnv targetEnv _outerRelated _sourceOnePoint sourceBody targetBody
         sourceCompiled targetCompiled
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
+      simp only [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      simp only [ConcreteElaboration.compileRegion?_succ] at targetCompiled
       cases sourceNodesEquation :
           ConcreteElaboration.compileNodes? definitions source.val
             (sourceContext.extend region) (source.val.nodesAt region) with
