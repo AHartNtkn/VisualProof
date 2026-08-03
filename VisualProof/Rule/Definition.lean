@@ -31,13 +31,42 @@ def referenceFragmentRaw
 /-- Checked canonical folded-reference fragment. -/
 structure CheckedReferenceFragment
     (definitions : List (List Sig))
-    (definition : Fin definitions.length) where
-  fragment : CheckedOpenDiagram definitions
-  generated : fragment.val = referenceFragmentRaw definitions definition
-  boundaryLength :
-    fragment.val.boundary.length = (definitions.get definition).length
-  boundarySignatures :
-    checkedBoundarySigs fragment = definitions.get definition
+    (definition : Fin definitions.length) : Type where
+  wellFormed :
+    (referenceFragmentRaw definitions definition).WellFormed definitions
+
+namespace CheckedReferenceFragment
+
+def fragment
+    (checked : CheckedReferenceFragment definitions definition) :
+    CheckedOpenDiagram definitions :=
+  ⟨referenceFragmentRaw definitions definition, checked.wellFormed⟩
+
+@[simp] theorem generated
+    (checked : CheckedReferenceFragment definitions definition) :
+    checked.fragment.val = referenceFragmentRaw definitions definition :=
+  rfl
+
+@[simp] theorem boundaryLength
+    (checked : CheckedReferenceFragment definitions definition) :
+    checked.fragment.val.boundary.length =
+      (definitions.get definition).length := by
+  simp [fragment, referenceFragmentRaw, Data.Finite.allFin_eq_finRange]
+
+@[simp] theorem boundarySignatures
+    (checked : CheckedReferenceFragment definitions definition) :
+    checkedBoundarySigs checked.fragment = definitions.get definition := by
+  change
+    (Data.Finite.allFin (definitions.get definition).length).map
+        (definitions.get definition).get =
+      definitions.get definition
+  rw [Data.Finite.allFin_eq_finRange]
+  unfold List.finRange
+  rw [List.map_ofFn]
+  simpa only [Function.comp_apply, List.get_eq_getElem] using
+    (List.ofFn_getElem (xs := definitions.get definition))
+
+end CheckedReferenceFragment
 
 /-- Validate canonical folded-reference syntax through the ordinary concrete
 checker. This is the exact pattern consumed by unfold and produced by fold. -/
@@ -51,29 +80,11 @@ def checkReferenceFragment
   | .ok checked =>
       have generatedDiagram : checked.val = raw.diagram :=
         ConcreteDiagram.checkWellFormed_preserves_input accepted
-      let fragment : CheckedOpenDiagram definitions :=
-        ⟨raw,
-          { diagram := generatedDiagram ▸ checked.property
-            boundary_root_scoped := by
-              simp [raw, referenceFragmentRaw,
-                Data.Finite.allFin_eq_finRange] }⟩
       exact .ok
-        { fragment := fragment
-          generated := rfl
-          boundaryLength := by
-            simp [fragment, raw, referenceFragmentRaw,
-              Data.Finite.allFin_eq_finRange]
-          boundarySignatures := by
-            change
-              (Data.Finite.allFin
-                (definitions.get definition).length).map
-                  (definitions.get definition).get =
-                definitions.get definition
-            rw [Data.Finite.allFin_eq_finRange]
-            unfold List.finRange
-            rw [List.map_ofFn]
-            simpa only [Function.comp_apply, List.get_eq_getElem] using
-              (List.ofFn_getElem (xs := definitions.get definition)) }
+        ⟨{ diagram := generatedDiagram ▸ checked.property
+           boundary_root_scoped := by
+             simp [raw, referenceFragmentRaw,
+               Data.Finite.allFin_eq_finRange] }⟩
 
 namespace ConcreteDefinitionWeakening
 
