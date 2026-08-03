@@ -15,6 +15,19 @@ function expectQuantifier(formula: Formula, quantifier: 'exists' | 'forall', nam
   return formula
 }
 
+function expectImplication(formula: Formula): Extract<Formula, { kind: 'implies' }> {
+  expect(formula.kind).toBe('implies')
+  if (formula.kind !== 'implies') throw new Error('expected implication')
+  return formula
+}
+
+function expectAtom(formula: Formula, name: string, args: readonly string[]): void {
+  expect(formula.kind).toBe('atom')
+  if (formula.kind !== 'atom') throw new Error('expected atom')
+  expect(formula.name).toBe(name)
+  expect(formula.args).toEqual(args)
+}
+
 describe('parseFormula', () => {
   it('parses the typed Unicode example with grouped individual binders', () => {
     const outer = expectQuantifier(parseFormula(EXAMPLE_SOURCE), 'forall', 'Z')
@@ -23,20 +36,41 @@ describe('parseFormula', () => {
     const second = expectQuantifier(outer.body, 'forall', 'S')
     expect(second.binders[0]!.sig).toEqual(relSig([IOTA, IOTA]))
 
-    expect(second.body.kind).toBe('implies')
-    if (second.body.kind !== 'implies') throw new Error('expected outer implication')
-    const universalZ = expectQuantifier(second.body.right, 'forall', 'z')
-    expect(universalZ.body.kind).toBe('implies')
-    if (universalZ.body.kind !== 'implies') throw new Error('expected nested implication')
-    const predicate = expectQuantifier(universalZ.body.right, 'forall', 'P')
-    expect(predicate.body.kind).toBe('implies')
-    if (predicate.body.kind !== 'implies' || predicate.body.left.kind !== 'and') throw new Error('expected induction conjunction')
-    const step = predicate.body.left.right
+    const outerImplication = expectImplication(second.body)
+    const existentialZ = expectQuantifier(outerImplication.left, 'exists', 'z')
+    expect(existentialZ.binders[0]!.sig).toEqual(IOTA)
+    expectAtom(existentialZ.body, 'Z', ['z'])
+
+    const universalZ = expectQuantifier(outerImplication.right, 'forall', 'z')
+    expect(universalZ.binders[0]!.sig).toEqual(IOTA)
+    const universalZImplication = expectImplication(universalZ.body)
+    expectAtom(universalZImplication.left, 'Z', ['z'])
+
+    const predicate = expectQuantifier(universalZImplication.right, 'forall', 'P')
+    expect(predicate.binders[0]!.sig).toEqual(relSig([IOTA]))
+    const predicateImplication = expectImplication(predicate.body)
+    expect(predicateImplication.left.kind).toBe('and')
+    if (predicateImplication.left.kind !== 'and') throw new Error('expected induction conjunction')
+
+    const base = expectQuantifier(predicateImplication.left.left, 'forall', 'n')
+    expect(base.binders[0]!.sig).toEqual(IOTA)
+    const baseImplication = expectImplication(base.body)
+    expectAtom(baseImplication.left, 'Z', ['n'])
+    expectAtom(baseImplication.right, 'P', ['n'])
+
+    const step = predicateImplication.left.right
     expect(step.kind).toBe('quantifier')
     if (step.kind !== 'quantifier') throw new Error('expected grouped quantifier')
     expect(step.quantifier).toBe('forall')
     expect(step.binders.map((binder) => binder.name)).toEqual(['n', 'm'])
     expect(step.binders.map((binder) => binder.sig)).toEqual([IOTA, IOTA])
+    const stepImplication = expectImplication(step.body)
+    expect(stepImplication.left.kind).toBe('and')
+    if (stepImplication.left.kind !== 'and') throw new Error('expected step conjunction')
+    expectAtom(stepImplication.left.left, 'P', ['n'])
+    expectAtom(stepImplication.left.right, 'S', ['n', 'm'])
+    expectAtom(stepImplication.right, 'P', ['m'])
+    expectAtom(predicateImplication.right, 'P', ['z'])
   })
 
   it('makes implication right-associative and conjunction tighter', () => {
