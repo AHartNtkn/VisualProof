@@ -1,4 +1,5 @@
 import VisualProof.Rule.WirePrimitive.CompilerSoundness
+import VisualProof.Theory.Semantics
 
 namespace VisualProof
 namespace WirePrimitive
@@ -261,6 +262,25 @@ theorem insertion_redundant
     (landing : InsertionPrimitiveLanding checked) :
     Nonempty (ConcreteIso landing.program.target.val checked.target.val) :=
   ⟨landing.constructionIso⟩
+
+/--
+The folded reference item introduced by `refSpawn` is exactly its stored body.
+This is the local equivalence consumed by concrete unfold; combined with
+`insertion_primitive_program`, it gives ref-spawn no independent semantics.
+-/
+theorem ref_spawn_unfold_conservative
+    (definitions : Definitions)
+    (pre : PreModel)
+    (definitionEnv : DefinitionEnv pre definitions.signatures)
+    (lawful : DefinitionLawful pre definitions definitionEnv)
+    (wireEnv : Env pre ctx)
+    (reference : DefVar definitions.signatures args)
+    (arguments : Vars ctx args) :
+    denoteItem pre definitionEnv wireEnv (.named reference arguments) ↔
+      definitions.definitionBody pre definitionEnv reference
+        (Vars.denote wireEnv arguments) :=
+  definitions.named_iff_definition pre definitionEnv lawful wireEnv
+    reference arguments
 
 end WirePrimitive
 end VisualProof
