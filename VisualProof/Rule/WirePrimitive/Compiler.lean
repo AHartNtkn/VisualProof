@@ -4,6 +4,7 @@ import VisualProof.Rule.WirePrimitive.ArgumentsExtendTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsArityTransport
 import VisualProof.Rule.WirePrimitive.ArgumentsDuplicateTransport
 import VisualProof.Rule.MonolithicWireQuantifierRaw
+import VisualProof.Diagram.Concrete.WireQuantifierRelationJoinRawEndpointTerminalConformance
 import VisualProof.Diagram.Concrete.IsomorphismSearch
 
 namespace VisualProof
@@ -188,7 +189,9 @@ private def sourceSiteStepPositions
         (Fin sites.sites.length) (Fin result.steps.length) //
       ∀ position,
         (result.steps.get (equivalence position)).application =
-          (sites.sites.get position).node } := by
+            (sites.sites.get position).node ∧
+          (result.steps.get (equivalence position)).sourceRegion =
+            (sites.sites.get position).region } := by
   let siteNodes := sites.sites.map AppliedSite.node
   let stepNodes := result.steps.map
     ConcreteWireQuantifier.RelationJoinStep.application
@@ -206,9 +209,100 @@ private def sourceSiteStepPositions
   refine ⟨siteCast.trans (positions.1.trans stepCast), ?_⟩
   intro position
   have exact := positions.2 (siteCast position)
-  simpa [siteNodes, stepNodes, siteCast, stepCast,
-    Data.Finite.FiniteEquiv.finCast, List.get_eq_getElem,
-    List.getElem_map] using exact
+  have applicationExact :
+      (result.steps.get
+          (siteCast.trans (positions.1.trans stepCast) position)).application =
+        (sites.sites.get position).node := by
+    simpa [siteNodes, stepNodes, siteCast, stepCast,
+      Data.Finite.FiniteEquiv.finCast, List.get_eq_getElem,
+      List.getElem_map] using exact
+  refine ⟨applicationExact, ?_⟩
+  have nodeData :=
+    (result.steps.get
+      (siteCast.trans (positions.1.trans stepCast) position)).sourceNodeExact
+  rw [applicationExact] at nodeData
+  exact (CNode.atom.inj
+    (nodeData.symm.trans (sites.sites.get position).node_data)).1
+
+/-- Rebuild the raw recursive construction-wire origin named by one accepted
+occurrence and its checked local internal-wire position.  This is the inverse
+direction missing from `constructionWireDescriptor`; the compiler uses it to
+land each primitive-created internal wire directly in the raw terminal wire
+carrier. -/
+private def constructionWireOriginAt :
+    (steps : List (ConcreteWireQuantifier.RelationJoinStep source dying
+      content)) →
+    (occurrence : Fin steps.length) →
+    Fin ((steps.get occurrence).attachment.fragmentInternalWires.length) →
+      ConcreteWireQuantifier.ConstructionWireOrigin steps
+  | [], occurrence, _ => nomatch occurrence
+  | step :: rest, ⟨0, _⟩, position =>
+      .head (by simpa using position)
+  | step :: rest, ⟨index + 1, bound⟩, position =>
+      .tail (constructionWireOriginAt rest
+        ⟨index, Nat.lt_of_succ_lt_succ bound⟩ (by simpa using position))
+
+@[simp]
+private theorem constructionWireDescriptor_originAt_occurrence
+    (steps : List (ConcreteWireQuantifier.RelationJoinStep source dying
+      content))
+    (occurrence : Fin steps.length)
+    (position : Fin
+      ((steps.get occurrence).attachment.fragmentInternalWires.length)) :
+    (ConcreteWireQuantifier.constructionWireDescriptor
+      (constructionWireOriginAt steps occurrence position)).occurrence =
+        occurrence := by
+  induction steps with
+  | nil => exact Fin.elim0 occurrence
+  | cons step rest induction =>
+      rcases occurrence with ⟨_ | index, bound⟩
+      · rfl
+      · simp only [constructionWireOriginAt,
+          ConcreteWireQuantifier.constructionWireDescriptor]
+        have tailExact := induction
+          ⟨index, Nat.lt_of_succ_lt_succ bound⟩ (by simpa using position)
+        apply Fin.ext
+        simpa using congrArg Fin.val tailExact
+
+@[simp]
+private theorem constructionWireDescriptor_originAt_position
+    (steps : List (ConcreteWireQuantifier.RelationJoinStep source dying
+      content))
+    (occurrence : Fin steps.length)
+    (position : Fin
+      ((steps.get occurrence).attachment.fragmentInternalWires.length)) :
+    (ConcreteWireQuantifier.constructionWireDescriptor
+      (constructionWireOriginAt steps occurrence position)).position.val =
+        position.val := by
+  induction steps with
+  | nil => exact Fin.elim0 occurrence
+  | cons step rest induction =>
+      rcases occurrence with ⟨_ | index, bound⟩
+      · rfl
+      · simp only [constructionWireOriginAt,
+          ConcreteWireQuantifier.constructionWireDescriptor]
+        simpa using induction
+          ⟨index, Nat.lt_of_succ_lt_succ bound⟩ (by simpa using position)
+
+@[simp]
+private theorem constructionWireOriginAt_descriptor
+    {steps : List (ConcreteWireQuantifier.RelationJoinStep source dying
+      content)}
+    (origin : ConcreteWireQuantifier.ConstructionWireOrigin steps) :
+    constructionWireOriginAt steps
+        (ConcreteWireQuantifier.constructionWireDescriptor origin).occurrence
+        (ConcreteWireQuantifier.constructionWireDescriptor origin).position =
+      origin := by
+  induction origin with
+  | head position => rfl
+  | tail origin induction =>
+      simp only [ConcreteWireQuantifier.constructionWireDescriptor]
+      change ConcreteWireQuantifier.ConstructionWireOrigin.tail
+          (constructionWireOriginAt _
+            (ConcreteWireQuantifier.constructionWireDescriptor origin).occurrence
+            (ConcreteWireQuantifier.constructionWireDescriptor origin).position) =
+        ConcreteWireQuantifier.ConstructionWireOrigin.tail origin
+      rw [induction]
 
 private theorem rawSourceSites_exists
     {source : CheckedDiagram definitions}
@@ -1585,6 +1679,469 @@ private def reversePrimitiveProgram :
           constructionIso := by
             simpa only [PrimitiveProgram.target_append] using
               inverse.constructionIso }
+
+/-- Read a compiled region through a proposed raw terminal-origin carrier. -/
+private def compiledRegionData
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (compiled : CheckedDiagram definitions)
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (regions : Data.Finite.FiniteEquiv compiled.val.RegionId
+      (ConcreteWireQuantifier.RelationJoinResult.FinalRegionOrigin result))
+    (region : compiled.val.RegionId) :
+    ConcreteWireQuantifier.AtlasRegionData
+      (ConcreteWireQuantifier.RelationJoinResult.FinalRegionOrigin result) :=
+  match compiled.val.regions region with
+  | .sheet => .sheet
+  | .cut parent => .cut (regions parent)
+
+/-- Read a compiled node through proposed raw terminal-origin carriers. -/
+private def compiledNodeData
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (compiled : CheckedDiagram definitions)
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (regions : Data.Finite.FiniteEquiv compiled.val.RegionId
+      (ConcreteWireQuantifier.RelationJoinResult.FinalRegionOrigin result))
+    (node : compiled.val.NodeId) :
+    ConcreteWireQuantifier.AtlasNodeData
+      (ConcreteWireQuantifier.RelationJoinResult.FinalRegionOrigin result)
+        definitions.length :=
+  match compiled.val.nodes node with
+  | .atom region args => .atom (regions region) args
+  | .ref region definition args => .ref (regions region) definition args
+  | .identity region signature arity =>
+      .identity (regions region) signature arity
+
+/-- Classify one compiled endpoint by its proposed raw terminal node origin. -/
+private def compiledEndpointOrigin
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (compiled : CheckedDiagram definitions)
+    {result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters}
+    (nodes : Data.Finite.FiniteEquiv compiled.val.NodeId
+      (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result))
+    (endpoint : CEndpoint compiled.val.nodeCount) :
+    ConcreteWireQuantifier.RawEndpoint
+      (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result) :=
+  { node := nodes endpoint.node, port := endpoint.port }
+
+/-- The minimum terminal facts from the primitive construction needed by
+`ConcreteIso.ofEquivs`.  Every field is consumed by `constructionIso` below;
+the receipt introduces no second graph representation or search procedure. -/
+private structure RawJoinConstructionConformance
+    {definitions : List (List Sig)}
+    {source : CheckedDiagram definitions}
+    {dying : source.val.WireId}
+    {content : CheckedOpenDiagram definitions}
+    {parameters : List source.val.WireId}
+    (compiled : CheckedDiagram definitions)
+    (result : ConcreteWireQuantifier.RelationJoinResult source dying content
+      parameters) where
+  regions : Data.Finite.FiniteEquiv compiled.val.RegionId
+    (ConcreteWireQuantifier.RelationJoinResult.FinalRegionOrigin result)
+  nodes : Data.Finite.FiniteEquiv compiled.val.NodeId
+    (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin result)
+  wires : Data.Finite.FiniteEquiv compiled.val.WireId
+    (ConcreteWireQuantifier.FinalWireOrigin result)
+  root : regions compiled.val.root =
+    result.finalRegionOriginEquiv result.plainFinal.val.root
+  regionData : ∀ region,
+    compiledRegionData compiled regions region =
+      ConcreteWireQuantifier.expectedRegionData result.steps (regions region)
+  nodeData : ∀ node,
+    compiledNodeData compiled regions node =
+      ConcreteWireQuantifier.expectedNodeData (definitions := definitions)
+        (source := source) (dying := dying) (content := content)
+        result.steps (nodes node).1
+  wireSignature : ∀ wire,
+    (compiled.val.wires wire).sig =
+      ConcreteWireQuantifier.expectedFinalWireSignature result (wires wire)
+  wireScope : ∀ wire,
+    regions (compiled.val.wires wire).scope =
+      ConcreteWireQuantifier.expectedFinalWireScope result (wires wire)
+  wireEndpoints : ∀ wire,
+    (compiled.val.wires wire).endpoints.map
+        (compiledEndpointOrigin compiled nodes) =
+      ConcreteWireQuantifier.expectedFinalWireEndpoints result (wires wire)
+
+namespace RawJoinConstructionConformance
+
+private def regionEquiv
+    (conformance : RawJoinConstructionConformance compiled result) :
+    Data.Finite.FiniteEquiv compiled.val.RegionId
+      result.plainFinal.val.RegionId :=
+  conformance.regions.trans result.finalRegionOriginEquiv.symm
+
+private def nodeEquiv
+    (conformance : RawJoinConstructionConformance compiled result) :
+    Data.Finite.FiniteEquiv compiled.val.NodeId
+      result.plainFinal.val.NodeId :=
+  conformance.nodes.trans result.finalNodeOriginEquiv.symm
+
+private def wireEquiv
+    (conformance : RawJoinConstructionConformance compiled result) :
+    Data.Finite.FiniteEquiv compiled.val.WireId
+      result.plainFinal.val.WireId :=
+  conformance.wires.trans
+    (ConcreteWireQuantifier.finalWireOriginEquiv result).symm
+
+private theorem root_exact
+    (conformance : RawJoinConstructionConformance compiled result) :
+    conformance.regionEquiv compiled.val.root =
+      result.plainFinal.val.root := by
+  change result.finalRegionOriginEquiv.symm
+      (conformance.regions compiled.val.root) =
+    result.plainFinal.val.root
+  apply result.finalRegionOriginEquiv.injective
+  rw [result.finalRegionOriginEquiv.apply_symm_apply]
+  exact conformance.root
+
+private theorem region_eq_regionEquiv_iff
+    (conformance : RawJoinConstructionConformance compiled result)
+    (rawRegion : result.plainFinal.val.RegionId)
+    (compiledRegion : compiled.val.RegionId) :
+    rawRegion = conformance.regionEquiv compiledRegion ↔
+      result.finalRegionOriginEquiv rawRegion =
+        conformance.regions compiledRegion := by
+  constructor
+  · intro exact
+    rw [exact]
+    exact result.finalRegionOriginEquiv.apply_symm_apply _
+  · intro exact
+    apply result.finalRegionOriginEquiv.injective
+    change result.finalRegionOriginEquiv rawRegion =
+      result.finalRegionOriginEquiv
+        (result.finalRegionOriginEquiv.symm
+          (conformance.regions compiledRegion))
+    rw [result.finalRegionOriginEquiv.apply_symm_apply]
+    exact exact
+
+private theorem region_eq_originInverse_iff
+    (conformance : RawJoinConstructionConformance compiled result)
+    (rawRegion : result.plainFinal.val.RegionId)
+    (compiledRegion : compiled.val.RegionId) :
+    rawRegion = result.finalRegionOriginEquiv.symm
+        (conformance.regions compiledRegion) ↔
+      result.finalRegionOriginEquiv rawRegion =
+        conformance.regions compiledRegion := by
+  simpa [regionEquiv] using
+    conformance.region_eq_regionEquiv_iff rawRegion compiledRegion
+
+private theorem region_table
+    (conformance : RawJoinConstructionConformance compiled result)
+    (region : compiled.val.RegionId) :
+    result.plainFinal.val.regions (conformance.regionEquiv region) =
+      (compiled.val.regions region).rename conformance.regionEquiv := by
+  have rawExact :=
+    result.plainRegionData_exact (conformance.regionEquiv region)
+  have compiledExact := conformance.regionData region
+  have originExact :
+      result.finalRegionOriginEquiv (conformance.regionEquiv region) =
+        conformance.regions region := by
+    exact result.finalRegionOriginEquiv.apply_symm_apply _
+  rw [originExact] at rawExact
+  have same := rawExact.trans compiledExact.symm
+  cases compiledData : compiled.val.regions region with
+  | sheet =>
+      cases rawData : result.plainFinal.val.regions
+          (conformance.regionEquiv region) with
+      | sheet => rfl
+      | cut parent =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainRegionData,
+            compiledRegionData, compiledData, rawData] at same
+  | cut compiledParent =>
+      cases rawData : result.plainFinal.val.regions
+          (conformance.regionEquiv region) with
+      | sheet =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainRegionData,
+            compiledRegionData, compiledData, rawData] at same
+      | cut rawParent =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainRegionData,
+            compiledRegionData, compiledData, rawData] at same
+          simp [compiledData, CRegion.rename]
+          exact (conformance.region_eq_regionEquiv_iff
+            rawParent compiledParent).mpr same
+
+private theorem node_table
+    (conformance : RawJoinConstructionConformance compiled result)
+    (node : compiled.val.NodeId) :
+    result.plainFinal.val.nodes (conformance.nodeEquiv node) =
+      (compiled.val.nodes node).rename conformance.regionEquiv := by
+  have rawExact := result.plainNodeData_exact (conformance.nodeEquiv node)
+  have compiledExact := conformance.nodeData node
+  have originExact :
+      result.finalNodeOriginEquiv (conformance.nodeEquiv node) =
+        conformance.nodes node := by
+    exact result.finalNodeOriginEquiv.apply_symm_apply _
+  rw [originExact] at rawExact
+  have same := rawExact.trans compiledExact.symm
+  cases compiledData : compiled.val.nodes node with
+  | atom compiledRegion compiledArgs =>
+      cases rawData : result.plainFinal.val.nodes
+          (conformance.nodeEquiv node) with
+      | atom rawRegion rawArgs =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+          simp [compiledData, CNode.rename]
+          exact ⟨(conformance.region_eq_originInverse_iff
+            rawRegion compiledRegion).mpr same.1, same.2⟩
+      | ref rawRegion definition rawArgs =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+      | identity rawRegion signature arity =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+  | ref compiledRegion compiledDefinition compiledArgs =>
+      cases rawData : result.plainFinal.val.nodes
+          (conformance.nodeEquiv node) with
+      | atom rawRegion rawArgs =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+      | ref rawRegion rawDefinition rawArgs =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+          simp [compiledData, CNode.rename]
+          exact ⟨(conformance.region_eq_originInverse_iff
+            rawRegion compiledRegion).mpr same.1, same.2⟩
+      | identity rawRegion signature arity =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+  | identity compiledRegion compiledSignature compiledArity =>
+      cases rawData : result.plainFinal.val.nodes
+          (conformance.nodeEquiv node) with
+      | atom rawRegion rawArgs =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+      | ref rawRegion definition rawArgs =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+      | identity rawRegion rawSignature rawArity =>
+          simp [ConcreteWireQuantifier.RelationJoinResult.plainNodeData,
+            compiledNodeData, compiledData, rawData] at same
+          simp [compiledData, CNode.rename]
+          exact ⟨(conformance.region_eq_originInverse_iff
+            rawRegion compiledRegion).mpr same.1, same.2⟩
+
+private theorem wire_signature
+    (conformance : RawJoinConstructionConformance compiled result)
+    (wire : compiled.val.WireId) :
+    (result.plainFinal.val.wires
+      (conformance.wireEquiv wire)).sig =
+        (compiled.val.wires wire).sig := by
+  change (result.plainFinal.val.wires
+      ((ConcreteWireQuantifier.finalWireOriginEquiv result).symm
+        (conformance.wires wire))).sig =
+    (compiled.val.wires wire).sig
+  have rawExact := result.plainFinal_wire_signature_at_origin
+    (conformance.wires wire)
+  exact rawExact.trans (conformance.wireSignature wire).symm
+
+private theorem wire_scope
+    (conformance : RawJoinConstructionConformance compiled result)
+    (wire : compiled.val.WireId) :
+    (result.plainFinal.val.wires
+      (conformance.wireEquiv wire)).scope =
+        conformance.regionEquiv (compiled.val.wires wire).scope := by
+  change (result.plainFinal.val.wires
+      ((ConcreteWireQuantifier.finalWireOriginEquiv result).symm
+        (conformance.wires wire))).scope =
+    result.finalRegionOriginEquiv.symm
+      (conformance.regions (compiled.val.wires wire).scope)
+  apply result.finalRegionOriginEquiv.injective
+  rw [result.finalRegionOriginEquiv.apply_symm_apply]
+  have rawExact := result.plainFinal_wire_scope_at_origin
+    (conformance.wires wire)
+  exact rawExact.trans (conformance.wireScope wire).symm
+
+private def endpointMap
+    (conformance : RawJoinConstructionConformance compiled result)
+    (endpoint : CEndpoint compiled.val.nodeCount) :
+    CEndpoint result.plainFinal.val.nodeCount :=
+  { node := conformance.nodeEquiv endpoint.node, port := endpoint.port }
+
+private def endpointInverse
+    (conformance : RawJoinConstructionConformance compiled result)
+    (endpoint : CEndpoint result.plainFinal.val.nodeCount) :
+    CEndpoint compiled.val.nodeCount :=
+  { node := conformance.nodeEquiv.symm endpoint.node, port := endpoint.port }
+
+@[simp]
+private theorem endpointInverse_map
+    (conformance : RawJoinConstructionConformance compiled result)
+    (endpoint : CEndpoint compiled.val.nodeCount) :
+    conformance.endpointInverse (conformance.endpointMap endpoint) =
+      endpoint := by
+  cases endpoint with
+  | mk node port =>
+      change CEndpoint.mk
+          (conformance.nodeEquiv.symm (conformance.nodeEquiv node)) port =
+        CEndpoint.mk node port
+      exact congrArg (fun target => CEndpoint.mk target port)
+        (conformance.nodeEquiv.left_inv node)
+
+@[simp]
+private theorem endpointMap_inverse
+    (conformance : RawJoinConstructionConformance compiled result)
+    (endpoint : CEndpoint result.plainFinal.val.nodeCount) :
+    conformance.endpointMap (conformance.endpointInverse endpoint) =
+      endpoint := by
+  cases endpoint with
+  | mk node port =>
+      change CEndpoint.mk
+          (conformance.nodeEquiv (conformance.nodeEquiv.symm node)) port =
+        CEndpoint.mk node port
+      exact congrArg (fun target => CEndpoint.mk target port)
+        (conformance.nodeEquiv.right_inv node)
+
+private theorem endpointMap_origin
+    (conformance : RawJoinConstructionConformance compiled result)
+    (endpoint : CEndpoint compiled.val.nodeCount) :
+    result.finalEndpointOriginEquiv (conformance.endpointMap endpoint) =
+      compiledEndpointOrigin compiled conformance.nodes endpoint := by
+  cases endpoint with
+  | mk node port =>
+      apply congrArg (fun origin =>
+        ({ node := origin, port := port } :
+          ConcreteWireQuantifier.RawEndpoint
+            (ConcreteWireQuantifier.RelationJoinResult.FinalNodeOrigin
+              result)))
+      exact result.finalNodeOriginEquiv.apply_symm_apply _
+
+private theorem endpoint_mem_iff
+    (conformance : RawJoinConstructionConformance compiled result)
+    (wire : compiled.val.WireId)
+    (endpoint : CEndpoint compiled.val.nodeCount) :
+    endpoint ∈ (compiled.val.wires wire).endpoints ↔
+      conformance.endpointMap endpoint ∈
+        (result.plainFinal.val.wires
+          (conformance.wireEquiv wire)).endpoints := by
+  have classifiedLists :
+      (compiled.val.wires wire).endpoints.map
+          (compiledEndpointOrigin compiled conformance.nodes) =
+        (result.plainFinal.val.wires
+          (conformance.wireEquiv wire)).endpoints.map
+            result.finalEndpointOriginEquiv := by
+    calc
+      _ = ConcreteWireQuantifier.expectedFinalWireEndpoints result
+          (conformance.wires wire) := conformance.wireEndpoints wire
+      _ = _ := by
+        change _ = (result.plainFinal.val.wires
+          ((ConcreteWireQuantifier.finalWireOriginEquiv result).symm
+            (conformance.wires wire))).endpoints.map
+              result.finalEndpointOriginEquiv
+        exact (result.finalWire_endpoints_exact
+          (conformance.wires wire)).symm
+  constructor
+  · intro member
+    have classifiedMember :
+        compiledEndpointOrigin compiled conformance.nodes endpoint ∈
+          (compiled.val.wires wire).endpoints.map
+            (compiledEndpointOrigin compiled conformance.nodes) :=
+      List.mem_map.mpr ⟨endpoint, member, rfl⟩
+    rw [classifiedLists] at classifiedMember
+    rcases List.mem_map.mp classifiedMember with
+      ⟨candidate, candidateMember, candidateOrigin⟩
+    have candidateExact : candidate = conformance.endpointMap endpoint := by
+      apply result.finalEndpointOriginEquiv.injective
+      exact candidateOrigin.trans (conformance.endpointMap_origin endpoint).symm
+    simpa only [candidateExact] using candidateMember
+  · intro member
+    have classifiedMember :
+        result.finalEndpointOriginEquiv
+            (conformance.endpointMap endpoint) ∈
+          (result.plainFinal.val.wires
+            (conformance.wireEquiv wire)).endpoints.map
+              result.finalEndpointOriginEquiv :=
+      List.mem_map.mpr ⟨conformance.endpointMap endpoint, member, rfl⟩
+    rw [← classifiedLists] at classifiedMember
+    rw [conformance.endpointMap_origin endpoint] at classifiedMember
+    rcases List.mem_map.mp classifiedMember with
+      ⟨candidate, candidateMember, candidateOrigin⟩
+    have candidateExact : candidate = endpoint := by
+      rcases candidate with ⟨candidateNode, candidatePort⟩
+      rcases endpoint with ⟨endpointNode, endpointPort⟩
+      simp [compiledEndpointOrigin] at candidateOrigin
+      rcases candidateOrigin with ⟨nodeExact, portExact⟩
+      subst candidatePort
+      exact congrArg (fun target => CEndpoint.mk target endpointPort)
+        (conformance.nodes.injective nodeExact)
+    simpa only [candidateExact] using candidateMember
+
+private theorem endpointMap_corresponds
+    (conformance : RawJoinConstructionConformance compiled result)
+    (wire : compiled.val.WireId)
+    (endpoint : CEndpoint compiled.val.nodeCount)
+    (member : endpoint ∈ (compiled.val.wires wire).endpoints) :
+    PortCorresponds compiled.val result.plainFinal.val
+      conformance.nodeEquiv endpoint (conformance.endpointMap endpoint) := by
+  rcases endpoint with ⟨endpointNode, endpointPort⟩
+  refine ⟨rfl, ?_⟩
+  have required := ConcreteDiagram.incident_port_required _
+    compiled.val compiled.property wire ⟨endpointNode, endpointPort⟩ member
+  unfold endpointMap
+  dsimp only [CEndpoint.node, CEndpoint.port]
+  rw [conformance.node_table endpointNode]
+  rw [CNode.rename_eq_relocate]
+  cases nodeData : compiled.val.nodes endpointNode with
+  | atom region args => rfl
+  | ref region definition args => rfl
+  | identity region signature arity =>
+      have identityRequired :
+          endpointPort ∈ (List.range arity).map CPort.identity := by
+        simpa [ConcreteDiagram.requiredPorts, nodeData] using required
+      obtain ⟨index, _, portExact⟩ := List.mem_map.mp identityRequired
+      exact ⟨rfl, rfl, index, index, portExact.symm, portExact.symm⟩
+
+private def endpointFiber
+    (conformance : RawJoinConstructionConformance compiled result)
+    (wire : compiled.val.WireId) :
+    ConcreteIso.EndpointFiberEquiv conformance.nodeEquiv
+      conformance.wireEquiv wire where
+  equivalence :=
+    { toFun := fun endpoint =>
+        ⟨conformance.endpointMap endpoint.1,
+          (conformance.endpoint_mem_iff wire endpoint.1).mp endpoint.2⟩
+      invFun := fun candidate =>
+        ⟨conformance.endpointInverse candidate.1, by
+          apply (conformance.endpoint_mem_iff wire
+            (conformance.endpointInverse candidate.1)).mpr
+          simpa using candidate.2⟩
+      left_inv := by
+        intro endpoint
+        apply Subtype.ext
+        exact conformance.endpointInverse_map endpoint.1
+      right_inv := by
+        intro candidate
+        apply Subtype.ext
+        exact conformance.endpointMap_inverse candidate.1 }
+  corresponds := by
+    intro endpoint
+    exact conformance.endpointMap_corresponds wire endpoint.1 endpoint.2
+
+/-- Assemble the primitive/raw landing directly from construction-owned
+terminal origin tables. -/
+private def constructionIso
+    (conformance : RawJoinConstructionConformance compiled result) :
+    ConcreteIso compiled.val result.plainFinal.val :=
+  ConcreteIso.ofEquivs conformance.regionEquiv conformance.nodeEquiv
+    conformance.wireEquiv conformance.root_exact conformance.region_table
+    conformance.node_table conformance.wire_signature conformance.wire_scope
+    conformance.endpointFiber
+
+end RawJoinConstructionConformance
 
 /-- The primitive construction of a raw accepted relation join. -/
 private structure RawRelationJoinCompilation
