@@ -208,17 +208,9 @@ def source
     CheckedDiagram definitions :=
   base
 
-/-- The checked, normalized concrete splice result. -/
+/-- The checked raw concrete splice result.  Identity normalization is a
+separate downstream mechanism, not part of the structural primitive. -/
 def target
-    {base : CheckedDiagram definitions}
-    {fragment : CheckedOpenDiagram definitions}
-    {input : StructuralInsertionInput base fragment}
-    (checked : StructuralInsertionReceipt input) :
-    CheckedDiagram definitions :=
-  checked.result.checked
-
-/-- The exact checked splice candidate before eager identity normalization. -/
-def rawTarget
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
     {input : StructuralInsertionInput base fragment}
@@ -226,14 +218,14 @@ def rawTarget
     CheckedDiagram definitions :=
   checked.result.raw
 
-/-- The construction-owned raw-to-public normalization receipt. -/
-def normalization
+/-- The exact checked splice candidate produced by the primitive. -/
+def rawTarget
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
     {input : StructuralInsertionInput base fragment}
     (checked : StructuralInsertionReceipt input) :
-    ConcreteDiagram.IdentityNormalization checked.rawTarget :=
-  checked.result.normalization
+    CheckedDiagram definitions :=
+  checked.result.raw
 
 /--
 A checked splice into a negative context is sound in the insertion direction.
@@ -250,9 +242,16 @@ theorem negative_splice_sound
     (definitionEnv : DefinitionEnv pre definitions) :
     denoteChecked pre definitionEnv checked.source →
       denoteChecked pre definitionEnv checked.target := by
-  obtain ⟨compiled, _compiledAccepted, targetDenotes⟩ :=
-    denote_splice checked.fragmentCompiled checked.attachment checked.result
-      checked.resultAccepted pre definitionEnv
+  obtain ⟨compiled, _compiledAccepted⟩ :=
+    compileInsertion_complete_of_raw_splice checked.fragmentCompiled
+      checked.attachment checked.result.rawResult
+      (splice_success_raw checked.resultAccepted)
+  have targetDenotes :
+      denoteChecked pre definitionEnv checked.target ↔
+        denoteRegion pre definitionEnv Env.empty compiled.inserted := by
+    simpa [StructuralInsertionReceipt.target, ConcreteSpliceResult.raw,
+      RawConcreteSpliceResult.checked] using
+      compiled.generated_checked_denotes_inserted pre definitionEnv
   have sameSite :=
     SiteCompilation.unique compiled.site checked.siteCompiled
   have sameDepth :
@@ -317,9 +316,16 @@ theorem sound
     Directed input.orientation
       (denoteChecked pre definitionEnv checked.source)
       (denoteChecked pre definitionEnv checked.target) := by
-  obtain ⟨compiled, _compiledAccepted, targetDenotes⟩ :=
-    denote_splice checked.fragmentCompiled checked.attachment checked.result
-      checked.resultAccepted pre definitionEnv
+  obtain ⟨compiled, _compiledAccepted⟩ :=
+    compileInsertion_complete_of_raw_splice checked.fragmentCompiled
+      checked.attachment checked.result.rawResult
+      (splice_success_raw checked.resultAccepted)
+  have targetDenotes :
+      denoteChecked pre definitionEnv checked.target ↔
+        denoteRegion pre definitionEnv Env.empty compiled.inserted := by
+    simpa [StructuralInsertionReceipt.target, ConcreteSpliceResult.raw,
+      RawConcreteSpliceResult.checked] using
+      compiled.generated_checked_denotes_inserted pre definitionEnv
   have sameSite :=
     SiteCompilation.unique compiled.site checked.siteCompiled
   have sameDepth :
