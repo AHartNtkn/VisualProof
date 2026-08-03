@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T011
+active_task: T012
 
 tasks:
   - id: T001
@@ -692,32 +692,51 @@ tasks:
   - id: T011
     type: worker
     assignee: Worker
-    status: active
+    status: complete
     reasoning_hint: high
-    objective: "Execute plan Task 10: prove insertion, ref, and per-site extension derivability."
+    objective: "Execute corrected plan Task 10: prove insertion/ref conservativity and pin direct per-site extension."
     inputs:
       - "Plan Task 10"
       - "T010 compiler redundancy"
     constraints:
       - "Keep the independent negative-splice theorem."
       - "Derived programs do not create new semantic authority."
+      - "The exact 34-step TypeScript union retains direct per-site argExtend; do not add a new primitive or claim a false sever/join derivation."
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/Rule/WirePrimitive.lean"
       - "VisualProof/Rule/WirePrimitive/Derived.lean"
       - "VisualProof/Rule/WirePrimitive/DerivedFixtures.lean"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+      - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
     verify:
       - "lake build"
       - "npm run formal:size"
     stop_if:
       - "Insertion or ref spawn gains a privileged semantic path."
-      - "Per-site extension cannot be related by checked transport."
-    receipt: null
+      - "Direct per-site extension diverges from the authoritative TypeScript payload or polarity gate."
+    receipt:
+      result: complete
+      harness: codex
+      summary: "Arbitrary raw insertion is constructed from vacuous introduction, atom spawn, and constructive relation join with a direct raw ConcreteIso and exact ordered boundary transport; folded references denote exactly their stored bodies; backward erasure still cites negative_splice_sound directly. Checked evidence disproved the stale per-site derivability claim, so the plan/spec now retain the authoritative 34-step union's independently gated direct argExtend instead of inventing a thirty-fifth primitive."
+      changed_files:
+        - "VisualProof/Rule/WirePrimitive/Derived.lean"
+        - "VisualProof/Rule/WirePrimitive/DerivedFixtures.lean"
+        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+        - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
+      commands:
+        - cmd: "lake build VisualProof.Rule.WirePrimitive.DerivedFixtures VisualProof.Rule.WirePrimitive.ArgumentsFixtures"
+          status: pass_157_jobs_27s
+        - cmd: "lake build"
+          status: pass_190_jobs
+        - cmd: "npm run formal:size"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
   - id: T012
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 11: complete definitions, citation, and the exact 34-step checker."
     inputs:
