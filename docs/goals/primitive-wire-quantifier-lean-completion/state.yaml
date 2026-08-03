@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T010
+active_task: T011
 
 tasks:
   - id: T001
@@ -626,7 +626,7 @@ tasks:
   - id: T010
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Execute plan Task 9: formalize the content compiler and monolithic redundancy."
     inputs:
@@ -670,11 +670,27 @@ tasks:
     stop_if:
       - "A compiler case is not structurally decreasing."
       - "Redundancy weakens exact raw ConcreteIso reproduction or boundary transport."
-    receipt: null
+    receipt:
+      result: blocked
+      harness: codex
+      summary: "Constructive raw join/sever implementation and the 151-job focused compiler/soundness/fixture gate pass. Aggregate validation now clears the repaired origin-aware normalization proofs but spends more than 20 CPU-minutes in queued Task 10 DerivedFixtures native_decide evaluation; no join-isomorphism theorem is missing."
+      changed_files:
+        - "VisualProof/Diagram/Concrete/IdentityNormalizationDropSemantics.lean"
+        - "VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean"
+        - "VisualProof/Diagram/Concrete/IdentityNormalizationFusionSemantics.lean"
+      commands:
+        - cmd: "lake build VisualProof.Rule.WirePrimitive.CompilerSoundness VisualProof.Rule.WirePrimitive.CompilerFixtures"
+          status: pass
+        - cmd: "lake build"
+          status: blocked_by_T011_fixture_evaluation
+        - cmd: "npm run formal:size"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
   - id: T011
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 10: prove insertion, ref, and per-site extension derivability."
     inputs:

@@ -690,11 +690,14 @@ checkers.
   ```
 
   Constructive join and sever redundancy landed through commits `52fb5cd`
-  and `573b4aa`. Direct elaboration of the compiler, soundness, and executable
-  fixtures plus `formal:size` passes. The aggregate `lake build` portion
-  remains pending because unrelated pre-existing identity-normalization
-  semantics modules do not elaborate from source; this task does not modify
-  those modules.
+  and `573b4aa`. The origin-aware elaboration integration repair `9026244`
+  restores the three stale normalization-semantics consumers without changing
+  their statements or behavior. Direct elaboration of the compiler, soundness,
+  and executable fixtures (151 jobs) plus `formal:size` passes. The aggregate
+  `lake build` portion remains pending because the already-landed Task 10
+  `DerivedFixtures.lean` whole-compiler `native_decide` evaluation consumed
+  more than 20 CPU-minutes without completing. No constructive join or sever
+  theorem is missing; Task 10 is active to replace that unbounded fixture gate.
 
 ---
 
