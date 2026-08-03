@@ -361,6 +361,27 @@ theorem ordinary_descendant_iteration_receipt :
     (checkOrdinaryIteration descendantIteration).toOption.isSome = true := by
   native_decide
 
+private def descendantIterationChecked :
+    CheckedOrdinaryIteration descendantIteration :=
+  (checkOrdinaryIteration descendantIteration).toOption.get (by native_decide)
+
+/-- Ordinary iteration exposes the accepted destination host-wire image exactly. -/
+example :
+    descendantIterationChecked.rawHostWire anchorWire =
+      (⟨0, by decide⟩ : descendantIterationChecked.target.val.WireId) := by
+  native_decide
+
+/-- The accepted ordinary-iteration carrier is injective. -/
+example : Function.Injective descendantIterationChecked.rawHostWire :=
+  descendantIterationChecked.rawHostWire_injective
+
+/-- The accepted ordinary-iteration carrier preserves every host signature. -/
+example (wire : host.val.WireId) :
+    (descendantIterationChecked.target.val.wires
+      (descendantIterationChecked.rawHostWire wire)).sig =
+        (host.val.wires wire).sig :=
+  descendantIterationChecked.rawHostWire_signature wire
+
 private def sameSiteIteration :
     OrdinaryIterationInput oneStubOccurrence.toSelection oneStubOccurrence where
   destination := anchor
@@ -400,6 +421,41 @@ private theorem copyPatternRaw_wellFormed :
 
 private def copyPattern : CheckedOpenDiagram [] :=
   ⟨copyPatternRaw, copyPatternRaw_wellFormed⟩
+
+private def carrierErasureChecked :
+    StructuralErasureReceipt (erasureInput .forward) :=
+  (checkStructuralErasure (erasureInput .forward)).toOption.get
+    (by native_decide)
+
+/-- Erasure maps an accepted insertion host wire exactly back to the base. -/
+example :
+    carrierErasureChecked.rawWireImage?
+        (⟨0, by decide⟩ : carrierErasureChecked.source.val.WireId) =
+      some anchorWire := by
+  native_decide
+
+/-- Accepted structural fragments have no internal wire, so every raw source
+wire lies in the insertion host carrier and receives an exact base image. -/
+example :
+    ∀ wire : carrierErasureChecked.source.val.WireId,
+      ∃ mapped, carrierErasureChecked.rawWireImage? wire = some mapped := by
+  native_decide
+
+/-- The accepted erasure carrier is injective on mapped identities. -/
+example {left right : carrierErasureChecked.source.val.WireId}
+    {mapped : carrierErasureChecked.target.val.WireId}
+    (leftMapped : carrierErasureChecked.rawWireImage? left = some mapped)
+    (rightMapped : carrierErasureChecked.rawWireImage? right = some mapped) :
+    left = right :=
+  carrierErasureChecked.rawWireImage_injective leftMapped rightMapped
+
+/-- The accepted erasure carrier preserves every mapped signature. -/
+example {wire : carrierErasureChecked.source.val.WireId}
+    {mapped : carrierErasureChecked.target.val.WireId}
+    (mappedExact : carrierErasureChecked.rawWireImage? wire = some mapped) :
+    (carrierErasureChecked.target.val.wires mapped).sig =
+      (carrierErasureChecked.source.val.wires wire).sig :=
+  carrierErasureChecked.rawWireImage_signature mappedExact
 
 private def deiterationSourceRaw : ConcreteDiagram 0 where
   regionCount := 3
@@ -519,6 +575,40 @@ private def nonAncestorDeiteration :
 theorem ordinary_deiteration_receipt :
     (checkOrdinaryDeiteration descendantDeiteration).toOption.isSome = true := by
   native_decide
+
+private def descendantDeiterationChecked :
+    CheckedOrdinaryDeiteration descendantDeiteration :=
+  (checkOrdinaryDeiteration descendantDeiteration).toOption.get
+    (by native_decide)
+
+/-- A surviving source wire maps to its exact dense removal position. -/
+example :
+    descendantDeiterationChecked.rawWireImage? deiterationSharedWire0 =
+      some (⟨0, by decide⟩ : descendantDeiterationChecked.target.val.WireId) := by
+  native_decide
+
+/-- For this accepted receipt, any wire excluded by the retained removal list
+has exactly no target image. -/
+example (wire : descendantDeiterationChecked.source.val.WireId)
+    (removed : wire ∉ Removal.wires innerOccurrence) :
+    descendantDeiterationChecked.rawWireImage? wire = none :=
+  descendantDeiterationChecked.rawWireImage_eq_none_of_not_mem wire removed
+
+/-- The accepted deiteration carrier is injective on surviving identities. -/
+example {left right : descendantDeiterationChecked.source.val.WireId}
+    {mapped : descendantDeiterationChecked.target.val.WireId}
+    (leftMapped : descendantDeiterationChecked.rawWireImage? left = some mapped)
+    (rightMapped : descendantDeiterationChecked.rawWireImage? right = some mapped) :
+    left = right :=
+  descendantDeiterationChecked.rawWireImage_injective leftMapped rightMapped
+
+/-- The accepted deiteration carrier preserves every surviving signature. -/
+example {wire : descendantDeiterationChecked.source.val.WireId}
+    {mapped : descendantDeiterationChecked.target.val.WireId}
+    (mappedExact : descendantDeiterationChecked.rawWireImage? wire = some mapped) :
+    (descendantDeiterationChecked.target.val.wires mapped).sig =
+      (descendantDeiterationChecked.source.val.wires wire).sig :=
+  descendantDeiterationChecked.rawWireImage_signature mappedExact
 
 example :
     (checkOrdinaryDeiteration descendantDeiteration).toOption.map

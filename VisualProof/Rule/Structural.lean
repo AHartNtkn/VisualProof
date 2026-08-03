@@ -584,6 +584,85 @@ def target
     CheckedDiagram definitions :=
   checked.inserted.source
 
+/-- Exact inverse image of the accepted insertion's raw host-wire carrier.
+Structural fragments expose every fragment wire at the boundary, so an
+accepted structural erasure currently maps every raw source wire; the partial
+codomain records the exact inverse-carrier ownership rather than assuming that
+fact at later consumers. -/
+def rawWireImage?
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralErasureInput base fragment}
+    (checked : StructuralErasureReceipt input)
+    (wire : checked.source.val.WireId) :
+    Option checked.target.val.WireId :=
+  if retained : wire.val < checked.target.val.wireCount then
+    some ⟨wire.val, retained⟩
+  else
+    none
+
+/-- The inverse raw host-wire carrier never identifies distinct source wires. -/
+theorem rawWireImage_injective
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralErasureInput base fragment}
+    (checked : StructuralErasureReceipt input)
+    {left right : checked.source.val.WireId}
+    {mapped : checked.target.val.WireId}
+    (leftMapped : checked.rawWireImage? left = some mapped)
+    (rightMapped : checked.rawWireImage? right = some mapped) :
+    left = right := by
+  unfold rawWireImage? at leftMapped rightMapped
+  split at leftMapped
+  next leftRetained =>
+    split at rightMapped
+    next rightRetained =>
+      apply Fin.ext
+      have leftExact : (⟨left.val, leftRetained⟩ :
+          checked.target.val.WireId) = mapped :=
+        Option.some.inj leftMapped
+      have rightExact : (⟨right.val, rightRetained⟩ :
+          checked.target.val.WireId) = mapped :=
+        Option.some.inj rightMapped
+      exact congrArg
+        (fun index : checked.target.val.WireId => index.val)
+        (leftExact.trans rightExact.symm)
+    next _ => simp at rightMapped
+  next _ => simp at leftMapped
+
+/-- Every mapped erasure wire retains the signature of its exact raw source. -/
+theorem rawWireImage_signature
+    {base : CheckedDiagram definitions}
+    {fragment : CheckedOpenDiagram definitions}
+    {input : StructuralErasureInput base fragment}
+    (checked : StructuralErasureReceipt input)
+    {wire : checked.source.val.WireId}
+    {mapped : checked.target.val.WireId}
+    (mappedExact : checked.rawWireImage? wire = some mapped) :
+    (checked.target.val.wires mapped).sig =
+      (checked.source.val.wires wire).sig := by
+  unfold rawWireImage? at mappedExact
+  split at mappedExact
+  next retained =>
+    have targetExact :
+        (⟨wire.val, retained⟩ : checked.target.val.WireId) = mapped :=
+      Option.some.inj mappedExact
+    subst mapped
+    have sourceExact :
+        wire = checked.inserted.rawHostWire ⟨wire.val, retained⟩ := by
+      apply Fin.ext
+      rfl
+    calc
+      (checked.target.val.wires ⟨wire.val, retained⟩).sig =
+          (checked.source.val.wires
+            (checked.inserted.rawHostWire ⟨wire.val, retained⟩)).sig :=
+        (checked.inserted.rawHostWire_signature
+          ⟨wire.val, retained⟩).symm
+      _ = (checked.source.val.wires wire).sig :=
+        congrArg (fun sourceWire =>
+          (checked.source.val.wires sourceWire).sig) sourceExact.symm
+  next _ => simp at mappedExact
+
 @[simp] theorem ofInsertion_source
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
@@ -1258,6 +1337,45 @@ def target
     CheckedDiagram definitions :=
   checked.result.checked
 
+/-- Exact raw image of one host wire through the accepted destination splice. -/
+def rawHostWire
+    {definitions : List (List Sig)}
+    {host : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {selection : CheckedSelection host}
+    {occurrence : Occurrence pattern host}
+    {input : OrdinaryIterationInput selection occurrence}
+    (checked : CheckedOrdinaryIteration input)
+    (wire : host.val.WireId) : checked.target.val.WireId :=
+  checked.destinationAttachment.hostWire wire
+
+/-- The accepted ordinary-iteration host carrier never coalesces source wires. -/
+theorem rawHostWire_injective
+    {definitions : List (List Sig)}
+    {host : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {selection : CheckedSelection host}
+    {occurrence : Occurrence pattern host}
+    {input : OrdinaryIterationInput selection occurrence}
+    (checked : CheckedOrdinaryIteration input) :
+    Function.Injective checked.rawHostWire :=
+  checked.destinationAttachment.hostWire_injective
+
+/-- Ordinary iteration preserves every host signature along its raw carrier. -/
+theorem rawHostWire_signature
+    {definitions : List (List Sig)}
+    {host : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {selection : CheckedSelection host}
+    {occurrence : Occurrence pattern host}
+    {input : OrdinaryIterationInput selection occurrence}
+    (checked : CheckedOrdinaryIteration input)
+    (wire : host.val.WireId) :
+    (checked.target.val.wires (checked.rawHostWire wire)).sig =
+      (host.val.wires wire).sig := by
+  simpa [target, rawHostWire, RawConcreteSpliceResult.checked] using
+    checked.destinationAttachment.diagram_wire_hostWire wire
+
 theorem equivalence
     {definitions : List (List Sig)}
     {host : CheckedDiagram definitions}
@@ -1701,6 +1819,133 @@ def target
     (checked : CheckedOrdinaryDeiteration input) :
     CheckedDiagram definitions :=
   checked.removed.complement
+
+/-- Exact source-to-complement image: survivors receive their dense removal
+index and every removed inner wire receives no image. -/
+def rawWireImage?
+    {definitions : List (List Sig)}
+    {sourceDiagram : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {innerSelection : CheckedSelection sourceDiagram}
+    {inner : Occurrence pattern sourceDiagram}
+    {justifierSelection : CheckedSelection sourceDiagram}
+    {justifier : Occurrence pattern sourceDiagram}
+    {input :
+      OrdinaryDeiterationInput innerSelection inner
+        justifierSelection justifier}
+    (checked : CheckedOrdinaryDeiteration input)
+    (wire : checked.source.val.WireId) :
+    Option checked.target.val.WireId :=
+  if retained : wire ∈ Removal.wires inner then
+    some (Removal.wireIndex inner wire retained)
+  else
+    none
+
+/-- Every checker-retained source wire maps to its exact dense removal index. -/
+theorem rawWireImage_of_mem
+    {definitions : List (List Sig)}
+    {sourceDiagram : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {innerSelection : CheckedSelection sourceDiagram}
+    {inner : Occurrence pattern sourceDiagram}
+    {justifierSelection : CheckedSelection sourceDiagram}
+    {justifier : Occurrence pattern sourceDiagram}
+    {input :
+      OrdinaryDeiterationInput innerSelection inner
+        justifierSelection justifier}
+    (checked : CheckedOrdinaryDeiteration input)
+    (wire : checked.source.val.WireId)
+    (retained : wire ∈ Removal.wires inner) :
+    checked.rawWireImage? wire =
+      some (Removal.wireIndex inner wire retained) := by
+  unfold rawWireImage?
+  rw [dif_pos retained]
+  apply congrArg some
+  apply Fin.ext
+  rfl
+
+/-- Every wire removed with the inner occurrence has no target identity. -/
+theorem rawWireImage_eq_none_of_not_mem
+    {definitions : List (List Sig)}
+    {sourceDiagram : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {innerSelection : CheckedSelection sourceDiagram}
+    {inner : Occurrence pattern sourceDiagram}
+    {justifierSelection : CheckedSelection sourceDiagram}
+    {justifier : Occurrence pattern sourceDiagram}
+    {input :
+      OrdinaryDeiterationInput innerSelection inner
+        justifierSelection justifier}
+    (checked : CheckedOrdinaryDeiteration input)
+    (wire : checked.source.val.WireId)
+    (removed : wire ∉ Removal.wires inner) :
+    checked.rawWireImage? wire = none := by
+  simp [rawWireImage?, removed]
+
+/-- Dense removal indices distinguish every pair of surviving source wires. -/
+theorem rawWireImage_injective
+    {definitions : List (List Sig)}
+    {sourceDiagram : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {innerSelection : CheckedSelection sourceDiagram}
+    {inner : Occurrence pattern sourceDiagram}
+    {justifierSelection : CheckedSelection sourceDiagram}
+    {justifier : Occurrence pattern sourceDiagram}
+    {input :
+      OrdinaryDeiterationInput innerSelection inner
+        justifierSelection justifier}
+    (checked : CheckedOrdinaryDeiteration input)
+    {left right : checked.source.val.WireId}
+    {mapped : checked.target.val.WireId}
+    (leftMapped : checked.rawWireImage? left = some mapped)
+    (rightMapped : checked.rawWireImage? right = some mapped) :
+    left = right := by
+  unfold rawWireImage? at leftMapped rightMapped
+  split at leftMapped
+  next leftRetained =>
+    split at rightMapped
+    next rightRetained =>
+      have indicesExact :
+          Removal.wireIndex inner left leftRetained =
+            Removal.wireIndex inner right rightRetained :=
+        Option.some.inj (leftMapped.trans rightMapped.symm)
+      have originsExact :=
+        congrArg (Removal.sourceWire inner) indicesExact
+      exact
+        (Removal.sourceWire_wireIndex inner left leftRetained).symm.trans
+          (originsExact.trans
+            (Removal.sourceWire_wireIndex inner right rightRetained))
+    next _ => simp at rightMapped
+  next _ => simp at leftMapped
+
+/-- Every surviving deiteration wire retains its exact source signature. -/
+theorem rawWireImage_signature
+    {definitions : List (List Sig)}
+    {sourceDiagram : CheckedDiagram definitions}
+    {pattern : CheckedOpenDiagram definitions}
+    {innerSelection : CheckedSelection sourceDiagram}
+    {inner : Occurrence pattern sourceDiagram}
+    {justifierSelection : CheckedSelection sourceDiagram}
+    {justifier : Occurrence pattern sourceDiagram}
+    {input :
+      OrdinaryDeiterationInput innerSelection inner
+        justifierSelection justifier}
+    (checked : CheckedOrdinaryDeiteration input)
+    {wire : checked.source.val.WireId}
+    {mapped : checked.target.val.WireId}
+    (mappedExact : checked.rawWireImage? wire = some mapped) :
+    (checked.target.val.wires mapped).sig =
+      (checked.source.val.wires wire).sig := by
+  unfold rawWireImage? at mappedExact
+  split at mappedExact
+  next retained =>
+    have targetExact : Removal.wireIndex inner wire retained = mapped :=
+      Option.some.inj mappedExact
+    subst mapped
+    simpa [source, target, RemovalResult.complement_generated] using
+      (Removal.diagramWire_signature inner
+        (Removal.wireIndex inner wire retained)).symm
+  next _ => simp at mappedExact
 
 /-- The surviving exact ancestor justifier in the computed complement. -/
 def survivingJustifier
