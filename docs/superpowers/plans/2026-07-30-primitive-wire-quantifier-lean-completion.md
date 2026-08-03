@@ -645,31 +645,31 @@ checkers.
 - `runPrimitiveProgram_sound`.
 - `compiled_join_redundant`, `compiled_sever_redundant`.
 
-- [ ] **Step 1: Add RED compiler fixtures.** Port the TypeScript round-trip
+- [x] **Step 1: Add RED compiler fixtures.** Port the TypeScript round-trip
   corpus, including empty content, one cut, parallel root items, shared
   root-scoped internal wires, repeated/dropped/permuted formals, uniform and
   per-site parameters, formal application, identities, folded refs, nullary
   content, and the worked `∃y.(P(x,y) ∧ ¬Q(y))` example.
-- [ ] **Step 2: Define the residual and measure.** The residual stores the
+- [x] **Step 2: Define the residual and measure.** The residual stores the
   live wire, remaining open content, formal count, and ambient mapping.
   Lexicographically measure nodes + internal wires + regions, then remaining
   argument plumbing. Prove every case strictly decreases; do not use partial
   recursion or a fuel value callers can choose.
-- [ ] **Step 3: Implement join compilation.** Case in this order:
+- [x] **Step 3: Implement join compilation.** Case in this order:
   root-scoped internal wire → `arityShift`; multiple root items →
   `parallelSplit`; one cut → `cutWrap`; empty → `endsDelete` then
   `vacuousElim`; one leaf → plumbing then merge, `applyFormal`,
   `identityLeaf`, or `refLeaf`.
-- [ ] **Step 4: Implement sever compilation.** Validate exact disjoint
+- [x] **Step 4: Implement sever compilation.** Validate exact disjoint
   occurrences and shared formal/ambient structure, construct the virtual
   monolithic sever target, compile the corresponding join there, reverse the
   checked program and orientation, and transport ids back through the
   occurrence removal receipt.
-- [ ] **Step 5: Prove program soundness.** Compose each primitive receipt's
+- [x] **Step 5: Prove program soundness.** Compose each primitive receipt's
   theorem and exact ordered boundary transport. The compiler is
   authoring-layer logic; primitive checkers remain unaware of residuals and
   monolithic inputs.
-- [ ] **Step 6: Prove redundancy.** For join, show the compiled raw program
+- [x] **Step 6: Prove redundancy.** For join, show the compiled raw program
   target is checked-isomorphic to the monolithic raw `plainFinal`; for sever,
   show it is checked-isomorphic to the raw monolithic target, in both cases
   with exact boundary transport and no normalization dependency. Derive monolithic
@@ -688,6 +688,13 @@ checkers.
     VisualProof/Rule/WirePrimitive/CompilerFixtures.lean
   git commit -m "feat: prove primitive compiler redundancy"
   ```
+
+  Constructive join and sever redundancy landed through commits `52fb5cd`
+  and `573b4aa`. Direct elaboration of the compiler, soundness, and executable
+  fixtures plus `formal:size` passes. The aggregate `lake build` portion
+  remains pending because unrelated pre-existing identity-normalization
+  semantics modules do not elaborate from source; this task does not modify
+  those modules.
 
 ---
 
