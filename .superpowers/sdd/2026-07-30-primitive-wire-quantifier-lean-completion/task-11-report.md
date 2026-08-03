@@ -317,3 +317,126 @@ laws`)
 
 **Concerns:** None for this slice. The broader `StepReceipt` authority
 migration remains deliberately unimplemented.
+
+## Complete 34-constructor owner-carrier audit
+
+**Status:** DONE_WITH_CONCERNS — 20 constructors have complete current owner
+routes; 14 require a coherent five-group prerequisite batch before
+`StepReceipt` can be sealed.
+
+**Foundation record:**
+`/tmp/task-11-complete-owner-audit-foundation-20260803.md`
+
+This audit is against HEAD `8f4101f`, which includes the green insertion
+carrier source commit `784bb84`. In the matrix, “logical” means the raw rule
+action before normalization, while “provenance” means the partial injective
+image of stable surviving source identities. Identity normalization is not
+part of any row: afterward, logical transport composes with `wireImage` and
+provenance composes with `externalImage?`.
+
+| # | Constructor | Canonical raw logical map | Canonical external provenance | Existing exact owner API | Missing owner API |
+|---:|---|---|---|---|---|
+| 1 | `refSpawn` | Total `checked.rawHostWire` | Same total injection | `StructuralInsertionReceipt.rawHostWire`, `_injective`, `_signature` | None |
+| 2 | `atomSpawn` | Total `checked.rawHostWire` | Same total injection | Same structural-insertion API | None |
+| 3 | `identityInsert` | Total `checked.rawHostWire` | Same total injection | Same structural-insertion API | None |
+| 4 | `wireJoin` | Inner wire coalesces to `outerWire`; every other wire uses `WireJoinResult.wireImage` | `inner -> none`; every `wire != inner` uses `wireImage` (so the stable outer survives) | Lower result owns `outer`, `inner`, `wireImage`, `outerWire`, `sourceWire` inverse laws, equal signatures, and retained signature law; `AppliedWireJoin` hides the result | Public applied-owner raw logical/provenance maps and their laws |
+| 5 | `erasure` | Compose `sourceIso.wires` with the partial inverse of the accepted insertion's host-wire carrier; inserted internal wires map to `none` | Same partial injection | `StructuralErasureReceipt` privately retains the exact insertion; `CompiledPrimitiveStep.erasure` owns `sourceIso` | Structural-erasure partial wire image plus injectivity/signature laws |
+| 6 | `wireSever` | Total retained branch `WireSeverResult.wireImage`; the newly split branch has no source preimage | Same total source injection | Lower result owns `wireImage`, signature, `sourceWireOfRetained` inverse laws, and `retained_ne_fresh`; `AppliedWireSever` hides the result | Public applied-owner total image plus injectivity/signature laws |
+| 7 | `iteration` | Total host image through the accepted `destinationAttachment` | Same total injection | `CheckedOrdinaryIteration` privately retains `destinationAttachment` and raw splice result | `rawHostWire`, injectivity, and signature laws |
+| 8 | `deiteration` | `wire -> Removal.wireIndex` exactly when the wire survives removal; removed inner wires map to `none` | Same partial injection | Receipt privately retains `RemovalResult`; lower `Removal.wires`, `wireIndex`, `sourceWire`, inverse laws, and `diagramWire_signature` exist | Public partial raw image plus injectivity/signature laws |
+| 9 | `doubleCutIntro` | Total `checked.wireEquiv` | Same total injection | `CheckedDoubleCut.wireEquiv`, `_injective`, `_signature` | None |
+| 10 | `doubleCutElim` | Total `checked.wireEquiv.symm` | Same total injection | `wireEquiv`, inverse bijection, `wireEquiv_symm_signature` | None |
+| 11 | `theorem` | For each source wire retained by occurrence removal: `Removal.wireIndex` then replacement attachment `hostWire`; removed theorem-side internal wires map to `none` | Same partial injection | `AppliedTheorem` privately retains occurrence, removal, replacement attachment, and raw splice; lower removal/splice carrier laws exist | Public replacement partial image plus injectivity/signature laws |
+| 12 | `vacuousIntro` | Total plain-to-bound image `(deletion.wireOriginEquiv wire).1` | Same total injection; the new bound wire has no source preimage | `EliminationReceipt.wireOriginEquiv` and `wire_signature` | None |
+| 13 | `vacuousElim` | Eliminated wire maps to `none`; every survivor maps through `targetWireImage ⟨wire, h⟩` | Same partial injection | `eliminatedWire`, `wireOriginEquiv`, `targetWireImage`, inverse laws, and `wire_signature` | None; injectivity/signature derive directly from the public equivalence |
+| 14 | `unfold` | Retained source wire: removal index then body-splice host image; removed reference-internal wire maps to `none` | Same partial injection | `AppliedUnfold` privately retains occurrence, removal, attachment, and raw splice; lower exact laws exist | Public replacement partial image plus injectivity/signature laws |
+| 15 | `fold` | Retained source wire: removal index then reference-splice host image; removed body-internal wire maps to `none` | Same partial injection | `AppliedFold` privately retains removal, attachment, and raw splice; lower exact laws exist | Public replacement partial image plus injectivity/signature laws |
+| 16 | `cutWrap` | Total `constructionResult.targetWireImage`; the acted wire maps to `targetWire` | Only `wire != acted` maps through `retainedWireImage`; the consumed/reallocated acted identity maps to `none` | Applied receipt exposes `constructionResult`; result exposes `wireOriginEquiv`, total/retained images, origin laws, retained signature, and acted target signature | None |
+| 17 | `cutAbsorb` | Total `wireOriginEquiv.symm`; the acted source maps to `targetWire` | Restrict the same carrier to `wire != acted`; the consumed/reallocated acted identity maps to `none` | Lower result retains `wireOriginEquiv`, `targetWire`, inverse wrap, and inverse isomorphism; applied receipt hides it; no direct wire signature law | Public construction result, directional target image, and injectivity/signature laws |
+| 18 | `parallelSplit` | Acted source maps to canonical `firstWire`; every other source maps through `retainedWireImage` | Only `wire != acted` uses `retainedWireImage`; both generated branches are new identities | Applied receipt exposes result; result exposes retained image, first/second wires, complete wire-origin equivalence, retained and branch signature laws | None |
+| 19 | `parallelFuse` | `left` and `right` coalesce to `targetWire`; all other wires use the retained image | Both acted/coalesced identities map to `none`; every wire distinct from both uses the retained injection | Lower result retains target, inverse split, inverse isomorphism, and a target allocation equivalence, but exposes no source-direction retained/logical classifier; applied receipt hides the result | Public construction result, retained source image, coalescing logical map, partial provenance map, and all signature/injectivity laws |
+| 20 | `endsDelete` | Total `constructionResult.targetWireImage` | Same total injection: only endpoints/nodes are deleted; no wire identity is removed | Applied receipt exposes result; `wireOriginEquiv`, `targetWireImage`, origin inverse, and signature law exist | None |
+| 21 | `endsSpawn` | Total `wireOriginEquiv.symm` | Same total injection: only endpoints/nodes are appended; no wire identity is replaced | Lower result exposes `wireOriginEquiv` but applied receipt hides the result and no directional signature law exists | Public construction result, source-to-target image, and injectivity/signature laws |
+| 22 | `arityShift` | Acted signature-changing wire maps to `none`; every other wire uses `transportRetainedWire` | Same partial injection | Public argument result, exact `[acted]` removal set, retained image/signature, target-exclusion and retained inverse machinery | None |
+| 23 | `arityUnshift` | Every member of `sourceRemovedWires` (acted head and checked local wires) maps to `none`; other wires use `argumentResult.retainedWireImage` | Same partial injection | Public argument result/removal set; lower retained image, signature, target-exclusion, and inverse laws | None |
+| 24 | `argPermute` | Acted signature-changing wire maps to `none`; every other wire uses `applied.wireEquiv` | Same partial injection | `wireEquiv` is an equivalence and `wireEquiv_retained_signature` covers `wire != acted` | None |
+| 25 | `argDuplicate` | Acted signature-changing wire maps to `none`; every other wire uses `wireEquiv` | Same partial injection | `wireEquiv`, equivalence injection, retained signature law | None |
+| 26 | `argContract` | Acted signature-changing wire maps to `none`; every other wire uses `wireEquiv` | Same partial injection | `wireEquiv`, equivalence injection, retained signature law | None |
+| 27 | `argDrop` | Acted signature-changing wire maps to `none`; every other wire uses `wireEquiv` | Same partial injection | `wireEquiv`, equivalence injection, retained signature law | None |
+| 28 | `argExtend` | Acted signature-changing wire maps to `none`; every other wire uses `wireEquiv` | Same partial injection | `wireEquiv`, equivalence injection, retained signature law | None |
+| 29 | `applyFormal` | Consumed acted relation maps to `none`; every other wire maps through `constructionResult.targetWireImage ⟨wire, h⟩` | Same partial injection | Applied receipt exposes `LeafResult`; result exposes retained `wireOriginEquiv`, target image, inverse law, and signature law | None |
+| 30 | `abstractFormal` | Total stable source-prefix image `wireSplitEquiv.symm (Fin.castAdd 1 wire)`; appended relation wire is fresh | Same total injection | `LeafAbstractResult.wireSplitEquiv` exists, but applied receipt hides the result and no source-prefix signature theorem exists | Public construction result and total source-wire image with injectivity/signature laws |
+| 31 | `identityLeaf` | Consumed acted relation maps to `none`; every other wire uses leaf `targetWireImage` | Same partial injection | Same complete `LeafResult` route as `applyFormal` | None |
+| 32 | `identityAbstract` | Total stable source-prefix image through `wireSplitEquiv.symm` | Same total injection | Same incomplete `LeafAbstractResult` route as `abstractFormal` | Public construction result and source-image laws |
+| 33 | `refLeaf` | Consumed acted relation maps to `none`; every other wire uses leaf `targetWireImage` | Same partial injection | Same complete `LeafResult` route as `applyFormal` | None |
+| 34 | `refAbstract` | Total stable source-prefix image through `wireSplitEquiv.symm` | Same total injection | Same incomplete `LeafAbstractResult` route as `abstractFormal` | Public construction result and source-image laws |
+
+### Batched missing owner APIs
+
+The following shapes are the complete prerequisite batch. Exact spelling may
+vary, but each authority and law must live at the named owner boundary.
+
+1. **Structural owner — `VisualProof/Rule/Structural.lean` (3 rows)**
+
+   - `StructuralErasureReceipt.rawWireImage?` from inserted raw source to base,
+     with `rawWireImage_injective` and `rawWireImage_signature`.
+   - `CheckedOrdinaryIteration.rawHostWire`,
+     `rawHostWire_injective`, and `rawHostWire_signature`, projected from the
+     retained destination attachment.
+   - `CheckedOrdinaryDeiteration.rawWireImage?`,
+     `rawWireImage_injective`, and `rawWireImage_signature`, projected from
+     the retained removal result.
+
+2. **Partition owner — `VisualProof/Rule/WirePrimitive/Partition.lean` (2 rows)**
+
+   - `AppliedWireSever.rawWireImage` with injectivity and signature laws,
+     projecting the hidden `WireSeverResult` carrier.
+   - `AppliedWireJoin.rawLogicalImage?` with signature law and
+     `rawExternalImage?` with injectivity/signature laws. The logical map sends
+     `inner` to `outerWire`; provenance rejects `inner` and retains `outer`.
+     These APIs should encapsulate the private outer/inner choice rather than
+     exposing a new caller decision.
+
+3. **Replacement owners — `VisualProof/Rule/Theorem.lean` and
+   `VisualProof/Rule/Definition.lean` (3 rows)**
+
+   - `AppliedTheorem.rawWireImage?`, `rawWireImage_injective`, and
+     `rawWireImage_signature`.
+   - The same three laws for `AppliedUnfold` and `AppliedFold`.
+   - Each is the owner-held composition of occurrence removal's retained
+     `wireIndex` with the accepted replacement attachment's `hostWire`; no
+     occurrence search or Step-level access to private fields is permitted.
+
+4. **Content owner — `VisualProof/Rule/WirePrimitive/Content.lean` plus its
+   concrete content carrier module (3 rows)**
+
+   - Expose `AppliedCutAbsorb.constructionResult`; add the source-to-target
+     `CutAbsorbResult.targetWireImage` and its injectivity/signature laws.
+     Provenance is that image restricted away from the consumed acted wire.
+   - Expose `AppliedParallelFuse.constructionResult`; add a construction-owned
+     retained source image, its injectivity/signature laws, the logical map
+     coalescing both inputs at `targetWire`, and the partial provenance map
+     excluding both inputs. `constructionWireEquiv` alone is insufficient
+     because it does not classify source identities.
+   - Expose `AppliedEndsSpawn.constructionResult`; add total
+     `EndsSpawnResult.targetWireImage` with injectivity/signature laws.
+
+5. **Leaf abstraction owner — `VisualProof/Rule/WirePrimitive/Leaves.lean`
+   plus `Diagram/Concrete/WirePrimitive/Leaves.lean` (3 rows)**
+
+   - Expose `constructionResult` on `AppliedAbstractFormal`,
+     `AppliedIdentityAbstract`, and `AppliedRefAbstract`.
+   - Add `LeafAbstractResult.sourceWireImage :=
+     wireSplitEquiv.symm (Fin.castAdd 1 wire)`, plus injectivity and signature
+     laws. The appended relation wire remains fresh and has no source origin.
+
+No other prerequisite is missing. In particular, structural insertion,
+double cut, vacuity, the ready content directions, arguments, forward leaves,
+and normalization already expose enough exact carrier evidence. The all-34
+migration should remain stopped until these five groups land together or in
+validated owner slices; otherwise Step would again need private-field
+reconstruction or partial authority.
+
+No Lean source was edited and no broad validation was run. The report diff was
+checked for whitespace errors. Protected dirty files and the preserved
+`OpenIsomorphism.lean` draft were not touched.
