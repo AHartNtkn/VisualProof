@@ -56,6 +56,7 @@ import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
 import { theoremActionCountLabel } from './shell-label'
+import { mountFormulaEntry } from './formula-entry'
 
 export { theoremActionCountLabel } from './shell-label'
 
@@ -678,6 +679,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const requireEdit = (): void => {
     if (mode !== 'edit') throw new Error('construction is an EDIT-mode operation; switch modes first')
   }
+  const formulaEntry = mountFormulaEntry(document.body, (diagram) => {
+    requireEdit()
+    pushEdit(diagram)
+  })
   // ---- goal + session ----
   const onSetLhs = guard(() => {
     requireEdit()
@@ -962,6 +967,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         : `[${head}] ${proofStatus()}`
     }
     compass.setMode(mode === 'edit' ? 'Edit' : mode === 'replay' ? 'Replay' : `Prove ${proofDirection() ?? ''}`.trim())
+    formulaBtn.hidden = mode !== 'edit'
+    if (mode !== 'edit') formulaEntry.close()
     backwardBtn.hidden = mode !== 'edit'
     forwardBtn.hidden = mode !== 'edit'
     dualBtn.hidden = mode !== 'edit'
@@ -1322,6 +1329,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const backwardBtn = button('Prove backward', () => beginTrack('backward'))
   const forwardBtn = button('Prove forward', () => beginTrack('forward'))
   const dualBtn = button('Prove fixed sides', beginDual)
+  const formulaBtn = button('Formula…', () => formulaEntry.open())
   const leaveBtn = button('Return to editing', leaveProof)
   // Theme toggle: view-only, persists for the session; paint reads `theme`
   // every frame, so flipping it re-styles the next frame with no rebuild.
@@ -1383,7 +1391,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   motionGroup.prepend(Object.assign(document.createElement('b'), { textContent: 'Motion' }))
   motionGroup.append(speedRow)
   const motionControls = [ghostMotion, hoverMotion, motionSpeed]
-  compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, leaveBtn, nameInput, declareBtn, helpBtn, helpText)
+  compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, formulaBtn, leaveBtn, nameInput, declareBtn, helpBtn, helpText)
   compass.utilities.append(
     themeBtn,
     companionBtn,
@@ -1685,6 +1693,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     spawnCascade.dispose()
     proofSpawn.dispose()
     proofMoves.dispose()
+    formulaEntry.close()
+    formulaEntry.dispose()
     mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null

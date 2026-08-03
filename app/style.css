@@ -12,7 +12,7 @@ button, input { font: inherit; }
 button { color: inherit; }
 
 #chrome { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
-#chrome button, #chrome input, #chrome section, #chrome aside { pointer-events: auto; }
+#chrome button, #chrome input, #chrome textarea, #chrome form, #chrome section, #chrome aside { pointer-events: auto; }
 .vpa-compass-north {
   position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 5px; padding: 5px;
@@ -77,15 +77,26 @@ button { color: inherit; }
 .vpa-motion-controls label { display: flex; align-items: center; gap: 6px; }
 .vpa-motion-controls input[type="range"] { width: 120px; }
 .vpa-motion-speed-value { min-width: 2.4em; color: #666154; }
+.vpa-formula-entry { position: fixed; z-index: 20; top: 62px; left: 50%; width: min(760px, calc(100vw - 24px)); box-sizing: border-box; transform: translateX(-50%); padding: 14px; border: 1px solid rgba(69, 66, 55, .24); border-radius: 11px; background: rgba(250, 249, 243, .98); box-shadow: 0 14px 44px rgba(50, 45, 30, .16); color: inherit; pointer-events: auto; }
+.vpa-formula-entry[hidden] { display: none; }
+.vpa-formula-entry form { display: grid; gap: 8px; }
+.vpa-formula-entry h2 { margin: 0; font-size: 15px; }
+.vpa-formula-entry label { font-size: 12px; color: #666154; }
+.vpa-formula-entry textarea { box-sizing: border-box; min-height: 132px; width: 100%; resize: vertical; border: 1px solid rgba(69, 66, 55, .3); border-radius: 7px; padding: 8px; background: inherit; color: inherit; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.vpa-formula-entry textarea[aria-invalid="true"] { border-color: #a43d26; outline-color: #a43d26; }
+.vpa-formula-error { min-height: 1.25em; color: #a43d26; font-size: 12px; }
+.vpa-formula-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.vpa-formula-actions button { border: 1px solid rgba(69, 66, 55, .22); border-radius: 7px; padding: 5px 9px; background: rgba(255, 255, 252, .8); cursor: pointer; }
 .vpa-menu { position: fixed; z-index: 50; max-width: 350px; padding: 8px; border-radius: 8px; background: rgba(250,249,243,.98); box-shadow: 0 8px 28px rgba(50,45,30,.18); }
 @media (prefers-color-scheme: dark) {
-  .vpa-compass-north, .vpa-compass-surface, .vpa-temporal, .vpa-menu { color-scheme: dark; background: rgba(32, 31, 29, .96); color: #eee9df; border-color: rgba(238,233,223,.24); }
+  .vpa-compass-north, .vpa-compass-surface, .vpa-temporal, .vpa-menu, .vpa-formula-entry { color-scheme: dark; background: rgba(32, 31, 29, .96); color: #eee9df; border-color: rgba(238,233,223,.24); }
   .vpa-status, .vpa-temporal-copy, .vpa-ledger > header small { color: #bbb4a8; }
 }
 #chrome[data-color-mode="dark"] .vpa-compass-north,
 #chrome[data-color-mode="dark"] .vpa-compass-surface,
 #chrome[data-color-mode="dark"] .vpa-temporal,
-#chrome[data-color-mode="dark"] .vpa-menu { color-scheme: dark; background: rgba(28, 32, 38, .96); color: #e6e1d6; border-color: rgba(230,225,214,.24); }
+#chrome[data-color-mode="dark"] .vpa-menu,
+body:has(#chrome[data-color-mode="dark"]) .vpa-formula-entry { color-scheme: dark; background: rgba(28, 32, 38, .96); color: #e6e1d6; border-color: rgba(230,225,214,.24); }
 #chrome[data-color-mode="dark"] .vpa-status,
 #chrome[data-color-mode="dark"] .vpa-temporal-copy,
 #chrome[data-color-mode="dark"] .vpa-ledger > header small { color: #b8b3aa; }

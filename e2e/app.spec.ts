@@ -20,6 +20,11 @@ declare global {
         pins: string[]
         userZoom: number
       }
+      diagram(): {
+        nodes: { id: string; kind: string }[]
+        wires: { id: string }[]
+        regions: { id: string; kind: string }[]
+      }
       dispose(): void
     }
   }
@@ -62,6 +67,51 @@ test('the app boots empty and loads and unloads a zero-signature theory file', a
   }).click()
   await expect(library).not.toContainText('StructuralReflexivity')
   await expect(page.locator('#status')).toContainText('EDIT')
+})
+
+test('formula entry creates a diagram, rejects malformed source, and preserves Edit undo', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
+  await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  const form = page.getByRole('dialog')
+  await form.getByLabel('Formula to diagram').fill('∀ Z : i → o. ∀ S : i → i → o. (∃ z. Z(z)) ⇒ (∀ z. Z(z) ⇒ (∀ P : i → o. ((∀ n. Z(n) ⇒ P(n)) & (∀ n m. (P(n) & S(n, m)) ⇒ P(m))) ⇒ P(z)))')
+  await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
+
+  await expect(form).toBeHidden()
+  const diagramSummary = () => page.evaluate(() => {
+    const diagram = window.__vpaDebug!.diagram()
+    return {
+      cutRegions: diagram.regions.filter((region) => region.kind === 'cut').length,
+      atoms: diagram.nodes.filter((node) => node.kind === 'atom').length,
+      wires: diagram.wires.length,
+    }
+  })
+  expect(await diagramSummary()).toEqual({
+    cutRegions: 22,
+    atoms: 8,
+    wires: 8,
+  })
+
+  await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  await form.getByLabel('Formula to diagram').fill('∀ x. Missing(x)')
+  await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
+
+  await expect(form.locator('.vpa-formula-error')).toBeVisible()
+  await expect(form.locator('.vpa-formula-error')).toContainText(/line 1, column \d+/)
+  expect(await diagramSummary()).toEqual({
+    cutRegions: 22,
+    atoms: 8,
+    wires: 8,
+  })
+
+  await page.keyboard.press('Control+z')
+  expect(await diagramSummary()).toEqual({
+    cutRegions: 0,
+    atoms: 0,
+    wires: 0,
+  })
 })
 
 test('the committed Frege theory loads through the ordinary library path', async ({ page, theoryFiles }) => {
