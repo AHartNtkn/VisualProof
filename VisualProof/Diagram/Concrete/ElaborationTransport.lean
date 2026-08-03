@@ -420,13 +420,13 @@ theorem compileNode?_natural
       cases headEquation :
           resolvePort? left leftContext leftNode .head (.rel args) with
       | none =>
-          simp [compileNode?, sourceNodeData, headEquation]
+          simp [compileNode?_equation, sourceNodeData, headEquation]
             at sourceCompiled
       | some head =>
           cases argsEquation :
               resolveArgs? left leftContext leftNode args 0 with
           | none =>
-              simp [compileNode?, sourceNodeData, headEquation,
+              simp [compileNode?_equation, sourceNodeData, headEquation,
                 argsEquation] at sourceCompiled
           | some arguments =>
               have sourceItemEquality :
@@ -434,7 +434,7 @@ theorem compileNode?_natural
                     Item definitions leftContext.sigs) =
                     sourceItem := by
                 exact Option.some.inj (by
-                  simpa [compileNode?, sourceNodeData, headEquation,
+                  simpa [compileNode?_equation, sourceNodeData, headEquation,
                     argsEquation] using sourceCompiled)
               subst sourceItem
               have targetHead :=
@@ -454,14 +454,14 @@ theorem compileNode?_natural
                     simp [ConcreteDiagram.requiredPorts,
                       targetNodeData, bound])
                   argsEquation
-              simp [compileNode?, targetNodeData, targetHead,
+              simp [compileNode?_equation, targetNodeData, targetHead,
                 targetArguments, Item.renameWires]
   | ref sourceRegion definition args =>
       have targetNodeData :
           right.nodes rightNode =
             .ref (regionMap sourceRegion) definition args := by
         rw [nodeShape, sourceNodeData]
-      simp only [compileNode?, sourceNodeData] at sourceCompiled
+      simp only [compileNode?_equation, sourceNodeData] at sourceCompiled
       split at sourceCompiled
       · rename_i signature
         cases argsEquation :
@@ -487,7 +487,7 @@ theorem compileNode?_natural
                   simp [ConcreteDiagram.requiredPorts,
                     targetNodeData, bound])
                 argsEquation
-            simp only [compileNode?, targetNodeData]
+            simp only [compileNode?_equation, targetNodeData]
             split
             · simp [targetArguments, reference,
                 Item.renameWires]
@@ -498,7 +498,7 @@ theorem compileNode?_natural
           right.nodes rightNode =
             .identity (regionMap sourceRegion) sig arity := by
         rw [nodeShape, sourceNodeData]
-      simp only [compileNode?, sourceNodeData] at sourceCompiled
+      simp only [compileNode?_equation, sourceNodeData] at sourceCompiled
       split at sourceCompiled
       · rename_i arityWitness
         cases portsEquation :
@@ -523,7 +523,7 @@ theorem compileNode?_natural
                   simp [ConcreteDiagram.requiredPorts,
                     targetNodeData, bound])
                 portsEquation
-            simp [compileNode?, targetNodeData, arityWitness,
+            simp [compileNode?_equation, targetNodeData, arityWitness,
               targetPorts, Item.renameWires]
       · simp at sourceCompiled
 
@@ -576,14 +576,14 @@ theorem compileNodes?_singleton_natural
   cases sourceNodeEquation :
       compileNode? definitions left leftContext leftNode with
   | none =>
-      simp [compileNodes?, sourceNodeEquation] at sourceCompiled
+      simp [compileNodes?_equation, sourceNodeEquation] at sourceCompiled
   | some sourceItem =>
       have sourceItemsEquality :
           (ItemSeq.cons sourceItem .nil :
             ItemSeq definitions leftContext.sigs) =
             sourceItems := by
         exact Option.some.inj (by
-          simpa [compileNodes?, sourceNodeEquation] using
+          simpa [compileNodes?_equation, sourceNodeEquation] using
             sourceCompiled)
       subst sourceItems
       have targetNodeEquation :=
@@ -592,7 +592,7 @@ theorem compileNodes?_singleton_natural
           forwardIncident sourceNodeEquation
       refine
         ⟨.cons (sourceItem.renameWires rho) .nil, ?_, rfl⟩
-      simp [compileNodes?, targetNodeEquation]
+      simp [compileNodes?_equation, targetNodeEquation]
 
 private theorem resolvePort?_reflect
     {definitions : List (List Sig)}
@@ -933,13 +933,13 @@ private theorem compileNode?_reflect
           resolvePort? source sourceContext sourceNode .head
             (.rel args) with
       | none =>
-          simp [compileNode?, sourceNodeData, sourceHeadEquation]
+          simp [compileNode?_equation, sourceNodeData, sourceHeadEquation]
             at sourceCompiled
       | some sourceHead =>
           cases sourceArgsEquation :
               resolveArgs? source sourceContext sourceNode args 0 with
           | none =>
-              simp [compileNode?, sourceNodeData,
+              simp [compileNode?_equation, sourceNodeData,
                 sourceHeadEquation, sourceArgsEquation]
                 at sourceCompiled
           | some sourceArgs =>
@@ -948,7 +948,7 @@ private theorem compileNode?_reflect
                     Item definitions sourceContext.sigs) =
                     sourceItem := by
                 exact Option.some.inj (by
-                  simpa [compileNode?, sourceNodeData,
+                  simpa [compileNode?_equation, sourceNodeData,
                     sourceHeadEquation, sourceArgsEquation] using
                       sourceCompiled)
               subst sourceItem
@@ -973,7 +973,7 @@ private theorem compileNode?_reflect
                       sourceNodeData, bound])
                   sourceArgsEquation
               refine ⟨.atom targetHead targetArgs, ?_, ?_⟩
-              · simp [compileNode?, targetNodeData,
+              · simp [compileNode?_equation, targetNodeData,
                   targetHeadEquation, targetArgsEquation]
               · simp [Item.renameWires, sourceHeadEquality,
                   sourceArgsEquality]
@@ -982,7 +982,7 @@ private theorem compileNode?_reflect
           source.nodes sourceNode =
             .ref (regionOrigin targetRegion) definition args := by
         rw [nodeShape, targetNodeData]
-      simp only [compileNode?, sourceNodeData] at sourceCompiled
+      simp only [compileNode?_equation, sourceNodeData] at sourceCompiled
       split at sourceCompiled
       · rename_i signature
         cases sourceArgsEquation :
@@ -1012,7 +1012,7 @@ private theorem compileNode?_reflect
                     sourceNodeData, bound])
                 sourceArgsEquation
             refine ⟨.named reference targetArgs, ?_, ?_⟩
-            · simp only [compileNode?, targetNodeData]
+            · simp only [compileNode?_equation, targetNodeData]
               split
               · simp [targetArgsEquation, reference]
               · contradiction
@@ -1023,7 +1023,7 @@ private theorem compileNode?_reflect
           source.nodes sourceNode =
             .identity (regionOrigin targetRegion) sig arity := by
         rw [nodeShape, targetNodeData]
-      simp only [compileNode?, sourceNodeData] at sourceCompiled
+      simp only [compileNode?_equation, sourceNodeData] at sourceCompiled
       split at sourceCompiled
       · rename_i arityWitness
         cases sourcePortsEquation :
@@ -1055,7 +1055,7 @@ private theorem compileNode?_reflect
               ⟨.identity sig targetPorts.val (by
                 simpa [targetPorts.property] using arityWitness),
                 ?_, ?_⟩
-            · simp [compileNode?, targetNodeData, arityWitness,
+            · simp [compileNode?_equation, targetNodeData, arityWitness,
                 targetPortsEquation]
             · simp [Item.renameWires, sourcePortsEquality]
       · simp at sourceCompiled
@@ -1114,14 +1114,14 @@ theorem compileNodes?_singleton_reflect
   cases sourceNodeEquation :
       compileNode? definitions source sourceContext sourceNode with
   | none =>
-      simp [compileNodes?, sourceNodeEquation] at sourceCompiled
+      simp [compileNodes?_equation, sourceNodeEquation] at sourceCompiled
   | some sourceItem =>
       have sourceItemsEquality :
           (ItemSeq.cons sourceItem .nil :
             ItemSeq definitions sourceContext.sigs) =
             sourceItems := by
         exact Option.some.inj (by
-          simpa [compileNodes?, sourceNodeEquation] using
+          simpa [compileNodes?_equation, sourceNodeEquation] using
             sourceCompiled)
       subst sourceItems
       obtain ⟨targetItem, targetNodeEquation, sourceItemEquality⟩ :=
@@ -1129,7 +1129,7 @@ theorem compileNodes?_singleton_reflect
           wireSignature contextAction regionOrigin nodeShape ownerImage
           sourceNodeEquation
       refine ⟨.cons targetItem .nil, ?_, ?_⟩
-      · simp [compileNodes?, targetNodeEquation]
+      · simp [compileNodes?_equation, targetNodeEquation]
       · simp [sourceItemEquality, ItemSeq.renameWires]
 
 private def binaryIdentityTemplate (definitionCount : Nat) (sig : Sig) :
@@ -1272,7 +1272,7 @@ theorem compileNodes?_binaryIdentity_singleton
   have sourceNodeCompiled : compileNode? definitions template templateContext
       ⟨0, by simp [template, binaryIdentityTemplate]⟩ =
         some (Item.binaryIdentity sig .here (.there .here)) := by
-    unfold compileNode?
+    rw [compileNode?_equation]
     rw [show
       template.nodes
           ⟨0, by simp [template, binaryIdentityTemplate]⟩ =
@@ -1294,8 +1294,7 @@ theorem compileNodes?_binaryIdentity_singleton
       [⟨0, by simp [template, binaryIdentityTemplate]⟩] =
         some
           (.cons (Item.binaryIdentity sig .here (.there .here)) .nil) := by
-    unfold compileNodes?
-    rw [sourceNodeCompiled]
+    simp [compileNodes?_equation, sourceNodeCompiled]
     rfl
   obtain ⟨targetItems, targetCompiled, targetEquality⟩ :=
     compileNodes?_singleton_natural wellFormed contextNodup rho wireMap
@@ -1379,7 +1378,7 @@ theorem compileNodes?_identity_origins
       items = .cons (.identity sig ports two) .nil ∧
       ∀ wire, wire ∈ diagram.identityIncidentWires node ↔
         ∃ resolvedVar ∈ ports, WireContext.origin diagram context.ids resolvedVar = wire := by
-  simp only [compileNodes?, compileNode?, nodeData] at compiled
+  simp only [compileNodes?_equation, compileNode?_equation, nodeData] at compiled
   split at compiled
   · rename_i arityWitness
     cases portsEquation :
@@ -1479,7 +1478,7 @@ theorem compileNodes?_atom_shape
                 subst values
                 exact ⟨portOrigin _ _ _ headEquation,
                   induction (index + 1) tail tailEquation⟩
-  simp only [compileNodes?, compileNode?, nodeData] at compiled
+  simp only [compileNodes?_equation, compileNode?_equation, nodeData] at compiled
   cases headEquation : resolvePort? diagram context node .head (.rel args) with
   | none => simp [headEquation] at compiled
   | some head =>

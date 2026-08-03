@@ -1060,11 +1060,16 @@ theorem compileNodes_natural
         targetItems = sourceItems.renameWires context.wireRenaming := by
   induction nodes generalizing sourceItems with
   | nil =>
-      simp only [compileNodes?, Option.some.injEq] at sourceCompiled ⊢
-      subst sourceItems
-      exact ⟨.nil, rfl, rfl⟩
+      rw [compileNodes?_equation] at sourceCompiled
+      have sourceItemsExact :
+          (.nil : ItemSeq definitions sourceContext.sigs) = sourceItems :=
+        Option.some.inj sourceCompiled
+      rw [← sourceItemsExact]
+      refine ⟨.nil, ?_, rfl⟩
+      rw [compileNodes?_equation]
   | @cons sourceTail targetTail sourceNode retained tail induction =>
-      simp only [compileNodes?] at sourceCompiled ⊢
+      rw [compileNodes?_equation] at sourceCompiled
+      dsimp only at sourceCompiled
       cases sourceHeadEquation :
           ConcreteElaboration.Internal.compileNode? definitions source.val
             sourceContext sourceNode with
@@ -1086,7 +1091,10 @@ theorem compileNodes_natural
                 induction sourceTailEquation
               refine ⟨.cons (sourceHead.renameWires context.wireRenaming)
                 targetRest, ?_, ?_⟩
-              · simp [targetHeadEquation, targetTailEquation]
+              · rw [compileNodes?_equation]
+                dsimp only
+                rw [targetHeadEquation, targetTailEquation]
+                rfl
               · simp [ItemSeq.renameWires, targetRestExact]
 
 /-- Ordered retained node compilation is literally shared after reindexing
@@ -1281,11 +1289,12 @@ theorem compileRegion_reindexed_outside
   | zero =>
       intro region sourceContext targetContext context _targetAbove _notBelow
         _notContains sourceBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ childFuel induction =>
       intro region sourceContext targetContext context targetAbove notBelow
         notContains sourceBody sourceCompiled
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
       obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
         Option.bind_eq_some_iff.mp sourceCompiled
       obtain ⟨sourceChildren, sourceChildrenCompiled, sourceFinished⟩ :=
@@ -1386,7 +1395,8 @@ theorem compileRegion_reindexed_outside
       let targetBody := ConcreteElaboration.finishRegion result.checked.val
         targetContext (result.regionImage region) targetCore
       refine ⟨targetBody, ?_, ?_⟩
-      · simp only [ConcreteElaboration.compileRegion?]
+      · rw [ConcreteElaboration.compileRegion?_succ]
+        dsimp only
         rw [targetNodesCompiled, result.childrenOf_decomposition region]
         have mappedChildrenExact :
             (source.val.childrenOf region).map result.regionEquiv =

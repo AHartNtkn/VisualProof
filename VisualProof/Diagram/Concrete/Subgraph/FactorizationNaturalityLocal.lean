@@ -676,8 +676,12 @@ theorem identityNodes_denote_iff_requests
           identity := by
   induction indices generalizing items with
   | nil =>
-      simp [ConcreteElaboration.compileNodes?] at itemsCompiled
-      subst items
+      rw [ConcreteElaboration.compileNodes?_equation] at itemsCompiled
+      have itemsEquality :
+          (.nil : ItemSeq definitions
+            (generatedSiteContext attachment outer).sigs) = items :=
+        Option.some.inj itemsCompiled
+      rw [← itemsEquality]
       simp [denoteItemSeq]
   | cons identity tail induction =>
       obtain ⟨headItem, tailItems, headCompiled, tailCompiled,
@@ -1425,8 +1429,22 @@ private theorem compileNodes_cons_eq_singleton_bind
           ConcreteElaboration.compileNodes? definitions diagram
             context nodes
         pure (headItems.append tailItems)) := by
-  simp [ConcreteElaboration.compileNodes?, ItemSeq.append,
-    Option.bind_assoc]
+  rw [ConcreteElaboration.compileNodes?_equation]
+  dsimp only
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context
+    [node]]
+  dsimp only
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context
+    []]
+  cases headEquation :
+      ConcreteElaboration.Internal.compileNode? definitions diagram context
+        node with
+  | none => simp [headEquation]
+  | some head =>
+      cases tailEquation :
+          ConcreteElaboration.compileNodes? definitions diagram context nodes with
+      | none => simp [headEquation, tailEquation]
+      | some tail => simp [headEquation, tailEquation, ItemSeq.append]
 
 private theorem compileNodes_cons_split
     (definitions : List (List Sig))
@@ -1502,9 +1520,12 @@ theorem copiedFragmentNodes_natural
           (ItemSeq.nil : ItemSeq definitions sourceContext.sigs) =
             sourceItems :=
         Option.some.inj (by
-          simpa [ConcreteElaboration.compileNodes?] using sourceCompiled)
+          rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+          exact sourceCompiled)
       subst sourceItems
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?], rfl⟩
+      refine ⟨.nil, ?_, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
+      rfl
   | cons node tail induction =>
       intro sourceItems sourceCompiled
       obtain ⟨headItems, tailItems, headCompiled, tailCompiled,
@@ -1724,9 +1745,12 @@ theorem copiedHostNodes_natural
           (ItemSeq.nil : ItemSeq definitions sourceContext.sigs) =
             sourceItems :=
         Option.some.inj (by
-          simpa [ConcreteElaboration.compileNodes?] using sourceCompiled)
+          rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+          exact sourceCompiled)
       subst sourceItems
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?], rfl⟩
+      refine ⟨.nil, ?_, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
+      rfl
   | cons node tail induction =>
       intro sourceItems sourceCompiled
       obtain ⟨headItems, tailItems, headCompiled, tailCompiled,

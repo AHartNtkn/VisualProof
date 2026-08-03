@@ -427,16 +427,8 @@ private theorem compileRegion?_complete
             exact ih nextDepth nextFuel childCoverage)
       refine ⟨finishRegion diagram context region
         (.mk (nodes.append children)), ?_⟩
-      simp only [compileRegion?]
-      change (compileNodes? definitions diagram extended
-        (diagram.nodesAt region)).bind (fun compiledNodes =>
-          (compileChildrenWith? definitions diagram
-            (compileRegion? definitions diagram fuel) extended
-            (diagram.childrenOf region)).bind (fun compiledChildren =>
-              some (finishRegion diagram context region
-                (.mk (compiledNodes.append compiledChildren))))) =
-        some (finishRegion diagram context region
-          (.mk (nodes.append children)))
+      rw [compileRegion?_succ]
+      simp only [extended]
       rw [nodesCompiled, childrenCompiled]
       rfl
 

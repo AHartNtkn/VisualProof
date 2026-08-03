@@ -51,13 +51,16 @@ private theorem fragmentRegion_denotation_natural
       denoteRegion pre definitionEnv (Env.comp targetEnv rho) sourceBody := by
   cases sourceFuel with
   | zero =>
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ sourceChildFuel =>
       cases targetFuel with
       | zero =>
-          simp [ConcreteElaboration.compileRegion?] at targetCompiled
+          simp at targetCompiled
       | succ targetChildFuel =>
-          simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
+          rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+          dsimp only at sourceCompiled
+          rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+          dsimp only at targetCompiled
           cases sourceNodesEquation :
               ConcreteElaboration.compileNodes? definitions
                 fragment.val.diagram (sourceContext.extend region)
@@ -755,18 +758,20 @@ theorem hostRegion_denotation_natural_outside
       denoteRegion pre definitionEnv (Env.comp targetEnv rho) sourceBody := by
   cases sourceFuel with
   | zero =>
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ sourceChildFuel =>
       cases targetFuel with
       | zero =>
-          simp [ConcreteElaboration.compileRegion?] at targetCompiled
+          simp at targetCompiled
       | succ targetChildFuel =>
           have notSite : region ≠ site := by
             intro same
             subst region
             exact outside (ConcreteDiagram.encloses_refl base.val site)
-          simp only [ConcreteElaboration.compileRegion?]
-            at sourceCompiled targetCompiled
+          rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+          dsimp only at sourceCompiled
+          rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+          dsimp only at targetCompiled
           cases sourceNodesEquation :
               ConcreteElaboration.compileNodes? definitions base.val
                 (sourceContext.extend region)

@@ -792,11 +792,14 @@ theorem compileRegion_equiv_outside
   | zero =>
       intro sourceContext region sourceAbove outside sourceBody targetBody
         sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ childFuel induction =>
       intro sourceContext region sourceAbove outside sourceBody targetBody
         sourceCompiled targetCompiled pre definitionEnv targetEnv
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+      dsimp only at targetCompiled
       obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
         Option.bind_eq_some_iff.mp sourceCompiled
       obtain ⟨sourceChildren, sourceChildrenCompiled, sourceBodyEquation⟩ :=

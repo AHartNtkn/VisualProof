@@ -64,7 +64,7 @@ theorem recursiveNormalizedChildShape_complete
         normalizedTarget correspondence sourceHead targetHead headNormalization
         regionClimb fuelExact below sourceAbove targetAbove sourceCoverage
         sourceBody targetBody sourceCompiled targetCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ fuel induction =>
       intro depth region sourceOuter targetOuter normalizedSource
         normalizedTarget correspondence sourceHead targetHead headNormalization

@@ -45,7 +45,7 @@ private theorem compileNodes?_node_for_item
             some (.cons item .nil)
   | [], items, compiled, item, member => by
       have itemsExact : (.nil : ItemSeq definitions context.sigs) = items :=
-        Option.some.inj (by simpa [compileNodes?] using compiled)
+        Option.some.inj (by simpa [compileNodes?_equation] using compiled)
       subst items
       simp [ItemSeq.toList] at member
   | head :: tail, items, compiled, item, member => by
@@ -164,12 +164,13 @@ private theorem compileRegion?_forward_denotation
       intro left right iso leftWellFormed rightWellFormed leftContext
         rightContext contexts region leftAbove rightAbove leftEnv
         leftBody rightBody leftCompiled
-      simp [compileRegion?] at leftCompiled
+      simp at leftCompiled
   | succ fuel induction =>
       intro left right iso leftWellFormed rightWellFormed leftContext
         rightContext contexts region leftAbove rightAbove leftEnv
         leftBody rightBody leftCompiled rightCompiled leftDenotes
-      simp only [compileRegion?] at leftCompiled rightCompiled
+      rw [compileRegion?_succ] at leftCompiled rightCompiled
+      dsimp only at leftCompiled rightCompiled
       cases leftNodesEquation :
           compileNodes? definitions left (leftContext.extend region)
             (left.nodesAt region) with

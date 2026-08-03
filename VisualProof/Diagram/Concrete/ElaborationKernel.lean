@@ -5,6 +5,12 @@ universe u
 
 namespace ConcreteElaboration
 
+/-- Forget a dependent origin receipt while retaining its generated value. -/
+def eraseOrigins? {motive : α → Type u} :
+    Option (Sigma motive) → Option α
+  | none => none
+  | some ⟨value, _⟩ => some value
+
 namespace Internal
 
 def resolveWireIn? (diagram : ConcreteDiagram definitionCount) :
@@ -217,11 +223,20 @@ def definitionVarAt :
   | _ :: rest, ⟨index + 1, bound⟩ =>
       .there (definitionVarAt rest ⟨index, Nat.lt_of_succ_lt_succ bound⟩)
 
-def compileNode? (definitions : List (List Sig))
+structure NodeOrigin
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram)
+    (node : diagram.NodeId)
+    (_item : Item definitions context.sigs) : Type where
+  source : diagram.NodeId
+  source_eq : source = node
+
+def compileNodeWithOrigin? (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (context : WireContext diagram) (node : diagram.NodeId) :
-    Option (Item definitions context.sigs) :=
-  match diagram.nodes node with
+    Option (Sigma (NodeOrigin definitions diagram context node)) :=
+  ((match diagram.nodes node with
   | .atom _ args => do
       let head ← resolvePort? diagram context node .head (.rel args)
       let arguments ← resolveArgs? diagram context node args 0
@@ -239,21 +254,156 @@ def compileNode? (definitions : List (List Sig))
         pure (.identity sig ports.val (by
           simpa only [ports.property] using arityWitness))
       else
-        none
+        none) : Option (Item definitions context.sigs)).map fun item =>
+          ⟨item, ⟨node, rfl⟩⟩
+
+def compileNode? (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram) (node : diagram.NodeId) :
+    Option (Item definitions context.sigs) :=
+  eraseOrigins? (compileNodeWithOrigin? definitions diagram context node)
+
+/-- Computation equation for the body projection of the origin-owning node
+compiler. -/
+theorem compileNode?_equation
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram) (node : diagram.NodeId) :
+    compileNode? definitions diagram context node =
+      match diagram.nodes node with
+      | .atom _ args => do
+          let head ← resolvePort? diagram context node .head (.rel args)
+          let arguments ← resolveArgs? diagram context node args 0
+          pure (.atom head arguments)
+      | .ref _ definition args =>
+          if signature : definitions.get definition = args then do
+            let arguments ← resolveArgs? diagram context node args 0
+            let reference := definitionVarAt definitions definition
+            pure (.named (signature ▸ reference) arguments)
+          else
+            none
+      | .identity _ sig arity =>
+          if arityWitness : 2 ≤ arity then do
+            let ports ← resolveIdentityPorts? diagram context node sig arity 0
+            pure (.identity sig ports.val (by
+              simpa only [ports.property] using arityWitness))
+          else
+            none := by
+  unfold compileNode? compileNodeWithOrigin?
+  generalize candidate :
+      ((match diagram.nodes node with
+      | .atom _ args => do
+          let head ← resolvePort? diagram context node .head (.rel args)
+          let arguments ← resolveArgs? diagram context node args 0
+          pure (.atom head arguments)
+      | .ref _ definition args =>
+          if signature : definitions.get definition = args then do
+            let arguments ← resolveArgs? diagram context node args 0
+            let reference := definitionVarAt definitions definition
+            pure (.named (signature ▸ reference) arguments)
+          else none
+      | .identity _ sig arity =>
+          if arityWitness : 2 ≤ arity then do
+            let ports ←
+              resolveIdentityPorts? diagram context node sig arity 0
+            pure (.identity sig ports.val (by
+              simpa only [ports.property] using arityWitness))
+          else none) : Option (Item definitions context.sigs)) = value
+  cases value <;> rfl
 
 end Internal
 
 open Internal
 
-def compileNodes? (definitions : List (List Sig))
+inductive NodeOrigins
+    (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length)
     (context : WireContext diagram) :
-    List diagram.NodeId → Option (ItemSeq definitions context.sigs)
-  | [] => some .nil
+    List diagram.NodeId → ItemSeq definitions context.sigs → Type
+  | nil : NodeOrigins definitions diagram context [] .nil
+  | cons (node : diagram.NodeId) (item : Item definitions context.sigs)
+      (tail : List diagram.NodeId)
+      (items : ItemSeq definitions context.sigs)
+      (origin : NodeOrigin definitions diagram context node item)
+      (rest : NodeOrigins definitions diagram context tail items) :
+      NodeOrigins definitions diagram context (node :: tail)
+        (.cons item items)
+
+def compileNodesWithOrigins? (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram) :
+    (nodes : List diagram.NodeId) →
+      Option (Sigma (NodeOrigins definitions diagram context nodes))
+  | [] => some ⟨.nil, .nil⟩
   | node :: tail => do
-      let head ← compileNode? definitions diagram context node
-      let rest ← compileNodes? definitions diagram context tail
-      pure (.cons head rest)
+      let ⟨head, origin⟩ ←
+        compileNodeWithOrigin? definitions diagram context node
+      let ⟨rest, origins⟩ ←
+        compileNodesWithOrigins? definitions diagram context tail
+      pure ⟨.cons head rest,
+        .cons node head tail rest origin origins⟩
+
+def compileNodes? (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram)
+    (nodes : List diagram.NodeId) :
+    Option (ItemSeq definitions context.sigs) :=
+  eraseOrigins?
+    (compileNodesWithOrigins? definitions diagram context nodes)
+
+/-- Computation equation for the body projection of the origin-owning ordered
+node compiler. -/
+theorem compileNodes?_equation
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (context : WireContext diagram) :
+    ∀ nodes,
+      compileNodes? definitions diagram context nodes =
+        match nodes with
+        | [] => some .nil
+        | node :: tail => do
+            let head ← compileNode? definitions diagram context node
+            let rest ← compileNodes? definitions diagram context tail
+            pure (.cons head rest)
+  | [] => rfl
+  | node :: tail => by
+      change
+        eraseOrigins?
+            (compileNodesWithOrigins? definitions diagram context
+              (node :: tail)) =
+          (compileNode? definitions diagram context node).bind fun head =>
+            (compileNodes? definitions diagram context tail).bind fun rest =>
+              some (ItemSeq.cons head rest)
+      rw [compileNodesWithOrigins?]
+      cases headEquation :
+          compileNodeWithOrigin? definitions diagram context node with
+      | none =>
+          simp [compileNode?, headEquation, eraseOrigins?]
+      | some headResult =>
+          rcases headResult with ⟨head, origin⟩
+          have headProjection :
+              compileNode? definitions diagram context node = some head := by
+            unfold compileNode?
+            rw [headEquation]
+            rfl
+          cases tailEquation :
+              compileNodesWithOrigins? definitions diagram context tail with
+          | none =>
+              have tailProjection :
+                  compileNodes? definitions diagram context tail = none := by
+                unfold compileNodes?
+                rw [tailEquation]
+                rfl
+              simp [headProjection, tailProjection, eraseOrigins?]
+          | some tailResult =>
+              rcases tailResult with ⟨rest, origins⟩
+              have tailProjection :
+                  compileNodes? definitions diagram context tail =
+                    some rest := by
+                unfold compileNodes?
+                rw [tailEquation]
+                rfl
+              simp [headProjection, tailProjection, eraseOrigins?]
 
 def compileChildrenWith?
     (definitions : List (List Sig))
@@ -395,12 +545,161 @@ theorem finishRegion_eq_signatures
   rw [proofExact]
   rfl
 
-def compileRegion? (definitions : List (List Sig))
+/-- Exact concrete-wire ownership of the binders discharged for one region. -/
+inductive BinderOrigins
+    (diagram : ConcreteDiagram definitionCount) :
+    List diagram.WireId → Type
+  | nil : BinderOrigins diagram []
+  | cons (wire : diagram.WireId) (tail : List diagram.WireId)
+      (rest : BinderOrigins diagram tail) :
+      BinderOrigins diagram (wire :: tail)
+
+mutual
+  inductive RegionOrigins
+      (definitions : List (List Sig))
+      (diagram : ConcreteDiagram definitions.length) :
+      (fuel : Nat) → (region : diagram.RegionId) →
+      (context : WireContext diagram) →
+      Region definitions context.sigs → Type
+    | step (fuel : Nat) (region : diagram.RegionId)
+        (context : WireContext diagram)
+        (nodeItems childItems :
+          ItemSeq definitions (context.extend region).sigs)
+        (binders : BinderOrigins diagram (diagram.wiresAt region))
+        (nodes : NodeOrigins definitions diagram (context.extend region)
+          (diagram.nodesAt region) nodeItems)
+        (children : ChildOrigins definitions diagram fuel
+          (context.extend region) (diagram.childrenOf region) childItems) :
+        RegionOrigins definitions diagram (fuel + 1) region context
+          (finishRegion diagram context region
+            (.mk (nodeItems.append childItems)))
+
+  inductive ChildOrigins
+      (definitions : List (List Sig))
+      (diagram : ConcreteDiagram definitions.length) :
+      (fuel : Nat) → (context : WireContext diagram) →
+      List diagram.RegionId → ItemSeq definitions context.sigs → Type
+    | nil : ChildOrigins definitions diagram fuel context [] .nil
+    | cons (child : diagram.RegionId)
+        (body : Region definitions context.sigs)
+        (tail : List diagram.RegionId)
+        (items : ItemSeq definitions context.sigs)
+        (bodyOrigins : RegionOrigins definitions diagram fuel child context body)
+        (rest : ChildOrigins definitions diagram fuel context tail items) :
+        ChildOrigins definitions diagram fuel context (child :: tail)
+          (.cons (.cut body) items)
+end
+
+private def binderOrigins
+    (diagram : ConcreteDiagram definitionCount) :
+    (wires : List diagram.WireId) → BinderOrigins diagram wires
+  | [] => .nil
+  | wire :: tail => .cons wire tail (binderOrigins diagram tail)
+
+def compileChildrenWithOrigins?
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat) (context : WireContext diagram)
+    (recurse : (region : diagram.RegionId) →
+      (context : WireContext diagram) →
+      Option (Sigma
+        (RegionOrigins definitions diagram fuel region context))) :
+    (children : List diagram.RegionId) →
+      Option (Sigma
+        (ChildOrigins definitions diagram fuel context children))
+  | [] => some ⟨.nil, .nil⟩
+  | child :: tail => do
+      let ⟨body, bodyOrigins⟩ ← recurse child context
+      let ⟨items, rest⟩ ←
+        compileChildrenWithOrigins? definitions diagram fuel context recurse tail
+      pure ⟨.cons (.cut body) items,
+        .cons child body tail items bodyOrigins rest⟩
+
+theorem erase_compileChildrenWithOrigins?
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat) (context : WireContext diagram)
+    (recurse : (region : diagram.RegionId) →
+      (context : WireContext diagram) →
+      Option (Sigma
+        (RegionOrigins definitions diagram fuel region context))) :
+    ∀ children,
+      eraseOrigins?
+          (compileChildrenWithOrigins? definitions diagram fuel context
+            recurse children) =
+        compileChildrenWith? definitions diagram
+          (fun region context => eraseOrigins? (recurse region context))
+          context children
+  | [] => rfl
+  | child :: tail => by
+      cases childEquation : recurse child context with
+      | none => simp [compileChildrenWithOrigins?, compileChildrenWith?,
+          eraseOrigins?, childEquation]
+      | some childResult =>
+          rcases childResult with ⟨body, bodyOrigins⟩
+          cases tailEquation :
+              compileChildrenWithOrigins? definitions diagram fuel context
+                recurse tail with
+          | none =>
+              have tailErasure :=
+                erase_compileChildrenWithOrigins? definitions diagram fuel
+                  context recurse tail
+              rw [tailEquation] at tailErasure
+              simp only [eraseOrigins?] at tailErasure
+              simp [compileChildrenWithOrigins?, compileChildrenWith?,
+                eraseOrigins?, childEquation, tailEquation, ← tailErasure]
+          | some tailResult =>
+              rcases tailResult with ⟨items, origins⟩
+              have tailErasure :=
+                erase_compileChildrenWithOrigins? definitions diagram fuel
+                  context recurse tail
+              rw [tailEquation] at tailErasure
+              simp only [eraseOrigins?] at tailErasure
+              simp [compileChildrenWithOrigins?, compileChildrenWith?,
+                eraseOrigins?, childEquation, tailEquation, ← tailErasure]
+
+def compileRegionWithOrigins?
+    (definitions : List (List Sig))
     (diagram : ConcreteDiagram definitions.length) :
-    Nat → (region : diagram.RegionId) → (context : WireContext diagram) →
-      Option (Region definitions context.sigs)
+    (fuel : Nat) → (region : diagram.RegionId) →
+      (context : WireContext diagram) →
+      Option (Sigma
+        (RegionOrigins definitions diagram fuel region context))
   | 0, _, _ => none
   | fuel + 1, region, context => do
+      let extended := context.extend region
+      let ⟨nodes, nodeOrigins⟩ ←
+        compileNodesWithOrigins? definitions diagram extended
+        (diagram.nodesAt region)
+      let children ← compileChildrenWithOrigins? definitions diagram fuel
+        extended (compileRegionWithOrigins? definitions diagram fuel)
+        (diagram.childrenOf region)
+      pure ⟨finishRegion diagram context region
+          (.mk (nodes.append children.1)),
+        .step fuel region context nodes children.1
+          (binderOrigins diagram (diagram.wiresAt region))
+          nodeOrigins children.2⟩
+
+def compileRegion? (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat) (region : diagram.RegionId)
+    (context : WireContext diagram) :
+    Option (Region definitions context.sigs) :=
+  eraseOrigins?
+    (compileRegionWithOrigins? definitions diagram fuel region context)
+
+@[simp] theorem compileRegion?_zero
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (region : diagram.RegionId) (context : WireContext diagram) :
+    compileRegion? definitions diagram 0 region context = none := rfl
+
+@[simp] theorem compileRegion?_succ
+    (definitions : List (List Sig))
+    (diagram : ConcreteDiagram definitions.length)
+    (fuel : Nat) (region : diagram.RegionId)
+    (context : WireContext diagram) :
+    compileRegion? definitions diagram (fuel + 1) region context = (do
       let extended := context.extend region
       let nodes ← compileNodes? definitions diagram extended
         (diagram.nodesAt region)
@@ -408,7 +707,35 @@ def compileRegion? (definitions : List (List Sig))
         (compileRegion? definitions diagram fuel) extended
         (diagram.childrenOf region)
       pure (finishRegion diagram context region
-        (.mk (nodes.append children)))
+        (.mk (nodes.append children)))) := by
+  unfold compileRegion? compileNodes?
+  simp only [compileRegionWithOrigins?]
+  cases nodesEquation : compileNodesWithOrigins? definitions diagram
+      (context.extend region) (diagram.nodesAt region) with
+  | none => simp [eraseOrigins?]
+  | some nodeResult =>
+      rcases nodeResult with ⟨nodes, nodeOrigins⟩
+      cases childrenEquation : compileChildrenWithOrigins? definitions diagram
+          fuel (context.extend region)
+          (compileRegionWithOrigins? definitions diagram fuel)
+          (diagram.childrenOf region) with
+      | none =>
+          have childrenErasure := erase_compileChildrenWithOrigins?
+            definitions diagram fuel (context.extend region)
+            (compileRegionWithOrigins? definitions diagram fuel)
+            (diagram.childrenOf region)
+          rw [childrenEquation] at childrenErasure
+          simp only [eraseOrigins?] at childrenErasure
+          simp [eraseOrigins?, ← childrenErasure]
+      | some childResult =>
+          rcases childResult with ⟨children, childOrigins⟩
+          have childrenErasure := erase_compileChildrenWithOrigins?
+            definitions diagram fuel (context.extend region)
+            (compileRegionWithOrigins? definitions diagram fuel)
+            (diagram.childrenOf region)
+          rw [childrenEquation] at childrenErasure
+          simp only [eraseOrigins?] at childrenErasure
+          simp [eraseOrigins?, ← childrenErasure]
 
 /-- The proof-independent kernel is exposed only through this computation theorem. -/
 def compileRoot? (definitions : List (List Sig))
@@ -444,20 +771,104 @@ Compile an open root with boundary classes already visible. Root-local wires
 are prepended only for content compilation and are the only wires discharged
 as binders; boundary wires remain free in the resulting intrinsic region.
 -/
-def compileOpenRoot? (definitions : List (List Sig))
+inductive OpenRootOrigins
+    (definitions : List (List Sig))
     (openDiagram : OpenConcreteDiagram definitions.length) :
-    Option (Region definitions (openBoundaryClassSigs openDiagram)) := do
+    Region definitions (openBoundaryClassSigs openDiagram) → Type
+  | step
+      (nodeItems childItems : ItemSeq definitions
+        ((openRootLocalWires openDiagram ++
+          openBoundaryWires openDiagram).map fun wire =>
+            (openDiagram.diagram.wires wire).sig))
+      (binders : BinderOrigins openDiagram.diagram
+        (openRootLocalWires openDiagram))
+      (nodes : NodeOrigins definitions openDiagram.diagram
+        ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩
+        (openDiagram.diagram.nodesAt openDiagram.diagram.root) nodeItems)
+      (children : ChildOrigins definitions openDiagram.diagram
+        openDiagram.diagram.regionCount
+        ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩
+        (openDiagram.diagram.childrenOf openDiagram.diagram.root) childItems) :
+      OpenRootOrigins definitions openDiagram
+        (finishRegionFor openDiagram.diagram
+          (openBoundaryWires openDiagram) (openRootLocalWires openDiagram)
+          (.mk (nodeItems.append childItems)))
+
+def compileOpenRootWithOrigins? (definitions : List (List Sig))
+    (openDiagram : OpenConcreteDiagram definitions.length) :
+    Option (Sigma (OpenRootOrigins definitions openDiagram)) := do
   let diagram := openDiagram.diagram
   let boundary := openBoundaryWires openDiagram
   let localWires := openRootLocalWires openDiagram
   let extended : WireContext diagram := ⟨localWires ++ boundary⟩
-  let nodes ← compileNodes? definitions diagram extended
+  let ⟨nodes, nodeOrigins⟩ ←
+    compileNodesWithOrigins? definitions diagram extended
     (diagram.nodesAt diagram.root)
-  let children ← compileChildrenWith? definitions diagram
-    (compileRegion? definitions diagram diagram.regionCount) extended
+  let ⟨children, childOrigins⟩ ← compileChildrenWithOrigins?
+    definitions diagram diagram.regionCount extended
+    (compileRegionWithOrigins? definitions diagram diagram.regionCount)
     (diagram.childrenOf diagram.root)
-  pure (finishRegionFor diagram boundary localWires
-    (.mk (nodes.append children)))
+  pure ⟨finishRegionFor diagram boundary localWires
+      (.mk (nodes.append children)),
+    .step nodes children (binderOrigins diagram localWires)
+      nodeOrigins childOrigins⟩
+
+def compileOpenRoot? (definitions : List (List Sig))
+    (openDiagram : OpenConcreteDiagram definitions.length) :
+    Option (Region definitions (openBoundaryClassSigs openDiagram)) :=
+  eraseOrigins? (compileOpenRootWithOrigins? definitions openDiagram)
+
+@[simp] theorem compileOpenRoot?_equation
+    (definitions : List (List Sig))
+    (openDiagram : OpenConcreteDiagram definitions.length) :
+    compileOpenRoot? definitions openDiagram = (do
+      let diagram := openDiagram.diagram
+      let boundary := openBoundaryWires openDiagram
+      let localWires := openRootLocalWires openDiagram
+      let extended : WireContext diagram := ⟨localWires ++ boundary⟩
+      let nodes ← compileNodes? definitions diagram extended
+        (diagram.nodesAt diagram.root)
+      let children ← compileChildrenWith? definitions diagram
+        (compileRegion? definitions diagram diagram.regionCount) extended
+        (diagram.childrenOf diagram.root)
+      pure (finishRegionFor diagram boundary localWires
+        (.mk (nodes.append children)))) := by
+  unfold compileOpenRoot? compileNodes? compileRegion?
+  simp only [compileOpenRootWithOrigins?]
+  cases nodesEquation : compileNodesWithOrigins? definitions
+      openDiagram.diagram
+      ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩
+      (openDiagram.diagram.nodesAt openDiagram.diagram.root) with
+  | none => simp [eraseOrigins?]
+  | some nodeResult =>
+      rcases nodeResult with ⟨nodes, nodeOrigins⟩
+      cases childrenEquation : compileChildrenWithOrigins? definitions
+          openDiagram.diagram openDiagram.diagram.regionCount
+          ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩
+          (compileRegionWithOrigins? definitions openDiagram.diagram
+            openDiagram.diagram.regionCount)
+          (openDiagram.diagram.childrenOf openDiagram.diagram.root) with
+      | none =>
+          have childrenErasure := erase_compileChildrenWithOrigins?
+            definitions openDiagram.diagram openDiagram.diagram.regionCount
+            ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩
+            (compileRegionWithOrigins? definitions openDiagram.diagram
+              openDiagram.diagram.regionCount)
+            (openDiagram.diagram.childrenOf openDiagram.diagram.root)
+          rw [childrenEquation] at childrenErasure
+          simp only [eraseOrigins?] at childrenErasure
+          simp [eraseOrigins?, ← childrenErasure]
+      | some childResult =>
+          rcases childResult with ⟨children, childOrigins⟩
+          have childrenErasure := erase_compileChildrenWithOrigins?
+            definitions openDiagram.diagram openDiagram.diagram.regionCount
+            ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩
+            (compileRegionWithOrigins? definitions openDiagram.diagram
+              openDiagram.diagram.regionCount)
+            (openDiagram.diagram.childrenOf openDiagram.diagram.root)
+          rw [childrenEquation] at childrenErasure
+          simp only [eraseOrigins?] at childrenErasure
+          simp [eraseOrigins?, ← childrenErasure]
 
 private theorem resolveWireIn?_complete
     (diagram : ConcreteDiagram definitionCount)
@@ -643,7 +1054,7 @@ theorem denote_compileOpenRoot_components
         denoteRegion pre definitionEnv
           (extendOpenRootEnvironment openDiagram values boundaryEnv)
           (.mk (nodes.append children)) := by
-  unfold compileOpenRoot? at compiled
+  rw [compileOpenRoot?_equation] at compiled
   cases nodesOption :
       compileNodes? definitions openDiagram.diagram
         ⟨openRootLocalWires openDiagram ++ openBoundaryWires openDiagram⟩

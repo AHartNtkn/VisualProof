@@ -263,7 +263,7 @@ theorem compileNodes?_identity_singleton_of_incident
     .identity sig ports.val (by
       simpa only [ports.property] using arityWitness)
   refine ⟨.cons item .nil, ?_⟩
-  simp [compileNodes?, compileNode?, nodeData, arityWitness, portsResolved,
+  simp [compileNodes?_equation, compileNode?_equation, nodeData, arityWitness, portsResolved,
     item]
 
 private theorem compileIdentityNode?_forward_denotation
@@ -292,7 +292,7 @@ private theorem compileIdentityNode?_forward_denotation
         some rightItem ∧
       (denoteItem pre definitionEnv leftEnv leftItem ↔
         denoteItem pre definitionEnv rightEnv rightItem) := by
-  simp only [compileNode?, nodeData] at leftCompiled
+  simp only [compileNode?_equation, nodeData] at leftCompiled
   split at leftCompiled
   · rename_i arityWitness
     cases portsEquation :
@@ -357,7 +357,7 @@ private theorem compileIdentityNode?_forward_denotation
           .identity sig rightPorts.val (by
             simpa [rightPorts.property] using arityWitness)
         refine ⟨rightItem, ?_, ?_⟩
-        · simp [rightItem, compileNode?, rightNodeData, arityWitness,
+        · simp [rightItem, compileNode?_equation, rightNodeData, arityWitness,
             rightPortsEquation]
         · simp only [rightItem, denoteItem_identity]
           apply AllEqual.iff_of_mem_iff
@@ -466,21 +466,21 @@ theorem compileNodes?_singleton_forward_denotation
         (denoteItem pre definitionEnv leftEnv leftItem ↔
           denoteItem pre definitionEnv rightEnv rightItem) := by
   cases leftEquation : compileNode? definitions left leftContext node with
-  | none => simp [compileNodes?, leftEquation] at leftCompiled
+  | none => simp [compileNodes?_equation, leftEquation] at leftCompiled
   | some actual =>
       have sequenceExact :
           (ItemSeq.cons actual .nil :
             ItemSeq definitions leftContext.sigs) =
           .cons leftItem .nil :=
         Option.some.inj (by
-          simpa [compileNodes?, leftEquation] using leftCompiled)
+          simpa [compileNodes?_equation, leftEquation] using leftCompiled)
       have actualExact : actual = leftItem :=
         (ItemSeq.cons.inj sequenceExact).1
       subst actual
       obtain ⟨rightItem, rightCompiled, denotation⟩ :=
         compileNode?_forward_denotation iso leftWellFormed rightWellFormed
           contexts definitionEnv envs node leftItem leftEquation
-      exact ⟨rightItem, by simp [compileNodes?, rightCompiled], denotation⟩
+      exact ⟨rightItem, by simp [compileNodes?_equation, rightCompiled], denotation⟩
 
 private theorem reference_signature
     (definitions : List (List Sig))
@@ -532,7 +532,7 @@ theorem compileNode?_complete_of_required_visible
           · simpa using atom_arg_typed definitions diagram wellFormed node
               storedRegion args nodeData offset bound)
       exact ⟨.atom head arguments, by
-        unfold compileNode?
+        rw [compileNode?_equation]
         rw [nodeData]
         simp [headResolved, argumentsResolved]⟩
   | ref storedRegion definition args =>
@@ -553,7 +553,7 @@ theorem compileNode?_complete_of_required_visible
               storedRegion definition args nodeData offset bound)
       exact ⟨.named (signature ▸ definitionVarAt definitions definition)
         arguments, by
-          unfold compileNode?
+          rw [compileNode?_equation]
           rw [nodeData]
           simp [signatureGetElem, argumentsResolved]⟩
   | identity storedRegion sig arity =>
@@ -572,7 +572,7 @@ theorem compileNode?_complete_of_required_visible
               bound)
       exact ⟨.identity sig ports.val (by
         simpa [ports.property] using arityWitness), by
-          unfold compileNode?
+          rw [compileNode?_equation]
           rw [nodeData]
           simp [arityWitness, portsResolved]⟩
 
@@ -602,7 +602,7 @@ private theorem compileNode?_complete
           · simpa using atom_arg_typed definitions diagram wellFormed node
               storedRegion args nodeData offset bound)
       exact ⟨.atom head arguments, by
-        unfold compileNode?
+        rw [compileNode?_equation]
         rw [nodeData]
         simp [headResolved, argumentsResolved]⟩
   | ref storedRegion definition args =>
@@ -621,7 +621,7 @@ private theorem compileNode?_complete
               storedRegion definition args nodeData offset bound)
       exact ⟨.named (signature ▸ definitionVarAt definitions definition)
         arguments, by
-          unfold compileNode?
+          rw [compileNode?_equation]
           rw [nodeData]
           simp [signatureGetElem, argumentsResolved]⟩
   | identity storedRegion sig arity =>
@@ -638,7 +638,7 @@ private theorem compileNode?_complete
               wellFormed node storedRegion sig arity nodeData offset bound)
       exact ⟨.identity sig ports.val (by
         simpa [ports.property] using arityWitness), by
-          unfold compileNode?
+          rw [compileNode?_equation]
           rw [nodeData]
           simp [arityWitness, portsResolved]⟩
 
@@ -660,7 +660,8 @@ theorem compileNodes?_complete
           intro candidate member
           exact owns candidate (by simp [member]))
       exact ⟨.cons head rest, by
-        simp [compileNodes?, headCompiled, restCompiled]⟩
+        rw [compileNodes?_equation]
+        simp [headCompiled, restCompiled]⟩
 
 /-- Decompose an accepted nonempty node compilation into its singleton head. -/
 theorem compileNodes?_cons_components
@@ -675,16 +676,19 @@ theorem compileNodes?_cons_components
           some (.cons head .nil) ∧
         compileNodes? definitions diagram context tail = some rest ∧
         items = .cons head rest := by
+  rw [compileNodes?_equation] at compiled
   cases headEquation : compileNode? definitions diagram context node with
-  | none => simp [compileNodes?, headEquation] at compiled
+  | none => simp [headEquation] at compiled
   | some head =>
       cases tailEquation : compileNodes? definitions diagram context tail with
-      | none => simp [compileNodes?, headEquation, tailEquation] at compiled
+      | none => simp [headEquation, tailEquation] at compiled
       | some rest =>
-          refine ⟨head, rest, by simp [compileNodes?, headEquation],
+          refine ⟨head, rest, by
+            rw [compileNodes?_equation]
+            simp [headEquation, compileNodes?_equation],
             rfl, ?_⟩
           exact Option.some.inj
-            (by simpa [compileNodes?, headEquation, tailEquation] using
+            (by simpa [headEquation, tailEquation] using
               compiled) |>.symm
 
 end ConcreteElaboration

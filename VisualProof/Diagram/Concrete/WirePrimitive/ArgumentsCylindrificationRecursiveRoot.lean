@@ -979,13 +979,15 @@ theorem recursiveFinalRegionClassifier_site
             | atom nodeRegion atomArguments =>
                 exact ⟨nodeRegion, atomArguments, rfl⟩
             | ref nodeRegion definition refArguments =>
-                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                simp [ConcreteElaboration.Internal.compileNode?_equation,
+                  nodeData]
                   at compiled
                 cases resolved :
                     ConcreteElaboration.Internal.resolveArgs? source.val
                       context node refArguments 0 <;> simp [resolved] at compiled
             | identity nodeRegion signature arity =>
-                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                simp [ConcreteElaboration.Internal.compileNode?_equation,
+                  nodeData]
                   at compiled
                 cases resolved :
                     ConcreteElaboration.Internal.resolveIdentityPorts?
@@ -995,7 +997,11 @@ theorem recursiveFinalRegionClassifier_site
           have singletonCompiled :
               ConcreteElaboration.compileNodes? definitions source.val context
                   [node] = some (.cons (.atom atomHead arguments) .nil) := by
-            simp [ConcreteElaboration.compileNodes?, compiled]
+            rw [ConcreteElaboration.compileNodes?_equation]
+            dsimp only
+            rw [compiled]
+            rw [ConcreteElaboration.compileNodes?_equation]
+            rfl
           obtain ⟨shapeHead, shapeArguments, itemExact, ownerExact,
               _argumentOrigins⟩ :=
             ConcreteElaboration.compileNodes?_atom_shape source.val context
@@ -1608,12 +1614,16 @@ theorem recursiveCompileNodes?_contextEmbedding
       (fun wire => wire) (fun _ => rfl) visible
   induction nodes generalizing sourceItems with
   | nil =>
-      simp only [ConcreteElaboration.compileNodes?, Option.some.injEq]
-        at sourceCompiled ⊢
-      subst sourceItems
-      exact ⟨.nil, rfl, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+      have sourceItemsExact :
+          (.nil : ItemSeq definitions sourceContext.sigs) = sourceItems :=
+        Option.some.inj sourceCompiled
+      rw [← sourceItemsExact]
+      refine ⟨.nil, ?_, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
   | cons head tail induction =>
-      simp only [ConcreteElaboration.compileNodes?] at sourceCompiled ⊢
+      rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+      dsimp only at sourceCompiled
       cases sourceHeadEquation :
           ConcreteElaboration.Internal.compileNode? definitions checked.val
             sourceContext head with
@@ -1651,7 +1661,10 @@ theorem recursiveCompileNodes?_contextEmbedding
                 induction sourceTailEquation
               refine ⟨.cons (sourceHead.renameWires embedding) targetTail,
                 ?_, ?_⟩
-              · simp [targetHeadEquation, targetTailEquation]
+              · rw [ConcreteElaboration.compileNodes?_equation]
+                dsimp only
+                rw [targetHeadEquation, targetTailEquation]
+                rfl
               · rw [targetTailExact]
                 rfl
 
@@ -1771,9 +1784,11 @@ theorem recursiveCompileRetainedNodes?_complete
         obtain ⟨tailItems, tailCompiled⟩ := induction (by
           intro node member
           exact allMembers node (by simp [member]))
-        exact ⟨ItemSeq.cons headItem tailItems, by
-          simp [ConcreteElaboration.compileNodes?, headCompiled,
-            tailCompiled]⟩
+        refine ⟨ItemSeq.cons headItem tailItems, ?_⟩
+        rw [ConcreteElaboration.compileNodes?_equation]
+        dsimp only
+        rw [headCompiled, tailCompiled]
+        rfl
   simpa [nodes] using compileList nodes nodeFacts
 
 /-- Retained ordinary nodes at any recursive region compile in paired

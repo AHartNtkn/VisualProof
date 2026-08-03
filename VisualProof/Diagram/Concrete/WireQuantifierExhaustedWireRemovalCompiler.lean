@@ -499,7 +499,8 @@ theorem compileNodes_reflect
           (.nil : ItemSeq definitions sourceContext.sigs) =
             sourceItems :=
         Option.some.inj (by
-          simpa [ConcreteElaboration.compileNodes?] using sourceCompiled)
+          rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+          exact sourceCompiled)
       subst sourceItems
       exact ⟨.nil, rfl, rfl⟩
   | cons targetNodeId tail induction =>
@@ -517,7 +518,8 @@ theorem compileNodes_reflect
           sourceNodup targetNodeId sourceHeadCompiled
       obtain ⟨targetTail, targetTailCompiled, sourceTailEquality⟩ :=
         induction sourceTailCompiled
-      simp only [ConcreteElaboration.compileNodes?] at targetHeadCompiled
+      rw [ConcreteElaboration.compileNodes?_equation] at targetHeadCompiled
+      dsimp only at targetHeadCompiled
       obtain ⟨targetItem, targetItemCompiled, targetHeadResult⟩ :=
         Option.bind_eq_some_iff.mp targetHeadCompiled
       have targetHeadEquality :
@@ -527,7 +529,8 @@ theorem compileNodes_reflect
         Option.some.inj targetHeadResult
       subst targetHead
       refine ⟨.cons targetItem targetTail, ?_, ?_⟩
-      · simp only [ConcreteElaboration.compileNodes?]
+      · rw [ConcreteElaboration.compileNodes?_equation]
+        dsimp only
         rw [targetItemCompiled, targetTailCompiled]
         rfl
       · cases sourceHeadEquality
@@ -1057,13 +1060,15 @@ private theorem compileRegion_corresponding_denotation
   | zero =>
       intro targetContext sourceContext correspond region above outside
         sourceBody targetBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ fuel induction =>
       intro targetContext sourceContext correspond region above outside
         sourceBody targetBody sourceCompiled targetCompiled pre definitionEnv
         specified targetEnv sourceEnv environments
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
-      simp only [ConcreteElaboration.compileRegion?] at targetCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+      dsimp only at targetCompiled
       cases sourceNodesEquation :
           ConcreteElaboration.compileNodes? definitions source.val
             (sourceContext.extend region) (source.val.nodesAt region) with
@@ -1549,11 +1554,12 @@ theorem compileRegion_reflect
   | zero =>
       intro targetContext sourceContext correspond region above sourceBody
         sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ fuel induction =>
       intro targetContext sourceContext correspond region above sourceBody
         sourceCompiled
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
       cases sourceNodesEquation :
           ConcreteElaboration.compileNodes? definitions source.val
             (sourceContext.extend region) (source.val.nodesAt region) with
@@ -1650,7 +1656,8 @@ theorem compileRegion_reflect
                     (Target source removed) targetContext
                     (targetRegion source removed region)
                     (.mk (targetNodes.append targetChildren)), ?_, ?_⟩
-              · simp only [ConcreteElaboration.compileRegion?]
+              · rw [ConcreteElaboration.compileRegion?_succ]
+                dsimp only
                 rw [targetNodesCompiled, targetChildrenCompiled]
                 rfl
               · intro removedAbsent outside pre definitionEnv targetEnv
@@ -1744,13 +1751,16 @@ theorem compileRegionBody_reflect
                 some
                   (ConcreteElaboration.finishRegion source.val sourceContext
                     region (.mk (sourceNodes.append sourceChildren))) := by
-            simp [ConcreteElaboration.compileRegion?,
-              sourceNodesEquation, sourceChildrenEquation]
+            rw [ConcreteElaboration.compileRegion?_succ]
+            dsimp only
+            rw [sourceNodesEquation, sourceChildrenEquation]
+            rfl
           obtain ⟨targetFull, targetCompiled, _targetLaw⟩ :=
             compileRegion_reflect.{0} source removed targetWellFormed
               removedEndpoints (fuel + 1) targetContext sourceContext
               correspond region above sourceFull
-          simp only [ConcreteElaboration.compileRegion?] at targetCompiled
+          rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+          dsimp only at targetCompiled
           cases targetNodesEquation :
               ConcreteElaboration.compileNodes? definitions
                 (Target source removed)

@@ -1558,14 +1558,16 @@ theorem compileRegion_equiv_below
       intro sourceContext targetContext related region sourceAbove
         targetAbove targetCoverage safe sourceEnv targetEnv
         outerRelated sourceOnePoint sourceBody targetBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ fuel induction =>
       intro sourceContext targetContext related region sourceAbove
         targetAbove targetCoverage safe sourceEnv targetEnv
         outerRelated sourceOnePoint sourceBody targetBody sourceCompiled
         targetCompiled
-      simp only [ConcreteElaboration.compileRegion?]
-        at sourceCompiled targetCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+      dsimp only at targetCompiled
       cases sourceNodesEquation :
           ConcreteElaboration.compileNodes? definitions source.val
             (sourceContext.extend region) (source.val.nodesAt region) with
@@ -1929,13 +1931,15 @@ theorem compileRegion_target_implies_source_at_inner
       intro sourceContext targetContext related sourceAbove targetAbove
         targetCoverage sourceEnv targetEnv outerRelated sourceBody targetBody
         sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ childFuel =>
       intro sourceContext targetContext related sourceAbove targetAbove
         targetCoverage sourceEnv targetEnv outerRelated sourceBody targetBody
         sourceCompiled targetCompiled targetDenotes
-      simp only [ConcreteElaboration.compileRegion?]
-        at sourceCompiled targetCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+      dsimp only at targetCompiled
       cases sourceNodesEquation :
           ConcreteElaboration.compileNodes? definitions source.val
             (sourceContext.extend (source.val.wires inner).scope)

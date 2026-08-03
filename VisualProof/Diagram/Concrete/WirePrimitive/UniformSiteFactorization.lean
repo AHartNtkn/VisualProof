@@ -570,11 +570,15 @@ theorem directAppliedArguments_compileNodes
           nodes.filterMap
             (compiledAppliedArguments? definitions diagram context head)
   | [], items, compiled => by
-      simp [ConcreteElaboration.compileNodes?] at compiled
-      subst items
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      dsimp only at compiled
+      have itemsExact : (.nil : ItemSeq definitions context.sigs) = items :=
+        Option.some.inj compiled
+      rw [← itemsExact]
       rfl
   | node :: tail, items, compiled => by
-      simp only [ConcreteElaboration.compileNodes?] at compiled
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      dsimp only at compiled
       cases headCompiled :
           ConcreteElaboration.Internal.compileNode? definitions diagram
             context node with
@@ -646,11 +650,15 @@ theorem directAppliedArguments_rename_compileNodes
             (renamedCompiledAppliedArguments? definitions diagram context rho
               head)
   | [], items, compiled => by
-      simp [ConcreteElaboration.compileNodes?] at compiled
-      subst items
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      dsimp only at compiled
+      have itemsExact : (.nil : ItemSeq definitions context.sigs) = items :=
+        Option.some.inj compiled
+      rw [← itemsExact]
       rfl
   | node :: tail, items, compiled => by
-      simp only [ConcreteElaboration.compileNodes?] at compiled
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      dsimp only at compiled
       cases headCompiled :
           ConcreteElaboration.Internal.compileNode? definitions diagram
             context node with

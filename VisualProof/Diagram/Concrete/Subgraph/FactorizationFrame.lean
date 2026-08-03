@@ -844,7 +844,8 @@ theorem compileRegion?_of_compileRegionBody?
     compileRegion? definitions diagram (fuel + 1) region outer =
       some (finishRegion diagram outer region body) := by
   unfold compileRegionBody? at compiled
-  unfold compileRegion?
+  rw [compileRegion?_succ]
+  dsimp only
   cases nodesEquation :
       compileNodes? definitions diagram (outer.extend region)
         (diagram.nodesAt region) with
@@ -975,8 +976,14 @@ theorem compileRegionFrame?_sound
                             (outer.extend region) child nested around nodes
                             (diagram.childrenOf region) nestedCompiled
                             aroundEquation
-                        unfold compileRegion?
-                        simp [nodesEquation, childrenEquation]
+                        rw [compileRegion?_succ]
+                        dsimp only
+                        rw [nodesEquation, childrenEquation]
+                        change some (finishRegion diagram outer region
+                          (.mk (nodes.append compiledChildren))) =
+                            some ((bindContextFor diagram outer.ids
+                              (diagram.wiresAt region) around.context).fill
+                                around.siteBody)
                         congr 1
                         exact
                           (congrArg (finishRegion diagram outer region)
@@ -1504,7 +1511,8 @@ private theorem compileRegionBody?_complete_of_compileRegion?
       compileRegionBody? definitions diagram fuel region outer =
         some body := by
   rcases compiled with ⟨body, compiled⟩
-  unfold compileRegion? at compiled
+  rw [compileRegion?_succ] at compiled
+  dsimp only at compiled
   unfold compileRegionBody?
   cases nodesEquation :
       compileNodes? definitions diagram (outer.extend region)
@@ -1540,7 +1548,7 @@ private theorem compileRegionFrame?_complete_of_region
   induction fuel with
   | zero =>
       intro region outer body _ _ compiled
-      simp [compileRegion?] at compiled
+      simp at compiled
   | succ fuel induction =>
       intro region outer body encloses covers compiled
       by_cases atSite : region = site
@@ -1568,7 +1576,8 @@ private theorem compileRegionFrame?_complete_of_region
             compileNodes? definitions diagram extended
               (diagram.nodesAt region) with
         | none =>
-            simp only [compileRegion?] at compiled
+            rw [compileRegion?_succ] at compiled
+            simp only [extended] at compiled
             rw [nodesEquation] at compiled
             simp at compiled
         | some nodes =>
@@ -1577,7 +1586,8 @@ private theorem compileRegionFrame?_complete_of_region
                   (compileRegion? definitions diagram fuel) extended
                   (diagram.childrenOf region) with
             | none =>
-                simp only [compileRegion?] at compiled
+                rw [compileRegion?_succ] at compiled
+                simp only [extended] at compiled
                 rw [nodesEquation, childrenEquation] at compiled
                 simp at compiled
             | some children =>

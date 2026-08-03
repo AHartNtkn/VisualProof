@@ -471,9 +471,19 @@ private theorem compileNodes_append
           ConcreteElaboration.compileNodes? definitions diagram context right
         pure (leftItems.append rightItems)) := by
   induction left with
-  | nil => simp [ConcreteElaboration.compileNodes?, ItemSeq.append]
+  | nil =>
+      rw [List.nil_append]
+      rw [ConcreteElaboration.compileNodes?_equation definitions diagram
+        context []]
+      dsimp only
+      simp [ItemSeq.append]
   | cons head tail induction =>
-      simp only [List.cons_append, ConcreteElaboration.compileNodes?]
+      rw [List.cons_append]
+      rw [ConcreteElaboration.compileNodes?_equation definitions diagram
+        context (head :: (tail ++ right))]
+      rw [ConcreteElaboration.compileNodes?_equation definitions diagram
+        context (head :: tail)]
+      dsimp only
       rw [induction]
       simp [Option.bind_assoc, ItemSeq.append]
 
@@ -627,13 +637,14 @@ theorem compileRegion_fuel_mono
   induction sourceFuel with
   | zero =>
       intro targetFuel fuelLe region context body sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ childFuel induction =>
       intro targetFuel fuelLe region context body sourceCompiled
       obtain ⟨extra, targetFuelEquation⟩ :=
         Nat.exists_eq_add_of_le fuelLe
       subst targetFuel
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
       obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
         Option.bind_eq_some_iff.mp sourceCompiled
       obtain ⟨sourceChildren, sourceChildrenCompiled,
@@ -678,7 +689,8 @@ theorem compileRegion_fuel_mono
       have targetFuelShape :
           childFuel + 1 + extra = childFuel + extra + 1 := by omega
       rw [targetFuelShape]
-      simp only [ConcreteElaboration.compileRegion?]
+      rw [ConcreteElaboration.compileRegion?_succ]
+      dsimp only
       rw [sourceNodesCompiled, childrenCompiled]
       rfl
 
@@ -881,11 +893,12 @@ private theorem fragmentRegion_compile
   | zero =>
       intro region nonroot sourceContext targetContext rho contextAction
         targetAbove sourceBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ childFuel induction =>
       intro region nonroot sourceContext targetContext rho contextAction
         targetAbove sourceBody sourceCompiled
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
       obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
         Option.bind_eq_some_iff.mp sourceCompiled
       obtain ⟨sourceChildren, sourceChildrenCompiled,
@@ -1012,7 +1025,8 @@ private theorem fragmentRegion_compile
           (attachment.fragmentRegion region)
           (.mk (targetNodes.append targetChildren))
       refine ⟨targetBody, ?_⟩
-      simp only [ConcreteElaboration.compileRegion?]
+      rw [ConcreteElaboration.compileRegion?_succ]
+      dsimp only
       rw [compiled.fragment_nodes region nonroot,
         compiled.fragment_children region nonroot]
       change
@@ -1074,13 +1088,14 @@ private theorem hostRegion_compile_outside
   | zero =>
       intro region outside sourceContext targetContext rho contextAction
         targetAbove sourceBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ childFuel induction =>
       intro region outside sourceContext targetContext rho contextAction
         targetAbove sourceBody sourceCompiled
       have notSite : region ≠ site :=
         fun same => outside (same ▸ ConcreteDiagram.encloses_refl base.val site)
-      simp only [ConcreteElaboration.compileRegion?] at sourceCompiled
+      rw [ConcreteElaboration.compileRegion?_succ] at sourceCompiled
+      dsimp only at sourceCompiled
       obtain ⟨sourceNodes, sourceNodesCompiled, sourceAfterNodes⟩ :=
         Option.bind_eq_some_iff.mp sourceCompiled
       obtain ⟨sourceChildren, sourceChildrenCompiled,
@@ -1196,7 +1211,8 @@ private theorem hostRegion_compile_outside
           (attachment.hostRegion region)
           (.mk (targetNodes.append targetChildren))
       refine ⟨targetBody, ?_⟩
-      simp only [ConcreteElaboration.compileRegion?]
+      rw [ConcreteElaboration.compileRegion?_succ]
+      dsimp only
       rw [hostNodes_offsite compiled region notSite,
         hostChildren_offsite compiled region notSite]
       change

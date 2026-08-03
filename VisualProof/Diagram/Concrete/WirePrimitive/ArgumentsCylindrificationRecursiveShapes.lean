@@ -128,7 +128,8 @@ theorem compileNode?_ordinary_kind
     | .bind .. => False := by
   cases nodeData : diagram.nodes node with
   | atom region arguments =>
-      simp only [ConcreteElaboration.Internal.compileNode?, nodeData] at compiled
+      rw [ConcreteElaboration.Internal.compileNode?_equation] at compiled
+      simp only [nodeData] at compiled
       cases headResolved : ConcreteElaboration.Internal.resolvePort? diagram
           context node .head (.rel arguments) with
       | none => simp [headResolved] at compiled
@@ -144,7 +145,8 @@ theorem compileNode?_ordinary_kind
               subst item
               trivial
   | ref region definition arguments =>
-      simp only [ConcreteElaboration.Internal.compileNode?, nodeData] at compiled
+      rw [ConcreteElaboration.Internal.compileNode?_equation] at compiled
+      simp only [nodeData] at compiled
       split at compiled
       next signature =>
         cases argumentsResolved :
@@ -161,7 +163,8 @@ theorem compileNode?_ordinary_kind
             trivial
       next signature => simp at compiled
   | identity region signature arity =>
-      simp only [ConcreteElaboration.Internal.compileNode?, nodeData] at compiled
+      rw [ConcreteElaboration.Internal.compileNode?_equation] at compiled
+      simp only [nodeData] at compiled
       split at compiled
       next arityWitness =>
         cases portsResolved :
@@ -203,12 +206,18 @@ theorem recursiveAbstractOrdinaryItems_compileFilter
       recursiveAbstractOrdinaryItems head (items.renameWires rho) =
         recursiveLeafItems (retained.renameWires rho)
   | [], items, retained, compiled, retainedCompiled, _ => by
-      simp [ConcreteElaboration.compileNodes?] at compiled retainedCompiled
-      subst items
-      subst retained
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      rw [ConcreteElaboration.compileNodes?_equation] at retainedCompiled
+      have itemsExact : (.nil : ItemSeq definitions context.sigs) = items :=
+        Option.some.inj compiled
+      have retainedExact :
+          (.nil : ItemSeq definitions context.sigs) = retained :=
+        Option.some.inj retainedCompiled
+      rw [← itemsExact, ← retainedExact]
       rfl
   | node :: tail, items, retained, compiled, retainedCompiled, classified => by
-      simp only [ConcreteElaboration.compileNodes?] at compiled
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      dsimp only at compiled
       cases headCompiled :
           ConcreteElaboration.Internal.compileNode? definitions diagram
             context node with
@@ -259,7 +268,9 @@ theorem recursiveAbstractOrdinaryItems_compileFilter
                 | cut body => simp at headClassified
                 | bind signature body => simp at headClassified
               · simp [selected] at retainedCompiled
-                simp only [ConcreteElaboration.compileNodes?] at retainedCompiled
+                rw [ConcreteElaboration.compileNodes?_equation]
+                  at retainedCompiled
+                dsimp only at retainedCompiled
                 cases retainedTailCompiled :
                     ConcreteElaboration.compileNodes? definitions diagram
                       context
@@ -692,11 +703,12 @@ theorem compileNodes?_filter_complete
         ConcreteElaboration.compileNodes? definitions diagram context
           (nodes.filter keep) = some retained
   | [], items, compiled => by
-      simp [ConcreteElaboration.compileNodes?] at compiled
-      subst items
-      exact ⟨.nil, rfl⟩
+      refine ⟨.nil, ?_⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
+      rfl
   | node :: tail, items, compiled => by
-      simp only [ConcreteElaboration.compileNodes?] at compiled
+      rw [ConcreteElaboration.compileNodes?_equation] at compiled
+      dsimp only at compiled
       cases headCompiled :
           ConcreteElaboration.Internal.compileNode? definitions diagram
             context node with
@@ -715,10 +727,12 @@ theorem compileNodes?_filter_complete
                   exact ⟨retained, by
                     simpa [List.filter_cons, kept] using retainedCompiled⟩
               | true =>
-                  exact ⟨.cons head retained, by
-                    simp [List.filter_cons, kept,
-                      ConcreteElaboration.compileNodes?, headCompiled,
-                      retainedCompiled]⟩
+                  refine ⟨.cons head retained, ?_⟩
+                  rw [List.filter_cons, kept]
+                  rw [ConcreteElaboration.compileNodes?_equation]
+                  simp only [if_true]
+                  rw [headCompiled, retainedCompiled]
+                  rfl
 
 /-- Retained source and target node compilations below the acted head are
 paired by the exact normalized block embedding. -/
@@ -1965,7 +1979,8 @@ theorem compileRegion?_recursive_decomposition
           (context.extend region) (diagram.childrenOf region) = some children ∧
       body = ConcreteElaboration.finishRegion diagram context region
         (.mk (nodes.append children)) := by
-  unfold ConcreteElaboration.compileRegion? at compiled
+  rw [ConcreteElaboration.compileRegion?_succ] at compiled
+  dsimp only at compiled
   cases nodesCompiled : ConcreteElaboration.compileNodes? definitions diagram
       (context.extend region) (diagram.nodesAt region) with
   | none => simp [nodesCompiled] at compiled
@@ -2320,7 +2335,7 @@ theorem recursiveCylindricalShape_complete
         below sourceAbove targetAbove outerOrigin sourceHead targetHead
         sourceHeadOrigin targetHeadOrigin sourceBody targetBody sourceCompiled
         targetCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp at sourceCompiled
   | succ fuel induction =>
       intro depth region sourceOuter targetOuter outer regionClimb fuelExact
         below sourceAbove targetAbove outerOrigin sourceHead targetHead

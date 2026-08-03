@@ -912,12 +912,17 @@ theorem arityShift_compileNodes_below_natural
           sourceOuter targetOuter outer) := by
   induction nodes generalizing sourceItems with
   | nil =>
-      simp only [ConcreteElaboration.compileNodes?, Option.some.injEq]
-        at sourceCompiled ⊢
-      subst sourceItems
-      exact ⟨.nil, rfl, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+      have sourceItemsExact :
+          (.nil : ItemSeq definitions (sourceOuter.extend region).sigs) =
+            sourceItems :=
+        Option.some.inj sourceCompiled
+      rw [← sourceItemsExact]
+      refine ⟨.nil, ?_, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
   | @cons sourceTail targetTail sourceNode retained tail induction =>
-      simp only [ConcreteElaboration.compileNodes?] at sourceCompiled ⊢
+      rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+      dsimp only at sourceCompiled
       cases sourceHeadEquation :
           ConcreteElaboration.Internal.compileNode? definitions source.val
             (sourceOuter.extend region) sourceNode with
@@ -948,7 +953,10 @@ theorem arityShift_compileNodes_below_natural
                     sourceArguments sourceSignature newArgument result
                     accepted region notHead sourceOuter targetOuter outer))
                 targetRest, ?_, ?_⟩
-              · simp [targetHeadEquation, targetTailEquation]
+              · rw [ConcreteElaboration.compileNodes?_equation]
+                dsimp only
+                rw [targetHeadEquation, targetTailEquation]
+                rfl
               · simp [ItemSeq.renameWires, targetRestExact]
 
 end ArgumentsSemantics

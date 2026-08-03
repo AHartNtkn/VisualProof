@@ -618,18 +618,18 @@ theorem Internal.compileAtomNode?_forward_denotation
   cases headEquation :
       resolvePort? left leftContext node .head (.rel args) with
   | none =>
-      simp [compileNode?, nodeData, headEquation] at leftCompiled
+      simp [compileNode?_equation, nodeData, headEquation] at leftCompiled
   | some leftHead =>
       cases argsEquation :
           resolveArgs? left leftContext node args 0 with
       | none =>
-          simp [compileNode?, nodeData, headEquation, argsEquation] at leftCompiled
+          simp [compileNode?_equation, nodeData, headEquation, argsEquation] at leftCompiled
       | some leftArgs =>
           have itemEquality :
               (Item.atom leftHead leftArgs :
                 Item definitions leftContext.sigs) = leftItem := by
             exact Option.some.inj (by
-              simpa [compileNode?, nodeData, headEquation, argsEquation] using
+              simpa [compileNode?_equation, nodeData, headEquation, argsEquation] using
                 leftCompiled)
           subst leftItem
           obtain ⟨rightHead, rightHeadEquation, headDenotes⟩ :=
@@ -639,7 +639,7 @@ theorem Internal.compileAtomNode?_forward_denotation
             resolveAtomArgs?_forward_denote iso leftWellFormed rightWellFormed
               contexts envs nodeData args 0 leftArgs argsEquation
           refine ⟨.atom rightHead rightArgs, ?_, ?_⟩
-          · simp [compileNode?, iso.node_table, nodeData, CNode.rename,
+          · simp [compileNode?_equation, iso.node_table, nodeData, CNode.rename,
               rightHeadEquation, rightArgsEquation]
           · simp only [denoteItem_atom, headDenotes, argsDenote]
 
@@ -669,7 +669,7 @@ theorem Internal.compileRefNode?_forward_denotation
         some rightItem ∧
       (denoteItem pre definitionEnv leftEnv leftItem ↔
         denoteItem pre definitionEnv rightEnv rightItem) := by
-  simp only [compileNode?, nodeData] at leftCompiled
+  simp only [compileNode?_equation, nodeData] at leftCompiled
   split at leftCompiled
   · rename_i signature
     cases argsEquation :
@@ -689,7 +689,7 @@ theorem Internal.compileRefNode?_forward_denotation
           resolveRefArgs?_forward_denote iso leftWellFormed rightWellFormed
             contexts envs nodeData args 0 leftArgs argsEquation
         refine ⟨.named reference rightArgs, ?_, ?_⟩
-        · simp only [compileNode?, iso.node_table, nodeData, CNode.rename]
+        · simp only [compileNode?_equation, iso.node_table, nodeData, CNode.rename]
           split
           · simp [rightArgsEquation, reference]
           · contradiction

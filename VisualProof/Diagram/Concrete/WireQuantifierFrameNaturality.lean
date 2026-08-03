@@ -382,7 +382,8 @@ private theorem compileRegionFrame_direction
               frame :=
           Option.some.inj frameEquation
         subst frame
-        simp only [ConcreteElaboration.compileRegion?] at targetCompiled
+        rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+        dsimp only at targetCompiled
         cases targetNodesEquation :
             ConcreteElaboration.compileNodes? definitions
               result.checked.val

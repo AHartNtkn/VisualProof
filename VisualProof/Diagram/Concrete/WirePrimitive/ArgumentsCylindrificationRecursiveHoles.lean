@@ -180,14 +180,18 @@ theorem compileAppliedSiteAt?_complete
   have nodeCompiled :
       ConcreteElaboration.Internal.compileNode? definitions source.val
           context site.node = some (.atom head arguments) := by
+    rw [ConcreteElaboration.compileNodes?_equation] at singletonCompiled
+    dsimp only at singletonCompiled
     cases found : ConcreteElaboration.Internal.compileNode? definitions
         source.val context site.node with
     | none =>
-        simp [ConcreteElaboration.compileNodes?, found] at singletonCompiled
+        simp [found] at singletonCompiled
     | some foundItem =>
         have foundExact : foundItem = .atom head arguments := by
-          simpa [ConcreteElaboration.compileNodes?, found] using
-            singletonCompiled
+          rw [found] at singletonCompiled
+          rw [ConcreteElaboration.compileNodes?_equation] at singletonCompiled
+          exact (ItemSeq.cons.inj
+            (Option.some.inj singletonCompiled)).1
         simpa [foundExact] using found
   have headExact :
       ConcreteElaboration.WireContext.origin source.val context.ids head =
@@ -376,14 +380,16 @@ theorem recursiveRegionClassifier_site
             | atom nodeRegion atomArguments =>
                 exact ⟨nodeRegion, atomArguments, rfl⟩
             | ref nodeRegion definition refArguments =>
-                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                simp [ConcreteElaboration.Internal.compileNode?_equation,
+                  nodeData]
                   at compiled
                 cases resolved :
                     ConcreteElaboration.Internal.resolveArgs? source.val
                       (context.extend region) node refArguments 0 <;>
                   simp [resolved] at compiled
             | identity nodeRegion signature arity =>
-                simp [ConcreteElaboration.Internal.compileNode?, nodeData]
+                simp [ConcreteElaboration.Internal.compileNode?_equation,
+                  nodeData]
                   at compiled
                 cases resolved :
                     ConcreteElaboration.Internal.resolveIdentityPorts?
@@ -394,7 +400,11 @@ theorem recursiveRegionClassifier_site
               ConcreteElaboration.compileNodes? definitions source.val
                   (context.extend region) [node] =
                 some (.cons (.atom atomHead arguments) .nil) := by
-            simp [ConcreteElaboration.compileNodes?, compiled]
+            rw [ConcreteElaboration.compileNodes?_equation]
+            dsimp only
+            rw [compiled]
+            rw [ConcreteElaboration.compileNodes?_equation]
+            rfl
           obtain ⟨shapeHead, shapeArguments, itemExact, ownerExact,
               _argumentOrigins⟩ :=
             ConcreteElaboration.compileNodes?_atom_shape source.val

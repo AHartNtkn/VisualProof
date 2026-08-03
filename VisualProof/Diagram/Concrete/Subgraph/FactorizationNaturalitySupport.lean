@@ -535,13 +535,15 @@ theorem compileNodes_cons_components
       ConcreteElaboration.compileNodes? definitions diagram context tail =
           some rest ∧
       items = .cons head rest := by
-  simp only [ConcreteElaboration.compileNodes?] at compiled
+  rw [ConcreteElaboration.compileNodes?_equation] at compiled
   obtain ⟨head, rest, headEquation, restEquation, itemsEquation⟩ :=
     option_bind₂_eq_some compiled
   subst items
   refine ⟨head, rest, ?_, restEquation, rfl⟩
-  simp only [ConcreteElaboration.compileNodes?]
+  rw [ConcreteElaboration.compileNodes?_equation]
+  dsimp only
   rw [headEquation]
+  rw [ConcreteElaboration.compileNodes?_equation]
   rfl
 
 private theorem compileNodes_append
@@ -559,9 +561,18 @@ private theorem compileNodes_append
         pure (leftItems.append rightItems)) := by
   induction left with
   | nil =>
-      simp [ConcreteElaboration.compileNodes?, ItemSeq.append]
+      rw [List.nil_append]
+      rw [ConcreteElaboration.compileNodes?_equation definitions diagram
+        context []]
+      dsimp only
+      simp [ItemSeq.append]
   | cons head tail induction =>
-      simp only [List.cons_append, ConcreteElaboration.compileNodes?]
+      rw [List.cons_append]
+      rw [ConcreteElaboration.compileNodes?_equation definitions diagram
+        context (head :: (tail ++ right))]
+      rw [ConcreteElaboration.compileNodes?_equation definitions diagram
+        context (head :: tail)]
+      dsimp only
       rw [induction]
       simp [Option.bind_assoc, ItemSeq.append]
 
@@ -1553,7 +1564,7 @@ theorem openRoot_compile_components
           (fragment.val.diagram.childrenOf fragment.val.diagram.root) =
         some children := by
   have bodyCompiled := compiled.body_generated
-  unfold ConcreteElaboration.compileOpenRoot? at bodyCompiled
+  rw [ConcreteElaboration.compileOpenRoot?_equation] at bodyCompiled
   obtain ⟨nodes, nodesCompiled, remainder⟩ :=
     Option.bind_eq_some_iff.mp bodyCompiled
   obtain ⟨children, childrenCompiled, _⟩ :=

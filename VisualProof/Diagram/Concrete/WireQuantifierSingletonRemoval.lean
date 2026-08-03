@@ -1715,8 +1715,22 @@ private theorem compileNodes_cons_eq_singleton_bind
         let tailItems ←
           ConcreteElaboration.compileNodes? definitions diagram context nodes
         pure (headItems.append tailItems)) := by
-  simp [ConcreteElaboration.compileNodes?, ItemSeq.append,
-    Option.bind_assoc]
+  rw [ConcreteElaboration.compileNodes?_equation]
+  dsimp only
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context
+    [node]]
+  dsimp only
+  rw [ConcreteElaboration.compileNodes?_equation definitions diagram context
+    []]
+  cases headEquation :
+      ConcreteElaboration.Internal.compileNode? definitions diagram context
+        node with
+  | none => simp [headEquation]
+  | some head =>
+      cases tailEquation :
+          ConcreteElaboration.compileNodes? definitions diagram context nodes with
+      | none => simp [headEquation, tailEquation]
+      | some tail => simp [headEquation, tailEquation, ItemSeq.append]
 
 theorem compileNodes_filter
     (definitions : List (List Sig))
@@ -1735,7 +1749,9 @@ theorem compileNodes_filter
   induction nodes with
   | nil =>
       intro items compiled
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?]⟩
+      refine ⟨.nil, ?_⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
+      rfl
   | cons head tail induction =>
       intro items compiled
       obtain ⟨headItems, tailItems, headCompiled, tailCompiled, _⟩ :=
@@ -1825,9 +1841,11 @@ theorem survivingNodes_natural
           (ItemSeq.nil : ItemSeq definitions context.sigs) =
             sourceItems :=
         Option.some.inj (by
-          simpa [ConcreteElaboration.compileNodes?] using sourceCompiled)
+          rw [ConcreteElaboration.compileNodes?_equation] at sourceCompiled
+          exact sourceCompiled)
       subst sourceItems
-      exact ⟨.nil, by simp [ConcreteElaboration.compileNodes?], rfl⟩
+      refine ⟨.nil, ?_, rfl⟩
+      rw [ConcreteElaboration.compileNodes?_equation]
   | cons target tail induction =>
       intro sourceItems sourceCompiled
       obtain ⟨sourceHead, sourceTail, headCompiled, tailCompiled,
@@ -1984,10 +2002,11 @@ theorem compileRegion_natural
   induction fuel with
   | zero =>
       intro context region above sourceBody compiled
-      simp [ConcreteElaboration.compileRegion?] at compiled
+      simp at compiled
   | succ fuel induction =>
       intro context region above sourceBody compiled
-      simp only [ConcreteElaboration.compileRegion?] at compiled
+      rw [ConcreteElaboration.compileRegion?_succ] at compiled
+      dsimp only at compiled
       cases sourceNodesEquation :
           ConcreteElaboration.compileNodes? definitions source.val
             (context.extend region) (source.val.nodesAt region) with
@@ -2115,7 +2134,8 @@ theorem compileRegion_natural
                     (targetContext source removed context)
                     (targetRegion source removed region)
                     (.mk (targetNodes'.append targetChildren')), ?_⟩
-              simp only [ConcreteElaboration.compileRegion?]
+              rw [ConcreteElaboration.compileRegion?_succ]
+              dsimp only
               rw [targetNodesCompiled']
               rw [targetChildrenCompiled']
               rfl
@@ -2164,12 +2184,15 @@ theorem compileRegionBody_natural
                 some
                   (ConcreteElaboration.finishRegion source.val context region
                     (.mk (sourceNodes.append sourceChildren))) := by
-            simp [ConcreteElaboration.compileRegion?,
-              sourceNodesEquation, sourceChildrenEquation]
+            rw [ConcreteElaboration.compileRegion?_succ]
+            dsimp only
+            rw [sourceNodesEquation, sourceChildrenEquation]
+            rfl
           obtain ⟨targetFull, targetCompiled⟩ :=
             compileRegion_natural source removed candidateWellFormed
               (fuel + 1) context region above sourceFull
-          simp only [ConcreteElaboration.compileRegion?] at targetCompiled
+          rw [ConcreteElaboration.compileRegion?_succ] at targetCompiled
+          dsimp only at targetCompiled
           cases targetNodesEquation :
               ConcreteElaboration.compileNodes? definitions
                 (ConcreteDiagram.DenseErasure.eraseNodeCandidate
