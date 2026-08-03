@@ -387,7 +387,11 @@ structure AppliedUnfold
       some reconstructionCompilation
   private body : ResolvedDefinitionBody definitions.intrinsic
     (definitions.intrinsic.signatures.get definition)
-  private bodyCompilation : OpenCompilation body.body
+  private bodyAccepted :
+    definitions.resolveBody
+        (ConcreteElaboration.Internal.definitionVarAt
+          definitions.intrinsic.signatures definition) =
+      .ok body
   private attachment : ConcreteSpliceAttachment removed.complement
     removed.site body.body
   private boundaryTargets :
@@ -397,9 +401,9 @@ structure AppliedUnfold
           (Fin.cast (bodyBoundaryLength body).symm position) =
         reconstruction.target
           (Fin.cast reference.boundaryLength.symm position)
-  private bodyInsertion : InsertionCompilation bodyCompilation attachment
+  private bodyInsertion : InsertionCompilation body.compilation attachment
   private bodyInsertionAccepted :
-    compileInsertion? bodyCompilation attachment = some bodyInsertion
+    compileInsertion? body.compilation attachment = some bodyInsertion
   private result : ConcreteSpliceResult attachment
   private resultAccepted : splice attachment = .ok result
 
@@ -468,6 +472,11 @@ structure AppliedFold
     Reconstruction.extract_splice_iso? input.occurrence removed
         bodyReconstruction bodyReconstructionAccepted =
       some bodyReconstructionIso
+  private bodyReconstructionCompilation :
+    InsertionCompilation input.body.compilation bodyReconstruction
+  private bodyReconstructionCompilationAccepted :
+    compileInsertion? input.body.compilation bodyReconstruction =
+      some bodyReconstructionCompilation
   private reference : CheckedReferenceFragment
     definitions.intrinsic.signatures input.definition
   private referenceCompilation : OpenCompilation reference.fragment
@@ -647,15 +656,14 @@ def applyUnfold
                                                           reference occurrence
                                                           removed
                                                           referenceCompilation
-                                                          referenceCompilationAccepted
-                                                          reconstruction
-                                                          reconstructionAccepted
-                                                          reconstructionIso
-                                                          reconstructionIsoAccepted
-                                                          reconstructionCompilation
-                                                          reconstructionCompilationAccepted
-                                                          body bodyCompilation
-                                                          attachment
+                                                    referenceCompilationAccepted
+                                                    reconstruction
+                                                    reconstructionAccepted
+                                                    reconstructionIso
+                                                    reconstructionIsoAccepted
+                                                    reconstructionCompilation
+                                                    reconstructionCompilationAccepted
+                                                    body bodyAccepted attachment
                                                           (by
                                                             intro position
                                                             have attachmentExact :=
@@ -745,58 +753,67 @@ def applyFold
                 bodyReconstruction bodyReconstructionAccepted with
           | none => exact .error .reconstructionIsoRejected
           | some bodyReconstructionIso =>
-              match referenceAccepted :
-                  checkReferenceFragment definitions.intrinsic.signatures
-                    input.definition with
-              | .error error =>
-                  exact .error (.referenceFragmentRejected error)
-              | .ok reference =>
-                  match referenceCompilationAccepted :
-                      compileOpen reference.fragment with
-                  | none => exact .error .referenceCompilationRejected
-                  | some referenceCompilation =>
-                      let target
-                          (position : Fin
-                            reference.fragment.val.boundary.length) :
-                          removed.complement.val.WireId :=
-                        bodyReconstruction.target
-                          (Fin.cast
-                            (referenceBodyBoundaryLength input reference)
-                            position)
-                      match attachmentAccepted :
-                          checkConcreteSpliceAttachment removed.complement
-                            removed.site reference.fragment target with
-                      | none => exact .error .bodyAttachmentRejected
-                      | some attachment =>
-                          match insertionAccepted :
-                              compileInsertion? referenceCompilation attachment with
-                          | none =>
-                              exact .error .bodyInsertionCompilationRejected
-                          | some insertion =>
-                              match resultAccepted : splice attachment with
-                              | .error error =>
-                                  exact .error (.bodySpliceRejected error)
-                              | .ok result =>
-                                  exact .ok
-                                    (AppliedFold.mk removed removedAccepted
-                                      bodyReconstruction
-                                      bodyReconstructionAccepted
-                                      bodyReconstructionIso
-                                      bodyReconstructionIsoAccepted reference
-                                      referenceCompilation
-                                      referenceCompilationAccepted attachment
-                                      (by
-                                        intro position
-                                        have exactTarget := congrFun
-                                          (checkConcreteSpliceAttachment_target
-                                            removed.complement removed.site
-                                            reference.fragment target attachment
-                                            attachmentAccepted)
-                                          (Fin.cast
-                                            reference.boundaryLength.symm
-                                            position)
-                                        simpa [target] using exactTarget)
-                                      insertion insertionAccepted result
-                                      resultAccepted)
+              match bodyReconstructionCompilationAccepted :
+                  compileInsertion? input.body.compilation
+                    bodyReconstruction with
+              | none => exact .error .reconstructionCompilationRejected
+              | some bodyReconstructionCompilation =>
+                  match referenceAccepted :
+                      checkReferenceFragment definitions.intrinsic.signatures
+                        input.definition with
+                  | .error error =>
+                      exact .error (.referenceFragmentRejected error)
+                  | .ok reference =>
+                      match referenceCompilationAccepted :
+                          compileOpen reference.fragment with
+                      | none => exact .error .referenceCompilationRejected
+                      | some referenceCompilation =>
+                          let target
+                              (position : Fin
+                                reference.fragment.val.boundary.length) :
+                              removed.complement.val.WireId :=
+                            bodyReconstruction.target
+                              (Fin.cast
+                                (referenceBodyBoundaryLength input reference)
+                                position)
+                          match attachmentAccepted :
+                              checkConcreteSpliceAttachment removed.complement
+                                removed.site reference.fragment target with
+                          | none => exact .error .bodyAttachmentRejected
+                          | some attachment =>
+                              match insertionAccepted :
+                                  compileInsertion? referenceCompilation
+                                    attachment with
+                              | none =>
+                                  exact .error
+                                    .bodyInsertionCompilationRejected
+                              | some insertion =>
+                                  match resultAccepted : splice attachment with
+                                  | .error error =>
+                                      exact .error (.bodySpliceRejected error)
+                                  | .ok result =>
+                                      exact .ok
+                                        (AppliedFold.mk removed removedAccepted
+                                          bodyReconstruction
+                                          bodyReconstructionAccepted
+                                          bodyReconstructionIso
+                                          bodyReconstructionIsoAccepted
+                                          bodyReconstructionCompilation
+                                          bodyReconstructionCompilationAccepted
+                                          reference referenceCompilation
+                                          referenceCompilationAccepted attachment
+                                          (by
+                                            intro position
+                                            have exactTarget := congrFun
+                                              (checkConcreteSpliceAttachment_target
+                                                removed.complement removed.site
+                                                reference.fragment target
+                                                attachment attachmentAccepted)
+                                              (Fin.cast
+                                                reference.boundaryLength.symm
+                                                position)
+                                            simpa [target] using exactTarget)
+                                          insertion insertionAccepted result
+                                          resultAccepted)
 
 end VisualProof
