@@ -14,12 +14,11 @@ the existing ordinary formula compiler semantically preserving and expressive;
 and prove direct relation substitution/comprehension constructively derivable
 from the primitive relation-wire rules.
 
-**Architecture:** Reuse only the former formalization's proof architecture:
-complete semantics, rule-owned soundness theorems, exhaustive one-step
-soundness, replay soundness, checked-theorem soundness, and verified-theory
-soundness. Do not retain any second-order-specific theorem merely because it
-already existed. The higher-order calculus, its source-formula compiler, and
-the primitive derivability compiler each own their actual production theorems.
+**Architecture:** Reuse the former formalization's semantic and proof style:
+complete/all-model semantics and rule-owned soundness theorems. Do not retain
+any second-order-specific theorem or aggregate checker layer merely because it
+already existed. The higher-order rules, source-formula compiler, and primitive
+derivability compiler each own their requested production theorems.
 
 **Tech stack:** Lean 4/Lake, the repository's existing TypeScript formula and
 kernel sources as correspondence authorities, Node.js/Vitest for mechanical
@@ -33,11 +32,8 @@ cross-language checks already justified by the formalization.
 | R2 | Replace second-order quantifier bubbles by recursive-signature wires and prove every actual higher-order rule sound against complete/all-model semantics in the established style. | Original refactor request; `2026-07-22-signature-indexed-wires-design.md`; zero-signature redesign Section 3; latest user clarification. |
 | R3 | Formalize semantic preservation/coverage of the existing ordinary formula-to-diagram compiler. This is language expressiveness, not deductive completeness. | Zero-signature redesign Section 4; existing `src/formula/syntax.ts` and `src/formula/diagram.ts`; latest user clarification. |
 | R4 | Prove direct relation substitution/grounding and comprehension/abstraction reproducible by primitive relation-wire steps. | `2026-07-29-primitive-wire-quantifier-rules-design.md`, especially “Completeness” and “Lean strategy”; latest user clarification. |
-| P1 | Restate exhaustive step, replay, checked-theorem, and verified-theory soundness over the new rule set. | Necessary reuse of the completed second-order soundness architecture; these aggregate the R2 rule theorems and are not second-order-specific propositions. |
-| P2 | Preserve exact ordered theorem boundaries and exact raw compiler landings up to checked concrete isomorphism. | Necessary to prove the actual theorem checker and the R4 direct-operation replacement; primitive design lines 105–149 and 228–250. |
-
 No task may be added without citing one of R1–R4 or demonstrating a direct
-logical dependency of P1/P2. Implementation convenience, an incumbent module,
+logical dependency of an R1–R4 production theorem. Implementation convenience, an incumbent module,
 a former plan checkbox, a TypeScript receipt shape, or an existing helper is
 not controlling evidence.
 
@@ -51,6 +47,9 @@ into theorem statements:
 - deductive completeness, Henkin semantics, normalization of source formulas,
   parser correctness, UI correctness, theory-library reconstruction, or a
   macro system;
+- aggregate `applyStep_sound`, replay soundness, checked-theorem soundness,
+  verified-theory soundness, a theorem checker, or ordered theorem-boundary
+  transport;
 - Lean/TypeScript receipt representation equality;
 - a `Transport`, `inverseTransport`, atlas, search, redundancy-mismatch,
   provenance, allocation, or interface API as an outcome in its own right;
@@ -59,6 +58,9 @@ into theorem statements:
   primitive-completeness theorems;
 - identity normalization in the statement, proof, landing, or boundary
   correspondence of direct substitution/comprehension adequacy.
+
+Ordered-boundary preservation is required only by R4's raw primitive-compiler
+correspondence. It is not a theorem-checker or proof-replay requirement.
 
 Identity normalization may retain its own soundness theorem if it is an actual
 production transformation. It remains a separate mechanism and may not be used
@@ -83,8 +85,6 @@ their statements are checked against this surface.
   shift/unshift, argument permute, duplicate/contract, drop/extend,
   apply/abstract formal, identity leaf/abstract, and folded-ref
   leaf/abstract.
-- `applyStep_sound` over the exact durable production rule sum. Exhaustiveness
-  is required; matching an incidental data layout is not.
 
 ### Direct substitution/comprehension derivability (R4)
 
@@ -98,23 +98,14 @@ their statements are checked against this surface.
   soundness. These corollaries quantify over accepted direct-operation inputs,
   not already-successful compiler outputs.
 
-### Proof architecture (P1/P2)
-
-- `replay_sound` and the backward counterpart over the higher-order step sum.
-- `checkedTheorem_sound`, proving the exact registered LHS entails the exact
-  registered RHS when the two replays meet up to checked concrete isomorphism
-  while preserving the ordered boundary.
-- `verifiedTheory_sound`, with definitions interpreted in dependency order and
-  theorem citations restricted to the verified prior prefix.
-
 ### Formula compiler semantics and expressiveness (R3)
 
 - A Lean source-formula grammar corresponding to the production TypeScript
   `Formula` AST, with typed lexical binding and interpretation in the same
   `Model` used by diagrams.
 - A total structural compiler on well-scoped typed formulas.
-- A checker/elaboration theorem for its output if the compiler constructs a
-  raw concrete diagram.
+- A well-formedness/elaboration theorem for its output if the compiler
+  constructs a raw concrete diagram.
 - One semantic preservation theorem: compiling a source formula yields a
   diagram with the same truth value in every `Model` and environment.
 - The expressiveness corollary: every supported source formula has such a
@@ -127,10 +118,10 @@ their statements are checked against this surface.
   theorems are present and currently build.
 - The two universal primitive compiler redundancy declarations and their
   semantic corollaries are RED, not GREEN.
-- `applyStep_sound` and replay soundness exist, but their dependency on a
-  plan-created `ProofStep.receipt` containing `sorry` must be removed or shown
-  necessary to the actual checker before either is accepted as complete.
-- Checked-theorem and verified-theory production owners are absent.
+- Existing aggregate step, replay, theorem-checker, and theory-verification
+  declarations are outside the required final surface. They establish no
+  completion obligation and may remain only when directly required by an
+  R1–R4 production theorem.
 - The formula semantic preservation/coverage formalization is absent.
 - Historical task receipts, prior checkmarks, fixture-based validation, and
   absence of `sorry` in an artificially weakened theorem do not establish
@@ -143,13 +134,12 @@ production theorem and the provenance table.
 
 ### Task 1: Establish the complete honest RED skeleton
 
-**Requirement:** R1–R4, P1, P2.
+**Requirement:** R1–R4.
 
 **Primary files:**
 
-- Modify only the current owners under `VisualProof/Diagram`,
-  `VisualProof/Rule`, `VisualProof/Proof`, and `VisualProof/Theory` needed to
-  state the final theorem surface.
+- Modify only the current owners under `VisualProof/Diagram` and
+  `VisualProof/Rule` needed to state the final theorem surface.
 - Create the minimal Lean formula modules under `VisualProof/Formula/`.
 - Modify `VisualProof.lean` only for production imports.
 
@@ -157,20 +147,18 @@ production theorem and the provenance table.
   obligation, a private helper directly used by one, or displaced.
 - [ ] State every missing production declaration from “Required final
   production theorem surface” with its strongest correct quantification and
-  `sorry`. In particular, add checked-theorem, verified-theory, formula
-  compiler, formula preservation, and formula expressiveness declarations.
+  `sorry`. In particular, add formula compiler, formula preservation, and
+  formula expressiveness declarations.
 - [ ] Keep the accepted-input `compiled_join_redundant` and
   `compiled_sever_redundant` declarations. They must produce the compiler
   success equality and raw checked concrete isomorphism with direct
   positionwise ordered-boundary preservation.
 - [ ] Delete artificially weakened, obsolete, or non-required production
-  declarations, including insertion redundancy. Delete `ProofStep.receipt`
-  and its plan-only receipt hierarchy unless the actual theorem checker—not a
-  mirrored TypeScript shape—requires that exact data. Replace any dependency
-  with the smallest direct checked result/interface proposition the owning
-  P1/P2 theorem needs.
+  declarations, including insertion redundancy.
 - [ ] Delete invalid proofs together with their old statements; do not preserve
-  them under aliases or adapters. Correct statements remain RED with `sorry`.
+  them under aliases or adapters. Delete `ProofStep.receipt` and its plan-only
+  hierarchy unless an R1–R4 production theorem directly requires that exact
+  structure. Correct statements remain RED with `sorry`.
 - [ ] Confirm the complete production skeleton elaborates. The expected RED
   evidence is exactly the `sorry` warnings on incomplete owning declarations.
   No fixture or example is permitted.
@@ -184,7 +172,7 @@ final theorem above.
 
 ### Task 2: Conform the higher-order semantic and checked-diagram core
 
-**Requirement:** R1, R2; prerequisite for R3/R4/P1/P2.
+**Requirement:** R1, R2; prerequisite for R3/R4.
 
 - [ ] Prove the live syntax contains recursive signatures, signature-indexed
   wire binding, atom/ref/identity/cut content, and no Lambda term, equation,
@@ -194,7 +182,7 @@ final theorem above.
   over every such model.
 - [ ] Revalidate concrete well-formedness, elaboration, open ordered boundaries,
   definitions, exact occurrence validation, splice semantics, and concrete
-  isomorphism only to the extent cited by the final R2–R4/P1/P2 theorems.
+  isomorphism only to the extent cited by the final R2–R4 theorems.
 - [ ] Reuse green current results only where their statements are
   substantively identical. Delete second-order-specific lemmas and any
   plan-created generalization not cited by a final owner.
@@ -225,12 +213,11 @@ final theorem owner.
 - [ ] Revalidate or prove all primitive content, argument, formal, identity,
   and folded-ref pairs. A shared witness lemma is permitted only if these
   owning production theorems directly cite it.
-- [ ] Ensure each public theorem quantifies over the checker-accepted rule
+- [ ] Ensure each public theorem quantifies over the production-accepted rule
   input and derives soundness; caller-supplied semantic truth, successful
   landing, transport, or inverse evidence is forbidden.
-- [ ] Make `applyStep_sound` GREEN by exhaustive delegation to the actual
-  higher-order rule theorems. Identity normalization, if production applies it
-  after a step, is composed only through its separate soundness theorem.
+- [ ] Ensure every actual rule has its own owning soundness theorem. An
+  aggregate step-dispatch theorem is not a completion criterion.
 
 **Validation:** focused owner builds followed by `lake build` and
 `npm run formal:size`; theorem dependency inspection proving all durable rule
@@ -241,7 +228,7 @@ covered.
 
 ### Task 4: Prove primitive derivability of direct substitution and comprehension
 
-**Requirement:** R4, P2.
+**Requirement:** R4.
 
 - [ ] Keep the direct relation-content join/sever implementations solely as
   specification operations. They are not durable proof-step constructors.
@@ -269,34 +256,7 @@ covered.
 
 ---
 
-### Task 5: Complete higher-order replay, theorem, and theory soundness
-
-**Requirement:** P1, P2; aggregates R2.
-
-- [ ] Define proof replay as the dependent chain of actual checked higher-order
-  steps. Preserve only the execution result and ordered interface information
-  the theorem checker genuinely consumes.
-- [ ] Prove forward and backward replay sound by composing
-  `applyStep_sound`; no per-step theorem may assume the desired entailment.
-- [ ] Define two-sided checked theorems using exact registered endpoints.
-  Replays may meet up to checked concrete isomorphism, but the theorem proved
-  is between the registered LHS and RHS, with their ordered boundary
-  interface preserved.
-- [ ] Prove `checkedTheorem_sound`.
-- [ ] Define ordered theory verification so definitions use only their prior
-  definition prefix and citations use only their prior verified theorem
-  prefix.
-- [ ] Prove `verifiedTheory_sound` in every full `Model`.
-- [ ] Do not require mirrored TypeScript receipts, allocation totals,
-  provenance maps, inverse transports, or separate boundary APIs unless the
-  actual checker consumes them and the owning theorem directly cites them.
-
-**Validation:** focused proof/theory builds, `lake build`, and direct theorem
-statements for exact endpoints and ordered boundaries.
-
----
-
-### Task 6: Formalize formula compilation and semantic expressiveness
+### Task 5: Formalize formula compilation and semantic expressiveness
 
 **Requirement:** R3.
 
@@ -329,7 +289,7 @@ TypeScript AST cases, `lake build`, and `npm run formal:size`.
 
 ---
 
-### Task 7: Delete displaced and plan-only infrastructure
+### Task 6: Delete displaced and plan-only infrastructure
 
 **Requirement:** R1–R4 minimality and the prohibition on extra requirements.
 
@@ -340,6 +300,8 @@ TypeScript AST cases, `lake build`, and `npm run formal:size`.
   redundancy-mismatch, generalized-shape, allocation, provenance, and receipt
   modules/declarations created only to satisfy the displaced plan. Do not keep
   aliases, adapters, compatibility wrappers, or umbrella imports.
+- [ ] Delete aggregate replay, checked-theorem, verified-theory, and theorem-
+  boundary infrastructure when it is outside the R1–R4 dependency closure.
 - [ ] Delete obsolete second-order-specific modules/declarations and any
   invalid old proofs not already removed by Task 1.
 - [ ] Delete theorem statements for insertion redundancy and ref
@@ -356,19 +318,18 @@ TypeScript AST cases, `lake build`, and `npm run formal:size`.
 
 ---
 
-### Task 8: Final conformance and completion audit
+### Task 7: Final conformance and completion audit
 
-**Requirement:** R1–R4, P1, P2.
+**Requirement:** R1–R4.
 
 - [ ] Verify the provenance table against the final source and prove every
   retained public theorem/task maps to a requested outcome or direct
   prerequisite.
 - [ ] Verify the complete final theorem surface is GREEN: no `sorry`, `admit`,
   project `axiom`, or artificially weakened replacement remains.
-- [ ] Print/check axioms for `applyStep_sound`, primitive join/sever adequacy
-  and semantic corollaries, `replay_sound`, `checkedTheorem_sound`,
-  `verifiedTheory_sound`, formula semantic preservation, and formula
-  expressiveness.
+- [ ] Print/check axioms for every actual rule-owned soundness theorem,
+  primitive join/sever adequacy and semantic corollaries, formula semantic
+  preservation, and formula expressiveness.
 - [ ] Verify exact actual-rule coverage and absence of Lambda, bubble,
   second-order comprehension, fixture, identity-retarget, monolithic durable
   step, and plan-only authority paths.
@@ -396,8 +357,7 @@ The work is complete only when all four requested outcomes are directly
 proved:
 
 1. no Lambda or quantifier-bubble formalization remains;
-2. every actual higher-order rule and the aggregate proof/theory checker are
-   sound in complete/all-model semantics;
+2. every actual higher-order rule is sound in complete/all-model semantics;
 3. the existing source-formula compiler has a kernel-checked semantic
    preservation/expressiveness theorem; and
 4. every accepted direct relation substitution/comprehension is reproduced by

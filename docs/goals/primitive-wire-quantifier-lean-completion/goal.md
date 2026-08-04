@@ -9,7 +9,7 @@ complete:
 
 1. Lambda expressions and quantifier bubbles are absent from the Lean model;
 2. every actual higher-order rule is sound in the established complete/all-model
-   semantic style, with aggregate replay/theorem/theory soundness;
+   semantic style;
 3. the production source-formula compiler has semantic preservation and
    expressiveness theorems; and
 4. direct relation substitution/comprehension is constructively reproduced by
@@ -18,7 +18,7 @@ complete:
 
 ## Authority
 
-The governing plan is the provenance-audited eight-task plan above. It replaces
+The governing plan is the provenance-audited seven-task plan above. It replaces
 the former 14-task authority. Prior receipts and checkmarks are historical
 evidence only; they do not establish completion unless the corresponding
 production theorem survives the new declaration-level audit unchanged.
@@ -45,9 +45,9 @@ production theorem survives the new declaration-level audit unchanged.
 
 ## Completion Oracle
 
-All eight plan tasks are complete, the plan's four numbered outcomes are each
+All seven plan tasks are complete, the plan's four numbered outcomes are each
 mapped to kernel-checked production theorems, no displaced or plan-only model
-remains, and Task 8's full conformance gates pass from a clean formal build.
+remains, and Task 7's full conformance gates pass from a clean formal build.
 
 ## Canonical Board
 
@@ -65,4 +65,4 @@ Read this charter, the governing plan, and `state.yaml`. Work only on the one
 active task. Compare each proposed declaration and helper to the provenance
 table before keeping it. Record production-theorem RED/GREEN evidence, focused
 and full validation, and the task commit; then activate the next task. Do not
-claim completion until the Task 8 audit records all four outcomes directly.
+claim completion until the Task 7 audit records all four outcomes directly.

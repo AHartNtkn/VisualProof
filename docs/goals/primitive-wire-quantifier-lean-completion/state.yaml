@@ -5,12 +5,12 @@ goal:
   title: "Higher-Order Diagram Calculus Lean Completion"
   slug: "primitive-wire-quantifier-lean-completion"
   kind: existing_plan
-  tranche: "Execute the provenance-audited eight-task Lean completion plan."
+  tranche: "Execute the provenance-audited seven-task Lean completion plan."
   status: active
   oracle:
-    signal: "All four requested outcomes are proved by the final production theorem surface and Task 8 gates pass."
+    signal: "All four requested outcomes are proved by the final production theorem surface and Task 7 gates pass."
     cadence: "after each plan task and at final conformance"
-    final_proof: "Kernel-checked rule/proof soundness, formula semantic preservation/expressiveness, primitive direct-operation adequacy, displaced-model absence, and clean full gates."
+    final_proof: "Kernel-checked rule soundness, formula semantic preservation/expressiveness, primitive direct-operation adequacy, displaced-model absence, and clean full gates."
   intake:
     original_request: "Convert the completed second-order Lean formalization to the higher-order wire calculus, prove its rules sound, prove formula expressiveness, and prove direct substitution/comprehension primitive-derivable—nothing more."
     interpreted_outcome: "A scope-correct higher-order Lean formalization using the old architecture but only new-calculus theorems, plus the two requested semantic completeness results."
@@ -18,7 +18,7 @@ goal:
     audience: "VisualProofAssistant maintainers and users relying on checked higher-order proofs"
     authority: requested
     proof_type: theorem
-    completion_proof: "Every required production declaration is GREEN and maps to R1-R4/P1-P2 in the governing plan."
+    completion_proof: "Every required production declaration is GREEN and maps to R1-R4 in the governing plan."
     likely_misfire: "Treating incumbent transport/fixture/atlas infrastructure or prior task receipts as requirements, or stopping before formula expressiveness."
     blind_spots_considered:
       - "Reuse architecture, not second-order theorem content"
@@ -30,9 +30,9 @@ goal:
       - "Plan-only infrastructure must be deleted when unreferenced"
     existing_plan_facts:
       - "Plan path: docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      - "The plan has eight provenance-tagged tasks."
+      - "The plan has seven provenance-tagged tasks."
       - "Task 1 establishes the entire honest production theorem skeleton."
-      - "Task 8 and the four-outcome completion oracle define completion."
+      - "Task 7 and the four-outcome completion oracle define completion."
 
 rules:
   pm_owns_state: true
@@ -78,7 +78,7 @@ tasks:
     objective: "Execute plan Task 1: establish the complete honest RED skeleton and delete false, obsolete, or plan-only production declarations."
     inputs:
       - "Governing plan Task 1 and required final production theorem surface"
-      - "Current Lean declarations and TypeScript production Formula/ProofStep authorities"
+      - "Current Lean declarations and TypeScript production rule/formula authorities"
       - "/tmp/vpa-original-scope-provenance-audit-20260804.md"
     constraints:
       - "Do not prove beyond the minimum needed to elaborate the skeleton."
@@ -89,8 +89,6 @@ tasks:
       - "VisualProof.lean"
       - "VisualProof/Diagram/**"
       - "VisualProof/Rule/**"
-      - "VisualProof/Proof/**"
-      - "VisualProof/Theory/**"
       - "VisualProof/Formula/**"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
       - "docs/goals/primitive-wire-quantifier-lean-completion/**"
@@ -132,7 +130,7 @@ tasks:
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 3: prove every actual higher-order rule and exhaustive applyStep sound."
+    objective: "Execute plan Task 3: prove every actual higher-order rule sound."
     inputs:
       - "T002 semantic core"
       - "T001 rule theorem skeleton"
@@ -142,7 +140,6 @@ tasks:
       - "No caller-supplied semantic or landing evidence."
     expected_output:
       - "GREEN rule-owned soundness theorems"
-      - "GREEN exhaustive applyStep_sound"
       - "Task-scoped commit"
   - id: T004
     type: worker
@@ -168,24 +165,7 @@ tasks:
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 5: complete replay, checked-theorem, and ordered-theory soundness over the new calculus."
-    inputs:
-      - "T003 applyStep_sound"
-      - "T001 proof/theory skeleton"
-    constraints:
-      - "Exact registered endpoints and ordered boundary interface."
-      - "No mirrored receipt or transport API requirement."
-    expected_output:
-      - "GREEN replay_sound and backward counterpart"
-      - "GREEN checkedTheorem_sound"
-      - "GREEN verifiedTheory_sound"
-      - "Task-scoped commit"
-  - id: T006
-    type: worker
-    assignee: Worker
-    status: queued
-    reasoning_hint: high
-    objective: "Execute plan Task 6: formalize the production Formula AST compiler and prove semantic preservation/expressiveness."
+    objective: "Execute plan Task 5: formalize the production Formula AST compiler and prove semantic preservation/expressiveness."
     inputs:
       - "src/formula/syntax.ts"
       - "src/formula/diagram.ts"
@@ -200,14 +180,14 @@ tasks:
       - "GREEN semantic preservation theorem"
       - "GREEN expressiveness corollary"
       - "Task-scoped commit"
-  - id: T007
+  - id: T006
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 7: delete every displaced or plan-only module/declaration outside the final theorem dependency closure."
+    objective: "Execute plan Task 6: delete every displaced or plan-only module/declaration outside the final theorem dependency closure."
     inputs:
-      - "Final owners from T003-T006"
+      - "Final owners from T003-T005"
       - "Governing plan explicit non-requirements"
     constraints:
       - "No aliases, adapters, fixture modules, or compatibility authorities."
@@ -217,14 +197,14 @@ tasks:
       - "Plan-only infrastructure deleted"
       - "Minimal production umbrella"
       - "Task-scoped commit"
-  - id: T008
+  - id: T007
     type: pm
     assignee: PM
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 8: audit all four outcomes, run clean full gates, record conformance, and close the goal only on direct proof."
+    objective: "Execute plan Task 7: audit all four outcomes, run clean full gates, record conformance, and close the goal only on direct proof."
     inputs:
-      - "T001-T007 receipts and commits"
+      - "T001-T006 receipts and commits"
       - "Governing plan completion oracle"
     constraints:
       - "No completion from prior receipts, passing narrow tests, or missing sorry alone."
