@@ -1,40 +1,38 @@
 # GoalBuddy v2 state.yaml
-# Board truth lives here. goal.md is the charter; notes/ holds long receipts only.
-
 version: 2
 
 goal:
-  title: "Primitive Wire-Quantifier Lean Completion"
+  title: "Higher-Order Diagram Calculus Lean Completion"
   slug: "primitive-wire-quantifier-lean-completion"
   kind: existing_plan
-  tranche: "Execute all 14 committed plan tasks and the final acceptance audit."
+  tranche: "Execute the provenance-audited eight-task Lean completion plan."
   status: active
   oracle:
-    signal: "Task 14 and every acceptance-matrix row pass against current sources."
-    cadence: "after each plan task and at final audit"
-    final_proof: "Reviewed task receipts, exact 34-tag parity, clean formal/unit/type/E2E gates, and no task-owned dirty work."
+    signal: "All four requested outcomes are proved by the final production theorem surface and Task 8 gates pass."
+    cadence: "after each plan task and at final conformance"
+    final_proof: "Kernel-checked rule/proof soundness, formula semantic preservation/expressiveness, primitive direct-operation adequacy, displaced-model absence, and clean full gates."
   intake:
-    original_request: "Execute the committed 14-task primitive wire-quantifier Lean completion plan completely."
-    interpreted_outcome: "The merged 34-step proof language is fully formalized, replay/theory sound, audited, and cleanly validated."
+    original_request: "Convert the completed second-order Lean formalization to the higher-order wire calculus, prove its rules sound, prove formula expressiveness, and prove direct substitution/comprehension primitive-derivable—nothing more."
+    interpreted_outcome: "A scope-correct higher-order Lean formalization using the old architecture but only new-calculus theorems, plus the two requested semantic completeness results."
     input_shape: existing_plan
-    audience: "VisualProofAssistant maintainers and proof-replay users"
+    audience: "VisualProofAssistant maintainers and users relying on checked higher-order proofs"
     authority: requested
-    proof_type: test
-    completion_proof: "All plan checkboxes, reviewed commits, Task 14 gates, and acceptance-matrix evidence are complete."
-    likely_misfire: "Stopping after partial Lean progress or preserving a displaced 15-step, iota-only, retarget, or monolithic-kernel authority."
+    proof_type: theorem
+    completion_proof: "Every required production declaration is GREEN and maps to R1-R4/P1-P2 in the governing plan."
+    likely_misfire: "Treating incumbent transport/fixture/atlas infrastructure or prior task receipts as requirements, or stopping before formula expressiveness."
     blind_spots_considered:
-      - "Full-model reification boundary"
-      - "Exact ordered boundary transport"
-      - "Monolithic specification containment"
-      - "Sandbox-only nested npm spawn failure"
-      - "Lean source-size limits"
-      - "Unrelated archive and scratchpad preservation"
+      - "Reuse architecture, not second-order theorem content"
+      - "Honest complete RED skeleton before proof work"
+      - "All actual higher-order rules need soundness"
+      - "Formula completeness means semantic expressiveness only"
+      - "Primitive adequacy is independent of identity normalization"
+      - "Exact ordered boundary correspondence"
+      - "Plan-only infrastructure must be deleted when unreferenced"
     existing_plan_facts:
       - "Plan path: docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      - "Tasks 1-14 execute in dependency order."
-      - "The exact ordered TypeScript ProofStep union has 34 tags."
-      - "Every Lean task uses theorem-driven RED/GREEN: the owning production theorem typechecks with sorry for RED and with a kernel-checked proof for GREEN; no fixture module or redundant test theorem may manufacture either state."
-      - "Task 14 and the full acceptance matrix define completion."
+      - "The plan has eight provenance-tagged tasks."
+      - "Task 1 establishes the entire honest production theorem skeleton."
+      - "Task 8 and the four-outcome completion oracle define completion."
 
 rules:
   pm_owns_state: true
@@ -67,825 +65,173 @@ visual_board:
   local:
     status: live
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
-    command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
+    command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.2/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T010
+active_task: T001
 
 tasks:
   - id: T001
-    type: pm
-    assignee: PM
-    status: done
-    reasoning_hint: medium
-    objective: "Correct the factual Task 3 dependency cross-reference, establish the execution ledger, validate the plan preflight, and activate plan Task 1."
-    inputs:
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      - "/tmp/vpa-primitive-wire-lean-implementation-foundation-20260730-v2.md"
-      - "Baseline: 113 Vitest files / 684 tests pass; Lake 96 jobs pass; formal:size passes."
-    constraints:
-      - "May edit only the plan cross-reference, this goal's control files, and this plan's ignored execution ledger."
-      - "Do not edit Lean or TypeScript implementation files."
-      - "Preserve unrelated archive and scratchpad paths."
-    expected_output:
-      - "Corrected dependency reference"
-      - "Plan-specific execution ledger"
-      - "Validated board"
-      - "T002 activated for plan Task 1"
-    receipt:
-      result: done
-      harness: codex
-      summary: "Verified the isolated baseline, corrected the Task 3 dependency reference to Task 4, created the plan ledger, and activated plan Task 1."
-      changed_files:
-        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-        - ".superpowers/sdd/2026-07-30-primitive-wire-quantifier-lean-completion/progress.md"
-        - "docs/goals/primitive-wire-quantifier-lean-completion/goal.md"
-        - "docs/goals/primitive-wire-quantifier-lean-completion/state.yaml"
-      commands:
-        - cmd: "npm test"
-          status: pass
-        - cmd: "lake build"
-          status: pass
-        - cmd: "npm run formal:size"
-          status: pass
-  - id: T002
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 1: correct the Phase 3 structural baseline and freeze the exact 34 tags."
-    inputs:
-      - "Plan Task 1"
-      - "Merged src/kernel/proof/step.ts tag order"
-      - "Existing Phase 3 structural fixtures and receipts"
-    constraints:
-      - "All Task 1 global constraints apply."
-      - "Preserve unrelated work."
-      - "Do not begin Task 2."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Rule/Tag.lean"
-      - "VisualProof/Rule/Structural.lean"
-      - "VisualProof/Rule/StructuralFixtures.lean"
-      - "VisualProof/Rule/StructuralAudit.lean"
-      - "tests/architecture/lean-semantics.test.ts"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-      - "npx vitest run tests/architecture/lean-semantics.test.ts"
-    stop_if:
-      - "A semantic decision conflicts with the governing specs."
-      - "Implementation requires files outside allowed_files."
-      - "Verification fails twice for an unexplained cause."
-    receipt:
-      result: done
-      harness: codex
-      commit: "091cc84"
-      summary: "Froze the exact 34-tag Lean inventory, replaced forward-only erasure with flipped-polarity receipts, added the direct negative-splice theorem, and pinned the completed structural audit."
-      changed_files:
-        - "VisualProof.lean"
-        - "VisualProof/Rule/Tag.lean"
-        - "VisualProof/Rule/Structural.lean"
-        - "VisualProof/Rule/StructuralFixtures.lean"
-        - "VisualProof/Rule/StructuralAudit.lean"
-        - "tests/architecture/lean-semantics.test.ts"
-        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      commands:
-        - cmd: "lake build"
-          status: pass
-        - cmd: "npm run formal:size"
-          status: pass
-        - cmd: "npx vitest run tests/architecture/lean-semantics.test.ts"
-          status: pass
-      review: "PASS: allowed-file scope, 34-tag order and uniqueness, both erasure polarities, independent negative-splice use, audit coverage, and unrelated-file preservation verified."
-  - id: T003
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 2: complete and isolate the monolithic specification rule."
-    inputs:
-      - "Plan Task 2"
-      - "T002 receipt"
-    constraints:
-      - "Monolithic relation rules remain specification-only."
-      - "Construct the relation-sever witness through Model.reify exactly once."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationSeverSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean"
-      - "VisualProof/Rule/MonolithicWireQuantifier.lean"
-      - "VisualProof/Rule/MonolithicWireQuantifierFixtures.lean"
-      - "VisualProof/Rule/WireQuantifier.lean"
-      - "VisualProof/Rule/WireQuantifierFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "A checker would need caller-supplied semantic evidence."
-      - "Verification fails twice for an unexplained cause."
-    receipt:
-      result: done
-      harness: codex
-      commit: 1c2b6ba
-      summary: "Completed the full-model monolithic relation sever/join specification, proved relation-sever soundness through one checker-constructed Model.reify witness and checked inverse reconstruction, isolated the specification API from the temporary iota facade, and covered the required positive and refusal fixtures."
-      changed_files:
-        - VisualProof.lean
-        - VisualProof/Diagram/Concrete/WireQuantifierRelationSeverSemantics.lean
-        - VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean
-        - VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean
-        - VisualProof/Rule/MonolithicWireQuantifier.lean
-        - VisualProof/Rule/MonolithicWireQuantifierFixtures.lean
-        - VisualProof/Rule/WireQuantifier.lean
-        - VisualProof/Rule/WireQuantifierFixtures.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: "! rg -n \"MonolithicRelation|ContentOccurrence\" VisualProof/Rule/Tag.lean VisualProof/Rule/WireQuantifier.lean"
-          status: pass
-        - cmd: "rg -c \"Model\\.reify\" VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean"
-          status: pass
-      review: "PASS: allowed-file scope, all Task 2 interfaces, full Model soundness, mixed-parity/nullary/repeated-formal/parameter/refusal coverage, specification containment, single reification boundary, build, size gate, and unrelated-file preservation verified."
-  - id: T004
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 3: rebuild sever/join as generic signature-indexed partition/merge."
-    inputs:
-      - "Plan Task 3"
-      - "T003 receipt"
-    constraints:
-      - "Delete iota-only ownership; add no alias or adapter."
-      - "Keep monolithic specification separately named."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/WirePartition.lean"
-      - "VisualProof/Diagram/Concrete/WirePartitionSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierIota.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierIotaSemantics.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Partition.lean"
-      - "VisualProof/Rule/WirePrimitive/PartitionFixtures.lean"
-      - "VisualProof/Rule/WireQuantifier.lean"
-      - "VisualProof/Rule/WireQuantifierFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-      - "! rg -n \"WireQuantifierIota|iota_sever_sound|iota_join_sound|Rule.WireQuantifier\" VisualProof VisualProof.lean"
-    stop_if:
-      - "Generic soundness would require Model.reify."
-      - "A displaced iota authority would remain."
-    receipt:
-      result: done
-      harness: codex
-      commit: 648f494
-      summary: "Rebuilt wire sever/join as generic signature-indexed partition/merge, made the selected sever scope and comparable outer/inner join scopes authoritative, proved both operations sound over every PreModel without reification, migrated all consumers, and deleted the iota-only facade and modules."
-      changed_files:
-        - VisualProof.lean
-        - VisualProof/Diagram/Concrete/WirePartition.lean
-        - VisualProof/Diagram/Concrete/WirePartitionSemantics.lean
-        - VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean
-        - VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean
-        - VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean
-        - VisualProof/Rule/WirePrimitive.lean
-        - VisualProof/Rule/WirePrimitive/Partition.lean
-        - VisualProof/Rule/WirePrimitive/PartitionFixtures.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: "! rg -n \"WireQuantifierIota|iota_sever_sound|iota_join_sound|Rule.WireQuantifier\" VisualProof VisualProof.lean"
-          status: pass
-        - cmd: "! rg -n \"Model\\.reify|sorry|admit\" VisualProof/Diagram/Concrete/WirePartition.lean VisualProof/Diagram/Concrete/WirePartitionSemantics.lean VisualProof/Rule/WirePrimitive/Partition.lean"
-          status: pass
-      review: "PASS: exact interfaces, generic signatures, endpoint partitioning, moved-endpoint enclosure, selected-scope polarity, comparable equal-signature outer-scope merge, inner-scope join polarity, generic PreModel soundness, fixture coverage, obsolete-authority deletion, full build, size gate, and unrelated-file preservation verified."
-  - id: T005
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 4: replace identity retargeting with derived substitution."
-    inputs:
-      - "Plan Task 4"
-      - "T004 generic scoped sever interface"
-    constraints:
-      - "Delete all IdentityRetarget authority."
-      - "Derived substitution must compose public iteration, scoped sever, and normalization."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/IdentityNormalizationCore.lean"
-      - "VisualProof/Diagram/Concrete/IdentityNormalization.lean"
-      - "VisualProof/Diagram/Concrete/IdentityNormalizationTransport.lean"
-      - "VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean"
-      - "VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean"
-      - "VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean"
-      - "VisualProof/Rule/Identity.lean"
-      - "VisualProof/Rule/IdentityFixtures.lean"
-      - "VisualProof/Rule/IdentityRetargetSemantics.lean"
-      - "VisualProof/Rule/Structural.lean"
-      - "VisualProof/Rule/StructuralFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-      - "test ! -e VisualProof/Rule/IdentityRetargetSemantics.lean"
-      - "! rg -n \"IdentityRetarget|retargets|identity_retarget_sound\" VisualProof VisualProof.lean"
-    stop_if:
-      - "The derived substitution does not land by eager normalization."
-      - "A retarget compatibility path would remain."
-    receipt:
-      result: done
-      harness: codex
-      commit: 5575690
-      summary: "Generalized eager identity collapse to the zero-or-one-outer-wire rule with unique outer-wire survival, proved generalized normalization soundness, deleted every IdentityRetarget authority, and derived substitution solely from ordinary iteration, scoped sever, and eager normalization in both orientations."
-      changed_files:
-        - VisualProof.lean
-        - VisualProof/Diagram/Concrete/IdentityNormalizationCore.lean
-        - VisualProof/Diagram/Concrete/IdentityNormalization.lean
-        - VisualProof/Diagram/Concrete/IdentityNormalizationTransport.lean
-        - VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean
-        - VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean
-        - VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean
-        - VisualProof/Rule/Identity.lean
-        - VisualProof/Rule/IdentityFixtures.lean
-        - VisualProof/Rule/IdentityRetargetSemantics.lean
-        - VisualProof/Rule/Structural.lean
-        - VisualProof/Rule/StructuralFixtures.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: "test ! -e VisualProof/Rule/IdentityRetargetSemantics.lean"
-          status: pass
-        - cmd: "! rg -n \"IdentityRetarget|retargets|identity_retarget_sound\" VisualProof VisualProof.lean"
-          status: pass
-        - cmd: git diff --check
-          status: pass
-      review: "PASS: all-local and unique-outer collapse, two-outer refusal, nested signature, both cut parities, exact ordinary-copy attachments, forward/backward landing on P(b), public proof composition, displaced-authority deletion, full build, size gate, allowed-file scope, and unrelated-file preservation verified."
-  - id: T006
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 5: prove the generic uniform-site witness theorem."
-    inputs:
-      - "Plan Task 5"
-      - "T004 partition receipts"
-    constraints:
-      - "Primitive checkers alone construct private site/frame evidence."
-      - "Separate per-site witnesses must remain unrepresentable."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Rule/WirePrimitive/Site.lean"
-      - "VisualProof/Rule/WirePrimitive/Witness.lean"
-      - "VisualProof/Rule/WirePrimitive/WitnessFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "The theorem requires caller-manufactured concrete evidence."
-      - "Mixed site polarity remains an unproved assumption."
-    receipt:
-      result: done
-      harness: codex
-      commit: c2ce4bc
-      summary: "Completed the generic uniform-site logical theorem on top of exhaustive applied-head/frame receipts, then corrected its construction boundary so proof-bearing semantic factorizations are internal to primitive semantics modules and never appear in public rule inputs or applied receipts."
-      changed_files:
-        - VisualProof.lean
-        - VisualProof/Rule/WirePrimitive/Site.lean
-        - VisualProof/Rule/WirePrimitive/Witness.lean
-        - VisualProof/Rule/WirePrimitive/WitnessFixtures.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build VisualProof.Rule.WirePrimitive.WitnessFixtures
-          status: pass
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: "! rg -n \"UniformSiteRewrite\\.ofChecked|def ofChecked\" VisualProof/Rule/WirePrimitive/Witness.lean VisualProof/Rule/WirePrimitive/WitnessFixtures.lean"
-          status: pass
-      review: "PASS after reopening: exact acted-wire endpoint exhaustion, ordered arguments and frames, shared witnesses, mixed local parity elimination, binder-only directionality, all three public forms, negative per-site-witness fixture, proof-internal construction boundary, no public semantic premise, full build, size gate, and unrelated-file preservation verified. Initial implementation commit: 3e3595f; boundary correction: c2ce4bc."
-  - id: T007
-    type: worker
-    assignee: Worker
-    status: blocked
-    reasoning_hint: high
-    objective: "Execute plan Task 6: formalize content-shape primitive pairs."
-    inputs:
-      - "Plan Task 6"
-      - "T006 uniform witness theorem"
-      - "Merged src/kernel/rules/wire-content.ts"
-    constraints:
-      - "Every primitive transforms all applied-head endpoints."
-      - "Merge remains the sole non-head exception."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean"
-      - "VisualProof/Diagram/Concrete/IsomorphismSearch.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/Content.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalProvenance.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinSingletonRemoval.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinAlignment.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean"
-      - "VisualProof/Rule/MonolithicWireQuantifier.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Witness.lean"
-      - "VisualProof/Rule/WirePrimitive/WitnessFixtures.lean"
-      - "VisualProof/Rule/WirePrimitive/Content.lean"
-      - "VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "A primitive would act on only some endpoints."
-      - "Round-trip equality cannot be expressed by checked isomorphism and transport."
-    receipt:
-      result: blocked
-      harness: codex
-      blocked_reason: "The next denotational induction step must eliminate the private AppliedSiteErasure.Trace, whose owner VisualProof/Rule/WirePrimitive/Site.lean is outside T007.allowed_files."
-      changed_files:
-        - "VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean"
-        - "VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
-      commands:
-        - cmd: "lake build"
-          status: pass
-        - cmd: "npm run formal:size"
-          status: pass
-        - cmd: "git diff --check"
-          status: pass
-      summary: "Committed checker-derived applied-site replacement semantics as 058ae0b: the theorem exposes the exact compiled atom and acted-wire origin, canonical singleton-erasure target frame, and whole-root replacement denotation. Task 6 remains incomplete; T016 continues with the required trace owner in scope."
-      spawned_tasks:
-        - T016
-  - id: T008
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 7: formalize argument-plumbing equivalences."
-    inputs:
-      - "Plan Task 7"
-      - "T006 uniform witness theorem"
-      - "Merged src/kernel/rules/wire-args.ts"
-    constraints:
-      - "Uniform scope-visible drop/extend is ungated; per-site variants remain gated."
-      - "Public relation-synthesizing soundness uses full Model truthfully."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsTupleSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFixedSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationLocal.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Arguments.lean"
-      - "VisualProof/Rule/WirePrimitive/ArgumentsFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "The TypeScript uniform-visible gate cannot be matched."
-      - "A full-model dependency is hidden behind PreModel."
-    receipt:
-      result: done
-      harness: codex
-      commit: f8fa460
-      summary: "Completed plan Task 7: all seven argument-plumbing primitives have checked concrete receipts and full-model soundness; arity shift/unshift normalize complete scope-local binder blocks so endpoint-local fresh wires work both at the acted scope and in nested regions; tuple permutation/duplication/contraction, merged uniform drop/extend equivalence, and per-site polarity gates are executable and proved."
-      changed_files:
-        - VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsTupleSemantics.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFixedSemantics.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationSemantics.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationLocal.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean
-        - VisualProof/Rule/WirePrimitive.lean
-        - VisualProof/Rule/WirePrimitive/Arguments.lean
-        - VisualProof/Rule/WirePrimitive/ArgumentsFixtures.lean
-        - VisualProof.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build VisualProof.Rule.WirePrimitive.ArgumentsFixtures
-          status: pass
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: git diff --check
-          status: pass
-        - cmd: "! rg -n \"\\b(sorry|admit|axiom)\\b\" VisualProof/Diagram/Concrete/WirePrimitive/Arguments*.lean VisualProof/Rule/WirePrimitive/Arguments*.lean"
-          status: pass
-      review: "PASS: all five Task 7 steps, full-model reification boundaries, all-end action, mixed acted-scope/nested fresh-wire regression, inverse unshift exhaustion, exact merged uniform/per-site gates, source-size limit, full build, and unrelated archive/scratchpad preservation verified."
-  - id: T016
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Continue plan Task 6: fold the private applied-site erasure trace, instantiate all content witnesses, and expose the six public soundness receipts."
-    inputs:
-      - "Plan Task 6"
-      - "T007 structural receipts and commit 058ae0b"
-      - "AppliedSite.replacement_denotation"
-      - "Merged src/kernel/rules/wire-content.ts"
-    constraints:
-      - "Every primitive transforms all applied-head endpoints."
-      - "Use the private checked trace; do not add a caller-supplied semantic premise."
-      - "Do not use the monolithic relation rule as the primitive proof path."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean"
-      - "VisualProof/Diagram/Concrete/IsomorphismSearch.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/Content.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean"
-      - "VisualProof/Diagram/Concrete/Subgraph/FactorizationFrame.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalProvenance.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalZipper.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierExhaustedWireRemovalCorrespondence.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierExhaustedWireRemovalCompiler.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierExhaustedWireRemovalReflection.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierExhaustedWireRemovalFinal.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinSingletonRemoval.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinAlignment.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationJoinTerminalSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean"
-      - "VisualProof/Rule/MonolithicWireQuantifier.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Site.lean"
-      - "VisualProof/Rule/WirePrimitive/Witness.lean"
-      - "VisualProof/Rule/WirePrimitive/WitnessFixtures.lean"
-      - "VisualProof/Rule/WirePrimitive/Content.lean"
-      - "VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "A primitive would act on only some endpoints."
-      - "Round-trip equality cannot be expressed by checked isomorphism and transport."
-      - "The semantic induction requires a monolithic-rule premise."
-    receipt:
-      result: done
-      harness: codex
-      commit: 4f6f4bd
-      summary: "Completed plan Task 6: the checker now certifies exact paired site contexts, shared outer suffixes, and target-environment reconstruction; cut and parallel primitives instantiate complement, diagonal, and intersection witnesses over full Model; all six public receipts expose soundness; mixed-site, empty-site, refusal, polarity, and inverse-isomorphism fixtures pass."
-      changed_files:
-        - VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean
-        - VisualProof/Rule/WirePrimitive/Content.lean
-        - VisualProof/Rule/WirePrimitive/ContentFixtures.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build VisualProof.Rule.WirePrimitive.ContentFixtures
-          status: pass
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: git diff --check
-          status: pass
-        - cmd: "! rg -n \"\\b(sorry|admit)\\b\" VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean VisualProof/Diagram/Concrete/WirePrimitive/ContentShapeSemantics.lean VisualProof/Rule/WirePrimitive/Content.lean VisualProof/Rule/WirePrimitive/ContentFixtures.lean"
-          status: pass
-      review: "PASS: all five Task 6 plan steps, exact full-model witness ownership, complete all-head factorization, four equivalence receipts, two directed ends receipts, inverse isomorphisms, source-size limit, full build, and unrelated archive/scratchpad preservation verified."
-  - id: T009
-    type: worker
-    assignee: Worker
-    status: done
-    reasoning_hint: high
-    objective: "Execute plan Task 8: formalize formal, identity, and folded-reference leaves."
-    inputs:
-      - "Plan Task 8"
-      - "Merged folded refLeaf/refAbstract authority"
-    constraints:
-      - "Definitions remain folded macros."
-      - "Full-model dependency is explicit."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Leaves.lean"
-      - "VisualProof/Rule/WirePrimitive/LeavesFixtures.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "Ref semantics require implicit macro expansion."
-      - "Selected nodes do not exhaust the checked abstracted sites."
-    receipt:
-      result: done
-      harness: codex
-      commit: 51b6964
-      summary: "Completed plan Task 8: checked formal, identity, and folded-reference join/sever leaves consume every applied endpoint or the exact selected node set; their independent semantic factorization proves full-Model soundness, typed chronological definition lookup without macro expansion, inverse checked isomorphism, both orientations, refusal behavior, and the truthful PreModel/Model boundary."
-      changed_files:
-        - VisualProof.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean
-        - VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean
-        - VisualProof/Rule/WirePrimitive.lean
-        - VisualProof/Rule/WirePrimitive/Leaves.lean
-        - VisualProof/Rule/WirePrimitive/LeavesFixtures.lean
-        - docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md
-      commands:
-        - cmd: lake build VisualProof.Rule.WirePrimitive.LeavesFixtures
-          status: pass
-        - cmd: lake build
-          status: pass
-        - cmd: npm run formal:size
-          status: pass
-        - cmd: git diff --check
-          status: pass
-        - cmd: "! rg -n \"\\b(sorry|admit|axiom)\\b\" VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean VisualProof/Rule/WirePrimitive/Leaves.lean VisualProof/Rule/WirePrimitive/LeavesFixtures.lean"
-          status: pass
-      review: "PASS: all five Task 8 steps, all-head join behavior, exact selected-node abstraction, formal-position and equal-signature identity witnesses, folded typed ref lookup, inverse checked isomorphism, both polarity/orientation paths, refusal fixtures, full-model boundary, source-size limit, full build, and unrelated archive/scratchpad preservation verified."
-  - id: T010
     type: worker
     assignee: Worker
     status: active
     reasoning_hint: high
-    objective: "Execute plan Task 9: formalize the content compiler and monolithic redundancy."
+    objective: "Execute plan Task 1: establish the complete honest RED skeleton and delete false, obsolete, or plan-only production declarations."
     inputs:
-      - "Plan Task 9"
-      - "Tasks 3 and 6-8 primitive receipts"
-      - "Merged src/kernel/proof/compile-content.ts"
-      - "/tmp/vpa-task9-raw-adequacy-foundation-20260802.md (controlling)"
+      - "Governing plan Task 1 and required final production theorem surface"
+      - "Current Lean declarations and TypeScript production Formula/ProofStep authorities"
+      - "/tmp/vpa-original-scope-provenance-audit-20260804.md"
     constraints:
-      - "Use structural well-founded recursion, not caller fuel."
-      - "Compiler logic never enters primitive checkers."
-      - "The monolithic specification receipt may expose only checker-owned structural evidence required to prove compiler completeness."
-      - "Adequacy is direct raw ConcreteIso reproduction: join lands at plainFinal and sever at its raw monolithic target, with exact boundary transport and no identity-normalization dependency."
-      - "The public redundancy theorems quantify over accepted monolithic inputs and construct compiler success; they never accept CompiledRelationJoin or CompiledRelationSever as a premise."
-      - "Exact ordered-boundary correspondence is stated positionwise under the final ConcreteIso; no per-primitive transport representation is required."
+      - "Do not prove beyond the minimum needed to elaborate the skeleton."
+      - "Use sorry only in owning production declarations."
+      - "No fixtures, examples, #check declarations, aliases, or weakened statements."
+      - "Preserve unrelated work."
     allowed_files:
       - "VisualProof.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Program.lean"
-      - "VisualProof/Rule/WirePrimitive/Site.lean"
-      - "VisualProof/Rule/WirePrimitive/Compiler.lean"
-      - "VisualProof/Rule/WirePrimitive/CompilerTermination.lean"
-      - "VisualProof/Rule/WirePrimitive/CompilerSoundness.lean"
-      - "VisualProof/Rule/MonolithicWireQuantifier.lean"
-      - "VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsConstruction.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsConstructionNaturality.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFrameNaturality.lean"
-      - "VisualProof/Diagram/Concrete/ElaborationTransport.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCommonCore.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsOperations.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationSemantics.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/ContentAlignment.lean"
-      - "VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean"
-      - "VisualProof/Rule/WirePrimitive/Arguments.lean"
+      - "VisualProof/Diagram/**"
+      - "VisualProof/Rule/**"
+      - "VisualProof/Proof/**"
+      - "VisualProof/Theory/**"
+      - "VisualProof/Formula/**"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
     verify:
+      - "Focused lake env lean checks for every changed production owner"
       - "lake build"
       - "npm run formal:size"
-    stop_if:
-      - "A compiler case is not structurally decreasing."
-      - "Redundancy weakens exact raw ConcreteIso reproduction or boundary transport."
-    receipt:
-      result: complete
-      harness: codex
-      summary: "Constructive raw join and sever adequacy are complete: join constructs ConcreteIso.ofEquivs to plainFinal, sever reverses the checked program and composes reconstructionIso, both graph searches and redundancyMismatch are absent, and no adequacy theorem or proof depends on identity normalization. Minimum retained-leaf terminal conformance closes the repeated-identity collision."
-      changed_files:
-        - "VisualProof/Rule/WirePrimitive/Compiler.lean"
-        - "VisualProof/Rule/WirePrimitive/CompilerSoundness.lean"
-        - "VisualProof/Rule/WirePrimitive/CompilerFixtures.lean"
-        - "VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean"
-        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      commands:
-        - cmd: "lake build VisualProof.Rule.WirePrimitive.Compiler VisualProof.Rule.WirePrimitive.CompilerSoundness VisualProof.Rule.WirePrimitive.CompilerFixtures"
-          status: pass
-        - cmd: "lake build"
-          status: pass_190_jobs
-        - cmd: "npm run formal:size"
-          status: pass
-        - cmd: "git diff --check"
-          status: pass
-    reopened:
-      reason: "The recorded completion proved only properties of an already-supplied CompiledRelationJoin/CompiledRelationSever and therefore did not establish compiler success or primitive-set completeness for every accepted monolithic input."
-      red_declarations:
-        - "compiled_join_redundant"
-        - "compiled_sever_redundant"
-        - "compiled_join_sound"
-        - "compiled_sever_sound"
-      completion_gate: "Replace the four production sorries with checked proofs; the redundancy declarations must retain public compiler .ok equalities, raw ConcreteIso landings, explicit positionwise ordered-boundary correspondence, and no identity-normalization dependency."
-  - id: T011
-    type: worker
-    assignee: Worker
-    status: queued
-    reasoning_hint: high
-    objective: "Execute corrected plan Task 10: prove insertion/ref conservativity and pin direct per-site extension."
-    inputs:
-      - "Plan Task 10"
-      - "T010 compiler redundancy"
-    constraints:
-      - "Keep the independent negative-splice theorem."
-      - "Derived programs do not create new semantic authority."
-      - "The exact 34-step TypeScript union retains direct per-site argExtend; do not add a new primitive or claim a false sever/join derivation."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Rule/WirePrimitive.lean"
-      - "VisualProof/Rule/WirePrimitive/Derived.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "Insertion or ref spawn gains a privileged semantic path."
-      - "Direct per-site extension diverges from the authoritative TypeScript payload or polarity gate."
-    receipt:
-      result: complete
-      harness: codex
-      summary: "Arbitrary raw insertion is constructed from vacuous introduction, atom spawn, and constructive relation join with a direct raw ConcreteIso and exact ordered boundary transport; folded references denote exactly their stored bodies; backward erasure still cites negative_splice_sound directly. Checked evidence disproved the stale per-site derivability claim, so the plan/spec now retain the authoritative 34-step union's independently gated direct argExtend instead of inventing a thirty-fifth primitive."
-      changed_files:
-        - "VisualProof/Rule/WirePrimitive/Derived.lean"
-        - "VisualProof/Rule/WirePrimitive/DerivedFixtures.lean"
-        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-        - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
-      commands:
-        - cmd: "lake build VisualProof.Rule.WirePrimitive.DerivedFixtures VisualProof.Rule.WirePrimitive.ArgumentsFixtures"
-          status: pass_157_jobs_27s
-        - cmd: "lake build"
-          status: pass_190_jobs
-        - cmd: "npm run formal:size"
-          status: pass
-        - cmd: "git diff --check"
-          status: pass
-    reopened:
-      reason: "The recorded insertion theorem accepted an InsertionPrimitiveLanding instead of proving that insertion_primitive_program succeeds for every AcceptedRawInsertion."
-      red_declarations:
-        - "insertion_redundant"
-      completion_gate: "Replace the production sorry with a checked proof while retaining the accepted-input quantifier, public .ok equality, and exact raw ConcreteIso landing."
-  - id: T012
-    type: worker
-    assignee: Worker
-    status: queued
-    reasoning_hint: high
-    objective: "Execute plan Task 11: complete definitions, citation, and the exact 34-step checker."
-    inputs:
-      - "Plan Task 11"
-      - "All primitive soundness receipts"
-      - "Exact TypeScript ProofStep union"
-    constraints:
-      - "Exactly 34 exhaustive cases with no default."
-      - "No monolithic relation-content or retarget payload."
-      - "Use owning production theorems for RED/GREEN; do not create fixture modules or redundant test theorems."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Rule/Definition.lean"
-      - "VisualProof/Rule/Theorem.lean"
-      - "VisualProof/Rule/Step.lean"
-      - "VisualProof/Rule/Soundness.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "A step case assumes its own directed entailment."
-      - "Transport drops ordered repeated boundary aliases."
-    receipt: null
-    reopened:
-      reason: "ProofStep constructors previously accepted caller-authored StepReceipt values, so the checked language did not own provenance and raw transport."
-      red_declarations:
-        - "ProofStep.receipt"
-      completion_gate: "Construct every StepReceipt from the owning checked constructor evidence and remove the production sorry; callers must remain unable to supply StepReceipt to any ProofStep constructor."
-  - id: T013
-    type: worker
-    assignee: Worker
-    status: queued
-    reasoning_hint: high
-    objective: "Execute plan Task 12: complete replay, theorem, and ordered-theory soundness."
-    inputs:
-      - "Plan Task 12"
-      - "T012 applyStep_sound and transport"
-    constraints:
-      - "Theorem endpoints remain the exact registered endpoints."
-      - "Citations access only the verified chronological prefix."
-      - "Use owning production theorems for RED/GREEN; do not create fixture modules or redundant test theorems."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Proof/Replay.lean"
-      - "VisualProof/Proof/Theorem.lean"
-      - "VisualProof/Proof/Theory.lean"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "lake build"
-      - "npm run formal:size"
-    stop_if:
-      - "Meeting diagrams replace registered theorem endpoints."
-      - "A theorem can cite a future theorem."
-    receipt: null
-  - id: T014
-    type: worker
-    assignee: Worker
-    status: queued
-    reasoning_hint: high
-    objective: "Execute plan Task 13: restore truthful correspondence and proof-authority tooling."
-    inputs:
-      - "Plan Task 13"
-      - "T012 and T013 public soundness stack"
-    constraints:
-      - "Parse TypeScript ProofStep discriminants mechanically."
-      - "Audit actual theorem signatures and allowed axioms."
-    allowed_files:
-      - "VisualProof.lean"
-      - "VisualProof/Audit.lean"
-      - "VisualProof/Correspondence/StepTags.lean"
-      - "VisualProof/Correspondence/StepTagsMain.lean"
-      - "scripts/check-lean-step-tags.mjs"
-      - "scripts/check-formalization.mjs"
-      - "lakefile.toml"
-      - "package.json"
-      - "tests/architecture/lean-semantics.test.ts"
-      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-    verify:
-      - "npm run formal:tags"
-      - "npm run formal:check"
-      - "npx vitest run tests/architecture/lean-semantics.test.ts"
+      - "GoalBuddy state checker"
       - "git diff --check"
     stop_if:
-      - "The checker needs a second hard-coded tag authority."
-      - "A project-defined axiom or sorryAx remains."
-    receipt: null
-  - id: T015
+      - "A missing product or semantic decision would change a final theorem statement."
+      - "A required edit overlaps unrelated uncommitted user work and cannot be isolated."
+      - "Evidence shows the governing provenance table omitted a requested outcome."
+    expected_output:
+      - "Complete production declaration ledger"
+      - "All missing final declarations elaborating with sorry"
+      - "Obsolete/artificial declarations deleted"
+      - "Focused and full build evidence"
+      - "Task-scoped commit"
+  - id: T002
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 2: conform the higher-order semantic and checked-diagram core, reusing only substantively equivalent results."
+    inputs:
+      - "T001 declaration ledger and commit"
+      - "Governing plan Task 2"
+    constraints:
+      - "No Lambda/bubble or second-order theorem authority."
+      - "Retain helpers only through direct final-owner dependencies."
+    expected_output:
+      - "GREEN semantic core"
+      - "Actual rule inventory correspondence"
+      - "Deleted displaced helpers"
+      - "Task-scoped commit"
+  - id: T003
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 3: prove every actual higher-order rule and exhaustive applyStep sound."
+    inputs:
+      - "T002 semantic core"
+      - "T001 rule theorem skeleton"
+    constraints:
+      - "One owning production theorem per actual obligation."
+      - "Identity normalization remains separate from primitive compiler adequacy."
+      - "No caller-supplied semantic or landing evidence."
+    expected_output:
+      - "GREEN rule-owned soundness theorems"
+      - "GREEN exhaustive applyStep_sound"
+      - "Task-scoped commit"
+  - id: T004
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 4: prove direct relation substitution/comprehension constructively derivable from primitive relation-wire programs."
+    inputs:
+      - "T003 primitive soundness"
+      - "Accepted direct join/sever specification operations"
+      - "Governing primitive design completeness cases"
+    constraints:
+      - "Universal accepted-input compiler success."
+      - "Raw checked concrete isomorphism and exact ordered boundary."
+      - "No normalization, search, atlas, assumed compilation, or assumed inverse landing."
+    expected_output:
+      - "GREEN compiled_join_redundant"
+      - "GREEN compiled_sever_redundant"
+      - "GREEN semantic corollaries"
+      - "Task-scoped commit"
+  - id: T005
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 5: complete replay, checked-theorem, and ordered-theory soundness over the new calculus."
+    inputs:
+      - "T003 applyStep_sound"
+      - "T001 proof/theory skeleton"
+    constraints:
+      - "Exact registered endpoints and ordered boundary interface."
+      - "No mirrored receipt or transport API requirement."
+    expected_output:
+      - "GREEN replay_sound and backward counterpart"
+      - "GREEN checkedTheorem_sound"
+      - "GREEN verifiedTheory_sound"
+      - "Task-scoped commit"
+  - id: T006
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 6: formalize the production Formula AST compiler and prove semantic preservation/expressiveness."
+    inputs:
+      - "src/formula/syntax.ts"
+      - "src/formula/diagram.ts"
+      - "T002 semantic core"
+      - "T001 formula theorem skeleton"
+    constraints:
+      - "AST/compiler semantics only; parser and UI are out of scope."
+      - "Use the same Model and diagram denotation."
+      - "No deductive-completeness claim."
+    expected_output:
+      - "GREEN formula compiler well-formedness/elaboration"
+      - "GREEN semantic preservation theorem"
+      - "GREEN expressiveness corollary"
+      - "Task-scoped commit"
+  - id: T007
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 7: delete every displaced or plan-only module/declaration outside the final theorem dependency closure."
+    inputs:
+      - "Final owners from T003-T006"
+      - "Governing plan explicit non-requirements"
+    constraints:
+      - "No aliases, adapters, fixture modules, or compatibility authorities."
+      - "Preserve unrelated user work."
+    expected_output:
+      - "Dependency closure report"
+      - "Plan-only infrastructure deleted"
+      - "Minimal production umbrella"
+      - "Task-scoped commit"
+  - id: T008
     type: pm
     assignee: PM
     status: queued
-    reasoning_hint: xhigh
-    objective: "Execute plan Task 14: clean-build audit, close Phase 3, and prepare final completion evidence."
+    reasoning_hint: high
+    objective: "Execute plan Task 8: audit all four outcomes, run clean full gates, record conformance, and close the goal only on direct proof."
     inputs:
-      - "Plan Task 14"
-      - "All prior task receipts"
-      - "/tmp/vpa-primitive-wire-lean-implementation-foundation-20260730-v2.md"
+      - "T001-T007 receipts and commits"
+      - "Governing plan completion oracle"
     constraints:
-      - "Modify an implementation owner only through a new exact-scope follow-up Worker task."
-      - "Preserve unrelated archive and scratchpad paths."
-      - "Do not record conformance until every gate passes."
+      - "No completion from prior receipts, passing narrow tests, or missing sorry alone."
+      - "Repair fixable in-repository failures before reporting."
     expected_output:
-      - "Displaced-authority absence evidence"
-      - "Phase 4 absence evidence"
-      - "Clean formal and full repository gate evidence"
-      - "Foundation conformance"
-      - "Final audit activated"
-    receipt: null
-  - id: T999
-    type: judge
-    assignee: Judge
-    status: queued
-    reasoning_hint: xhigh
-    objective: "Audit the full 14-task result against the original outcome, plan acceptance matrix, receipts, current sources, and final verification."
-    inputs:
-      - "All done task receipts"
-      - "Plan acceptance matrix"
-      - "Foundation conformance"
-      - "Current git status and final gate output"
-    constraints:
-      - "Do not implement."
-      - "Reject completion if any required Worker task is queued, active, blocked without replacement, or weakly evidenced."
-      - "Require full_outcome_complete: true only when every original requirement is directly proved."
-    expected_output:
-      - "complete | not_complete"
-      - "full_outcome_complete: true | false"
-      - "Requirement-by-requirement evidence"
-      - "Missing work and next task if not complete"
-    receipt: null
-
-checks:
-  dirty_fingerprint: "HEAD e42b803; only pre-existing archive/ and scratchpad/ paths untracked before goal setup."
-  last_verification:
-    result: pass
-    task: T001
-    commands:
-      - "npm test (outside sandbox): 113 files / 684 tests passed"
-      - "lake build: 96 jobs passed"
-      - "npm run formal:size: passed"
+      - "Provenance-to-source conformance matrix"
+      - "Axiom and placeholder audit"
+      - "Clean formal/unit/type/E2E gates"
+      - "Foundation conformance appendix"
+      - "full_outcome_complete: true"

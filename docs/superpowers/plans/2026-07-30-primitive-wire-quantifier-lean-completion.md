@@ -1,1043 +1,408 @@
-# Primitive Wire-Quantifier Lean Completion Implementation Plan
+# Higher-Order Diagram Calculus Lean Completion Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Execution:** Use `superpowers:executing-plans` or
+> `superpowers:subagent-driven-development`. Lean development follows the global
+> theorem-driven RED/GREEN rule: RED is the owning production declaration
+> elaborating with `sorry`; GREEN is that same declaration proved without
+> `sorry`. Do not create fixture modules, redundant examples, `#check`
+> declarations, or test theorems to manufacture either state.
 
-**Goal:** Complete the Lean formalization for the merged primitive
-wire-quantifier proof language, including the unfinished Phase 3 proof/replay
-stack, and mechanically prove that the primitive compiler makes the
-monolithic strongest-form relation sever/join rules redundant.
+**Goal:** Finish the Lean conversion of the completed second-order diagram
+calculus into the actual higher-order, signature-indexed-wire calculus; prove
+the actual higher-order rules sound in the established all-models style; prove
+the existing ordinary formula compiler semantically preserving and expressive;
+and prove direct relation substitution/comprehension constructively derivable
+from the primitive relation-wire rules.
 
-**Architecture:** Lean keeps the monolithic relation-content sever/join only
-as a semantic specification. The durable kernel is the exact 34-constructor
-TypeScript `ProofStep` language. Small checked concrete primitive receipts
-feed one generic uniform-site witness theorem; an authoring-layer compiler
-emits checked primitive programs and a redundancy theorem directly relates
-their raw result to the raw monolithic replacement. The remaining Phase 3
-stack then proves one-step, replay, theorem, citation, and ordered-theory
-soundness and checks TypeScript/Lean tag parity mechanically.
+**Architecture:** Reuse only the former formalization's proof architecture:
+complete semantics, rule-owned soundness theorems, exhaustive one-step
+soundness, replay soundness, checked-theorem soundness, and verified-theory
+soundness. Do not retain any second-order-specific theorem merely because it
+already existed. The higher-order calculus, its source-formula compiler, and
+the primitive derivability compiler each own their actual production theorems.
 
-**Tech stack:** Lean 4/Lake, TypeScript, Node.js, Vitest, and the repository's
-existing `formal:size`, typecheck, unit-test, and Playwright gates.
+**Tech stack:** Lean 4/Lake, the repository's existing TypeScript formula and
+kernel sources as correspondence authorities, Node.js/Vitest for mechanical
+cross-language checks already justified by the formalization.
 
-## Authority, scope, and supersession
+## Controlling requirements and provenance
 
-This plan is the continuing execution authority for:
+| ID | Required outcome | Controlling evidence |
+|---|---|---|
+| R1 | Remove the Lambda-expression and beta-eta formalization rather than porting it. | Original refactor request; `2026-07-25-zero-signature-hol-redesign-design.md`, Sections 1 and 3. |
+| R2 | Replace second-order quantifier bubbles by recursive-signature wires and prove every actual higher-order rule sound against complete/all-model semantics in the established style. | Original refactor request; `2026-07-22-signature-indexed-wires-design.md`; zero-signature redesign Section 3; latest user clarification. |
+| R3 | Formalize semantic preservation/coverage of the existing ordinary formula-to-diagram compiler. This is language expressiveness, not deductive completeness. | Zero-signature redesign Section 4; existing `src/formula/syntax.ts` and `src/formula/diagram.ts`; latest user clarification. |
+| R4 | Prove direct relation substitution/grounding and comprehension/abstraction reproducible by primitive relation-wire steps. | `2026-07-29-primitive-wire-quantifier-rules-design.md`, especially “Completeness” and “Lean strategy”; latest user clarification. |
+| P1 | Restate exhaustive step, replay, checked-theorem, and verified-theory soundness over the new rule set. | Necessary reuse of the completed second-order soundness architecture; these aggregate the R2 rule theorems and are not second-order-specific propositions. |
+| P2 | Preserve exact ordered theorem boundaries and exact raw compiler landings up to checked concrete isomorphism. | Necessary to prove the actual theorem checker and the R4 direct-operation replacement; primitive design lines 105–149 and 228–250. |
 
-- the Lean strategy and later 2026-07-30 amendments in
-  `docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md`;
-- the unfinished work in Tasks 7–11 of
-  `docs/superpowers/plans/2026-07-27-zero-signature-hol-phase-3-lean-semantics.md`;
-- the merged TypeScript kernel produced by
-  `docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-rules-ts.md`.
+No task may be added without citing one of R1–R4 or demonstrating a direct
+logical dependency of P1/P2. Implementation convenience, an incumbent module,
+a former plan checkbox, a TypeScript receipt shape, or an existing helper is
+not controlling evidence.
 
-The completed Phase 3 Tasks 1–6 remain the semantic foundation and are not
-replanned. This plan supersedes the stale parts of Tasks 7–11:
+## Explicit non-requirements
 
-- the durable language now has **34**, not 15, tags;
-- backward erasure is legal in a negative region, following the common
-  flipped-polarity law;
-- generic wire sever/join replaces the iota-only public primitive;
-- `IdentityRetarget` is removed and substitution is derived from plain
-  iteration, scoped sever, and eager one-point normalization;
-- the monolithic relation rule is a specification theorem, never a durable
-  `ProofStep`;
-- `refLeaf`/`refAbstract` are formalized because the merged kernel keeps
-  definitions folded as macros; their soundness reduces to definition lookup
-  and fold/unfold transparency;
-- uniform, scope-visible `argDrop`/`argExtend` is an equivalence in the merged
-  kernel, while per-site attachments retain the join/sever polarity gates.
+The following are not completion criteria and must not be rebuilt or promoted
+into theorem statements:
 
-Where the original primitive design and the completed TypeScript plan differ,
-the merged durable TypeScript API controls cross-language correspondence. The
-design still controls the semantic obligations: uniform all-end action,
-pointwise witnesses, compiler redundancy, insertion/ref conservativity, and
-the retained direct per-site extension gate.
+- second-order Lambda, term, equation, bubble, beta-eta, fusion/fission,
+  head-strip, inconsistent-cut, or monolithic bubble-comprehension theorems;
+- deductive completeness, Henkin semantics, normalization of source formulas,
+  parser correctness, UI correctness, theory-library reconstruction, or a
+  macro system;
+- Lean/TypeScript receipt representation equality;
+- a `Transport`, `inverseTransport`, atlas, search, redundancy-mismatch,
+  provenance, allocation, or interface API as an outcome in its own right;
+- per-primitive transported-boundary theorems;
+- insertion redundancy or ref-spawn/unfold conservativity as additional
+  primitive-completeness theorems;
+- identity normalization in the statement, proof, landing, or boundary
+  correspondence of direct substitution/comprehension adequacy.
 
-## Exact durable step inventory
+Identity normalization may retain its own soundness theorem if it is an actual
+production transformation. It remains a separate mechanism and may not be used
+to weaken or finish the R4 compiler theorem.
 
-`VisualProof.StepTag.all` and the checked `ProofStep` sum must use this exact
-order, matching `src/kernel/proof/step.ts`:
+## Required final production theorem surface
 
-1. `refSpawn`
-2. `atomSpawn`
-3. `identityInsert`
-4. `wireJoin`
-5. `erasure`
-6. `wireSever`
-7. `iteration`
-8. `deiteration`
-9. `doubleCutIntro`
-10. `doubleCutElim`
-11. `theorem`
-12. `vacuousIntro`
-13. `vacuousElim`
-14. `unfold`
-15. `fold`
-16. `cutWrap`
-17. `cutAbsorb`
-18. `parallelSplit`
-19. `parallelFuse`
-20. `endsDelete`
-21. `endsSpawn`
-22. `arityShift`
-23. `arityUnshift`
-24. `argPermute`
-25. `argDuplicate`
-26. `argContract`
-27. `argDrop`
-28. `argExtend`
-29. `applyFormal`
-30. `abstractFormal`
-31. `identityLeaf`
-32. `identityAbstract`
-33. `refLeaf`
-34. `refAbstract`
+Task 1 must make every applicable declaration below exist and elaborate before
+new proof work continues. Existing declarations may be retained only after
+their statements are checked against this surface.
 
-## Global constraints
+### Higher-order rule soundness (R2)
 
-- Every wire-content or wire-argument primitive transforms all applied-head
-  endpoints of its acted-on wire uniformly. Merge alone may consume
-  non-head endpoints. No per-end primitive is introduced.
-- Every directional receipt stores orientation and checker-derived cut
-  polarity. Join-family rules require negative forward / positive backward;
-  sever-family rules require positive forward / negative backward.
-  Equivalences are ungated.
-- Public soundness is truth in every full `Model`. Generic lemmas may quantify
-  over `PreModel` when the required semantic witnesses are explicit. Fullness
-  is used exactly where a relation value must be synthesized; audits must
-  report that boundary rather than preserve the old “only monolithic
-  sever/join use fullness” claim.
-- Fresh ids, selected regions, endpoint partitions, ordered formals, ambient
-  parameters, definition identities, and boundary transports are all
-  checker-owned receipts. A public soundness theorem accepts no semantic
-  premise manufactured by its caller.
-- Compiler adequacy compares raw concrete replacements by checked concrete
-  isomorphism with exact ordered boundary transport: join lands at
-  `plainFinal` and sever lands at its raw monolithic target. It has no
-  dependency on identity normalization. Source-name equality is never used as
-  a substitute for fresh-name equivalence.
-- The monolithic relation rule may be imported only by the compiler
-  correctness/redundancy layer. It must not appear in
-  `StepTag`, `ProofStep`, replay JSON correspondence, or application dispatch.
-- Delete displaced paths and declarations. Do not retain iota aliases,
-  identity-retarget adapters, monolithic proof-step variants, or parallel tag
-  authorities.
-- Keep every repository-owned Lean source below the existing size limit.
-  Split concrete construction, semantics, and compiler ownership before a
-  module approaches the limit.
-- Follow the global theorem-driven Lean RED/GREEN contract. At every proof
-  task, state the owning production theorem and confirm RED, then replace its
-  `sorry` with a kernel-checked proof and confirm GREEN. Do not add fixture
-  modules or redundant `example`, `#check`, or test-theorem declarations to
-  manufacture either state. After focused typechecking, run `lake build` and
-  `npm run formal:size` before committing.
-- Never weaken a required universal theorem by quantifying over a successful
-  compiler result, inverse landing, derived landing, transport receipt, or
-  other evidence that the theorem is required to construct. Delete such a
-  statement and replace it under the production name with the accepted-input
-  obligation and `sorry`. Absence of `sorry` is not completion when the owning
-  obligation has not been declared.
+- Soundness of the actual structural operations: insertion/spawn, erasure,
+  iteration, deiteration, double-cut introduction/elimination, vacuous-wire
+  introduction/elimination, definitional fold/unfold, and cited-theorem
+  application.
+- Soundness of the actual identity transformations retained by production.
+- Soundness of generic signature-indexed wire partition/merge.
+- Soundness of every durable primitive family:
+  ends delete/spawn, cut wrap/absorb, parallel split/fuse, arity
+  shift/unshift, argument permute, duplicate/contract, drop/extend,
+  apply/abstract formal, identity leaf/abstract, and folded-ref
+  leaf/abstract.
+- `applyStep_sound` over the exact durable production rule sum. Exhaustiveness
+  is required; matching an incidental data layout is not.
 
----
+### Direct substitution/comprehension derivability (R4)
 
-### Task 1: Correct the Phase 3 structural baseline and freeze 34 tags
+- `compiled_join_redundant`: every accepted direct relation-content join
+  produces an accepted primitive program whose raw target is checked-concretely
+  isomorphic to the raw direct-operation target, preserving every ordered
+  boundary position and repeated alias.
+- `compiled_sever_redundant`: the corresponding theorem for every accepted
+  direct relation-content sever.
+- Semantic corollaries deriving the direct operations from primitive-program
+  soundness. These corollaries quantify over accepted direct-operation inputs,
+  not already-successful compiler outputs.
 
-**Files:**
+### Proof architecture (P1/P2)
 
-- Modify: `VisualProof/Rule/Tag.lean`
-- Modify: `VisualProof/Rule/Structural.lean`
-- Modify: `VisualProof.lean`
-- Test: `tests/architecture/lean-semantics.test.ts`
+- `replay_sound` and the backward counterpart over the higher-order step sum.
+- `checkedTheorem_sound`, proving the exact registered LHS entails the exact
+  registered RHS when the two replays meet up to checked concrete isomorphism
+  while preserving the ordered boundary.
+- `verifiedTheory_sound`, with definitions interpreted in dependency order and
+  theorem citations restricted to the verified prior prefix.
 
-**Interfaces:**
+### Formula compiler semantics and expressiveness (R3)
 
-- `StepTag.all.length = 34` and `StepTag.all.Nodup`.
-- `StructuralErasureReceipt.sound` accepts forward-positive and
-  backward-negative erasure.
-- Structural insertion remains forward-negative / backward-positive.
+- A Lean source-formula grammar corresponding to the production TypeScript
+  `Formula` AST, with typed lexical binding and interpretation in the same
+  `Model` used by diagrams.
+- A total structural compiler on well-scoped typed formulas.
+- A checker/elaboration theorem for its output if the compiler constructs a
+  raw concrete diagram.
+- One semantic preservation theorem: compiling a source formula yields a
+  diagram with the same truth value in every `Model` and environment.
+- The expressiveness corollary: every supported source formula has such a
+  diagram. This is the requested semantic completeness claim.
 
-- [x] **Step 1: State the inventory, Phase 3 audit, and polarity obligations.**
-  Change the Lean length theorem and architecture expectation to 34. In the
-  owning production modules, pin the completed Task 7 authority: explicit direct
-  nodes plus selected subtrees, explicit anchor-scoped internal wires, one
-  boundary class per touching wire, generalized insertion outside the copied
-  content, ordinary iteration/deiteration, double-cut, and vacuous-wire
-  receipts. Prove backward-negative erasure and backward-positive refusal.
-  Preserve the existing insertion matrix.
-- [x] **Step 2: Confirm RED on the owning production declarations.**
+## Current evidence, not inherited completion
 
-  ```bash
-  lake build VisualProof.Rule.Tag VisualProof.Rule.Structural
-  npx vitest run tests/architecture/lean-semantics.test.ts
-  ```
+- The Lambda subtree and concrete bubble authority appear absent.
+- Recursive signatures, all-model semantics, and many actual rule-soundness
+  theorems are present and currently build.
+- The two universal primitive compiler redundancy declarations and their
+  semantic corollaries are RED, not GREEN.
+- `applyStep_sound` and replay soundness exist, but their dependency on a
+  plan-created `ProofStep.receipt` containing `sorry` must be removed or shown
+  necessary to the actual checker before either is accepted as complete.
+- Checked-theorem and verified-theory production owners are absent.
+- The formula semantic preservation/coverage formalization is absent.
+- Historical task receipts, prior checkmarks, fixture-based validation, and
+  absence of `sorry` in an artificially weakened theorem do not establish
+  completion under this plan.
 
-- [x] **Step 3: Replace the tag inventory.** Add the 19 merged primitive tags
-  in the exact order above. Keep one `StepTag.all`; do not add a second list
-  for tooling.
-- [x] **Step 4: Replace forward-only erasure.** Remove
-  `backwardErasureForbidden`; check the selected site's parity against
-  orientation, and prove the backward-negative case with the independently
-  named negative-splice lemma required by the primitive design.
-- [x] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  npx vitest run tests/architecture/lean-semantics.test.ts
-  git add -- VisualProof.lean VisualProof/Rule/Tag.lean \
-    VisualProof/Rule/Structural.lean \
-    tests/architecture/lean-semantics.test.ts
-  git commit -m "refactor: align Lean structural rules with 34 proof steps"
-  ```
+No task below starts as complete. Each must be revalidated against its owning
+production theorem and the provenance table.
 
 ---
 
-### Task 2: Complete and isolate the monolithic specification rule
+### Task 1: Establish the complete honest RED skeleton
 
-**Files:**
+**Requirement:** R1–R4, P1, P2.
 
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverSemantics.lean`
-- Create: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean`
-- Create: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean`
-- Create: `VisualProof/Rule/MonolithicWireQuantifier.lean`
-- Modify: `VisualProof/Rule/WireQuantifier.lean`
-- Modify: `VisualProof.lean`
+**Primary files:**
 
-**Interfaces:**
+- Modify only the current owners under `VisualProof/Diagram`,
+  `VisualProof/Rule`, `VisualProof/Proof`, and `VisualProof/Theory` needed to
+  state the final theorem surface.
+- Create the minimal Lean formula modules under `VisualProof/Formula/`.
+- Modify `VisualProof.lean` only for production imports.
 
-- `MonolithicRelationSeverInput`, `MonolithicRelationJoinInput`.
-- `applyMonolithicRelationSever`, `applyMonolithicRelationJoin`.
-- `relation_sever_sound`, `relation_join_sound`, both over full `Model`.
-- `VisualProof/Rule/WireQuantifier.lean` temporarily owns only the still-live
-  iota partition/merge API; relation-content variants no longer occur there.
+- [ ] Inventory every current public theorem and classify it as an exact final
+  obligation, a private helper directly used by one, or displaced.
+- [ ] State every missing production declaration from “Required final
+  production theorem surface” with its strongest correct quantification and
+  `sorry`. In particular, add checked-theorem, verified-theory, formula
+  compiler, formula preservation, and formula expressiveness declarations.
+- [ ] Keep the accepted-input `compiled_join_redundant` and
+  `compiled_sever_redundant` declarations. They must produce the compiler
+  success equality and raw checked concrete isomorphism with direct
+  positionwise ordered-boundary preservation.
+- [ ] Delete artificially weakened, obsolete, or non-required production
+  declarations, including insertion redundancy. Delete `ProofStep.receipt`
+  and its plan-only receipt hierarchy unless the actual theorem checker—not a
+  mirrored TypeScript shape—requires that exact data. Replace any dependency
+  with the smallest direct checked result/interface proposition the owning
+  P1/P2 theorem needs.
+- [ ] Delete invalid proofs together with their old statements; do not preserve
+  them under aliases or adapters. Correct statements remain RED with `sorry`.
+- [ ] Confirm the complete production skeleton elaborates. The expected RED
+  evidence is exactly the `sorry` warnings on incomplete owning declarations.
+  No fixture or example is permitted.
+- [ ] Commit the skeleton before proving another theorem.
 
-- [x] **Step 1: State production relation-sever obligations and confirm RED.** Cover multiple disjoint
-  exact copies at mixed parities, nullary content, ordered repeated formals,
-  coherent ambient parameters, mismatched occurrences, overlap, parameter
-  visibility, and fresh relation scope.
-- [x] **Step 2: Complete concrete relation-sever soundness.** Reuse the landed
-  occurrence extraction, singleton-removal, factorization, negative-splice,
-  and relation-join receipt machinery. Construct the reified relation witness
-  exactly once through `Model.reify`.
-- [x] **Step 3: Isolate the specification API.** Move relation sever/join
-  inputs, applied receipts, checkers, exports, and theorems from the
-  mixed facade to `MonolithicWireQuantifier`. Leave only the current iota
-  partition/merge in `WireQuantifier` until Task 3 replaces it.
-- [x] **Step 4: Audit specification-only reachability.**
-
-  ```bash
-  ! rg -n "MonolithicRelation|ContentOccurrence" \
-    VisualProof/Rule/Tag.lean VisualProof/Rule/WireQuantifier.lean
-  ```
-
-- [x] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean \
-    VisualProof/Diagram/Concrete/WireQuantifierRelationSeverSemantics.lean \
-    VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean \
-    VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean \
-    VisualProof/Rule/MonolithicWireQuantifier.lean \
-    VisualProof/Rule/WireQuantifier.lean
-  git commit -m "feat: complete monolithic relation sever soundness"
-  ```
+**Validation:** focused `lake env lean` on every changed owner, `lake build`,
+`npm run formal:size`, and a declaration ledger mapping each `sorry` to one
+final theorem above.
 
 ---
 
-### Task 3: Rebuild sever/join as generic signature-indexed partition/merge
+### Task 2: Conform the higher-order semantic and checked-diagram core
 
-**Files:**
+**Requirement:** R1, R2; prerequisite for R3/R4/P1/P2.
 
-- Create: `VisualProof/Diagram/Concrete/WirePartition.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePartitionSemantics.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean`
-- Create: `VisualProof/Rule/WirePrimitive/Partition.lean`
-- Create: `VisualProof/Rule/WirePrimitive.lean`
-- Delete: `VisualProof/Diagram/Concrete/WireQuantifierIota.lean`
-- Delete: `VisualProof/Diagram/Concrete/WireQuantifierIotaSemantics.lean`
-- Delete: `VisualProof/Rule/WireQuantifier.lean`
-- Modify: `VisualProof.lean`
+- [ ] Prove the live syntax contains recursive signatures, signature-indexed
+  wire binding, atom/ref/identity/cut content, and no Lambda term, equation,
+  relation-bubble, or second-order binder authority.
+- [ ] Prove `Model` gives a nonempty individual carrier and full recursively
+  interpreted higher-order function spaces, and diagram validity quantifies
+  over every such model.
+- [ ] Revalidate concrete well-formedness, elaboration, open ordered boundaries,
+  definitions, exact occurrence validation, splice semantics, and concrete
+  isomorphism only to the extent cited by the final R2–R4/P1/P2 theorems.
+- [ ] Reuse green current results only where their statements are
+  substantively identical. Delete second-order-specific lemmas and any
+  plan-created generalization not cited by a final owner.
+- [ ] Prove the current durable Lean rule inventory covers the actual
+  production TypeScript rule discriminants. This is a validation of R2
+  coverage, not a second tag authority or a requirement to mirror payload
+  representations.
+- [ ] Make every retained semantic-core theorem GREEN.
 
-**Interfaces:**
-
-```lean
-structure WireSeverInput (source : CheckedDiagram definitions) where
-  orientation : Orientation
-  wire : source.val.WireId
-  keep : List (CEndpoint source.val.nodeCount)
-  scope : source.val.RegionId
-
-structure WireJoinInput (source : CheckedDiagram definitions) where
-  orientation : Orientation
-  left : source.val.WireId
-  right : source.val.WireId
-```
-
-- `applyWireSever`, `applyWireJoin`.
-- `wire_sever_sound`, `wire_join_sound` over `PreModel`.
-- `identity_substitution_derived_sound` completed in Task 4.
-
-- [x] **Step 1: State generic partition/merge obligations and confirm RED.** Cover `.iota`, `rel []`, nested
-  relation signatures, moved-endpoint scope enclosure, chosen sever scope
-  polarity, equal-signature join, incomparable scopes, and merge of a
-  non-head endpoint. Require content primitives to reject the same non-head
-  case later.
-- [x] **Step 2: Rebuild the concrete owner.** Partition one wire's exact
-  endpoint set into retained and moved endpoints. The fresh scope must be
-  inside the old scope and enclose every moved endpoint. Merge comparable,
-  equal-signature wires at the outer scope. Gate sever on the fresh scope and
-  join on the inner scope.
-- [x] **Step 3: Prove generic soundness.** Use the one-point quantifier laws
-  for the selected `Sig`; no `Model.reify` or relation-content splice is
-  permitted.
-- [x] **Step 4: Remove iota authority.** Migrate all consumers to
-  the generic API, delete both iota modules, and remove `iota_sever_sound` /
-  `iota_join_sound`. Delete the old mixed rule facade and make
-  `Rule/WirePrimitive.lean` the sole primitive facade; the monolithic
-  specification remains separately named.
-- [x] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  ! rg -n "WireQuantifierIota|iota_sever_sound|iota_join_sound|Rule.WireQuantifier" \
-    VisualProof VisualProof.lean
-  git add -- VisualProof.lean \
-    VisualProof/Diagram/Concrete/WirePartition.lean \
-    VisualProof/Diagram/Concrete/WirePartitionSemantics.lean \
-    VisualProof/Diagram/Concrete/WireQuantifierIota.lean \
-    VisualProof/Diagram/Concrete/WireQuantifierIotaSemantics.lean \
-    VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Partition.lean \
-    VisualProof/Rule/WireQuantifier.lean
-  git commit -m "refactor: generalize Lean wire partition and merge"
-  ```
+**Validation:** `lake build`; exact source scans for displaced Lambda/bubble
+declarations; direct import/dependency evidence from each retained helper to a
+final theorem owner.
 
 ---
 
-### Task 4: Replace identity retargeting with derived substitution
+### Task 3: Prove every actual higher-order rule sound
 
-**Files:**
+**Requirement:** R2.
 
-- Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCore.lean`
-- Modify: `VisualProof/Diagram/Concrete/IdentityNormalization.lean`
-- Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationTransport.lean`
-- Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean`
-- Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean`
-- Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean`
-- Modify: `VisualProof/Rule/Identity.lean`
-- Modify: `VisualProof/Rule/Structural.lean`
-- Delete: `VisualProof/Rule/IdentityRetargetSemantics.lean`
-- Modify: `VisualProof.lean`
+- [ ] Revalidate or prove the structural rule theorems: production spawn and
+  insertion forms, erasure, iteration/deiteration, double cuts, vacuous wires,
+  fold/unfold, and cited theorem replacement.
+- [ ] Revalidate or prove every actual identity transformation. Keep its
+  normalization theorem separate from direct substitution/comprehension
+  compiler adequacy.
+- [ ] Revalidate or prove generic signature-indexed wire partition/merge over
+  the weakest semantic structure that supports the rule.
+- [ ] Revalidate or prove all primitive content, argument, formal, identity,
+  and folded-ref pairs. A shared witness lemma is permitted only if these
+  owning production theorems directly cite it.
+- [ ] Ensure each public theorem quantifies over the checker-accepted rule
+  input and derives soundness; caller-supplied semantic truth, successful
+  landing, transport, or inverse evidence is forbidden.
+- [ ] Make `applyStep_sound` GREEN by exhaustive delegation to the actual
+  higher-order rule theorems. Identity normalization, if production applies it
+  after a step, is composed only through its separate soundness theorem.
 
-**Interfaces:**
-
-- `normalizeOneIdentity` collapses when zero or one incident wire is scoped
-  outside the identity's region; two or more outer wires decline.
-- Ordinary iteration/deiteration payloads contain no retarget field.
-- `identity_substitution_derived_sound` composes iteration, generic scoped
-  sever, and normalization in both orientations.
-
-- [x] **Step 1: State one-point normalization obligations and confirm RED.** Cover all-co-scoped collapse,
-  exactly-one-outer collapse with the outer wire as survivor, two-outer
-  refusal, arbitrary signature, and both cut parities.
-- [x] **Step 2: State derived-substitution obligations and confirm RED.** Starting from
-  `id(a,b)` dominating `P(a)`, check plain iteration into the inner region,
-  sever the copied identity port and `P` endpoint onto a fresh wire scoped at
-  that region, and require eager normalization to land on `P(b)`. Cover
-  forward and backward orientations.
-- [x] **Step 3: Extend normalization.** Generalize the collapse proof from
-  all-co-scoped to all-but-at-most-one-co-scoped and prove the one-point
-  equivalence without changing degeneracy drop or same-region fusion.
-- [x] **Step 4: Delete retarget authority.** Remove every
-  `IdentityRetarget*` structure, checker, semantic theorem, structural copy
-  payload, export, and import. Plain copy rules preserve attachment
-  identities exactly.
-- [x] **Step 5: Prove the derived theorem.** Compose the public ordinary
-  iteration receipt, Task 3's generic scoped sever receipt, and
-  `normalizeIdentities_sound`; prove exact normalized landing and ordered
-  transport in both orientations.
-- [x] **Step 6: Prove the displaced model is absent.**
-
-  ```bash
-  test ! -e VisualProof/Rule/IdentityRetargetSemantics.lean
-  ! rg -n "IdentityRetarget|retargets|identity_retarget_sound" \
-    VisualProof VisualProof.lean
-  ```
-
-- [x] **Step 7: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean \
-    VisualProof/Diagram/Concrete/IdentityNormalizationCore.lean \
-    VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean \
-    VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean \
-    VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean \
-    VisualProof/Rule/Identity.lean \
-    VisualProof/Rule/IdentityRetargetSemantics.lean \
-    VisualProof/Rule/Structural.lean
-  git commit -m "refactor: derive Lean identity substitution from scoped sever"
-  ```
+**Validation:** focused owner builds followed by `lake build` and
+`npm run formal:size`; theorem dependency inspection proving all durable rule
+constructors are covered exactly once and no obsolete second-order rule is
+covered.
 
 ---
 
-### Task 5: Prove the generic uniform-site witness theorem
+### Task 4: Prove primitive derivability of direct substitution and comprehension
 
-**Files:**
+**Requirement:** R4, P2.
 
-- Create: `VisualProof/Rule/WirePrimitive/Site.lean`
-- Create: `VisualProof/Rule/WirePrimitive/Witness.lean`
-- Modify: `VisualProof.lean`
+- [ ] Keep the direct relation-content join/sever implementations solely as
+  specification operations. They are not durable proof-step constructors.
+- [ ] Audit the structural compiler against the design cases: root-scoped
+  internal wire, parallel root content, cut, empty residual, argument
+  plumbing, fixed/ambient wire, formal application, identity, and folded ref.
+  Retain only helpers directly cited by the constructive adequacy proof.
+- [ ] Prove termination from a structural measure with no caller-selected
+  fuel.
+- [ ] Prove `compiled_join_redundant` from every accepted direct join input.
+  The theorem itself constructs the successful primitive program and returns
+  its exact raw isomorphism to the raw direct target.
+- [ ] Derive sever by the checked inverse primitive sequence and prove
+  `compiled_sever_redundant` from every accepted direct sever input.
+- [ ] State ordered-boundary preservation representation-independently and
+  directly in both final theorems. Preserve order and repeated aliases.
+- [ ] Prove the semantic corollaries solely from primitive-program soundness
+  and the raw isomorphisms.
+- [ ] Confirm neither theorem nor its import closure references identity
+  normalization, search, atlas selection, `redundancyMismatch`, an assumed
+  compiled result, or an assumed inverse landing.
 
-**Interfaces:**
-
-- `AppliedSite`: an atom-head endpoint, site region, ordered argument tuple,
-  and its checked intrinsic frame factorization.
-- `UniformSiteRewrite`: one signature, one binder scope, exhaustive
-  source/target site lists, a position-preserving site correspondence, and
-  checked normalized result equality.
-- `HasEliminatingWitness`, `HasIntroducingWitness`.
-- `uniform_join_sound`, `uniform_sever_sound`,
-  `uniform_equivalence_sound`.
-
-All construction fields are private and are populated only by primitive
-checkers.
-
-- [x] **Step 1: State abstract witness obligations and confirm RED.** Instantiate the production theorem with a
-  nullary site under positive and negative contexts, mixed-parity sites, and a
-  two-site shared witness. Establish in the owning API that separate per-site
-  witnesses do not satisfy the uniform witness requirement.
-- [x] **Step 2: Define one site/frame authority.** An applied site records its
-  atom-head endpoint, region, ordered arguments, and checked factorization.
-  The all-sites collection proves it exhausts the acted-on wire.
-- [x] **Step 3: Prove pointwise replacement.** Show one semantic witness makes
-  every source/target site pair pointwise equal and that equality composes
-  through all checked contexts. Mixed site polarity must disappear from the
-  final obligation; only binder-scope polarity selects entailment direction.
-- [x] **Step 4: Prove the three public forms.** A supplied eliminating witness
-  gives join-family soundness, an introducing witness gives sever-family
-  soundness, and both give an ungated equivalence. Keep this theorem generic
-  over `PreModel`; later full-model instantiations construct the witnesses.
-- [x] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean \
-    VisualProof/Rule/WirePrimitive/Site.lean \
-    VisualProof/Rule/WirePrimitive/Witness.lean
-  git commit -m "feat: prove the uniform wire-site witness theorem"
-  ```
+**Validation:** focused compiler builds, theorem dependency/import audit,
+`lake build`, and `npm run formal:size`.
 
 ---
 
-### Task 6: Formalize content-shape primitive pairs
+### Task 5: Complete higher-order replay, theorem, and theory soundness
 
-**Files:**
+**Requirement:** P1, P2; aggregates R2.
 
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/Content.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierSingletonRemovalProvenance.lean`
-- Create: `VisualProof/Diagram/Concrete/WireQuantifierRelationJoinSingletonRemoval.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationJoinAlignment.lean`
-- Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean`
-- Modify: `VisualProof/Rule/MonolithicWireQuantifier.lean`
-- Modify: `VisualProof/Rule/WirePrimitive/Witness.lean`
-- Create: `VisualProof/Rule/WirePrimitive/Content.lean`
-- Modify: `VisualProof/Rule/WirePrimitive.lean`
-- Modify: `VisualProof.lean`
+- [ ] Define proof replay as the dependent chain of actual checked higher-order
+  steps. Preserve only the execution result and ordered interface information
+  the theorem checker genuinely consumes.
+- [ ] Prove forward and backward replay sound by composing
+  `applyStep_sound`; no per-step theorem may assume the desired entailment.
+- [ ] Define two-sided checked theorems using exact registered endpoints.
+  Replays may meet up to checked concrete isomorphism, but the theorem proved
+  is between the registered LHS and RHS, with their ordered boundary
+  interface preserved.
+- [ ] Prove `checkedTheorem_sound`.
+- [ ] Define ordered theory verification so definitions use only their prior
+  definition prefix and citations use only their prior verified theorem
+  prefix.
+- [ ] Prove `verifiedTheory_sound` in every full `Model`.
+- [ ] Do not require mirrored TypeScript receipts, allocation totals,
+  provenance maps, inverse transports, or separate boundary APIs unless the
+  actual checker consumes them and the owning theorem directly cites them.
 
-**Interfaces:**
-
-- `applyCutWrap`, `applyCutAbsorb`.
-- `applyParallelSplit`, `applyParallelFuse`.
-- `applyEndsDelete`, `applyEndsSpawn`.
-- Checked receipts exposing `.source`, `.target`, `.tag`, and `.sound`.
-- Public theorems:
-  `cut_wrap_sound`, `cut_absorb_sound`,
-  `parallel_split_sound`, `parallel_fuse_sound`,
-  `ends_delete_sound`, and `ends_spawn_sound`.
-
-- [x] **Step 1: State production checker obligations and confirm RED.** Cover all-end
-  transformation,
-  empty endpoint sets, mixed site regions, exact single-atom cut absorption,
-  pairwise co-located parallel matching, endpoint-free spawn, ordered
-  argument signatures, site visibility, polarity matrix, and non-head
-  refusal.
-- [x] **Step 2: Implement concrete receipts.** Own the freshness and
-  all-applied-head evidence required by the six primitive soundness theorems
-  and by compiler construction. Lean and TypeScript need not share a receipt
-  representation. Every checker proves it selected all applied heads and no
-  others.
-- [x] **Step 3: Instantiate the witness theorem.** Use:
-  `W := True` for ends deletion; negation for cut wrap/absorb; conjunction
-  and diagonal copying for parallel split/fuse. Construct relation-valued
-  witnesses in full `Model`; reuse `PreModel.inhabited` only where choosing
-  an unused value is sufficient.
-- [x] **Step 4: Confirm GREEN and commit.** The six owning primitive soundness
-  theorems are kernel-checked. Per-pair inverse APIs, `Transport` types, and
-  transported-boundary theorems are not Task 6 acceptance requirements.
-  Internal inverse construction may be used by the compiler, but final raw
-  isomorphism and ordered-boundary adequacy are owned only by Task 9.
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/Content.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean \
-    VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean \
-    VisualProof/Rule/MonolithicWireQuantifier.lean \
-    VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Witness.lean \
-    VisualProof/Rule/WirePrimitive/Content.lean
-  git commit -m "feat: prove wire content primitive soundness"
-  ```
-
-  Task 6 is complete under the original specification boundary: all six
-  primitive semantic theorems are GREEN. The former extra demand for
-  normalized pairwise inverse landings and transported ordered boundaries was
-  deleted; it incorrectly froze internal compiler mechanisms and conflicted
-  with the separation of identity normalization.
+**Validation:** focused proof/theory builds, `lake build`, and direct theorem
+statements for exact endpoints and ordered boundaries.
 
 ---
 
-### Task 7: Formalize argument-plumbing equivalences
+### Task 6: Formalize formula compilation and semantic expressiveness
 
-**Files:**
+**Requirement:** R3.
 
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsTupleSemantics.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsFixedSemantics.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationSemantics.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationLocal.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean`
-- Create: `VisualProof/Rule/WirePrimitive/Arguments.lean`
-- Modify: `VisualProof/Rule/WirePrimitive.lean`
-- Modify: `VisualProof.lean`
+**Correspondence authority:** `src/formula/syntax.ts`,
+`src/formula/diagram.ts`, and the graph constructors they call.
 
-**Interfaces:**
+- [ ] Define the production source `Formula` grammar in Lean with typed lexical
+  binding corresponding to the TypeScript AST: atom, conjunction,
+  implication, and existential/universal binder groups over recursive
+  signatures. Formalize the AST/compiler boundary, not parsing spans, parser
+  errors, UI behavior, or text parsing.
+- [ ] Define source-formula interpretation in the same `Model` and typed
+  environment used by diagram semantics.
+- [ ] Define the structural compiler corresponding to the existing production
+  translation: atoms, same-region conjunction, cut-based implication, and
+  polarity-correct wire scopes for quantifiers.
+- [ ] Prove the compiler constructs a well-formed/elaborable diagram. If the
+  Lean compiler targets intrinsic diagrams directly, prove the exact
+  correspondence needed to the production concrete construction rather than
+  inventing a second compiler authority.
+- [ ] Prove the owning semantic preservation theorem by structural induction
+  on the source formula.
+- [ ] Derive the expressiveness theorem: every supported well-scoped formula
+  has a diagram with equal denotation in every model/environment.
+- [ ] Do not claim proof-system completeness, completeness for syntax absent
+  from the production `Formula` AST, or correctness of the TypeScript parser.
 
-- `applyArityShift`, `applyArityUnshift`.
-- `applyArgPermute`.
-- `applyArgDuplicate`, `applyArgContract`.
-- `applyArgDrop`, `applyArgExtend`.
-- Corresponding `_sound` theorems and checked input/receipt types over full
-  `Model`, obtained from the generic `PreModel` witness theorem.
-
-- [x] **Step 1: State production plumbing obligations and confirm RED.** Cover nested signatures,
-  per-site fresh arity-shift wires scoped at each endpoint region,
-  arity-unshift exhaustion, invalid permutations, duplicate/contract
-  adjacency, drop/extend positions, all-end attachment coverage, signature
-  equality, and visibility.
-- [x] **Step 2: Implement structural equivalences.** Prove arity
-  shift/unshift with existential/cylindrification witnesses in the full
-  relation domains; use `PreModel.inhabited` for the reverse direction's
-  required choice. Prove permutation and duplicate/contract by typed tuple
-  rearrangement and full-model reification of the transformed relation.
-- [x] **Step 3: Implement merged drop/extend gates.** Detect one uniform
-  attachment wire visible at the acted wire's scope. That case is an ungated
-  equivalence. Otherwise enforce join-family polarity for drop and
-  sever-family polarity for extend.
-- [x] **Step 4: Prove the gated witnesses.** Uniform attachment uses a single
-  scope-visible parameter in both directions. Per-site drop has only the
-  eliminating witness; per-site extend has only the introducing witness.
-- [x] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean \
-    VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Arguments.lean
-  git commit -m "feat: prove wire argument primitive soundness"
-  ```
+**Validation:** focused formula module builds, correspondence scan against the
+TypeScript AST cases, `lake build`, and `npm run formal:size`.
 
 ---
 
-### Task 8: Formalize formal, identity, and folded-reference leaves
+### Task 7: Delete displaced and plan-only infrastructure
 
-**Files:**
+**Requirement:** R1–R4 minimality and the prohibition on extra requirements.
 
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean`
-- Create: `VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean`
-- Create: `VisualProof/Rule/WirePrimitive/Leaves.lean`
-- Modify: `VisualProof/Rule/WirePrimitive.lean`
-- Modify: `VisualProof.lean`
+- [ ] Compute the declaration and import closure of the final production
+  theorems. Classify every remaining Lean module as a final owner or a helper
+  directly referenced by one.
+- [ ] Delete all unreferenced fixture, atlas, search, transport, inverse,
+  redundancy-mismatch, generalized-shape, allocation, provenance, and receipt
+  modules/declarations created only to satisfy the displaced plan. Do not keep
+  aliases, adapters, compatibility wrappers, or umbrella imports.
+- [ ] Delete obsolete second-order-specific modules/declarations and any
+  invalid old proofs not already removed by Task 1.
+- [ ] Delete theorem statements for insertion redundancy and ref
+  conservativity unless they are ordinary soundness lemmas directly required
+  by a live production rule. Their former status as completion-plan tasks is
+  not authority.
+- [ ] Ensure no fixture module, redundant example, or test theorem remains for
+  Lean RED/GREEN development.
+- [ ] Minimize `VisualProof.lean` to the production library and required public
+  theorem owners.
 
-**Interfaces:**
-
-- `applyApplyFormal`, `applyAbstractFormal`.
-- `applyIdentityLeaf`, `applyIdentityAbstract`.
-- `applyRefLeaf`, `applyRefAbstract`.
-- Corresponding `_sound` theorems over full `Model`.
-
-- [x] **Step 1: State production leaf obligations and confirm RED.** Cover formal-position signature
-  equality, distinct per-site formal heads, identity equal signature/arity,
-  one shared definition for ref abstraction, definition signature lookup,
-  chosen scope enclosure, all endpoints, both orientations, and all refusal
-  cases in the merged TypeScript checkers.
-- [x] **Step 2: Implement checked concrete leaves.** Match
-  `src/kernel/rules/wire-args.ts`: join-family leaf rules consume every
-  applied end; sever-family abstract rules consume the exact selected
-  node set and create one fresh uniformly applied wire.
-- [x] **Step 3: Prove semantic witnesses.** Use full relation domains for
-  application, equality at arbitrary `Sig`, and the predicate denoted by a
-  stored definition. Ref proofs must call typed definition lookup and show
-  equivalence to unfold/compile/fold without actually expanding the macro.
-- [x] **Step 4: Audit fullness.** Use production theorem signatures
-  demonstrating that generic partition/merge remains `PreModel`-parametric
-  while relation-synthesizing primitive instances quantify over `Model`.
-- [x] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean \
-    VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean \
-    VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Leaves.lean
-  git commit -m "feat: prove wire leaf primitive soundness"
-  ```
+**Validation:** dependency closure report; absent-path/source scans; clean
+`lake build`; `npm run formal:size`.
 
 ---
 
-### Task 9: Formalize the content compiler and monolithic redundancy
+### Task 8: Final conformance and completion audit
 
-**Files:**
+**Requirement:** R1–R4, P1, P2.
 
-- Create: `VisualProof/Rule/WirePrimitive/Program.lean`
-- Create: `VisualProof/Rule/WirePrimitive/Compiler.lean`
-- Create: `VisualProof/Rule/WirePrimitive/CompilerTermination.lean`
-- Create: `VisualProof/Rule/WirePrimitive/CompilerSoundness.lean`
-- Modify: `VisualProof/Rule/WirePrimitive.lean`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-
-- `CompiledPrimitiveStep`: the checked primitive subset emitted by the
-  structural compiler.
-- `PrimitiveProgram`: ordered checked steps with exact dependent source and
-  target indices.
-- `runPrimitiveProgram`.
-- `compileRelationJoin`, `compileRelationSever`.
-- `runPrimitiveProgram_sound`.
-- `compiled_join_redundant`, `compiled_sever_redundant`.
-
-- [x] **Step 1: State compiler adequacy obligations and confirm RED.** Cover the TypeScript
-  round-trip
-  corpus, including empty content, one cut, parallel root items, shared
-  root-scoped internal wires, repeated/dropped/permuted formals, uniform and
-  per-site parameters, formal application, identities, folded refs, nullary
-  content, and the worked `∃y.(P(x,y) ∧ ¬Q(y))` example.
-- [x] **Step 2: Define the residual and measure.** The residual stores the
-  live wire, remaining open content, formal count, and ambient mapping.
-  Lexicographically measure nodes + internal wires + regions, then remaining
-  argument plumbing. Prove every case strictly decreases; do not use partial
-  recursion or a fuel value callers can choose.
-- [x] **Step 3: Implement join compilation.** Case in this order:
-  root-scoped internal wire → `arityShift`; multiple root items →
-  `parallelSplit`; one cut → `cutWrap`; empty → `endsDelete` then
-  `vacuousElim`; one leaf → plumbing then merge, `applyFormal`,
-  `identityLeaf`, or `refLeaf`.
-- [x] **Step 4: Implement sever compilation.** Validate exact disjoint
-  occurrences and shared formal/ambient structure, construct the virtual
-  monolithic sever target, compile the corresponding join there, reverse the
-  checked program and orientation, and transport ids back through the
-  occurrence removal receipt.
-- [x] **Step 5: Prove program soundness.** Compose each primitive receipt's
-  semantic theorem. The compiler is
-  authoring-layer logic; primitive checkers remain unaware of residuals and
-  monolithic inputs.
-- [ ] **Step 6: Prove redundancy.** `compiled_join_redundant` and
-  `compiled_sever_redundant` are RED under their production names. They
-  quantify over `AcceptedMonolithicRelationJoin` and
-  `AppliedMonolithicRelationSever`, respectively, and must produce a
-  `CompiledRelation*`, equality showing the public compiler returned
-  `.ok`, and the exact raw `ConcreteIso`. They must not accept a
-  `CompiledRelation*` argument. For join, show the compiled raw program
-  target is checked-isomorphic to the monolithic raw `plainFinal`; for sever,
-  show it is checked-isomorphic to the raw monolithic target, in both cases
-  with no normalization dependency. The same theorem must explicitly quantify
-  over every ordered final boundary list and prove positionwise that mapping
-  through the returned `ConcreteIso.wires` preserves order and repeated
-  aliases. State this directly in the final theorem; do not require a
-  `Transport` type, per-primitive transport theorem, or matching Lean and
-  TypeScript receipt representation. Derive monolithic
-  soundness again through the universal `compiled_join_sound` and
-  `compiled_sever_sound` declarations, which are also RED and quantify over
-  the accepted monolithic receipt rather than an already-compiled result.
-- [ ] **Step 7: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Program.lean \
-    VisualProof/Rule/WirePrimitive/Compiler.lean \
-    VisualProof/Rule/WirePrimitive/CompilerTermination.lean \
-    VisualProof/Rule/WirePrimitive/CompilerSoundness.lean
-  git commit -m "feat: prove primitive compiler redundancy"
-  ```
-
-  The constructive compiler implementation and its direct raw
-  `ConcreteIso` fields landed through commits `52fb5cd`, `573b4aa`, and
-  `95dd95a`; searches and `redundancyMismatch` are absent. This task was
-  reopened because the former public declarations accepted those successful
-  compilation records as hypotheses. Those weakened declarations have been
-  replaced by the universal RED statements above. The implementation is not
-  complete until those exact declarations are GREEN.
-
----
-
-### Task 10: Prove insertion/ref conservativity and pin per-site extension
-
-**Files:**
-
-- Create: `VisualProof/Rule/WirePrimitive/Derived.lean`
-- Modify: `VisualProof/Rule/WirePrimitive.lean`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-
-- `insertion_primitive_program`.
-- `insertion_redundant`.
-- `ref_spawn_unfold_conservative`.
-
-- [x] **Step 1: State derivation obligations and confirm RED.** Include arbitrary open content
-  in a negative region, nullary content, a folded reference body, and both
-  replay orientations. Reuse the authoritative Task 7 argument theorems for
-  uniform extension and two-site differing attachments; do not duplicate that
-  corpus here.
-- [ ] **Step 2: Derive insertion.** `insertion_redundant` is now the owning
-  universal RED theorem: it quantifies over `AcceptedRawInsertion`, produces
-  an `InsertionPrimitiveLanding`, proves
-  `insertion_primitive_program checked = .ok landing`, and returns the exact
-  raw `ConcreteIso`. It must not accept an `InsertionPrimitiveLanding` as its
-  premise. Prove it by composing vacuous introduction of a
-  `rel []` wire, negative-gated atom spawn, and compiled relation join
-  grounding to the inserted content. Prove the raw result is checked-concretely
-  isomorphic to raw structural insertion with exact ordered boundary transport;
-  identity normalization is outside this theorem and its proof.
-- [x] **Step 3: Derive ref conservativity.** Prove the folded named item is
-  exactly its stored definition body under a lawful definition environment.
-  Task 11's checked unfold theorem consumes this law. Definitions remain
-  macros and acquire no spawn-anywhere semantic authority.
-- [x] **Step 4: Pin direct per-site extension.** Preserve the authoritative
-  34-step kernel's explicit per-site `argExtend`: uniform scope-visible
-  attachments are ungated, while differing attachments retain the
-  sever-family polarity gate. The gesture layer exposes the uniform drag, but
-  durable replay accepts explicit per-site payloads. The canonical two-site
-  production theorem must cover both orientations. Do not claim an ordinary
-  sever/join derivation: the required join has the opposite checked polarity
-  on an accepted even-scope extension case.
-- [x] **Step 5: Pin the independent negative-splice theorem.** The insertion
-  corollary may use it, but must not replace it; backward erasure soundness
-  continues to cite the direct negative-splice proof.
-- [ ] **Step 6: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Derived.lean
-  git commit -m "feat: prove primitive derivability corollaries"
-  ```
-
-  The insertion construction, boundary transport, folded-reference law,
-  independent negative-splice theorem, and Task 7 `argExtend` results are
-  present. This task was reopened because the former `insertion_redundant`
-  assumed the landing it was required to establish. The replacement universal
-  declaration is RED and this task is incomplete until that proof is GREEN.
-
----
-
-### Task 11: Complete definitions, citation, and the exact 34-step checker
-
-**Files:**
-
-- Create: `VisualProof/Rule/Definition.lean`
-- Create: `VisualProof/Rule/Theorem.lean`
-- Create: `VisualProof/Rule/Step.lean`
-- Create: `VisualProof/Rule/Soundness.lean`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-
-- `applyUnfold`, `applyFold`, `unfold_sound`, `fold_sound`.
-- `applyTheorem`, `theorem_application_sound`.
-- A 34-constructor dependent `ProofStep`.
-- `applyStep`, `applyStep_sound`.
-- Step receipts expose normalized result, allocation/provenance, total wire
-  transport, root interface transport, and ordered boundary transport.
-
-- [x] **Step 1: State one production obligation per tag and confirm RED.** Ensure every
-  checker-accepted payload applies in its legal orientation and returns its
-  `StepTag`. Use exhaustive production definitions and theorems so a missing
-  or duplicate constructor cannot pass typechecking.
-- [x] **Step 2: Prove ref spawn and fold/unfold.** Use
-  `Definitions.lookup_iff_body` and splice denotation. Fold/unfold are
-  equivalences; ref spawn uses structural insertion gates.
-- [x] **Step 3: Prove theorem application.** A prior checked theorem can be
-  cited at an exact pinned occurrence, LHS→RHS in positive context and
-  RHS→LHS in negative context, flipped by replay orientation. Preserve
-  ordered aliased boundaries.
-- [x] **Step 4: Define the exact checked sum.** Each constructor contains the
-  owning module's checked receipt or enough raw input for `applyStep` to
-  construct that receipt. There is no relation-content constructor and no
-  identity-retarget field.
-- [ ] **Step 5: Define receipts and transport.** `ProofStep` constructors no
-  longer accept `StepReceipt`; `StepReceipt.mk` is private and
-  `ProofStep.receipt` is the owning RED production declaration with `sorry`.
-  Replace that `sorry` by deriving provenance and raw transport from each
-  constructor's owning checked receipt. Match the merged TypeScript
-  distinction among provenance, every-scope transport, and root interface
-  transport. Normalization transport composes after the primitive result;
-  repeated ordered boundary aliases remain repeated.
-- [x] **Step 6: Prove `applyStep_sound`.** Use exactly 34 exhaustive cases,
-  delegating each case to its owning theorem. No default case and no premise
-  that already assumes the desired directed entailment.
-- [ ] **Step 7: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean VisualProof/Rule/Definition.lean \
-    VisualProof/Rule/Theorem.lean VisualProof/Rule/Step.lean \
-    VisualProof/Rule/Soundness.lean
-  git commit -m "feat: prove all 34 Lean proof steps sound"
-  ```
-
-  Definition unfolding/folding and pinned prior-theorem replacement retain
-  their exact checked reconstruction, ordered boundary, and raw insertion
-  receipts; their soundness theorems prove replacement independently of
-  identity normalization. `ProofStep` is the exact 34-constructor checked sum
-  and no longer admits caller-authored receipts. `applyStep_sound` has 34
-  explicit branches that delegate raw soundness to the owning theorem and
-  compose canonical normalization only at the outer step boundary. Receipt
-  ownership remains RED, so Task 11 is not complete.
-  Structural, definition, theorem, and derived insertion receipts were migrated
-  from normalized splice results to raw splice results so the raw primitive
-  compiler adequacy import closure contains no identity-normalization module.
-  Focused Lean checks, full `lake build` (193 jobs), `formal:size`, placeholder
-  scans, diff hygiene, and the Lean semantics architecture gate pass.
-
----
-
-### Task 12: Complete replay, theorem, and ordered-theory soundness
-
-**Files:**
-
-- Create: `VisualProof/Proof/Replay.lean`
-- Create: `VisualProof/Proof/Theorem.lean`
-- Create: `VisualProof/Proof/Theory.lean`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-
-- `Proof`, `replay`, `replay_sound`, `backward_replay_sound`.
-- `Theorem`, `checkTheorem`, `checkedTheorem_sound`.
-- `Theory`, `verifyTheory`, `verifiedTheory_sound`.
-
-- [ ] **Step 1: Define the end-to-end production theorem statements and confirm RED.** Their
-  proof obligations cover a multi-step primitive compiler program, a
-  two-sided theorem whose halves meet only up to checked
-  isomorphism, repeated boundary aliases transported through normalization,
-  citation in both polarities, and a later theorem citing only an earlier
-  theorem.
-- [ ] **Step 2: Prove replay.** Compose `applyStep_sound` along the list while
-  composing allocation reservations and total transports. Forward replay
-  starts at LHS; backward replay starts at RHS with each gate flipped.
-- [ ] **Step 3: Prove two-sided theorem checking.** Independently replay both
-  sides, transport the registered ordered boundaries after every step, and
-  require the meeting diagrams to be checked-isomorphic. Prove entailment
-  between the exact registered endpoints, not substituted meeting objects.
-- [ ] **Step 4: Prove ordered theory verification.** Interpret the complete
-  ordered definition prefix first. Verify theorems chronologically so a
-  theorem payload can cite only its already-verified prefix. Prove every
-  accepted theorem valid in every full `Model`.
-- [ ] **Step 5: Confirm GREEN and commit.**
-
-  ```bash
-  lake build
-  npm run formal:size
-  git add -- VisualProof.lean VisualProof/Proof/Replay.lean \
-    VisualProof/Proof/Theorem.lean VisualProof/Proof/Theory.lean
-  git commit -m "feat: prove Lean replay and theory soundness"
-  ```
-
----
-
-### Task 13: Restore truthful correspondence and proof-authority tooling
-
-**Files:**
-
-- Create: `VisualProof/Correspondence/StepTags.lean`
-- Create: `VisualProof/Correspondence/StepTagsMain.lean`
-- Create: `VisualProof/Audit.lean`
-- Create: `scripts/check-lean-step-tags.mjs`
-- Create: `scripts/check-formalization.mjs`
-- Modify: `lakefile.toml`
-- Modify: `package.json`
-- Modify: `tests/architecture/lean-semantics.test.ts`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-
-- Executable `visualproof_step_tags`.
-- `npm run formal:tags`.
-- `npm run formal:check`.
-
-- [ ] **Step 1: Add RED tooling assertions.** Require both package scripts,
-  both scripts, exactly one Lean tag executable, exact 34-line output, and no
-  displaced source-matching executable.
-- [ ] **Step 2: Serialize the Lean authority.** Define
-  `StepTag.serializedName`, prove injectivity, and print `StepTag.all`; do not
-  hand-maintain another Lean tag list.
-- [ ] **Step 3: Compare TypeScript mechanically.** Parse only the
-  `rule: '…'` discriminants of the exported TypeScript `ProofStep` union, run
-  `lake env visualproof_step_tags`, reject duplicates, require exact ordered
-  equality and count 34, and report the first order mismatch plus missing and
-  extra tags.
-- [ ] **Step 4: Add authority audits.** `VisualProof/Audit.lean` imports and
-  prints axioms for normalization, derived identity substitution, generic
-  partition/merge, all primitive families, relation sever/join redundancy,
-  insertion redundancy, `applyStep_sound`, replay, checked theorem, and
-  verified theory soundness.
-- [ ] **Step 5: Add source-structure audits.**
-  `scripts/check-formalization.mjs` must reject repository-owned Lean source
-  containing `sorry`, `admit`, project axioms, Lambda-era declarations,
-  `IdentityRetarget`, iota-only primitive owners, or Phase 4 reference
-  semantics. It must also prove:
-
-  - monolithic relation APIs occur only in the specification/compiler layer;
-  - no TypeScript `ProofStep` contains a monolithic or retarget payload;
-  - no Lean fixture module or fixture import exists;
-  - the public primitive content/argument checkers require all applied heads,
-    except generic merge;
-  - the documented full-`Model` boundary matches theorem signatures.
-
-- [ ] **Step 6: Restore supported commands.**
-
-  ```json
-  "formal:tags": "node scripts/check-lean-step-tags.mjs",
-  "formal:check": "node scripts/check-formalization.mjs"
-  ```
-
-  `formal:check` runs `formal:size`, `lake build`, `formal:tags`, TypeScript
-  typecheck, and the Lean architecture test. Add only
-  `visualproof_step_tags` to `lakefile.toml`.
-- [ ] **Step 7: Confirm GREEN and commit.**
-
-  ```bash
-  npm run formal:tags
-  npm run formal:check
-  npx vitest run tests/architecture/lean-semantics.test.ts
-  git diff --check
-  git add -- VisualProof.lean VisualProof/Audit.lean \
-    VisualProof/Correspondence/StepTags.lean \
-    VisualProof/Correspondence/StepTagsMain.lean \
-    scripts/check-lean-step-tags.mjs \
-    scripts/check-formalization.mjs lakefile.toml package.json \
-    tests/architecture/lean-semantics.test.ts
-  git commit -m "build: enforce Lean parity for 34 proof steps"
-  ```
-
----
-
-### Task 14: Clean-build audit and close Phase 3
-
-**Files:**
-
-- Modify only the exact owner of a failure exposed by the gates.
-- Update completion checkboxes in this plan as tasks land.
-- Append conformance to the implementation session's foundation record.
-
-- [ ] **Step 1: Prove displaced authorities are absent.**
-
-  ```bash
-  test ! -d VisualProof/Lambda
-  test ! -e VisualProof/Rule/IdentityRetargetSemantics.lean
-  test ! -e VisualProof/Diagram/Concrete/WireQuantifierIota.lean
-  ! rg --files VisualProof | rg 'Fixtures\.lean$'
-  ! rg -n \
-    "LambdaModel|IdentityRetarget|iota_sever_sound|iota_join_sound|openTermSpawn|congruenceJoin|headStrip|inconsistentCut|comprehensionInstantiate|comprehensionAbstract" \
-    VisualProof VisualProof.lean
-  ```
-
-- [ ] **Step 2: Prove monolithic containment and Phase 4 absence.**
-
-  ```bash
-  test ! -e VisualProof/HOL
-  ! rg -n "denotation-preservation|translateHOL|ReferenceHOL|Henkin" \
-    VisualProof
-  ```
-
-  Run the formal source audit for monolithic containment rather than relying
-  on a raw zero-match grep, because the compiler/redundancy modules
-  intentionally retain the specification rule.
-- [ ] **Step 3: Run a clean formal build.**
+- [ ] Verify the provenance table against the final source and prove every
+  retained public theorem/task maps to a requested outcome or direct
+  prerequisite.
+- [ ] Verify the complete final theorem surface is GREEN: no `sorry`, `admit`,
+  project `axiom`, or artificially weakened replacement remains.
+- [ ] Print/check axioms for `applyStep_sound`, primitive join/sever adequacy
+  and semantic corollaries, `replay_sound`, `checkedTheorem_sound`,
+  `verifiedTheory_sound`, formula semantic preservation, and formula
+  expressiveness.
+- [ ] Verify exact actual-rule coverage and absence of Lambda, bubble,
+  second-order comprehension, fixture, identity-retarget, monolithic durable
+  step, and plan-only authority paths.
+- [ ] Verify primitive compiler adequacy's declaration and import closure are
+  independent of identity normalization.
+- [ ] Run the authoritative full gates:
 
   ```bash
   lake clean
   lake build
-  npm run formal:check
-  ```
-
-- [ ] **Step 4: Run complete repository gates.**
-
-  ```bash
+  npm run formal:size
   npm test
   npm run typecheck
-  npm run formal:size
   npm run e2e
   git diff --check
   git status --short
   ```
 
-  Only unrelated pre-existing untracked `archive/` and `scratchpad/` paths
-  may remain.
-- [ ] **Step 5: Record conformance.** Append the completed owners, deleted
-  structures, all 34 tags, full-model boundary, compiler redundancy theorems,
-  clean build, unit/type/E2E results, and Phase 4 absence to the implementation
-  foundation record without rewriting its pre-action sections.
-- [ ] **Step 6: Commit any gate-owned correction.** Stage only task-owned
-  files. If no correction exists, do not make an empty commit.
+- [ ] Repair in-repository failures, rerun until green, append conformance to
+  the implementation foundation record, and commit only task-owned work.
 
-## Acceptance matrix
+## Completion oracle
 
-| Requirement | Direct evidence |
-|---|---|
-| No Lean test-fixture layer | no `*Fixtures.lean` source or import; production theorem typechecking is the feedback loop |
-| Exact merged proof language | `StepTag.all_length = 34`, exhaustive `ProofStep`, `npm run formal:tags` |
-| No identity-retarget authority | deleted module/declarations plus `identity_substitution_derived_sound` |
-| Generic signature-indexed partition/merge | `.iota`, `rel`, nested-rel production cases and `wire_*_sound` |
-| Backward erasure follows flipped polarity | Task 1 matrix and independent negative-splice theorem |
-| Complete strongest-form specification | `relation_sever_sound`, existing `relation_join_sound` |
-| Uniform all-site primitive semantics | `UniformSiteRewrite` exhaustion + witness theorem |
-| Original nine pairs plus folded-ref pair sound | Tasks 3 and 6–8 theorem families |
-| Vacuous family retained | exhaustive 34-step checker and compiler empty-content case |
-| Fullness boundary truthful | theorem signatures plus Task 8/13 audits |
-| Compiler terminates structurally | well-founded residual measure |
-| Monolithic rule redundant | universal accepted-input `compiled_join_redundant` and `compiled_sever_redundant`, including public compiler `.ok` equalities and raw `ConcreteIso` landings |
-| Insertion/ref remain conservative | universal accepted-input `insertion_redundant` with compiler `.ok` equality; `ref_spawn_unfold_conservative` |
-| Per-site extend retained with exact gate | `applyArgExtend`, canonical uniform/differing-attachment theorems |
-| Definitions/citation sound | fold/unfold and theorem-application theorems |
-| All 34 steps sound | receipt-free exhaustive `ProofStep`; owner-derived `ProofStep.receipt`; exhaustive `applyStep_sound` |
-| Forward/backward replay sound | `replay_sound`, `backward_replay_sound` |
-| Exact theorem endpoints | `checkedTheorem_sound` with ordered boundary transport |
-| Ordered theory sound | `verifiedTheory_sound` |
-| No displaced/Phase 4 model | Task 13 source audit and Task 14 clean-build gates |
+The work is complete only when all four requested outcomes are directly
+proved:
+
+1. no Lambda or quantifier-bubble formalization remains;
+2. every actual higher-order rule and the aggregate proof/theory checker are
+   sound in complete/all-model semantics;
+3. the existing source-formula compiler has a kernel-checked semantic
+   preservation/expressiveness theorem; and
+4. every accepted direct relation substitution/comprehension is reproduced by
+   a checked primitive relation-wire program with exact raw target and ordered
+   boundary correspondence, independently of identity normalization.
+
+Passing tests, matching names, prior receipts, or completion of only the
+primitive compiler does not satisfy this oracle.

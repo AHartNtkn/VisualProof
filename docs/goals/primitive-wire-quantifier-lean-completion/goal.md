@@ -1,90 +1,53 @@
-# Primitive Wire-Quantifier Lean Completion
+# Higher-Order Diagram Calculus Lean Completion
 
 ## Objective
 
 Execute
 `docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md`
-completely so the exact merged 34-step proof language, its Lean semantics,
-primitive compiler and redundancy theorems, proof/replay/theory stack, and
-formal audits are implemented and all final gates pass.
+until the requested second-order-to-higher-order conversion is genuinely
+complete:
 
-## Original Request
+1. Lambda expressions and quantifier bubbles are absent from the Lean model;
+2. every actual higher-order rule is sound in the established complete/all-model
+   semantic style, with aggregate replay/theorem/theory soundness;
+3. the production source-formula compiler has semantic preservation and
+   expressiveness theorems; and
+4. direct relation substitution/comprehension is constructively reproduced by
+   primitive relation-wire steps with exact raw and ordered-boundary
+   correspondence, independently of identity normalization.
 
-Execute the committed 14-task Lean completion plan completely, in dependency
-order, with updated checkboxes and durable receipts, validated task commits,
-preservation of unrelated work, and no restoration of the 15-step, iota-only,
-IdentityRetarget, or monolithic-kernel models.
+## Authority
 
-## Intake Summary
-
-- Input shape: `existing_plan`
-- Audience: VisualProofAssistant maintainers and users relying on checked proof replay
-- Authority: `requested`
-- Proof type: `test`
-- Completion proof: every plan checkbox is complete, every task has a reviewed commit and receipt, the acceptance matrix is directly evidenced, and Task 14's clean full gate suite passes
-- Goal oracle: Task 14 plus the full acceptance matrix in the committed plan
-- Likely misfire: stopping after a substantial Lean slice, accepting the stale 15-step model, or treating narrow checks as proof of end-to-end completion
-- Blind spots considered: truthful full-model boundary, exact ordered boundary transport, specification-only monolithic containment, sandbox-only nested npm failure, source-size limits, and preservation of unrelated untracked files
-- Existing plan facts: all 14 tasks, their dependency order, exact 34 tags, required paths/interfaces, theorem-driven RED/GREEN steps, task commits, and final acceptance matrix remain controlling
-
-## Goal Oracle
-
-The oracle for this goal is:
-
-`Task 14 and every row of the plan's acceptance matrix pass against current repository sources, with reviewed receipts and no task-owned dirty work.`
-
-The PM must keep comparing task receipts to this oracle. Planning, discovery,
-a passing narrow slice, or a clean-looking board is not enough. The goal
-finishes only when a final Judge/PM audit maps receipts and verification back
-to this oracle and records `full_outcome_complete: true`.
-
-## Goal Kind
-
-`existing_plan`
-
-## Current Tranche
-
-The full owner outcome is the tranche. Execute Tasks 1–14 continuously in
-dependency order. Each plan task is the largest safe useful work package;
-review at task, phase-risk, and final boundaries, then immediately activate
-the next required task.
+The governing plan is the provenance-audited eight-task plan above. It replaces
+the former 14-task authority. Prior receipts and checkmarks are historical
+evidence only; they do not establish completion unless the corresponding
+production theorem survives the new declaration-level audit unchanged.
 
 ## Non-Negotiable Constraints
 
-- Treat `src/kernel/proof/step.ts` as the exact ordered 34-tag correspondence authority.
-- Keep the monolithic relation rule only as semantic specification/compiler evidence.
-- Treat accepted monolithic inputs, not already-successful compiler receipts,
-  as the quantifiers of compiler adequacy. The final raw `ConcreteIso` must
-  state positionwise ordered-boundary correspondence and must not reference
-  identity normalization.
-- Do not promote internal `inverseTransport`, transport representations, or
-  matching Lean/TypeScript receipt shapes into Task 6 requirements.
-- Delete rather than adapt or alias iota-only and identity-retarget authorities.
-- Preserve all unrelated `archive/` and `scratchpad/` work.
-- Update plan checkboxes, GoalBuddy receipts, and the plan-specific ledger as work lands.
-- Run every task's focused and global validation before its task-scoped commit.
-- Do not claim completion before Task 14 and the full acceptance matrix are directly audited.
+- Reuse only the completed second-order proof architecture, not
+  second-order-specific theorems.
+- Begin implementation with the complete honest production theorem skeleton.
+  Correct incomplete statements use `sorry`; requirements are never weakened
+  to remove `sorry`.
+- Lean RED/GREEN uses owning production declarations only. No fixture modules,
+  redundant examples, `#check`, or test theorems.
+- Every retained task, public theorem, or helper must map to one requested
+  outcome or a demonstrated direct prerequisite.
+- Primitive compiler adequacy quantifies over accepted direct-operation inputs,
+  constructs compiler success, preserves the raw ordered boundary, and has no
+  identity-normalization dependency.
+- Transport, inverse, provenance, allocation, atlas, search, mirrored receipt,
+  insertion-redundancy, and ref-conservativity designs are not requirements.
+  Retain an implementation detail only when a final owning theorem directly
+  needs it.
+- Preserve unrelated work and commit each validated task-owned slice.
 
-## Stop Rule
+## Completion Oracle
 
-Stop only when a final audit proves the full original outcome is complete.
-
-Do not stop after planning, discovery, or task selection while a safe required
-task remains. Do not stop after one verified package. A task-specific blocker
-does not block adjacent safe work; only a genuine unresolved product decision
-or external impasse may stop the run.
-
-## Slice Sizing
-
-Each numbered plan task is the default Worker package. Split a task only when
-evidence shows its current write scope or verification boundary is unsafe;
-record the split on the board and retain the task's full acceptance boundary.
-
-## Board Health
-
-Machine truth lives in `state.yaml`. The PM runs the GoalBuddy checker after
-every receipt transition and repairs only GoalBuddy control files during
-board maintenance.
+All eight plan tasks are complete, the plan's four numbered outcomes are each
+mapped to kernel-checked production theorems, no displaced or plan-only model
+remains, and Task 8's full conformance gates pass from a clean formal build.
 
 ## Canonical Board
 
@@ -98,8 +61,8 @@ board maintenance.
 
 ## PM Loop
 
-On every continuation, read this charter, `state.yaml`, the plan-specific
-ledger, and the active task receipt state. Work only on the active task,
-record validation and commits, review it, update its plan checkboxes and
-receipt, run the board checker, and activate the next required task. Finish
-only through the final audit task with `full_outcome_complete: true`.
+Read this charter, the governing plan, and `state.yaml`. Work only on the one
+active task. Compare each proposed declaration and helper to the provenance
+table before keeping it. Record production-theorem RED/GREEN evidence, focused
+and full validation, and the task commit; then activate the next task. Do not
+claim completion until the Task 8 audit records all four outcomes directly.
