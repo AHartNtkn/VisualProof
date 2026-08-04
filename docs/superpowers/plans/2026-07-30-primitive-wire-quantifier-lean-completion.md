@@ -12,7 +12,7 @@ as a semantic specification. The durable kernel is the exact 34-constructor
 TypeScript `ProofStep` language. Small checked concrete primitive receipts
 feed one generic uniform-site witness theorem; an authoring-layer compiler
 emits checked primitive programs and a redundancy theorem directly relates
-their raw result to the raw monolithic replacement. The completed Phase 3
+their raw result to the raw monolithic replacement. The remaining Phase 3
 stack then proves one-step, replay, theorem, citation, and ordered-theory
 soundness and checks TypeScript/Lean tag parity mechanically.
 
@@ -131,6 +131,12 @@ order, matching `src/kernel/proof/step.ts`:
   modules or redundant `example`, `#check`, or test-theorem declarations to
   manufacture either state. After focused typechecking, run `lake build` and
   `npm run formal:size` before committing.
+- Never weaken a required universal theorem by quantifying over a successful
+  compiler result, inverse landing, derived landing, transport receipt, or
+  other evidence that the theorem is required to construct. Delete such a
+  statement and replace it under the production name with the accepted-input
+  obligation and `sorry`. Absence of `sorry` is not completion when the owning
+  obligation has not been declared.
 
 ---
 
@@ -436,7 +442,6 @@ checkers.
 **Files:**
 
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean`
-- Create: `VisualProof/Diagram/Concrete/IsomorphismSearch.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/Content.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean`
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierSingletonRemoval.lean`
@@ -467,25 +472,27 @@ checkers.
   pairwise co-located parallel matching, endpoint-free spawn, ordered
   argument signatures, site visibility, polarity matrix, and non-head
   refusal.
-- [x] **Step 2: Implement concrete receipts.** Mirror the merged
-  `src/kernel/rules/wire-content.ts` result shape and freshness discipline.
-  Every checker proves it selected all applied heads and no others.
+- [x] **Step 2: Implement concrete receipts.** Own the freshness and
+  all-applied-head evidence required by the six primitive soundness theorems
+  and by compiler construction. Lean and TypeScript need not share a receipt
+  representation. Every checker proves it selected all applied heads and no
+  others.
 - [x] **Step 3: Instantiate the witness theorem.** Use:
   `W := True` for ends deletion; negation for cut wrap/absorb; conjunction
   and diagonal copying for parallel split/fuse. Construct relation-valued
   witnesses in full `Model`; reuse `PreModel.inhabited` only where choosing
   an unused value is sufficient.
-- [x] **Step 4: Prove exact inverse theorems.** Wrap/absorb and split/fuse
-  round trips must produce checked isomorphic normalized diagrams with
-  transported ordered boundaries.
-- [x] **Step 5: Confirm GREEN and commit.**
+- [x] **Step 4: Confirm GREEN and commit.** The six owning primitive soundness
+  theorems are kernel-checked. Per-pair inverse APIs, `Transport` types, and
+  transported-boundary theorems are not Task 6 acceptance requirements.
+  Internal inverse construction may be used by the compiler, but final raw
+  isomorphism and ordered-boundary adequacy are owned only by Task 9.
 
   ```bash
   lake build
   npm run formal:size
   git add -- VisualProof.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/UniformSiteFactorization.lean \
-    VisualProof/Diagram/Concrete/IsomorphismSearch.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/Content.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/ContentSemantics.lean \
     VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean \
@@ -495,6 +502,12 @@ checkers.
     VisualProof/Rule/WirePrimitive/Content.lean
   git commit -m "feat: prove wire content primitive soundness"
   ```
+
+  Task 6 is complete under the original specification boundary: all six
+  primitive semantic theorems are GREEN. The former extra demand for
+  normalized pairwise inverse landings and transported ordered boundaries was
+  deleted; it incorrectly froze internal compiler mechanisms and conflicted
+  with the separation of identity normalization.
 
 ---
 
@@ -617,8 +630,8 @@ checkers.
 
 - `CompiledPrimitiveStep`: the checked primitive subset emitted by the
   structural compiler.
-- `PrimitiveProgram`: ordered checked steps plus composed allocation and
-  boundary-transport receipts.
+- `PrimitiveProgram`: ordered checked steps with exact dependent source and
+  target indices.
 - `runPrimitiveProgram`.
 - `compileRelationJoin`, `compileRelationSever`.
 - `runPrimitiveProgram_sound`.
@@ -646,16 +659,28 @@ checkers.
   checked program and orientation, and transport ids back through the
   occurrence removal receipt.
 - [x] **Step 5: Prove program soundness.** Compose each primitive receipt's
-  theorem and exact ordered boundary transport. The compiler is
+  semantic theorem. The compiler is
   authoring-layer logic; primitive checkers remain unaware of residuals and
   monolithic inputs.
-- [x] **Step 6: Prove redundancy.** For join, show the compiled raw program
+- [ ] **Step 6: Prove redundancy.** `compiled_join_redundant` and
+  `compiled_sever_redundant` are RED under their production names. They
+  quantify over `AcceptedMonolithicRelationJoin` and
+  `AppliedMonolithicRelationSever`, respectively, and must produce a
+  `CompiledRelation*`, equality showing the public compiler returned
+  `.ok`, and the exact raw `ConcreteIso`. They must not accept a
+  `CompiledRelation*` argument. For join, show the compiled raw program
   target is checked-isomorphic to the monolithic raw `plainFinal`; for sever,
   show it is checked-isomorphic to the raw monolithic target, in both cases
-  with exact boundary transport and no normalization dependency. Derive monolithic
-  soundness again as a corollary and prove primitive-set completeness for
-  every checked monolithic input.
-- [x] **Step 7: Confirm GREEN and commit.**
+  with no normalization dependency. The same theorem must explicitly quantify
+  over every ordered final boundary list and prove positionwise that mapping
+  through the returned `ConcreteIso.wires` preserves order and repeated
+  aliases. State this directly in the final theorem; do not require a
+  `Transport` type, per-primitive transport theorem, or matching Lean and
+  TypeScript receipt representation. Derive monolithic
+  soundness again through the universal `compiled_join_sound` and
+  `compiled_sever_sound` declarations, which are also RED and quantify over
+  the accepted monolithic receipt rather than an already-compiled result.
+- [ ] **Step 7: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -668,16 +693,13 @@ checkers.
   git commit -m "feat: prove primitive compiler redundancy"
   ```
 
-  Constructive join and sever redundancy landed through commits `52fb5cd`
-  and `573b4aa`. Commit `95dd95a` supplies the minimum terminal leaf
-  factorization needed when construction-owned identity leaves collide with
-  retained leaves of the same kind. Both compiler searches and
-  `redundancyMismatch` are absent; join constructs a direct raw
-  `ConcreteIso` to `plainFinal`, and sever is derived by reverse execution and
-  reconstruction. Commit `e4044e6` bounds the already-landed Task 10 nullary
-  production case without reducing its two-orientation coverage. Focused
-  compiler and soundness builds, full `lake build` (190 jobs), `formal:size`,
-  and diff hygiene pass. Raw adequacy has no identity-normalization dependency.
+  The constructive compiler implementation and its direct raw
+  `ConcreteIso` fields landed through commits `52fb5cd`, `573b4aa`, and
+  `95dd95a`; searches and `redundancyMismatch` are absent. This task was
+  reopened because the former public declarations accepted those successful
+  compilation records as hypotheses. Those weakened declarations have been
+  replaced by the universal RED statements above. The implementation is not
+  complete until those exact declarations are GREEN.
 
 ---
 
@@ -700,7 +722,12 @@ checkers.
   replay orientations. Reuse the authoritative Task 7 argument theorems for
   uniform extension and two-site differing attachments; do not duplicate that
   corpus here.
-- [x] **Step 2: Derive insertion.** Compose vacuous introduction of a
+- [ ] **Step 2: Derive insertion.** `insertion_redundant` is now the owning
+  universal RED theorem: it quantifies over `AcceptedRawInsertion`, produces
+  an `InsertionPrimitiveLanding`, proves
+  `insertion_primitive_program checked = .ok landing`, and returns the exact
+  raw `ConcreteIso`. It must not accept an `InsertionPrimitiveLanding` as its
+  premise. Prove it by composing vacuous introduction of a
   `rel []` wire, negative-gated atom spawn, and compiled relation join
   grounding to the inserted content. Prove the raw result is checked-concretely
   isomorphic to raw structural insertion with exact ordered boundary transport;
@@ -720,7 +747,7 @@ checkers.
 - [x] **Step 5: Pin the independent negative-splice theorem.** The insertion
   corollary may use it, but must not replace it; backward erasure soundness
   continues to cite the direct negative-splice proof.
-- [x] **Step 6: Confirm GREEN and commit.**
+- [ ] **Step 6: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -730,14 +757,11 @@ checkers.
   git commit -m "feat: prove primitive derivability corollaries"
   ```
 
-  Arbitrary and nullary insertion execute through vacuity, atom spawn, and
-  constructive join in both orientations. `InsertionPrimitiveLanding` exposes
-  exact ordered raw boundary transport, including aliases; folded references
-  reduce to their stored bodies; backward erasure still cites the independent
-  negative-splice theorem. The authoritative Task 7 theorems pin uniform and
-  differing-attachment `argExtend` behavior. Focused derivation/argument
-  production builds, full `lake build` (190 jobs), `formal:size`, placeholder
-  scans, obsolete-claim scans, and diff hygiene pass.
+  The insertion construction, boundary transport, folded-reference law,
+  independent negative-splice theorem, and Task 7 `argExtend` results are
+  present. This task was reopened because the former `insertion_redundant`
+  assumed the landing it was required to establish. The replacement universal
+  declaration is RED and this task is incomplete until that proof is GREEN.
 
 ---
 
@@ -775,14 +799,18 @@ checkers.
   owning module's checked receipt or enough raw input for `applyStep` to
   construct that receipt. There is no relation-content constructor and no
   identity-retarget field.
-- [x] **Step 5: Define receipts and transport.** Match the merged TypeScript
+- [ ] **Step 5: Define receipts and transport.** `ProofStep` constructors no
+  longer accept `StepReceipt`; `StepReceipt.mk` is private and
+  `ProofStep.receipt` is the owning RED production declaration with `sorry`.
+  Replace that `sorry` by deriving provenance and raw transport from each
+  constructor's owning checked receipt. Match the merged TypeScript
   distinction among provenance, every-scope transport, and root interface
   transport. Normalization transport composes after the primitive result;
   repeated ordered boundary aliases remain repeated.
 - [x] **Step 6: Prove `applyStep_sound`.** Use exactly 34 exhaustive cases,
   delegating each case to its owning theorem. No default case and no premise
   that already assumes the desired directed entailment.
-- [x] **Step 7: Confirm GREEN and commit.**
+- [ ] **Step 7: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -793,13 +821,14 @@ checkers.
   git commit -m "feat: prove all 34 Lean proof steps sound"
   ```
 
-  Definition unfolding/folding and pinned prior-theorem replacement now retain
+  Definition unfolding/folding and pinned prior-theorem replacement retain
   their exact checked reconstruction, ordered boundary, and raw insertion
   receipts; their soundness theorems prove replacement independently of
-  identity normalization. `ProofStep` is the exact 34-constructor checked sum,
-  and `applyStep_sound` has 34 explicit branches that delegate raw soundness to
-  the owning theorem and compose canonical normalization only at the outer
-  step boundary. Tag wiring, length, no-duplication, and exhaustiveness compile.
+  identity normalization. `ProofStep` is the exact 34-constructor checked sum
+  and no longer admits caller-authored receipts. `applyStep_sound` has 34
+  explicit branches that delegate raw soundness to the owning theorem and
+  compose canonical normalization only at the outer step boundary. Receipt
+  ownership remains RED, so Task 11 is not complete.
   Structural, definition, theorem, and derived insertion receipts were migrated
   from normalized splice results to raw splice results so the raw primitive
   compiler adequacy import closure contains no identity-normalization module.
@@ -1003,11 +1032,11 @@ checkers.
 | Vacuous family retained | exhaustive 34-step checker and compiler empty-content case |
 | Fullness boundary truthful | theorem signatures plus Task 8/13 audits |
 | Compiler terminates structurally | well-founded residual measure |
-| Monolithic rule redundant | `compiled_join_redundant`, `compiled_sever_redundant` |
-| Insertion/ref remain conservative | `insertion_redundant`, `ref_spawn_unfold_conservative` |
+| Monolithic rule redundant | universal accepted-input `compiled_join_redundant` and `compiled_sever_redundant`, including public compiler `.ok` equalities and raw `ConcreteIso` landings |
+| Insertion/ref remain conservative | universal accepted-input `insertion_redundant` with compiler `.ok` equality; `ref_spawn_unfold_conservative` |
 | Per-site extend retained with exact gate | `applyArgExtend`, canonical uniform/differing-attachment theorems |
 | Definitions/citation sound | fold/unfold and theorem-application theorems |
-| All 34 steps sound | exhaustive `applyStep_sound` |
+| All 34 steps sound | receipt-free exhaustive `ProofStep`; owner-derived `ProofStep.receipt`; exhaustive `applyStep_sound` |
 | Forward/backward replay sound | `replay_sound`, `backward_replay_sound` |
 | Exact theorem endpoints | `checkedTheorem_sound` with ordered boundary transport |
 | Ordered theory sound | `verifiedTheory_sound` |

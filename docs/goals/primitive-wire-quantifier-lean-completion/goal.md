@@ -53,6 +53,12 @@ the next required task.
 
 - Treat `src/kernel/proof/step.ts` as the exact ordered 34-tag correspondence authority.
 - Keep the monolithic relation rule only as semantic specification/compiler evidence.
+- Treat accepted monolithic inputs, not already-successful compiler receipts,
+  as the quantifiers of compiler adequacy. The final raw `ConcreteIso` must
+  state positionwise ordered-boundary correspondence and must not reference
+  identity normalization.
+- Do not promote internal `inverseTransport`, transport representations, or
+  matching Lean/TypeScript receipt shapes into Task 6 requirements.
 - Delete rather than adapt or alias iota-only and identity-retarget authorities.
 - Preserve all unrelated `archive/` and `scratchpad/` work.
 - Update plan checkboxes, GoalBuddy receipts, and the plan-specific ledger as work lands.

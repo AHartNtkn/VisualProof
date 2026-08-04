@@ -69,7 +69,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.1/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T012
+active_task: T010
 
 tasks:
   - id: T001
@@ -626,7 +626,7 @@ tasks:
   - id: T010
     type: worker
     assignee: Worker
-    status: complete
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 9: formalize the content compiler and monolithic redundancy."
     inputs:
@@ -639,6 +639,8 @@ tasks:
       - "Compiler logic never enters primitive checkers."
       - "The monolithic specification receipt may expose only checker-owned structural evidence required to prove compiler completeness."
       - "Adequacy is direct raw ConcreteIso reproduction: join lands at plainFinal and sever at its raw monolithic target, with exact boundary transport and no identity-normalization dependency."
+      - "The public redundancy theorems quantify over accepted monolithic inputs and construct compiler success; they never accept CompiledRelationJoin or CompiledRelationSever as a premise."
+      - "Exact ordered-boundary correspondence is stated positionwise under the final ConcreteIso; no per-primitive transport representation is required."
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/Rule/WirePrimitive.lean"
@@ -647,7 +649,6 @@ tasks:
       - "VisualProof/Rule/WirePrimitive/Compiler.lean"
       - "VisualProof/Rule/WirePrimitive/CompilerTermination.lean"
       - "VisualProof/Rule/WirePrimitive/CompilerSoundness.lean"
-      - "VisualProof/Rule/WirePrimitive/CompilerFixtures.lean"
       - "VisualProof/Rule/MonolithicWireQuantifier.lean"
       - "VisualProof/Diagram/Concrete/WireQuantifierBatchRemoval.lean"
       - "VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean"
@@ -689,10 +690,18 @@ tasks:
           status: pass
         - cmd: "git diff --check"
           status: pass
+    reopened:
+      reason: "The recorded completion proved only properties of an already-supplied CompiledRelationJoin/CompiledRelationSever and therefore did not establish compiler success or primitive-set completeness for every accepted monolithic input."
+      red_declarations:
+        - "compiled_join_redundant"
+        - "compiled_sever_redundant"
+        - "compiled_join_sound"
+        - "compiled_sever_sound"
+      completion_gate: "Replace the four production sorries with checked proofs; the redundancy declarations must retain public compiler .ok equalities, raw ConcreteIso landings, explicit positionwise ordered-boundary correspondence, and no identity-normalization dependency."
   - id: T011
     type: worker
     assignee: Worker
-    status: complete
+    status: queued
     reasoning_hint: high
     objective: "Execute corrected plan Task 10: prove insertion/ref conservativity and pin direct per-site extension."
     inputs:
@@ -706,7 +715,6 @@ tasks:
       - "VisualProof.lean"
       - "VisualProof/Rule/WirePrimitive.lean"
       - "VisualProof/Rule/WirePrimitive/Derived.lean"
-      - "VisualProof/Rule/WirePrimitive/DerivedFixtures.lean"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
       - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
     verify:
@@ -733,10 +741,15 @@ tasks:
           status: pass
         - cmd: "git diff --check"
           status: pass
+    reopened:
+      reason: "The recorded insertion theorem accepted an InsertionPrimitiveLanding instead of proving that insertion_primitive_program succeeds for every AcceptedRawInsertion."
+      red_declarations:
+        - "insertion_redundant"
+      completion_gate: "Replace the production sorry with a checked proof while retaining the accepted-input quantifier, public .ok equality, and exact raw ConcreteIso landing."
   - id: T012
     type: worker
     assignee: Worker
-    status: active
+    status: queued
     reasoning_hint: high
     objective: "Execute plan Task 11: complete definitions, citation, and the exact 34-step checker."
     inputs:
@@ -761,6 +774,11 @@ tasks:
       - "A step case assumes its own directed entailment."
       - "Transport drops ordered repeated boundary aliases."
     receipt: null
+    reopened:
+      reason: "ProofStep constructors previously accepted caller-authored StepReceipt values, so the checked language did not own provenance and raw transport."
+      red_declarations:
+        - "ProofStep.receipt"
+      completion_gate: "Construct every StepReceipt from the owning checked constructor evidence and remove the production sorry; callers must remain unable to supply StepReceipt to any ProofStep constructor."
   - id: T013
     type: worker
     assignee: Worker

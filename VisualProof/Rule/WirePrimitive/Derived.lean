@@ -335,15 +335,18 @@ def insertion_primitive_program
   else
     throw .constructionMismatch
 
-/-- A constructed insertion program has exactly the raw structural landing. -/
+/-- Every accepted raw structural insertion is reproduced by a checked
+primitive program with the exact raw landing. -/
 theorem insertion_redundant
     {base : CheckedDiagram definitions}
     {fragment : CheckedOpenDiagram definitions}
     {input : StructuralInsertionInput base fragment}
-    {checked : AcceptedRawInsertion input}
-    (landing : InsertionPrimitiveLanding checked) :
-    Nonempty (ConcreteIso landing.program.target.val checked.target.val) :=
-  ⟨landing.constructionIso⟩
+    (checked : AcceptedRawInsertion input) :
+    ∃ landing : InsertionPrimitiveLanding checked,
+      insertion_primitive_program checked = .ok landing ∧
+        Nonempty
+          (ConcreteIso landing.program.target.val checked.target.val) := by
+  sorry
 
 /--
 The folded reference item introduced by `refSpawn` is exactly its stored body.

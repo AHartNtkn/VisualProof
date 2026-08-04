@@ -310,6 +310,7 @@ Identity normalization is sequenced after that transition and is never a
 premise of the raw rule's soundness theorem. -/
 structure StepReceipt
     (source rawTarget : CheckedDiagram definitions) where
+  private mk ::
   provenance : WireProvenance source.val
     (ConcreteDiagram.normalizeIdentities rawTarget).target.val
   rawTransport : WireTransport source.val rawTarget.val
@@ -377,35 +378,28 @@ inductive ProofStep
     CheckedDiagram definitions.intrinsic.signatures → Type
   | refSpawn {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .refSpawn)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .refSpawn) : ProofStep definitions orientation source
   | atomSpawn {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .atomSpawn)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .atomSpawn) : ProofStep definitions orientation source
   | identityInsert {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .identityInsert)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .identityInsert) : ProofStep definitions orientation source
   | wireJoin {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .wireJoin)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .wireJoin) : ProofStep definitions orientation source
   | erasure {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .erasure)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .erasure) : ProofStep definitions orientation source
   | wireSever {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .wireSever)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .wireSever) : ProofStep definitions orientation source
   | iteration {source}
       {pattern : CheckedOpenDiagram definitions.intrinsic.signatures}
       {selection : CheckedSelection source}
       {occurrence : Occurrence pattern source}
       (input : StructuralCore.OrdinaryIterationInput selection occurrence)
-      (checked : StructuralCore.CheckedOrdinaryIteration input)
-      (receipt : StepReceipt source checked.target) : ProofStep definitions orientation source
+      (checked : StructuralCore.CheckedOrdinaryIteration input) : ProofStep definitions orientation source
   | deiteration {source}
       {pattern : CheckedOpenDiagram definitions.intrinsic.signatures}
       {innerSelection : CheckedSelection source}
@@ -414,114 +408,87 @@ inductive ProofStep
       {justifier : Occurrence pattern source}
       (input : StructuralCore.OrdinaryDeiterationInput
         innerSelection inner justifierSelection justifier)
-      (checked : StructuralCore.CheckedOrdinaryDeiteration input)
-      (receipt : StepReceipt source checked.target) : ProofStep definitions orientation source
+      (checked : StructuralCore.CheckedOrdinaryDeiteration input) : ProofStep definitions orientation source
   | doubleCutIntro {source doubled}
       (input : StructuralCore.DoubleCutInput source doubled)
-      (checked : StructuralCore.CheckedDoubleCut input)
-      (receipt : StepReceipt source checked.doubled) : ProofStep definitions orientation source
+      (checked : StructuralCore.CheckedDoubleCut input) : ProofStep definitions orientation source
   | doubleCutElim {source plain}
       (input : StructuralCore.DoubleCutInput plain source)
-      (checked : StructuralCore.CheckedDoubleCut input)
-      (receipt : StepReceipt source checked.plain) : ProofStep definitions orientation source
+      (checked : StructuralCore.CheckedDoubleCut input) : ProofStep definitions orientation source
   | theorem {source}
       (input : TheoremApplication.{u}
         (definitions := definitions.intrinsic) source)
       (orientationExact : input.orientation = orientation)
-      (applied : AppliedTheorem.{u} definitions.intrinsic source input)
-      (receipt : StepReceipt source applied.target) : ProofStep definitions orientation source
+      (applied : AppliedTheorem.{u} definitions.intrinsic source input) : ProofStep definitions orientation source
   | vacuousIntro {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .vacuousIntro)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .vacuousIntro) : ProofStep definitions orientation source
   | vacuousElim {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .vacuousElim)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .vacuousElim) : ProofStep definitions orientation source
   | unfold {source}
       (input : UnfoldInput definitions source)
-      (applied : AppliedUnfold definitions source input)
-      (receipt : StepReceipt source applied.target) : ProofStep definitions orientation source
+      (applied : AppliedUnfold definitions source input) : ProofStep definitions orientation source
   | fold {source}
       (input : FoldInput definitions source)
-      (applied : AppliedFold definitions source input)
-      (receipt : StepReceipt source applied.target) : ProofStep definitions orientation source
+      (applied : AppliedFold definitions source input) : ProofStep definitions orientation source
   | cutWrap {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .cutWrap)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .cutWrap) : ProofStep definitions orientation source
   | cutAbsorb {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .cutAbsorb)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .cutAbsorb) : ProofStep definitions orientation source
   | parallelSplit {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .parallelSplit)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .parallelSplit) : ProofStep definitions orientation source
   | parallelFuse {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .parallelFuse)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .parallelFuse) : ProofStep definitions orientation source
   | endsDelete {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .endsDelete)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .endsDelete) : ProofStep definitions orientation source
   | endsSpawn {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .endsSpawn)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .endsSpawn) : ProofStep definitions orientation source
   | arityShift {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .arityShift)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .arityShift) : ProofStep definitions orientation source
   | arityUnshift {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .arityUnshift)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .arityUnshift) : ProofStep definitions orientation source
   | argPermute {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .argPermute)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .argPermute) : ProofStep definitions orientation source
   | argDuplicate {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .argDuplicate)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .argDuplicate) : ProofStep definitions orientation source
   | argContract {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .argContract)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .argContract) : ProofStep definitions orientation source
   | argDrop {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .argDrop)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .argDrop) : ProofStep definitions orientation source
   | argExtend {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .argExtend)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .argExtend) : ProofStep definitions orientation source
   | applyFormal {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .applyFormal)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .applyFormal) : ProofStep definitions orientation source
   | abstractFormal {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .abstractFormal)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .abstractFormal) : ProofStep definitions orientation source
   | identityLeaf {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .identityLeaf)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .identityLeaf) : ProofStep definitions orientation source
   | identityAbstract {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .identityAbstract)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .identityAbstract) : ProofStep definitions orientation source
   | refLeaf {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .refLeaf)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .refLeaf) : ProofStep definitions orientation source
   | refAbstract {source}
       (primitive : WirePrimitive.CompiledPrimitiveStep orientation source)
-      (tagExact : primitive.tag = .refAbstract)
-      (receipt : StepReceipt source primitive.target) : ProofStep definitions orientation source
+      (tagExact : primitive.tag = .refAbstract) : ProofStep definitions orientation source
 
 namespace ProofStep
 
@@ -530,27 +497,27 @@ def rawTarget :
     {source : CheckedDiagram definitions.intrinsic.signatures} →
       ProofStep definitions orientation source →
         CheckedDiagram definitions.intrinsic.signatures
-  | _, .refSpawn primitive _ _ | _, .atomSpawn primitive _ _
-  | _, .identityInsert primitive _ _ | _, .wireJoin primitive _ _
-  | _, .erasure primitive _ _ | _, .wireSever primitive _ _
-  | _, .vacuousIntro primitive _ _ | _, .vacuousElim primitive _ _
-  | _, .cutWrap primitive _ _ | _, .cutAbsorb primitive _ _
-  | _, .parallelSplit primitive _ _ | _, .parallelFuse primitive _ _
-  | _, .endsDelete primitive _ _ | _, .endsSpawn primitive _ _
-  | _, .arityShift primitive _ _ | _, .arityUnshift primitive _ _
-  | _, .argPermute primitive _ _ | _, .argDuplicate primitive _ _
-  | _, .argContract primitive _ _ | _, .argDrop primitive _ _
-  | _, .argExtend primitive _ _ | _, .applyFormal primitive _ _
-  | _, .abstractFormal primitive _ _ | _, .identityLeaf primitive _ _
-  | _, .identityAbstract primitive _ _ | _, .refLeaf primitive _ _
-  | _, .refAbstract primitive _ _ => primitive.target
-  | _, .iteration _ checked _ => checked.target
-  | _, .deiteration _ checked _ => checked.target
-  | _, .doubleCutIntro _ checked _ => checked.doubled
-  | _, .doubleCutElim _ checked _ => checked.plain
-  | _, .theorem _ _ applied _ => applied.target
-  | _, .unfold _ applied _ => applied.target
-  | _, .fold _ applied _ => applied.target
+  | _, .refSpawn primitive _ | _, .atomSpawn primitive _
+  | _, .identityInsert primitive _ | _, .wireJoin primitive _
+  | _, .erasure primitive _ | _, .wireSever primitive _
+  | _, .vacuousIntro primitive _ | _, .vacuousElim primitive _
+  | _, .cutWrap primitive _ | _, .cutAbsorb primitive _
+  | _, .parallelSplit primitive _ | _, .parallelFuse primitive _
+  | _, .endsDelete primitive _ | _, .endsSpawn primitive _
+  | _, .arityShift primitive _ | _, .arityUnshift primitive _
+  | _, .argPermute primitive _ | _, .argDuplicate primitive _
+  | _, .argContract primitive _ | _, .argDrop primitive _
+  | _, .argExtend primitive _ | _, .applyFormal primitive _
+  | _, .abstractFormal primitive _ | _, .identityLeaf primitive _
+  | _, .identityAbstract primitive _ | _, .refLeaf primitive _
+  | _, .refAbstract primitive _ => primitive.target
+  | _, .iteration _ checked => checked.target
+  | _, .deiteration _ checked => checked.target
+  | _, .doubleCutIntro _ checked => checked.doubled
+  | _, .doubleCutElim _ checked => checked.plain
+  | _, .theorem _ _ applied => applied.target
+  | _, .unfold _ applied => applied.target
+  | _, .fold _ applied => applied.target
 
 /-- Stable tag of an exact checked step. -/
 def tag :
@@ -591,28 +558,13 @@ def tag :
   | _, .refLeaf .. => .refLeaf
   | _, .refAbstract .. => .refAbstract
 
-/-- The complete transport receipt owned by the checked step. -/
+/-- Every exact checked step owns this complete transport receipt; callers
+cannot supply or replace the evidence. -/
 def receipt :
     {source : CheckedDiagram definitions.intrinsic.signatures} →
     (step : ProofStep definitions orientation source) →
-      StepReceipt source step.rawTarget
-  | _, .refSpawn _ _ receipt | _, .atomSpawn _ _ receipt
-  | _, .identityInsert _ _ receipt | _, .wireJoin _ _ receipt
-  | _, .erasure _ _ receipt | _, .wireSever _ _ receipt
-  | _, .vacuousIntro _ _ receipt | _, .vacuousElim _ _ receipt
-  | _, .cutWrap _ _ receipt | _, .cutAbsorb _ _ receipt
-  | _, .parallelSplit _ _ receipt | _, .parallelFuse _ _ receipt
-  | _, .endsDelete _ _ receipt | _, .endsSpawn _ _ receipt
-  | _, .arityShift _ _ receipt | _, .arityUnshift _ _ receipt
-  | _, .argPermute _ _ receipt | _, .argDuplicate _ _ receipt
-  | _, .argContract _ _ receipt | _, .argDrop _ _ receipt
-  | _, .argExtend _ _ receipt | _, .applyFormal _ _ receipt
-  | _, .abstractFormal _ _ receipt | _, .identityLeaf _ _ receipt
-  | _, .identityAbstract _ _ receipt | _, .refLeaf _ _ receipt
-  | _, .refAbstract _ _ receipt | _, .iteration _ _ receipt
-  | _, .deiteration _ _ receipt | _, .doubleCutIntro _ _ receipt
-  | _, .doubleCutElim _ _ receipt | _, .theorem _ _ _ receipt
-  | _, .unfold _ _ receipt | _, .fold _ _ receipt => receipt
+      StepReceipt source step.rawTarget := by
+  sorry
 
 end ProofStep
 

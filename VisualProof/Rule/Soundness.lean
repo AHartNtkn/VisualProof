@@ -1465,86 +1465,86 @@ theorem applyStep_sound
       (denoteChecked model.toPreModel definitionEnv source)
       (denoteChecked model.toPreModel definitionEnv step.rawTarget) := by
     cases step with
-    | refSpawn primitive tagExact receipt =>
+    | refSpawn primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | atomSpawn primitive tagExact receipt =>
+    | atomSpawn primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | identityInsert primitive tagExact receipt =>
+    | identityInsert primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | wireJoin primitive tagExact receipt =>
+    | wireJoin primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | erasure primitive tagExact receipt =>
+    | erasure primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | wireSever primitive tagExact receipt =>
+    | wireSever primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | iteration input checked receipt =>
+    | iteration input checked =>
         exact directed_of_iff orientation
           (checked.equivalence model.toPreModel definitionEnv)
-    | deiteration input checked receipt =>
+    | deiteration input checked =>
         exact directed_of_iff orientation
           (checked.equivalence model.toPreModel definitionEnv)
-    | doubleCutIntro input checked receipt =>
+    | doubleCutIntro input checked =>
         exact directed_of_iff orientation
           (checked.equivalence model.toPreModel definitionEnv)
-    | doubleCutElim input checked receipt =>
+    | doubleCutElim input checked =>
         exact directed_of_iff orientation
           (checked.equivalence model.toPreModel definitionEnv).symm
-    | «theorem» input orientationExact applied receipt =>
+    | «theorem» input orientationExact applied =>
         change Directed orientation
           (denoteChecked model.toPreModel definitionEnv source)
           (denoteChecked model.toPreModel definitionEnv applied.target)
         cases orientationExact
         exact theorem_application_sound source input applied model definitionEnv
           lawful
-    | vacuousIntro primitive tagExact receipt =>
+    | vacuousIntro primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | vacuousElim primitive tagExact receipt =>
+    | vacuousElim primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | unfold input applied receipt =>
+    | unfold input applied =>
         exact directed_of_iff orientation
           (unfold_sound definitions source input applied model
             definitionEnv lawful)
-    | fold input applied receipt =>
+    | fold input applied =>
         exact directed_of_iff orientation
           (fold_sound definitions source input applied model
             definitionEnv lawful)
-    | cutWrap primitive tagExact receipt =>
+    | cutWrap primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | cutAbsorb primitive tagExact receipt =>
+    | cutAbsorb primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | parallelSplit primitive tagExact receipt =>
+    | parallelSplit primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | parallelFuse primitive tagExact receipt =>
+    | parallelFuse primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | endsDelete primitive tagExact receipt =>
+    | endsDelete primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | endsSpawn primitive tagExact receipt =>
+    | endsSpawn primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | arityShift primitive tagExact receipt =>
+    | arityShift primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | arityUnshift primitive tagExact receipt =>
+    | arityUnshift primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | argPermute primitive tagExact receipt =>
+    | argPermute primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | argDuplicate primitive tagExact receipt =>
+    | argDuplicate primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | argContract primitive tagExact receipt =>
+    | argContract primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | argDrop primitive tagExact receipt =>
+    | argDrop primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | argExtend primitive tagExact receipt =>
+    | argExtend primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | applyFormal primitive tagExact receipt =>
+    | applyFormal primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | abstractFormal primitive tagExact receipt =>
+    | abstractFormal primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | identityLeaf primitive tagExact receipt =>
+    | identityLeaf primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | identityAbstract primitive tagExact receipt =>
+    | identityAbstract primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | refLeaf primitive tagExact receipt =>
+    | refLeaf primitive tagExact =>
         exact primitive.sound model definitionEnv
-    | refAbstract primitive tagExact receipt =>
+    | refAbstract primitive tagExact =>
         exact primitive.sound model definitionEnv
   have normalized :
       denoteChecked model.toPreModel definitionEnv step.rawTarget ↔

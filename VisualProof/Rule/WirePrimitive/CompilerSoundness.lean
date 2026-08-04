@@ -149,26 +149,39 @@ theorem runPrimitiveProgram_sound
       | backward =>
           exact fun targetHolds => headSound (tailSound targetHolds)
 
-/-- Exact raw-construction redundancy certificate for a compiled strongest
-join. -/
+/-- Every accepted strongest join compiles to a primitive program whose raw
+target is exactly concretely isomorphic to the accepted monolithic target. -/
 theorem compiled_join_redundant
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
-    (compiled : CompiledRelationJoin input) :
-    Nonempty
-      (ConcreteIso compiled.program.target.val
-        compiled.monolithic.plainFinal.val) :=
-  ⟨compiled.constructionIso⟩
+    (monolithic : AcceptedMonolithicRelationJoin source input) :
+    ∃ compiled : CompiledRelationJoin input,
+      compileRelationJoin source input = .ok compiled ∧
+        ∃ landing : ConcreteIso compiled.program.target.val
+            monolithic.plainFinal.val,
+          ∀ (boundary : List compiled.program.target.val.WireId)
+            (position : Fin boundary.length),
+            (boundary.map landing.wires).get
+                (Fin.cast (by simp) position) =
+              landing.wires (boundary.get position) := by
+  sorry
 
-/-- Exact checked redundancy certificate for a compiled strongest sever. -/
+/-- Every accepted strongest sever compiles to a primitive program whose raw
+target is exactly concretely isomorphic to the accepted monolithic target. -/
 theorem compiled_sever_redundant
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationSeverInput source}
-    (compiled : CompiledRelationSever input) :
-    Nonempty
-      (ConcreteIso compiled.program.target.val
-        compiled.monolithic.target.val) :=
-  ⟨compiled.constructionIso⟩
+    (monolithic : AppliedMonolithicRelationSever source input) :
+    ∃ compiled : CompiledRelationSever input,
+      compileRelationSever source input = .ok compiled ∧
+        ∃ landing : ConcreteIso compiled.program.target.val
+            monolithic.target.val,
+          ∀ (boundary : List compiled.program.target.val.WireId)
+            (position : Fin boundary.length),
+            (boundary.map landing.wires).get
+                (Fin.cast (by simp) position) =
+              landing.wires (boundary.get position) := by
+  sorry
 
 /--
 The raw monolithic join direction follows from the primitive program and the
@@ -177,34 +190,14 @@ independently checked construction isomorphism.
 theorem compiled_join_sound
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationJoinInput source}
-    (compiled : CompiledRelationJoin input)
+    (monolithic : AcceptedMonolithicRelationJoin source input)
     (model : Model.{u})
     (definitionEnv : DefinitionEnv model.toPreModel definitions) :
     Directed input.orientation
       (denoteChecked model.toPreModel definitionEnv source)
       (denoteChecked model.toPreModel definitionEnv
-        compiled.monolithic.plainFinal) := by
-  have programSound :=
-    runPrimitiveProgram_sound compiled.program model definitionEnv
-  have targetEquivalent :=
-    iso_denotation compiled.constructionIso model.toPreModel definitionEnv
-  cases orientationExact : input.orientation with
-  | forward =>
-      have primitiveDirection :
-          denoteChecked model.toPreModel definitionEnv source →
-            denoteChecked model.toPreModel definitionEnv
-              compiled.program.target := by
-        simpa [orientationExact] using programSound
-      exact fun sourceHolds =>
-        targetEquivalent.mp (primitiveDirection sourceHolds)
-  | backward =>
-      have primitiveDirection :
-          denoteChecked model.toPreModel definitionEnv
-              compiled.program.target →
-            denoteChecked model.toPreModel definitionEnv source := by
-        simpa [orientationExact] using programSound
-      exact fun targetHolds =>
-        primitiveDirection (targetEquivalent.mpr targetHolds)
+        monolithic.plainFinal) := by
+  sorry
 
 /--
 The monolithic sever direction follows again from the reversed primitive
@@ -213,34 +206,14 @@ program and the independently checked final isomorphism.
 theorem compiled_sever_sound
     {source : CheckedDiagram definitions}
     {input : MonolithicRelationSeverInput source}
-    (compiled : CompiledRelationSever input)
+    (monolithic : AppliedMonolithicRelationSever source input)
     (model : Model.{u})
     (definitionEnv : DefinitionEnv model.toPreModel definitions) :
     Directed input.orientation
       (denoteChecked model.toPreModel definitionEnv source)
       (denoteChecked model.toPreModel definitionEnv
-        compiled.monolithic.target) := by
-  have programSound :=
-    runPrimitiveProgram_sound compiled.program model definitionEnv
-  have targetEquivalent :=
-    iso_denotation compiled.constructionIso model.toPreModel definitionEnv
-  cases orientationExact : input.orientation with
-  | forward =>
-      have primitiveDirection :
-          denoteChecked model.toPreModel definitionEnv source →
-            denoteChecked model.toPreModel definitionEnv
-              compiled.program.target := by
-        simpa [orientationExact] using programSound
-      exact fun sourceHolds =>
-        targetEquivalent.mp (primitiveDirection sourceHolds)
-  | backward =>
-      have primitiveDirection :
-          denoteChecked model.toPreModel definitionEnv
-              compiled.program.target →
-            denoteChecked model.toPreModel definitionEnv source := by
-        simpa [orientationExact] using programSound
-      exact fun targetHolds =>
-        primitiveDirection (targetEquivalent.mpr targetHolds)
+        monolithic.target) := by
+  sorry
 
 end WirePrimitive
 
