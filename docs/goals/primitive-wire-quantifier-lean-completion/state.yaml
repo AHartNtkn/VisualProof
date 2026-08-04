@@ -33,7 +33,7 @@ goal:
       - "Plan path: docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
       - "Tasks 1-14 execute in dependency order."
       - "The exact ordered TypeScript ProofStep union has 34 tags."
-      - "Every task requires focused RED/GREEN validation and a task-scoped commit."
+      - "Every Lean task uses theorem-driven RED/GREEN: the owning production theorem typechecks with sorry for RED and with a kernel-checked proof for GREEN; no fixture module or redundant test theorem may manufacture either state."
       - "Task 14 and the full acceptance matrix define completion."
 
 rules:
@@ -746,13 +746,13 @@ tasks:
     constraints:
       - "Exactly 34 exhaustive cases with no default."
       - "No monolithic relation-content or retarget payload."
+      - "Use owning production theorems for RED/GREEN; do not create fixture modules or redundant test theorems."
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/Rule/Definition.lean"
       - "VisualProof/Rule/Theorem.lean"
       - "VisualProof/Rule/Step.lean"
       - "VisualProof/Rule/Soundness.lean"
-      - "VisualProof/Rule/StepFixtures.lean"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
     verify:
       - "lake build"
@@ -773,12 +773,12 @@ tasks:
     constraints:
       - "Theorem endpoints remain the exact registered endpoints."
       - "Citations access only the verified chronological prefix."
+      - "Use owning production theorems for RED/GREEN; do not create fixture modules or redundant test theorems."
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/Proof/Replay.lean"
       - "VisualProof/Proof/Theorem.lean"
       - "VisualProof/Proof/Theory.lean"
-      - "VisualProof/Proof/Fixtures.lean"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
     verify:
       - "lake build"

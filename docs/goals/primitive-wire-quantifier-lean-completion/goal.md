@@ -23,9 +23,9 @@ IdentityRetarget, or monolithic-kernel models.
 - Proof type: `test`
 - Completion proof: every plan checkbox is complete, every task has a reviewed commit and receipt, the acceptance matrix is directly evidenced, and Task 14's clean full gate suite passes
 - Goal oracle: Task 14 plus the full acceptance matrix in the committed plan
-- Likely misfire: stopping after a substantial Lean slice, accepting the stale 15-step model, or treating passing narrow fixtures as proof of end-to-end completion
+- Likely misfire: stopping after a substantial Lean slice, accepting the stale 15-step model, or treating narrow checks as proof of end-to-end completion
 - Blind spots considered: truthful full-model boundary, exact ordered boundary transport, specification-only monolithic containment, sandbox-only nested npm failure, source-size limits, and preservation of unrelated untracked files
-- Existing plan facts: all 14 tasks, their dependency order, exact 34 tags, required paths/interfaces, RED/GREEN steps, task commits, and final acceptance matrix remain controlling
+- Existing plan facts: all 14 tasks, their dependency order, exact 34 tags, required paths/interfaces, theorem-driven RED/GREEN steps, task commits, and final acceptance matrix remain controlling
 
 ## Goal Oracle
 

@@ -117,16 +117,20 @@ order, matching `src/kernel/proof/step.ts`:
   dependency on identity normalization. Source-name equality is never used as
   a substitute for fresh-name equivalence.
 - The monolithic relation rule may be imported only by the compiler
-  correctness/redundancy layer and its fixtures. It must not appear in
+  correctness/redundancy layer. It must not appear in
   `StepTag`, `ProofStep`, replay JSON correspondence, or application dispatch.
 - Delete displaced paths and declarations. Do not retain iota aliases,
   identity-retarget adapters, monolithic proof-step variants, or parallel tag
   authorities.
 - Keep every repository-owned Lean source below the existing size limit.
-  Split concrete construction, semantics, compiler, and fixtures before a
+  Split concrete construction, semantics, and compiler ownership before a
   module approaches the limit.
-- At every task: add a RED fixture first, run its focused Lean target, make it
-  GREEN, then run `lake build` and `npm run formal:size` before committing.
+- Follow the global theorem-driven Lean RED/GREEN contract. At every proof
+  task, state the owning production theorem and confirm RED, then replace its
+  `sorry` with a kernel-checked proof and confirm GREEN. Do not add fixture
+  modules or redundant `example`, `#check`, or test-theorem declarations to
+  manufacture either state. After focused typechecking, run `lake build` and
+  `npm run formal:size` before committing.
 
 ---
 
@@ -136,8 +140,6 @@ order, matching `src/kernel/proof/step.ts`:
 
 - Modify: `VisualProof/Rule/Tag.lean`
 - Modify: `VisualProof/Rule/Structural.lean`
-- Modify: `VisualProof/Rule/StructuralFixtures.lean`
-- Create: `VisualProof/Rule/StructuralAudit.lean`
 - Modify: `VisualProof.lean`
 - Test: `tests/architecture/lean-semantics.test.ts`
 
@@ -148,18 +150,18 @@ order, matching `src/kernel/proof/step.ts`:
   backward-negative erasure.
 - Structural insertion remains forward-negative / backward-positive.
 
-- [x] **Step 1: Add RED inventory, Phase 3 audit, and polarity fixtures.**
-  Change the Lean length theorem and architecture expectation to 34. In
-  `StructuralAudit.lean`, pin the completed Task 7 authority: explicit direct
+- [x] **Step 1: State the inventory, Phase 3 audit, and polarity obligations.**
+  Change the Lean length theorem and architecture expectation to 34. In the
+  owning production modules, pin the completed Task 7 authority: explicit direct
   nodes plus selected subtrees, explicit anchor-scoped internal wires, one
   boundary class per touching wire, generalized insertion outside the copied
   content, ordinary iteration/deiteration, double-cut, and vacuous-wire
-  receipts. Add a backward-negative erasure fixture and a backward-positive
-  refusal fixture. Preserve the existing insertion matrix.
-- [x] **Step 2: Run RED.**
+  receipts. Prove backward-negative erasure and backward-positive refusal.
+  Preserve the existing insertion matrix.
+- [x] **Step 2: Confirm RED on the owning production declarations.**
 
   ```bash
-  lake build VisualProof.Rule.Tag VisualProof.Rule.StructuralFixtures
+  lake build VisualProof.Rule.Tag VisualProof.Rule.Structural
   npx vitest run tests/architecture/lean-semantics.test.ts
   ```
 
@@ -170,7 +172,7 @@ order, matching `src/kernel/proof/step.ts`:
   `backwardErasureForbidden`; check the selected site's parity against
   orientation, and prove the backward-negative case with the independently
   named negative-splice lemma required by the primitive design.
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -178,8 +180,6 @@ order, matching `src/kernel/proof/step.ts`:
   npx vitest run tests/architecture/lean-semantics.test.ts
   git add -- VisualProof.lean VisualProof/Rule/Tag.lean \
     VisualProof/Rule/Structural.lean \
-    VisualProof/Rule/StructuralFixtures.lean \
-    VisualProof/Rule/StructuralAudit.lean \
     tests/architecture/lean-semantics.test.ts
   git commit -m "refactor: align Lean structural rules with 34 proof steps"
   ```
@@ -194,9 +194,7 @@ order, matching `src/kernel/proof/step.ts`:
 - Create: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean`
 - Create: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean`
 - Create: `VisualProof/Rule/MonolithicWireQuantifier.lean`
-- Create: `VisualProof/Rule/MonolithicWireQuantifierFixtures.lean`
 - Modify: `VisualProof/Rule/WireQuantifier.lean`
-- Modify: `VisualProof/Rule/WireQuantifierFixtures.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
@@ -207,7 +205,7 @@ order, matching `src/kernel/proof/step.ts`:
 - `VisualProof/Rule/WireQuantifier.lean` temporarily owns only the still-live
   iota partition/merge API; relation-content variants no longer occur there.
 
-- [x] **Step 1: Add RED relation-sever semantics.** Cover multiple disjoint
+- [x] **Step 1: State production relation-sever obligations and confirm RED.** Cover multiple disjoint
   exact copies at mixed parities, nullary content, ordered repeated formals,
   coherent ambient parameters, mismatched occurrences, overlap, parameter
   visibility, and fresh relation scope.
@@ -216,7 +214,7 @@ order, matching `src/kernel/proof/step.ts`:
   and relation-join receipt machinery. Construct the reified relation witness
   exactly once through `Model.reify`.
 - [x] **Step 3: Isolate the specification API.** Move relation sever/join
-  inputs, applied receipts, checkers, exports, theorems, and fixtures from the
+  inputs, applied receipts, checkers, exports, and theorems from the
   mixed facade to `MonolithicWireQuantifier`. Leave only the current iota
   partition/merge in `WireQuantifier` until Task 3 replaces it.
 - [x] **Step 4: Audit specification-only reachability.**
@@ -226,7 +224,7 @@ order, matching `src/kernel/proof/step.ts`:
     VisualProof/Rule/Tag.lean VisualProof/Rule/WireQuantifier.lean
   ```
 
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -236,9 +234,7 @@ order, matching `src/kernel/proof/step.ts`:
     VisualProof/Diagram/Concrete/WireQuantifierRelationSeverRemovalSemantics.lean \
     VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean \
     VisualProof/Rule/MonolithicWireQuantifier.lean \
-    VisualProof/Rule/MonolithicWireQuantifierFixtures.lean \
-    VisualProof/Rule/WireQuantifier.lean \
-    VisualProof/Rule/WireQuantifierFixtures.lean
+    VisualProof/Rule/WireQuantifier.lean
   git commit -m "feat: complete monolithic relation sever soundness"
   ```
 
@@ -254,12 +250,10 @@ order, matching `src/kernel/proof/step.ts`:
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierNaturality.lean`
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierFrameNaturality.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Partition.lean`
-- Create: `VisualProof/Rule/WirePrimitive/PartitionFixtures.lean`
 - Create: `VisualProof/Rule/WirePrimitive.lean`
 - Delete: `VisualProof/Diagram/Concrete/WireQuantifierIota.lean`
 - Delete: `VisualProof/Diagram/Concrete/WireQuantifierIotaSemantics.lean`
 - Delete: `VisualProof/Rule/WireQuantifier.lean`
-- Delete: `VisualProof/Rule/WireQuantifierFixtures.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
@@ -281,11 +275,11 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 - `wire_sever_sound`, `wire_join_sound` over `PreModel`.
 - `identity_substitution_derived_sound` completed in Task 4.
 
-- [x] **Step 1: Add RED generic fixtures.** Cover `.iota`, `rel []`, nested
+- [x] **Step 1: State generic partition/merge obligations and confirm RED.** Cover `.iota`, `rel []`, nested
   relation signatures, moved-endpoint scope enclosure, chosen sever scope
   polarity, equal-signature join, incomparable scopes, and merge of a
   non-head endpoint. Require content primitives to reject the same non-head
-  fixture later.
+  case later.
 - [x] **Step 2: Rebuild the concrete owner.** Partition one wire's exact
   endpoint set into retained and moved endpoints. The fresh scope must be
   inside the old scope and enclose every moved endpoint. Merge comparable,
@@ -294,12 +288,12 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 - [x] **Step 3: Prove generic soundness.** Use the one-point quantifier laws
   for the selected `Sig`; no `Model.reify` or relation-content splice is
   permitted.
-- [x] **Step 4: Remove iota authority.** Migrate all consumers and fixtures to
+- [x] **Step 4: Remove iota authority.** Migrate all consumers to
   the generic API, delete both iota modules, and remove `iota_sever_sound` /
   `iota_join_sound`. Delete the old mixed rule facade and make
   `Rule/WirePrimitive.lean` the sole primitive facade; the monolithic
   specification remains separately named.
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -313,9 +307,7 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
     VisualProof/Diagram/Concrete/WireQuantifierIotaSemantics.lean \
     VisualProof/Rule/WirePrimitive.lean \
     VisualProof/Rule/WirePrimitive/Partition.lean \
-    VisualProof/Rule/WirePrimitive/PartitionFixtures.lean \
-    VisualProof/Rule/WireQuantifier.lean \
-    VisualProof/Rule/WireQuantifierFixtures.lean
+    VisualProof/Rule/WireQuantifier.lean
   git commit -m "refactor: generalize Lean wire partition and merge"
   ```
 
@@ -332,9 +324,7 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 - Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean`
 - Modify: `VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean`
 - Modify: `VisualProof/Rule/Identity.lean`
-- Modify: `VisualProof/Rule/IdentityFixtures.lean`
 - Modify: `VisualProof/Rule/Structural.lean`
-- Modify: `VisualProof/Rule/StructuralFixtures.lean`
 - Delete: `VisualProof/Rule/IdentityRetargetSemantics.lean`
 - Modify: `VisualProof.lean`
 
@@ -346,10 +336,10 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 - `identity_substitution_derived_sound` composes iteration, generic scoped
   sever, and normalization in both orientations.
 
-- [x] **Step 1: Add RED one-point fixtures.** Cover all-co-scoped collapse,
+- [x] **Step 1: State one-point normalization obligations and confirm RED.** Cover all-co-scoped collapse,
   exactly-one-outer collapse with the outer wire as survivor, two-outer
   refusal, arbitrary signature, and both cut parities.
-- [x] **Step 2: Add RED derived-substitution fixtures.** Starting from
+- [x] **Step 2: State derived-substitution obligations and confirm RED.** Starting from
   `id(a,b)` dominating `P(a)`, check plain iteration into the inner region,
   sever the copied identity port and `P` endpoint onto a fresh wire scoped at
   that region, and require eager normalization to land on `P(b)`. Cover
@@ -359,7 +349,7 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
   equivalence without changing degeneracy drop or same-region fusion.
 - [x] **Step 4: Delete retarget authority.** Remove every
   `IdentityRetarget*` structure, checker, semantic theorem, structural copy
-  payload, fixture, export, and import. Plain copy rules preserve attachment
+  payload, export, and import. Plain copy rules preserve attachment
   identities exactly.
 - [x] **Step 5: Prove the derived theorem.** Compose the public ordinary
   iteration receipt, Task 3's generic scoped sever receipt, and
@@ -373,7 +363,7 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
     VisualProof VisualProof.lean
   ```
 
-- [x] **Step 7: Run GREEN and commit.**
+- [x] **Step 7: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -383,10 +373,9 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
     VisualProof/Diagram/Concrete/IdentityNormalizationCollapseWellFormed.lean \
     VisualProof/Diagram/Concrete/IdentityNormalizationCollapseSemantics.lean \
     VisualProof/Diagram/Concrete/IdentityNormalizationSemantics.lean \
-    VisualProof/Rule/Identity.lean VisualProof/Rule/IdentityFixtures.lean \
+    VisualProof/Rule/Identity.lean \
     VisualProof/Rule/IdentityRetargetSemantics.lean \
-    VisualProof/Rule/Structural.lean \
-    VisualProof/Rule/StructuralFixtures.lean
+    VisualProof/Rule/Structural.lean
   git commit -m "refactor: derive Lean identity substitution from scoped sever"
   ```
 
@@ -398,7 +387,6 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 
 - Create: `VisualProof/Rule/WirePrimitive/Site.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Witness.lean`
-- Create: `VisualProof/Rule/WirePrimitive/WitnessFixtures.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
@@ -415,10 +403,10 @@ structure WireJoinInput (source : CheckedDiagram definitions) where
 All construction fields are private and are populated only by primitive
 checkers.
 
-- [x] **Step 1: Add RED abstract examples.** Instantiate the statement with a
+- [x] **Step 1: State abstract witness obligations and confirm RED.** Instantiate the production theorem with a
   nullary site under positive and negative contexts, mixed-parity sites, and a
-  two-site shared witness. Add a negative example showing that separate
-  per-site witnesses do not satisfy the API.
+  two-site shared witness. Establish in the owning API that separate per-site
+  witnesses do not satisfy the uniform witness requirement.
 - [x] **Step 2: Define one site/frame authority.** An applied site records its
   atom-head endpoint, region, ordered arguments, and checked factorization.
   The all-sites collection proves it exhausts the acted-on wire.
@@ -430,15 +418,14 @@ checkers.
   gives join-family soundness, an introducing witness gives sever-family
   soundness, and both give an ungated equivalence. Keep this theorem generic
   over `PreModel`; later full-model instantiations construct the witnesses.
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
   npm run formal:size
   git add -- VisualProof.lean \
     VisualProof/Rule/WirePrimitive/Site.lean \
-    VisualProof/Rule/WirePrimitive/Witness.lean \
-    VisualProof/Rule/WirePrimitive/WitnessFixtures.lean
+    VisualProof/Rule/WirePrimitive/Witness.lean
   git commit -m "feat: prove the uniform wire-site witness theorem"
   ```
 
@@ -459,9 +446,7 @@ checkers.
 - Modify: `VisualProof/Diagram/Concrete/WireQuantifierRelationSeverInsertionSemantics.lean`
 - Modify: `VisualProof/Rule/MonolithicWireQuantifier.lean`
 - Modify: `VisualProof/Rule/WirePrimitive/Witness.lean`
-- Modify: `VisualProof/Rule/WirePrimitive/WitnessFixtures.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Content.lean`
-- Create: `VisualProof/Rule/WirePrimitive/ContentFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
 - Modify: `VisualProof.lean`
 
@@ -476,7 +461,8 @@ checkers.
   `parallel_split_sound`, `parallel_fuse_sound`,
   `ends_delete_sound`, and `ends_spawn_sound`.
 
-- [x] **Step 1: Add RED checker fixtures.** Cover all-end transformation,
+- [x] **Step 1: State production checker obligations and confirm RED.** Cover all-end
+  transformation,
   empty endpoint sets, mixed site regions, exact single-atom cut absorption,
   pairwise co-located parallel matching, endpoint-free spawn, ordered
   argument signatures, site visibility, polarity matrix, and non-head
@@ -489,10 +475,10 @@ checkers.
   and diagonal copying for parallel split/fuse. Construct relation-valued
   witnesses in full `Model`; reuse `PreModel.inhabited` only where choosing
   an unused value is sufficient.
-- [x] **Step 4: Prove exact inverse fixtures.** Wrap/absorb and split/fuse
+- [x] **Step 4: Prove exact inverse theorems.** Wrap/absorb and split/fuse
   round trips must produce checked isomorphic normalized diagrams with
   transported ordered boundaries.
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -506,9 +492,7 @@ checkers.
     VisualProof/Rule/MonolithicWireQuantifier.lean \
     VisualProof/Rule/WirePrimitive.lean \
     VisualProof/Rule/WirePrimitive/Witness.lean \
-    VisualProof/Rule/WirePrimitive/WitnessFixtures.lean \
-    VisualProof/Rule/WirePrimitive/Content.lean \
-    VisualProof/Rule/WirePrimitive/ContentFixtures.lean
+    VisualProof/Rule/WirePrimitive/Content.lean
   git commit -m "feat: prove wire content primitive soundness"
   ```
 
@@ -526,7 +510,6 @@ checkers.
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationLocal.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsCylindrificationFactorization.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Arguments.lean`
-- Create: `VisualProof/Rule/WirePrimitive/ArgumentsFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
 - Modify: `VisualProof.lean`
 
@@ -539,7 +522,7 @@ checkers.
 - Corresponding `_sound` theorems and checked input/receipt types over full
   `Model`, obtained from the generic `PreModel` witness theorem.
 
-- [x] **Step 1: Add RED plumbing fixtures.** Cover nested signatures,
+- [x] **Step 1: State production plumbing obligations and confirm RED.** Cover nested signatures,
   per-site fresh arity-shift wires scoped at each endpoint region,
   arity-unshift exhaustion, invalid permutations, duplicate/contract
   adjacency, drop/extend positions, all-end attachment coverage, signature
@@ -556,7 +539,7 @@ checkers.
 - [x] **Step 4: Prove the gated witnesses.** Uniform attachment uses a single
   scope-visible parameter in both directions. Per-site drop has only the
   eliminating witness; per-site extend has only the introducing witness.
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -565,8 +548,7 @@ checkers.
     VisualProof/Diagram/Concrete/WirePrimitive/Arguments.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/ArgumentsSemantics.lean \
     VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Arguments.lean \
-    VisualProof/Rule/WirePrimitive/ArgumentsFixtures.lean
+    VisualProof/Rule/WirePrimitive/Arguments.lean
   git commit -m "feat: prove wire argument primitive soundness"
   ```
 
@@ -579,7 +561,6 @@ checkers.
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean`
 - Create: `VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean`
 - Create: `VisualProof/Rule/WirePrimitive/Leaves.lean`
-- Create: `VisualProof/Rule/WirePrimitive/LeavesFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
 - Modify: `VisualProof.lean`
 
@@ -590,7 +571,7 @@ checkers.
 - `applyRefLeaf`, `applyRefAbstract`.
 - Corresponding `_sound` theorems over full `Model`.
 
-- [x] **Step 1: Add RED leaf fixtures.** Cover formal-position signature
+- [x] **Step 1: State production leaf obligations and confirm RED.** Cover formal-position signature
   equality, distinct per-site formal heads, identity equal signature/arity,
   one shared definition for ref abstraction, definition signature lookup,
   chosen scope enclosure, all endpoints, both orientations, and all refusal
@@ -603,10 +584,10 @@ checkers.
   application, equality at arbitrary `Sig`, and the predicate denoted by a
   stored definition. Ref proofs must call typed definition lookup and show
   equivalence to unfold/compile/fold without actually expanding the macro.
-- [x] **Step 4: Audit fullness.** Add theorem signatures/`#check` fixtures
+- [x] **Step 4: Audit fullness.** Use production theorem signatures
   demonstrating that generic partition/merge remains `PreModel`-parametric
   while relation-synthesizing primitive instances quantify over `Model`.
-- [x] **Step 5: Run GREEN and commit.**
+- [x] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -615,8 +596,7 @@ checkers.
     VisualProof/Diagram/Concrete/WirePrimitive/Leaves.lean \
     VisualProof/Diagram/Concrete/WirePrimitive/LeavesSemantics.lean \
     VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Leaves.lean \
-    VisualProof/Rule/WirePrimitive/LeavesFixtures.lean
+    VisualProof/Rule/WirePrimitive/Leaves.lean
   git commit -m "feat: prove wire leaf primitive soundness"
   ```
 
@@ -630,7 +610,6 @@ checkers.
 - Create: `VisualProof/Rule/WirePrimitive/Compiler.lean`
 - Create: `VisualProof/Rule/WirePrimitive/CompilerTermination.lean`
 - Create: `VisualProof/Rule/WirePrimitive/CompilerSoundness.lean`
-- Create: `VisualProof/Rule/WirePrimitive/CompilerFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
 - Modify: `VisualProof.lean`
 
@@ -645,7 +624,8 @@ checkers.
 - `runPrimitiveProgram_sound`.
 - `compiled_join_redundant`, `compiled_sever_redundant`.
 
-- [x] **Step 1: Add RED compiler fixtures.** Port the TypeScript round-trip
+- [x] **Step 1: State compiler adequacy obligations and confirm RED.** Cover the TypeScript
+  round-trip
   corpus, including empty content, one cut, parallel root items, shared
   root-scoped internal wires, repeated/dropped/permuted formals, uniform and
   per-site parameters, formal application, identities, folded refs, nullary
@@ -675,7 +655,7 @@ checkers.
   with exact boundary transport and no normalization dependency. Derive monolithic
   soundness again as a corollary and prove primitive-set completeness for
   every checked monolithic input.
-- [x] **Step 7: Run GREEN and commit.**
+- [x] **Step 7: Confirm GREEN and commit.**
 
   ```bash
   lake build
@@ -684,8 +664,7 @@ checkers.
     VisualProof/Rule/WirePrimitive/Program.lean \
     VisualProof/Rule/WirePrimitive/Compiler.lean \
     VisualProof/Rule/WirePrimitive/CompilerTermination.lean \
-    VisualProof/Rule/WirePrimitive/CompilerSoundness.lean \
-    VisualProof/Rule/WirePrimitive/CompilerFixtures.lean
+    VisualProof/Rule/WirePrimitive/CompilerSoundness.lean
   git commit -m "feat: prove primitive compiler redundancy"
   ```
 
@@ -696,8 +675,8 @@ checkers.
   `redundancyMismatch` are absent; join constructs a direct raw
   `ConcreteIso` to `plainFinal`, and sever is derived by reverse execution and
   reconstruction. Commit `e4044e6` bounds the already-landed Task 10 nullary
-  fixture without reducing its two-orientation coverage. Focused compiler,
-  soundness, and fixture builds, full `lake build` (190 jobs), `formal:size`,
+  production case without reducing its two-orientation coverage. Focused
+  compiler and soundness builds, full `lake build` (190 jobs), `formal:size`,
   and diff hygiene pass. Raw adequacy has no identity-normalization dependency.
 
 ---
@@ -707,7 +686,6 @@ checkers.
 **Files:**
 
 - Create: `VisualProof/Rule/WirePrimitive/Derived.lean`
-- Create: `VisualProof/Rule/WirePrimitive/DerivedFixtures.lean`
 - Modify: `VisualProof/Rule/WirePrimitive.lean`
 - Modify: `VisualProof.lean`
 
@@ -717,9 +695,9 @@ checkers.
 - `insertion_redundant`.
 - `ref_spawn_unfold_conservative`.
 
-- [x] **Step 1: Add RED derivation fixtures.** Include arbitrary open content
+- [x] **Step 1: State derivation obligations and confirm RED.** Include arbitrary open content
   in a negative region, nullary content, a folded reference body, and both
-  replay orientations. Reuse the authoritative Task 7 argument fixtures for
+  replay orientations. Reuse the authoritative Task 7 argument theorems for
   uniform extension and two-site differing attachments; do not duplicate that
   corpus here.
 - [x] **Step 2: Derive insertion.** Compose vacuous introduction of a
@@ -736,20 +714,19 @@ checkers.
   attachments are ungated, while differing attachments retain the
   sever-family polarity gate. The gesture layer exposes the uniform drag, but
   durable replay accepts explicit per-site payloads. The canonical two-site
-  fixture must exercise both orientations. Do not claim an ordinary
+  production theorem must cover both orientations. Do not claim an ordinary
   sever/join derivation: the required join has the opposite checked polarity
   on an accepted even-scope extension case.
 - [x] **Step 5: Pin the independent negative-splice theorem.** The insertion
   corollary may use it, but must not replace it; backward erasure soundness
   continues to cite the direct negative-splice proof.
-- [x] **Step 6: Run GREEN and commit.**
+- [x] **Step 6: Confirm GREEN and commit.**
 
   ```bash
   lake build
   npm run formal:size
   git add -- VisualProof.lean VisualProof/Rule/WirePrimitive.lean \
-    VisualProof/Rule/WirePrimitive/Derived.lean \
-    VisualProof/Rule/WirePrimitive/DerivedFixtures.lean
+    VisualProof/Rule/WirePrimitive/Derived.lean
   git commit -m "feat: prove primitive derivability corollaries"
   ```
 
@@ -757,10 +734,10 @@ checkers.
   constructive join in both orientations. `InsertionPrimitiveLanding` exposes
   exact ordered raw boundary transport, including aliases; folded references
   reduce to their stored bodies; backward erasure still cites the independent
-  negative-splice theorem. The authoritative Task 7 fixtures pin uniform and
+  negative-splice theorem. The authoritative Task 7 theorems pin uniform and
   differing-attachment `argExtend` behavior. Focused derivation/argument
-  fixtures, full `lake build` (190 jobs), `formal:size`, placeholder scans,
-  obsolete-claim scans, and diff hygiene pass.
+  production builds, full `lake build` (190 jobs), `formal:size`, placeholder
+  scans, obsolete-claim scans, and diff hygiene pass.
 
 ---
 
@@ -772,7 +749,6 @@ checkers.
 - Create: `VisualProof/Rule/Theorem.lean`
 - Create: `VisualProof/Rule/Step.lean`
 - Create: `VisualProof/Rule/Soundness.lean`
-- Create: `VisualProof/Rule/StepFixtures.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
@@ -784,10 +760,10 @@ checkers.
 - Step receipts expose normalized result, allocation/provenance, total wire
   transport, root interface transport, and ordered boundary transport.
 
-- [x] **Step 1: Add one RED fixture per tag.** Each fixture constructs a
-  checker-accepted payload, applies it in its legal orientation, and checks
-  its `StepTag`. Add compile-failing exhaustiveness theorems so a missing or
-  duplicate constructor cannot pass.
+- [x] **Step 1: State one production obligation per tag and confirm RED.** Ensure every
+  checker-accepted payload applies in its legal orientation and returns its
+  `StepTag`. Use exhaustive production definitions and theorems so a missing
+  or duplicate constructor cannot pass typechecking.
 - [x] **Step 2: Prove ref spawn and fold/unfold.** Use
   `Definitions.lookup_iff_body` and splice denotation. Fold/unfold are
   equivalences; ref spawn uses structural insertion gates.
@@ -806,14 +782,14 @@ checkers.
 - [x] **Step 6: Prove `applyStep_sound`.** Use exactly 34 exhaustive cases,
   delegating each case to its owning theorem. No default case and no premise
   that already assumes the desired directed entailment.
-- [x] **Step 7: Run GREEN and commit.**
+- [x] **Step 7: Confirm GREEN and commit.**
 
   ```bash
   lake build
   npm run formal:size
   git add -- VisualProof.lean VisualProof/Rule/Definition.lean \
     VisualProof/Rule/Theorem.lean VisualProof/Rule/Step.lean \
-    VisualProof/Rule/Soundness.lean VisualProof/Rule/StepFixtures.lean
+    VisualProof/Rule/Soundness.lean
   git commit -m "feat: prove all 34 Lean proof steps sound"
   ```
 
@@ -839,7 +815,6 @@ checkers.
 - Create: `VisualProof/Proof/Replay.lean`
 - Create: `VisualProof/Proof/Theorem.lean`
 - Create: `VisualProof/Proof/Theory.lean`
-- Create: `VisualProof/Proof/Fixtures.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
@@ -848,8 +823,9 @@ checkers.
 - `Theorem`, `checkTheorem`, `checkedTheorem_sound`.
 - `Theory`, `verifyTheory`, `verifiedTheory_sound`.
 
-- [ ] **Step 1: Add RED end-to-end fixtures.** Cover a multi-step primitive
-  compiler program, a two-sided theorem whose halves meet only up to checked
+- [ ] **Step 1: Define the end-to-end production theorem statements and confirm RED.** Their
+  proof obligations cover a multi-step primitive compiler program, a
+  two-sided theorem whose halves meet only up to checked
   isomorphism, repeated boundary aliases transported through normalization,
   citation in both polarities, and a later theorem citing only an earlier
   theorem.
@@ -864,14 +840,13 @@ checkers.
   ordered definition prefix first. Verify theorems chronologically so a
   theorem payload can cite only its already-verified prefix. Prove every
   accepted theorem valid in every full `Model`.
-- [ ] **Step 5: Run GREEN and commit.**
+- [ ] **Step 5: Confirm GREEN and commit.**
 
   ```bash
   lake build
   npm run formal:size
   git add -- VisualProof.lean VisualProof/Proof/Replay.lean \
-    VisualProof/Proof/Theorem.lean VisualProof/Proof/Theory.lean \
-    VisualProof/Proof/Fixtures.lean
+    VisualProof/Proof/Theorem.lean VisualProof/Proof/Theory.lean
   git commit -m "feat: prove Lean replay and theory soundness"
   ```
 
@@ -899,7 +874,7 @@ checkers.
 
 - [ ] **Step 1: Add RED tooling assertions.** Require both package scripts,
   both scripts, exactly one Lean tag executable, exact 34-line output, and no
-  displaced fixture-matching executable.
+  displaced source-matching executable.
 - [ ] **Step 2: Serialize the Lean authority.** Define
   `StepTag.serializedName`, prove injectivity, and print `StepTag.all`; do not
   hand-maintain another Lean tag list.
@@ -921,6 +896,7 @@ checkers.
 
   - monolithic relation APIs occur only in the specification/compiler layer;
   - no TypeScript `ProofStep` contains a monolithic or retarget payload;
+  - no Lean fixture module or fixture import exists;
   - the public primitive content/argument checkers require all applied heads,
     except generic merge;
   - the documented full-`Model` boundary matches theorem signatures.
@@ -935,7 +911,7 @@ checkers.
   `formal:check` runs `formal:size`, `lake build`, `formal:tags`, TypeScript
   typecheck, and the Lean architecture test. Add only
   `visualproof_step_tags` to `lakefile.toml`.
-- [ ] **Step 7: Run GREEN and commit.**
+- [ ] **Step 7: Confirm GREEN and commit.**
 
   ```bash
   npm run formal:tags
@@ -967,6 +943,7 @@ checkers.
   test ! -d VisualProof/Lambda
   test ! -e VisualProof/Rule/IdentityRetargetSemantics.lean
   test ! -e VisualProof/Diagram/Concrete/WireQuantifierIota.lean
+  ! rg --files VisualProof | rg 'Fixtures\.lean$'
   ! rg -n \
     "LambdaModel|IdentityRetarget|iota_sever_sound|iota_join_sound|openTermSpawn|congruenceJoin|headStrip|inconsistentCut|comprehensionInstantiate|comprehensionAbstract" \
     VisualProof VisualProof.lean
@@ -1015,19 +992,20 @@ checkers.
 
 | Requirement | Direct evidence |
 |---|---|
+| No Lean test-fixture layer | no `*Fixtures.lean` source or import; production theorem typechecking is the feedback loop |
 | Exact merged proof language | `StepTag.all_length = 34`, exhaustive `ProofStep`, `npm run formal:tags` |
-| No identity-retarget authority | deleted module/declarations plus derived-substitution fixtures |
-| Generic signature-indexed partition/merge | `.iota`, `rel`, nested-rel fixtures and `wire_*_sound` |
+| No identity-retarget authority | deleted module/declarations plus `identity_substitution_derived_sound` |
+| Generic signature-indexed partition/merge | `.iota`, `rel`, nested-rel production cases and `wire_*_sound` |
 | Backward erasure follows flipped polarity | Task 1 matrix and independent negative-splice theorem |
 | Complete strongest-form specification | `relation_sever_sound`, existing `relation_join_sound` |
 | Uniform all-site primitive semantics | `UniformSiteRewrite` exhaustion + witness theorem |
 | Original nine pairs plus folded-ref pair sound | Tasks 3 and 6–8 theorem families |
-| Vacuous family retained | 34-step fixtures and compiler empty-content case |
+| Vacuous family retained | exhaustive 34-step checker and compiler empty-content case |
 | Fullness boundary truthful | theorem signatures plus Task 8/13 audits |
 | Compiler terminates structurally | well-founded residual measure |
 | Monolithic rule redundant | `compiled_join_redundant`, `compiled_sever_redundant` |
 | Insertion/ref remain conservative | `insertion_redundant`, `ref_spawn_unfold_conservative` |
-| Per-site extend retained with exact gate | `applyArgExtend`, canonical uniform/differing-attachment fixtures |
+| Per-site extend retained with exact gate | `applyArgExtend`, canonical uniform/differing-attachment theorems |
 | Definitions/citation sound | fold/unfold and theorem-application theorems |
 | All 34 steps sound | exhaustive `applyStep_sound` |
 | Forward/backward replay sound | `replay_sound`, `backward_replay_sound` |
